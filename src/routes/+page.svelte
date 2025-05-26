@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Button } from 'carbon-components-svelte';
+	import KhButton from '$lib/components/kh-button.svelte';
 </script>
 
 <h1>Welcome to SvelteKit</h1>
 <p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
 
-<Button>Carbon button</Button>
+<KhButton>Carbon button</KhButton>
