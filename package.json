@@ -3,11 +3,29 @@
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
+	"contributors": [
+		{
+			"name": "Jean-Baptiste Thery",
+			"email": "jb.thery@jcode.works",
+			"url": "https://github.com/jb-thery"
+		}
+	],
+	"release": {
+		"branches": [
+			{
+				"name": "main"
+			},
+			{
+				"name": "develop",
+				"prerelease": true
+			}
+		]
+	},
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
+		"prepare": "husky",
 		"machine-translate": "inlang machine translate --project project.inlang",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -18,9 +36,12 @@
 		"test:e2e": "playwright test",
 		"reset:npm:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf pnpm-lock.yaml",
 		"update:packages": "pnpm --recursive update --latest",
-		"generate-pwa-assets": "pwa-assets-generator"
+		"generate-pwa-assets": "pwa-assets-generator",
+		"init:project": "npx husky init && pnpm i"
 	},
 	"devDependencies": {
+		"@commitlint/cli": "^19.8.1",
+		"@commitlint/config-conventional": "^19.8.1",
 		"@eslint/compat": "^1.2.9",
 		"@eslint/js": "^9.27.0",
 		"@playwright/test": "^1.52.0",
@@ -37,6 +58,7 @@
 		"eslint-config-prettier": "^10.1.5",
 		"eslint-plugin-svelte": "^3.9.0",
 		"globals": "^16.2.0",
+		"husky": "^9.1.7",
 		"jsdom": "^26.1.0",
 		"prettier": "^3.5.3",
 		"prettier-plugin-svelte": "^3.4.0",
