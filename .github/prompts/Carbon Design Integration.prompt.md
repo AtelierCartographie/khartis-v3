@@ -1,6 +1,6 @@
 # Carbon Design System Integration
 
-Your goal is to properly integrate Carbon Design System components with TailwindCSS in Khartis.
+Your goal is to properly integrate Carbon Design System components in Khartis.
 
 ## Carbon Component Usage
 
@@ -24,23 +24,6 @@ Your goal is to properly integrate Carbon Design System components with Tailwind
 </script>
 
 <Theme bind:theme />
-```
-
-### Combining Carbon + TailwindCSS
-
-```svelte
-<!-- Use Carbon for components, Tailwind for layout -->
-<div class="mx-auto max-w-4xl space-y-6 p-6">
-	<DataTable>
-		<svelte:fragment slot="title">
-			{m.table_title()}
-		</svelte:fragment>
-	</DataTable>
-
-	<Button kind="primary" class="w-full">
-		{m.submit_button()}
-	</Button>
-</div>
 ```
 
 ### Accessibility Features
