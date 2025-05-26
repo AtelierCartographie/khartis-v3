@@ -139,6 +139,31 @@ Supports 5 languages: French, English, Spanish, German, Portuguese
 - Auto-translate missing keys: `pnpm machine-translate`
 - Powered by [Paraglide-JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs)
 
+### Configuration
+
+#### Vite Configuration (`vite.config.ts`)
+
+The Vite configuration handles several key aspects of the build setup:
+
+- **SvelteKit Integration**: Uses `@sveltejs/kit/vite` plugin for full framework support
+- **Internationalization**: Paraglide-JS plugin generates i18n files from `./project.inlang` to `./src/lib/paraglide`
+- **PWA Support**: VitePWA plugin configures the app as a Progressive Web App with:
+  - Service worker registration with user prompt
+  - Comprehensive asset caching (JS, CSS, HTML, fonts)
+  - Web app manifest with offline capabilities
+  - Custom icons for different platforms
+- **Testing**: Vitest workspace configuration with separate environments for client (jsdom) and server (node) tests
+
+#### Svelte Configuration (`svelte.config.js`)
+
+The Svelte configuration sets up:
+
+- **Static Adapter**: Uses `@sveltejs/adapter-static` for SPA deployment with `200.html` fallback
+- **Preprocessors**:
+  - `vitePreprocess()`: TypeScript and PostCSS preprocessing via Vite
+  - `optimizeImports()`: Carbon Design System import optimization
+  - `optimizeCss()`: Carbon CSS optimization for better performance
+
 ### Project Structure
 
 ```
