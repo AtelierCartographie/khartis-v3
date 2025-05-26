@@ -32,126 +32,110 @@ Khartis v3 is a modern Single Page Application (SPA) built with:
 
 ## 🛠 Prerequisites
 
-Make sure you have the following installed on your machine:
+- [Node.js](https://nodejs.org/) 18+
+- [pnpm](https://pnpm.io/) (package manager)
+- Modern browser (Chrome, Firefox, Safari, Edge)
 
-- [Node.js](https://nodejs.org/) (version 18 or higher)
-- [pnpm](https://pnpm.io/) (recommended package manager)
-- [Git](https://git-scm.com/)
-
-## 📦 Installation
+## 🚀 Quick Start
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/username/khartis-v3.git
+git clone https://github.com/sciencespo/khartis-v3.git
 cd khartis-v3
 ```
 
-2. Install dependencies:
+2. Install dependencies and setup:
 
 ```bash
 pnpm init:project
 ```
 
-## 🏃‍♂️ Development
-
-### Development server
-
-Start the development server with hot reload:
+3. Start development server:
 
 ```bash
 pnpm dev
 ```
 
-The application will be available at [http://localhost:5173](http://localhost:5173)
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+## 🏃‍♂️ Development
 
 ### Available scripts
 
 ```bash
 # Development
-pnpm dev                # Development server
-pnpm build             # Production build
-pnpm preview           # Preview production build
+pnpm dev                # Start development server
+pnpm build              # Build for production
+pnpm preview            # Preview production build
 
 # Code quality
-pnpm lint              # ESLint + Prettier checks
-pnpm format            # Auto-format code
-pnpm check             # TypeScript and Svelte checks
+pnpm lint               # ESLint + Prettier checks
+pnpm format             # Auto-format code
+pnpm check              # TypeScript and Svelte checks
 
 # Testing
-pnpm test              # Run all tests (unit + e2e)
-pnpm test:unit         # Unit tests (Vitest)
-pnpm test:e2e          # End-to-end tests (Playwright)
+pnpm test               # Run all tests (unit + e2e)
+pnpm test:unit          # Unit tests only (Vitest)
+pnpm test:e2e           # End-to-end tests (Playwright)
+
+# Internationalization
+pnpm machine-translate  # Auto-translate missing keys
+
+# PWA
+pnpm generate-pwa-assets # Generate PWA icons and assets
+
+# Maintenance
+pnpm update:packages    # Update all dependencies
+pnpm reset:npm:packages # Clean node_modules and lock file
 ```
 
 ## 🧪 Testing
 
-### Unit tests
-
-Unit tests use Vitest and Testing Library:
-
 ```bash
-pnpm test:unit
-```
-
-### End-to-end tests
-
-E2E tests use Playwright:
-
-```bash
-pnpm test:e2e
+pnpm test:unit         # Unit tests (Vitest + Testing Library)
+pnpm test:e2e          # E2E tests (Playwright)
+pnpm test              # Run both unit and e2e tests
 ```
 
 ## 🏗 Build and deployment
 
-### Production build
-
 ```bash
-pnpm build
+pnpm build             # Build for production (outputs to build/)
+pnpm preview           # Preview the production build locally
 ```
 
-Production files will be generated in the `build/` folder.
-
-### Deployment
-
-This SPA can be deployed to any static web server (Netlify, Vercel, GitHub Pages, etc.).
-
-The `build/200.html` file serves as a fallback for client-side routing.
+Deploy the `build/` folder to any static hosting service (Netlify, Vercel, GitHub Pages, etc.).
 
 ## 🌐 Internationalization
 
-The application supports 5 languages:
+Supports 5 languages: 🇫🇷 French • 🇬🇧 English • 🇪🇸 Spanish • 🇩🇪 German • 🇵🇹 Portuguese
 
-- 🇫🇷 French (base language)
-- 🇬🇧 English
-- 🇪🇸 Spanish
-- 🇩🇪 German
-- 🇵🇹 Portuguese
+- Translations: `messages/` folder
+- Auto-translate missing keys: `pnpm machine-translate`
+- Powered by [Paraglide-JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs)
 
-Translations are managed with Paraglide-JS and located in the `messages/` folder.
-
-## 🏗 Project architecture
+## 🏗 Project structure
 
 ```
 src/
 ├── routes/              # SvelteKit pages
-├── lib/                 # Shared components and utilities
+├── lib/                 # Shared utilities
 ├── components/          # Reusable components
-└── paraglide/          # Generated internationalization
+└── paraglide/          # Generated i18n files
 
 messages/               # Translation files
-project.inlang/        # Paraglide-JS configuration
 ```
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please:
-
 1. Fork the project
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
 5. Open a Pull Request
+
+Before submitting, run `pnpm lint` and `pnpm test` to ensure code quality.
 
 ## 📄 License
 
