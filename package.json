@@ -8,13 +8,17 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
+		"machine-translate": "inlang machine translate --project project.inlang",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
 		"lint": "prettier --check . && eslint .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "playwright test"
+		"test:e2e": "playwright test",
+		"reset:npm:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf pnpm-lock.yaml",
+		"update:packages": "pnpm --recursive update --latest",
+		"generate-pwa-assets": "pwa-assets-generator"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.9",
@@ -27,6 +31,8 @@
 		"@tailwindcss/vite": "^4.1.7",
 		"@testing-library/jest-dom": "^6.6.3",
 		"@testing-library/svelte": "^5.2.8",
+		"@types/node": "^22.15.21",
+		"@vite-pwa/assets-generator": "^1.0.0",
 		"eslint": "^9.27.0",
 		"eslint-config-prettier": "^10.1.5",
 		"eslint-plugin-svelte": "^3.9.0",
@@ -45,7 +51,9 @@
 	},
 	"dependencies": {
 		"@inlang/paraglide-js": "^2.0.13",
-		"carbon-components-svelte": "^0.89.2"
+		"carbon-components-svelte": "^0.89.2",
+		"vite-plugin-pwa": "^1.0.0",
+		"vite-plugin-sitemap": "^0.8.2"
 	},
 	"pnpm": {
 		"onlyBuiltDependencies": [
