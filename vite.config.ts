@@ -27,6 +27,7 @@ export default defineConfig(() => ({
 				short_name: 'KH',
 				display: 'standalone',
 				theme_color: '#ffffff',
+				background_color: '#ffffff',
 				start_url: '/?standalone=true',
 				orientation: 'portrait',
 				description:
