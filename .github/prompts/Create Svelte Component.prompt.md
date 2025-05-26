@@ -6,7 +6,6 @@ Your goal is to generate a new Svelte 5 component following project conventions.
 
 - Use Svelte 5 syntax with `$props()`, `$state()`, `$derived()`, and `{@render children()}`
 - Import Carbon Design System components when applicable
-- Use TailwindCSS for custom styling and layouts
 - Include proper TypeScript types
 - Implement accessibility features (ARIA labels, semantic HTML)
 - Use Paraglide-JS for any displayed text with `import { m } from '$lib/paraglide/messages.js'`

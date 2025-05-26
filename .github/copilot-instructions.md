@@ -4,7 +4,7 @@ We use pnpm for package management, never npm or yarn.
 
 This is a SvelteKit SPA (no SSR) using adapter-static with TypeScript.
 
-We use Carbon Design System components with TailwindCSS v4 for styling.
+We use Carbon Design System components.
 
 All user-facing text must be internationalized using Paraglide-JS with French as the base language. Always import from `$lib/paraglide/messages.js` and use the `m` object for translations.
 

@@ -8,7 +8,6 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
 ![Svelte](https://img.shields.io/badge/Svelte-FF3E00?style=flat&logo=svelte&logoColor=white)
 ![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=flat&logo=svelte&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 ![Carbon Design System](https://img.shields.io/badge/Carbon_Design_System-161616?style=flat&logo=ibm&logoColor=white)
 
 </div>
@@ -44,7 +43,7 @@ Khartis v3 is a modern Single Page Application (SPA) built with:
 
 - **Framework**: [SvelteKit](https://kit.svelte.dev/) with TypeScript
 - **Architecture**: SPA with client-side routing (adapter-static)
-- **Styling**: [Carbon Design System](https://carbondesignsystem.com/) + [TailwindCSS v4](https://tailwindcss.com/)
+- **Styling**: [Carbon Design System](https://carbondesignsystem.com/)
 - **Internationalization**: [Paraglide-JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) (fr, en, es, de, pt)
 - **Testing**: Vitest (unit) + Playwright (e2e)
 - **Package Manager**: pnpm
