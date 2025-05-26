@@ -2,7 +2,7 @@
 
 <div align="center">
   <h3>Simple thematic mapping tool</h3>
-  
+
   <p>An open source project by <a href="http://www.sciencespo.fr/cartographie/">Sciences Po - Cartography Workshop</a></p>
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
@@ -50,7 +50,7 @@ cd khartis-v3
 2. Install dependencies:
 
 ```bash
-pnpm install
+pnpm init:project
 ```
 
 ## 🏃‍♂️ Development
