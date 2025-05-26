@@ -1,0 +1,77 @@
+name: Production Deployment Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  dependency-setup:
+    name: Dependencies Installation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache dependencies
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+
+  version-generation:
+    name: Semantic Version Generation
+    needs: dependency-setup
+    runs-on: ubuntu-latest
+    permissions: write-all
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "pnpm"
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Run semantic-release
+        id: semantic-release
+        run: npx semantic-release
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Retrieve latest release via GitHub API
+        id: get-version
+        run: |
+          LATEST_TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
+          echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest version: $LATEST_TAG"
