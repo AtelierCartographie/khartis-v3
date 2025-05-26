@@ -43,7 +43,8 @@
 		"vitest": "^3.1.4"
 	},
 	"dependencies": {
-		"@inlang/paraglide-js": "^2.0.13"
+		"@inlang/paraglide-js": "^2.0.13",
+		"carbon-components-svelte": "^0.89.2"
 	},
 	"pnpm": {
 		"onlyBuiltDependencies": [
