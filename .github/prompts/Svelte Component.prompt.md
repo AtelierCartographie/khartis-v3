@@ -9,7 +9,6 @@ Ask for the component name and purpose if not provided.
 - Use Svelte 5 syntax: `$props()`, `$state()`, `$derived()`, `{@render children()}`
 - Use TypeScript with proper interface definitions
 - Integrate Carbon Design System components where appropriate
-- Use TailwindCSS for custom styling
 - All text must be internationalized using `$lib/paraglide/messages.js`
 - Include proper accessibility attributes (ARIA labels, semantic HTML)
 - Use kebab-case for component file names
