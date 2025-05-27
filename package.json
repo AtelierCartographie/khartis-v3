@@ -26,7 +26,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "husky",
-		"machine-translate": "inlang machine translate --project project.inlang",
+		"machine-translate": "inlang machine translate",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
@@ -70,6 +70,7 @@
 		"vitest": "^3.1.4"
 	},
 	"dependencies": {
+		"@duckdb/duckdb-wasm": "1.29.1-dev132.0",
 		"@inlang/paraglide-js": "^2.0.13",
 		"carbon-components-svelte": "^0.89.2",
 		"carbon-icons-svelte": "^13.3.0",
