@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -35,9 +35,75 @@ jobs:
             */*/node_modules
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
 
+  unit-tests:
+    name: Unit Tests (Vitest)
+    needs: dependency-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Run unit tests
+        run: pnpm run test:unit -- --run
+
+  e2e-tests:
+    name: End-to-End Tests (Playwright)
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Run Playwright tests
+        run: pnpm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
   version-generation:
     name: Semantic Version Generation
-    needs: dependency-setup
+    needs: e2e-tests
     runs-on: ubuntu-latest
     permissions: write-all
     outputs:
@@ -51,7 +117,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -66,7 +132,7 @@ jobs:
         id: semantic-release
         run: npx semantic-release
         env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
 
       - name: Retrieve latest release via GitHub API
         id: get-version
