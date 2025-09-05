@@ -22,7 +22,9 @@ export const mainToolbarActions = {
       globalActions.setNavigationState(ToolbarStep.Visualizations);
       console.log('[MainToolbar] ➡️  Navigating to visualization tab');
     } else {
-      console.warn('[MainToolbar] ⚠️  Cannot navigate to visualization: conditions not met');
+      console.warn(
+        '[MainToolbar] ⚠️  Cannot navigate to visualization: conditions not met'
+      );
     }
   },
 

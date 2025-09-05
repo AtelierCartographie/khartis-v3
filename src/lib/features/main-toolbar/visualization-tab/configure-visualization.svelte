@@ -32,7 +32,6 @@
     <Separator orientation="horizontal" />
   </header>
 
-  <!-- Symboles -->
   <ExpandableSection
     title={m.symbols_title()}
     defaultOpen
@@ -307,7 +306,6 @@
     {/snippet}
   </ExpandableSection>
 
-  <!-- Polygones -->
   <ExpandableSection
     title={m.polygons_title()}
     defaultOpen={false}
@@ -416,7 +414,6 @@
     {/snippet}
   </ExpandableSection>
 
-  <!-- Lignes -->
   <ExpandableSection
     title={m.lines_title()}
     defaultOpen={false}
@@ -478,7 +475,6 @@
     {/snippet}
   </ExpandableSection>
 
-  <!-- Étiquettes -->
   <ExpandableSection
     title={m.labels_title()}
     defaultOpen={false}

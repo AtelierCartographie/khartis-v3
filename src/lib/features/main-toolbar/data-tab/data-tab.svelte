@@ -9,10 +9,6 @@
   import GeolocationStep from './geolocation-step.svelte';
 
   // TODO: Implement navigation logic
-  // $effect(() => {
-  //   const canNavigate = isDataReady();
-  //   mainToolbarActions.setCanNavigateToVisualization(canNavigate);
-  // });
 </script>
 
 <div id="khartis-data-tab">

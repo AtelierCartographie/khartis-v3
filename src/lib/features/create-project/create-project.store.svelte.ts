@@ -36,7 +36,6 @@ export const createProjectState = $state<CreateProjectState>({
 });
 
 export const createProjectActions = {
-  // Modal actions
   openModal(): void {
     createProjectState.isModalOpen = true;
     console.log('[CreateProject] 🔄 Modal opened');
@@ -48,13 +47,11 @@ export const createProjectActions = {
     console.log('[CreateProject] 🔄 Modal closed');
   },
 
-  // Tab actions
   selectTab(tab: ProjectTab): void {
     createProjectState.selectedTab = tab;
     console.log('[CreateProject] 🔄 Tab selected:', tab);
   },
 
-  // New project actions
   addUploadedFile(file: UploadedFile): void {
     createProjectState.newProject.uploadedFiles.push(file);
     console.log('[CreateProject] 🔄 File uploaded:', file.name);
@@ -150,7 +147,6 @@ export const createProjectActions = {
     }
   },
 
-  // Open project actions
   setSavedProjects(projects: SavedProject[]): void {
     createProjectState.openProject.savedProjects = projects;
     console.log('[CreateProject] 🔄 Saved projects updated:', projects.length);
@@ -177,7 +173,6 @@ export const createProjectActions = {
     }
   },
 
-  // Try example actions
   setExamples(examples: ExampleProject[]): void {
     createProjectState.tryExample.examples = examples;
     console.log('[CreateProject] 🔄 Examples updated:', examples.length);
@@ -205,7 +200,6 @@ export const createProjectActions = {
     }
   },
 
-  // Utility actions
   resetNewProject(): void {
     Object.assign(createProjectState.newProject, DEFAULT_STATE.newProject);
     console.log('[CreateProject] 🔄 New project state reset');
@@ -214,7 +208,7 @@ export const createProjectActions = {
   resetOpenProject(): void {
     Object.assign(createProjectState.openProject, {
       ...DEFAULT_STATE.openProject,
-      savedProjects: createProjectState.openProject.savedProjects // Keep loaded projects
+      savedProjects: createProjectState.openProject.savedProjects
     });
     console.log('[CreateProject] 🔄 Open project state reset');
   },
@@ -222,7 +216,7 @@ export const createProjectActions = {
   resetTryExample(): void {
     Object.assign(createProjectState.tryExample, {
       ...DEFAULT_STATE.tryExample,
-      examples: createProjectState.tryExample.examples // Keep loaded examples
+      examples: createProjectState.tryExample.examples
     });
     console.log('[CreateProject] 🔄 Try example state reset');
   },

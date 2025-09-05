@@ -94,12 +94,10 @@
     selectedRowIds={selectedRowIds}
     on:click:row--expand={(e) => {
       const event = e as CustomEvent<{ expanded: boolean; row: any }>;
-      // Mettre à jour la logique selon les besoins
       console.log('Row expanded:', event.detail);
     }}
     on:click:row--select={(e) => {
       const event = e as CustomEvent<{ selected: boolean; row: any }>;
-      // Mettre à jour la logique selon les besoins
       console.log('Row selected:', event.detail);
     }}
     headers={headers}

@@ -41,6 +41,10 @@
 - [📁 Project Structure](#project-structure)
   - [Feature-Based Architecture](#️-feature-based-architecture)
 - [🔧 Store Architecture & State Management](#-store-architecture--state-management)
+- [🔧 Store Architecture & State Management](#-store-architecture--state-management)
+  - [Global vs Tool State](#global-vs-tool-state)
+  - [Tool Store Orchestration](#tool-store-orchestration)
+  - [Zoom State Lifecycle](#zoom-state-lifecycle)
 - [🎨 Custom CSS System](#custom-css-system-documentation)
   - [Overview](#overview)
   - [Philosophy](#philosophy)
@@ -563,6 +567,113 @@ export function getComputedValue(): string {
 - **No Comments**: Keep code clean and self-documenting
 - **TypeScript Strict**: Full type safety with explicit return types
 - **Console Prefix**: Use `[ComponentName]` not `[ComponentNameStore]`
+
+### Global vs Tool State
+
+There are two complementary layers of state:
+
+| Layer                 | File(s)                            | Scope                         | Typical Responsibilities                                                                                                              |
+| --------------------- | ---------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Global UI/Application | `commons/store/global.svelte.ts`   | Cross-feature UI + navigation | Active step, selected tool, modal visibility, global zoom mode, projection filter/view mode                                           |
+| Tool Domain State     | `step-toolbar/tools/tools-store/*` | Cartographic tool data        | Layers ordering & visibility, legend content, projection params, annotations, geo indications, search, simplification, facets, format |
+
+Design rationale:
+
+1. Keep high-frequency UI transitions (navigation, zoom mode switching) lightweight and independent from heavier domain objects (layers, legend items).
+2. Allow resetting all cartographic tools without impacting global UI (e.g. keep current step & panel layout).
+3. Encourage explicit data flow: components decide whether they consume global state, tool state, or both.
+
+Practical rule: If the property influences multiple tool domains or top-level layout, it belongs to `globalState`; otherwise it resides in `toolState`.
+
+### Tool Store Orchestration
+
+All cartographic tool slices are consolidated in a single orchestrator store defined in:
+
+`step-toolbar/tools/tools-store/tools.store.svelte.ts`
+
+Core parts:
+
+```ts
+export const toolState = $state<ToolState>({ ...DEFAULT_STATE });
+export const toolActions = {
+  /* grouped update & toggle actions */
+};
+```
+
+Supporting files:
+
+- `tools-store.types.ts`: Strict TypeScript contracts for each slice.
+- `tools-store.defaults.svelte.ts`: Canonical `DEFAULT_STATE` (fixtures for design/UI dev).
+- `tools-store.actions.svelte.ts`: Factory functions returning slice-scoped mutators (search, layers, annotations, geo indications) to keep `toolActions` thin.
+- `tools-store.selectors.svelte.ts`: Pure selectors (`getVisibleLayers`, `getSearchResults`, `getActiveAnnotation`) used both directly and via re-export helpers.
+
+Mutation pattern:
+
+1. Actions mutate state in-place (Svelte 5 fine-grained reactivity observes property updates).
+2. Side-effects are limited to `console.log` dev traces (emoji/log enrichment intentionally omitted to keep output compact).
+3. Slice resets reuse `DEFAULT_STATE` to guarantee structural consistency.
+
+Selector usage example:
+
+```ts
+import { getVisibleLayersFromState } from '$lib/features/step-toolbar/tools/tools-store/tools.store.svelte';
+const visible = getVisibleLayersFromState();
+```
+
+Full reset (cartographic only):
+
+```ts
+toolActions.resetAll();
+```
+
+Targeted reset:
+
+```ts
+toolActions.resetTool('legend');
+```
+
+When adding a new tool slice:
+
+1. Extend `ToolState` and `DEFAULT_STATE`.
+2. Add factory actions if complex (createXActions pattern).
+3. Add selectors for derived collections (avoid `$derived` in the orchestrator for testability & portability).
+4. Register update & toggle methods in `toolActions`.
+
+### Zoom State Lifecycle
+
+Zoom resides in `globalState.zoom` because it affects cross-feature layout and interaction surfaces (map canvas vs entire application).
+
+Contract:
+
+```ts
+interface ZoomState {
+  mode: 'map' | 'page';
+  mapZoomLevel: number; // 0.1 → 10 (step = 0.2)
+  pageZoomLevel: number; // 10 → 500 (%) (step = 10)
+  minMapZoom: number; // 0.1
+  maxMapZoom: number; // 10
+  minPageZoom: number; // 10
+  maxPageZoom: number; // 500
+}
+```
+
+Lifecycle events (all via `globalActions`):
+
+| Action                   | Effect                                 | Notes                                         |
+| ------------------------ | -------------------------------------- | --------------------------------------------- |
+| `setZoomMode(mode)`      | Switch context (Map/Page)              | Keeps respective zoom levels intact           |
+| `zoomIn()` / `zoomOut()` | Increment/decrement current mode level | Clamped & rounded (map zoom to 0.1 precision) |
+| `resetZoom()`            | Reset active mode only                 | Map → 1, Page → 100%                          |
+| `setMapZoom(level)`      | Direct set (clamped)                   | Use for programmatic fit-to-bounds later      |
+| `setPageZoom(level)`     | Direct set (clamped)                   | Enables accessibility shortcuts               |
+
+UI bindings:
+
+- `zoom-toolbar.svelte`: Mode tabs + in/out/reset.
+- `main-map.svelte`: Applies `transform: scale(mapZoomLevel)` (future: Deck.gl viewport sync).
+- `+layout.svelte`: Wraps root content in a scale container when `mode === Page`.
+
+Accessibility: Reset is keyboard-activable (Enter/Space) and zoom value is focusable for assistive tech. Shortcuts documented in the Zoom section above remain source of truth.
 
 ### Architecture Overview
 

@@ -24,7 +24,6 @@
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
   let selectedFieldId = $state<number>(0);
 
-  // Mock suggestions; can be generated from profiling later
   let suggestions = $state<Suggestion[]>([
     {
       id: 'symb1',

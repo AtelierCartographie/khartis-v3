@@ -36,13 +36,10 @@ export type ExampleCategory =
   | 'hybrids';
 
 export interface CreateProjectState {
-  // Modal state
   isModalOpen: boolean;
 
-  // Tab selection
   selectedTab: ProjectTab;
 
-  // New project state
   newProject: {
     uploadedFiles: UploadedFile[];
     pastedData: string;
@@ -52,7 +49,6 @@ export interface CreateProjectState {
     error?: string;
   };
 
-  // Open project state
   openProject: {
     savedProjects: SavedProject[];
     selectedProjectId?: string;
@@ -61,7 +57,6 @@ export interface CreateProjectState {
     error?: string;
   };
 
-  // Try example state
   tryExample: {
     examples: ExampleProject[];
     selectedExampleId?: string;
