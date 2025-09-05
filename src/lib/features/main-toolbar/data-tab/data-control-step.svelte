@@ -1,5 +1,8 @@
 <script lang="ts">
-  import Separator from '$lib/features/commons/components/separator.svelte';
+  import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
   import { Button, DataTable, Tag } from 'carbon-components-svelte';
   import {
     Filter,
@@ -10,7 +13,7 @@
     TrashCan,
     WarningAltFilled
   } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   const expandedRowIds = $derived(dataTabState.dataControl.expandedRowIds);
   const selectedRowIds = $derived(dataTabState.dataControl.selectedRowIds);
@@ -27,14 +30,8 @@
   }));
 </script>
 
-<section>
-  <header class="control-header">
-    <div class="control-title">
-      <Table size={24} />
-      <h5>1. Contrôler les données</h5>
-    </div>
-    <Separator orientation="horizontal" />
-  </header>
+<section id="data-control-step">
+  <MainToolBarHeader title="1. Contrôler les données" />
 
   <div class="toolbar">
     <div class="tools">
@@ -110,11 +107,9 @@
 </section>
 
 <style>
-  .control-header .control-title {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    margin-bottom: var(--cds-spacing-03);
+  #data-control-step {
+    background-color: var(--cds-ui-02);
+    padding: var(--cds-spacing-05);
   }
 
   .toolbar {

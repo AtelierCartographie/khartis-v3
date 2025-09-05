@@ -159,6 +159,10 @@
 </nav>
 
 <style>
+  #khartis-main-toolbar {
+    background-color: var(--cds-ui-01);
+  }
+
   nav {
     border-left: 1px solid var(--cds-ui-01);
     transition:
