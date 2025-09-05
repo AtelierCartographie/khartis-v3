@@ -1720,12 +1720,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@duckdb/duckdb-wasm@npm:1.29.1-dev132.0":
-  version: 1.29.1-dev132.0
-  resolution: "@duckdb/duckdb-wasm@npm:1.29.1-dev132.0"
+"@duckdb/duckdb-wasm@npm:1.29.1-dev9.0":
+  version: 1.29.1-dev9.0
+  resolution: "@duckdb/duckdb-wasm@npm:1.29.1-dev9.0"
   dependencies:
     apache-arrow: "npm:^17.0.0"
-  checksum: 10c0/89c0558c4d6411db27046e3071e5055c0fa023fe596a49227cb61c208c8f4b2acdcee25dffe920375072023b10fd8e00d12f9b31ae2380fba85da4403168cb9a
+  checksum: 10c0/8fbf8e579f113ac112a05b673e7c8b4416c1f7303ed5e2d14c1124071420fc0caaa2a32f81606d994c8cf00cf7ba8bd9f63fd1d16b9600c2f9e8f4ab7171efee
   languageName: node
   linkType: hard
 
@@ -6478,9 +6478,9 @@ __metadata:
   linkType: hard
 
 "caniuse-lite@npm:^1.0.30001737":
-  version: 1.0.30001739
-  resolution: "caniuse-lite@npm:1.0.30001739"
-  checksum: 10c0/a61ca5a53c428769059421a23311a7a812bdb6586e34dcad6189bd61bcdea58ffe2fe7f3c22a829e8978eba5316b6599aee88b9ea23677d8d5298865df4f4ad8
+  version: 1.0.30001741
+  resolution: "caniuse-lite@npm:1.0.30001741"
+  checksum: 10c0/45746f896205a61a8eeb85a32aeca243ebce640cd6eb80d04949d9389a13f4659c737860300d7b988057599f0958c55eeab74ec02ce9ef137feb7d006e75fec1
   languageName: node
   linkType: hard
 
@@ -9295,7 +9295,7 @@ __metadata:
     "@deck.gl/layers": "npm:^9.1.14"
     "@deck.gl/mapbox": "npm:^9.1.14"
     "@deck.gl/mesh-layers": "npm:^9.1.14"
-    "@duckdb/duckdb-wasm": "npm:1.29.1-dev132.0"
+    "@duckdb/duckdb-wasm": "npm:1.29.1-dev9.0"
     "@eslint/compat": "npm:^1.3.2"
     "@eslint/js": "npm:^9.34.0"
     "@inlang/cli": "npm:^3.0.12"
@@ -9329,11 +9329,11 @@ __metadata:
     husky: "npm:^9.1.7"
     jsdom: "npm:^26.1.0"
     mapbox-gl: "npm:^3.14.0"
-    maplibre-gl: "npm:^5.7.0"
+    maplibre-gl: "npm:^5.7.1"
     prettier: "npm:^3.6.2"
     prettier-plugin-svelte: "npm:^3.4.0"
     sass-embedded: "npm:^1.92.0"
-    svelte: "npm:^5.38.6"
+    svelte: "npm:^5.38.7"
     svelte-check: "npm:^4.3.1"
     svelte-dnd-action: "npm:^0.9.64"
     typescript: "npm:^5.9.2"
@@ -9661,9 +9661,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"maplibre-gl@npm:^5.7.0":
-  version: 5.7.0
-  resolution: "maplibre-gl@npm:5.7.0"
+"maplibre-gl@npm:^5.7.1":
+  version: 5.7.1
+  resolution: "maplibre-gl@npm:5.7.1"
   dependencies:
     "@mapbox/geojson-rewind": "npm:^0.5.2"
     "@mapbox/jsonlint-lines-primitives": "npm:^2.0.2"
@@ -9687,7 +9687,7 @@ __metadata:
     quickselect: "npm:^3.0.0"
     supercluster: "npm:^8.0.1"
     tinyqueue: "npm:^3.0.0"
-  checksum: 10c0/1223089f2a3f1d110c5d3ceb836e88125b4b8412be9ade38b6702a3ec98e74e61262a8d055d58a060b9bf528213ef8695aadd5531c82052c87e363b5bbd1934a
+  checksum: 10c0/3a7a532568feca351a8c29d05de73bbc9abbd9f4fe336b6e07d0b3c7fc353c6d73cd73fd21e10e5d046d5ea7610dd9c86dc7af64f3f39726688cbeea1663dd44
   languageName: node
   linkType: hard
 
@@ -11945,9 +11945,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"svelte@npm:^5.38.6":
-  version: 5.38.6
-  resolution: "svelte@npm:5.38.6"
+"svelte@npm:^5.38.7":
+  version: 5.38.7
+  resolution: "svelte@npm:5.38.7"
   dependencies:
     "@jridgewell/remapping": "npm:^2.3.4"
     "@jridgewell/sourcemap-codec": "npm:^1.5.0"
@@ -11963,7 +11963,7 @@ __metadata:
     locate-character: "npm:^3.0.0"
     magic-string: "npm:^0.30.11"
     zimmerframe: "npm:^1.1.2"
-  checksum: 10c0/0643cc4f29de3585c4d0eb55117091d0fdbd51de0d75020db6fdf733c37a3dca3be43ee237b623c492b5cea52eecbe06dfd369f800cdbb62371827852b78df43
+  checksum: 10c0/b8ea04effc6a7bc38cd17236cc9ab047b149bf6f803e5a3005d9381f3a83098733089849deeb83d073c325c543891429c6d3faa098d9502c5cf4b26534577646
   languageName: node
   linkType: hard
 
