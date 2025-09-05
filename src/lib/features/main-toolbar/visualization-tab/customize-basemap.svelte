@@ -1,16 +1,14 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import Separator from '$lib/features/commons/components/separator.svelte';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Map } from 'carbon-icons-svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 </script>
 
-<section>
-  <header class="step-header">
-    <h5>{m.step3_title()}</h5>
-    <p class="kh-help">{m.step3_description()}</p>
-    <Separator orientation="horizontal" />
-  </header>
+<section id="customize-basemap">
+  <MainToolBarHeader title={m.step3_title()} />
+
+  <p class="kh-help">{m.step3_description()}</p>
 
   <Grid noGutter fullWidth>
     <Row>
@@ -30,13 +28,9 @@
 </section>
 
 <style lang="scss">
-  .step-header {
-    margin-bottom: var(--cds-spacing-05);
-
-    h5 {
-      margin-bottom: var(--cds-spacing-03);
-      font-weight: 600;
-    }
+  #customize-basemap {
+    background-color: var(--cds-ui-02);
+    padding: var(--cds-spacing-05);
   }
 
   .kh-help {

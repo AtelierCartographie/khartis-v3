@@ -18,25 +18,16 @@
     )}
   >
     <ChooseVisualization />
+
     <ConfigureVisualization />
+
     <CustomizeBasemap />
+
     <Actions />
   </Grid>
 </div>
 
 <style>
-  #khartis-viz-tab :global(.bx--grid) {
-    gap: var(--cds-spacing-07);
-  }
-
-  #khartis-viz-tab :global(.bx--grid) > :global(*) {
-    margin-bottom: var(--cds-spacing-07);
-  }
-
-  #khartis-viz-tab :global(.bx--grid) > :global(*:last-child) {
-    margin-bottom: 0;
-  }
-
   :global(.collapsed-content) {
     opacity: 0.7;
     pointer-events: none;

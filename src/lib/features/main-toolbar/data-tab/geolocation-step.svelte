@@ -1,6 +1,9 @@
 <script lang="ts">
-  import Separator from '$lib/features/commons/components/separator.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     ComboBox,
@@ -9,7 +12,7 @@
     SelectItem
   } from 'carbon-components-svelte';
   import { Location, Map } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   const dataFields = [
     'Nom pays',
@@ -49,14 +52,8 @@
   let projectionValue = $state('wgs84');
 </script>
 
-<section>
-  <header class="geo-header">
-    <div class="geo-title">
-      <Map size={24} />
-      <h5>{m.geo_step_title()}</h5>
-    </div>
-    <Separator orientation="horizontal" />
-  </header>
+<section id="geolocation-step">
+  <MainToolBarHeader title={m.geo_step_title()} />
 
   <p class="kh-help">
     {m.geo_step_description()}
@@ -171,11 +168,9 @@
 </section>
 
 <style>
-  .geo-header .geo-title {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    margin-bottom: var(--cds-spacing-03);
+  #geolocation-step {
+    background-color: var(--cds-ui-02);
+    padding: var(--cds-spacing-05);
   }
 
   .kh-help {
