@@ -1,0 +1,413 @@
+<script lang="ts">
+  import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { m } from '$lib/paraglide/messages';
+  import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
+  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
+  import clsx from 'clsx';
+
+  let {
+    hex = '#fff',
+    hue = 50,
+    saturation = 50,
+    lightness = 50,
+    onCancel = () => {},
+    onValidate = (_: {
+      hex: string;
+      hue: number;
+      saturation: number;
+      lightness: number;
+    }) => {},
+    triggerLabel = ''
+  } = $props();
+
+  let colorOpen = $state(false);
+  let colorWrapEl = $state<HTMLElement | null>(null);
+  let triggerEl = $state<HTMLButtonElement | null>(null);
+  let dropdownEl = $state<HTMLDivElement | null>(null);
+  let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
+  let openUpward = $state(false);
+
+  function updateHex() {
+    hex = hslToHex(hue, saturation, lightness);
+  }
+
+  function updateDropdownPosition() {
+    if (triggerEl && dropdownEl) {
+      const rect = triggerEl.getBoundingClientRect();
+      const dropdownHeight = 400;
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+        openUpward = true;
+        dropdownPosition = {
+          top: rect.top - dropdownHeight - 26,
+          left: rect.left,
+          width: 370
+        };
+      } else {
+        openUpward = false;
+        dropdownPosition = {
+          top: rect.bottom - 95,
+          left: rect.left,
+          width: 370
+        };
+      }
+    }
+  }
+
+  $effect(() => {
+    updateHex();
+  });
+
+  $effect(() => {
+    if (colorOpen) {
+      updateDropdownPosition();
+      window.addEventListener('scroll', updateDropdownPosition, true);
+      window.addEventListener('resize', updateDropdownPosition);
+
+      return () => {
+        window.removeEventListener('scroll', updateDropdownPosition, true);
+        window.removeEventListener('resize', updateDropdownPosition);
+      };
+    }
+  });
+</script>
+
+<div
+  id="khartis-color-picker"
+  class={clsx('color-picker-wrap')}
+  bind:this={colorWrapEl}
+>
+  {#if triggerLabel}
+    <label class="form-label" for="color-picker-trigger">{triggerLabel}</label>
+  {/if}
+
+  <button
+    id="color-picker-trigger"
+    class="color-trigger"
+    type="button"
+    onclick={() => (colorOpen = !colorOpen)}
+    aria-expanded={colorOpen}
+    bind:this={triggerEl}
+  >
+    <div class="swatch" style={`background:${hex}`}></div>
+    <span class:open={colorOpen} class="chevron"><ChevronDown size={20} /></span
+    >
+  </button>
+
+  {#if colorOpen}
+    <div
+      class="color-dropdown"
+      class:open-upward={openUpward}
+      style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px;"
+      bind:this={dropdownEl}
+    >
+      <Grid condensed class="mt-5 mb-5">
+        <Row noGutter>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider rainbow">
+              <Slider
+                min={0}
+                max={360}
+                step={1}
+                bind:value={hue}
+                hideTextInput
+                labelText={m.color_hue()}
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <input
+                id="cp-hue-num"
+                class="number"
+                type="number"
+                min={0}
+                max={360}
+                step={1}
+                bind:value={hue}
+                inputmode="numeric"
+              />
+            </div>
+          </Column>
+        </Row>
+
+        <Row noGutter>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                bind:value={saturation}
+                hideTextInput
+                labelText={m.color_saturation()}
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <input
+                id="cp-sat-num"
+                class="number"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                bind:value={saturation}
+                inputmode="numeric"
+              />
+            </div>
+          </Column>
+        </Row>
+
+        <Row noGutter>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                min={0}
+                max={100}
+                step={1}
+                bind:value={lightness}
+                hideTextInput
+                labelText={m.color_brightness()}
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <input
+                id="cp-light-num"
+                class="number"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                bind:value={lightness}
+                inputmode="numeric"
+              />
+            </div>
+          </Column>
+        </Row>
+
+        <Row noGutter class="mt-4">
+          <Column sm={2} md={4} lg={8}>
+            <label class="form-label mb-2" for="cp-hex"
+              >{m.color_hex_code()}</label
+            >
+
+            <input id="cp-hex" class="hex" bind:value={hex} />
+          </Column>
+
+          <Column sm={2} md={4} lg={8}>
+            <span class="form-label mb-2">{m.color_preview()}</span>
+            <div class="preview" style={`background:${hex}`}></div>
+          </Column>
+        </Row>
+
+        <Row noGutter class="mt-4">
+          <Column sm={2} md={4} lg={8}>
+            <Button
+              kind="secondary"
+              size="field"
+              class="action-button"
+              onclick={() => onCancel()}>{m.button_cancel()}</Button
+            >
+          </Column>
+
+          <Column sm={2} md={4} lg={8}>
+            <Button
+              kind="primary"
+              size="field"
+              class="action-button"
+              onclick={() => onValidate({ hex, hue, saturation, lightness })}
+            >
+              {m.button_validate()}
+              <ArrowRight
+                size={16}
+                style="margin-left: var(--cds-spacing-03);"
+              />
+            </Button>
+          </Column>
+        </Row>
+      </Grid>
+    </div>
+  {/if}
+</div>
+
+<style>
+  .field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cds-text-01);
+  }
+
+  .color-picker-wrap {
+    position: relative;
+  }
+
+  .color-trigger {
+    margin-top: var(--cds-spacing-03);
+    width: 100%;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    background: var(--cds-field-01);
+    border: 0;
+    border-bottom: 1px solid var(--cds-ui-04);
+    padding: 0 var(--cds-spacing-05) 0 var(--cds-spacing-03);
+    cursor: pointer;
+    color: var(--cds-text-01);
+    text-align: left;
+  }
+
+  .color-trigger:focus {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
+  }
+
+  .swatch {
+    width: 100%;
+    margin-right: 20px;
+    height: 1.25rem;
+    border: 1px solid var(--cds-ui-04);
+  }
+
+  .chevron {
+    position: absolute;
+    right: var(--cds-spacing-03);
+    transform: rotate(0deg);
+    transition: transform 120ms;
+  }
+
+  .chevron.open {
+    transform: rotate(180deg);
+  }
+
+  .color-dropdown {
+    position: fixed;
+    z-index: 9999;
+    background: var(--cds-field-01);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--cds-ui-04);
+  }
+
+  .color-dropdown.open-upward {
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .slider {
+    width: 100%;
+  }
+
+  #khartis-color-picker .slider :global(.bx--slider) {
+    min-width: 160px !important;
+  }
+
+  #khartis-color-picker .slider :global(.bx--slider__track) {
+    background: var(--cds-ui-03);
+  }
+
+  #khartis-color-picker .slider :global(.bx--slider__filled-track) {
+    background: var(--cds-text-01);
+  }
+
+  #khartis-color-picker .slider.rainbow :global(.bx--slider__track) {
+    background: linear-gradient(
+      90deg,
+      red,
+      yellow,
+      lime,
+      cyan,
+      blue,
+      magenta,
+      red
+    );
+  }
+
+  #khartis-color-picker .slider.rainbow :global(.bx--slider__filled-track) {
+    background: transparent;
+  }
+
+  .input-wrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+  }
+
+  .input-wrapper .number {
+    width: 100%;
+    height: 32px;
+    min-width: unset;
+    padding: 0 var(--cds-spacing-03);
+    border: none;
+    border-bottom: 1px solid #000;
+    background: var(--cds-ui-02);
+    color: var(--cds-text-01);
+    font-weight: normal;
+    font-family: var(--cds-code-01-font-family);
+    line-height: var(--cds-body-short-01-line-height);
+    border-radius: 0;
+    box-sizing: border-box;
+    font-weight: 600;
+  }
+
+  .input-wrapper .number:focus {
+    outline: none;
+    border-bottom-color: #000;
+  }
+
+  .input-wrapper .number:disabled {
+    background: var(--cds-ui-03);
+    color: var(--cds-text-02);
+    cursor: not-allowed;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+
+  .hex {
+    width: 100%;
+    height: 2.5rem;
+    border: none;
+    border-bottom: 1px solid #000;
+    padding: 0 var(--cds-spacing-03);
+    background: var(--cds-field-02);
+    color: var(--cds-text-01);
+    font-family: var(--cds-code-01-font-family);
+    font-size: var(--cds-body-short-01-font-size);
+    text-align: center;
+    font-weight: normal;
+  }
+
+  .preview {
+    width: 100%;
+    height: 2.5rem;
+    border: 1px solid var(--cds-ui-04);
+  }
+
+  .hex,
+  .preview {
+    box-sizing: border-box;
+  }
+
+  #khartis-color-picker :global(.action-button) {
+    width: 100%;
+    max-width: 100%;
+  }
+</style>

@@ -1,0 +1,158 @@
+<script lang="ts">
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import {
+    SimplificationLevel,
+    SimplificationSource
+  } from '$lib/features/commons/types/enums';
+  import { m } from '$lib/paraglide/messages';
+  import {
+    Column,
+    Grid,
+    InlineNotification,
+    RadioButton,
+    RadioButtonGroup,
+    Row,
+    Slider
+  } from 'carbon-components-svelte';
+  import { DocumentAdd, Earth } from 'carbon-icons-svelte';
+  import {
+    simplificationActions,
+    simplificationState
+  } from '../simplification/simplification.store.svelte';
+
+  const store = simplificationActions;
+  const state = $derived(simplificationState);
+
+  const sourceIndex = $derived(
+    state.source === SimplificationSource.Basemap ? 0 : 1
+  );
+
+  const sources = [
+    { icon: Earth, label: m.simplification_source_basemap(), iconSize: 20 },
+    {
+      icon: DocumentAdd,
+      label: m.simplification_source_geodata(),
+      iconSize: 20
+    }
+  ];
+
+  function onSourceChange(index: number) {
+    const newSource =
+      index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
+    store.setSource(newSource);
+  }
+</script>
+
+<div id="khartis-simplification-tool">
+  <Grid noGutter fullWidth class="simplification-grid">
+    <Row>
+      <Column>
+        <p class="description">{m.simplification_description()}</p>
+      </Column>
+    </Row>
+
+    <Row>
+      <Column>
+        <ToggleTabs
+          items={sources}
+          activeIndex={sourceIndex}
+          onChange={onSourceChange}
+          className="source-tabs"
+          activeClass="active"
+          fullWidthClass="full-width"
+          hideInactiveLabel
+        />
+      </Column>
+    </Row>
+
+    {#if state.source === SimplificationSource.Basemap}
+      <Row>
+        <Column>
+          <div class="form-label">{m.simplification_level_label()}</div>
+          <RadioButtonGroup
+            orientation="horizontal"
+            selected={state.level}
+            on:change={(e) =>
+              store.setLevel((e as CustomEvent).detail as SimplificationLevel)}
+          >
+            <RadioButton
+              value={SimplificationLevel.Low}
+              labelText={m.simplification_level_low()}
+            />
+            <RadioButton
+              value={SimplificationLevel.Medium}
+              labelText={m.simplification_level_medium()}
+            />
+            <RadioButton
+              value={SimplificationLevel.High}
+              labelText={m.simplification_level_high()}
+            />
+          </RadioButtonGroup>
+        </Column>
+      </Row>
+    {/if}
+
+    {#if state.source === SimplificationSource.Geo}
+      <Row>
+        <Column>
+          <InlineNotification
+            kind="warning"
+            lowContrast
+            title={m.simplification_warning_title()}
+            subtitle={m.simplification_warning_subtitle()}
+          />
+        </Column>
+      </Row>
+
+      <Row>
+        <Column>
+          <div class="form-label">{m.simplification_rate_label()}</div>
+          <div class="slider-row">
+            <Slider
+              min={0}
+              max={100}
+              step={1}
+              value={state.rate}
+              on:change={(e) => store.setRate((e as CustomEvent).detail || 50)}
+              labelText=""
+              minLabel="0"
+              maxLabel="100"
+              fullWidth
+            />
+          </div>
+        </Column>
+      </Row>
+    {/if}
+  </Grid>
+</div>
+
+<style>
+  .description {
+    color: var(--cds-text-secondary);
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  #khartis-simplification-tool :global(.source-tabs) {
+    width: 100%;
+    margin-bottom: 1.5rem;
+  }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  #khartis-simplification-tool :global(.bx--number) {
+    width: 96px;
+  }
+  .form-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cds-text-01);
+    margin-bottom: var(--cds-spacing-03);
+    display: block;
+  }
+  #khartis-simplification-tool :global(.bx--radio-button-group--horizontal) {
+    gap: 2rem;
+  }
+</style>
