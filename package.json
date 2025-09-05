@@ -1,98 +1,109 @@
 {
-	"name": "khartis-v3",
-	"private": true,
-	"version": "0.0.1",
-	"type": "module",
-	"contributors": [
-		{
-			"name": "Jean-Baptiste Thery",
-			"email": "jb.thery@jcode.works",
-			"url": "https://github.com/jb-thery"
-		}
-	],
-	"release": {
-		"branches": [
-			{
-				"name": "main"
-			},
-			{
-				"name": "develop",
-				"prerelease": true
-			}
-		]
-	},
-	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "husky",
-		"machine-translate": "inlang machine translate",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint .",
-		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "playwright test",
-		"reset:npm:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf pnpm-lock.yaml",
-		"update:packages": "pnpm --recursive update --latest",
-		"generate-pwa-assets": "pwa-assets-generator",
-		"init:project": "npx husky init && pnpm i"
-	},
-	"devDependencies": {
-		"@commitlint/cli": "^19.8.1",
-		"@commitlint/config-conventional": "^19.8.1",
-		"@eslint/compat": "^1.2.9",
-		"@eslint/js": "^9.27.0",
-		"@playwright/test": "^1.52.0",
-		"@sveltejs/adapter-auto": "^6.0.1",
-		"@sveltejs/adapter-static": "^3.0.8",
-		"@sveltejs/kit": "^2.21.1",
-		"@sveltejs/vite-plugin-svelte": "^5.0.3",
-		"@testing-library/jest-dom": "^6.6.3",
-		"@testing-library/svelte": "^5.2.8",
-		"@types/node": "^22.15.21",
-		"@vite-pwa/assets-generator": "^1.0.0",
-		"carbon-preprocess-svelte": "^0.11.11",
-		"eslint": "^9.27.0",
-		"eslint-config-prettier": "^10.1.5",
-		"eslint-plugin-svelte": "^3.9.0",
-		"globals": "^16.2.0",
-		"husky": "^9.1.7",
-		"jsdom": "^26.1.0",
-		"prettier": "^3.5.3",
-		"prettier-plugin-svelte": "^3.4.0",
-		"svelte": "^5.33.2",
-		"svelte-check": "^4.2.1",
-		"typescript": "^5.8.3",
-		"typescript-eslint": "^8.32.1",
-		"vite": "^6.3.5",
-		"vitest": "^3.1.4"
-	},
-	"dependencies": {
-		"@deck.gl/core": "^9.1.12",
-		"@deck.gl/geo-layers": "^9.1.12",
-		"@deck.gl/layers": "^9.1.12",
-		"@deck.gl/mapbox": "^9.1.12",
-		"@deck.gl/mesh-layers": "^9.1.12",
-		"@duckdb/duckdb-wasm": "1.29.1-dev132.0",
-		"@inlang/paraglide-js": "^2.0.13",
-		"@mapbox/vector-tile": "^2.0.3",
-		"@turf/turf": "^7.2.0",
-		"carbon-components-svelte": "^0.89.2",
-		"carbon-icons-svelte": "^13.3.0",
-		"d3-geo": "^3.1.1",
-		"d3-scale-chromatic": "^3.1.0",
-		"deck.gl": "^9.1.12",
-		"mapbox-gl": "^3.12.0",
-		"maplibre-gl": "^5.5.0",
-		"vite-plugin-pwa": "^1.0.0",
-		"vite-plugin-sitemap": "^0.8.2"
-	},
-	"pnpm": {
-		"onlyBuiltDependencies": [
-			"esbuild"
-		]
-	},
-	"packageManager": "pnpm@10.11.0"
+  "name": "khartis-v3",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "contributors": [
+    {
+      "name": "Jean-Baptiste Thery",
+      "email": "jb.thery@jcode.works",
+      "url": "https://github.com/jb-thery"
+    }
+  ],
+  "release": {
+    "branches": [
+      {
+        "name": "main"
+      },
+      {
+        "name": "develop",
+        "prerelease": true
+      }
+    ]
+  },
+  "scripts": {
+    "dev": "vite dev --port 5176",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "husky",
+    "machine-translate": "npx inlang machine translate --project ./project.inlang",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "format": "prettier --write .",
+    "lint": "prettier --check . && eslint .",
+    "test:unit": "vitest",
+    "test": "npm run test:unit -- --run && npm run test:e2e",
+    "test:e2e": "playwright test",
+    "reset:yarn:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf yarn.lock",
+    "update:packages": "yarn upgrade-interactive",
+    "generate-pwa-assets": "pwa-assets-generator",
+    "init:project": "npx husky init && yarn install"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/compat": "^1.3.2",
+    "@eslint/js": "^9.34.0",
+    "@inlang/cli": "^3.0.12",
+    "@playwright/test": "^1.55.0",
+    "@sveltejs/adapter-auto": "^6.1.0",
+    "@sveltejs/adapter-static": "^3.0.9",
+    "@sveltejs/kit": "^2.37.0",
+    "@sveltejs/vite-plugin-svelte": "^6.1.4",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/svelte": "^5.2.8",
+    "@types/carbon__themes": "^0.0.3",
+    "@types/node": "^22",
+    "@vite-pwa/assets-generator": "^1.0.0",
+    "carbon-preprocess-svelte": "^0.11.11",
+    "eslint": "^9.34.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.12.1",
+    "globals": "^16.3.0",
+    "husky": "^9.1.7",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.6.2",
+    "prettier-plugin-svelte": "^3.4.0",
+    "sass-embedded": "^1.92.0",
+    "svelte": "^5.38.6",
+    "svelte-check": "^4.3.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.42.0",
+    "vite": "^7.1.4",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@carbon/colors": "^11.39.0",
+    "@carbon/layout": "^11.40.0",
+    "@carbon/themes": "^11.59.0",
+    "@deck.gl/core": "^9.1.14",
+    "@deck.gl/geo-layers": "^9.1.14",
+    "@deck.gl/layers": "^9.1.14",
+    "@deck.gl/mapbox": "^9.1.14",
+    "@deck.gl/mesh-layers": "^9.1.14",
+    "@duckdb/duckdb-wasm": "1.29.1-dev132.0",
+    "@inlang/paraglide-js": "^2.2.0",
+    "@mapbox/vector-tile": "^2.0.4",
+    "@turf/turf": "^7.2.0",
+    "carbon-components-svelte": "^0.89.6",
+    "carbon-icons-svelte": "^13.5.0",
+    "clsx": "^2.1.1",
+    "d3-geo": "^3.1.1",
+    "d3-scale-chromatic": "^3.1.0",
+    "dayjs": "^1.11.18",
+    "deck.gl": "^9.1.14",
+    "glob": "^11.0.3",
+    "hotkeys-js": "^3.13.15",
+    "mapbox-gl": "^3.14.0",
+    "maplibre-gl": "^5.7.0",
+    "svelte-dnd-action": "^0.9.64",
+    "vite-plugin-pwa": "^1.0.3",
+    "vite-plugin-sitemap": "^0.8.2"
+  },
+  "yarn": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "packageManager": "yarn@4.9.4"
 }
