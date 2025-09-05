@@ -10,7 +10,7 @@
   import {
     createProjectActions,
     createProjectState
-  } from './create-project.store.svelte';
+  } from '$lib/features/commons/store/create-project.store.svelte';
   import OpenProject from './open-project.svelte';
   import ProjectTab from './project-tab.svelte';
   import TryWithExample from './try-with-example.svelte';

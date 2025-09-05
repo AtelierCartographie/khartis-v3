@@ -10,7 +10,7 @@
   import {
     toolActions,
     toolState
-  } from '../tools-store/tools-store.store.svelte';
+  } from '../tools-store/tools.store.svelte';
 
   let width = $state(toolState.format.width ?? 842);
   let height = $state(toolState.format.height ?? 595);

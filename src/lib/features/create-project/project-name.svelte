@@ -5,7 +5,7 @@
   import {
     createProjectState,
     createProjectActions
-  } from './create-project.store.svelte';
+  } from '$lib/features/commons/store/create-project.store.svelte';
 
   interface Props {
     onClose?: () => void;
