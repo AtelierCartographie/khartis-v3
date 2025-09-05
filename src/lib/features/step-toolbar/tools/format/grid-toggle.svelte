@@ -1,7 +1,9 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { Column, Grid, Row, Toggle } from 'carbon-components-svelte';
-  import { formatState, formatActions } from './format.store.svelte';
+  import { formatActions, getFormatState } from './format.store.svelte';
+
+  const formatState = $derived(getFormatState());
 
   let grid = $state(formatState.gridEnabled);
 

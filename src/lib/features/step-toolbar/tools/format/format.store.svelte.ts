@@ -1,31 +1,21 @@
+import { toolActions, toolState } from '../tools-store/tools.store.svelte';
 import type { FormatState } from './format.types';
 
-const DEFAULT_STATE: FormatState = {
-  mode: 'preset',
-  model: 'page-a4-landscape',
-  width: 842,
-  height: 595,
-  color: { hue: 180, saturation: 50, lightness: 50 },
-  margins: { top: 32, bottom: 32, left: 32, right: 32 },
-  gridEnabled: true
-};
-
-export const formatState = $state<FormatState>({ ...DEFAULT_STATE });
+export function getFormatState(): FormatState {
+  return toolState.format;
+}
 
 export const formatActions = {
   setState(newState: Partial<FormatState>): void {
-    Object.assign(formatState, newState);
-    console.log('[Format] 🔄 State updated:', newState);
+    toolActions.updateFormat(newState);
   },
 
   setMode(mode: 'preset' | 'custom'): void {
-    formatState.mode = mode;
-    console.log('[Format] 📄 Mode changed to:', mode);
+    toolActions.updateFormat({ mode });
   },
 
   setModel(model: string): void {
-    formatState.model = model;
-    console.log('[Format] 📐 Model changed to:', model);
+    const updates: Partial<FormatState> = { model };
 
     const presets = {
       'page-a4-landscape': { width: 842, height: 595 },
@@ -36,28 +26,21 @@ export const formatActions = {
 
     const preset = presets[model as keyof typeof presets];
     if (preset) {
-      formatState.width = preset.width;
-      formatState.height = preset.height;
-      console.log(
-        '[Format] 📏 Size updated to:',
-        preset.width,
-        'x',
-        preset.height,
-        'px'
-      );
+      toolActions.updateFormat({
+        ...updates,
+        width: preset.width,
+        height: preset.height
+      });
+    } else {
+      toolActions.updateFormat(updates);
     }
   },
 
   setSize(width: number, height: number): void {
-    formatState.width = Math.max(1, width);
-    formatState.height = Math.max(1, height);
-    console.log(
-      '[Format] 📏 Custom size set to:',
-      formatState.width,
-      'x',
-      formatState.height,
-      'px'
-    );
+    toolActions.updateFormat({
+      width: Math.max(1, width),
+      height: Math.max(1, height)
+    });
   },
 
   setColor(color: {
@@ -65,22 +48,29 @@ export const formatActions = {
     saturation: number;
     lightness: number;
   }): void {
-    formatState.color = color;
-    console.log('[Format] 🎨 Background color set to:', color);
+    toolActions.updateFormat({ color });
   },
 
-  setMargins(margins: Partial<typeof DEFAULT_STATE.margins>): void {
-    formatState.margins = { ...formatState.margins, ...margins };
-    console.log('[Format] 📐 Margins updated:', formatState.margins);
+  setMargins(margins: Partial<{ top: number; bottom: number; left: number; right: number }>): void {
+    const currentState = getFormatState();
+    toolActions.updateFormat({
+      margins: { ...currentState.margins, ...margins }
+    });
   },
 
   setGridEnabled(enabled: boolean): void {
-    formatState.gridEnabled = enabled;
-    console.log('[Format] 🔲 Grid', enabled ? 'enabled' : 'disabled');
+    toolActions.updateFormat({ gridEnabled: enabled });
   },
 
   reset(): void {
-    console.log('[Format] 🔄 Reset to default state');
-    Object.assign(formatState, DEFAULT_STATE);
+    toolActions.updateFormat({
+      mode: 'preset',
+      model: 'page-a4-landscape',
+      width: 842,
+      height: 595,
+      color: { hue: 180, saturation: 50, lightness: 50 },
+      margins: { top: 32, bottom: 32, left: 32, right: 32 },
+      gridEnabled: true
+    });
   }
 };

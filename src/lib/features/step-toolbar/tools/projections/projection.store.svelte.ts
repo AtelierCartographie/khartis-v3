@@ -1,52 +1,48 @@
+import { toolActions, toolState } from '../tools-store/tools.store.svelte';
 import type { ProjectionState } from './projections.types';
 
-const DEFAULT_STATE: ProjectionState = {
-  selected: 'natural-earth',
-  viewMode: 'list',
-  longitude: 0,
-  latitude: 0,
-  rotation: 0,
-  center: [0, 0],
-  scale: 1
-};
-
-export const projectionState = $state<ProjectionState>({ ...DEFAULT_STATE });
+export function getProjectionState(): ProjectionState {
+  return toolState.projection;
+}
 
 export const projectionActions = {
   setState(newState: Partial<ProjectionState>): void {
-    Object.assign(projectionState, newState);
-    console.log('[Projection] 🔄 State updated:', newState);
+    toolActions.updateProjection(newState);
   },
 
   setSelected(projectionId: string): void {
-    projectionState.selected = projectionId;
-    console.log('[Projection] 🗺️ Selected projection:', projectionId);
+    toolActions.updateProjection({ selected: projectionId });
   },
 
   setViewMode(mode: 'list' | 'grid'): void {
-    projectionState.viewMode = mode;
-    console.log('[Projection] 👁️ View mode:', mode);
+    toolActions.updateProjection({ viewMode: mode });
   },
 
   setCenter(longitude: number, latitude: number): void {
-    projectionState.center = [longitude, latitude];
-    projectionState.longitude = longitude;
-    projectionState.latitude = latitude;
-    console.log('[Projection] 🎯 Center set to:', longitude, latitude);
+    toolActions.updateProjection({
+      center: [longitude, latitude],
+      longitude,
+      latitude
+    });
   },
 
   setRotation(rotation: number): void {
-    projectionState.rotation = rotation;
-    console.log('[Projection] 🔄 Rotation set to:', rotation + '°');
+    toolActions.updateProjection({ rotation });
   },
 
   setScale(scale: number): void {
-    projectionState.scale = Math.max(0.1, Math.min(10, scale));
-    console.log('[Projection] 🔍 Scale set to:', projectionState.scale);
+    toolActions.updateProjection({ scale: Math.max(0.1, Math.min(10, scale)) });
   },
 
   reset(): void {
-    console.log('[Projection] 🔄 Reset to default state');
-    Object.assign(projectionState, DEFAULT_STATE);
+    toolActions.updateProjection({
+      selected: 'natural-earth',
+      viewMode: 'list',
+      longitude: 0,
+      latitude: 0,
+      rotation: 0,
+      center: [0, 0],
+      scale: 1
+    });
   }
 };

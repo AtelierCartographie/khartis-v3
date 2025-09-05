@@ -17,11 +17,11 @@
   import { DocumentAdd, Earth } from 'carbon-icons-svelte';
   import {
     simplificationActions,
-    simplificationState
+    getSimplificationState
   } from '../simplification/simplification.store.svelte';
 
   const store = simplificationActions;
-  const state = $derived(simplificationState);
+  const state = $derived(getSimplificationState());
 
   const sourceIndex = $derived(
     state.source === SimplificationSource.Basemap ? 0 : 1
