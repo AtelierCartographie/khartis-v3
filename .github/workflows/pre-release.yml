@@ -15,17 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+      - name: Setup yarn
+        run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'yarn'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: yarn install --frozen-lockfile
 
       - name: Cache dependencies
         uses: actions/cache/save@v4
@@ -33,7 +33,7 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
 
   unit-tests:
     name: Unit Tests (Vitest)
@@ -42,14 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+      - name: Setup yarn
+        run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'yarn'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -57,11 +57,11 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run unit tests
-        run: pnpm run test:unit -- --run
+        run: yarn run test:unit -- --run
 
   e2e-tests:
     name: End-to-End Tests (Playwright)
@@ -70,14 +70,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+      - name: Setup yarn
+        run: corepack enable
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'yarn'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -85,14 +85,14 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
       - name: Run Playwright tests
-        run: pnpm run test:e2e
+        run: yarn run test:e2e
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -111,13 +111,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v4
+      - name: Setup yarn
+        run: corepack enable
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'yarn'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -125,7 +125,7 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run semantic-release
@@ -141,3 +141,47 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
           echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "Latest version: $LATEST_TAG"
+
+  build-and-deploy:
+    name: Build and Deploy to PPRD
+    needs: semantic-versioning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup yarn
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Build Svelte application
+        run: yarn build
+        env:
+          PUBLIC_BASE_PATH: '/cartographie/khartisnewpprd/'
+
+      - name: Deploy to PPRD via SFTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: cdnscp.reims.sciences-po.fr
+          username: khartis_upload
+          password: ${{ secrets.SFTP_PASSWORD }}
+          protocol: sftp
+          local-dir: ./build/
+          server-dir: /khartis_upload/html/pprd/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
