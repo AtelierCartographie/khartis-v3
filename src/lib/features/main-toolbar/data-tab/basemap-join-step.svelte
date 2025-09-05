@@ -1,7 +1,10 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
-  import Separator from '$lib/features/commons/components/separator.svelte';
+  import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -11,7 +14,7 @@
     Tag
   } from 'carbon-components-svelte';
   import { Grid as GridIcon, Upload } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   type Basemap = {
     id: string;
@@ -46,14 +49,8 @@
   const toVerifyCount = $derived(dataTabState.basemapJoin.entitiesToVerify);
 </script>
 
-<section>
-  <header class="join-header">
-    <div class="join-title">
-      <GridIcon size={24} />
-      <h5>{m.basemap_step_title()}</h5>
-    </div>
-    <Separator orientation="horizontal" />
-  </header>
+<section id="basemap-join-step">
+  <MainToolBarHeader title={m.basemap_step_title()} />
 
   <p class="kh-help">
     {m.basemap_step_description()}
@@ -180,11 +177,9 @@
 </section>
 
 <style>
-  .join-header .join-title {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    margin-bottom: var(--cds-spacing-03);
+  #basemap-join-step {
+    background-color: var(--cds-ui-02);
+    padding: var(--cds-spacing-05);
   }
 
   .kh-help {

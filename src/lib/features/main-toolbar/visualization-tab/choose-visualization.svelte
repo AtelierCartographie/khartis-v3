@@ -1,6 +1,5 @@
 <script lang="ts">
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
-  import Separator from '$lib/features/commons/components/separator.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -10,6 +9,7 @@
     Row
   } from 'carbon-components-svelte';
   import { Add, MagicWand } from 'carbon-icons-svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   interface Suggestion {
     id: string;
@@ -49,11 +49,8 @@
   let selectedSuggestion = $state<string>('symb2');
 </script>
 
-<section>
-  <header class="step-header">
-    <h5>{m.step1_title()}</h5>
-    <Separator orientation="horizontal" />
-  </header>
+<section id="choose-visualization">
+  <MainToolBarHeader title={m.step1_title()} />
 
   <Grid noGutter fullWidth>
     <Row>
@@ -112,13 +109,9 @@
 </section>
 
 <style lang="scss">
-  .step-header {
-    margin-bottom: var(--cds-spacing-05);
-
-    h5 {
-      margin-bottom: var(--cds-spacing-03);
-      font-weight: 600;
-    }
+  #choose-visualization {
+    background-color: var(--cds-ui-02);
+    padding: var(--cds-spacing-05);
   }
 
   .sub-section {
