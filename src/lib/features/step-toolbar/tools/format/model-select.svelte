@@ -7,8 +7,9 @@
     Select,
     SelectItem
   } from 'carbon-components-svelte';
-  import { formatActions, formatState } from './format.store.svelte';
+  import { formatActions, getFormatState } from './format.store.svelte';
 
+  const formatState = $derived(getFormatState());
   let selectedModel = $state(formatState.model);
 
   const modelOptions = [

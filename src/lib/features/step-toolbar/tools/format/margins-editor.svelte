@@ -8,7 +8,9 @@
     NumberInput,
     Row
   } from 'carbon-components-svelte';
-  import { formatActions, formatState } from './format.store.svelte';
+  import { formatActions, getFormatState } from './format.store.svelte';
+
+  const formatState = $derived(getFormatState());
 
   let top = $state(formatState.margins.top);
   let bottom = $state(formatState.margins.bottom);

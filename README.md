@@ -271,7 +271,10 @@ yarn playwright install  # Install Playwright browsers (first time only)
 
 ```
 e2e/
-├── create-project.spec.ts  # Project creation modal tests
+├── create-project/         # Project creation workflows
+│   ├── new-project.spec.ts      # New project creation tests
+│   ├── open-project.spec.ts     # Open existing project tests
+│   └── example-project.spec.ts  # Try example project tests
 └── [other-test].spec.ts    # Other feature tests
 ```
 
@@ -635,14 +638,35 @@ export function getComputedValue(): string {
 - **TypeScript Strict**: Full type safety with explicit return types
 - **Console Prefix**: Use `[ComponentName]` not `[ComponentNameStore]`
 
-### Global vs Tool State
+### Global vs Local State Architecture
 
-There are two complementary layers of state:
+#### Three-Layer State Management
 
-| Layer                 | File(s)                            | Scope                         | Typical Responsibilities                                                                                                              |
-| --------------------- | ---------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Global UI/Application | `commons/store/global.svelte.ts`   | Cross-feature UI + navigation | Active step, selected tool, modal visibility, global zoom mode, projection filter/view mode                                           |
-| Tool Domain State     | `step-toolbar/tools/tools-store/*` | Cartographic tool data        | Layers ordering & visibility, legend content, projection params, annotations, geo indications, search, simplification, facets, format |
+| Layer | Location | Scope | Examples |
+|-------|----------|-------|----------|
+| **Global Application State** | `commons/store/` | Cross-feature, app-wide | Navigation, modals, zoom, themes |
+| **Feature-Local State** | `features/*/[feature].state.svelte.ts` | Single feature | Main toolbar state |
+| **Tool State (Orchestrated)** | `step-toolbar/tools/tools.store.svelte.ts` | All cartographic tools | Unified tool state management |
+
+#### Global Stores (`commons/store/`)
+
+- **`global.svelte.ts`**: Main application state (navigation, UI panels, zoom)
+- **`create-project.store.svelte.ts`**: Project creation workflow
+- **`data-tab.store.svelte.ts`**: Data management and configuration
+
+#### Feature-Local Stores
+
+- **`main-toolbar.state.svelte.ts`**: Toolbar-specific state management
+
+#### Tool Stores (Centralized Pattern)
+
+All cartographic tools use a **centralized orchestrator** pattern:
+
+- **Central Store**: `tools.store.svelte.ts` - Single source of truth for all tools
+- **Tool-Specific Stores**: Each tool has its own store file that:
+  - Uses `getXxxState()` to access state from central store
+  - Delegates mutations to `toolActions` from central store
+  - Maintains the same API for components
 
 Design rationale:
 
@@ -652,27 +676,56 @@ Design rationale:
 
 Practical rule: If the property influences multiple tool domains or top-level layout, it belongs to `globalState`; otherwise it resides in `toolState`.
 
-### Tool Store Orchestration
+### Tool Store Orchestration Pattern
 
-All cartographic tool slices are consolidated in a single orchestrator store defined in:
+The tool state management uses a **centralized orchestration** pattern:
+
+#### Central Orchestrator
 
 `step-toolbar/tools/tools-store/tools.store.svelte.ts`
 
-Core parts:
-
-```ts
+```typescript
+// Single source of truth for all tool states
 export const toolState = $state<ToolState>({ ...DEFAULT_STATE });
+
+// Centralized actions for all tools
 export const toolActions = {
-  /* grouped update & toggle actions */
+  updateFormat(updates: Partial<FormatState>): void { ... },
+  updateProjection(updates: Partial<ProjectionState>): void { ... },
+  updateSimplification(updates: Partial<SimplificationState>): void { ... },
+  // ... other tool updates
 };
 ```
 
-Supporting files:
+#### Individual Tool Stores
 
-- `tools-store.types.ts`: Strict TypeScript contracts for each slice.
-- `tools-store.defaults.svelte.ts`: Canonical `DEFAULT_STATE` (fixtures for design/UI dev).
-- `tools-store.actions.svelte.ts`: Factory functions returning slice-scoped mutators (search, layers, annotations, geo indications) to keep `toolActions` thin.
-- `tools-store.selectors.svelte.ts`: Pure selectors (`getVisibleLayers`, `getSearchResults`, `getActiveAnnotation`) used both directly and via re-export helpers.
+Each tool maintains its own store file for component compatibility:
+
+```typescript
+// Example: format.store.svelte.ts
+import { toolActions, toolState } from '../tools-store/tools.store.svelte';
+
+// Access state through getter function
+export function getFormatState(): FormatState {
+  return toolState.format;
+}
+
+// Actions delegate to central store
+export const formatActions = {
+  setState(newState: Partial<FormatState>): void {
+    toolActions.updateFormat(newState);
+  },
+  // ... other actions
+};
+```
+
+#### Benefits of This Pattern
+
+1. **Single Source of Truth**: All tool state in one place
+2. **Consistent API**: Components use familiar `xxxState` and `xxxActions`
+3. **Easy Cross-Tool Communication**: Tools can access each other's state
+4. **Simplified Testing**: One central store to mock
+5. **Performance**: Single reactive state object
 
 Mutation pattern:
 
@@ -751,94 +804,91 @@ The state management system is built with:
 - **Modular stores** - One store per tool/feature
 - **Automatic persistence** to LocalStorage where needed
 
-### Store Locations
-
-**Important Architecture Pattern**: Each tool's store and types are co-located with their components for better modularity and maintainability within the feature-based structure.
+### Store File Organization
 
 ```
 src/lib/features/
 ├── commons/
-│   └── store/                     # Global app stores
-│       └── global.svelte.ts      # App-wide state (navigation, modals, toolbar)
-├── step-toolbar/
-│   └── tools/
-│       ├── tools.store.svelte.ts  # Unified tool state (main orchestrator)
-│       ├── tools-store/           # Cross-tool orchestration & defaults
-│       ├── annotations/
-│       │   ├── annotations.store.svelte.ts    # Text, shapes, drawings
-│       │   └── annotations.types.ts            # Annotation types
-│       ├── color-blindness/
-│       │   ├── color-blindness.store.svelte.ts # Accessibility simulation
-│       │   └── color-blindness.types.ts        # Color blindness types
-│       ├── facets/
-│       │   ├── facets.store.svelte.ts         # Small multiples layout
-│       │   └── facets.types.ts                 # Facets types
-│       ├── format/
-│       │   ├── format.store.svelte.ts         # Page format & export
-│       │   └── format.types.ts                 # Format types
-│       ├── geo-indications/
-│       │   ├── geo-indications.store.svelte.ts # Scale, orientation, inset
-│       │   └── geo-indications.types.ts        # Geo indications types
-│       ├── layers/
-│       │   ├── layers.store.svelte.ts         # Layer management
-│       │   └── layers.types.ts                 # Layer types
-│       ├── legend/
-│       │   ├── legend.store.svelte.ts         # Legend configuration
-│       │   └── legend.types.ts                 # Legend types
-│       ├── projections/
-│       │   ├── projection.store.svelte.ts     # Map projection settings (D3-geo)
-│       │   └── projections.types.ts            # Projection types
-│       ├── search/
-│       │   ├── search.store.svelte.ts         # Find & replace in data
-│       │   └── search.types.ts                 # Search types
-│       └── simplification/
-│           ├── simplification.store.svelte.ts # Geometry simplification
-│           └── simplification.types.ts        # Simplification types
+│   └── store/                              # Global application stores
+│       ├── global.svelte.ts               # App navigation, UI panels, zoom
+│       ├── create-project.store.svelte.ts # Project creation workflow
+│       ├── create-project.types.ts        # Project types
+│       ├── data-tab.store.svelte.ts       # Data management state
+│       └── data-tab.types.ts              # Data tab types
+├── main-toolbar/
+│   └── main-toolbar.state.svelte.ts       # Toolbar-specific state
+└── step-toolbar/
+    └── tools/
+        ├── tools-store/                    # Centralized tool orchestration
+        │   ├── tools.store.svelte.ts      # Main orchestrator (single source of truth)
+        │   ├── tools-store.types.ts       # Combined tool state types
+        │   ├── tools-store.defaults.svelte.ts  # Default states
+        │   ├── tools-store.actions.svelte.ts   # Action factories
+        │   └── tools-store.selectors.svelte.ts # State selectors
+        ├── annotations/
+        │   ├── annotations.store.svelte.ts     # Delegates to tools.store
+        │   └── annotations.types.ts            # Annotation types
+        ├── color-blindness/
+        │   ├── color-blindness.store.svelte.ts # Delegates to tools.store
+        │   └── color-blindness.types.ts        # Color blindness types
+        ├── facets/
+        │   ├── facets.store.svelte.ts         # Delegates to tools.store
+        │   └── facets.types.ts                # Facets types
+        ├── format/
+        │   ├── format.store.svelte.ts         # Delegates to tools.store
+        │   └── format.types.ts                # Format types
+        ├── geo-indications/
+        │   ├── geo-indications.store.svelte.ts # Delegates to tools.store
+        │   └── geo-indications.types.ts        # Geo indications types
+        ├── layers/
+        │   ├── layers.store.svelte.ts         # Delegates to tools.store
+        │   └── layers.types.ts                # Layer types
+        ├── legend/
+        │   ├── legend.store.svelte.ts         # Delegates to tools.store
+        │   └── legend.types.ts                # Legend types
+        ├── projections/
+        │   ├── projection.store.svelte.ts     # Delegates to tools.store
+        │   └── projections.types.ts           # Projection types
+        ├── search/
+        │   ├── search.store.svelte.ts         # Delegates to tools.store
+        │   └── search.types.ts                # Search types
+        └── simplification/
+            ├── simplification.store.svelte.ts # Delegates to tools.store
+            └── simplification.types.ts        # Simplification types
 ```
 
 ### Usage Examples
 
-#### Accessing State
+#### Accessing State in Components
 
 ```svelte
 <script lang="ts">
-  import {
-    annotationsState,
-    annotationsActions
-  } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import {
-    globalState,
-    globalActions
-  } from '$lib/features/commons/store/global.svelte';
-  import {
-    colorBlindnessState,
-    colorBlindnessActions
-  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
-
-  // Reactive derived values using Svelte 5 runes
-  const activeAnnotations = $derived(
-    annotationsState.items.filter(
-      (item) => item.id === annotationsState.selectedId
-    )
-  );
-
-  const isSimulationActive = $derived(
-    colorBlindnessState.enabled && colorBlindnessState.simulationType !== 'none'
-  );
+  // Global state
+  import { globalState, globalActions } from '$lib/features/commons/store/global.svelte';
+  
+  // Tool stores (using centralized pattern)
+  import { getFormatState, formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import { getProjectionState, projectionActions } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+  
+  // Get reactive state
+  const formatState = $derived(getFormatState());
+  const projectionState = $derived(getProjectionState());
+  
+  // Derived values
+  const isLandscape = $derived(formatState.width > formatState.height);
+  const currentProjection = $derived(projectionState.selected);
 </script>
 
-<!-- Display reactive state -->
-<div>{annotationsState.items.length} annotations</div>
-<div>Simulation: {isSimulationActive ? 'Active' : 'Inactive'}</div>
+<!-- Use reactive state -->
+<div>Format: {formatState.width}x{formatState.height}</div>
+<div>Projection: {currentProjection}</div>
 
 <!-- Trigger actions -->
-<button
-  onclick={() => annotationsActions.addAnnotation('text', 'Titre de la carte')}
->
-  Add Text
+<button onclick={() => formatActions.setMode('custom')}>
+  Custom Format
 </button>
-<button onclick={() => colorBlindnessActions.toggleEnabled()}>
-  Toggle Simulation
+<button onclick={() => projectionActions.setSelected('mercator')}>
+  Use Mercator
 </button>
 ```
 

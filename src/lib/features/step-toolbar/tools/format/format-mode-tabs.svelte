@@ -3,7 +3,9 @@
   import { m } from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import { Document, Edit } from 'carbon-icons-svelte';
-  import { formatActions, formatState } from './format.store.svelte';
+  import { formatActions, getFormatState } from './format.store.svelte';
+
+  const formatState = $derived(getFormatState());
 
   const customLabel = $derived(m.format_custom());
 
