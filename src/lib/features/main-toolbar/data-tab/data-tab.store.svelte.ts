@@ -66,8 +66,12 @@ export const dataTabActions = {
 
   updateJoinMapping(index: number, selectedMapping: string): void {
     if (dataTabState.basemapJoin.joinMappings[index]) {
-      dataTabState.basemapJoin.joinMappings[index].selectedMapping = selectedMapping;
-      console.log('[DataTab] 🔄 Join mapping updated:', { index, selectedMapping });
+      dataTabState.basemapJoin.joinMappings[index].selectedMapping =
+        selectedMapping;
+      console.log('[DataTab] 🔄 Join mapping updated:', {
+        index,
+        selectedMapping
+      });
     }
   },
 
@@ -92,8 +96,12 @@ export const dataTabActions = {
   },
 
   toggleFilter(): void {
-    dataTabState.dataControl.filterActive = !dataTabState.dataControl.filterActive;
-    console.log('[DataTab] 🔄 Filter toggled:', dataTabState.dataControl.filterActive);
+    dataTabState.dataControl.filterActive =
+      !dataTabState.dataControl.filterActive;
+    console.log(
+      '[DataTab] 🔄 Filter toggled:',
+      dataTabState.dataControl.filterActive
+    );
   },
 
   selectBasemap(basemapId: string): void {
@@ -126,7 +134,10 @@ export function hasJoinErrors() {
 }
 
 export function totalEntities() {
-  return dataTabState.basemapJoin.joinedEntities + dataTabState.basemapJoin.entitiesToVerify;
+  return (
+    dataTabState.basemapJoin.joinedEntities +
+    dataTabState.basemapJoin.entitiesToVerify
+  );
 }
 
 export function isDataReady() {

@@ -64,7 +64,6 @@
     annotationsActions.updateDefaultStyle({ strokeWidth: e.detail });
   }
 
-
   function handleCurvatureChange(e: CustomEvent<number>) {
     annotationsActions.updateDefaultStyle({ curvature: e.detail });
   }
@@ -184,9 +183,7 @@
             color: { hue, saturation, lightness }
           });
         }}
-        onCancel={() => {
-          /* no-op */
-        }}
+        onCancel={() => {}}
       />
     </Column>
   </Row>
@@ -264,6 +261,4 @@
   .toggle-label {
     color: var(--cds-text-secondary);
   }
-
-  /* color picker handled by shared component */
 </style>

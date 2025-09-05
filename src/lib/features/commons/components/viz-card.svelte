@@ -9,7 +9,7 @@
     title: string;
     subtitle?: string;
     tags?: string[];
-    ratio?: string; // e.g. 1:1 label at left
+    ratio?: string;
     selected?: boolean;
     radioName?: string;
   }
