@@ -1,7 +1,7 @@
 import {
   toolActions,
   toolState
-} from '../tools-store/tools-store.store.svelte';
+} from '../tools-store/tools.store.svelte';
 import type { LegendItem, LegendState } from './legend.types';
 
 export function getLegendState(): LegendState {

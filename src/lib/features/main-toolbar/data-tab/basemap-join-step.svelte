@@ -11,7 +11,7 @@
     Tag
   } from 'carbon-components-svelte';
   import { Grid as GridIcon, Upload } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from './data-tab.store.svelte';
+  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 
   type Basemap = {
     id: string;

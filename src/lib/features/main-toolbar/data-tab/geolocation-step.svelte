@@ -9,7 +9,7 @@
     SelectItem
   } from 'carbon-components-svelte';
   import { Location, Map } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from './data-tab.store.svelte';
+  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 
   const dataFields = [
     'Nom pays',
