@@ -1,8 +1,5 @@
 import { TextAlign } from '$lib/features/commons/types/enums';
-import {
-  toolActions,
-  toolState
-} from '../tools-store/tools.store.svelte';
+import { toolActions, toolState } from '../tools-store/tools.store.svelte';
 import type {
   AnnotationsState,
   AnnotationStyle,
@@ -36,7 +33,6 @@ export const annotationsActions = {
       items: updatedItems,
       selectedId: newAnnotation.id
     });
-
   },
 
   selectAnnotation(id: string | null): void {
@@ -66,7 +62,6 @@ export const annotationsActions = {
     }
 
     toolActions.updateAnnotations(updates);
-
   },
 
   setActiveType(type: 'text' | 'shape' | 'drawing' | 'image'): void {
@@ -90,7 +85,6 @@ export const annotationsActions = {
         predefinedStyle: styleName,
         defaultStyle: updatedDefaultStyle
       });
-
     }
   },
 
@@ -126,7 +120,6 @@ export const annotationsActions = {
         items: updatedItems,
         selectedId: duplicate.id
       });
-
     }
   },
 

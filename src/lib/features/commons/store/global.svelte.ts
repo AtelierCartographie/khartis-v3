@@ -60,7 +60,6 @@ export const globalActions = {
     globalState.projectionViewMode = mode;
   },
 
-  // Zoom actions
   setZoomMode(mode: ZoomMode): void {
     globalState.zoom.mode = mode;
     console.log(`Zoom mode changed to: ${mode}`);

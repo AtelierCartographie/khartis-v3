@@ -44,7 +44,6 @@
     activeTabIndex = index;
   }
 
-  // État pour les coordonnées géographiques
   let latitudeFieldId = $state<number | undefined>();
   let longitudeFieldId = $state<number | undefined>();
   let projectionValue = $state('wgs84');
@@ -73,7 +72,6 @@
   </div>
 
   {#if activeTabIndex === 0}
-    <!-- Vue Entités administratives -->
     <div class="tab-content">
       <div class="form-field">
         <Select
@@ -120,7 +118,6 @@
       />
     </div>
   {:else}
-    <!-- Vue Coordonnées géographiques -->
     <div class="tab-content">
       <div class="form-row">
         <div class="form-field flex-1">

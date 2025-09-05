@@ -5,7 +5,6 @@
 
   onMount(() => {
     function handleKeyDown(event: KeyboardEvent): void {
-      // Vérifier si l'utilisateur tape dans un input ou textarea
       const target = event.target as HTMLElement;
       if (
         target.tagName === 'INPUT' ||
@@ -15,7 +14,6 @@
         return;
       }
 
-      // Raccourcis pour le zoom
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
           case '+':
@@ -37,7 +35,6 @@
         }
       }
 
-      // Raccourci pour changer le mode de zoom (Alt + Z)
       if (event.altKey && event.key === 'z') {
         event.preventDefault();
         const newMode =
@@ -47,7 +44,6 @@
       }
     }
 
-    // Gérer le zoom avec la molette (Ctrl + wheel)
     function handleWheel(event: WheelEvent): void {
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
@@ -69,5 +65,3 @@
     };
   });
 </script>
-
-<!-- Ce composant n'a pas de rendu visuel, il gère juste les événements globaux -->
