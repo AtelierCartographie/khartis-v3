@@ -10,7 +10,7 @@
     TrashCan,
     WarningAltFilled
   } from 'carbon-icons-svelte';
-  import { dataTabActions, dataTabState } from './data-tab.store.svelte';
+  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 
   const expandedRowIds = $derived(dataTabState.dataControl.expandedRowIds);
   const selectedRowIds = $derived(dataTabState.dataControl.selectedRowIds);

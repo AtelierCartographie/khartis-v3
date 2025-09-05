@@ -1,6 +1,6 @@
 <script lang="ts">
   import { InlineNotification } from 'carbon-components-svelte';
-  import { dataTabActions, dataTabState } from './data-tab.store.svelte';
+  import { dataTabActions, dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 
   const showVariableTypes = $derived(dataTabState.notifications.variableTypes);
   const showWarnings = $derived(dataTabState.notifications.warnings);
