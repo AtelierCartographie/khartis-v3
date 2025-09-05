@@ -259,6 +259,73 @@ yarn test:e2e         # E2E tests (Playwright with build+preview on port 4173)
 - For debugging: run `yarn build && yarn preview` manually, then `yarn test:e2e`
 - E2E tests are in `e2e/` directory
 
+#### End-to-End Testing (E2E)
+
+**Setup:**
+
+```bash
+yarn playwright install  # Install Playwright browsers (first time only)
+```
+
+**Test Structure:**
+
+```
+e2e/
+├── create-project.spec.ts  # Project creation modal tests
+└── [other-test].spec.ts    # Other feature tests
+```
+
+**Running E2E Tests:**
+
+```bash
+yarn test:e2e                           # Run all E2E tests
+yarn playwright test <file>            # Run specific test file
+yarn playwright test --ui              # Run tests with UI mode
+yarn playwright test --debug           # Debug mode
+yarn playwright test --headed          # Run tests with visible browser
+```
+
+**Writing E2E Tests:**
+
+Example test structure for feature testing:
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('Feature Name', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('should perform expected behavior', async ({ page }) => {
+    // Arrange
+    const element = page.locator('#element-id');
+    
+    // Act
+    await element.click();
+    
+    // Assert
+    await expect(element).toBeVisible();
+  });
+});
+```
+
+**Best Practices:**
+
+- Use `data-testid` attributes for reliable element selection
+- Wait for network idle state before interacting with elements
+- Test both desktop and mobile viewports
+- Include accessibility checks with ARIA attributes
+- Use Page Object Model for complex UI interactions
+
+**Configuration:**
+
+- Config file: `playwright.config.ts`
+- Test server: Runs on port 4173 (production build)
+- Browsers: Chromium, Firefox, WebKit
+- Test timeout: 30 seconds per test
+
 ### Build and Deployment
 
 ```bash
