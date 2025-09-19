@@ -4,6 +4,7 @@
   import { InlineNotification, DataTableSkeleton } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
+  import { globalActions } from '$lib/features/commons/store/global.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
@@ -12,6 +13,13 @@
       ? duckDBOrchestrator.getAllDatasets().find(d => d.sourceFileId === selectedDataset.sourceFileId)?.tableName || null
       : null
   );
+
+  // Sync button selection with the selected dataset
+  $effect(() => {
+    if (selectedDataset?.sourceFileId) {
+      globalActions.selectDataButton(selectedDataset.sourceFileId, false);
+    }
+  });
 </script>
 
 <section id="data-control-step">
@@ -28,7 +36,7 @@
 
     <AdvancedDataTable
       dataset={selectedDataset}
-      tableName={currentDuckTable}
+      tableName={currentDuckTable || undefined}
       showSummaryPlots={false}
     />
 
