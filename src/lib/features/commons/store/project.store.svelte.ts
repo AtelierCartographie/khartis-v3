@@ -131,7 +131,25 @@ class ProjectStore {
         this._state.currentProject.data.sourceFiles.push(fileCopy);
         globalActions.addDataButtonForFile(file.id, file.name, false);
 
-        await dataOrchestrator.onFileAdded(fileCopy);
+        try {
+          await dataOrchestrator.onFileAdded(fileCopy);
+        } catch (error) {
+          console.error('[ProjectStore] Failed to process file:', error);
+
+          // Remove the file from sourceFiles if processing failed
+          const index = this._state.currentProject.data.sourceFiles.findIndex(
+            f => f.id === fileCopy.id
+          );
+          if (index > -1) {
+            this._state.currentProject.data.sourceFiles.splice(index, 1);
+          }
+
+          // Remove the data button
+          globalActions.removeDataButton(file.id);
+
+          // Re-throw the error to be handled by the caller
+          throw error;
+        }
       }
     }
 

@@ -252,8 +252,10 @@ export async function parseCsvWithPapa(
                 });
 
                 if (retryResults.data.length > 0) {
-                  const headers = retryResults.data[0].map((_: any, i: number) => `Column_${i + 1}`);
-                  const data = retryResults.data.slice(1).map((row: any[]) => {
+                  const firstRow = retryResults.data[0] as any[];
+                  const headers = firstRow.map((_: any, i: number) => `Column_${i + 1}`);
+                  const dataRows = retryResults.data.slice(1) as any[][];
+                  const data = dataRows.map((row: any[]) => {
                     const obj: any = {};
                     headers.forEach((h: string, i: number) => {
                       obj[h] = row[i];
@@ -286,7 +288,7 @@ export async function parseCsvWithPapa(
             });
           }
         },
-        error: (error) => {
+        error: (error: any) => {
           console.error('[parseCsvWithPapa] Parse error:', error);
           reject(error);
         }
