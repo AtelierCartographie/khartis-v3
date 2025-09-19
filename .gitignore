@@ -1,6 +1,17 @@
 test-results
 node_modules
 
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Diagnostic reports
+report.*.json
+
 # Output
 .output
 .vercel
@@ -8,16 +19,23 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+dist
 
 # OS
 .DS_Store
 Thumbs.db
+.AppleDouble
+.LSOverride
 
 # Env
 .env
 .env.*
 !.env.example
 !.env.test
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
 
 # Vite
 vite.config.js.timestamp-*
@@ -25,3 +43,61 @@ vite.config.ts.timestamp-*
 
 # Paraglide
 src/lib/paraglide
+
+# Yarn Berry (PnP)
+.pnp.cjs
+.pnp.loader.mjs
+
+# TypeScript
+*.tsbuildinfo
+
+# ESLint cache
+.eslintcache
+
+# Coverage
+coverage/
+.nyc_output
+
+# Playwright
+playwright-report/
+blob-report/
+.playwright
+
+# Yarn
+!.yarn/versions
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.claude
+CLAUDE_BEST_PRACTICES.md
+CLAUDE.md
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+
+# Vitest
+.vitest
+
+# Editors/IDEs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.history/
+
+# Temporary files
+.tmp/
+tmp/
+*.tmp
+
+# Inlang cache
+project.inlang/cache/
+
+
+
