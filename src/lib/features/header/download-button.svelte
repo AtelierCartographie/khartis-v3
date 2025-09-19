@@ -1,7 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { slugify } from '$lib/features/commons/utils/string.utils';
   import {
     exportProjectData,
     downloadFile,
@@ -48,7 +47,7 @@
           break;
 
         case 1:
-          showError('Export carte', 'Fonctionnalité en cours de développement');
+          showError(m.export_map_error(), m.export_map_feature_in_development());
           break;
 
         case 2:
@@ -81,7 +80,7 @@
             const filename = generateExportFilename(exportFileName, extension);
             downloadFile(blob, filename);
           } else {
-            showError('Export données', 'Aucune donnée à exporter');
+            showError(m.export_data_error(), m.export_data_no_data());
           }
           break;
       }
@@ -89,8 +88,8 @@
       open = false;
     } catch (error) {
       showError(
-        'Erreur export',
-        error instanceof Error ? error.message : 'Erreur inconnue'
+        m.export_error(),
+        error instanceof Error ? error.message : m.export_unknown_error()
       );
     }
   }
