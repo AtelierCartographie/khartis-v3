@@ -26,29 +26,30 @@ export default defineConfig(() => ({
         display: 'standalone',
         theme_color: '#ffffff',
         background_color: '#ffffff',
-        start_url: '/?standalone=true',
+        start_url: '/cartographie/khartisnewpprd/?standalone=true',
+        scope: '/cartographie/khartisnewpprd/',
         orientation: 'portrait',
         description:
           'Khartis est un outil simple de créations de cartes thématiques. Projections paramétrables - géoréférencement automatique. Un projet open source de Sciences Po - Atelier de cartographie',
         icons: [
           {
-            src: 'pwa-64x64.png',
+            src: '/cartographie/khartisnewpprd/pwa-64x64.png',
             sizes: '64x64',
             type: 'image/png'
           },
           {
-            src: 'pwa-192x192.png',
+            src: '/cartographie/khartisnewpprd/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: 'pwa-512x512.png',
+            src: '/cartographie/khartisnewpprd/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: 'maskable-icon-512x512.png',
+            src: '/cartographie/khartisnewpprd/maskable-icon-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
