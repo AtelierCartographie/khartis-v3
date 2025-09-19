@@ -45,10 +45,21 @@ export const globalActions = {
     globalState.toolbarState = state;
   },
 
-  selectDataButton(id: string): void {
+  selectDataButton(id: string, updateDataset: boolean = true): void {
     globalState.dataButtons.forEach((button) => {
       button.isSelected = button.id === id;
     });
+
+    // Update the selected dataset in datasetsStore only if requested
+    // This avoids infinite loops when called from data-control-step
+    if (updateDataset) {
+      import('../store/datasets.store.svelte').then(({ datasetsStore }) => {
+        const dataset = datasetsStore.getDatasetBySourceFile(id);
+        if (dataset) {
+          datasetsStore.selectDataset(dataset.id);
+        }
+      });
+    }
   },
 
   addDataButtonForFile(
