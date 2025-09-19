@@ -1,11 +1,11 @@
 <script lang="ts">
-  import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
-  import { Modal } from 'carbon-components-svelte';
   import {
-    createProjectState,
-    createProjectActions
+    createProjectActions,
+    createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
+  import { Modal } from 'carbon-components-svelte';
 
   interface Props {
     open: boolean;
@@ -57,7 +57,7 @@
   secondaryButtonText="Annuler"
   open={open}
   modalHeading="Ajouter des données au projet"
-  size="lg"
+  size="sm"
   on:click:button--secondary={closeModal}
   on:click:button--primary={handleImport}
   on:close={closeModal}

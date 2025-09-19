@@ -35,13 +35,15 @@
   });
 
   async function handleDownload() {
-    const slugifiedName = slugify(exportFileName || 'untitled');
+    if (exportFileName !== projectStore.projectName) {
+      projectStore.updateProjectName(exportFileName);
+    }
 
     try {
       switch (selectedTabIndex) {
         case 0:
           if (projectStore.currentProject) {
-            await projectStore.exportProject(slugifiedName);
+            await projectStore.exportProject(exportFileName);
           }
           break;
 
@@ -76,7 +78,7 @@
               projectStore.currentProject.data.sourceFiles,
               format
             );
-            const filename = generateExportFilename(slugifiedName, extension);
+            const filename = generateExportFilename(exportFileName, extension);
             downloadFile(blob, filename);
           } else {
             showError('Export données', 'Aucune donnée à exporter');
