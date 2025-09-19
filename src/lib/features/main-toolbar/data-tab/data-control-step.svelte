@@ -1,23 +1,27 @@
 <script lang="ts">
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
-  import { InlineNotification, DataTableSkeleton } from 'carbon-components-svelte';
-  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
+  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
+  import { InlineNotification } from 'carbon-components-svelte';
+  import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
   const currentDuckTable = $derived(
     selectedDataset
-      ? duckDBOrchestrator.getAllDatasets().find(d => d.sourceFileId === selectedDataset.sourceFileId)?.tableName || null
+      ? duckDBOrchestrator
+          .getAllDatasets()
+          .find((d) => d.sourceFileId === selectedDataset.sourceFileId)
+          ?.tableName || null
       : null
   );
 
   // Sync button selection with the selected dataset
   $effect(() => {
     if (selectedDataset?.sourceFileId) {
-      globalActions.selectDataButton(selectedDataset.sourceFileId, false);
+      // Only update visual selection, not the dataset (to avoid loops)
+      globalActions.selectDataButton(selectedDataset.sourceFileId);
     }
   });
 </script>
@@ -75,6 +79,8 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    position: relative;
+    min-height: 0;
   }
 
   .dataset-info {
