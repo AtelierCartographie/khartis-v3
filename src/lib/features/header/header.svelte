@@ -1,17 +1,13 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
-  import {
-    globalState,
-    globalActions
-  } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { m } from '$lib/paraglide/messages.js';
   import {
     Button,
     Header as CbsHeader,
     HeaderUtilities
   } from 'carbon-components-svelte';
-  import { Help, Add, FolderOpen } from 'carbon-icons-svelte';
+  import { Add, FolderOpen, Help } from 'carbon-icons-svelte';
   import DownloadButton from './download-button.svelte';
   import Logo from './logo.svelte';
   import ProjectTitle from './project-title.svelte';
@@ -43,6 +39,16 @@
         size="small"
         tooltipPosition="bottom"
         tooltipAlignment="end"
+        iconDescription={m.help_tooltip()}
+        kind="ghost"
+        icon={Help}
+      >
+        {m.header_help()}
+      </Button>
+
+      <Button
+        tooltipPosition="bottom"
+        tooltipAlignment="end"
         iconDescription="New Project"
         kind="ghost"
         icon={Add}
@@ -50,7 +56,6 @@
       />
 
       <Button
-        size="small"
         tooltipPosition="bottom"
         tooltipAlignment="end"
         iconDescription="Open Project"
@@ -58,19 +63,6 @@
         icon={FolderOpen}
         on:click={handleOpenProject}
       />
-
-      <div class="header-divider"></div>
-
-      <Button
-        size="small"
-        tooltipPosition="bottom"
-        tooltipAlignment="end"
-        iconDescription={m.help_tooltip()}
-        kind="ghost"
-        icon={Help}
-      >
-        {m.header_help()}
-      </Button>
 
       <DownloadButton />
     </HeaderUtilities>
