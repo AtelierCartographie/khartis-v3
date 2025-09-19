@@ -107,7 +107,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--cds-ui-01);
+    background-color: var(--cds-ui-background);
     z-index: 9999;
   }
 

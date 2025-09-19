@@ -7,8 +7,15 @@ const config = {
 
   kit: {
     adapter: adapter({
-      fallback: '200.html'
-    })
+      pages: 'build',
+      assets: 'build',
+      fallback: 'index.html',
+      precompress: false,
+      strict: true
+    }),
+    paths: {
+      base: process.env.NODE_ENV === 'production' ? '/pprd' : ''
+    }
   }
 };
 
