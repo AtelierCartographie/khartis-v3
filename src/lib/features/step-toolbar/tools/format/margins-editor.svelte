@@ -12,10 +12,10 @@
 
   const formatState = $derived(getFormatState());
 
-  let top = $state(formatState.margins.top);
-  let bottom = $state(formatState.margins.bottom);
-  let left = $state(formatState.margins.left);
-  let right = $state(formatState.margins.right);
+  let top = $state(0);
+  let bottom = $state(0);
+  let left = $state(0);
+  let right = $state(0);
 
   $effect(() => {
     top = formatState.margins.top;
@@ -189,7 +189,7 @@
 <style>
   .margin-controls {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     margin-top: var(--cds-spacing-03);
   }
 

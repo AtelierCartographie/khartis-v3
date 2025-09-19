@@ -3,6 +3,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -82,7 +83,9 @@
     field: keyof LegendItem,
     value: string
   ): void {
-    legendActions.updateLegendItem(id, { [field]: value });
+    // Sanitize input to prevent XSS attacks
+    const sanitizedValue = sanitizeTextInput(value);
+    legendActions.updateLegendItem(id, { [field]: sanitizedValue });
   }
 
   function handleTabChange(newIndex: number): void {
@@ -195,13 +198,8 @@
                     size="xl"
                     placeholder={item.name}
                     id={`${item.id}-title`}
-                    value={item.title}
-                    on:input={(e) =>
-                      updateItemField(
-                        item.id,
-                        'title',
-                        (e.target as HTMLInputElement).value
-                      )}
+                    bind:value={item.title}
+                    on:change={() => updateItemField(item.id, 'title', item.title)}
                   />
                 </Column>
               </Row>
@@ -213,13 +211,8 @@
                     size="xl"
                     placeholder={m.legend_no_subtitle()}
                     id={`${item.id}-subtitle`}
-                    value={item.subtitle}
-                    on:input={(e) =>
-                      updateItemField(
-                        item.id,
-                        'subtitle',
-                        (e.target as HTMLInputElement).value
-                      )}
+                    bind:value={item.subtitle}
+                    on:change={() => updateItemField(item.id, 'subtitle', item.subtitle)}
                   />
                 </Column>
               </Row>
@@ -231,13 +224,8 @@
                     size="xl"
                     placeholder={m.legend_no_note()}
                     id={`${item.id}-note`}
-                    value={item.note}
-                    on:input={(e) =>
-                      updateItemField(
-                        item.id,
-                        'note',
-                        (e.target as HTMLInputElement).value
-                      )}
+                    bind:value={item.note}
+                    on:change={() => updateItemField(item.id, 'note', item.note)}
                   />
                 </Column>
               </Row>

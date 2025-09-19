@@ -78,7 +78,7 @@
   }
 </script>
 
-<Grid padding noGutter>
+<Grid noGutter fullWidth>
   <Row>
     <Column>
       <p class="field-label">Type</p>
@@ -94,24 +94,21 @@
 
   <Row>
     <Column>
-      <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
-        Ajouter un dessin
-      </Button>
+      <div class="section">
+        <p class="helper">
+          Ajouter un dessin ou sélectionner un élément existant pour le modifier
+          ci-dessous.
+        </p>
+        <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
+          Ajouter un dessin
+        </Button>
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <p class="helper">
-        Ajouter un dessin ou sélectionner un élément existant pour le modifier
-        ci-dessous.
-      </p>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Épaisseur"
           value={defaultStyle.strokeWidth || 2}
@@ -121,14 +118,13 @@
           stepMultiplier={1}
           on:change={handleThicknessChange}
         />
-        <div class="metric-value">{defaultStyle.strokeWidth ?? 2}</div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Lissage (%)"
           value={defaultStyle.smoothness ?? 50}
@@ -138,65 +134,68 @@
           stepMultiplier={5}
           on:change={handleSmoothnessChange}
         />
-        <div class="metric-value">{defaultStyle.smoothness ?? 50}</div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="toggle-row">
-        <span class="toggle-label">Pointillés</span>
-        <Toggle
-          size="sm"
-          toggled={defaultStyle.strokeStyle === 'dotted'}
-          ontoggle={(e) =>
+      <div class="section">
+        <div class="toggle-row">
+          <span class="toggle-label">Pointillés</span>
+          <Toggle
+            size="sm"
+            toggled={defaultStyle.strokeStyle === 'dotted'}
+            ontoggle={(e) =>
+              annotationsActions.updateDefaultStyle({
+                strokeStyle: ((e as any).detail ? 'dotted' : 'solid') as
+                  | 'dotted'
+                  | 'solid'
+              })}
+          >
+            <span slot="labelA">Oui</span>
+            <span slot="labelB">Non</span>
+          </Toggle>
+        </div>
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
+        <ColorPicker
+          hex={strokeColor}
+          hue={hue}
+          saturation={saturation}
+          lightness={lightness}
+          triggerLabel="Couleur"
+          onValidate={({
+            hex,
+            hue,
+            saturation,
+            lightness
+          }: {
+            hex: string;
+            hue: number;
+            saturation: number;
+            lightness: number;
+          }) => {
+            strokeColor = hex;
             annotationsActions.updateDefaultStyle({
-              strokeStyle: ((e as any).detail ? 'dotted' : 'solid') as
-                | 'dotted'
-                | 'solid'
-            })}
-        >
-          <span slot="labelA">Oui</span>
-          <span slot="labelB">Non</span>
-        </Toggle>
+              strokeColor: hex,
+              color: { hue, saturation, lightness }
+            });
+          }}
+          onCancel={() => {}}
+        />
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <ColorPicker
-        hex={strokeColor}
-        hue={hue}
-        saturation={saturation}
-        lightness={lightness}
-        triggerLabel="Couleur"
-        onValidate={({
-          hex,
-          hue,
-          saturation,
-          lightness
-        }: {
-          hex: string;
-          hue: number;
-          saturation: number;
-          lightness: number;
-        }) => {
-          strokeColor = hex;
-          annotationsActions.updateDefaultStyle({
-            strokeColor: hex,
-            color: { hue, saturation, lightness }
-          });
-        }}
-        onCancel={() => {}}
-      />
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Opacité"
           value={(defaultStyle.opacity ?? 1) * 100}
@@ -207,59 +206,54 @@
           on:change={(e) =>
             annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 })}
         />
-        <div class="metric-value">
-          {Math.round((defaultStyle.opacity ?? 1) * 100)}
-        </div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      {#if annotationsState.selectedId}
-        {@const selected = annotationsState.items.find(
-          (i) => i.id === annotationsState.selectedId
-        )}
-        <Button
-          kind="danger-tertiary"
-          icon={TrashCan}
-          disabled={!selected || selected.type !== 'drawing'}
-          on:click={() =>
-            selected &&
-            selected.type === 'drawing' &&
-            annotationsActions.removeAnnotation(selected.id)}
-        >
-          Supprimer le dessin
-        </Button>
-      {:else}
-        <Button kind="danger-tertiary" icon={TrashCan} disabled
-          >Supprimer le dessin</Button
-        >
-      {/if}
+      <div class="section">
+        {#if annotationsState.selectedId}
+          {@const selected = annotationsState.items.find(
+            (i) => i.id === annotationsState.selectedId
+          )}
+          <Button
+            kind="danger-tertiary"
+            icon={TrashCan}
+            disabled={!selected || selected.type !== 'drawing'}
+            on:click={() =>
+              selected &&
+              selected.type === 'drawing' &&
+              annotationsActions.removeAnnotation(selected.id)}
+          >
+            Supprimer le dessin
+          </Button>
+        {:else}
+          <Button kind="danger-tertiary" icon={TrashCan} disabled
+            >Supprimer le dessin</Button
+          >
+        {/if}
+      </div>
     </Column>
   </Row>
 </Grid>
 
 <style>
+  .section {
+    margin-top: var(--cds-spacing-05);
+  }
+
   .field-label {
     font-size: 0.875rem;
     font-weight: 500;
     color: var(--cds-text-01);
+    margin-bottom: var(--cds-spacing-03);
   }
+
   .helper {
-    margin: 0 0 var(--cds-spacing-05) 0;
+    margin: 0 0 var(--cds-spacing-03) 0;
     color: var(--cds-text-secondary);
-  }
-  .metric-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-  .metric-value {
-    width: 48px;
-    text-align: right;
-    color: var(--cds-text-secondary);
+    font-size: 0.875rem;
   }
   .toggle-row {
     display: flex;
@@ -268,5 +262,6 @@
   }
   .toggle-label {
     color: var(--cds-text-secondary);
+    font-size: 0.875rem;
   }
 </style>

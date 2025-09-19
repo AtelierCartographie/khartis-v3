@@ -1,4 +1,6 @@
 import type { Layer, LayersState } from './layers.types';
+import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
 const FIXTURE_LAYERS = [
   {
@@ -57,7 +59,6 @@ export const layersState = $state<LayersState>({ ...DEFAULT_STATE });
 export const layersActions = {
   setState(newState: Partial<LayersState>): void {
     Object.assign(layersState, newState);
-    console.log('[Layers] 🔄 State updated:', newState);
   },
 
   addLayer(layer: Omit<Layer, 'id' | 'order'>): Layer {
@@ -73,19 +74,6 @@ export const layersActions = {
     };
 
     layersState.layers.push(newLayer);
-    console.log(
-      '[Layers] ➕ Added new layer:',
-      newLayer.name,
-      '(',
-      newLayer.type,
-      ')'
-    );
-    console.log(
-      '[Layers] 🎨 Color:',
-      newLayer.color,
-      '| Opacity:',
-      newLayer.opacity + '%'
-    );
     return newLayer;
   },
 
@@ -93,9 +81,6 @@ export const layersActions = {
     const index = layersState.layers.findIndex((layer) => layer.id === id);
     if (index !== -1) {
       layersState.layers[index] = { ...layersState.layers[index], ...updates };
-      console.log('[Layers] ✏️ Updated layer:', id, updates);
-    } else {
-      console.log('[Layers] ❌ Layer not found:', id);
     }
   },
 
@@ -104,9 +89,6 @@ export const layersActions = {
     if (layer) {
       layersState.layers = layersState.layers.filter((l) => l.id !== id);
       this.reorderLayersOfType(layer.type);
-      console.log('[Layers] 🗑️ Removed layer:', layer.name);
-    } else {
-      console.log('[Layers] ❌ Layer not found:', id);
     }
   },
 
@@ -114,12 +96,6 @@ export const layersActions = {
     const layer = layersState.layers.find((l) => l.id === id);
     if (layer) {
       layer.visible = !layer.visible;
-      console.log(
-        '[Layers] 👁️ Toggled visibility for:',
-        layer.name,
-        '→',
-        layer.visible
-      );
     }
   },
 
@@ -127,12 +103,6 @@ export const layersActions = {
     const layer = layersState.layers.find((l) => l.id === id);
     if (layer) {
       layer.opacity = Math.max(0, Math.min(100, opacity));
-      console.log(
-        '[Layers] 🎨 Set opacity for:',
-        layer.name,
-        '→',
-        layer.opacity + '%'
-      );
     }
   },
 
@@ -140,7 +110,6 @@ export const layersActions = {
     const layer = layersState.layers.find((l) => l.id === id);
     if (layer) {
       layer.color = color;
-      console.log('[Layers] 🌈 Set color for:', layer.name, '→', color);
     }
   },
 
@@ -151,23 +120,11 @@ export const layersActions = {
 
     layersState.layers = layers;
     this.updateLayerOrders();
-    console.log(
-      '[Layers] 🔄 Reordered layers from index',
-      fromIndex,
-      'to',
-      toIndex
-    );
   },
 
   toggleSectionExpanded(section: string): void {
     layersState.expandedSections[section] =
       !layersState.expandedSections[section];
-    console.log(
-      '[Layers] 📁 Toggled section:',
-      section,
-      '→',
-      layersState.expandedSections[section]
-    );
   },
 
   duplicateLayer(id: string): Layer | null {
@@ -177,7 +134,6 @@ export const layersActions = {
         ...layer,
         name: `${layer.name} (copie)`
       });
-      console.log('[Layers] 📋 Duplicated layer:', layer.name);
       return duplicate;
     }
     return null;
@@ -194,8 +150,6 @@ export const layersActions = {
     geographicLayers.forEach((layer, index) => {
       layer.order = index;
     });
-
-    console.log('[Layers] 🔢 Updated layer orders');
   },
 
   reorderLayersOfType(type: 'visualization' | 'geographic'): void {
@@ -203,17 +157,10 @@ export const layersActions = {
     layers.forEach((layer, index) => {
       layer.order = index;
     });
-    console.log('[Layers] 🔢 Reordered', type, 'layers');
   },
 
   setDragState(dragState: Partial<LayersState['dragState']>): void {
     layersState.dragState = { ...layersState.dragState, ...dragState };
-    if (dragState.isDragging !== undefined) {
-      console.log(
-        '[Layers] 🖱️ Drag state:',
-        dragState.isDragging ? 'started' : 'ended'
-      );
-    }
   },
 
   startDragging(index: number): void {
@@ -222,7 +169,6 @@ export const layersActions = {
       dragOverIndex: null,
       isDragging: true
     };
-    console.log('[Layers] 🖱️ Started dragging layer at index:', index);
   },
 
   endDragging(): void {
@@ -241,13 +187,56 @@ export const layersActions = {
       dragOverIndex: null,
       isDragging: false
     };
-
-    console.log('[Layers] 🖱️ Ended dragging');
   },
 
   reset(): void {
-    console.log('[Layers] 🔄 Reset to default state with fixture data');
     Object.assign(layersState, DEFAULT_STATE);
+  },
+
+  syncWithVisualizations(): void {
+    const visualizations = visualizationStore.visualizations;
+
+    const existingIds = new Set(layersState.layers.map((l) => l.id));
+
+    visualizations.forEach((viz) => {
+      if (!existingIds.has(viz.id)) {
+        const dataset = datasetsStore.datasets.find(
+          (d) => d.id === viz.datasetId
+        );
+
+        this.addLayer({
+          name: viz.name,
+          visible: viz.enabled,
+          type: 'visualization',
+          color: Array.isArray(viz.style.fillColor)
+            ? viz.style.fillColor[0]
+            : viz.style.fillColor || '#3b82f6',
+          opacity: (viz.style.fillOpacity || 1) * 100
+        });
+      }
+    });
+
+    const vizIds = new Set(visualizations.map((v) => v.id));
+    layersState.layers = layersState.layers.filter(
+      (layer) => layer.type === 'geographic' || vizIds.has(layer.id)
+    );
+  },
+
+  createLayerFromVisualization(vizId: string): Layer | null {
+    const visualization = visualizationStore.visualizations.find(
+      (v) => v.id === vizId
+    );
+    if (!visualization) return null;
+
+    return this.addLayer({
+      name: visualization.name,
+      visible: visualization.enabled,
+      type: 'visualization',
+      color: Array.isArray(visualization.style.fillColor)
+        ? visualization.style.fillColor[0]
+        : visualization.style.fillColor || '#3b82f6',
+      opacity: (visualization.style.fillOpacity || 1) * 100
+    });
   }
 };
 

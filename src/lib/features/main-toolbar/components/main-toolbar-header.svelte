@@ -13,7 +13,7 @@
   <section class="flex items-center gap-5 mb-3">
     <Pin size={24} />
 
-    <h3>{title}</h3>
+    <h5>{title}</h5>
   </section>
 
   <Separator orientation="horizontal" />

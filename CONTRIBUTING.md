@@ -1,67 +1,23 @@
-# Contributing to Khartis v3 🗺️
+# Contributing to Khartis v3
 
-Welcome to Khartis v3! This guide helps you contribute effectively to our thematic mapping tool.
+Thank you for your interest in improving Khartis v3. This guide explains how to set up your environment, propose changes, and meet our quality bar.
 
-## 🚀 Quick Start
+## 1) Quick start
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
-- \*## ✅ Pre-Submission Checklist
-
-Before submitting your PR, ensure all items are checked:
-
-### Code Quality
-
-- [ ] `yarn lint` passes without errors
-- [ ] `yarn format` applied (auto-formatted code)
-- [ ] `yarn check` passes (TypeScript + Svelte validation)
-- [ ] `yarn build` succeeds without warnings
-- [ ] No console errors or warnings in browser
-
-### Testing
-
-- [ ] `yarn test` passes (unit + e2e if applicable)
-- [ ] New features have corresponding tests
-- [ ] Manual testing completed in dev environment
-- [ ] Cross-browser compatibility verified (Chrome, Firefox, Safari)
-
-### Internationalization
-
-- [ ] i18n keys added/updated for UI changes (`messages/` files)
-- [ ] `yarn machine-translate` run if new keys added
-- [ ] No hardcoded text in user-facing components
-
-### Documentation
-
-- [ ] README updated if new features or setup changes
-- [ ] Code comments added for complex logic
-- [ ] JSDoc comments for public APIs
-- [ ] Screenshots included for UI changes
-
-### Accessibility & UX
-
-- [ ] Keyboard navigation works properly
-- [ ] Focus management is correct
-- [ ] Color contrast meets WCAG guidelines
-- [ ] Screen reader compatibility verified
-- [ ] Responsive design tested on different screen sizes
-
-### Security & Privacy
-
-- [ ] No secrets, tokens, or credentials in code or commit history
-- [ ] No sensitive user data logged
-- [ ] External dependencies justified and secure4\*\* (required, fixed in `packageManager`)
-- Modern browser (Chrome, Firefox, Safari, Edge)
-- Git
+- Node.js ≥ 18
+- Yarn 4 (via Corepack)
+- Git and a modern browser (Chrome, Firefox, Safari, Edge)
 
 ### Setup
 
 ```bash
 # Clone and setup
+corepack enable
 git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
-yarn init:project    # Install dependencies + setup Husky hooks
+yarn init:project    # Install deps + setup Husky hooks
 
 # Start development
 yarn dev             # → http://localhost:5176
@@ -72,9 +28,9 @@ yarn dev             # → http://localhost:5176
 - Dev server: http://localhost:5176
 - Preview/E2E: http://localhost:4173 (used by Playwright)
 
-## 🌳 Branching & Pull Requests
+## 2) Branching & pull requests
 
-### Branch Naming
+### Branch naming
 
 Use descriptive prefixes for your branches:
 
@@ -86,19 +42,19 @@ Use descriptive prefixes for your branches:
 - `test/` - Test additions/improvements (e.g., `test/e2e-coverage`, `test/unit-stores`)
 - `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`, `chore/ci-improvements`)
 
-### Pull Request Process
+### Pull requests
 
-1. **Target Branch**: Open PRs against `main` (or `develop` if pre-release workflow exists)
-2. **PR Title**: Follow Conventional Commits format: `type(scope): description`
-3. **Description**: Include:
-   - What changes were made and why
-   - Screenshots for UI changes
-   - Testing instructions
-   - Breaking changes (if any)
-4. **Reviews**: At least 1 reviewer required
-5. **Merge**: Use "Squash and merge" with conventional commit message
+- **Target branch**: open PRs against `main` (or `develop` when the prerelease flow is active)
+- **Title**: Conventional Commits format: `type(scope): description`
+- **Description**: include:
+  - What changes were made and why
+  - Screenshots for UI changes
+  - Testing instructions
+  - Breaking changes (if any)
+- **Reviews**: at least one approving review
+- **Merge**: Squash and merge with a conventional commit message
 
-## 💬 Commit Guidelines (Conventional Commits)
+## 3) Commit guidelines (Conventional Commits)
 
 We use [Conventional Commits](https://www.conventionalcommits.org/) for consistent commit history and automated versioning.
 
@@ -145,7 +101,7 @@ refactor(store): migrate to Svelte 5 runes pattern
 test(e2e): add projection tool test coverage
 ```
 
-### Breaking Changes
+### Breaking changes
 
 For breaking changes, add `!` after type or include `BREAKING CHANGE:` in footer:
 
@@ -156,169 +112,129 @@ feat(api): add new authentication method
 BREAKING CHANGE: Legacy authentication method removed
 ```
 
-## 🎨 Code Style & Quality Standards
+## 4) Pre‑PR checklist
 
-### TypeScript & Svelte
+### Code quality
 
-- **TypeScript Strict**: No implicit `any`, full type safety required
-- **Svelte 5 Runes**: Use `$state`, `$derived` exclusively (no legacy stores)
-- **Functional Stores**: No classes, use the project's store pattern:
-  ```typescript
-  export const myState = $state<MyState>({ ...DEFAULT_STATE });
-  export const myActions = {
-    /* ... */
-  };
-  ```
+- [ ] `yarn lint` passes
+- [ ] `yarn format` applied
+- [ ] `yarn check` passes (TypeScript + Svelte)
+- [ ] `yarn build` succeeds (no blocking warnings)
+- [ ] No console errors/warnings in browser
 
-### Architecture & Organization
+### Testing
 
-- **Feature-based**: Co-locate components, stores (`*.store.svelte.ts`), and types
-- **File Naming**: `kebab-case.svelte`, `kebab-case.ts`, `kebab-case.svelte.ts`
-- **No Cross-Dependencies**: Features only import from `commons/`, never from each other
-- **Tool Structure**: Follow the 5-step tool creation pattern (see README)
-
-### UI & Styling
-
-- **Carbon First**: Use `carbon-components-svelte` components primarily
-- **CSS Utilities**: Complement with project's utility classes (`features/commons/assets/styles/`)
-- **No Inline Styles**: Use utility classes or scoped CSS
-- **Accessibility**: Ensure keyboard navigation, proper focus management, and color contrast
+- [ ] `yarn test` passes (unit + e2e as applicable)
+- [ ] New features include tests; bug fixes include regression tests
+- [ ] Manual validation on dev build
+- [ ] Cross‑browser spot‑check (Chrome, Firefox, Safari)
 
 ### Internationalization
 
-- **Paraglide-JS**: All user-facing text must use i18n
-- **No Hardcoded Text**: Add keys to `messages/` files
-- **Auto-translate**: Run `yarn machine-translate` for missing translations
-- **Key Naming**: Use descriptive, hierarchical keys (e.g., `legend.title`, `format.page.size`)
+- [ ] No hardcoded user‑facing text; keys added/updated in Paraglide messages
+- [ ] `yarn machine-translate` run for new keys (then review)
 
-### Data & Performance
+### Documentation
 
-- **DuckDB WASM**: Use for heavy data processing, keep UI reactive
-- **Client-side Only**: No backend dependencies, everything runs in browser
-- **Memory Management**: Be mindful of large datasets and cleanup when needed
+- [ ] README/docs updated for new behavior or setup changes
+- [ ] Comments for non‑obvious logic; JSDoc for public APIs
+- [ ] Screenshots for UI changes when useful
 
-### Code Formatting
+### Accessibility & UX
 
-```bash
-yarn lint           # Check linting rules
-yarn format         # Auto-format code
-yarn check          # TypeScript + Svelte validation
-```
+- [ ] Keyboard navigation and focus management verified
+- [ ] Contrast meets WCAG guidance (where applicable)
+- [ ] Responsive layout works at common breakpoints
 
-**Pre-commit hooks** automatically run linting and formatting via Husky.
+### Security & privacy
 
-## 🧪 Testing Guidelines
+- [ ] No secrets/tokens/credentials committed
+- [ ] No sensitive user data logged
+- [ ] Dependencies justified and pinned; avoid risky additions
 
-### Test Types
+## 5) Code style & architecture
+
+- **TypeScript strict**: keep types accurate; no implicit `any`
+- **Svelte 5 (Runes)**: use the project’s runes patterns; avoid legacy stores
+- **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
+- **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
+- **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
+- **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
+- **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
+
+## 6) Testing
+
+### Test types
 
 - **Unit Tests**: Vitest with jsdom + node workspace
 - **E2E Tests**: Playwright (automatically runs `build` + `preview` on port 4173)
 - **Manual Testing**: Cross-browser compatibility, accessibility
 
-### Running Tests
+### Running tests
 
 ```bash
-yarn test          # All tests (unit + e2e)
+yarn test          # All tests (unit + E2E)
 yarn test:unit     # Unit tests only
 yarn test:e2e      # E2E tests only
-yarn build         # Ensure build works
+yarn build         # Ensure production build works
 ```
 
-### Writing Tests
+### Writing tests
 
 - **Unit Tests**: Test store logic, utility functions, component behavior
 - **E2E Tests**: Test user workflows, tool interactions, data processing
 - **Coverage**: Add tests for new features and bug fixes
 - **Accessibility**: Include keyboard navigation and screen reader tests
 
-### Test Requirements
+### Test requirements
 
 - New features **must** include tests
 - Bug fixes **should** include regression tests
 - E2E tests for major user workflows
 - Test both success and error scenarios
 
-## 7) Checklist avant PR
+## 7) Internationalization
 
-- [ ] `yarn lint` OK et `yarn format` appliqué
-- [ ] `yarn test` OK (unit + e2e si concerné)
-- [ ] `yarn build` OK
-- [ ] Clés i18n ajoutées/mises à jour si UI modifiée
-- [ ] README/docs ajustés si nécessaire
-- [ ] Captures d’écran pour changements UI
-- [ ] Accessibilité de base (focus, contraste) vérifiée
-- [ ] Pas de secrets/jetons dans le code ou l’historique
+- Use Paraglide‑JS for strings; add keys to messages
+- Run `yarn machine-translate` to generate missing translations and review
+- Prefer descriptive hierarchical keys (e.g., `legend.title`, `format.page.size`)
 
-## 🔄 Review & Merge Process
+## 8) Accessibility & responsiveness
 
-### Review Requirements
+- Ensure keyboard access to controls; Enter/Esc confirm/cancel
+- Maintain visible focus and logical tab order
+- Validate contrast and touch targets; verify responsive behavior
 
-- **Minimum**: 1 approving review from a maintainer
-- **Code Review**: Focus on architecture, performance, security, and maintainability
-- **Testing**: Reviewers should test functionality locally when possible
-- **Documentation**: Ensure changes are properly documented
+## 9) Security & privacy
 
-### Addressing Feedback
+- Khartis runs client‑side; do not add server dependencies without discussion
+- Do not commit secrets or tokens; use environment variables securely in local only
+- Keep dependencies up‑to‑date and avoid untrusted sources
 
-- **Respond Promptly**: Address review comments in a timely manner
-- **Ask Questions**: If feedback is unclear, ask for clarification
-- **Resolve Conversations**: Mark conversations as resolved after addressing
-- **Force Push**: Avoid force-pushing after review has started
+## 10) Useful scripts
 
-### Merge Strategy
+- `dev`: start the dev server
+- `build`: build for production
+- `preview`: preview the production build
+- `check` / `check:watch`: Svelte type checks
+- `lint` / `format`: linting and formatting
+- `test:unit` / `test:e2e` / `test`: run tests
+- `generate-pwa-assets`: build PWA icons
+- `machine-translate`: generate/update i18n translations
 
-- **Squash and Merge**: Recommended for feature branches
-- **Commit Message**: Must follow Conventional Commits format
-- **Clean History**: Ensure commit message summarizes all changes
-- **Delete Branch**: Source branch will be automatically deleted after merge
+## 11) Getting help
 
-## 🛠️ Development Tips
+- Documentation: see docs/summary.md
+- Issues: search existing ones or open a new issue
+- Discussions: use GitHub Discussions for ideas and Q&A
+- Maintainers: see contributors in package.json
 
-### Project Architecture
+## 12) Code of Conduct
 
-- **Feature-based Structure**: Each feature in `src/lib/features/` is self-contained
-- **Commons Folder**: Shared resources in `src/lib/features/commons/`
-- **Tool Development**: Follow the 5-step tool creation process (see main README)
-- **Store Pattern**: Use Svelte 5 runes with functional pattern
-
-### Useful Commands
-
-```bash
-# Development
-yarn dev                    # Start with hot reload
-yarn build && yarn preview # Test production build locally
-
-# Debugging
-yarn check                  # Type checking
-yarn lint --fix            # Auto-fix linting issues
-
-# Internationalization
-yarn machine-translate     # Generate missing translations
-
-# Dependencies
-yarn upgrade-interactive   # Update packages interactively
-```
-
-### Common Issues
-
-- **Port conflicts**: Dev (5176), Preview (4173)
-- **TypeScript errors**: Run `yarn check` for detailed output
-- **E2E test failures**: Ensure `yarn build` works first
-- **i18n missing**: Add keys to `messages/` and run `yarn machine-translate`
-
-## 🆘 Getting Help
-
-- 📖 **Documentation**: [README.md](./README.md) has comprehensive setup and architecture info
-- 🐛 **Issues**: Check existing issues or create a new one
-- 💬 **Discussions**: Use GitHub Discussions for questions and ideas
-- 📧 **Maintainers**: Contact info in `package.json` contributors section
-
-## 📜 Code of Conduct
-
-This project follows our [Code of Conduct](./CODE_OF_CONDUCT.md). Please read it before contributing.
+This project follows our Code of Conduct (CODE_OF_CONDUCT.md). Please review it before contributing.
 
 ---
 
-**Thank you for contributing to Khartis v3! 🗺️**
+**Thank you for helping improve Khartis v3! 🗺️**
 
 _Together, we're building an amazing open-source thematic mapping tool for everyone._

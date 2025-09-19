@@ -1,6 +1,11 @@
 <script lang="ts">
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
+  import {
+    createProjectState,
+    createProjectActions
+  } from '$lib/features/commons/store/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 
   interface Props {
     open: boolean;
@@ -11,18 +16,41 @@
 
   const closeModal = () => {
     open = false;
+    createProjectActions.clearAllFiles();
   };
 
-  const handleImport = () => {
-    addDataButton();
+  const handleImport = async () => {
+    const newFiles = createProjectState.newProject.uploadedFiles.filter(
+      (f) => f.status === 'complete'
+    );
+
+    if (newFiles.length > 0 && projectStore.currentProject) {
+      await projectStore.addFilesToProject(newFiles);
+    }
+
+    closeModal();
   };
+
+  const canImport = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.status === 'complete'
+    )
+  );
+
+  const isProcessing = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.status === 'processing'
+    )
+  );
 </script>
 
 <Modal
-  primaryButtonText="Importer"
+  primaryButtonText="Ajouter au projet"
+  primaryButtonDisabled={!canImport || isProcessing}
   secondaryButtonText="Annuler"
   open={open}
-  modalHeading="Importer de nouvelles données"
+  modalHeading="Ajouter des données au projet"
+  size="lg"
   on:click:button--secondary={closeModal}
   on:click:button--primary={handleImport}
   on:close={closeModal}

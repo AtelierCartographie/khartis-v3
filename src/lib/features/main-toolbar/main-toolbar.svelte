@@ -24,8 +24,10 @@
   import DataTab from './data-tab/data-tab.svelte';
   import {
     mainToolbarActions,
-    mainToolbarState
+    mainToolbarState,
+    getDerivedToolbarState
   } from './main-toolbar.state.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import VizualisationTab from './visualization-tab/visualization-tab.svelte';
 
   const listToolsComponents = {
@@ -51,6 +53,23 @@
 
     globalState.selectedTool = undefined;
   };
+
+  const derivedToolbarState = $derived(getDerivedToolbarState());
+
+  // Update toolbar state when project changes
+  $effect(() => {
+    const project = projectStore.currentProject;
+    const isDirty = projectStore.isDirty;
+
+    // Update navigation state based on project
+    if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
+      mainToolbarState.canNavigateToVisualization = true;
+    } else {
+      mainToolbarState.canNavigateToVisualization = false;
+    }
+
+    mainToolbarActions.updateToolbarState();
+  });
 </script>
 
 <nav
@@ -123,37 +142,65 @@
   </article>
 
   {#if globalState.selectedStep === ToolbarStep.Data}
+    {@const dataCompleteness = mainToolbarActions.checkDataCompleteness()}
+
     <footer
       class={clsx(
         'sticky bottom-0  bg-white p-5 border-t',
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
-      <ProgressIndicator currentIndex={0} spaceEqually>
+      <ProgressIndicator
+        currentIndex={derivedToolbarState.hasProject
+          ? derivedToolbarState.hasFiles
+            ? 2
+            : 1
+          : 0}
+        spaceEqually
+      >
         <ProgressStep
-          complete
-          label="Controller"
-          description="The progress indicator will listen for clicks on the steps"
+          complete={derivedToolbarState.hasProject}
+          label="Créer projet"
+          description={derivedToolbarState.hasProject
+            ? projectStore.currentProject?.manifest.name
+            : 'Créez ou chargez un projet'}
         />
         <ProgressStep
-          complete
-          label="Géolocaliser"
-          description="The progress indicator will listen for clicks on the steps"
+          complete={derivedToolbarState.hasFiles}
+          disabled={!derivedToolbarState.hasProject}
+          label="Importer données"
+          description={derivedToolbarState.hasFiles
+            ? 'Données importées'
+            : 'Importez vos fichiers CSV ou GeoJSON'}
         />
         <ProgressStep
-          complete
-          label="Joindre"
-          description="The progress indicator will listen for clicks on the steps"
+          complete={dataCompleteness.isComplete}
+          disabled={!derivedToolbarState.hasFiles}
+          label="Valider"
+          description={dataCompleteness.isComplete
+            ? 'Prêt pour la visualisation'
+            : 'Validation des données'}
         />
 
         <Button
           on:click={mainToolbarActions.navigateToVisualization}
-          disabled={!mainToolbarState.canNavigateToVisualization}
+          disabled={!derivedToolbarState.canVisualize}
           icon={ArrowRight}
           class="visualize-button"
+          tooltipPosition="top"
+          tooltipAlignment="end"
+          iconDescription={!derivedToolbarState.canVisualize
+            ? dataCompleteness.missingSteps.join(', ')
+            : 'Passer à la visualisation'}
           size="small">Visualiser</Button
         >
       </ProgressIndicator>
+
+      {#if projectStore.isDirty}
+        <div class="mt-2 text-xs text-gray-600">
+          ⚠️ Modifications non sauvegardées
+        </div>
+      {/if}
     </footer>
   {/if}
 </nav>

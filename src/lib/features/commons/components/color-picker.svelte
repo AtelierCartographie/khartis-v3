@@ -1,5 +1,6 @@
 <script lang="ts">
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
@@ -7,7 +8,7 @@
 
   let {
     hex = '#fff',
-    hue = 50,
+    hue = 180,
     saturation = 50,
     lightness = 50,
     onCancel = () => {},
@@ -21,14 +22,16 @@
   } = $props();
 
   let colorOpen = $state(false);
-  let colorWrapEl = $state<HTMLElement | null>(null);
   let triggerEl = $state<HTMLButtonElement | null>(null);
   let dropdownEl = $state<HTMLDivElement | null>(null);
   let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
   let openUpward = $state(false);
 
   function updateHex() {
-    hex = hslToHex(hue, saturation, lightness);
+    const newHex = hslToHex(hue, saturation, lightness);
+    if (newHex !== hex) {
+      hex = newHex;
+    }
   }
 
   function updateDropdownPosition() {
@@ -58,8 +61,18 @@
   }
 
   $effect(() => {
-    updateHex();
+    if (
+      hue !== undefined &&
+      saturation !== undefined &&
+      lightness !== undefined
+    ) {
+      updateHex();
+    }
   });
+
+  function handleOutsideClick() {
+    colorOpen = false;
+  }
 
   $effect(() => {
     if (colorOpen) {
@@ -78,7 +91,8 @@
 <div
   id="khartis-color-picker"
   class={clsx('color-picker-wrap')}
-  bind:this={colorWrapEl}
+  use:clickOutside={{ enabled: colorOpen }}
+  onoutsideclick={handleOutsideClick}
 >
   {#if triggerLabel}
     <label class="form-label" for="color-picker-trigger">{triggerLabel}</label>
@@ -201,7 +215,15 @@
               >{m.color_hex_code()}</label
             >
 
-            <input id="cp-hex" class="hex" bind:value={hex} />
+            <input
+              id="cp-hex"
+              class="hex"
+              bind:value={hex}
+              oninput={(e) => {
+                const target = e.target as HTMLInputElement;
+                hex = target.value;
+              }}
+            />
           </Column>
 
           <Column sm={2} md={4} lg={8}>
@@ -216,7 +238,10 @@
               kind="secondary"
               size="field"
               class="action-button"
-              onclick={() => onCancel()}>{m.button_cancel()}</Button
+              onclick={() => {
+                onCancel();
+                colorOpen = false;
+              }}>{m.button_cancel()}</Button
             >
           </Column>
 
@@ -225,7 +250,10 @@
               kind="primary"
               size="field"
               class="action-button"
-              onclick={() => onValidate({ hex, hue, saturation, lightness })}
+              onclick={() => {
+                onValidate({ hex, hue, saturation, lightness });
+                colorOpen = false;
+              }}
             >
               {m.button_validate()}
               <ArrowRight

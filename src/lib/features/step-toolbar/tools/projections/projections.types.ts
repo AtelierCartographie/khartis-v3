@@ -6,4 +6,5 @@ export interface ProjectionState {
   rotation: number;
   scale?: number;
   center?: [number, number];
+  autoFit?: boolean;
 }

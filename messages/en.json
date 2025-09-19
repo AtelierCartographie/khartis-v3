@@ -148,6 +148,7 @@
   "geo_projection": "Projection",
   "geo_projection_wgs84": "WGS 84 (EPSG:4326)",
   "geo_projection_mercator": "Web Mercator (EPSG:3857)",
+  "geo_learn_more_geocoding": "Learn more about geocoding",
   "basemap_step_title": "3. Join data to a basemap",
   "basemap_step_description": "Select a basemap from the Khartis catalog or import a basemap. Otherwise, if the data has geometry, add a basemap from OpenStreetMap.",
   "basemap_catalog": "Catalog",

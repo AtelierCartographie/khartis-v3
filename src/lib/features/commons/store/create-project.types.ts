@@ -1,13 +1,44 @@
 export type ProjectTab = 1 | 2 | 3;
 
+export enum FileType {
+  CSV = 'csv',
+  GEOJSON = 'geojson',
+  SHAPEFILE = 'shapefile',
+  GEOPACKAGE = 'geopackage',
+  UNKNOWN = 'unknown'
+}
+
+export enum DataSourceType {
+  FILE_UPLOAD = 'file_upload',
+  PASTE = 'paste',
+  URL = 'url'
+}
+
+export interface FileValidation {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
   size: number;
   type: string;
+  fileType: FileType;
   content?: string | ArrayBuffer;
-  status: 'uploading' | 'complete' | 'edit' | 'error';
+  parsedData?: any;
+  status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
   errorMessage?: string;
+  validation?: FileValidation;
+  sourceType: DataSourceType;
+  relatedFiles?: string[];
+  uploadProgress?: number;
+  statistics?: Record<string, any>;
+  duplicates?: {
+    hasDuplicates: boolean;
+    duplicateCount: number;
+  };
 }
 
 export interface SavedProject {
@@ -36,8 +67,6 @@ export type ExampleCategory =
   | 'hybrids';
 
 export interface CreateProjectState {
-  isModalOpen: boolean;
-
   selectedTab: ProjectTab;
 
   newProject: {

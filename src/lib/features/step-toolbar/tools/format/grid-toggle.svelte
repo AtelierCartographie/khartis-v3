@@ -5,9 +5,15 @@
 
   const formatState = $derived(getFormatState());
 
-  let grid = $state(formatState.gridEnabled);
+  let grid = $state(false);
 
-  $effect(() => formatActions.setGridEnabled(grid));
+  $effect(() => {
+    grid = formatState.gridEnabled;
+  });
+
+  function handleToggle() {
+    formatActions.toggleGrid();
+  }
 </script>
 
 <Grid padding noGutter>
@@ -19,6 +25,7 @@
         labelA={m.projection_settings_no()}
         labelB={m.projection_settings_yes()}
         size="sm"
+        on:toggle={handleToggle}
       />
 
       <i class="block mt-3">{m.format_grid_description()}</i>

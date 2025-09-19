@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Grid } from 'carbon-components-svelte';
-  import { toolState } from '../tools-store/tools.store.svelte';
+  import { formatState } from './format.store.svelte';
   import ColorSelector from './color-selector.svelte';
   import CustomSize from './custom-size.svelte';
   import FormatModeTabs from './format-mode-tabs.svelte';
@@ -8,7 +8,7 @@
   import MarginsEditor from './margins-editor.svelte';
   import ModelSelect from './model-select.svelte';
 
-  const isPreset = $derived(toolState.format.mode === 'preset');
+  const isPreset = $derived(formatState.mode === 'preset');
 </script>
 
 <div id="khartis-format-tool">

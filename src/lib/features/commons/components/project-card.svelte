@@ -127,9 +127,9 @@
 
   <div class={bottomSectionClasses}>
     <div class="flex items-start justify-between">
-      <h6 class="flex-1 pr-2">{title}</h6>
+      <h6 class="flex-1 pr-2 title-text">{title}</h6>
 
-      <div class="ml-2">
+      <div class="ml-2 radio-button-wrapper">
         <RadioButton
           checked={selected}
           disabled={disabled}
@@ -148,7 +148,20 @@
   #kh-card {
     min-width: 184px;
     max-width: 220px;
+    width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .title-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .radio-button-wrapper {
+    flex-shrink: 0;
   }
 
   #kh-card:hover:not(.opacity-50) .top-section {

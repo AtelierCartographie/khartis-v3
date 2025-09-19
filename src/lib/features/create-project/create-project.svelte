@@ -7,6 +7,7 @@
   } from 'carbon-components-svelte';
   import { FileStorage, ShapeExclude, Upload } from 'carbon-icons-svelte';
   import CreateNewProject from './create-new-project.svelte';
+  import ProjectName from './project-name.svelte';
   import {
     createProjectActions,
     createProjectState
@@ -22,16 +23,7 @@
 
   const { open = false, onClose }: Props = $props();
 
-  $effect(() => {
-    if (open) {
-      createProjectActions.openModal();
-    } else {
-      createProjectActions.closeModal();
-    }
-  });
-
   function handleClose() {
-    createProjectActions.closeModal();
     onClose?.();
   }
 
@@ -41,10 +33,7 @@
 </script>
 
 <div id="khartis-create-project">
-  <ComposedModal
-    preventCloseOnClickOutside
-    open={createProjectState.isModalOpen}
-  >
+  <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader title={m.create_project_welcome()}>
       <div class="mb-3"></div>
       <span class="text-grey">
@@ -92,23 +81,23 @@
 
         <div class="tab-content">
           {#if createProjectState.selectedTab === 1}
-            <CreateNewProject onClose={handleClose} />
+            <CreateNewProject onClose={handleClose} isModal />
           {:else if createProjectState.selectedTab === 2}
             <OpenProject onClose={handleClose} />
           {:else if createProjectState.selectedTab === 3}
             <TryWithExample onClose={handleClose} />
           {/if}
         </div>
+
+        {#if createProjectState.selectedTab === 1}
+          <ProjectName onClose={handleClose} />
+        {/if}
       </article>
     </ModalBody>
   </ComposedModal>
 </div>
 
 <style lang="scss">
-  #khartis-create-project :global(.bx--modal-close) {
-    display: none;
-  }
-
   #khartis-create-project :global(.bx--modal-container) {
     width: 90vw;
     max-width: 700px;

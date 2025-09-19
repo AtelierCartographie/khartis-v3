@@ -6,9 +6,34 @@ import type {
   SavedProject,
   UploadedFile
 } from './create-project.types';
+import {
+  createUploadedFile,
+  readFileContent,
+  validateFile,
+  groupShapefiles,
+  isShapefileComponent,
+  extractDataFromPaste,
+  FileType,
+  isValidUrl,
+  getFilenameFromUrl,
+  validateCsvStructure,
+  validateGeospatialFile,
+  parseCsvWithPapa,
+  parseShapefile,
+  detectDuplicateRows,
+  getDataStatistics,
+  parseGeoPackage,
+  DataSourceType
+} from '../utils/file-import.utils';
+import {
+  showSuccess,
+  showError,
+  showWarning
+} from '../utils/notification.utils.svelte';
+import { globalActions, globalState } from './global.svelte';
+import { projectStore } from './project.store.svelte';
 
 const DEFAULT_STATE: CreateProjectState = {
-  isModalOpen: false,
   selectedTab: 1,
 
   newProject: {
@@ -36,25 +61,365 @@ export const createProjectState = $state<CreateProjectState>({
 });
 
 export const createProjectActions = {
-  openModal(): void {
-    createProjectState.isModalOpen = true;
-    console.log('[CreateProject] 🔄 Modal opened');
-  },
-
-  closeModal(): void {
-    createProjectState.isModalOpen = false;
-    this.resetAllTabs();
-    console.log('[CreateProject] 🔄 Modal closed');
-  },
-
   selectTab(tab: ProjectTab): void {
     createProjectState.selectedTab = tab;
-    console.log('[CreateProject] 🔄 Tab selected:', tab);
   },
 
   addUploadedFile(file: UploadedFile): void {
     createProjectState.newProject.uploadedFiles.push(file);
-    console.log('[CreateProject] 🔄 File uploaded:', file.name);
+
+    const hasExistingSelection = globalState.dataButtons.some(
+      (btn) => btn.isSelected
+    );
+    globalActions.addDataButtonForFile(
+      file.id,
+      file.name,
+      !hasExistingSelection
+    );
+  },
+
+  isFileDuplicate(fileName: string): boolean {
+    const uploadingFiles = createProjectState.newProject.uploadedFiles;
+
+    const isInUploadingFiles = uploadingFiles.some(
+      (f) => f.name === fileName && f.status !== 'error'
+    );
+
+    if (isInUploadingFiles) {
+      return true;
+    }
+
+    const currentProject = projectStore.currentProject;
+    if (currentProject?.data?.sourceFiles) {
+      return currentProject.data.sourceFiles.some((f) => f.name === fileName);
+    }
+
+    return false;
+  },
+
+  async processFiles(files: File[]): Promise<void> {
+    const fileGroups = groupShapefiles(files);
+    const duplicates: string[] = [];
+    const toProcess: Map<string, File[]> = new Map();
+
+    for (const [baseName, groupFiles] of fileGroups) {
+      const mainFileName =
+        groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
+
+      if (this.isFileDuplicate(mainFileName)) {
+        duplicates.push(mainFileName);
+      } else {
+        toProcess.set(baseName, groupFiles);
+      }
+    }
+
+    if (duplicates.length > 0) {
+      showWarning(
+        'Fichiers déjà importés',
+        `Les fichiers suivants existent déjà : ${duplicates.join(', ')}`
+      );
+    }
+
+    for (const [baseName, groupFiles] of toProcess) {
+      if (
+        groupFiles.length === 1 &&
+        !isShapefileComponent(groupFiles[0].name)
+      ) {
+        await this.processSingleFile(groupFiles[0]);
+      } else {
+        await this.processShapefileGroup(baseName, groupFiles);
+      }
+    }
+  },
+
+  async processSingleFile(
+    file: File,
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+  ): Promise<void> {
+    if (this.isFileDuplicate(file.name)) {
+      showWarning(
+        'Fichier déjà importé',
+        `Le fichier "${file.name}" existe déjà dans le projet`
+      );
+      return;
+    }
+
+    const validation = validateFile(file);
+    const uploadedFile = createUploadedFile(file, sourceType);
+
+    uploadedFile.validation = validation;
+
+    if (!validation.isValid) {
+      uploadedFile.status = 'error';
+      uploadedFile.errorMessage = validation.errors[0];
+      this.addUploadedFile(uploadedFile);
+      return;
+    }
+
+    // Don't add the file yet, wait until we know the final status
+    // this.addUploadedFile(uploadedFile);
+
+    try {
+      uploadedFile.status = 'processing';
+      // Add the file with 'processing' status
+      this.addUploadedFile(uploadedFile);
+
+      if (uploadedFile.fileType === FileType.CSV) {
+        const result = await parseCsvWithPapa(file, (progress) => {
+          this.updateFileProgress(uploadedFile.id, progress);
+        });
+
+        uploadedFile.parsedData = result.data;
+        uploadedFile.content = JSON.stringify(result.data);
+
+        const duplicates = detectDuplicateRows(result.data);
+        uploadedFile.duplicates = {
+          hasDuplicates: duplicates.hasDuplicates,
+          duplicateCount: duplicates.duplicateCount
+        };
+
+        if (duplicates.hasDuplicates) {
+          showWarning(
+            'Duplicate rows detected',
+            `Found ${duplicates.duplicateCount} duplicate rows`
+          );
+        }
+
+        uploadedFile.statistics = getDataStatistics(
+          result.data,
+          result.headers
+        );
+
+        uploadedFile.parsedData = result.data;
+
+        if (result.errors.length > 0) {
+          uploadedFile.validation = {
+            isValid: false,
+            errors: result.errors,
+            warnings: []
+          };
+          uploadedFile.status = 'error';
+          uploadedFile.errorMessage = result.errors[0];
+          this.updateFileStatus(uploadedFile.id, 'error', result.errors[0]);
+          return;
+        }
+
+        // Mark CSV file as complete
+        uploadedFile.status = 'complete';
+        // Update the file in the array
+        this.updateFileStatus(uploadedFile.id, 'complete');
+      } else if (uploadedFile.fileType === FileType.GEOJSON) {
+        const content = await readFileContent(file, (progress) => {
+          this.updateFileProgress(uploadedFile.id, progress);
+        });
+        uploadedFile.content = content;
+
+        try {
+          uploadedFile.parsedData = JSON.parse(content as string);
+        } catch (e) {
+          uploadedFile.status = 'error';
+          uploadedFile.errorMessage = 'Invalid JSON format';
+          this.updateFileStatus(uploadedFile.id, 'error', 'Invalid JSON format');
+          return;
+        }
+
+        const geoValidation = await validateGeospatialFile(content as string);
+        uploadedFile.validation = {
+          ...uploadedFile.validation,
+          ...geoValidation
+        };
+        if (!geoValidation.isValid) {
+          uploadedFile.status = 'error';
+          uploadedFile.errorMessage = geoValidation.errors[0];
+          this.updateFileStatus(
+            uploadedFile.id,
+            'error',
+            geoValidation.errors[0]
+          );
+          return;
+        }
+
+        // Mark GeoJSON file as complete
+        uploadedFile.status = 'complete';
+        this.updateFileStatus(uploadedFile.id, 'complete');
+      } else if (uploadedFile.fileType === FileType.GEOPACKAGE) {
+        const content = await readFileContent(file, (progress) => {
+          this.updateFileProgress(uploadedFile.id, progress * 0.5);
+        });
+
+        const geojson = await parseGeoPackage(
+          content as ArrayBuffer,
+          (progress) => {
+            this.updateFileProgress(uploadedFile.id, 50 + progress * 0.5);
+          }
+        );
+
+        uploadedFile.parsedData = geojson;
+        uploadedFile.content = JSON.stringify(geojson);
+
+        const geoValidation = await validateGeospatialFile(
+          JSON.stringify(geojson)
+        );
+        uploadedFile.validation = {
+          ...uploadedFile.validation,
+          ...geoValidation
+        };
+        if (!geoValidation.isValid) {
+          uploadedFile.status = 'error';
+          uploadedFile.errorMessage = geoValidation.errors[0];
+          this.updateFileStatus(
+            uploadedFile.id,
+            'error',
+            geoValidation.errors[0]
+          );
+          return;
+        }
+
+        // Mark GeoPackage file as complete
+        uploadedFile.status = 'complete';
+        this.updateFileStatus(uploadedFile.id, 'complete');
+      } else {
+        const content = await readFileContent(file, (progress) => {
+          this.updateFileProgress(uploadedFile.id, progress);
+        });
+        uploadedFile.content = content;
+        // Mark other file types as complete
+        uploadedFile.status = 'complete';
+        this.updateFileStatus(uploadedFile.id, 'complete');
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to process file';
+      uploadedFile.status = 'error';
+      uploadedFile.errorMessage = message;
+      this.updateFileStatus(uploadedFile.id, 'error', message);
+      showError('File processing failed', message, error);
+    }
+  },
+
+  async processShapefileGroup(baseName: string, files: File[]): Promise<void> {
+    const mainFile = files.find((f) => f.name.endsWith('.shp'));
+    if (!mainFile) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: baseName,
+        size: files.reduce((sum, f) => sum + f.size, 0),
+        type: 'application/x-shapefile',
+        fileType: FileType.SHAPEFILE,
+        status: 'error',
+        errorMessage: 'Missing .shp file in shapefile set',
+        sourceType: DataSourceType.FILE_UPLOAD
+      };
+      this.addUploadedFile(errorFile);
+      showError('Invalid shapefile', 'Missing .shp file in shapefile set');
+      return;
+    }
+
+    const requiredExtensions = ['.shp', '.shx', '.dbf'];
+    const fileExtensions = files.map(
+      (f) => '.' + f.name.split('.').pop()?.toLowerCase()
+    );
+    const missingExtensions = requiredExtensions.filter(
+      (ext) => !fileExtensions.includes(ext)
+    );
+
+    if (missingExtensions.length > 0) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: baseName,
+        size: files.reduce((sum, f) => sum + f.size, 0),
+        type: 'application/x-shapefile',
+        fileType: FileType.SHAPEFILE,
+        status: 'error',
+        errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
+        sourceType: DataSourceType.FILE_UPLOAD
+      };
+      this.addUploadedFile(errorFile);
+      showError(
+        'Incomplete shapefile',
+        `Missing required components: ${missingExtensions.join(', ')}`
+      );
+      return;
+    }
+
+    const uploadedFile: UploadedFile = {
+      id: crypto.randomUUID(),
+      name: baseName + '.shp',
+      size: files.reduce((sum, f) => sum + f.size, 0),
+      type: 'application/x-shapefile',
+      fileType: FileType.SHAPEFILE,
+      status: 'processing',
+      sourceType: DataSourceType.FILE_UPLOAD,
+      relatedFiles: files.map((f) => f.name)
+    };
+
+    this.addUploadedFile(uploadedFile);
+
+    try {
+      const fileContents: Record<string, ArrayBuffer> = {};
+      for (const file of files) {
+        const content = await readFileContent(file);
+        if (content instanceof ArrayBuffer) {
+          const extension = file.name.split('.').pop()?.toLowerCase() || '';
+          fileContents[extension] = content;
+        }
+      }
+
+      const geojson = await parseShapefile(fileContents, (progress) => {
+        this.updateFileProgress(uploadedFile.id, progress);
+      });
+
+      uploadedFile.parsedData = geojson;
+      uploadedFile.content = JSON.stringify(geojson);
+      uploadedFile.status = 'complete';
+      this.updateFileStatus(uploadedFile.id, 'complete');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to process shapefile';
+      uploadedFile.status = 'error';
+      uploadedFile.errorMessage = message;
+      this.updateFileStatus(uploadedFile.id, 'error', message);
+      showError('Shapefile processing failed', message, error);
+    }
+  },
+
+  async processPastedData(pastedText: string): Promise<void> {
+    const { fileType, validation } = extractDataFromPaste(pastedText);
+
+    let baseName = 'pasted-data';
+    let extension =
+      fileType === FileType.CSV
+        ? 'csv'
+        : fileType === FileType.GEOJSON
+          ? 'geojson'
+          : 'txt';
+    let fileName = `${baseName}.${extension}`;
+
+    let counter = 1;
+    while (this.isFileDuplicate(fileName)) {
+      fileName = `${baseName}-${counter}.${extension}`;
+      counter++;
+    }
+
+    const uploadedFile: UploadedFile = {
+      id: crypto.randomUUID(),
+      name: fileName,
+      size: new Blob([pastedText]).size,
+      type: fileType === FileType.CSV ? 'text/csv' : 'application/json',
+      fileType,
+      status: validation.isValid ? 'complete' : 'error',
+      content: pastedText,
+      validation,
+      sourceType: DataSourceType.PASTE,
+      errorMessage: validation.isValid ? undefined : validation.errors[0]
+    };
+
+    this.addUploadedFile(uploadedFile);
+    this.setPastedData('');
+
+    if (!validation.isValid) {
+      showError('Invalid pasted data', validation.errors[0]);
+    }
   },
 
   removeUploadedFile(fileId: string): void {
@@ -64,7 +429,8 @@ export const createProjectActions = {
     if (index !== -1) {
       const fileName = createProjectState.newProject.uploadedFiles[index].name;
       createProjectState.newProject.uploadedFiles.splice(index, 1);
-      console.log('[CreateProject] 🔄 File removed:', fileName);
+
+      globalActions.removeDataButton(fileId);
     }
   },
 
@@ -81,23 +447,28 @@ export const createProjectActions = {
       if (errorMessage) {
         file.errorMessage = errorMessage;
       }
-      console.log('[CreateProject] 🔄 File status updated:', file.name, status);
+    }
+  },
+
+  updateFileProgress(fileId: string, progress: number): void {
+    const file = createProjectState.newProject.uploadedFiles.find(
+      (f) => f.id === fileId
+    );
+    if (file) {
+      file.uploadProgress = Math.round(progress);
     }
   },
 
   setPastedData(data: string): void {
     createProjectState.newProject.pastedData = data;
-    console.log('[CreateProject] 🔄 Pasted data updated');
   },
 
   setOnlineFileUrl(url: string): void {
     createProjectState.newProject.onlineFileUrl = url;
-    console.log('[CreateProject] 🔄 Online file URL updated:', url);
   },
 
   setProjectName(name: string): void {
     createProjectState.newProject.projectName = name;
-    console.log('[CreateProject] 🔄 Project name updated:', name);
   },
 
   setNewProjectLoading(loading: boolean): void {
@@ -107,13 +478,16 @@ export const createProjectActions = {
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
     if (error) {
-      console.error('[CreateProject] ❌ New project error:', error);
+      console.error('[CreateProject] New project error:', error);
     }
   },
 
   async loadOnlineFile(): Promise<void> {
     const url = createProjectState.newProject.onlineFileUrl;
-    if (!url) return;
+    if (!url || !isValidUrl(url)) {
+      this.setNewProjectError('Please enter a valid HTTP or HTTPS URL');
+      return;
+    }
 
     this.setNewProjectLoading(true);
     this.setNewProjectError();
@@ -124,42 +498,57 @@ export const createProjectActions = {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      const filename = url.split('/').pop() || 'online-file';
+      const filename = getFilenameFromUrl(url);
       const blob = await response.blob();
+      const file = new File([blob], filename, { type: blob.type });
 
-      const file: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: filename,
-        size: blob.size,
-        type: blob.type,
-        status: 'complete'
-      };
-
-      this.addUploadedFile(file);
+      await this.processSingleFile(file, DataSourceType.URL);
       this.setOnlineFileUrl('');
-      console.log('[CreateProject] ✅ Online file loaded:', filename);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to load online file';
       this.setNewProjectError(message);
+      showError('Failed to load online file', message, error);
     } finally {
       this.setNewProjectLoading(false);
     }
   },
 
+  clearAllFiles(): void {
+    createProjectState.newProject.uploadedFiles = [];
+
+    globalActions.clearAllDataButtons();
+  },
+
+  getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {
+    return createProjectState.newProject.uploadedFiles.filter(
+      (f) => f.status === status
+    );
+  },
+
+  hasValidFiles(): boolean {
+    return createProjectState.newProject.uploadedFiles.some(
+      (f) => f.status === 'complete'
+    );
+  },
+
+  getTotalFileSize(): number {
+    return createProjectState.newProject.uploadedFiles.reduce(
+      (sum, file) => sum + file.size,
+      0
+    );
+  },
+
   setSavedProjects(projects: SavedProject[]): void {
     createProjectState.openProject.savedProjects = projects;
-    console.log('[CreateProject] 🔄 Saved projects updated:', projects.length);
   },
 
   selectSavedProject(projectId?: string): void {
     createProjectState.openProject.selectedProjectId = projectId;
-    console.log('[CreateProject] 🔄 Saved project selected:', projectId);
   },
 
   setImportedFile(file?: UploadedFile): void {
     createProjectState.openProject.importedFile = file;
-    console.log('[CreateProject] 🔄 Project file imported:', file?.name);
   },
 
   setOpenProjectLoading(loading: boolean): void {
@@ -169,24 +558,21 @@ export const createProjectActions = {
   setOpenProjectError(error?: string): void {
     createProjectState.openProject.error = error;
     if (error) {
-      console.error('[CreateProject] ❌ Open project error:', error);
+      console.error('[CreateProject] Open project error:', error);
     }
   },
 
   setExamples(examples: ExampleProject[]): void {
     createProjectState.tryExample.examples = examples;
-    console.log('[CreateProject] 🔄 Examples updated:', examples.length);
   },
 
   selectExample(exampleId?: string): void {
     createProjectState.tryExample.selectedExampleId = exampleId;
-    console.log('[CreateProject] 🔄 Example selected:', exampleId);
   },
 
   setExampleCategory(category: ExampleCategory): void {
     createProjectState.tryExample.selectedCategory = category;
     createProjectState.tryExample.selectedExampleId = undefined;
-    console.log('[CreateProject] 🔄 Example category changed:', category);
   },
 
   setTryExampleLoading(loading: boolean): void {
@@ -196,13 +582,17 @@ export const createProjectActions = {
   setTryExampleError(error?: string): void {
     createProjectState.tryExample.error = error;
     if (error) {
-      console.error('[CreateProject] ❌ Try example error:', error);
+      console.error('[CreateProject] Try example error:', error);
     }
   },
 
   resetNewProject(): void {
-    Object.assign(createProjectState.newProject, DEFAULT_STATE.newProject);
-    console.log('[CreateProject] 🔄 New project state reset');
+    createProjectState.newProject.uploadedFiles = [];
+    createProjectState.newProject.pastedData = '';
+    createProjectState.newProject.onlineFileUrl = '';
+    createProjectState.newProject.projectName = '';
+    createProjectState.newProject.isLoading = false;
+    createProjectState.newProject.error = undefined;
   },
 
   resetOpenProject(): void {
@@ -210,7 +600,6 @@ export const createProjectActions = {
       ...DEFAULT_STATE.openProject,
       savedProjects: createProjectState.openProject.savedProjects
     });
-    console.log('[CreateProject] 🔄 Open project state reset');
   },
 
   resetTryExample(): void {
@@ -218,7 +607,6 @@ export const createProjectActions = {
       ...DEFAULT_STATE.tryExample,
       examples: createProjectState.tryExample.examples
     });
-    console.log('[CreateProject] 🔄 Try example state reset');
   },
 
   resetAllTabs(): void {
@@ -226,11 +614,9 @@ export const createProjectActions = {
     this.resetOpenProject();
     this.resetTryExample();
     createProjectState.selectedTab = 1;
-    console.log('[CreateProject] 🔄 All tabs reset');
   },
 
   reset(): void {
     Object.assign(createProjectState, DEFAULT_STATE);
-    console.log('[CreateProject] 🔄 Complete state reset');
   }
 };
