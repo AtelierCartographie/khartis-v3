@@ -1,323 +1,153 @@
 # Khartis v3
 
 <div align="center">
-  <h3>Simple thematic mapping tool</h3>
-
-  <p>An open source project by <a href="http://www.sciencespo.fr/cartographie/">Sciences Po - Cartography Workshop</a></p>
-
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)
-![Svelte](https://img.shields.io/badge/Svelte-FF3E00?style=flat&logo=svelte&logoColor=white)
-![SvelteKit](https://img.shields.io/badge/SvelteKit-FF3E00?style=flat&logo=svelte&logoColor=white)
-![Carbon Design System](https://img.shields.io/badge/Carbon_Design_System-161616?style=flat&logo=ibm&logoColor=white)
-
+  <h3>🗺️ Simple thematic mapping tool</h3>
+  <p>An open-source project by <a href="http://www.sciencespo.fr/cartographie/">Sciences Po – Cartography Workshop</a></p>
+  
+  <p>
+    <img alt="Version" src="https://img.shields.io/badge/version-0.0.1-blue?style=flat">
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat">
+    <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat&logo=node.js">
+  </p>
+  <p>
+    <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white">
+    <img alt="Svelte 5" src="https://img.shields.io/badge/Svelte_5-FF3E00?style=flat&logo=svelte&logoColor=white">
+    <img alt="SvelteKit" src="https://img.shields.io/badge/SvelteKit-FF3E00?style=flat&logo=svelte&logoColor=white">
+    <img alt="Carbon Design System" src="https://img.shields.io/badge/Carbon_Design_System-161616?style=flat&logo=ibm&logoColor=white">
+  </p>
+  <p>
+    <img alt="DuckDB" src="https://img.shields.io/badge/DuckDB-FFF000?style=flat&logo=duckdb&logoColor=black">
+    <img alt="Deck.gl" src="https://img.shields.io/badge/Deck.gl-00AEF0?style=flat&logo=uber&logoColor=white">
+    <img alt="MapLibre" src="https://img.shields.io/badge/MapLibre-396CB2?style=flat&logo=maplibre&logoColor=white">
+    <img alt="D3.js" src="https://img.shields.io/badge/D3.js-F68E56?style=flat&logo=d3.js&logoColor=white">
+  </p>
 </div>
 
-## Table of Contents
+Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client‑side to keep your data private.
 
-- [Setup](#setup)
-  - [Technologies](#technologies)
-  - [Resources](#resources)
-  - [Prerequisites](#prerequisites)
-  - [Quick Start](#quick-start)
-  - [Development](#development)
-  - [Testing](#testing)
-  - [Build and Deployment](#build-and-deployment)
-  - [Internationalization](#internationalization)
-  - [Project Structure](#project-structure)
-  - [Commit Lint](#commit-lint)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Support](#support)
-- [CI/CD](#cicd)
-  - [GitHub Actions Workflows](#github-actions-workflows)
-  - [Semantic Release Configuration](#semantic-release-configuration)
-  - [Automatic Versioning Rules](#automatic-versioning-rules)
-  - [Release Process](#release-process)
-  - [Environment Variables](#environment-variables)
+- Website (coming soon)
+- Documentation: see the `docs/` folder (entry: `docs/summary.md`)
 
-## Setup
+## Features
 
-### Technologies
+- Data management: import CSV/GeoJSON/GeoPackage, variable typing, cleaning, join assistant, geolocation, enrichment
+- Visualization: choropleth, proportional, categorical, bivariate; palettes and classification; suggestions and presets
+- Map tools: projection catalog with WKT/PROJ.4 import, simplification, layers, search
+- Layout: legends, scale, north arrow, inset maps, annotations, grids, margins
+- Export: JPEG, SVG, PDF (optional); data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); project auto‑save and versions
+- Accessibility and i18n: RGAA/WCAG, keyboard shortcuts, French/English interface
 
-Khartis v3 is a modern Single Page Application (SPA) built with:
+## Tech stack
 
-- **Framework**: [SvelteKit](https://kit.svelte.dev/) with TypeScript
-- **Architecture**: SPA with client-side routing (adapter-static)
-- **Styling**: [Carbon Design System](https://carbondesignsystem.com/)
-- **Internationalization**: [Paraglide-JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) (fr, en, es, de, pt)
-- **Testing**: Vitest (unit) + Playwright (e2e)
-- **Package Manager**: pnpm
+- SvelteKit 5 (Runes), TypeScript, Vite
+- Carbon Design System (Svelte) for UI
+- Deck.gl + WebGL for rendering; D3 for projections
+- DuckDB WASM + Spatial for in‑browser data processing
+- Playwright + Vitest for tests; ESLint + Prettier for lint/format
 
-### Resources
+## Screenshots
 
-- [Official Khartis documentation](http://www.sciencespo.fr/cartographie/khartis/docs/)
-- [FAQ](http://www.sciencespo.fr/cartographie/khartis/docs/FAQ/)
-- [Sciences Po - Cartography Workshop](http://www.sciencespo.fr/cartographie/)
+TODO: add screenshots
 
-### Prerequisites
+## Getting started
 
-- [Node.js](https://nodejs.org/) 18+
-- [pnpm](https://pnpm.io/) (package manager)
-- Modern browser (Chrome, Firefox, Safari, Edge)
+Prerequisites
 
-### Quick Start
+- Node.js >= 18
+- Yarn 4 (via Corepack)
 
-1. Clone the repository:
+Install
+
+- Enable Corepack (first time only):
 
 ```bash
-git clone https://github.com/sciencespo/khartis-v3.git
-cd khartis-v3
+corepack enable
 ```
 
-2. Install dependencies and setup:
+- Install dependencies:
 
 ```bash
-pnpm init:project
+yarn install
 ```
 
-3. Start development server:
+Development
 
 ```bash
-pnpm dev
+yarn dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Development
-
-#### Available scripts
+Build
 
 ```bash
-# Development
-pnpm dev                # Start development server
-pnpm build              # Build for production
-pnpm preview            # Preview production build
-
-# Code quality
-pnpm lint               # ESLint + Prettier checks
-pnpm format             # Auto-format code
-pnpm check              # TypeScript and Svelte checks
-
-# Testing
-pnpm test               # Run all tests (unit + e2e)
-pnpm test:unit          # Unit tests only (Vitest)
-pnpm test:e2e           # End-to-end tests (Playwright)
-
-# Internationalization
-pnpm machine-translate  # Auto-translate missing keys
-
-# PWA
-pnpm generate-pwa-assets # Generate PWA icons and assets
-
-# Maintenance
-pnpm update:packages    # Update all dependencies
-pnpm reset:npm:packages # Clean node_modules and lock file
+yarn build && yarn preview
 ```
 
-### Testing
+## Scripts
 
-```bash
-pnpm test:unit         # Unit tests (Vitest + Testing Library)
-pnpm test:e2e          # E2E tests (Playwright)
-pnpm test              # Run both unit and e2e tests
-```
+- dev: start the development server
+- build: build for production
+- preview: preview the production build
+- check / check:watch: Svelte type checks
+- lint: Prettier check + ESLint
+- format: Prettier write
+- test:unit: unit tests with Vitest
+- test:e2e: end‑to‑end tests with Playwright
+- test: run unit tests and then E2E tests
 
-### Build and Deployment
+Additional
 
-```bash
-pnpm build             # Build for production (outputs to build/)
-pnpm preview           # Preview the production build locally
-```
+- generate-pwa-assets: generate PWA icons
+- machine-translate: run Inlang machine translation
+- init:project: initialize Husky and install
 
-Deploy the `build/` folder to any static hosting service (Netlify, Vercel, GitHub Pages, etc.).
+## Testing
 
-### Internationalization
+- Unit tests (Vitest): fast component and logic checks
+- E2E tests (Playwright): core flows and cross‑browser sanity
+- Test setup lives alongside the code in `e2e/` and `vitest-setup-client.ts`
 
-Supports 5 languages: French, English, Spanish, German, Portuguese
+## Linting and formatting
 
-- Translations: `messages/` folder
-- Auto-translate missing keys: `pnpm machine-translate`
-- Powered by [Paraglide-JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs)
+- ESLint (JS/Svelte) and Prettier; run them locally or via CI
 
-### Configuration
+## Internationalization
 
-#### Vite Configuration (`vite.config.ts`)
+- Inlang Paraglide for type‑safe i18n
+- Languages: English and French
 
-The Vite configuration handles several key aspects of the build setup:
+## Documentation
 
-- **SvelteKit Integration**: Uses `@sveltejs/kit/vite` plugin for full framework support
-- **Internationalization**: Paraglide-JS plugin generates i18n files from `./project.inlang` to `./src/lib/paraglide`
-- **PWA Support**: VitePWA plugin configures the app as a Progressive Web App with:
-  - Service worker registration with user prompt
-  - Comprehensive asset caching (JS, CSS, HTML, fonts)
-  - Web app manifest with offline capabilities
-  - Custom icons for different platforms
-- **Testing**: Vitest workspace configuration with separate environments for client (jsdom) and server (node) tests
+- Start here: `docs/summary.md`
+- Highlights:
+  - Data management: `docs/01-data-management.md`
+  - Visualization engine: `docs/02-visualization-engine.md`
+  - Layout system: `docs/03-layout-system.md`
+  - Export system: `docs/04-export-system.md`
+  - Technical architecture: `docs/05-technical-architecture.md`
+  - Performance optimization: `docs/06-performance-optimization.md`
+  - Accessibility and security: `docs/07-accessibility-security.md`
+  - Keyboard shortcuts: `docs/08-keyboard-shortcuts.md`
 
-#### Svelte Configuration (`svelte.config.js`)
+## Privacy, security, and data
 
-The Svelte configuration sets up:
+- Client‑side only: imported data never leaves the browser
+- Content Security Policy and dependency scanning in place
+- Optional audience analytics, consent‑based and privacy‑preserving
 
-- **Static Adapter**: Uses `@sveltejs/adapter-static` for SPA deployment with `200.html` fallback
-- **Preprocessors**:
-  - `vitePreprocess()`: TypeScript and PostCSS preprocessing via Vite
-  - `optimizeImports()`: Carbon Design System import optimization
-  - `optimizeCss()`: Carbon CSS optimization for better performance
+## Browser compatibility
 
-### Project Structure
+- Recent versions of Chrome, Firefox, Edge, and Safari on desktop and mobile
 
-```
-src/
-├── routes/              # SvelteKit pages
-├── lib/                 # Shared utilities
-└── paraglide/           # Generated i18n files
+## Contributing
 
-messages/               # Translation files
-```
+We welcome contributions once the repo opens to the public. Before submitting a PR:
 
-### Commit Lint
+- Follow commit conventions and run lint/tests locally
+- Add/update documentation when behavior changes
+- Keep performance and accessibility budgets in mind
 
-This project uses [Commitlint](https://commitlint.js.org/) to enforce conventional commit message format, ensuring consistent and meaningful commit history.
+## License
 
-#### Commit Message Format
+MIT — see `LICENSE`.
 
-Commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-#### Supported Types
-
-- `feat`: A new feature
-- `fix`: A bug fix
-- `docs`: Documentation only changes
-- `style`: Changes that do not affect the meaning of the code
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `perf`: A code change that improves performance
-- `test`: Adding missing tests or correcting existing tests
-- `build`: Changes that affect the build system or external dependencies
-- `ci`: Changes to CI configuration files and scripts
-- `chore`: Other changes that don't modify src or test files
-- `revert`: Reverts a previous commit
-
-#### Examples
-
-```bash
-feat: add new mapping visualization component
-fix(api): resolve data loading timeout issue
-docs: update installation instructions
-test: add unit tests for data processing
-chore: update dependencies
-```
-
-#### Validation
-
-Commit messages are automatically validated using Husky hooks:
-
-- **Pre-commit**: Runs linting and formatting checks
-- **Commit-msg**: Validates commit message format using commitlint
-
-If your commit message doesn't follow the conventional format, the commit will be rejected.
-
-### Contributing
-
-1. Fork the project
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-Before submitting, run `pnpm lint` and `pnpm test` to ensure code quality.
-
-### License
-
-This project is licensed under the [MIT](LICENSE) license.
-
-### Support
-
-For any questions or issues:
-
-- Check the [documentation](http://www.sciencespo.fr/cartographie/khartis/docs/)
-- Check the [FAQ](http://www.sciencespo.fr/cartographie/khartis/docs/FAQ/)
-- Open an issue on GitHub
-
-## CI/CD
-
-This project uses **GitHub Actions** for continuous integration and deployment, with **Semantic Release** for automated versioning and release management.
-
-### GitHub Actions Workflows
-
-The project includes two main workflows:
-
-#### Production Deployment (`release.yml`)
-
-- **Trigger**: Push to `main` branch
-- **Purpose**: Production deployment and stable releases
-- **Steps**:
-  1. **Dependencies Installation**: Sets up Node.js 22, PNPM, and installs dependencies
-  2. **Semantic Version Generation**: Runs semantic-release to analyze commits and generate version tags
-  3. **Deployment**: Builds and deploys the application to production
-
-#### Staging Deployment (`pre-release.yml`)
-
-- **Trigger**: Push to `develop` branch
-- **Purpose**: Staging environment and pre-release versions
-- **Steps**:
-  1. **Dependencies Setup**: Same as production workflow
-  2. **Version Tag Generation**: Creates pre-release versions for staging
-
-### Semantic Release Configuration
-
-Semantic Release is configured in `package.json` to automate versioning based on conventional commits:
-
-```json
-"release": {
-  "branches": [
-    {
-      "name": "main"
-    },
-    {
-      "name": "develop",
-      "prerelease": true
-    }
-  ]
-}
-```
-
-**Branch Strategy**:
-
-- **`main`**: Stable releases (e.g., `1.0.0`, `1.1.0`)
-- **`develop`**: Pre-release versions (e.g., `1.1.0-beta.1`)
-
-### Automatic Versioning Rules
-
-Based on conventional commit types:
-
-- `feat:` → **Minor** version bump (1.0.0 → 1.1.0)
-- `fix:` → **Patch** version bump (1.0.0 → 1.0.1)
-- `feat!:` or `BREAKING CHANGE:` → **Major** version bump (1.0.0 → 2.0.0)
-- `docs:`, `style:`, `refactor:`, `test:`, `chore:` → **No version bump**
-
-### Release Process
-
-1. **Development**: Work on feature branches, merge to `develop`
-2. **Pre-release**: Push to `develop` triggers staging deployment with pre-release version
-3. **Production**: Merge `develop` to `main` triggers production deployment with stable version
-4. **Automated**: Semantic Release automatically:
-   - Analyzes commit messages since last release
-   - Determines version bump type
-   - Generates changelog
-   - Creates GitHub release with release notes
-   - Tags the commit with new version
-
-### Environment Variables
-
-The workflows use these environment variables:
-
-- `NODE_VERSION: 22` - Node.js version
-- `GITHUB_TOKEN` - Automatically provided by GitHub for semantic-release
+© Atelier de cartographie / Sciences Po, 2025
