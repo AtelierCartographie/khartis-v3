@@ -104,10 +104,34 @@ class ProjectStore {
         (f) => f.id === file.id || f.name === file.name
       );
       if (!exists) {
-        this._state.currentProject.data.sourceFiles.push(file);
+        // Create a deep copy of the file to preserve parsedData
+        // Use JSON parse/stringify as structuredClone fails with proxy objects
+        const fileCopy = {
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          fileType: file.fileType,
+          status: file.status,
+          uploadProgress: file.uploadProgress,
+          errorMessage: file.errorMessage,
+          validation: file.validation,
+          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : null,
+          content: file.content,
+          duplicates: file.duplicates,
+          statistics: file.statistics,
+          sourceType: file.sourceType
+        };
+
+        console.log('[ProjectStore] Adding file to sourceFiles:', {
+          name: fileCopy.name,
+          parsedDataLength: Array.isArray(fileCopy.parsedData) ? fileCopy.parsedData.length : 0
+        });
+
+        this._state.currentProject.data.sourceFiles.push(fileCopy);
         globalActions.addDataButtonForFile(file.id, file.name, false);
 
-        await dataOrchestrator.onFileAdded(file);
+        await dataOrchestrator.onFileAdded(fileCopy);
       }
     }
 

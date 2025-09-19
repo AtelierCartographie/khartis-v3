@@ -8,6 +8,7 @@ import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svel
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import type { UploadedFile } from '../store/create-project.types';
 import { showError } from '../utils/notification.utils.svelte';
+import { duckDBOrchestrator } from './duckdb-orchestrator.service';
 
 class DataOrchestratorService {
   private isInitialized = false;
@@ -16,25 +17,40 @@ class DataOrchestratorService {
     // Force re-initialization on each call for now to fix the bug
     // if (this.isInitialized) return;
 
-    console.log('DataOrchestrator init - starting');
     await projectStore.waitForInit();
 
     const currentProject = projectStore.currentProject;
-    console.log('DataOrchestrator init - currentProject:', currentProject);
 
     if (currentProject?.data?.sourceFiles) {
-      console.log('DataOrchestrator init - processing files:', currentProject.data.sourceFiles);
       await this.processProjectFiles(currentProject.data.sourceFiles);
-    } else {
-      console.log('DataOrchestrator init - no source files to process');
     }
 
     this.isInitialized = true;
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
+    console.log('[DataOrchestrator.onFileAdded] Processing file:', file.name);
+    console.log('[DataOrchestrator.onFileAdded] File details:', {
+      id: file.id,
+      status: file.status,
+      fileType: file.fileType,
+      hasParsedData: !!file.parsedData,
+      parsedDataLength: file.parsedData?.length
+    });
+
     try {
+      // Always use the original processing for now to ensure data is available
       await datasetsStore.addFile(file);
+      console.log('[DataOrchestrator.onFileAdded] File processed via datasetsStore');
+
+      // Then try to also process with DuckDB for future use
+      try {
+        const duckDataset = await duckDBOrchestrator.processFile(file);
+        console.log('[DataOrchestrator.onFileAdded] DuckDB also processed:', !!duckDataset);
+      } catch (duckError) {
+        console.warn('[DataOrchestrator.onFileAdded] DuckDB processing failed:', duckError);
+        // Continue anyway, we have the data from datasetsStore
+      }
 
       const dataset = datasetsStore.getDatasetBySourceFile(file.id);
       if (!dataset) return;
@@ -84,14 +100,10 @@ class DataOrchestratorService {
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    console.log('processProjectFiles - files to process:', files);
     await datasetsStore.processFiles(files);
-    console.log('processProjectFiles - after processFiles, datasets:', datasetsStore.datasets);
 
     const geoDatasets = datasetsStore.getDatasetsByType(true);
     const tabularDatasets = datasetsStore.getDatasetsByType(false);
-    console.log('processProjectFiles - geoDatasets:', geoDatasets);
-    console.log('processProjectFiles - tabularDatasets:', tabularDatasets);
 
     if (geoDatasets.length > 0) {
       projectionActions.suggestProjectionForCurrentData();
