@@ -6,6 +6,7 @@ import {
   type ProjectionFilterId,
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
+import { datasetsStore } from './datasets.store.svelte';
 
 export const globalState = $state<GlobalState>({
   settingPanel: false,
@@ -46,7 +47,6 @@ export const globalActions = {
   },
 
   selectDataButton(id: string): void {
-    // Check if already selected to avoid unnecessary updates
     const currentSelected = globalState.dataButtons.find(b => b.isSelected);
     if (currentSelected?.id === id) return;
 
@@ -54,14 +54,10 @@ export const globalActions = {
       button.isSelected = button.id === id;
     });
 
-    // Update the selected dataset in datasetsStore
-    // The id is the fileId, we need to find the corresponding dataset
-    import('../store/datasets.store.svelte').then(({ datasetsStore }) => {
-      const dataset = datasetsStore.getDatasetBySourceFile(id);
-      if (dataset && datasetsStore.selectedDatasetId !== dataset.id) {
-        datasetsStore.selectDataset(dataset.id);
-      }
-    });
+    const dataset = datasetsStore.getDatasetBySourceFile(id);
+    if (dataset) {
+      datasetsStore.selectDataset(dataset.id);
+    }
   },
 
   addDataButtonForFile(
