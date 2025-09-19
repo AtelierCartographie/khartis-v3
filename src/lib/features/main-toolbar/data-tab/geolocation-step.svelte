@@ -5,13 +5,8 @@
     dataTabState
   } from '$lib/features/commons/store/data-tab.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    ComboBox,
-    InlineNotification,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
-  import { Location, Map } from 'carbon-icons-svelte';
+  import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
+  import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   const dataFields = [
@@ -26,9 +21,12 @@
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
 
   const geoFieldId = $derived(dataTabState.geolocation.linkedVariable);
-  const geoRef = $derived(dataTabState.geolocation.geoReference);
 
-  let activeTabIndex = $state(0);
+  let activeTabIndex = $state(
+    dataTabState.geolocation.geoReference === 'coordinates' ? 1 : 0
+  );
+
+  const GEO_LEARN_MORE_URL = 'https://docs.khartis.org/geocoding';
 
   const tabItems = [
     {
@@ -45,11 +43,13 @@
 
   function handleTabChange(index: number) {
     activeTabIndex = index;
+    dataTabActions.setGeolocationState({
+      geoReference: index === 1 ? 'coordinates' : 'entities'
+    });
   }
 
   let latitudeFieldId = $state<number | undefined>();
   let longitudeFieldId = $state<number | undefined>();
-  let projectionValue = $state('wgs84');
 </script>
 
 <section id="geolocation-step">
@@ -59,38 +59,20 @@
     {m.geo_step_description()}
   </p>
 
-  <div class="tab-container">
-    <ToggleTabs
-      bind:activeIndex={activeTabIndex}
-      items={tabItems}
-      onChange={handleTabChange}
-      className="geo-tabs"
-    />
+  <div class="form-field">
+    <div class="field-label">{m.geo_reference()}</div>
+    <div class="tab-container">
+      <ToggleTabs
+        bind:activeIndex={activeTabIndex}
+        items={tabItems}
+        onChange={handleTabChange}
+        className="geo-tabs"
+      />
+    </div>
   </div>
 
   {#if activeTabIndex === 0}
     <div class="tab-content">
-      <div class="form-field">
-        <Select
-          id="geo-ref"
-          labelText={m.geo_reference()}
-          selected={geoRef}
-          size="xl"
-          on:change={(e) => {
-            const event = e as CustomEvent<{
-              selectedValue: 'admin' | 'places' | 'custom';
-            }>;
-            dataTabActions.setGeolocationState({
-              geoReference: event.detail.selectedValue
-            });
-          }}
-        >
-          <SelectItem value="admin" text={m.geo_admin_entities()} />
-          <SelectItem value="places" text={m.geo_places()} />
-          <SelectItem value="custom" text={m.geo_custom()} />
-        </Select>
-      </div>
-
       <div class="form-field">
         <div class="field-label">{m.geo_linked_variable()}</div>
         <ComboBox
@@ -118,17 +100,6 @@
     <div class="tab-content">
       <div class="form-row">
         <div class="form-field flex-1">
-          <div class="field-label">{m.geo_latitude()}</div>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={latitudeFieldId}
-            on:select={(e) => (latitudeFieldId = e.detail.selectedId)}
-            placeholder={m.geo_select_latitude()}
-            titleText=""
-          />
-        </div>
-
-        <div class="form-field flex-1">
           <div class="field-label">{m.geo_longitude()}</div>
           <ComboBox
             items={dataFieldItems}
@@ -138,23 +109,23 @@
             titleText=""
           />
         </div>
+
+        <div class="form-field flex-1">
+          <div class="field-label">{m.geo_latitude()}</div>
+          <ComboBox
+            items={dataFieldItems}
+            selectedId={latitudeFieldId}
+            on:select={(e) => (latitudeFieldId = e.detail.selectedId)}
+            placeholder={m.geo_select_latitude()}
+            titleText=""
+          />
+        </div>
       </div>
 
-      <div class="form-field">
-        <Select
-          id="geo-projection"
-          labelText={m.geo_projection()}
-          selected={projectionValue}
-          size="xl"
-          on:change={(e) => {
-            const event = e as CustomEvent<{ selectedValue: string }>;
-            projectionValue = event.detail.selectedValue;
-          }}
-        >
-          <SelectItem value="wgs84" text={m.geo_projection_wgs84()} />
-          <SelectItem value="mercator" text={m.geo_projection_mercator()} />
-        </Select>
-      </div>
+      <Link href={GEO_LEARN_MORE_URL} target="_blank">
+        {m.geo_learn_more_geocoding()}
+        <Launch size={16} />
+      </Link>
 
       <InlineNotification
         title={m.geo_notification_title()}

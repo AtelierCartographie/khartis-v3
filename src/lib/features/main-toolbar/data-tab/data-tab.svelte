@@ -5,10 +5,7 @@
   import clsx from 'clsx';
   import BasemapJoinStep from './basemap-join-step.svelte';
   import DataControlStep from './data-control-step.svelte';
-  import DataNotifications from './data-notifications.svelte';
   import GeolocationStep from './geolocation-step.svelte';
-
-  // TODO: Implement navigation logic
 </script>
 
 <div id="khartis-data-tab">
@@ -20,8 +17,6 @@
     )}
   >
     <DataControlStep />
-
-    <DataNotifications />
 
     <GeolocationStep />
 

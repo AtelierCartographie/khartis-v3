@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { globalState } from '$lib/features/commons/store/global.svelte';
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
+  import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
   import type { Snippet } from 'svelte';
 
@@ -26,9 +28,25 @@
   } = $props();
 
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
+
+  function handleOutsideClick(event: CustomEvent) {
+    const toolbar = document.getElementById('khartis-step-toolbar');
+    const target = event.detail?.originalEvent?.target as Node;
+
+    if (!toolbar || !toolbar.contains(target)) {
+      globalState.selectedTool = undefined;
+    }
+  }
 </script>
 
-<div id="khartis-tool-popover">
+<div
+  id="khartis-tool-popover"
+  use:clickOutside={{
+    enabled: open,
+    excludeSelectors: ['#khartis-step-toolbar', '#khartis-color-picker']
+  }}
+  onoutsideclick={handleOutsideClick}
+>
   <Popover
     open={open}
     align={align}
@@ -54,6 +72,7 @@
   .popover-scroll {
     max-height: 70vh;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: var(--cds-spacing-03) var(--cds-spacing-06) var(--cds-spacing-03)
       var(--cds-spacing-06);
   }

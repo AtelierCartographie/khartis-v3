@@ -10,7 +10,7 @@
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
-  let selectedModel = $state(formatState.model);
+  let selectedModel = $state('');
 
   const modelOptions = [
     { value: 'page-a4-landscape', text: m.format_model_a4_landscape() },
@@ -19,7 +19,15 @@
     { value: 'page-a3-portrait', text: m.format_model_a3_portrait() }
   ];
 
-  $effect(() => formatActions.setModel(selectedModel));
+  $effect(() => {
+    selectedModel = formatState.model;
+  });
+
+  $effect(() => {
+    if (selectedModel && selectedModel !== formatState.model) {
+      formatActions.setModel(selectedModel);
+    }
+  });
 </script>
 
 <Grid padding noGutter>

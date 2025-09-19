@@ -2,16 +2,11 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
-  import { toolState } from '../tools-store/tools.store.svelte';
+  import { facetsState } from './facets.store.svelte';
 
-  function handleConfigureVisualization() {
-    console.log('Opening visualization configuration');
-    console.log('Available variables:', toolState.facets.variables);
-    console.log('Selected variables:', toolState.facets.selectedVariables);
-  }
+  function handleConfigureVisualization() {}
 
   function handleLearnMore() {
-    console.log('Opening documentation for map collections');
     window.open('https://docs.khartis.com/facets', '_blank');
   }
 </script>

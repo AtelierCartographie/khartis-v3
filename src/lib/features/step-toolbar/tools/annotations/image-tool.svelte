@@ -50,7 +50,7 @@
   }
 </script>
 
-<Grid padding noGutter>
+<Grid noGutter fullWidth>
   <Row>
     <Column>
       <Button kind="primary" icon={Add} on:click={triggerFileDialog}>
@@ -71,7 +71,7 @@
 
   <Row>
     <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText={m.annotations_size()}
           value={defaultStyle.size || 100}
@@ -81,14 +81,13 @@
           stepMultiplier={5}
           on:change={handleSizeChange}
         />
-        <div class="metric-value">{defaultStyle.size ?? 100}</div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText={m.annotations_opacity?.() || 'Opacité'}
           value={(defaultStyle.opacity ?? 1) * 100}
@@ -98,40 +97,43 @@
           stepMultiplier={5}
           on:change={handleOpacityChange}
         />
-        <div class="metric-value">
-          {Math.round((defaultStyle.opacity ?? 1) * 100)}
-        </div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      {#if annotationsState.selectedId}
-        {@const selected = annotationsState.items.find(
-          (i) => i.id === annotationsState.selectedId
-        )}
-        <Button
-          kind="danger-tertiary"
-          icon={TrashCan}
-          disabled={!selected || selected.type !== 'image'}
-          on:click={() =>
-            selected &&
-            selected.type === 'image' &&
-            annotationsActions.removeAnnotation(selected.id)}
-        >
-          Supprimer l’image
-        </Button>
-      {:else}
-        <Button kind="danger-tertiary" icon={TrashCan} disabled>
-          Supprimer l’image
-        </Button>
-      {/if}
+      <div class="section">
+        {#if annotationsState.selectedId}
+          {@const selected = annotationsState.items.find(
+            (i) => i.id === annotationsState.selectedId
+          )}
+          <Button
+            kind="danger-tertiary"
+            icon={TrashCan}
+            disabled={!selected || selected.type !== 'image'}
+            on:click={() =>
+              selected &&
+              selected.type === 'image' &&
+              annotationsActions.removeAnnotation(selected.id)}
+          >
+            Supprimer l’image
+          </Button>
+        {:else}
+          <Button kind="danger-tertiary" icon={TrashCan} disabled>
+            Supprimer l’image
+          </Button>
+        {/if}
+      </div>
     </Column>
   </Row>
 </Grid>
 
 <style>
+  .section {
+    margin-top: var(--cds-spacing-05);
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;
@@ -142,16 +144,5 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
-  }
-  .metric-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-  .metric-value {
-    width: 48px;
-    text-align: right;
-    color: var(--cds-text-secondary);
   }
 </style>

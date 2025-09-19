@@ -1,5 +1,6 @@
 <script lang="ts">
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
+  import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ZoomMode } from '$lib/features/commons/types/global';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
@@ -7,7 +8,10 @@
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import ZoomToolbar from '$lib/features/zoom-toolbar/zoom-toolbar.svelte';
+  import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service';
+  import { onMount } from 'svelte';
 
   import 'carbon-components-svelte/css/all.css';
 
@@ -18,6 +22,28 @@
   import '$lib/features/commons/assets/styles/theming.css';
 
   let { children } = $props();
+  let isLoading = $state(true);
+
+  onMount(async () => {
+    console.log('Layout onMount - starting initialization');
+
+    // Wait for project store to initialize from IndexedDB
+    await projectStore.waitForInit();
+    console.log('Layout onMount - projectStore initialized, currentProject:', projectStore.currentProject);
+    console.log('Layout onMount - project files:', projectStore.currentProject?.data?.sourceFiles);
+
+    // Initialize data orchestrator to process any existing files
+    console.log('Layout onMount - calling dataOrchestrator.initialize()');
+    await dataOrchestrator.initialize();
+    console.log('Layout onMount - dataOrchestrator initialized');
+
+    isLoading = false;
+
+    // Show modal only if no project exists
+    if (!projectStore.currentProject) {
+      globalState.isCreateProjectModalOpen = true;
+    }
+  });
 
   function handleCloseModal() {
     globalState.isCreateProjectModalOpen = false;
@@ -31,34 +57,69 @@
   );
 </script>
 
-<Header />
+{#if isLoading}
+  <div class="loading-container">
+    <div class="loading-spinner"></div>
+  </div>
+{:else}
+  <Header />
 
-<Sidenav />
+  <Sidenav />
 
-<KeyboardShortcuts />
+  <KeyboardShortcuts />
 
-<main>
-  <article class="main-content">
-    <StepToolbar />
+  <main>
+    <article class="main-content">
+      <StepToolbar />
 
-    <div class="page-content-wrapper" style={pageTransformStyle}>
-      {@render children()}
-    </div>
+      <div class="page-content-wrapper" style={pageTransformStyle}>
+        {@render children()}
+      </div>
 
-    <ZoomToolbar />
+      <ZoomToolbar />
 
-    <div></div>
-  </article>
+      <div></div>
+    </article>
 
-  <CreateProject
-    open={globalState.isCreateProjectModalOpen}
-    onClose={handleCloseModal}
-  />
+    <CreateProject
+      open={!isLoading && globalState.isCreateProjectModalOpen}
+      onClose={handleCloseModal}
+    />
 
-  <MainToolbar />
-</main>
+    <MainToolbar />
+    <NotificationContainer />
+  </main>
+{/if}
 
 <style>
+  .loading-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--cds-ui-01);
+    z-index: 9999;
+  }
+
+  .loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--cds-border-subtle);
+    border-top-color: var(--cds-interactive-01);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   main {
     margin-top: var(--cds-header-height);
     position: relative;

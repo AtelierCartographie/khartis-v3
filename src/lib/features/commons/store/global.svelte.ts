@@ -11,12 +11,11 @@ export const globalState = $state<GlobalState>({
   settingPanel: false,
   mainPanel: true,
   isSideNavOpen: false,
-  isCreateProjectModalOpen: true,
-  isAddDataModalOpen: false,
+  isCreateProjectModalOpen: false,
   selectedStep: ToolbarStep.Data,
   selectedTool: undefined,
   toolbarState: ToolbarState.Full,
-  dataButtons: [{ id: 'data-1', label: 'Lorem', isSelected: true }],
+  dataButtons: [],
   projectionFilter: 'all',
   projectionViewMode: 'list',
   zoom: {
@@ -52,6 +51,54 @@ export const globalActions = {
     });
   },
 
+  addDataButtonForFile(
+    fileId: string,
+    fileName: string,
+    autoSelect: boolean = true
+  ): void {
+    const existingTab = globalState.dataButtons.find(
+      (btn) => btn.id === fileId
+    );
+    if (existingTab) {
+      if (autoSelect) {
+        globalState.dataButtons.forEach((button) => {
+          button.isSelected = button.id === fileId;
+        });
+      }
+      return;
+    }
+
+    if (autoSelect) {
+      globalState.dataButtons.forEach((button) => {
+        button.isSelected = false;
+      });
+    }
+
+    globalState.dataButtons.push({
+      id: fileId,
+      label: fileName,
+      isSelected: autoSelect
+    });
+  },
+
+  removeDataButton(fileId: string): void {
+    const index = globalState.dataButtons.findIndex((btn) => btn.id === fileId);
+    if (index > -1) {
+      globalState.dataButtons.splice(index, 1);
+
+      if (
+        globalState.dataButtons.length > 0 &&
+        !globalState.dataButtons.some((btn) => btn.isSelected)
+      ) {
+        globalState.dataButtons[0].isSelected = true;
+      }
+    }
+  },
+
+  clearAllDataButtons(): void {
+    globalState.dataButtons = [];
+  },
+
   setProjectionFilter(id: ProjectionFilterId): void {
     globalState.projectionFilter = id;
   },
@@ -62,7 +109,6 @@ export const globalActions = {
 
   setZoomMode(mode: ZoomMode): void {
     globalState.zoom.mode = mode;
-    console.log(`Zoom mode changed to: ${mode}`);
   },
 
   zoomIn(): void {
@@ -72,14 +118,12 @@ export const globalActions = {
         globalState.zoom.maxMapZoom
       );
       globalState.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
-      console.log(`Map zoom in: ${globalState.zoom.mapZoomLevel}`);
     } else {
       const newZoomLevel = Math.min(
         globalState.zoom.pageZoomLevel + globalState.zoom.pageZoomStep,
         globalState.zoom.maxPageZoom
       );
       globalState.zoom.pageZoomLevel = newZoomLevel;
-      console.log(`Page zoom in: ${globalState.zoom.pageZoomLevel}%`);
     }
   },
 
@@ -90,24 +134,20 @@ export const globalActions = {
         globalState.zoom.minMapZoom
       );
       globalState.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
-      console.log(`Map zoom out: ${globalState.zoom.mapZoomLevel}`);
     } else {
       const newZoomLevel = Math.max(
         globalState.zoom.pageZoomLevel - globalState.zoom.pageZoomStep,
         globalState.zoom.minPageZoom
       );
       globalState.zoom.pageZoomLevel = newZoomLevel;
-      console.log(`Page zoom out: ${globalState.zoom.pageZoomLevel}%`);
     }
   },
 
   resetZoom(): void {
     if (globalState.zoom.mode === ZoomMode.Map) {
       globalState.zoom.mapZoomLevel = 1;
-      console.log('Map zoom reset to 1');
     } else {
       globalState.zoom.pageZoomLevel = 100;
-      console.log('Page zoom reset to 100%');
     }
   },
 
@@ -116,7 +156,6 @@ export const globalActions = {
       globalState.zoom.minMapZoom,
       Math.min(level, globalState.zoom.maxMapZoom)
     );
-    console.log(`Map zoom set to: ${globalState.zoom.mapZoomLevel}`);
   },
 
   setPageZoom(level: number): void {
@@ -124,6 +163,5 @@ export const globalActions = {
       globalState.zoom.minPageZoom,
       Math.min(level, globalState.zoom.maxPageZoom)
     );
-    console.log(`Page zoom set to: ${globalState.zoom.pageZoomLevel}%`);
   }
 };

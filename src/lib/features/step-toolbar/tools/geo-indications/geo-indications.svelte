@@ -212,26 +212,16 @@
                   on:change={(e) =>
                     store.setOrientationSize((e as CustomEvent).detail.value)}
                   hideTextInput
+                  fullWidth
                 />
               </div>
             </Column>
 
             <Column sm={1} md={2} lg={3}>
               <div class="input-wrapper">
-                <input
-                  id="orientation-size"
-                  class="number"
-                  type="number"
-                  min={5}
-                  max={30}
-                  step={1}
-                  value={state.orientation.size}
-                  oninput={(e) =>
-                    store.setOrientationSize(
-                      parseInt((e.target as HTMLInputElement).value) || 10
-                    )}
-                  inputmode="numeric"
-                />
+                <div class="value-display">
+                  {state.orientation.size}
+                </div>
               </div>
             </Column>
           </Row>
@@ -301,26 +291,16 @@
                   on:change={(e) =>
                     store.setInsetMapSize((e as CustomEvent).detail.value)}
                   hideTextInput
+                  fullWidth
                 />
               </div>
             </Column>
 
             <Column sm={1} md={2} lg={3}>
               <div class="input-wrapper">
-                <input
-                  id="inset-map-size"
-                  class="number"
-                  type="number"
-                  min={20}
-                  max={210}
-                  step={1}
-                  value={state.insetMap.size}
-                  oninput={(e) =>
-                    store.setInsetMapSize(
-                      parseInt((e.target as HTMLInputElement).value) || 40
-                    )}
-                  inputmode="numeric"
-                />
+                <div class="value-display">
+                  {state.insetMap.size}
+                </div>
               </div>
             </Column>
           </Row>
@@ -356,26 +336,16 @@
                   on:change={(e) =>
                     store.setInsetMapZoom((e as CustomEvent).detail.value)}
                   hideTextInput
+                  fullWidth
                 />
               </div>
             </Column>
 
             <Column sm={1} md={2} lg={3}>
               <div class="input-wrapper">
-                <input
-                  id="inset-map-zoom"
-                  class="number"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={state.insetMap.zoom}
-                  oninput={(e) =>
-                    store.setInsetMapZoom(
-                      parseInt((e.target as HTMLInputElement).value) || 50
-                    )}
-                  inputmode="numeric"
-                />
+                <div class="value-display">
+                  {state.insetMap.zoom}%
+                </div>
               </div>
             </Column>
           </Row>
@@ -392,26 +362,16 @@
                   on:change={(e) =>
                     store.setInsetMapContrast((e as CustomEvent).detail.value)}
                   hideTextInput
+                  fullWidth
                 />
               </div>
             </Column>
 
             <Column sm={1} md={2} lg={3}>
               <div class="input-wrapper">
-                <input
-                  id="inset-map-contrast"
-                  class="number"
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={state.insetMap.contrast}
-                  oninput={(e) =>
-                    store.setInsetMapContrast(
-                      parseInt((e.target as HTMLInputElement).value) || 50
-                    )}
-                  inputmode="numeric"
-                />
+                <div class="value-display">
+                  {state.insetMap.contrast}%
+                </div>
               </div>
             </Column>
           </Row>
@@ -480,44 +440,21 @@
     height: 100%;
     display: flex;
     align-items: flex-end;
+    justify-content: center;
   }
 
-  .input-wrapper .number {
-    width: 100%;
-    height: 32px;
-    min-width: unset;
-    padding: 0 var(--cds-spacing-03);
-    border: none;
-    border-bottom: 1px solid #000;
-    background: var(--cds-ui-02);
-    color: var(--cds-text-01);
-    font-weight: normal;
-    font-family: var(--cds-code-01-font-family);
-    line-height: var(--cds-body-short-01-line-height);
-    border-radius: 0;
-    box-sizing: border-box;
+  .value-display {
+    min-width: 3rem;
+    text-align: center;
+    font-size: 0.875rem;
     font-weight: 600;
-  }
-
-  .input-wrapper .number:focus {
-    outline: none;
-    border-bottom-color: #000;
-  }
-
-  .input-wrapper .number:disabled {
-    background: var(--cds-ui-03);
-    color: var(--cds-text-02);
-    cursor: not-allowed;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type='number'] {
-    appearance: textfield;
-    -moz-appearance: textfield;
+    color: var(--cds-text-01);
+    padding: 0 var(--cds-spacing-02);
+    background: var(--cds-ui-02);
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
   }
 </style>

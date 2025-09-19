@@ -75,7 +75,7 @@
   }
 </script>
 
-<Grid padding noGutter>
+<Grid noGutter fullWidth>
   <Row>
     <Column>
       <Select
@@ -93,24 +93,21 @@
 
   <Row>
     <Column>
-      <Button kind="primary" icon={Add} on:click={handleAddShape}>
-        Ajouter une forme
-      </Button>
+      <div class="section">
+        <p class="helper">
+          Ajouter une forme ou sélectionner un élément existant pour le modifier
+          ci-dessous.
+        </p>
+        <Button kind="primary" icon={Add} on:click={handleAddShape}>
+          Ajouter une forme
+        </Button>
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <p class="helper">
-        Ajouter une forme ou sélectionner un élément existant pour le modifier
-        ci-dessous.
-      </p>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Épaisseur"
           value={defaultStyle.strokeWidth || 2}
@@ -120,14 +117,13 @@
           stepMultiplier={1}
           on:change={handleThicknessChange}
         />
-        <div class="metric-value">{defaultStyle.strokeWidth ?? 2}</div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Courbe (%)"
           value={defaultStyle.curvature ?? 40}
@@ -137,60 +133,63 @@
           stepMultiplier={5}
           on:change={handleCurvatureChange}
         />
-        <div class="metric-value">{defaultStyle.curvature ?? 40}</div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="toggle-row">
-        <span class="toggle-label">Pointillés</span>
-        <Toggle
-          size="sm"
-          toggled={defaultStyle.strokeStyle === 'dotted'}
-          ontoggle={(e) => toggleDotted((e as any).detail ?? true)}
-        >
-          <span slot="labelA">Oui</span>
-          <span slot="labelB">Non</span>
-        </Toggle>
+      <div class="section">
+        <div class="toggle-row">
+          <span class="toggle-label">Pointillés</span>
+          <Toggle
+            size="sm"
+            toggled={defaultStyle.strokeStyle === 'dotted'}
+            ontoggle={(e) => toggleDotted((e as any).detail ?? true)}
+          >
+            <span slot="labelA">Oui</span>
+            <span slot="labelB">Non</span>
+          </Toggle>
+        </div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <ColorPicker
-        hex={strokeColor}
-        hue={hue}
-        saturation={saturation}
-        lightness={lightness}
-        triggerLabel="Couleur"
-        onValidate={({
-          hex,
-          hue,
-          saturation,
-          lightness
-        }: {
-          hex: string;
-          hue: number;
-          saturation: number;
-          lightness: number;
-        }) => {
-          strokeColor = hex;
-          annotationsActions.updateDefaultStyle({
-            strokeColor: hex,
-            color: { hue, saturation, lightness }
-          });
-        }}
-        onCancel={() => {}}
-      />
+      <div class="section">
+        <ColorPicker
+          hex={strokeColor}
+          hue={hue}
+          saturation={saturation}
+          lightness={lightness}
+          triggerLabel="Couleur"
+          onValidate={({
+            hex,
+            hue,
+            saturation,
+            lightness
+          }: {
+            hex: string;
+            hue: number;
+            saturation: number;
+            lightness: number;
+          }) => {
+            strokeColor = hex;
+            annotationsActions.updateDefaultStyle({
+              strokeColor: hex,
+              color: { hue, saturation, lightness }
+            });
+          }}
+          onCancel={() => {}}
+        />
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="metric-row">
+      <div class="section">
         <Slider
           labelText="Opacité"
           value={(defaultStyle.opacity ?? 1) * 100}
@@ -201,56 +200,47 @@
           on:change={(e) =>
             annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 })}
         />
-        <div class="metric-value">
-          {Math.round((defaultStyle.opacity ?? 1) * 100)}
-        </div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      {#if annotationsState.selectedId}
-        {@const selected = annotationsState.items.find(
-          (i) => i.id === annotationsState.selectedId
-        )}
-        <Button
-          kind="danger-tertiary"
-          icon={TrashCan}
-          disabled={!selected || selected.type !== 'shape'}
-          on:click={() =>
-            selected &&
-            selected.type === 'shape' &&
-            annotationsActions.removeAnnotation(selected.id)}
-        >
-          Supprimer la forme
-        </Button>
-      {:else}
-        <Button kind="danger-tertiary" icon={TrashCan} disabled
-          >Supprimer la forme</Button
-        >
-      {/if}
+      <div class="section">
+        {#if annotationsState.selectedId}
+          {@const selected = annotationsState.items.find(
+            (i) => i.id === annotationsState.selectedId
+          )}
+          <Button
+            kind="danger-tertiary"
+            icon={TrashCan}
+            disabled={!selected || selected.type !== 'shape'}
+            on:click={() =>
+              selected &&
+              selected.type === 'shape' &&
+              annotationsActions.removeAnnotation(selected.id)}
+          >
+            Supprimer la forme
+          </Button>
+        {:else}
+          <Button kind="danger-tertiary" icon={TrashCan} disabled
+            >Supprimer la forme</Button
+          >
+        {/if}
+      </div>
     </Column>
   </Row>
 </Grid>
 
 <style>
+  .section {
+    margin-top: var(--cds-spacing-05);
+  }
+
   .helper {
-    margin: 0 0 var(--cds-spacing-05) 0;
+    margin: 0 0 var(--cds-spacing-03) 0;
     color: var(--cds-text-secondary);
-  }
-
-  .metric-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .metric-value {
-    width: 48px;
-    text-align: right;
-    color: var(--cds-text-secondary);
+    font-size: 0.875rem;
   }
 
   .toggle-row {
@@ -260,5 +250,6 @@
   }
   .toggle-label {
     color: var(--cds-text-secondary);
+    font-size: 0.875rem;
   }
 </style>

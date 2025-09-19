@@ -1,10 +1,13 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
-  import Separator from '../commons/components/separator.svelte';
-  import ToggleTabs from '../commons/components/toggle-tabs.svelte';
-  import { globalActions, globalState } from '../commons/store/global.svelte';
-  import { ZoomMode } from '../commons/types/global';
+  import Separator from '../../commons/components/separator.svelte';
+  import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '../../commons/store/global.svelte';
+  import { ZoomMode } from '../../commons/types/global';
 
   let activeTabIndex: number = $state(0);
 
@@ -132,7 +135,6 @@ Shortcuts: Ctrl/Cmd + Plus/Minus to zoom, Ctrl/Cmd + 0 to reset, Alt + Z to swit
     align-items: center;
     justify-content: space-between;
     background: var(--cds-ui-01);
-    padding: 8px 0;
   }
 
   .zoom-display {

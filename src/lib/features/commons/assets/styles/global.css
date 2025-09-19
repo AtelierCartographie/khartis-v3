@@ -22,6 +22,8 @@
   --cds-medium-gray: #e0e0e0;
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #525252;
+  --cds-hover-tertiary: #1a1a1a;
+  --cds-button-primary: black;
 }
 
 :root[theme='g100'] {
@@ -48,6 +50,8 @@
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #a3a3a3;
   --cds-text-01: #f4f4f4;
+  --cds-hover-tertiary: #e5e5e5;
+  --cds-button-primary: white;
 }
 
 .app-shadow {

@@ -1,71 +1,78 @@
 import { TextAlign } from '$lib/features/commons/types/enums';
-import { toolActions, toolState } from '../tools-store/tools.store.svelte';
 import type {
   AnnotationsState,
   AnnotationStyle,
   AnnotationType
 } from './annotations.types';
 
+const DEFAULT_ANNOTATIONS_STATE: AnnotationsState = {
+  items: [],
+  selectedId: null,
+  activeType: 'text',
+  predefinedStyle: 'default',
+  textContent: '',
+  defaultStyle: {
+    font: 'cabin',
+    fontSize: 14,
+    bold: false,
+    italic: false,
+    underlined: false,
+    textAlign: TextAlign.Left,
+    opacity: 100,
+    color: '#000000'
+  }
+};
+
+export const annotationsState = $state<AnnotationsState>({
+  ...DEFAULT_ANNOTATIONS_STATE
+});
+
 export function getAnnotationsState(): AnnotationsState {
-  return toolState.annotations;
+  return annotationsState;
 }
 
 export const annotationsActions = {
   setState(newState: Partial<AnnotationsState>): void {
-    toolActions.updateAnnotations(newState);
+    Object.assign(annotationsState, newState);
   },
 
   addAnnotation(
     type: 'text' | 'shape' | 'drawing' | 'image',
     content: string
   ): void {
-    const currentState = getAnnotationsState();
     const newAnnotation: AnnotationType = {
       id: `annotation-${Date.now()}`,
       type,
       content,
       position: { x: Math.random() * 300 + 50, y: Math.random() * 200 + 50 },
-      style: { ...currentState.defaultStyle }
+      style: { ...annotationsState.defaultStyle }
     };
 
-    const updatedItems = [...currentState.items, newAnnotation];
-    toolActions.updateAnnotations({
-      items: updatedItems,
-      selectedId: newAnnotation.id
-    });
+    annotationsState.items = [...annotationsState.items, newAnnotation];
+    annotationsState.selectedId = newAnnotation.id;
   },
 
   selectAnnotation(id: string | null): void {
-    toolActions.updateAnnotations({ selectedId: id });
+    annotationsState.selectedId = id;
   },
 
   updateAnnotation(id: string, updates: Partial<AnnotationType>): void {
-    const currentState = getAnnotationsState();
-    const updatedItems = currentState.items.map((item) =>
+    annotationsState.items = annotationsState.items.map((item) =>
       item.id === id ? { ...item, ...updates } : item
     );
-
-    if (updatedItems.length > 0) {
-      toolActions.updateAnnotations({ items: updatedItems });
-    } else {
-    }
   },
 
   removeAnnotation(id: string): void {
-    const currentState = getAnnotationsState();
-    const annotation = currentState.items.find((item) => item.id === id);
-    const updatedItems = currentState.items.filter((item) => item.id !== id);
-
-    const updates: Partial<AnnotationsState> = { items: updatedItems };
-    if (currentState.selectedId === id) {
-      updates.selectedId = null;
+    annotationsState.items = annotationsState.items.filter(
+      (item) => item.id !== id
+    );
+    if (annotationsState.selectedId === id) {
+      annotationsState.selectedId = null;
     }
-
-    toolActions.updateAnnotations(updates);
   },
 
   setActiveType(type: 'text' | 'shape' | 'drawing' | 'image'): void {
-    toolActions.updateAnnotations({ activeType: type });
+    annotationsState.activeType = type;
   },
 
   setPredefinedStyle(styleName: string): void {
@@ -78,32 +85,27 @@ export const annotationsActions = {
 
     const style = styles[styleName];
     if (style) {
-      const currentState = getAnnotationsState();
-      const updatedDefaultStyle = { ...currentState.defaultStyle, ...style };
-
-      toolActions.updateAnnotations({
-        predefinedStyle: styleName,
-        defaultStyle: updatedDefaultStyle
-      });
+      annotationsState.predefinedStyle = styleName;
+      annotationsState.defaultStyle = {
+        ...annotationsState.defaultStyle,
+        ...style
+      };
     }
   },
 
   setTextContent(content: string): void {
-    toolActions.updateAnnotations({ textContent: content });
+    annotationsState.textContent = content;
   },
 
   updateDefaultStyle(styleUpdates: Partial<AnnotationStyle>): void {
-    const currentState = getAnnotationsState();
-    const updatedDefaultStyle = {
-      ...currentState.defaultStyle,
+    annotationsState.defaultStyle = {
+      ...annotationsState.defaultStyle,
       ...styleUpdates
     };
-    toolActions.updateAnnotations({ defaultStyle: updatedDefaultStyle });
   },
 
   duplicateAnnotation(id: string): void {
-    const currentState = getAnnotationsState();
-    const original = currentState.items.find((item) => item.id === id);
+    const original = annotationsState.items.find((item) => item.id === id);
     if (original) {
       const duplicate = {
         ...original,
@@ -115,41 +117,30 @@ export const annotationsActions = {
         }
       };
 
-      const updatedItems = [...currentState.items, duplicate];
-      toolActions.updateAnnotations({
-        items: updatedItems,
-        selectedId: duplicate.id
-      });
+      annotationsState.items = [...annotationsState.items, duplicate];
+      annotationsState.selectedId = duplicate.id;
     }
   },
 
   moveAnnotation(id: string, newPosition: { x: number; y: number }): void {
-    const currentState = getAnnotationsState();
-    const updatedItems = currentState.items.map((item) =>
+    annotationsState.items = annotationsState.items.map((item) =>
       item.id === id ? { ...item, position: newPosition } : item
     );
-
-    toolActions.updateAnnotations({ items: updatedItems });
   },
 
   toggleVisibility(id: string): void {
-    const currentState = getAnnotationsState();
-    const annotation = currentState.items.find((item) => item.id === id);
+    const annotation = annotationsState.items.find((item) => item.id === id);
     if (annotation) {
     }
   },
 
   clearAll(): void {
-    const currentState = getAnnotationsState();
-    toolActions.updateAnnotations({
-      items: [],
-      selectedId: null
-    });
+    annotationsState.items = [];
+    annotationsState.selectedId = null;
   },
 
   toggleStyleProperty(property: 'bold' | 'italic' | 'underlined'): void {
-    const currentState = getAnnotationsState();
-    const updatedStyle = { ...currentState.defaultStyle };
+    const updatedStyle = { ...annotationsState.defaultStyle };
 
     if (property === 'bold') {
       updatedStyle.bold = !updatedStyle.bold;
@@ -159,37 +150,36 @@ export const annotationsActions = {
       updatedStyle.underlined = !updatedStyle.underlined;
     }
 
-    toolActions.updateAnnotations({ defaultStyle: updatedStyle });
+    annotationsState.defaultStyle = updatedStyle;
   },
 
   setTextAlign(align: TextAlign): void {
-    const currentState = getAnnotationsState();
-    const updatedStyle = { ...currentState.defaultStyle, textAlign: align };
-    toolActions.updateAnnotations({ defaultStyle: updatedStyle });
+    annotationsState.defaultStyle = {
+      ...annotationsState.defaultStyle,
+      textAlign: align
+    };
   },
 
   reset(): void {
-    toolActions.resetTool('annotations');
+    Object.assign(annotationsState, DEFAULT_ANNOTATIONS_STATE);
   }
 };
 
 export function getSelectedAnnotation() {
-  const currentState = getAnnotationsState();
-  if (!currentState.selectedId) return null;
+  if (!annotationsState.selectedId) return null;
   return (
-    currentState.items.find((item) => item.id === currentState.selectedId) ||
-    null
+    annotationsState.items.find(
+      (item) => item.id === annotationsState.selectedId
+    ) || null
   );
 }
 
 export function getVisibleAnnotations() {
-  const currentState = getAnnotationsState();
-  return currentState.items;
+  return annotationsState.items;
 }
 
 export function getAnnotationsByType(
   type: 'text' | 'shape' | 'drawing' | 'image'
 ) {
-  const currentState = getAnnotationsState();
-  return currentState.items.filter((item) => item.type === type);
+  return annotationsState.items.filter((item) => item.type === type);
 }

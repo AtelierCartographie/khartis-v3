@@ -93,7 +93,6 @@ class DuckDBManager {
         error: null
       }));
 
-      console.log('Initializing DuckDB...');
       const db = await instantiateDuckDb();
       const connection = await db.connect();
 
@@ -105,8 +104,6 @@ class DuckDBManager {
         isReady: true,
         error: null
       }));
-
-      console.log('DuckDB initialized successfully');
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to initialize DuckDB';
@@ -135,14 +132,12 @@ class DuckDBManager {
     }
 
     if (this.registeredFiles.has(name)) {
-      console.log(`File ${name} already registered`);
       return;
     }
 
     try {
       await currentState.db.registerFileURL(name, url, protocol, cache);
       this.registeredFiles.add(name);
-      console.log(`File ${name} registered successfully`);
     } catch (error) {
       console.error(`Failed to register file ${name}:`, error);
       throw error;
@@ -162,7 +157,6 @@ class DuckDBManager {
         error: null
       }));
 
-      console.log('Executing query:', sql);
       const result = await currentState.connection.query(sql);
 
       const rows: T[] = [];
@@ -196,7 +190,6 @@ class DuckDBManager {
   ): Promise<void> {
     const sql = `CREATE TABLE IF NOT EXISTS ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`;
     await this.query(sql);
-    console.log(`Table ${tableName} created from ${fileName}`);
   }
 
   async reset(): Promise<void> {
