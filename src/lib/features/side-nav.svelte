@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
@@ -17,6 +18,18 @@
   import Separator from './commons/components/separator.svelte';
 
   let currentLocale = $state(getLocale());
+
+  function handleNewProject() {
+    createProjectActions.selectTab(1);
+    globalState.isCreateProjectModalOpen = true;
+    globalState.isSideNavOpen = false;
+  }
+
+  function handleOpenProject() {
+    createProjectActions.selectTab(2);
+    globalState.isCreateProjectModalOpen = true;
+    globalState.isSideNavOpen = false;
+  }
 
   const handleLanguageChange = (event: Event) => {
     const target = event.target as HTMLSelectElement;
@@ -63,7 +76,12 @@
 
         <Row>
           <Column>
-            <Button size="small" kind="ghost" class="menu-bar-item">
+            <Button
+              size="small"
+              kind="ghost"
+              class="menu-bar-item"
+              on:click={handleNewProject}
+            >
               {m.sidenav_new_project()}
               <span class="shortcut-icon">⇧⌘N</span>
             </Button>
@@ -76,9 +94,13 @@
               >{m.sidenav_duplicate_project()}
             </Button>
 
-            <Button size="small" kind="ghost" class="menu-bar-item">
+            <Button
+              size="small"
+              kind="ghost"
+              class="menu-bar-item"
+              on:click={handleOpenProject}
+            >
               {m.sidenav_open_project()}
-
               <span class="shortcut-icon">⇧⌘O</span>
             </Button>
           </Column>
