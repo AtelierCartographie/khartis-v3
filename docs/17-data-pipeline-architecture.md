@@ -2,7 +2,16 @@
 
 ## Overview
 
-The data pipeline provides a comprehensive system for processing, analyzing, and transforming data as it flows through Khartis. It acts as the bridge between raw imported data and visualization-ready datasets.
+The data pipeline provides a comprehensive system for processing, analyzing, and transforming data as it flows through Khartis. Built on **DuckDB WASM with spatial extensions**, it acts as the bridge between raw imported data and visualization-ready datasets, processing everything client-side for complete data privacy.
+
+## Core Technologies
+
+- **DuckDB WASM 1.29.1** - In-browser analytical database
+- **DuckDB Spatial Extension** - Geographic data processing
+- **Apache Arrow** - Columnar data format
+- **SQL Macros** - Reusable analysis functions
+
+See [DuckDB Integration Documentation](20-duckdb-integration.md) for detailed implementation.
 
 ## Architecture Components
 
