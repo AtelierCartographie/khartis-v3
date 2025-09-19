@@ -7,7 +7,7 @@ export interface DataControlState {
 }
 
 export interface GeolocationState {
-  geoReference: 'admin' | 'places' | 'custom';
+  geoReference: 'entities' | 'coordinates' | 'custom';
   linkedVariable: number | null;
   linkedVariableName: string;
   autoDetected: boolean;

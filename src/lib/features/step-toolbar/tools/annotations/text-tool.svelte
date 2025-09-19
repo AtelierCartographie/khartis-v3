@@ -81,7 +81,7 @@
   }
 </script>
 
-<Grid padding noGutter>
+<Grid noGutter fullWidth>
   <Row>
     <Column>
       <Select
@@ -101,53 +101,59 @@
 
   <Row>
     <Column>
-      <p class="helper">
-        Ajouter un texte ou sélectionner un élément existant pour le modifier
-        ci-dessous.
-      </p>
-      <TextArea
-        id="text-content"
-        labelText="Contenu"
-        value={selectedText
-          ? (selectedText.content as string)
-          : annotationsState.textContent}
-        oninput={handleContentInput}
-        placeholder={selectedText ? '' : 'Aucune'}
-        disabled={!selectedText}
-        rows={4}
-      />
+      <div class="section">
+        <p class="helper">
+          Ajouter un texte ou sélectionner un élément existant pour le modifier
+          ci-dessous.
+        </p>
+        <TextArea
+          id="text-content"
+          labelText="Contenu"
+          value={selectedText
+            ? (selectedText.content as string)
+            : annotationsState.textContent}
+          oninput={handleContentInput}
+          placeholder={selectedText ? '' : 'Aucune'}
+          disabled={!selectedText}
+          rows={4}
+        />
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <Button
-        kind="primary"
-        icon={Add}
-        onclick={handleAddText}
-        disabled={false}
-      >
-        {m.annotations_add_text()}
-      </Button>
+      <div class="section">
+        <Button
+          kind="primary"
+          icon={Add}
+          onclick={handleAddText}
+          disabled={false}
+        >
+          {m.annotations_add_text()}
+        </Button>
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <NumberInput
-        label={m.annotations_size()}
-        value={defaultStyle.fontSize || 16}
-        min={8}
-        max={72}
-        step={1}
-        on:change={handleFontSizeChange}
-      />
+      <div class="section">
+        <NumberInput
+          label={m.annotations_size()}
+          value={defaultStyle.fontSize || 16}
+          min={8}
+          max={72}
+          step={1}
+          on:change={handleFontSizeChange}
+        />
+      </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="opacity-row">
+      <div class="section">
         <Slider
           labelText={m.annotations_opacity?.() || 'Opacité'}
           value={(defaultStyle.opacity ?? 1) * 100}
@@ -157,16 +163,13 @@
           stepMultiplier={4}
           on:change={handleOpacityChange}
         />
-        <div class="opacity-value">
-          {Math.round((defaultStyle.opacity ?? 1) * 100)}
-        </div>
       </div>
     </Column>
   </Row>
 
   <Row>
     <Column>
-      <div class="text-style-controls">
+      <div class="section text-style-controls">
         <div class="style-toggles">
           <Toggle
             size="sm"
@@ -202,35 +205,35 @@
 
         <div class="alignment-controls">
           <p class="alignment-label">Alignement</p>
-          <ButtonSet>
-            <Button
-              kind={defaultStyle.textAlign === TextAlign.LEFT
-                ? 'primary'
-                : 'ghost'}
-              size="small"
-              icon={TextAlignLeft}
-              iconDescription="Aligner à gauche"
+          <div class="alignment-buttons">
+            <button
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.LEFT
+                ? 'active'
+                : ''}"
               onclick={() => handleAlignChange(TextAlign.LEFT)}
-            />
-            <Button
-              kind={defaultStyle.textAlign === TextAlign.CENTER
-                ? 'primary'
-                : 'ghost'}
-              size="small"
-              icon={TextAlignCenter}
-              iconDescription="Centrer"
+              aria-label="Aligner à gauche"
+            >
+              <TextAlignLeft />
+            </button>
+            <button
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.CENTER
+                ? 'active'
+                : ''}"
               onclick={() => handleAlignChange(TextAlign.CENTER)}
-            />
-            <Button
-              kind={defaultStyle.textAlign === TextAlign.RIGHT
-                ? 'primary'
-                : 'ghost'}
-              size="small"
-              icon={TextAlignRight}
-              iconDescription="Aligner à droite"
+              aria-label="Centrer"
+            >
+              <TextAlignCenter />
+            </button>
+            <button
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.RIGHT
+                ? 'active'
+                : ''}"
               onclick={() => handleAlignChange(TextAlign.RIGHT)}
-            />
-          </ButtonSet>
+              aria-label="Aligner à droite"
+            >
+              <TextAlignRight />
+            </button>
+          </div>
         </div>
       </div>
     </Column>
@@ -238,30 +241,37 @@
 
   <Row>
     <Column>
-      <Button
-        kind="danger-tertiary"
-        icon={TrashCan}
-        disabled={!selectedText}
-        on:click={() =>
-          selectedText && annotationsActions.removeAnnotation(selectedText.id)}
-      >
-        Supprimer le texte
-      </Button>
+      <div class="section">
+        <Button
+          kind="danger-tertiary"
+          icon={TrashCan}
+          disabled={!selectedText}
+          on:click={() =>
+            selectedText &&
+            annotationsActions.removeAnnotation(selectedText.id)}
+        >
+          Supprimer le texte
+        </Button>
+      </div>
     </Column>
   </Row>
 </Grid>
 
 <style>
+  .section {
+    margin-top: var(--cds-spacing-05);
+  }
+
   .text-style-controls {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
-    margin-top: var(--cds-spacing-05);
   }
 
   .helper {
     margin: 0 0 var(--cds-spacing-03) 0;
     color: var(--cds-text-secondary);
+    font-size: 0.875rem;
   }
 
   .style-toggles {
@@ -282,15 +292,40 @@
     margin: 0;
   }
 
-  .opacity-row {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: center;
-    gap: var(--cds-spacing-03);
+  .alignment-buttons {
+    display: flex;
+    gap: 2px;
+    background: var(--cds-layer-01);
+    border: 1px solid var(--cds-border-subtle);
+    border-radius: 4px;
+    padding: 2px;
+    width: fit-content;
   }
-  .opacity-value {
-    width: 48px;
-    text-align: right;
+
+  .alignment-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
     color: var(--cds-text-secondary);
+    transition: all 0.15s ease;
+  }
+
+  .alignment-btn:hover {
+    background: var(--cds-layer-hover);
+    color: var(--cds-text-primary);
+  }
+
+  .alignment-btn.active {
+    background: var(--cds-button-primary);
+    color: var(--cds-text-on-color);
+  }
+
+  .alignment-btn.active:hover {
+    background: var(--cds-button-primary-hover);
   }
 </style>

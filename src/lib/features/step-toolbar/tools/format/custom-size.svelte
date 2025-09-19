@@ -7,13 +7,10 @@
     NumberInput,
     Row
   } from 'carbon-components-svelte';
-  import {
-    toolActions,
-    toolState
-  } from '../tools-store/tools.store.svelte';
+  import { formatState, formatActions } from './format.store.svelte';
 
-  let width = $state(toolState.format.width ?? 842);
-  let height = $state(toolState.format.height ?? 595);
+  let width = $state(formatState.width ?? 842);
+  let height = $state(formatState.height ?? 595);
 
   const widthLabel = $derived(
     'format_width' in m && typeof m.format_width === 'function'
@@ -29,7 +26,7 @@
   function updateSize(newWidth: number, newHeight: number): void {
     width = newWidth;
     height = newHeight;
-    toolActions.updateFormat({ width: newWidth, height: newHeight });
+    formatActions.setSize(newWidth, newHeight);
   }
 
   function decrementWidth(): void {
@@ -116,7 +113,7 @@
 <style>
   .margin-controls {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
   }
 
   #khartis-custom-size-tool :global(.margin-input) {

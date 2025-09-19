@@ -1,109 +1,100 @@
 <script lang="ts">
-  import {
-    dataTabActions,
-    dataTabState
-  } from '$lib/features/commons/store/data-tab.store.svelte';
-  import { Button, DataTable, Tag } from 'carbon-components-svelte';
-  import {
-    Filter,
-    Launch,
-    Renew,
-    Search,
-    Table,
-    TrashCan,
-    WarningAltFilled
-  } from 'carbon-icons-svelte';
+  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { DataTable, InlineNotification } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   const expandedRowIds = $derived(dataTabState.dataControl.expandedRowIds);
   const selectedRowIds = $derived(dataTabState.dataControl.selectedRowIds);
 
-  const headers: any = [
-    { key: 'col1', value: 'Nom pays' },
-    { key: 'col2', value: 'String Geo Lorem…' }
-  ];
+  const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const allDatasets = $derived(datasetsStore.datasets);
 
-  const rows = Array.from({ length: 6 }).map((_, i) => ({
-    id: i,
-    col1: 'Content',
-    col2: 'Content'
-  }));
+  $effect(() => {
+    console.log('All datasets in store:', allDatasets);
+    console.log('Selected dataset:', selectedDataset);
+    console.log('Datasets store processing:', datasetsStore.isProcessing);
+  });
+
+  const headers = $derived(
+    selectedDataset &&
+      selectedDataset.columns &&
+      selectedDataset.columns.length > 0
+      ? selectedDataset.columns.map((col) => ({
+          key: col.name,
+          value: `${col.name} (${col.type})`
+        }))
+      : []
+  );
+
+  const rows = $derived(
+    selectedDataset && selectedDataset.data && selectedDataset.data.length > 0
+      ? selectedDataset.data.slice(0, 100).map((row, index) => ({
+          id: index,
+          ...row
+        }))
+      : []
+  );
 </script>
 
 <section id="data-control-step">
   <MainToolBarHeader title="1. Contrôler les données" />
 
-  <div class="toolbar">
-    <div class="tools">
-      <Button
-        kind="ghost"
-        icon={Search}
-        iconDescription="Rechercher"
-        on:click={() => {}}
+  {#if selectedDataset}
+    <div class="dataset-info">
+      <span class="dataset-name">{selectedDataset.name}</span>
+      <span class="row-count">{selectedDataset.rowCount} lignes</span>
+    </div>
+
+    <DataTable
+      batchExpansion
+      batchSelection
+      expandedRowIds={expandedRowIds}
+      selectedRowIds={selectedRowIds}
+      on:click:row--expand={(e) => {
+        const event = e as CustomEvent<{ expanded: boolean; row: any }>;
+        // Row expand handler
+      }}
+      on:click:row--select={(e) => {
+        const event = e as CustomEvent<{ selected: boolean; row: any }>;
+        // Row select handler
+      }}
+      headers={headers}
+      rows={rows}
+      size="short"
+    >
+      <svelte:fragment slot="expanded-row" let:row>
+        <div class="expanded-row-content">
+          <pre>{JSON.stringify(row, null, 2)}</pre>
+        </div>
+      </svelte:fragment>
+    </DataTable>
+
+    <InlineNotification
+      title="Types des variables"
+      subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
+      kind="info"
+      lowContrast
+      hideCloseButton={false}
+    />
+
+    {#if selectedDataset.columns.some((col) => col.nullable)}
+      <InlineNotification
+        title="Valeurs manquantes"
+        subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
+        kind="warning"
+        lowContrast
+        hideCloseButton={false}
       />
-      <Button
-        kind="ghost"
-        icon={Filter}
-        iconDescription="Filtrer"
-        on:click={dataTabActions.toggleFilter}
-      />
-      <Button kind="ghost" icon={Table} iconDescription="Table" />
-      <Button kind="ghost" icon={TrashCan} iconDescription="Supprimer" />
-      <Button kind="ghost" icon={Renew} iconDescription="Annuler" />
+    {/if}
+  {:else}
+    <div class="empty-state">
+      <p>
+        Aucune donnée chargée. Veuillez importer un fichier depuis l'onglet
+        précédent.
+      </p>
     </div>
-    <div class="grow"></div>
-    <div class="expand">
-      <span>Agrandir</span>
-      <Button kind="ghost" icon={Launch} iconDescription="Agrandir" />
-    </div>
-  </div>
-
-  <div class="chips-row">
-    <div class="chips">
-      <Tag type="teal">Nom pays</Tag>
-      <Tag type="teal">String Geo Lorem…</Tag>
-    </div>
-  </div>
-
-  <div class="summary">
-    <div class="left">
-      <div class="lines-count">100 lignes</div>
-      <div class="issues">
-        <span class="issue">
-          <WarningAltFilled size={16} />
-          <span>2 valeurs nulles</span>
-        </span>
-        <span class="issue">
-          <WarningAltFilled size={16} />
-          <span>2 doublons</span>
-        </span>
-      </div>
-    </div>
-    <div class="right">
-      <Tag type="green">30 uniques</Tag>
-    </div>
-  </div>
-
-  <DataTable
-    batchExpansion
-    batchSelection
-    expandedRowIds={expandedRowIds}
-    selectedRowIds={selectedRowIds}
-    on:click:row--expand={(e) => {
-      const event = e as CustomEvent<{ expanded: boolean; row: any }>;
-      console.log('Row expanded:', event.detail);
-    }}
-    on:click:row--select={(e) => {
-      const event = e as CustomEvent<{ selected: boolean; row: any }>;
-      console.log('Row selected:', event.detail);
-    }}
-    headers={headers}
-    rows={rows}
-  >
-    <svelte:fragment slot="expanded-row" let:row>
-      <pre> {JSON.stringify(row, null, 2)}</pre>
-    </svelte:fragment>
-  </DataTable>
+  {/if}
 </section>
 
 <style>
@@ -112,58 +103,47 @@
     padding: var(--cds-spacing-05);
   }
 
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-03) 0;
-  }
-
-  .toolbar .tools {
-    display: flex;
-    gap: var(--cds-spacing-02);
-  }
-
-  .toolbar .expand {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    color: var(--cds-text-02);
-  }
-
-  .chips-row {
-    padding: var(--cds-spacing-03) 0;
-  }
-
-  .chips {
-    display: flex;
-    gap: var(--cds-spacing-03);
-    flex-wrap: wrap;
-  }
-
-  .summary {
+  .dataset-info {
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: var(--cds-spacing-03) 0;
+    margin-bottom: var(--cds-spacing-03);
   }
 
-  .lines-count {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-02);
-  }
-
-  .issues {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .issue {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    color: var(--cds-support-03);
+  .dataset-name {
     font-weight: 600;
+    color: var(--cds-text-01);
+  }
+
+  .row-count {
+    color: var(--cds-text-02);
+    font-size: 0.875rem;
+  }
+
+  .expanded-row-content {
+    padding: var(--cds-spacing-03);
+    background-color: var(--cds-ui-01);
+    border-radius: 4px;
+  }
+
+  .expanded-row-content pre {
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    white-space: pre-wrap;
+  }
+
+  .empty-state {
+    padding: var(--cds-spacing-07) var(--cds-spacing-05);
+    text-align: center;
+    color: var(--cds-text-02);
+    background-color: var(--cds-ui-01);
+    border-radius: 4px;
+    margin-top: var(--cds-spacing-05);
+  }
+
+  .empty-state p {
+    margin: 0;
   }
 </style>

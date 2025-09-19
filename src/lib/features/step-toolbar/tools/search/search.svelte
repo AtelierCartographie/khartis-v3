@@ -14,14 +14,14 @@
     ChevronRight,
     WatsonHealthRotate_360
   } from 'carbon-icons-svelte';
-  import { toolActions, toolState } from '../tools-store/tools.store.svelte';
+  import { searchState, searchActions } from './search.store.svelte';
 
-  let searchValue = $state(toolState.search.searchValue);
-  let selectedSource = $state(toolState.search.selectedSource);
-  let replaceValue = $state(toolState.search.replaceValue);
+  let searchValue = $state(searchState.searchValue);
+  let selectedSource = $state(searchState.selectedSource);
+  let replaceValue = $state(searchState.replaceValue);
 
   $effect(() => {
-    toolActions.updateSearch({
+    searchActions.setState({
       searchValue,
       selectedSource,
       replaceValue
@@ -35,27 +35,27 @@
     { id: 'text', text: m.search_text_variables() }
   ];
 
-  function handleReplace() {
-    const success = toolActions.performReplace();
-    if (success) {
+  async function handleReplace() {
+    const success = await searchActions.replaceAll();
+    if (success > 0) {
       searchValue = '';
       replaceValue = '';
     }
   }
 
   function navigateResults(direction: 'prev' | 'next') {
-    const currentIndex = toolState.search.currentResultIndex;
-    const totalResults = toolState.search.results.length;
+    const currentIndex = searchState.currentResultIndex;
+    const totalResults = searchState.results.length;
 
     if (direction === 'next' && currentIndex < totalResults - 1) {
-      toolActions.updateSearch({ currentResultIndex: currentIndex + 1 });
+      searchActions.goToNextResult();
     } else if (direction === 'prev' && currentIndex > 0) {
-      toolActions.updateSearch({ currentResultIndex: currentIndex - 1 });
+      searchActions.goToPreviousResult();
     }
   }
 
-  const results = $derived(toolState.search.results);
-  const currentResultIndex = $derived(toolState.search.currentResultIndex);
+  const results = $derived(searchState.results);
+  const currentResultIndex = $derived(searchState.currentResultIndex);
   const hasResults = $derived(results.length > 0);
   const showResults = $derived(searchValue.trim().length > 0);
   const noResults = $derived(showResults && !hasResults);

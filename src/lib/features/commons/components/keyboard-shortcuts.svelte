@@ -20,17 +20,14 @@
           case '=':
             event.preventDefault();
             globalActions.zoomIn();
-            console.log('Keyboard zoom in');
             break;
           case '-':
             event.preventDefault();
             globalActions.zoomOut();
-            console.log('Keyboard zoom out');
             break;
           case '0':
             event.preventDefault();
             globalActions.resetZoom();
-            console.log('Keyboard zoom reset');
             break;
         }
       }
@@ -40,7 +37,6 @@
         const newMode =
           globalState.zoom.mode === ZoomMode.Map ? ZoomMode.Page : ZoomMode.Map;
         globalActions.setZoomMode(newMode);
-        console.log(`Keyboard switch to ${newMode} mode`);
       }
     }
 

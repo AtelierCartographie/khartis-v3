@@ -148,6 +148,7 @@
   "geo_projection": "Projection",
   "geo_projection_wgs84": "WGS 84 (EPSG:4326)",
   "geo_projection_mercator": "Web Mercator (EPSG:3857)",
+  "geo_learn_more_geocoding": "En savoir plus sur le géocodage",
   "basemap_step_title": "3. Joindre les données à un fond de carte",
   "basemap_step_description": "Sélectionner un fond de carte présent dans le catalogue de Khartis ou importer un fond de carte. Sinon et si les données ont une géométrie, ajouter un fond issu d'OpenStreetMap.",
   "basemap_catalog": "Catalogue",

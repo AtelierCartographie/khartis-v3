@@ -68,7 +68,7 @@
   }
 
   function handleOpenSettings(layerId: string): void {
-    console.log('[Layers] Opening settings for layer:', layerId);
+
   }
 
   function reorderLayers(

@@ -2,102 +2,103 @@ import {
   SimplificationLevel,
   SimplificationSource
 } from '$lib/features/commons/types/enums';
-import { toolActions, toolState } from '../tools-store/tools.store.svelte';
 import type {
   SimplificationState,
   SimplificationResult
 } from './simplification.types';
 
+const DEFAULT_SIMPLIFICATION_STATE: SimplificationState = {
+  source: SimplificationSource.Basemap,
+  level: SimplificationLevel.Medium,
+  rate: 50,
+  isProcessing: false
+};
+
+export const simplificationState = $state<SimplificationState>({
+  ...DEFAULT_SIMPLIFICATION_STATE
+});
+
 export function getSimplificationState(): SimplificationState {
-  return toolState.simplification;
+  return simplificationState;
 }
 
 export const simplificationActions = {
   setState(newState: Partial<SimplificationState>): void {
-    toolActions.updateSimplification(newState);
+    Object.assign(simplificationState, newState);
   },
 
   setSource(source: SimplificationSource): void {
-    const state = getSimplificationState();
-    const updates: Partial<SimplificationState> = { source };
-    
-    if (source === SimplificationSource.Basemap && state.lastApplied) {
-      updates.level = state.lastApplied.level || SimplificationLevel.Medium;
+    simplificationState.source = source;
+
+    if (
+      source === SimplificationSource.Basemap &&
+      simplificationState.lastApplied
+    ) {
+      simplificationState.level =
+        simplificationState.lastApplied.level || SimplificationLevel.Medium;
     }
-    
-    toolActions.updateSimplification(updates);
   },
 
   setLevel(level: SimplificationLevel): void {
-    const state = getSimplificationState();
-    if (state.source === SimplificationSource.Basemap) {
-      toolActions.updateSimplification({ level });
+    if (simplificationState.source === SimplificationSource.Basemap) {
+      simplificationState.level = level;
     }
   },
 
   setRate(rate: number): void {
-    const state = getSimplificationState();
-    if (state.source === SimplificationSource.Geo) {
-      toolActions.updateSimplification({ rate: Math.max(0, Math.min(100, rate)) });
+    if (simplificationState.source === SimplificationSource.Geo) {
+      simplificationState.rate = Math.max(0, Math.min(100, rate));
     }
   },
 
   async applySimplification(
     geometryData?: unknown
   ): Promise<SimplificationResult | null> {
-    const state = getSimplificationState();
-    if (state.isProcessing) {
+    if (simplificationState.isProcessing) {
       return null;
     }
 
-    toolActions.updateSimplification({ isProcessing: true });
+    simplificationState.isProcessing = true;
 
     const sourceType =
-      state.source === SimplificationSource.Basemap
+      simplificationState.source === SimplificationSource.Basemap
         ? 'basemap'
         : 'geodata';
 
     try {
       const result = await this.performSimplification(geometryData);
 
-      const currentState = getSimplificationState();
-      toolActions.updateSimplification({
-        lastApplied: {
-          source: currentState.source,
-          level:
-            currentState.source === SimplificationSource.Basemap
-              ? currentState.level
-              : undefined,
-          rate:
-            currentState.source === SimplificationSource.Geo
-              ? currentState.rate
-              : undefined,
-          timestamp: Date.now()
-        }
-      });
+      simplificationState.lastApplied = {
+        source: simplificationState.source,
+        level:
+          simplificationState.source === SimplificationSource.Basemap
+            ? simplificationState.level
+            : undefined,
+        rate:
+          simplificationState.source === SimplificationSource.Geo
+            ? simplificationState.rate
+            : undefined,
+        timestamp: Date.now()
+      };
 
-      console.log('[Simplification] ✅ Simplification completed successfully');
-      console.log('[Simplification] 📊 Result:', result);
       return result;
     } catch (error) {
-      console.error('[Simplification] ❌ Simplification failed:', error);
       throw error;
     } finally {
-      toolActions.updateSimplification({ isProcessing: false });
+      simplificationState.isProcessing = false;
     }
   },
 
   async performSimplification(
     geometryData?: unknown
   ): Promise<SimplificationResult> {
-    const state = getSimplificationState();
     return new Promise((resolve) => {
       setTimeout(() => {
-        if (state.source === SimplificationSource.Basemap) {
-          const reduction = getVertexReduction(state.level);
+        if (simplificationState.source === SimplificationSource.Basemap) {
+          const reduction = getVertexReduction(simplificationState.level);
           resolve({
             type: 'basemap',
-            level: state.level,
+            level: simplificationState.level,
             simplified: true,
             vertexReduction: reduction,
             originalVertices: 10000,
@@ -106,12 +107,12 @@ export const simplificationActions = {
         } else {
           resolve({
             type: 'geodata',
-            rate: state.rate,
+            rate: simplificationState.rate,
             simplified: true,
-            vertexReduction: state.rate,
+            vertexReduction: simplificationState.rate,
             originalVertices: 15000,
             simplifiedVertices: Math.round(
-              15000 * (1 - state.rate / 100)
+              15000 * (1 - simplificationState.rate / 100)
             )
           });
         }
@@ -120,9 +121,8 @@ export const simplificationActions = {
   },
 
   undoLastSimplification(): boolean {
-    const state = getSimplificationState();
-    if (state.lastApplied) {
-      toolActions.updateSimplification({ lastApplied: undefined });
+    if (simplificationState.lastApplied) {
+      simplificationState.lastApplied = undefined;
       return true;
     } else {
       return false;
@@ -130,13 +130,7 @@ export const simplificationActions = {
   },
 
   reset(): void {
-    toolActions.updateSimplification({
-      source: SimplificationSource.Basemap,
-      level: SimplificationLevel.Medium,
-      rate: 50,
-      isProcessing: false,
-      lastApplied: undefined
-    });
+    Object.assign(simplificationState, DEFAULT_SIMPLIFICATION_STATE);
   }
 };
 
@@ -150,20 +144,18 @@ export function getVertexReduction(level: SimplificationLevel): number {
 }
 
 export function getSimplificationTolerance(): number {
-  const state = getSimplificationState();
-  if (state.source === SimplificationSource.Basemap) {
+  if (simplificationState.source === SimplificationSource.Basemap) {
     const tolerances = {
       [SimplificationLevel.Low]: 0.001,
       [SimplificationLevel.Medium]: 0.005,
       [SimplificationLevel.High]: 0.01
     };
-    return tolerances[state.level];
+    return tolerances[simplificationState.level];
   } else {
-    return (100 - state.rate) / 10000;
+    return (100 - simplificationState.rate) / 10000;
   }
 }
 
 export function canUndo(): boolean {
-  const state = getSimplificationState();
-  return !!state.lastApplied;
+  return !!simplificationState.lastApplied;
 }
