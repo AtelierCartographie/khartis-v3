@@ -1,15 +1,16 @@
 <script lang="ts">
+  import { m } from '$lib/paraglide/messages.js';
   import { Button, Link } from 'carbon-components-svelte';
   import { Edit } from 'carbon-icons-svelte';
 </script>
 
 <section class="actions">
   <Button kind="primary" size="lg" icon={Edit} class="create-btn"
-    >Créer sa visualisation</Button
+    >{m.create_visualization_button()}</Button
   >
 
   <Link href="#" inline size="sm" class="learn-more"
-    >En savoir plus sur les visualisations possibles</Link
+    >{m.learn_more_visualizations()}</Link
   >
 </section>
 

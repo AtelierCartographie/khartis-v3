@@ -374,5 +374,19 @@
   "geo_inset_map_size": "Size (px)",
   "geo_inset_map_window_color": "Window color",
   "geo_inset_map_zoom": "Zoom",
-  "geo_inset_map_contrast": "Contrast"
+  "geo_inset_map_contrast": "Contrast",
+  "export_map_error": "Export map",
+  "export_map_feature_in_development": "Feature in development",
+  "export_data_error": "Export data",
+  "export_data_no_data": "No data to export",
+  "export_error": "Export error",
+  "export_unknown_error": "Unknown error",
+  "create_visualization_button": "Create visualization",
+  "learn_more_visualizations": "Learn more about available visualizations",
+  "data_join_errors_detected": "Khartis detected errors during the join. Check the joined entities above.",
+  "replace_incorrect_entities_question": "Replace incorrect entities in the data table with those from the basemap?",
+  "no_data_loaded": "No data loaded. Please import a file from the previous tab.",
+  "loading": "Loading...",
+  "error_prefix": "Error: ",
+  "no_data_available": "No data available"
 }
