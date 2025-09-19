@@ -148,11 +148,12 @@ export const createProjectActions = {
     const uploadedFile = createUploadedFile(file, sourceType);
 
     uploadedFile.validation = validation;
+    uploadedFile.status = validation.isValid ? 'uploading' : 'error';
+    uploadedFile.errorMessage = validation.isValid ? undefined : validation.errors[0];
+
+    this.addUploadedFile(uploadedFile);
 
     if (!validation.isValid) {
-      uploadedFile.status = 'error';
-      uploadedFile.errorMessage = validation.errors[0];
-      this.addUploadedFile(uploadedFile);
       return;
     }
 
@@ -160,23 +161,31 @@ export const createProjectActions = {
     // this.addUploadedFile(uploadedFile);
 
     try {
-      uploadedFile.status = 'processing';
-      // Add the file with 'processing' status
-      this.addUploadedFile(uploadedFile);
+      this.updateFileStatus(uploadedFile.id, 'processing');
 
       if (uploadedFile.fileType === FileType.CSV) {
+        console.log('[CreateProjectStore] Parsing CSV file:', file.name);
         const result = await parseCsvWithPapa(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);
         });
 
-        uploadedFile.parsedData = result.data;
-        uploadedFile.content = JSON.stringify(result.data);
+        console.log('[CreateProjectStore] CSV parse result:', {
+          dataLength: result.data?.length,
+          headers: result.headers,
+          errors: result.errors,
+          firstRow: result.data?.[0]
+        });
 
         const duplicates = detectDuplicateRows(result.data);
-        uploadedFile.duplicates = {
-          hasDuplicates: duplicates.hasDuplicates,
-          duplicateCount: duplicates.duplicateCount
-        };
+
+        this.updateFileData(uploadedFile.id, {
+          parsedData: result.data,
+          content: JSON.stringify(result.data),
+          duplicates: {
+            hasDuplicates: duplicates.hasDuplicates,
+            duplicateCount: duplicates.duplicateCount
+          }
+        });
 
         if (duplicates.hasDuplicates) {
           showWarning(
@@ -190,57 +199,78 @@ export const createProjectActions = {
           result.headers
         );
 
-        uploadedFile.parsedData = result.data;
+        this.updateFileData(uploadedFile.id, {
+          parsedData: result.data
+        });
+
+        console.log('[CreateProjectStore] Before duplicate check - parsedData:', {
+          isArray: Array.isArray(result.data),
+          length: result.data?.length,
+          firstRow: result.data?.[0]
+        });
 
         if (result.errors.length > 0) {
-          uploadedFile.validation = {
-            isValid: false,
-            errors: result.errors,
-            warnings: []
-          };
-          uploadedFile.status = 'error';
-          uploadedFile.errorMessage = result.errors[0];
-          this.updateFileStatus(uploadedFile.id, 'error', result.errors[0]);
+          this.updateFileData(uploadedFile.id, {
+            validation: {
+              isValid: false,
+              errors: result.errors,
+              warnings: []
+            },
+            status: 'error',
+            errorMessage: result.errors[0]
+          });
           return;
         }
 
         // Mark CSV file as complete
-        uploadedFile.status = 'complete';
+        this.updateFileStatus(uploadedFile.id, 'complete');
+
+        const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
+        console.log('[CreateProjectStore] Final uploadedFile parsedData:', {
+          name: updatedFile?.name,
+          parsedDataLength: updatedFile?.parsedData?.length,
+          firstRow: updatedFile?.parsedData?.[0]
+        });
+
         // Update the file in the array
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else if (uploadedFile.fileType === FileType.GEOJSON) {
         const content = await readFileContent(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);
         });
-        uploadedFile.content = content;
 
         try {
-          uploadedFile.parsedData = JSON.parse(content as string);
+          const parsedData = JSON.parse(content as string);
+          this.updateFileData(uploadedFile.id, {
+            content: content,
+            parsedData: parsedData
+          });
         } catch (e) {
-          uploadedFile.status = 'error';
-          uploadedFile.errorMessage = 'Invalid JSON format';
-          this.updateFileStatus(uploadedFile.id, 'error', 'Invalid JSON format');
+          this.updateFileData(uploadedFile.id, {
+            content: content,
+            status: 'error',
+            errorMessage: 'Invalid JSON format'
+          });
           return;
         }
 
         const geoValidation = await validateGeospatialFile(content as string);
-        uploadedFile.validation = {
-          ...uploadedFile.validation,
-          ...geoValidation
-        };
+        this.updateFileData(uploadedFile.id, {
+          validation: {
+            ...uploadedFile.validation,
+            ...geoValidation
+          }
+        });
+
         if (!geoValidation.isValid) {
-          uploadedFile.status = 'error';
-          uploadedFile.errorMessage = geoValidation.errors[0];
-          this.updateFileStatus(
-            uploadedFile.id,
-            'error',
-            geoValidation.errors[0]
-          );
+          this.updateFileData(uploadedFile.id, {
+            status: 'error',
+            errorMessage: geoValidation.errors[0]
+          });
           return;
         }
 
         // Mark GeoJSON file as complete
-        uploadedFile.status = 'complete';
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else if (uploadedFile.fileType === FileType.GEOPACKAGE) {
         const content = await readFileContent(file, (progress) => {
@@ -254,45 +284,47 @@ export const createProjectActions = {
           }
         );
 
-        uploadedFile.parsedData = geojson;
-        uploadedFile.content = JSON.stringify(geojson);
+        this.updateFileData(uploadedFile.id, {
+          parsedData: geojson,
+          content: JSON.stringify(geojson)
+        });
 
         const geoValidation = await validateGeospatialFile(
           JSON.stringify(geojson)
         );
-        uploadedFile.validation = {
-          ...uploadedFile.validation,
-          ...geoValidation
-        };
+        this.updateFileData(uploadedFile.id, {
+          validation: {
+            ...uploadedFile.validation,
+            ...geoValidation
+          }
+        });
+
         if (!geoValidation.isValid) {
-          uploadedFile.status = 'error';
-          uploadedFile.errorMessage = geoValidation.errors[0];
-          this.updateFileStatus(
-            uploadedFile.id,
-            'error',
-            geoValidation.errors[0]
-          );
+          this.updateFileData(uploadedFile.id, {
+            status: 'error',
+            errorMessage: geoValidation.errors[0]
+          });
           return;
         }
 
         // Mark GeoPackage file as complete
-        uploadedFile.status = 'complete';
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else {
         const content = await readFileContent(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);
         });
-        uploadedFile.content = content;
-        // Mark other file types as complete
-        uploadedFile.status = 'complete';
-        this.updateFileStatus(uploadedFile.id, 'complete');
+        this.updateFileData(uploadedFile.id, {
+          content: content,
+          status: 'complete'
+        });
       }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to process file';
-      uploadedFile.status = 'error';
-      uploadedFile.errorMessage = message;
-      this.updateFileStatus(uploadedFile.id, 'error', message);
+      this.updateFileData(uploadedFile.id, {
+        status: 'error',
+        errorMessage: message
+      });
       showError('File processing failed', message, error);
     }
   },
@@ -369,16 +401,18 @@ export const createProjectActions = {
         this.updateFileProgress(uploadedFile.id, progress);
       });
 
-      uploadedFile.parsedData = geojson;
-      uploadedFile.content = JSON.stringify(geojson);
-      uploadedFile.status = 'complete';
-      this.updateFileStatus(uploadedFile.id, 'complete');
+      this.updateFileData(uploadedFile.id, {
+        parsedData: geojson,
+        content: JSON.stringify(geojson),
+        status: 'complete'
+      });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to process shapefile';
-      uploadedFile.status = 'error';
-      uploadedFile.errorMessage = message;
-      this.updateFileStatus(uploadedFile.id, 'error', message);
+      this.updateFileData(uploadedFile.id, {
+        status: 'error',
+        errorMessage: message
+      });
       showError('Shapefile processing failed', message, error);
     }
   },
@@ -431,6 +465,19 @@ export const createProjectActions = {
       createProjectState.newProject.uploadedFiles.splice(index, 1);
 
       globalActions.removeDataButton(fileId);
+    }
+  },
+
+  updateFileData(fileId: string, data: Partial<UploadedFile>): void {
+    const file = createProjectState.newProject.uploadedFiles.find(
+      (f) => f.id === fileId
+    );
+    if (file) {
+      Object.assign(file, data);
+      console.log('[CreateProjectStore] Updated file data:', {
+        id: fileId,
+        parsedDataLength: file.parsedData?.length
+      });
     }
   },
 

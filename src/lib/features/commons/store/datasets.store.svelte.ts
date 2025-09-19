@@ -37,6 +37,14 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
+  // Method to directly add a processed dataset (for DuckDB integration)
+  addProcessedDataset(dataset: ProcessedDataset): void {
+    this._state.datasets.push(dataset);
+    if (!this._state.selectedDatasetId) {
+      this._state.selectedDatasetId = dataset.id;
+    }
+  }
+
   get error() {
     return this._state.error;
   }
@@ -45,20 +53,63 @@ class DatasetsStore {
     this._state.isProcessing = true;
     this._state.error = undefined;
 
-    console.log('datasetsStore.processFiles - files:', files);
-
     try {
-      const newDatasets = await createDataPipeline(files);
-      console.log('datasetsStore.processFiles - newDatasets:', newDatasets);
+      // Try to access parsedData directly
+      console.log('[DatasetsStore.processFiles] Original files:', files.length);
+      files.forEach((file, i) => {
+        console.log(`[DatasetsStore.processFiles] File ${i}:`, {
+          name: file.name,
+          hasParseData: !!file.parsedData,
+          parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
+        });
+
+        // Try to access first element
+        if (file.parsedData && Array.isArray(file.parsedData) && file.parsedData.length > 0) {
+          console.log(`[DatasetsStore.processFiles] File ${i} first row:`, file.parsedData[0]);
+        }
+      });
+
+      // Create clean copies of files to avoid proxy issues
+      const filesCopy = files.map(file => {
+        // Check if parsedData exists and has data
+        if (!file.parsedData) {
+          console.warn(`[DatasetsStore.processFiles] File ${file.name} has no parsedData`);
+        }
+
+        // Create a clean copy without proxy references
+        const cleanFile = {
+          id: file.id,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          fileType: file.fileType,
+          status: file.status,
+          uploadProgress: file.uploadProgress,
+          errorMessage: file.errorMessage,
+          validation: file.validation,
+          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
+          content: file.content,
+          duplicates: file.duplicates,
+          statistics: file.statistics,
+          sourceType: file.sourceType
+        };
+
+        return cleanFile;
+      });
+
+      console.log('[DatasetsStore.processFiles] Files copy:', filesCopy.length);
+      filesCopy.forEach((file, i) => {
+        console.log(`[DatasetsStore.processFiles] File copy ${i} parsedData:`, file.parsedData?.length);
+      });
+
+      const newDatasets = await createDataPipeline(filesCopy);
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
 
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
-        console.log('datasetsStore.processFiles - selected dataset ID:', this._state.selectedDatasetId);
       }
     } catch (error) {
-      console.error('datasetsStore.processFiles - error:', error);
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
@@ -72,7 +123,33 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-      const dataset = await processUploadedFile(file);
+      console.log('[DatasetsStore.addFile] Original file:', {
+        name: file.name,
+        hasParseData: !!file.parsedData,
+        parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
+      });
+
+      // Create a clean copy without proxy references
+      const fileCopy = {
+        id: file.id,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        fileType: file.fileType,
+        status: file.status,
+        uploadProgress: file.uploadProgress,
+        errorMessage: file.errorMessage,
+        validation: file.validation,
+        parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
+        content: file.content,
+        duplicates: file.duplicates,
+        statistics: file.statistics,
+        sourceType: file.sourceType
+      };
+
+      console.log('[DatasetsStore.addFile] File copy parsedData:', fileCopy.parsedData?.length);
+
+      const dataset = await processUploadedFile(fileCopy);
 
       if (dataset) {
         this._state.datasets.push(dataset);
