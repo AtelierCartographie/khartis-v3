@@ -1,0 +1,104 @@
+:root {
+  --cds-main-toolbar-width: 50vw;
+  --cds-header-height: 47px;
+  --cds-interactive-04: #3c3838;
+  --cds-active-primary: rgb(46, 44, 44);
+  --cds-hover-primary: #3c3838;
+  --cds-link-01: var(--cds-text-01);
+  --cds-link-02: var(--cds-text-01);
+  --cds-hover-primary-text: #515151;
+  --cds-inverse-focus-ui: #ffffff;
+  --cds-focus: black;
+  --cds-interactive-01: #000000;
+  --cds-interactive-02: #393939;
+  --cds-interactive-03: #000000;
+  --cds-interactive-04: #000000;
+  --cds-blue: #0072c3;
+  --cds-pale-blue: #cceeff;
+  --cds-medium-blue: #a8e2ff;
+  --cds-dark-blue: #003a6d;
+  --cds-selection-blue: #82cfff;
+  --cds-light-gray: #f4f4f4;
+  --cds-medium-gray: #e0e0e0;
+  --cds-dark-gray: #8d8d8d;
+  --cds-text-gray: #525252;
+  --cds-hover-tertiary: #1a1a1a;
+  --cds-button-primary: black;
+}
+
+:root[theme='g100'] {
+  --cds-main-toolbar-width: 50vw;
+  --cds-interactive-01: #393939;
+  --cds-interactive-04: #393939;
+  --cds-hover-primary: #464646;
+  --cds-active-primary: rgb(34, 33, 33);
+  --cds-link-01: var(--cds-text-01);
+  --cds-link-02: var(--cds-text-01);
+  --cds-hover-primary-text: #a4a4a4;
+  --cds-inverse-focus-ui: #ffffff;
+  --cds-focus: rgb(255, 255, 255);
+  --cds-interactive-02: #393939;
+  --cds-interactive-03: #ffffff;
+  --cds-interactive-04: #ffffff;
+  --cds-blue: #0072c3;
+  --cds-pale-blue: #cceeff;
+  --cds-medium-blue: #a8e2ff;
+  --cds-dark-blue: #003a6d;
+  --cds-selection-blue: #82cfff;
+  --cds-light-gray: #f4f4f4;
+  --cds-medium-gray: #e0e0e0;
+  --cds-dark-gray: #8d8d8d;
+  --cds-text-gray: #a3a3a3;
+  --cds-text-01: #f4f4f4;
+  --cds-hover-tertiary: #e5e5e5;
+  --cds-button-primary: white;
+}
+
+.app-shadow {
+  box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.1);
+}
+
+html[theme='g100'] .app-shadow {
+  box-shadow: 0px 2px 6px 0px rgba(0, 0, 0, 0.5);
+}
+
+html,
+body {
+  color: var(--cds-text-01);
+}
+
+i,
+label {
+  display: block;
+  line-height: 1.4;
+}
+
+.text-grey {
+  color: var(--cds-text-05);
+}
+
+.centered-flex-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.centered-flex-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.form-label {
+  font-size: var(--cds-label-01-font-size, 0.75rem);
+  font-weight: 400;
+  color: var(--cds-text-gray);
+  display: block;
+  line-height: 1.4;
+}
