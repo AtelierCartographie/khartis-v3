@@ -2,7 +2,7 @@ import { Duck, initDuckDB } from './duckdb/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import type { ProcessedDataset } from '../utils/data-pipeline.utils';
-import { showError, showInfo } from '../utils/notification.utils.svelte';
+import { showError } from '../utils/notification.utils.svelte';
 
 export interface DuckDBDataset {
   id: string;
@@ -102,7 +102,7 @@ class DuckDBOrchestratorService {
     console.log('[DuckDBOrchestrator.processCSV] Analysis complete, columns:', columns.length);
     console.log('[DuckDBOrchestrator.processCSV] Columns sample:', columns.slice(0, 2));
 
-    const rowCount = await Duck.get_row_count(finalTableName);
+    const rowCount = await this.getRowCount(finalTableName);
     console.log('[DuckDBOrchestrator.processCSV] Row count:', rowCount);
 
     const dataset: DuckDBDataset = {
@@ -148,7 +148,7 @@ class DuckDBOrchestratorService {
 
     // Analyze the table
     const columns = await Duck.analyse(tableName);
-    const rowCount = await Duck.get_row_count(tableName);
+    const rowCount = await this.getRowCount(tableName);
 
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
@@ -215,7 +215,15 @@ class DuckDBOrchestratorService {
     return `${name}_${timestamp}`;
   }
 
-  async getTableData(tableName: string, options?: { limit?: number }): Promise<any> {
+  async getTableData(
+    tableName: string,
+    options?: {
+      offset?: number;
+      limit?: number;
+      orderBy?: string | null;
+      order?: 'ASC' | 'DESC' | null;
+    }
+  ): Promise<any> {
     console.log('[DuckDBOrchestrator.getTableData] Getting data for table:', tableName);
 
     if (!this.initialized) {
@@ -225,18 +233,113 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new Error('DuckDB not initialized');
 
     try {
-      const data = await Duck.get_data(tableName, { geometry: false });
-      console.log('[DuckDBOrchestrator.getTableData] Data retrieved:', {
-        tableName,
-        hasData: !!data,
-        numRows: data?.numRows
-      });
-      return data;
+      if (options?.orderBy || options?.limit || options?.offset) {
+        let query = `SELECT * FROM ${tableName}`;
+
+        if (options?.orderBy && options?.order) {
+          query += ` ORDER BY "${options.orderBy}" ${options.order}`;
+        }
+
+        if (options?.limit) {
+          query += ` LIMIT ${options.limit}`;
+        }
+
+        if (options?.offset) {
+          query += ` OFFSET ${options.offset}`;
+        }
+
+        console.log('[DuckDBOrchestrator.getTableData] Running query:', query);
+        return await Duck.query(query);
+      } else {
+        const data = await Duck.get_data(tableName, { geometry: false });
+        console.log('[DuckDBOrchestrator.getTableData] Data retrieved:', {
+          tableName,
+          hasData: !!data,
+          numRows: data?.numRows
+        });
+        return data;
+      }
     } catch (error) {
       console.error('[DuckDBOrchestrator.getTableData] Error:', error);
       // Return empty data if table doesn't exist yet
       return { numRows: 0, get: () => ({}) };
     }
+  }
+
+  async getRowCount(tableName: string): Promise<number> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    try {
+      // Use the Duck.get_row_count method which is already implemented
+      return await Duck.get_row_count(tableName);
+    } catch (error) {
+      console.error('[DuckDBOrchestrator.getRowCount] Error:', error);
+      // Fallback to manual query if get_row_count fails
+      const result: any = await Duck.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+      if (result && result.get) {
+        return result.get(0).count;
+      } else if (result && result.numRows === 1) {
+        // Handle different result formats
+        return Number(result.toArray()[0].count);
+      }
+      return 0;
+    }
+  }
+
+  async analyzeTable(tableName: string): Promise<any[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    const result: any = await Duck.query(`
+      SELECT
+        column_name as name,
+        data_type as type
+      FROM duckdb_columns()
+      WHERE table_name = '${tableName}'
+    `);
+
+    const columns = [];
+    for (let i = 0; i < result.numRows; i++) {
+      columns.push(result.get(i));
+    }
+    return columns;
+  }
+
+  async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    await Duck.query(`ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`);
+  }
+
+  async changeColumnType(tableName: string, columnName: string, newType: string): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    await Duck.query(`ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`);
+  }
+
+  async dropColumn(tableName: string, columnName: string): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    await Duck.query(`ALTER TABLE ${tableName} DROP COLUMN "${columnName}"`);
   }
 
   async runQuery(query: string): Promise<any> {
