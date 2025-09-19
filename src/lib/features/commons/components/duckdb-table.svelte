@@ -50,7 +50,7 @@
       const limit = Math.min(maxRows, totalRows);
 
       for (let i = 0; i < limit; i++) {
-        const rowData = arrowTable.get(i);
+        const rowData = arrowTable!.get(i);
         displayRows.push({
           id: i.toString(),
           ...rowData
@@ -141,7 +141,7 @@
         <div class="column-card">
           <div class="column-header">
             <span class="column-name">{col.name}</span>
-            <Tag size="sm" type={getColumnTypeTag(col.type_simple)}>
+            <Tag size="sm" type={getColumnTypeTag(col.type_simple) as any}>
               {col.type_simple}
             </Tag>
           </div>
@@ -176,7 +176,7 @@
   </div>
 {/if}
 
-<script lang="ts" context="module">
+<script lang="ts" module>
   function getColumnTypeTag(type: string): string {
     const tagMap: Record<string, string> = {
       'numeric': 'blue',
