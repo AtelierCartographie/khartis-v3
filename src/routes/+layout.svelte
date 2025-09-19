@@ -1,16 +1,18 @@
 <script lang="ts">
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
+  import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service';
+  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
   import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ZoomMode } from '$lib/features/commons/types/global';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import Header from '$lib/features/header/header.svelte';
+  import Logo from '$lib/features/header/logo.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
+  import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service';
   import { onMount } from 'svelte';
 
   import 'carbon-components-svelte/css/all.css';
@@ -25,17 +27,18 @@
   let isLoading = $state(true);
 
   onMount(async () => {
-    console.log('Layout onMount - starting initialization');
+    // Initialize DuckDB first
+    try {
+      await duckDBOrchestrator.initialize();
+    } catch (error) {
+      // Silent fail - DuckDB initialization is optional
+    }
 
     // Wait for project store to initialize from IndexedDB
     await projectStore.waitForInit();
-    console.log('Layout onMount - projectStore initialized, currentProject:', projectStore.currentProject);
-    console.log('Layout onMount - project files:', projectStore.currentProject?.data?.sourceFiles);
 
     // Initialize data orchestrator to process any existing files
-    console.log('Layout onMount - calling dataOrchestrator.initialize()');
     await dataOrchestrator.initialize();
-    console.log('Layout onMount - dataOrchestrator initialized');
 
     isLoading = false;
 
@@ -59,7 +62,10 @@
 
 {#if isLoading}
   <div class="loading-container">
-    <div class="loading-spinner"></div>
+    <div class="loading-inner">
+      <Logo />
+      <div class="loading-spinner"></div>
+    </div>
   </div>
 {:else}
   <Header />
@@ -103,6 +109,17 @@
     justify-content: center;
     background-color: var(--cds-ui-01);
     z-index: 9999;
+  }
+
+  .loading-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--cds-spacing-08);
+  }
+
+  .loading-inner :global(#khartis-logo) {
+    transform: scale(1.2);
   }
 
   .loading-spinner {

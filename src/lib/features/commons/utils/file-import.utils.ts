@@ -210,37 +210,94 @@ export async function parseCsvWithPapa(
   errors: string[];
   meta: any;
 }> {
+  console.log('[parseCsvWithPapa] Starting parse of file:', {
+    name: file.name,
+    size: file.size,
+    type: file.type
+  });
+
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      encoding: 'UTF-8',
-      complete: (results) => {
-        resolve({
-          data: results.data,
-          headers: results.meta.fields || [],
-          errors: results.errors.map((e) => e.message),
-          meta: results.meta
-        });
-      },
-      error: (error) => {
-        reject(error);
-      },
-      beforeFirstChunk: (chunk) => {
-        const hasBOM = chunk.charCodeAt(0) === 0xfeff;
-        if (hasBOM) {
-          return chunk.slice(1);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      console.log('[parseCsvWithPapa] File content preview:', text.substring(0, 500));
+
+      Papa.parse(text, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        delimiter: detectDelimiter(text),
+        complete: (results) => {
+          console.log('[parseCsvWithPapa] Parse complete:', {
+            dataLength: results.data.length,
+            headers: results.meta.fields,
+            errors: results.errors,
+            firstRow: results.data[0],
+            delimiter: results.meta.delimiter
+          });
+
+          if (results.data.length === 0 && text.trim().length > 0) {
+            console.warn('[parseCsvWithPapa] Empty result but file has content, trying without header');
+
+            Papa.parse(text, {
+              header: false,
+              dynamicTyping: true,
+              skipEmptyLines: true,
+              delimiter: detectDelimiter(text),
+              complete: (retryResults) => {
+                console.log('[parseCsvWithPapa] Retry parse complete:', {
+                  dataLength: retryResults.data.length,
+                  firstRow: retryResults.data[0]
+                });
+
+                if (retryResults.data.length > 0) {
+                  const headers = retryResults.data[0].map((_: any, i: number) => `Column_${i + 1}`);
+                  const data = retryResults.data.slice(1).map((row: any[]) => {
+                    const obj: any = {};
+                    headers.forEach((h: string, i: number) => {
+                      obj[h] = row[i];
+                    });
+                    return obj;
+                  });
+
+                  resolve({
+                    data: data,
+                    headers: headers,
+                    errors: retryResults.errors.map((e) => e.message),
+                    meta: retryResults.meta
+                  });
+                } else {
+                  resolve({
+                    data: results.data,
+                    headers: results.meta.fields || [],
+                    errors: results.errors.map((e) => e.message),
+                    meta: results.meta
+                  });
+                }
+              }
+            });
+          } else {
+            resolve({
+              data: results.data,
+              headers: results.meta.fields || [],
+              errors: results.errors.map((e) => e.message),
+              meta: results.meta
+            });
+          }
+        },
+        error: (error) => {
+          console.error('[parseCsvWithPapa] Parse error:', error);
+          reject(error);
         }
-        return chunk;
-      },
-      step: (row, parser: any) => {
-        if (onProgress && file.size > 0 && parser.cursor) {
-          const progress = Math.min(100, (parser.cursor / file.size) * 100);
-          onProgress(progress);
-        }
-      }
-    });
+      });
+    };
+
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'));
+    };
+
+    reader.readAsText(file, 'UTF-8');
   });
 }
 

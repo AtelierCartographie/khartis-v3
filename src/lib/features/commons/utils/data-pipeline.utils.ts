@@ -246,13 +246,26 @@ export async function processUploadedFile(
   file: UploadedFile
 ): Promise<ProcessedDataset | null> {
   console.log('processUploadedFile - file:', file);
-  console.log('processUploadedFile - parsedData:', file.parsedData);
-  console.log('processUploadedFile - status:', file.status);
 
-  if (!file.parsedData || file.status !== 'complete') {
+  // Check if file is a proxy and try to access properties directly
+  const parsedData = file.parsedData;
+  const status = file.status;
+
+  console.log('processUploadedFile - parsedData type:', typeof parsedData);
+  console.log('processUploadedFile - parsedData is array?', Array.isArray(parsedData));
+  console.log('processUploadedFile - parsedData:', parsedData);
+  console.log('processUploadedFile - status:', status);
+
+  // Try to access the data if it's an array
+  if (Array.isArray(parsedData)) {
+    console.log('processUploadedFile - parsedData length:', parsedData.length);
+    console.log('processUploadedFile - first item:', parsedData[0]);
+  }
+
+  if (!parsedData || status !== 'complete') {
     console.log('processUploadedFile - returning null: no parsedData or not complete');
-    console.log('processUploadedFile - file has parsedData?', !!file.parsedData);
-    console.log('processUploadedFile - file status:', file.status);
+    console.log('processUploadedFile - file has parsedData?', !!parsedData);
+    console.log('processUploadedFile - file status:', status);
     return null;
   }
 
@@ -270,8 +283,8 @@ export async function processUploadedFile(
   };
 
   if (file.fileType === FileType.CSV) {
-    console.log('processUploadedFile - processing CSV, parsedData length:', file.parsedData?.length);
-    const { columns, processedData } = processTabularData(file.parsedData);
+    console.log('processUploadedFile - processing CSV, parsedData length:', parsedData?.length);
+    const { columns, processedData } = processTabularData(parsedData);
     console.log('processUploadedFile - after processTabularData, columns:', columns);
     console.log('processUploadedFile - after processTabularData, data length:', processedData.length);
     return {
