@@ -2,7 +2,6 @@
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
   import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { InlineNotification } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
@@ -16,14 +15,6 @@
           ?.tableName || null
       : null
   );
-
-  // Sync button selection with the selected dataset
-  $effect(() => {
-    if (selectedDataset?.sourceFileId) {
-      // Only update visual selection, not the dataset (to avoid loops)
-      globalActions.selectDataButton(selectedDataset.sourceFileId);
-    }
-  });
 </script>
 
 <section id="data-control-step">

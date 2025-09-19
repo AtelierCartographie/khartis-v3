@@ -127,7 +127,11 @@
         <Button
           isSelected={dataButton.isSelected}
           kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-          on:click={() => globalActions.selectDataButton(dataButton.id)}
+          on:click={() => {
+            if (!dataButton.isSelected) {
+              globalActions.selectDataButton(dataButton.id);
+            }
+          }}
           class="tab-button"
           title={dataButton.label}
         >

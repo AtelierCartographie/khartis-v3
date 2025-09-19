@@ -99,6 +99,9 @@ class ProjectStore {
       this._state.currentProject.data.sourceFiles = [];
     }
 
+    const isFirstFile = this._state.currentProject.data.sourceFiles.length === 0;
+    let addedFiles = 0;
+
     for (const file of newFiles) {
       const exists = this._state.currentProject.data.sourceFiles.find(
         (f) => f.id === file.id || f.name === file.name
@@ -129,7 +132,11 @@ class ProjectStore {
         });
 
         this._state.currentProject.data.sourceFiles.push(fileCopy);
-        globalActions.addDataButtonForFile(file.id, file.name, false);
+
+        // Select the first file added or when it's the first file in the project
+        const shouldSelect = isFirstFile && addedFiles === 0;
+        globalActions.addDataButtonForFile(file.id, file.name, shouldSelect);
+        addedFiles++;
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
