@@ -15,12 +15,13 @@ The application follows a modular architecture with three main stages:
 ### Key technologies
 
 - Framework: SvelteKit 5 (Runes mode)
-- Database: DuckDB WASM with spatial extension (pending integration)
-- Map rendering: Deck.gl (WebGL) (pending integration)
-- Projections: D3.js (12 projections implemented)
+- Database: DuckDB WASM 1.29.1 with spatial extension ✅
+- Map rendering: Deck.gl (WebGL) + MapLibre GL ✅
+- Projections: D3.js (12+ projections implemented)
 - Design system: Carbon (IBM)
 - File parsing: PapaParse, shpjs, sql.js
 - State management: Svelte 5 runes with reactive stores
+- Internationalization: Paraglide.js
 
 ### Documentation structure
 
@@ -44,6 +45,9 @@ The application follows a modular architecture with three main stages:
 18. [Data pipeline architecture](17-data-pipeline-architecture.md)
 19. [Glossary](18-glossary.md)
 20. [Security for client-side applications](19-security-client-side.md)
+21. [DuckDB Integration](20-duckdb-integration.md)
+22. [Deck.gl and MapLibre Integration](21-deckgl-maplibre-integration.md)
+23. [Visualization System](22-visualization-system.md)
 
 # Documentation summary
 
@@ -71,9 +75,12 @@ This documentation provides a complete overview of Khartis v3 implementation, co
 - **14 — Features architecture**: Module structure, stores, tools, integration
 - **15 — Tools implementation**: Tool patterns, creation guide, testing, accessibility
 - **16 — Internationalization**: Paraglide.js setup, message management, type-safe i18n
-- **17 — Data pipeline architecture**: Type detection, column analysis, statistics, orchestration
+- **17 — Data pipeline architecture**: Type detection, column analysis, statistics, DuckDB orchestration
 - **18 — Glossary**: Technical and cartographic terms dictionary
 - **19 — Security**: Client-side security model, pragmatic protections, avoiding over-engineering
+- **20 — DuckDB Integration**: WASM setup, SQL macros, spatial operations, performance optimization
+- **21 — Deck.gl/MapLibre**: WebGL rendering, layer system, interactions, base map integration
+- **22 — Visualization System**: Choropleth, proportional, categorical, bivariate maps, suggestions
 
 Additional resources
 
