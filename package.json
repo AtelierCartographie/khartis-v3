@@ -23,7 +23,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 5176",
-    "build": "vite build",
+    "build": "NODE_ENV=production vite build",
     "preview": "vite preview",
     "prepare": "husky",
     "machine-translate": "npx inlang machine translate --project ./project.inlang",
