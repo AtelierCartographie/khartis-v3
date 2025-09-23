@@ -2,9 +2,12 @@ export type ProjectTab = 1 | 2 | 3;
 
 export enum FileType {
   CSV = 'csv',
+  TSV = 'tsv',
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
+  KML = 'kml',
+  KMZ = 'kmz',
   UNKNOWN = 'unknown'
 }
 

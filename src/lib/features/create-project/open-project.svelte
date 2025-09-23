@@ -148,6 +148,36 @@
     showDeleteConfirm = false;
   }
 
+  function validateKhartisFiles(files: File[]): File[] {
+    const validFiles: File[] = [];
+
+    for (const file of files) {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+
+      if (extension !== 'kh' && extension !== 'khartis') {
+        continue;
+      }
+
+      if (file.size === 0) {
+        error = m.validation_file_empty();
+        continue;
+      }
+
+      if (file.size > 100 * 1024 * 1024) {
+        error = m.validation_file_too_large();
+        continue;
+      }
+
+      validFiles.push(file);
+    }
+
+    if (validFiles.length === 0 && files.length > 0) {
+      error = m.validation_invalid_format();
+    }
+
+    return validFiles;
+  }
+
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
@@ -254,7 +284,7 @@
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
         accept={['.kh', '.khartis']}
-        validateFiles={(files) => files}
+        validateFiles={validateKhartisFiles}
         disabled={isImporting}
         on:change={handleFileImport}
       />

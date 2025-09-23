@@ -34,6 +34,7 @@ import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
 import { logger } from '../utils/logger.utils';
 import { ProjectValidator, DataValidator } from '../utils/validation.utils';
+import { FileValidator } from '../utils/file-validator.utils';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -100,21 +101,30 @@ export const createProjectActions = {
   },
 
   async processFiles(files: File[]): Promise<void> {
+    const validationResult = FileValidator.validateMultiple(files);
+
+    if (validationResult.globalErrors.length > 0) {
+      this.setNewProjectError(validationResult.globalErrors.join(', '));
+      showError('Erreur de validation', validationResult.globalErrors.join(', '));
+      return;
+    }
+
+    for (const [filename, result] of validationResult.results) {
+      if (!result.isValid) {
+        this.setNewProjectError(result.errors.join(', '));
+        showError(`Erreur avec ${filename}`, result.errors.join(', '));
+        return;
+      }
+
+      if (result.warnings.length > 0) {
+        result.warnings.forEach(warning => logger.warn(warning));
+        showWarning('Avertissement', result.warnings.join(', '));
+      }
+    }
+
     const fileGroups = groupShapefiles(files);
     const duplicates: string[] = [];
     const toProcess: Map<string, File[]> = new Map();
-
-    for (const file of files) {
-      const fileValidation = ProjectValidator.validateFileSize(file);
-      if (!fileValidation.isValid) {
-        this.setNewProjectError(fileValidation.errors.join(', '));
-        showError('Fichier trop volumineux', fileValidation.errors.join(', '));
-        return;
-      }
-      if (fileValidation.warnings.length > 0) {
-        fileValidation.warnings.forEach(warning => logger.warn(warning));
-      }
-    }
 
     for (const [baseName, groupFiles] of fileGroups) {
       const mainFileName =
@@ -158,10 +168,14 @@ export const createProjectActions = {
       return;
     }
 
-    const validation = validateFile(file);
+    const validation = FileValidator.validate(file);
     const uploadedFile = createUploadedFile(file, sourceType);
 
-    uploadedFile.validation = validation;
+    uploadedFile.validation = {
+      isValid: validation.isValid,
+      errors: validation.errors,
+      warnings: validation.warnings
+    };
     uploadedFile.status = validation.isValid ? 'uploading' : 'error';
     uploadedFile.errorMessage = validation.isValid ? undefined : validation.errors[0];
 
@@ -177,7 +191,27 @@ export const createProjectActions = {
     try {
       this.updateFileStatus(uploadedFile.id, 'processing');
 
-      if (uploadedFile.fileType === FileType.CSV) {
+      if (validation.requiresAsyncValidation) {
+        const asyncValidation = await FileValidator.validateAsync(file, validation);
+        if (!asyncValidation.isValid) {
+          this.updateFileData(uploadedFile.id, {
+            status: 'error',
+            errorMessage: asyncValidation.errors.join(', '),
+            validation: {
+              isValid: asyncValidation.isValid,
+              errors: asyncValidation.errors,
+              warnings: asyncValidation.warnings
+            }
+          });
+          return;
+        }
+
+        if (asyncValidation.warnings.length > 0) {
+          asyncValidation.warnings.forEach(w => logger.warn(w));
+        }
+      }
+
+      if (uploadedFile.fileType === FileType.CSV || uploadedFile.fileType === FileType.TSV) {
         logger.debug('[CreateProjectStore] Parsing CSV file:', file.name);
         const result = await parseCsvWithPapa(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);

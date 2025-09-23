@@ -12,7 +12,7 @@ import { formatFileSize } from './format.utils';
 export { FileType, DataSourceType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
 
-export const MAX_FILE_SIZE = 100 * 1024 * 1024;
+export const MAX_FILE_SIZE = 50 * 1024 * 1024; // Harmonisé à 50 MB
 
 export const SUPPORTED_EXTENSIONS = {
   tabular: ['.csv', '.tsv', '.txt'],
