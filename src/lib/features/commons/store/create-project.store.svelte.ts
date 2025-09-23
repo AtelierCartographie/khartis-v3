@@ -32,6 +32,8 @@ import {
 } from '../utils/notification.utils.svelte';
 import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
+import { logger } from '../utils/logger.utils';
+import { ProjectValidator, DataValidator } from '../utils/validation.utils';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -102,6 +104,18 @@ export const createProjectActions = {
     const duplicates: string[] = [];
     const toProcess: Map<string, File[]> = new Map();
 
+    for (const file of files) {
+      const fileValidation = ProjectValidator.validateFileSize(file);
+      if (!fileValidation.isValid) {
+        this.setNewProjectError(fileValidation.errors.join(', '));
+        showError('Fichier trop volumineux', fileValidation.errors.join(', '));
+        return;
+      }
+      if (fileValidation.warnings.length > 0) {
+        fileValidation.warnings.forEach(warning => logger.warn(warning));
+      }
+    }
+
     for (const [baseName, groupFiles] of fileGroups) {
       const mainFileName =
         groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
@@ -164,17 +178,29 @@ export const createProjectActions = {
       this.updateFileStatus(uploadedFile.id, 'processing');
 
       if (uploadedFile.fileType === FileType.CSV) {
-        console.log('[CreateProjectStore] Parsing CSV file:', file.name);
+        logger.debug('[CreateProjectStore] Parsing CSV file:', file.name);
         const result = await parseCsvWithPapa(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);
         });
 
-        console.log('[CreateProjectStore] CSV parse result:', {
+        logger.debug('[CreateProjectStore] CSV parse result:', {
           dataLength: result.data?.length,
           headers: result.headers,
           errors: result.errors,
           firstRow: result.data?.[0]
         });
+
+        const csvValidation = DataValidator.validateCSVData(result.data);
+        if (!csvValidation.isValid) {
+          this.updateFileData(uploadedFile.id, {
+            status: 'error',
+            errorMessage: csvValidation.errors.join(', ')
+          });
+          return;
+        }
+        if (csvValidation.warnings.length > 0) {
+          csvValidation.warnings.forEach(warning => logger.warn(warning));
+        }
 
         const duplicates = detectDuplicateRows(result.data);
 
@@ -203,7 +229,7 @@ export const createProjectActions = {
           parsedData: result.data
         });
 
-        console.log('[CreateProjectStore] Before duplicate check - parsedData:', {
+        logger.debug('[CreateProjectStore] Before duplicate check - parsedData:', {
           isArray: Array.isArray(result.data),
           length: result.data?.length,
           firstRow: result.data?.[0]
@@ -226,7 +252,7 @@ export const createProjectActions = {
         this.updateFileStatus(uploadedFile.id, 'complete');
 
         const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
-        console.log('[CreateProjectStore] Final uploadedFile parsedData:', {
+        logger.debug('[CreateProjectStore] Final uploadedFile parsedData:', {
           name: updatedFile?.name,
           parsedDataLength: updatedFile?.parsedData?.length,
           firstRow: updatedFile?.parsedData?.[0]
@@ -241,6 +267,18 @@ export const createProjectActions = {
 
         try {
           const parsedData = JSON.parse(content as string);
+
+          const geoValidation = DataValidator.validateGeoData(parsedData);
+          if (!geoValidation.isValid) {
+            this.updateFileData(uploadedFile.id, {
+              status: 'error',
+              errorMessage: geoValidation.errors.join(', ')
+            });
+            return;
+          }
+          if (geoValidation.warnings.length > 0) {
+            geoValidation.warnings.forEach(warning => logger.warn(warning));
+          }
           this.updateFileData(uploadedFile.id, {
             content: content,
             parsedData: parsedData
@@ -474,7 +512,7 @@ export const createProjectActions = {
     );
     if (file) {
       Object.assign(file, data);
-      console.log('[CreateProjectStore] Updated file data:', {
+      logger.debug('[CreateProjectStore] Updated file data:', {
         id: fileId,
         parsedDataLength: file.parsedData?.length
       });
@@ -525,7 +563,7 @@ export const createProjectActions = {
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
     if (error) {
-      console.error('[CreateProject] New project error:', error);
+      logger.error('[CreateProject] New project error:', error);
     }
   },
 
@@ -605,7 +643,7 @@ export const createProjectActions = {
   setOpenProjectError(error?: string): void {
     createProjectState.openProject.error = error;
     if (error) {
-      console.error('[CreateProject] Open project error:', error);
+      logger.error('[CreateProject] Open project error:', error);
     }
   },
 
@@ -629,7 +667,7 @@ export const createProjectActions = {
   setTryExampleError(error?: string): void {
     createProjectState.tryExample.error = error;
     if (error) {
-      console.error('[CreateProject] Try example error:', error);
+      logger.error('[CreateProject] Try example error:', error);
     }
   },
 
