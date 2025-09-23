@@ -5,6 +5,7 @@ import type {
 import { ProjectStorageKey } from '../store/project.types';
 import { ProjectSerializer } from './project-serialization.utils';
 import { compressData, decompressData } from './compression.utils';
+import { logger } from './logger.utils';
 
 const DB_NAME = 'KhartisDB';
 const DB_VERSION = 1;
@@ -257,7 +258,8 @@ export class ProjectPersistence {
     try {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
-      console.error('Failed to save to localStorage:', error);
+      logger.error('Failed to save to localStorage:', error);
+      throw new Error('Storage quota exceeded or localStorage unavailable');
     }
   }
 

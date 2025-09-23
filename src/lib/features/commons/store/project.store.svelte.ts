@@ -14,6 +14,8 @@ import { generateProjectFilename, slugify } from '../utils/string.utils';
 import type { UploadedFile } from './create-project.types';
 import { globalActions } from './global.svelte';
 import { dataOrchestrator } from '../services/data-orchestrator.service';
+import { logger } from '../utils/logger.utils';
+import { ProjectValidator, STORAGE_LIMITS } from '../utils/validation.utils';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -126,7 +128,7 @@ class ProjectStore {
           sourceType: file.sourceType
         };
 
-        console.log('[ProjectStore] Adding file to sourceFiles:', {
+        logger.debug('[ProjectStore] Adding file to sourceFiles:', {
           name: fileCopy.name,
           parsedDataLength: Array.isArray(fileCopy.parsedData) ? fileCopy.parsedData.length : 0
         });
@@ -141,7 +143,7 @@ class ProjectStore {
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
         } catch (error) {
-          console.error('[ProjectStore] Failed to process file:', error);
+          logger.error('[ProjectStore] Failed to process file:', error);
 
           // Remove the file from sourceFiles if processing failed
           const index = this._state.currentProject.data.sourceFiles.findIndex(
@@ -184,13 +186,20 @@ class ProjectStore {
   }
 
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
+    const nameValidation = ProjectValidator.validateProjectName(name);
+    if (!nameValidation.isValid) {
+      throw new Error(nameValidation.errors.join(', '));
+    }
+
+    const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+
     const project: KhartisProject = {
       id: crypto.randomUUID(),
       manifest: {
         version: '3.0.0',
         createdAt: new Date(),
         updatedAt: new Date(),
-        name,
+        name: sanitizedName,
         format: 'kh'
       },
       data: {
@@ -256,6 +265,14 @@ class ProjectStore {
     }
 
     try {
+      const projectValidation = ProjectValidator.validateProjectSize(this._state.currentProject);
+      if (!projectValidation.isValid) {
+        throw new Error(projectValidation.errors.join(', '));
+      }
+
+      if (projectValidation.warnings.length > 0) {
+        projectValidation.warnings.forEach(warning => logger.warn(warning));
+      }
       this._state.currentProject.manifest.updatedAt = new Date();
 
       await projectPersistence.saveProject(this._state.currentProject);
@@ -294,12 +311,24 @@ class ProjectStore {
         throw new Error('Project not found');
       }
 
+      const projects = await this.listProjects();
+      const capacityCheck = ProjectValidator.validateStorageCapacity(projects.length);
+      if (!capacityCheck.isValid) {
+        throw new Error(capacityCheck.errors.join(', '));
+      }
+
+      const duplicatedName = newName || `${originalProject.manifest.name} (copie)`;
+      const nameValidation = ProjectValidator.validateProjectName(duplicatedName);
+      if (!nameValidation.isValid) {
+        throw new Error(nameValidation.errors.join(', '));
+      }
+
       const duplicatedProject: KhartisProject = {
         ...JSON.parse(JSON.stringify(originalProject)),
         id: crypto.randomUUID(),
         manifest: {
           ...originalProject.manifest,
-          name: newName || `${originalProject.manifest.name} (copie)`,
+          name: ProjectValidator.sanitizeProjectName(duplicatedName),
           createdAt: new Date(),
           updatedAt: new Date()
         }
@@ -317,7 +346,14 @@ class ProjectStore {
   }
 
   async listProjects(): Promise<SavedProjectMetadata[]> {
-    return projectPersistence.listProjects();
+    const projects = await projectPersistence.listProjects();
+
+    const storageCheck = ProjectValidator.validateStorageCapacity(projects.length);
+    if (storageCheck.warnings.length > 0) {
+      storageCheck.warnings.forEach(warning => logger.warn(warning));
+    }
+
+    return projects;
   }
 
   async exportProject(customName?: string): Promise<void> {
@@ -527,7 +563,7 @@ class ProjectStore {
       try {
         await this.loadProject(lastProjectId);
       } catch (error) {
-        console.error('Failed to load last project:', error);
+        logger.error('Failed to load last project:', error);
         // Don't show toast here as it's during initialization
       }
     }
