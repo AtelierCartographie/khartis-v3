@@ -4,7 +4,9 @@
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
+  import { FileValidator, SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
+  import { showError, showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import {
     Button,
     FileUploaderDropContainer,
@@ -30,7 +32,38 @@
 
   async function handleFileDrop(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
-    await createProjectActions.processFiles(files);
+
+    const validationResult = FileValidator.validateMultiple(files);
+
+    if (validationResult.globalErrors.length > 0) {
+      showError('Erreur de validation', validationResult.globalErrors.join(', '));
+      return;
+    }
+
+    const validFiles: File[] = [];
+    const warnings: string[] = [];
+
+    for (const [filename, result] of validationResult.results) {
+      const file = files.find(f => f.name === filename);
+      if (!file) continue;
+
+      if (result.isValid) {
+        validFiles.push(file);
+        if (result.warnings.length > 0) {
+          warnings.push(...result.warnings);
+        }
+      } else {
+        showError(`Erreur avec ${filename}`, result.errors.join(', '));
+      }
+    }
+
+    if (warnings.length > 0) {
+      showWarning('Avertissements', warnings.join(', '));
+    }
+
+    if (validFiles.length > 0) {
+      await createProjectActions.processFiles(validFiles);
+    }
   }
 
   async function handlePasteData() {
@@ -42,6 +75,17 @@
 
   async function handleLoadOnlineFile() {
     if (onlineUrlValue.trim()) {
+      const urlValidation = FileValidator.validateURL(onlineUrlValue);
+
+      if (!urlValidation.isValid) {
+        showError('URL invalide', urlValidation.errors.join(', '));
+        return;
+      }
+
+      if (urlValidation.warnings.length > 0) {
+        showWarning('Avertissement', urlValidation.warnings.join(', '));
+      }
+
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
       await createProjectActions.loadOnlineFile();
       if (!createProjectState.newProject.error) {
@@ -80,19 +124,29 @@
         labelText={m.create_project_drag_drop_file()}
         multiple
         accept={[
-          '.csv',
-          '.tsv',
-          '.txt',
-          '.geojson',
-          '.json',
-          '.shp',
-          '.shx',
-          '.dbf',
-          '.prj',
-          '.cpg',
-          '.gpkg'
+          ...SUPPORTED_FILE_TYPES.tabular.extensions,
+          ...SUPPORTED_FILE_TYPES.geojson.extensions,
+          ...SUPPORTED_FILE_TYPES.shapefile.extensions,
+          ...SUPPORTED_FILE_TYPES.geopackage.extensions
         ]}
-        validateFiles={(files) => files}
+        validateFiles={(files) => {
+          const validationResult = FileValidator.validateMultiple(Array.from(files));
+
+          if (!validationResult.isValid) {
+            const allErrors = [
+              ...validationResult.globalErrors,
+              ...Array.from(validationResult.results.values())
+                .flatMap(r => r.errors)
+            ];
+
+            if (allErrors.length > 0) {
+              showError('Validation échouée', allErrors[0]);
+              return [];
+            }
+          }
+
+          return files;
+        }}
         on:change={handleFileDrop}
       />
     </div>
