@@ -286,6 +286,36 @@ class ProjectStore {
     }
   }
 
+  async duplicateProject(id: string, newName?: string): Promise<string> {
+    try {
+      const originalProject = await projectPersistence.loadProject(id);
+
+      if (!originalProject) {
+        throw new Error('Project not found');
+      }
+
+      const duplicatedProject: KhartisProject = {
+        ...JSON.parse(JSON.stringify(originalProject)),
+        id: crypto.randomUUID(),
+        manifest: {
+          ...originalProject.manifest,
+          name: newName || `${originalProject.manifest.name} (copie)`,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      };
+
+      await projectPersistence.saveProject(duplicatedProject);
+
+      return duplicatedProject.id;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to duplicate project';
+      showError('Failed to duplicate project', message, error);
+      throw error;
+    }
+  }
+
   async listProjects(): Promise<SavedProjectMetadata[]> {
     return projectPersistence.listProjects();
   }

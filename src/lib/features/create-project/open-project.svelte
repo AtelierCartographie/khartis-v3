@@ -5,9 +5,13 @@
     FileUploaderDropContainer,
     Tooltip,
     InlineNotification,
-    SkeletonPlaceholder
+    SkeletonPlaceholder,
+    Modal,
+    Button,
+    OverflowMenu,
+    OverflowMenuItem
   } from 'carbon-components-svelte';
-  import { Calendar, Link } from 'carbon-icons-svelte';
+  import { Calendar, Link, Copy, TrashCan } from 'carbon-icons-svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     createProjectActions,
@@ -30,6 +34,9 @@
   let isLoading = $state(true);
   let error = $state('');
   let isImporting = $state(false);
+  let isDuplicating = $state(false);
+  let projectToDelete = $state<string | null>(null);
+  let showDeleteConfirm = $state(false);
 
   onMount(async () => {
     await loadProjects();
@@ -95,6 +102,52 @@
     }
   }
 
+  async function handleDuplicateProject(projectId: string, projectName: string) {
+    isDuplicating = true;
+    error = '';
+
+    try {
+      const newProjectId = await projectStore.duplicateProject(projectId);
+      await loadProjects();
+      selectedProjectId = newProjectId;
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to duplicate project';
+    } finally {
+      isDuplicating = false;
+    }
+  }
+
+  function confirmDeleteProject(projectId: string) {
+    projectToDelete = projectId;
+    showDeleteConfirm = true;
+  }
+
+  async function handleDeleteProject() {
+    if (!projectToDelete) return;
+
+    error = '';
+    const deletingId = projectToDelete;
+    projectToDelete = null;
+    showDeleteConfirm = false;
+
+    try {
+      await projectStore.deleteProject(deletingId);
+
+      if (selectedProjectId === deletingId) {
+        selectedProjectId = null;
+      }
+
+      await loadProjects();
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to delete project';
+    }
+  }
+
+  function cancelDelete() {
+    projectToDelete = null;
+    showDeleteConfirm = false;
+  }
+
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
@@ -137,23 +190,53 @@
       </div>
     {:else}
       {#each savedProjects as project}
-        <ProjectCard
-          title={project.name}
-          subtitle={project.description || formatFileSize(project.size)}
-          variant="blue"
-          selected={selectedProjectId === project.id}
-          onclick={() => handleProjectClick(project.id)}
-        >
-          {#snippet footer()}
-            <div class="flex items-center">
-              <Calendar
-                size={16}
-                style="color: var(--calendar-color); fill: var(--calendar-color);"
-              />
-              <span class="ml-2 text-sm">{formatDate(project.updatedAt)}</span>
-            </div>
-          {/snippet}
-        </ProjectCard>
+        <div class="project-card-wrapper">
+          <ProjectCard
+            title={project.name}
+            subtitle={project.description || formatFileSize(project.size)}
+            variant="blue"
+            selected={selectedProjectId === project.id}
+            onclick={() => handleProjectClick(project.id)}
+          >
+            {#snippet footer()}
+              <div class="flex items-center justify-between w-full">
+                <div class="flex items-center">
+                  <Calendar
+                    size={16}
+                    style="color: var(--calendar-color); fill: var(--calendar-color);"
+                  />
+                  <span class="ml-2 text-sm">{formatDate(project.updatedAt)}</span>
+                </div>
+                <OverflowMenu
+                  size="sm"
+                  flipped
+                  onclick={(e) => e.stopPropagation()}
+                >
+                  <OverflowMenuItem
+                    text={m.open_project_duplicate()}
+                    disabled={isDuplicating}
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateProject(project.id, project.name);
+                    }}
+                  >
+                    <Copy slot="icon" size={16} />
+                  </OverflowMenuItem>
+                  <OverflowMenuItem
+                    danger
+                    text={m.open_project_delete()}
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      confirmDeleteProject(project.id);
+                    }}
+                  >
+                    <TrashCan slot="icon" size={16} />
+                  </OverflowMenuItem>
+                </OverflowMenu>
+              </div>
+            {/snippet}
+          </ProjectCard>
+        </div>
       {/each}
     {/if}
   </div>
@@ -183,6 +266,21 @@
       <Link size={24} />
     </div>
   </div>
+
+  <Modal
+    danger
+    bind:open={showDeleteConfirm}
+    modalHeading={m.open_project_delete_confirm_title()}
+    primaryButtonText={m.open_project_delete_confirm_button()}
+    secondaryButtonText={m.open_project_cancel()}
+    on:click:button--primary={handleDeleteProject}
+    on:click:button--secondary={cancelDelete}
+    size="xs"
+  >
+    <p>
+      {m.open_project_delete_confirm_message()}
+    </p>
+  </Modal>
 </section>
 
 <style>
@@ -200,5 +298,24 @@
     text-align: center;
     border: 1px dashed var(--cds-border-subtle);
     border-radius: 4px;
+  }
+
+  .project-card-wrapper {
+    position: relative;
+  }
+
+  .project-card-wrapper :global(.bx--overflow-menu) {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+  }
+
+  .project-card-wrapper :global(.bx--overflow-menu__icon) {
+    fill: var(--cds-icon-secondary);
+  }
+
+  .project-card-wrapper :global(.bx--overflow-menu:hover .bx--overflow-menu__icon) {
+    fill: var(--cds-icon-primary);
   }
 </style>
