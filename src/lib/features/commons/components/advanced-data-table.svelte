@@ -7,6 +7,7 @@
   import { onMount, untrack } from 'svelte';
   import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
   import type { ProcessedDataset } from '../utils/data-pipeline.utils';
+  import { logger, LogCategory } from '../utils/logger';
 
   interface Props {
     dataset?: ProcessedDataset;
@@ -80,7 +81,7 @@
         tableData = dataset.data.slice(rows[0], rows[0] + rows.length);
       }
     } catch (err) {
-      console.error('[AdvancedDataTable] Error loading data:', err);
+      logger.error('Error loading data', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to load data';
     }
   }
@@ -180,7 +181,7 @@
 
       initializeRows(startIndex);
     } catch (err) {
-      console.error('[AdvancedDataTable] Error on mount:', err);
+      logger.error('Error on mount', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to initialize table';
     } finally {
       isLoading = false;

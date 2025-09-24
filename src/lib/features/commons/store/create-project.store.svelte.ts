@@ -32,9 +32,12 @@ import {
 } from '../utils/notification.utils.svelte';
 import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
-import { logger } from '../utils/logger.utils';
+import { logger, LogCategory } from '../utils/logger';
 import { ProjectValidator, DataValidator } from '../utils/validation.utils';
 import { FileValidator } from '../utils/file-validator.utils';
+import { DeepDataValidator, type DataAnalysisResult } from '../utils/deep-validator.utils';
+import { GeoMatcher } from '../utils/geo-matcher.utils';
+import { DuckDBValidatorService, type ValidationResult } from '../services/duckdb-validator.service';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -117,7 +120,7 @@ export const createProjectActions = {
       }
 
       if (result.warnings.length > 0) {
-        result.warnings.forEach(warning => logger.warn(warning));
+        result.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
         showWarning('Avertissement', result.warnings.join(', '));
       }
     }
@@ -205,22 +208,15 @@ export const createProjectActions = {
         }
 
         if (asyncValidation.warnings.length > 0) {
-          asyncValidation.warnings.forEach(w => logger.warn(w));
+          asyncValidation.warnings.forEach(w => logger.warn(w, LogCategory.FILE));
         }
       }
 
       if (uploadedFile.fileType === FileType.CSV || uploadedFile.fileType === FileType.TSV) {
-        logger.debug('[CreateProjectStore] Parsing CSV file:', file.name);
         const result = await parseCsvWithPapa(file, (progress) => {
           this.updateFileProgress(uploadedFile.id, progress);
         });
 
-        logger.debug('[CreateProjectStore] CSV parse result:', {
-          dataLength: result.data?.length,
-          headers: result.headers,
-          errors: result.errors,
-          firstRow: result.data?.[0]
-        });
 
         const csvValidation = DataValidator.validateCSVData(result.data);
         if (!csvValidation.isValid) {
@@ -231,7 +227,7 @@ export const createProjectActions = {
           return;
         }
         if (csvValidation.warnings.length > 0) {
-          csvValidation.warnings.forEach(warning => logger.warn(warning));
+          csvValidation.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
         }
 
         const duplicates = detectDuplicateRows(result.data);
@@ -257,15 +253,50 @@ export const createProjectActions = {
           result.headers
         );
 
+        const headers = result.data[0] ? Object.keys(result.data[0]) : [];
+        const dataRows = result.data.map(row => headers.map(h => row[h]));
+
+        const deepAnalysis = await DeepDataValidator.analyzeDataContent(
+          headers,
+          dataRows,
+          { sampleSize: Math.min(100, dataRows.length) }
+        );
+
+        if (!deepAnalysis.geoDetection.hasGeoColumns) {
+          showError(
+            'Aucune colonne géographique détectée',
+            'Assurez-vous d\'avoir une colonne avec des noms de lieux, codes ISO ou coordonnées.'
+          );
+          this.updateFileData(uploadedFile.id, {
+            status: 'error',
+            errorMessage: 'Pas de données géographiques détectées'
+          });
+          return;
+        }
+
+        if (deepAnalysis.geoDetection.suggestedPrimaryGeoColumn) {
+          logger.info('Colonne géographique détectée', LogCategory.FILE, {
+            column: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.columnName,
+            type: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.type,
+            confidence: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.confidence
+          });
+        }
+
+        if (deepAnalysis.performanceWarnings.length > 0) {
+          deepAnalysis.performanceWarnings.forEach(warning =>
+            showWarning('Performance', warning)
+          );
+        }
+
+        if (deepAnalysis.suggestions.length > 0) {
+          logger.info('Suggestions d\'analyse', LogCategory.FILE, deepAnalysis.suggestions);
+        }
+
         this.updateFileData(uploadedFile.id, {
-          parsedData: result.data
+          parsedData: result.data,
+          deepAnalysis: deepAnalysis
         });
 
-        logger.debug('[CreateProjectStore] Before duplicate check - parsedData:', {
-          isArray: Array.isArray(result.data),
-          length: result.data?.length,
-          firstRow: result.data?.[0]
-        });
 
         if (result.errors.length > 0) {
           this.updateFileData(uploadedFile.id, {
@@ -283,11 +314,6 @@ export const createProjectActions = {
         this.updateFileStatus(uploadedFile.id, 'complete');
 
         const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
-        logger.debug('[CreateProjectStore] Final uploadedFile parsedData:', {
-          name: updatedFile?.name,
-          parsedDataLength: updatedFile?.parsedData?.length,
-          firstRow: updatedFile?.parsedData?.[0]
-        });
 
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else if (uploadedFile.fileType === FileType.GEOJSON) {
@@ -307,7 +333,7 @@ export const createProjectActions = {
             return;
           }
           if (geoValidation.warnings.length > 0) {
-            geoValidation.warnings.forEach(warning => logger.warn(warning));
+            geoValidation.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
           }
           this.updateFileData(uploadedFile.id, {
             content: content,
@@ -540,10 +566,6 @@ export const createProjectActions = {
     );
     if (file) {
       Object.assign(file, data);
-      logger.debug('[CreateProjectStore] Updated file data:', {
-        id: fileId,
-        parsedDataLength: file.parsedData?.length
-      });
     }
   },
 
@@ -591,7 +613,7 @@ export const createProjectActions = {
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
     if (error) {
-      logger.error('[CreateProject] New project error:', error);
+      logger.error('New project error', LogCategory.PROJECT, error);
     }
   },
 
@@ -671,7 +693,7 @@ export const createProjectActions = {
   setOpenProjectError(error?: string): void {
     createProjectState.openProject.error = error;
     if (error) {
-      logger.error('[CreateProject] Open project error:', error);
+      logger.error('Open project error', LogCategory.PROJECT, error);
     }
   },
 
@@ -695,7 +717,7 @@ export const createProjectActions = {
   setTryExampleError(error?: string): void {
     createProjectState.tryExample.error = error;
     if (error) {
-      logger.error('[CreateProject] Try example error:', error);
+      logger.error('Try example error', LogCategory.PROJECT, error);
     }
   },
 

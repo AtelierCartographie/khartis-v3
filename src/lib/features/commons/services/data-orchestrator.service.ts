@@ -9,6 +9,7 @@ import { projectionActions } from '../../step-toolbar/tools/projections/projecti
 import type { UploadedFile } from '../store/create-project.types';
 import { showError } from '../utils/notification.utils.svelte';
 import { duckDBOrchestrator } from './duckdb-orchestrator.service';
+import { logger, LogCategory } from '../utils/logger';
 
 class DataOrchestratorService {
   private isInitialized = false;
@@ -27,8 +28,8 @@ class DataOrchestratorService {
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
-    console.log('[DataOrchestrator.onFileAdded] Processing file:', file.name);
-    console.log('[DataOrchestrator.onFileAdded] File details:', {
+    logger.info('Processing file', LogCategory.DATA, {
+      name: file.name,
       id: file.id,
       status: file.status,
       fileType: file.fileType,
@@ -38,13 +39,13 @@ class DataOrchestratorService {
 
     try {
       await datasetsStore.addFile(file);
-      console.log('[DataOrchestrator.onFileAdded] File processed via datasetsStore');
+      logger.info('File processed via datasetsStore', LogCategory.DATA);
 
       try {
         const duckDataset = await duckDBOrchestrator.processFile(file);
-        console.log('[DataOrchestrator.onFileAdded] DuckDB also processed:', !!duckDataset);
+        logger.info('DuckDB processing completed', LogCategory.DUCKDB, !!duckDataset);
       } catch (duckError) {
-        console.warn('[DataOrchestrator.onFileAdded] DuckDB processing failed:', duckError);
+        logger.warn('DuckDB processing failed', LogCategory.DUCKDB, duckError);
       }
 
       const dataset = datasetsStore.getDatasetBySourceFile(file.id);

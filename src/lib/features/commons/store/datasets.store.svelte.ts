@@ -5,7 +5,7 @@ import {
 } from '../utils/data-pipeline.utils';
 import type { UploadedFile } from './create-project.types';
 import { projectStore } from './project.store.svelte';
-import { logger } from '../utils/logger.utils';
+import { logger, LogCategory } from '../utils/logger';
 
 interface DatasetsState {
   datasets: ProcessedDataset[];
@@ -54,22 +54,14 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-      logger.debug('[DatasetsStore.processFiles] Original files:', files.length);
-      files.forEach((file, i) => {
-        logger.debug(`[DatasetsStore.processFiles] File ${i}:`, {
-          name: file.name,
-          hasParseData: !!file.parsedData,
-          parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
-        });
-
-        if (file.parsedData && Array.isArray(file.parsedData) && file.parsedData.length > 0) {
-          logger.debug(`[DatasetsStore.processFiles] File ${i} first row:`, file.parsedData[0]);
-        }
+      logger.info('Processing files', LogCategory.DATA, {
+        count: files.length,
+        files: files.map(f => ({ name: f.name, hasData: !!f.parsedData }))
       });
 
       const filesCopy = files.map(file => {
         if (!file.parsedData) {
-          logger.warn(`[DatasetsStore.processFiles] File ${file.name} has no parsedData`);
+          logger.warn(`File ${file.name} has no parsedData`, LogCategory.DATA);
         }
 
         const cleanFile = {
@@ -92,10 +84,6 @@ class DatasetsStore {
         return cleanFile;
       });
 
-      logger.debug('[DatasetsStore.processFiles] Files copy:', filesCopy.length);
-      filesCopy.forEach((file, i) => {
-        logger.debug(`[DatasetsStore.processFiles] File copy ${i} parsedData:`, file.parsedData?.length);
-      });
 
       const newDatasets = await createDataPipeline(filesCopy);
 
@@ -118,11 +106,6 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-      logger.debug('[DatasetsStore.addFile] Original file:', {
-        name: file.name,
-        hasParseData: !!file.parsedData,
-        parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
-      });
 
       const fileCopy = {
         id: file.id,
@@ -141,7 +124,6 @@ class DatasetsStore {
         sourceType: file.sourceType
       };
 
-      logger.debug('[DatasetsStore.addFile] File copy parsedData:', fileCopy.parsedData?.length);
 
       const dataset = await processUploadedFile(fileCopy);
 

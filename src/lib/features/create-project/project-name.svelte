@@ -9,6 +9,7 @@
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { Button, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
@@ -52,26 +53,34 @@
     hasTriedSubmit = true;
 
     if (!hasValidName) {
+      logger.warn('Project creation attempted without name', LogCategory.PROJECT);
       return;
     }
 
     if (!hasValidFiles) {
+      logger.warn('Project creation attempted without valid files', LogCategory.PROJECT);
       showError('No files', 'Please add at least one valid file');
       return;
     }
 
     isCreating = true;
+    logger.info('Creating new project', LogCategory.PROJECT, {
+      name: projectName.trim(),
+      filesCount: validFiles.length
+    });
 
     try {
       const safeName = sanitizeProjectName(projectName.trim());
       await projectStore.createProject(safeName, validFiles);
       await projectsStore.refresh();
 
+      logger.success('Project created successfully', LogCategory.PROJECT, { name: safeName });
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
       goto('/');
     } catch (error) {
+      logger.error('Failed to create project', LogCategory.PROJECT, error);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to create project';
       showError('Failed to create project', errorMessage);

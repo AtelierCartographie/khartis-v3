@@ -3,6 +3,7 @@ import { tableFromIPC, type Table } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
+import { logger, LogCategory } from '../../utils/logger';
 
 const DUCK_CONST = {
 	DEFAULT: {
@@ -256,7 +257,7 @@ class DuckDB {
 				format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
 			});
 		} catch (error) {
-			console.error('Failed to initialize DuckDB:', error);
+			logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
 			throw error;
 		}
 	}
@@ -385,7 +386,7 @@ class DuckDB {
 			this.loaded_files.set(tablename, filename);
 			return tablename;
 		} catch (error) {
-			console.error('Failed to read tabular data:', error);
+			logger.error('Failed to read tabular data', LogCategory.DUCKDB, error);
 			throw error;
 		}
 	}
@@ -417,10 +418,10 @@ class DuckDB {
 			);
 			await this.add_row_id(tablename);
 			this.loaded_files.set(tablename, geofile.name);
-			console.log('Table created:', tablename);
+			logger.info('Table created', LogCategory.DUCKDB, { tablename });
 			return tablename;
 		} catch (error) {
-			console.error('Failed to read geofile:', error);
+			logger.error('Failed to read geofile', LogCategory.DUCKDB, error);
 			throw error;
 		}
 	}
@@ -460,7 +461,7 @@ class DuckDB {
 			this.loaded_files.set(tablename, filename);
 			return tablename;
 		} catch (error) {
-			console.error('Failed to read file url:', error);
+			logger.error('Failed to read file url', LogCategory.DUCKDB, error);
 			throw error;
 		}
 	}
@@ -614,7 +615,7 @@ class DuckDB {
 			const result = await this.query(query);
 			return result as Table;
 		} catch (error) {
-			console.error('Failed to apply filters:', error);
+			logger.error('Failed to apply filters', LogCategory.DUCKDB, error);
 			throw error;
 		}
 	}

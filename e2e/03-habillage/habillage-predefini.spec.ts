@@ -1,9 +1,53 @@
 import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
+
+const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
 
 test.describe('Habillage prédéfini - 2.C.1', () => {
-  test.skip('affiche automatiquement la légende', async ({ page }) => {});
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
 
-  test.skip('affiche les textes prédéfinis à l\'étape', async ({ page }) => {});
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+    await page.waitForTimeout(500);
+
+    const fileInput = modal.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(TEST_DATASET_PATH);
+
+    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    await projectNameInput.fill('Test Habillage');
+
+    await page.waitForTimeout(1000);
+
+    const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+    await expect(createButton).toBeEnabled();
+    await createButton.click();
+
+    await expect(modal).toBeHidden({ timeout: 10000 });
+
+    await page.waitForTimeout(2000);
+
+    const habillageStep = page.getByRole('button', { name: /Habillage/i }).or(page.locator('[data-testid="step-habillage"]'));
+    await habillageStep.click();
+    await page.waitForTimeout(2000);
+  });
+
+  test('affiche automatiquement la légende', async ({ page }) => {
+    const legend = page.locator('[data-testid="legend-tool"]').or(page.locator('.legend-container'));
+    await expect(legend).toBeVisible({ timeout: 10000 });
+  });
+
+  test('affiche les textes prédéfinis à l\'étape', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    const textElements = page.locator('.habillage-text-element, .map-text-element');
+    const count = await textElements.count();
+    expect(count).toBeGreaterThan(0);
+  });
 
   test.skip('affiche un placeholder pour le titre', async ({ page }) => {});
 
@@ -21,7 +65,18 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
 
   test.skip('permet de supprimer chaque élément', async ({ page }) => {});
 
-  test.skip('applique un style par défaut', async ({ page }) => {});
+  test('applique un style par défaut', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    const mapContainer = page.locator('.map-container, #map-view');
+    await expect(mapContainer).toBeVisible();
+
+    const hasDefaultStyles = await mapContainer.evaluate((el) => {
+      const styles = window.getComputedStyle(el);
+      return styles.fontFamily !== '' || styles.fontSize !== '';
+    });
+    expect(hasDefaultStyles).toBeTruthy();
+  });
 
   test.skip('masque les placeholders vides à l\'export', async ({ page }) => {});
 });

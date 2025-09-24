@@ -12,6 +12,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import OpenProject from './open-project.svelte';
   import ProjectTab from './project-tab.svelte';
   import TryWithExample from './try-with-example.svelte';
@@ -28,6 +29,8 @@
   }
 
   function selectTile(index: number) {
+    const tabNames = ['', 'new project', 'open project', 'try example'];
+    logger.info('Selecting tab', LogCategory.UI, { tab: tabNames[index] || 'unknown', index });
     createProjectActions.selectTab(index as 1 | 2 | 3);
   }
 </script>
