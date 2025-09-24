@@ -20,7 +20,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'world-population',
     title: 'Population mondiale 2023',
     subtitle: 'Carte choroplèthe de la population par pays',
-    description: 'Visualisation de la répartition de la population mondiale avec une palette séquentielle',
+    description:
+      'Visualisation de la répartition de la population mondiale avec une palette séquentielle',
     category: 'polygons',
     thumbnail: '/examples/world-population-thumb.png',
     dataUrl: '/examples/data/world-population-2023.csv',
@@ -41,7 +42,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'european-cities',
     title: 'Villes européennes',
     subtitle: 'Symboles proportionnels des principales villes',
-    description: 'Représentation des villes européennes avec des cercles proportionnels à la population',
+    description:
+      'Représentation des villes européennes avec des cercles proportionnels à la population',
     category: 'symbols',
     thumbnail: '/examples/european-cities-thumb.png',
     dataUrl: '/examples/data/european-cities.csv',
@@ -63,7 +65,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'transport-network',
     title: 'Réseau de transport',
     subtitle: 'Flux et connexions entre villes',
-    description: 'Visualisation des flux de transport avec épaisseur variable selon le trafic',
+    description:
+      'Visualisation des flux de transport avec épaisseur variable selon le trafic',
     category: 'lines',
     thumbnail: '/examples/transport-network-thumb.png',
     dataUrl: '/examples/data/transport-flows.geojson',
@@ -83,7 +86,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'gdp-evolution',
     title: 'Évolution du PIB',
     subtitle: 'Carte bivariée PIB et croissance',
-    description: 'Analyse combinée du PIB par habitant et du taux de croissance',
+    description:
+      'Analyse combinée du PIB par habitant et du taux de croissance',
     category: 'hybrids',
     thumbnail: '/examples/gdp-evolution-thumb.png',
     dataUrl: '/examples/data/gdp-growth-2023.csv',
@@ -103,7 +107,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'france-departments',
     title: 'Départements français',
     subtitle: 'Données socio-économiques',
-    description: 'Carte thématique des départements français avec données INSEE',
+    description:
+      'Carte thématique des départements français avec données INSEE',
     category: 'polygons',
     thumbnail: '/examples/france-departments-thumb.png',
     dataUrl: '/examples/data/france-departments-insee.csv',
@@ -140,7 +145,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'election-results',
     title: 'Résultats électoraux',
     subtitle: 'Carte par circonscription',
-    description: 'Visualisation des résultats électoraux avec symboles et couleurs',
+    description:
+      'Visualisation des résultats électoraux avec symboles et couleurs',
     category: 'hybrids',
     thumbnail: '/examples/election-results-thumb.png',
     dataUrl: '/examples/data/election-results-2024.csv',
@@ -166,7 +172,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'covid-spread',
     title: 'Propagation COVID-19',
     subtitle: 'Évolution temporelle 2020-2023',
-    description: 'Animation de la propagation du virus avec données temporelles',
+    description:
+      'Animation de la propagation du virus avec données temporelles',
     category: 'symbols',
     thumbnail: '/examples/covid-spread-thumb.png',
     dataUrl: '/examples/data/covid-timeline.csv',
@@ -186,7 +193,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     id: 'urban-density',
     title: 'Densité urbaine',
     subtitle: 'Métropoles mondiales',
-    description: 'Analyse de la densité de population dans les grandes métropoles',
+    description:
+      'Analyse de la densité de population dans les grandes métropoles',
     category: 'symbols',
     thumbnail: '/examples/urban-density-thumb.png',
     dataUrl: '/examples/data/urban-density.csv',
@@ -226,11 +234,11 @@ export function getExamplesByCategory(category: string): ExampleProject[] {
   if (category === 'all') {
     return EXAMPLE_PROJECTS;
   }
-  return EXAMPLE_PROJECTS.filter(example => example.category === category);
+  return EXAMPLE_PROJECTS.filter((example) => example.category === category);
 }
 
 export function getExampleById(id: string): ExampleProject | undefined {
-  return EXAMPLE_PROJECTS.find(example => example.id === id);
+  return EXAMPLE_PROJECTS.find((example) => example.id === id);
 }
 
 export async function loadExampleData(example: ExampleProject): Promise<any> {

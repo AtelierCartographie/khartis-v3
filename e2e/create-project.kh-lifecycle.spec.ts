@@ -10,7 +10,8 @@ const CURRENT_PROJECT_STORAGE_KEY = 'khartis_current_project';
 const DATASET_FILENAME = 'nuts2_data.csv';
 const TEST_DATASET_PATH = join(
   process.cwd(),
-  'datasets-test',
+  'e2e',
+  'mocks',
   'csv',
   DATASET_FILENAME
 );
@@ -44,15 +45,21 @@ test.describe('Create project kh', () => {
     // Guard that the modal is visible before interacting with it
     await expect(modal).toBeVisible();
 
+    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+    await page.waitForTimeout(500);
+
     const fileInput = modal.locator('input[type="file"]').first();
     // Upload the reference CSV so the create button becomes available
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
     // Verify the uploaded filename appears in the modal summary
-    await expect(modal.getByText(DATASET_FILENAME)).toBeVisible();
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(DATASET_FILENAME);
 
-    // Fill in the project name using the placeholder-controlled input
-    await modal.getByPlaceholder(PROJECT_NAME_PLACEHOLDER).fill(projectName);
+    // Fill in the project name using the data-testid input
+    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    await projectNameInput.fill(projectName);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
@@ -107,40 +114,4 @@ test.describe('Create project kh', () => {
     // Assert the newly created project is listed among the saved entries
     await expect(savedProjectHeading).toBeVisible();
   });
-
-  test.skip('auto saves a new kh project after uploading data and displays the dirty state badge', async ({
-    page
-  }) => {});
-
-  test.skip('restores the last opened kh project when reloading the app', async ({
-    page
-  }) => {});
-
-  test.skip('exports the current kh project archive with manifest metadata', async ({
-    page
-  }) => {});
-
-  test.skip('imports a kh archive and hydrates the project dashboard entries', async ({
-    page
-  }) => {});
-
-  test.skip('duplicates an existing kh project with a localized suffix and unique identifier', async ({
-    page
-  }) => {});
-
-  test.skip('shows a storage warning when kh project size crosses the threshold', async ({
-    page
-  }) => {});
-
-  test.skip('surfaces an error notification when kh export hits storage quota limits', async ({
-    page
-  }) => {});
-
-  test.skip('removes a deleted kh project from saved projects and clears current selection', async ({
-    page
-  }) => {});
-
-  test.skip('preserves kh project history entries for undo redo after reload', async ({
-    page
-  }) => {});
 });

@@ -114,6 +114,7 @@
 
 <section
   id="khartis-create-new-project"
+  data-testid="create-new-project-section"
   class={clsx('grid grid-cols-1 gap-3', isModal && 'is-modal-create-project')}
 >
   <header class="mb-4">
@@ -130,6 +131,7 @@
   <div class="grid grid-cols-2 gap-5">
     <div>
       <FileUploaderDropContainer
+        data-testid="file-upload-container"
         labelText={m.create_project_drag_drop_file()}
         multiple
         accept={[
