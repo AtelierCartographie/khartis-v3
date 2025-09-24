@@ -38,7 +38,6 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
-  // Method to directly add a processed dataset (for DuckDB integration)
   addProcessedDataset(dataset: ProcessedDataset): void {
     this._state.datasets.push(dataset);
     if (!this._state.selectedDatasetId) {
@@ -55,7 +54,6 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-      // Try to access parsedData directly
       logger.debug('[DatasetsStore.processFiles] Original files:', files.length);
       files.forEach((file, i) => {
         logger.debug(`[DatasetsStore.processFiles] File ${i}:`, {
@@ -64,20 +62,16 @@ class DatasetsStore {
           parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
         });
 
-        // Try to access first element
         if (file.parsedData && Array.isArray(file.parsedData) && file.parsedData.length > 0) {
           logger.debug(`[DatasetsStore.processFiles] File ${i} first row:`, file.parsedData[0]);
         }
       });
 
-      // Create clean copies of files to avoid proxy issues
       const filesCopy = files.map(file => {
-        // Check if parsedData exists and has data
         if (!file.parsedData) {
           logger.warn(`[DatasetsStore.processFiles] File ${file.name} has no parsedData`);
         }
 
-        // Create a clean copy without proxy references
         const cleanFile = {
           id: file.id,
           name: file.name,
@@ -130,7 +124,6 @@ class DatasetsStore {
         parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
       });
 
-      // Create a clean copy without proxy references
       const fileCopy = {
         id: file.id,
         name: file.name,

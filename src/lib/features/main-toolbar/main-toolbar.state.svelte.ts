@@ -21,7 +21,6 @@ const DEFAULT_STATE: MainToolbarState = {
 
 export const mainToolbarState = $state<MainToolbarState>({ ...DEFAULT_STATE });
 
-// Function to get derived state (cannot export $derived directly)
 export function getDerivedToolbarState() {
   const hasProject = !!projectStore.currentProject;
   const hasFiles = createProjectState.newProject.uploadedFiles.some(
@@ -55,7 +54,6 @@ export const mainToolbarActions = {
   },
 
   navigateToVisualization(): void {
-    // Save project before navigating if dirty
     if (projectStore.isDirty) {
       projectStore.saveCurrentProject().then(() => {
 
@@ -98,7 +96,6 @@ export const mainToolbarActions = {
       missingSteps.push('Import data files');
     }
 
-    // Check for data validation
     const files = projectStore.currentProject?.data?.sourceFiles || [];
     const hasErrors = files.some((f) => f.status === 'error');
     if (hasErrors) {

@@ -4,7 +4,6 @@ import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
 
-// --- Constants used by Duck class ---
 const DUCK_CONST = {
 	DEFAULT: {
 		DECIMAL_SEPARATOR: '.',
@@ -34,7 +33,6 @@ const DUCK_CONST = {
 	}
 };
 
-// --- HELPER FUNCTIONS ---
 type QueryFormat = (typeof DUCK_CONST.QUERY_FORMAT)[keyof typeof DUCK_CONST.QUERY_FORMAT];
 type FileType = (typeof DUCK_CONST.TYPE)[keyof typeof DUCK_CONST.TYPE];
 
@@ -115,11 +113,6 @@ interface RegisterFilesOptions {
 	shapefile?: boolean;
 }
 
-/**
- * Normalizes a string by removing accents, special characters, etc.
- * @param {string} str The string to normalize.
- * @returns {string} The normalized string.
- */
 function normalize_name(str: string): string {
 	let normalized = str
 		.normalize('NFD')
@@ -139,20 +132,10 @@ function normalize_name(str: string): string {
 	return normalized;
 }
 
-/**
- * Extract the filename from an url.
- * @param {string} url The url.
- * @returns {string} filename The filename.
- */
 function extract_filename(url: string): string {
 	return url.split('/').pop() || '';
 }
 
-/**
- * Get the type of file.
- * @param {string} filename The filename.
- * @returns {string} The type of file.
- */
 function get_file_type(filename: string): FileType {
 	if (DUCK_CONST.REGEX.TABULAR.test(filename)) return DUCK_CONST.TYPE.TABULAR;
 	if (DUCK_CONST.REGEX.GEO.test(filename)) return DUCK_CONST.TYPE.GEOFILE;
@@ -160,12 +143,6 @@ function get_file_type(filename: string): FileType {
 	return DUCK_CONST.TYPE.TABULAR;
 }
 
-/**
- * Generates a unique table name from a filename.
- * @param {string} filename The original filename.
- * @param {Map<string, string>} existingNames A Map where keys are existing table names.
- * @returns {string} A unique table name.
- */
 function generate_unique_table_name(filename: string, existingNames: Map<string, string>): string {
 	const split_filename = (name: string): string => {
 		const index = name.indexOf('.');
@@ -182,42 +159,18 @@ function generate_unique_table_name(filename: string, existingNames: Map<string,
 	return tablename;
 }
 
-/**
- * Adds a unique identifier to a file object.
- * The ID is a combination of the file's last modified timestamp and a normalized version of its name.
- * This ensures each file has a distinct identifier, even if multiple files share the same name.
- *
- * @param {Object} file - The file object to which the ID will be added.
- * @param {number} file.lastModified - The last modified time of the file.
- * @param {string} file.name - The name of the file.
- */
 function add_file_id(file: FileWithId): void {
 	file.id = file.lastModified + '-' + normalize_name(file.name);
 }
 
-/**
- * Check if the value is an integer.
- * @param {number|string} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid integer, otherwise false.
- */
 const isValidInteger = (value: number | string): boolean =>
 	(typeof value === 'number' && Number.isInteger(value)) ||
 	(typeof value === 'string' && DUCK_CONST.REGEX.COLUMN_VALIDATION_INTEGER.test(value));
 
-/**
- * Check if the value is a float.
- * @param {number|string} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid float, otherwise false.
- */
 const isValidFloat = (value: number | string): boolean =>
 	typeof value === 'number' ||
 	(typeof value === 'string' && DUCK_CONST.REGEX.COLUMN_VALIDATION_DOUBLE.test(value));
 
-/**
- * Check if the value is a boolean.
- * @param {number|string|boolean} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid boolean, otherwise false.
- */
 const isValidBoolean = (value: number | string | boolean): boolean =>
 	typeof value === 'boolean' ||
 	typeof value === 'number' ||
@@ -225,12 +178,6 @@ const isValidBoolean = (value: number | string | boolean): boolean =>
 		(DUCK_CONST.REGEX.COLUMN_VALIDATION_BOOLEAN_STRING.test(value) ||
 			DUCK_CONST.REGEX.COLUMN_VALIDATION_BOOLEAN_NUMBER.test(value)));
 
-/**
- * Validates and potentially casts a value based on a specified column type.
- * @param {*} new_value The value to validate.
- * @param {string} column_type The type of the column.
- * @returns {{isValid: boolean, value: *}} An object with isValid and the potentially cast value.
- */
 function validate_and_cast_value(new_value: unknown, column_type: string): ValidationResult {
 	let isValid = false;
 	let value: DuckDBValue = new_value as DuckDBValue;
@@ -275,55 +222,6 @@ function validate_and_cast_value(new_value: unknown, column_type: string): Valid
 	return { isValid, value };
 }
 
-// --- DuckDB Class ---
-/**
- * DuckDB class provides an interface to interact with DuckDB, a high-performance analytical database.
- * It supports operations such as initializing the database, reading tabular data, registering files,
- * generating unique table names, and performing spatial operations.
- *
- * @class DuckDB
- * @property {Object} db - The DuckDB instance.
- * @property {Object} connection - The connection to the DuckDB instance.
- * @property {Map} loaded_files - A map storing table names and their corresponding filenames.
- * @property {Set} registered_files - A set storing registered files.
- * @property {Map} table_metadata - A map storing metadata for each table (analysis, filters, join associations).
- *
- *
- * @method constructor() - Initializes a new instance of the DuckDB class.
- * @method init() - Initializes the DuckDB instance and connects to the database.
- * @method close() - Closes the DuckDB connection.
- * @method reset() - Resets the DuckDB instance but keeps the database open and the session.
- * @method #add_row_id(table) - Adds a row ID column to a specified table.
- * @method query(query, options) - Executes a SQL query and returns the result in the specified format.
- * @method register_files(files, options) - Registers files with the DuckDB instance.
- * @method get_loaded_files() - Retrieves the list of loaded files.
- * @method #get_table_metadata() - Retrieves the metadata for a given table.
- * @method read_tabular(input, options) - Reads tabular data from a given input and creates a table in DuckDB.
- * @method read_geofile(geofile, options) - Reads a geofile and optionally retrieves its metadata or creates a table from it.
- * @method read_link(url, options) - Reads a file from a given URL and creates a table in the database.
- * @method describe_table(table) - Describes the structure of a specified table by querying its columns.
- * @method get_row_count(table) - Retrieves the row count of a specified table.
- * @method get_data(table, options) - Retrieves data from the specified table as an arrow table.
- * @method sort_table(table, column, order) - Sorts a table by a specified column in the given order.
- * @method rename_column(table, old_name, new_name) - Renames a column in a specified table.
- * @method change_column_type(table, column, new_type) - Changes the data type of a specified column in a given table.
- * @method change_column_case(table, column, caseType) - Changes the case of all values in a specified column of a table.
- * @method trim_column(table, column) - Trims whitespace from the specified column in the given table.
- * @method drop_column(table, column) - Drops a column from a specified table in the database.
- * @method drop_rows(table, rows_id) - Drops rows from a specified table where the column value matches the specified value.
- * @method update_cell(table, id_column, id_value, column, new_value) - Update a cell value in the table.
- * @method add_filter(table, key_index, filter) - Adds a filter to the specified table.
- * @method remove_filter(table, key_index) - Removes a filter from the specified table.
- * @method apply_filters(table) - Applies the filters and executes the query for a specific table.
- * @method latlon_to_point(table, columns) - Converts latitude and longitude columns to a geometric point and adds it to the specified table.
- * @method copy_to_geoparquet_as_buffer(table) - Copies a table to a GeoParquet file with ZSTD compression and returns it as a buffer.
- * @method export_table(table, format) - Exports a table to a specified format (CSV, Parquet, or GeoParquet).
- * @method calculate_class_breaks(table, column, options) - Retrieves break points for a specified column in a table using various methods.
- * @method add_class(table, column, breaks) - Adds a classification column to the specified table based on the provided breaks.
- * @method analyse(table) - Analyzes the specified table and returns various statistical summaries and histograms.
- * @method join_by_id(table, table_id, options) - Joins a table to one or multiple basemaps based on the similarity of an ID column.
- * @method apply_join_association(table, basemap) - Applies a join association to a table based on a previously performed join operation.
- */
 class DuckDB {
 	public db: duckdb.AsyncDuckDB | null = null;
 	public connection: duckdb.AsyncDuckDBConnection | null = null;
@@ -334,16 +232,13 @@ class DuckDB {
 
 	constructor() {}
 
-	// New DuckDb instance + spatial extension
 	async init(): Promise<void> {
 		try {
-			// Select a bundle based on browser checks
 			const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
 			const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
 			const worker_url = URL.createObjectURL(
 				new Blob([`importScripts("${bundle.mainWorker}");`], { type: 'text/javascript' })
 			);
-			// Instantiate the asynchronous version of DuckDB-wasm
 			const worker = await duckdb.createWorker(worker_url);
 			const logger = new duckdb.ConsoleLogger();
 			this.db = new duckdb.AsyncDuckDB(logger, worker);
@@ -357,7 +252,6 @@ class DuckDB {
 			await this.query(`INSTALL spatial; LOAD spatial;`, {
 				format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
 			});
-			// load all macro for discretization, data analysis and join operations
 			await this.query(breaks + analyse + join_macros, {
 				format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
 			});
@@ -367,16 +261,10 @@ class DuckDB {
 		}
 	}
 
-	/**
-	 * Close DuckDB connection.
-	 */
 	async close(): Promise<void> {
 		await this.connection?.close();
 	}
 
-	/**
-	 * Reset the DuckDB instance but keep the database open and the session.
-	 */
 	async reset(): Promise<void> {
 		this.loaded_files.clear();
 		this.registered_files.clear();
@@ -387,11 +275,6 @@ class DuckDB {
 		await this.db?.reset;
 	}
 
-	/**
-	 * Adds a row ID column to a specified table.
-	 *
-	 * @param {string} table - The name of the table to add the row ID column to.
-	 */
 	private async add_row_id(table: string): Promise<void> {
 		await this.query(
 			`CREATE OR REPLACE SEQUENCE id_${table} START 1;
@@ -400,53 +283,26 @@ class DuckDB {
 		);
 	}
 
-	/**
-	 * Executes a SQL query and returns the result in the specified format.
-	 * The default format is an Arrow table.
-	 * Use @uwdata/flechette under the hood to convert Arrow buffer (IPC) to Arrow table.
-	 *
-	 * @param {string} query - The SQL query to execute.
-	 * @param {Object} [options={}] - Optional settings for the query execution.
-	 * @param {string} [options.format='arrow-table'] - The format of the result. Can be 'arrow-table', 'arrow-ipc', or 'array'.
-	 * @param {boolean} [options.useProxy=true] - Whether to use Proxy object for performance optimization.
-	 * @returns {Promise<*>} - The result of the query in the specified format.
-	 */
 	async query(query: string, options: QueryOptions = {}): Promise<unknown> {
 		let { format = DUCK_CONST.QUERY_FORMAT.ARROW_TABLE, useProxy = true } = options;
 
-		// Return an Arrow table with Flechette
-		// 1. return an arrow IPC (buffer)
 		const buffer = await this.connection!.useUnsafe(async (bindings: unknown, conn: unknown) => {
 			return await (bindings as any).runQuery(conn, query);
 		});
 		if (format === DUCK_CONST.QUERY_FORMAT.ARROW_IPC) return buffer;
 
-		// 2. Return an Arrow table with Flechette
 		const table = tableFromIPC(buffer, {
 			useBigInt: true,
 			useDate: true,
 			useDecimalInt: false,
 			useMap: true,
-			useProxy // Le véritable gain de performance se fait avec l'utilisation de Proxy
+			useProxy 
 		});
 		if (format === DUCK_CONST.QUERY_FORMAT.ARROW_TABLE) return table;
 
-		// 3. Return an array with proxy or a pure js array of objects
 		if (format === DUCK_CONST.QUERY_FORMAT.ARRAY) return table.toArray();
 	}
 
-	/**
-	 * Registers a list of files with the DuckDB database.
-	 *
-	 * This method iterates over the provided files, assigns an ID to each file,
-	 * and registers the file with the DuckDB database if it hasn't been registered already.
-	 *
-	 * @async
-	 * @param {File[]} files - An array of File objects to be registered.
-	 * @param {Object} [options={}] - Optional parameters.
-	 * @param {boolean} [options.shapefile=false] - If true, all sibling files will have the same id, necessary for the spatial extension.
-	 * @returns {Promise<void>} - A promise that resolves when all files are registered.
-	 */
 	async register_files(files: File[], options: RegisterFilesOptions = {}): Promise<void> {
 		let { shapefile = false } = options;
 		let shape_date: number | undefined;
@@ -472,14 +328,6 @@ class DuckDB {
 		}
 	}
 
-	/**
-	 * Retrieves the list of loaded files.
-	 *
-	 * @returns {Array<{tablename: string, filename: string}>} An array of objects, each containing:
-	 *   - {string} tablename - The name of the table in the database.
-	 *   - {string} filename - The original filename associated with the table.
-	 *
-	 */
 	get_loaded_files(): Array<{ tablename: string; filename: string }> {
 		if (this.loaded_files.size === 0) return [];
 		return Array.from(this.loaded_files, ([tablename, filename]) => ({
@@ -488,18 +336,6 @@ class DuckDB {
 		}));
 	}
 
-	/**
-	 * Retrieves the metadata for a given table.
-	 *
-	 * @param {string} table - The name of the table.
-	 * @returns {Object} - The metadata object for the table, containing:
-	 *   - {Object|null} analysis - The analysis results for the table, or null if not analyzed.
-	 *   - {Object|null} join - The join association information for the table, or null if no join has been performed.
-	 *     - {string} id - The name of the ID column used for the join.
-	 *     - {string} join_results_name - The name of the table containing the join results.
-	 *     - {string|null} basemap_join_ref - The name of the basemap join reference table, or null if not applicable.
-	 *   - {Map<number, string>} filters - A map of filters applied to the table, where the key is the filter index and the value is the filter condition.
-	 */
 	private get_table_metadata(table: string): TableMetadata {
 		if (!this.table_metadata.has(table))
 			this.table_metadata.set(table, {
@@ -510,34 +346,20 @@ class DuckDB {
 		return this.table_metadata.get(table)!;
 	}
 
-	/**
-	 * Reads tabular data from a given input and creates a table in DuckDB.
-	 *
-	 * @async
-	 * @param {string|File} input - The input data, either a string or a File object.
-	 * @param {Object} [options] - Optional parameters.
-	 * @param {string} [options.tablename] - The name of the table to create. If not provided, a unique name will be generated.
-	 * @param {string} [options.decimal_separator=','] - The decimal separator used in the CSV data.
-	 * @param {string} [options.format='csv'] - The format of the input data. Can be 'csv' or 'parquet'.
-	 * @returns {Promise<string>} - The name of the created table.
-	 * @throws {Error} - Throws an error if the input type is invalid or if the table creation fails.
-	 */
 	async read_tabular(input: string | File, options: ReadTabularOptions = {}): Promise<string> {
 		let {
 			tablename,
 			decimal_separator = DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR,
 			format = DUCK_CONST.DEFAULT.FORMAT_TABULAR
 		} = options;
-		let filename: string; // original filename
-		let fileid: string; // filename use for registering the file in DuckDB
+		let filename: string; 
+		let fileid: string; 
 		try {
-			// input = COPY-PASTE
 			if (typeof input === 'string') {
 				if (!tablename) tablename = generate_unique_table_name('data_paste', this.loaded_files);
 				filename = tablename;
 				fileid = tablename;
 				await this.db!.registerFileText(filename, input);
-				// input = FILE
 			} else if (input instanceof File) {
 				filename = input.name;
 				if (!tablename) tablename = generate_unique_table_name(filename, this.loaded_files);
@@ -546,7 +368,6 @@ class DuckDB {
 			} else {
 				throw new Error('Invalid input type. Expected a string or a File.');
 			}
-			// Read the tabular data and create a table
 			if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
 				await this.query(
 					`CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
@@ -899,28 +720,12 @@ class DuckDB {
 		return class_column_name;
 	}
 
-	/**
-	 * Analyzes the specified table and returns an array of indicators with summaries and histograms.
-	 *
-	 * @param {string} table - The name of the table to analyze.
-	 * @param {Object} [options={}] - Optional parameters for the analysis.
-	 * @param {boolean} [options.force=false] - If true, forces a re-analysis of the table, bypassing the cache.
-	 * @returns {Promise<Array<Object>>} A promise that resolves to an array of indicator objects, each containing:
-	 *   - {string} name - The name of the column.
-	 *   - {string} type_simple - The simplified type of the column (e.g., 'numeric', 'date', 'string').
-	 *   - {Object} [summary_general] - General summary statistics for the column.
-	 *   - {Object} [summary_numeric] - Numeric summary statistics for the column (if applicable).
-	 *   - {Object} [summary_date] - Date summary statistics for the column (if applicable).
-	 *   - {Object} [histogram] - Histogram data for the column. To later generate summary plots.
-	 */
 	async analyse(table: string, options: AnalyseOptions = {}): Promise<AnalysisResults> {
 		const { force = false } = options;
 		const table_metadata = this.get_table_metadata(table);
 		const { analysis } = table_metadata;
 
-		// Check if the table has already been analyzed
-		if (!force && analysis) return analysis; // Return cached results
-		// force analysis => remove previous cached results
+		if (!force && analysis) return analysis; 
 		if (force && analysis) delete table_metadata.analysis;
 
 		const describe_full = (await this.query(`FROM describe_full('${table}')`, {
@@ -958,7 +763,6 @@ class DuckDB {
 					})) as ArrowTableLike;
 					histogram = await this.query(`FROM histogram_categorical(${table}, "${d.name}")`);
 					break;
-				//'geometry' and 'other' types are not handled
 			}
 			return {
 				...d,
@@ -971,52 +775,12 @@ class DuckDB {
 
 		const analysis_result = await Promise.all(indicators);
 
-		// Store the analysis results in the tableMetada map
 		table_metadata.analysis = analysis_result;
 
 		return analysis_result;
 	}
 
-	/**
-	 * JOINTURES
-	 * - ✅ join_by_id
-	 *   - ATTENTION : si basemap importé, besoin de l'analyser pour des stats à la colonne et un typage sémio.
-	 *    Par défaut conserver les colonnes qui ont un typage sémio égale à 'geoid' et trié par "score" et "share_uniques".
-	 * - join_by_bbox (test vers tous les fonds de carte de Khartis via Bbox)
-	 * - ✅ apply_join_association (joint l'id du fond de carte sélectionné au jeu de données + la typologie de match)
-	 *   /!\ L'association manuelle par l'utilisateur est gérée par la méthode update_cell
-	 */
 
-	/**
-	 * Joins a table to one or multiple basemaps based on the similarity of an ID column.
-	 *
-	 * This method provides a unified interface for joining a table to either multiple basemaps
-	 * (using `basemaps_table`) or a single basemap (using `basemap_table`, `basemap_id`, and
-	 * optionally `basemap_others_id`). It uses the `apply_join_across_basemaps` macro to perform
-	 * the join and then generates a synthesis of the join results using the `join_synthesis` macro.
-	 *
-	 * @async
-	 * @param {string} table - The name of the table to join.
-	 * @param {string} table_id - The name of the ID column in the table.
-	 * @param {Object} options - An object containing the join options.
-	 * @param {string} [options.basemaps_table] - The name of the table containing multiple basemaps.
-	 * @param {string} [options.basemap_table] - The name of a single basemap table provided by the user.
-	 * @param {string} [options.basemap_id] - The name of the main ID column in the single basemap table.
-	 * @param {string} [options.basemap_others_id] - A comma-separated string of other ID column names in the single basemap table. Optional.
-	 * @returns {Promise<Object>} - A promise that resolves to the synthesis of the join results.
-	 *   - basemap: The name of the basemap.
-	 *   - share_basemap: The share of the basemap in the join results.
-	 *   - share_candidate: The share of the candidate in the join results.
-	 * @throws {Error} - Throws an error if neither `basemaps_table` nor `basemap_table` is provided,
-	 *   or if `basemap_id` is missing when `basemap_table` is used.
-	 * @description This method simplifies the process of joining a table to basemaps by handling
-	 *   both multiple and single basemap scenarios. It prepares the basemap table if necessary
-	 *   and then performs the join, returning a synthesis of the results.
-	 * @example
-	 * // Example usage:
-	 * await duckdb.join_by_id('my_data_table', 'my_id_column', { basemaps_table: 'khartis_basemaps' });
-	 * await duckdb.join_by_id('my_data_table', 'my_id_column', { basemap_table: 'user_basemap', basemap_id: 'basemap_id', basemap_others_id: 'list_value(['other_id1', 'other_id2'])' });
-	 */
 	async join_by_id(
 		table: string,
 		table_id: string,
@@ -1034,24 +798,19 @@ class DuckDB {
 		let basemap_join_ref_name: string | null = null;
 		let join_across_query: string;
 
-		// Case 1: Joining to multiple basemaps (using basemaps_table)
 		if (basemaps_table) {
 			join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
 			FROM apply_join_across_basemaps(${table}, ${table_id}, ${basemaps_table})`;
 
-			// Case 2: Joining to a single basemap (using basemap_table, basemap_id, basemap_others_id)
 		} else if (basemap_table) {
 			basemap_join_ref_name = `${basemap_table}_join_ref`;
-			// prepare the basemap table as a join reference table
 			if (basemap_others_id) {
-				// With alternative ID columns
 				await this.query(
 					`CREATE OR REPLACE TABLE ${basemap_join_ref_name} AS
 					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id}, ${basemap_others_id});`,
 					{ format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
 				);
 			} else {
-				// With a single ID column
 				await this.query(
 					`CREATE OR REPLACE TABLE ${basemap_join_ref_name} AS
 					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id})`,
@@ -1065,14 +824,11 @@ class DuckDB {
 			throw new Error('Invalid options configuration');
 		}
 
-		// Apply the join query
 		await this.query(join_across_query, { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC });
-		// Generate the synthesis of the join results
 		const synthesis = await this.query(`FROM join_synthesis(${table_name})`, {
 			format: DUCK_CONST.QUERY_FORMAT.ARRAY
 		});
 
-		// Store association
 		const table_metadata = this.get_table_metadata(table);
 		table_metadata.join = {
 			id: table_id,
@@ -1083,19 +839,6 @@ class DuckDB {
 		return synthesis as AnalysisResults;
 	}
 
-	/**
-	 * Applies a join association to a table based on a previously performed join operation.
-	 *
-	 * This method retrieves the join association information stored during a previous join operation
-	 * (either `join_by_id_to_basemaps` or `join_by_id_to_one_basemap`) and applies the join to the
-	 * specified table. It adds columns from the join table to the original table, including the
-	 * basemap ID and the type of match (exact, partial, etc.).
-	 *
-	 * @async
-	 * @param {string} table - The name of the table to which the join association will be applied.
-	 * @param {string} basemap - The name of the basemap to filter the join results by.
-	 * @throws {Error} - Throws an error if no join association is found for the specified table.
-	 */
 	async apply_join_association(table: string, basemap: string): Promise<void> {
 		const { join } = this.get_table_metadata(table);
 		if (!join) {

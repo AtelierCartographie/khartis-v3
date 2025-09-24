@@ -30,8 +30,6 @@
         closeModal();
       } catch (error) {
         console.error('[AddDataModal] Failed to add files to project:', error);
-        // Don't close modal on error so user can see what happened
-        // The error notification will be shown by the error handling in projectStore
       }
     } else {
       closeModal();

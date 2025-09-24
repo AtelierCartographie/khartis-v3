@@ -2,12 +2,14 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
-  import { facetsState } from './facets.store.svelte';
 
   function handleConfigureVisualization() {}
 
   function handleLearnMore() {
-    window.open('https://docs.khartis.com/facets', '_blank');
+    window.open(
+      'https://cartographie.sciencespo.fr/khartis/help/facets',
+      '_blank'
+    );
   }
 </script>
 

@@ -29,6 +29,13 @@
   "sidenav_new_project": "New project",
   "sidenav_duplicate_project": "Duplicate the project",
   "sidenav_open_project": "Open a project",
+  "duplicate_project_modal_title": "Duplicate a project",
+  "duplicate_project_modal_confirm": "Duplicate",
+  "duplicate_project_modal_cancel": "Cancel",
+  "duplicate_project_modal_no_projects": "No projects available to duplicate",
+  "duplicate_project_modal_select_project": "Select the project to duplicate",
+  "duplicate_project_modal_new_name": "New project name",
+  "duplicate_project_modal_name_placeholder": "Enter the duplicated project name",
   "sidenav_help": "Help",
   "sidenav_documentation": "Documentation",
   "sidenav_report_bug": "Report a bug",
@@ -404,5 +411,6 @@
   "no_data_loaded": "No data loaded. Please import a file from the previous tab.",
   "loading": "Loading...",
   "error_prefix": "Error: ",
-  "no_data_available": "No data available"
+  "no_data_available": "No data available",
+  "project_duplicate_suffix": "(copy)"
 }

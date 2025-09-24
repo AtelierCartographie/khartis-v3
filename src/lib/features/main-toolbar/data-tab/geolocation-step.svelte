@@ -26,7 +26,8 @@
     dataTabState.geolocation.geoReference === 'coordinates' ? 1 : 0
   );
 
-  const GEO_LEARN_MORE_URL = 'https://docs.khartis.org/geocoding';
+  const GEO_LEARN_MORE_URL =
+    'https://cartographie.sciencespo.fr/khartis/help/geocoding';
 
   const tabItems = [
     {

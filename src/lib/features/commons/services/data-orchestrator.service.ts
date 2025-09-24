@@ -14,8 +14,6 @@ class DataOrchestratorService {
   private isInitialized = false;
 
   async initialize(): Promise<void> {
-    // Force re-initialization on each call for now to fix the bug
-    // if (this.isInitialized) return;
 
     await projectStore.waitForInit();
 
@@ -39,17 +37,14 @@ class DataOrchestratorService {
     });
 
     try {
-      // Always use the original processing for now to ensure data is available
       await datasetsStore.addFile(file);
       console.log('[DataOrchestrator.onFileAdded] File processed via datasetsStore');
 
-      // Then try to also process with DuckDB for future use
       try {
         const duckDataset = await duckDBOrchestrator.processFile(file);
         console.log('[DataOrchestrator.onFileAdded] DuckDB also processed:', !!duckDataset);
       } catch (duckError) {
         console.warn('[DataOrchestrator.onFileAdded] DuckDB processing failed:', duckError);
-        // Continue anyway, we have the data from datasetsStore
       }
 
       const dataset = datasetsStore.getDatasetBySourceFile(file.id);

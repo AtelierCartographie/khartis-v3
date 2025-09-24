@@ -19,7 +19,6 @@
     ratio?: string;
   }
 
-  // TODO hook to real data inputs when available
   const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
   let selectedFieldId = $state<number>(0);

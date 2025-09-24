@@ -185,8 +185,6 @@ export const createProjectActions = {
       return;
     }
 
-    // Don't add the file yet, wait until we know the final status
-    // this.addUploadedFile(uploadedFile);
 
     try {
       this.updateFileStatus(uploadedFile.id, 'processing');
@@ -282,7 +280,6 @@ export const createProjectActions = {
           return;
         }
 
-        // Mark CSV file as complete
         this.updateFileStatus(uploadedFile.id, 'complete');
 
         const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
@@ -292,7 +289,6 @@ export const createProjectActions = {
           firstRow: updatedFile?.parsedData?.[0]
         });
 
-        // Update the file in the array
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else if (uploadedFile.fileType === FileType.GEOJSON) {
         const content = await readFileContent(file, (progress) => {
@@ -342,7 +338,6 @@ export const createProjectActions = {
           return;
         }
 
-        // Mark GeoJSON file as complete
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else if (uploadedFile.fileType === FileType.GEOPACKAGE) {
         const content = await readFileContent(file, (progress) => {
@@ -379,7 +374,6 @@ export const createProjectActions = {
           return;
         }
 
-        // Mark GeoPackage file as complete
         this.updateFileStatus(uploadedFile.id, 'complete');
       } else {
         const content = await readFileContent(file, (progress) => {

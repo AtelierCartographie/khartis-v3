@@ -74,16 +74,13 @@ class DuckDBOrchestratorService {
     console.log('[DuckDBOrchestrator.processCSV] ParsedData length:', file.parsedData?.length);
     console.log('[DuckDBOrchestrator.processCSV] First row:', file.parsedData?.[0]);
 
-    // Convert parsed data to CSV string for DuckDB
     const csvData = this.convertToCSV(file.parsedData);
     console.log('[DuckDBOrchestrator.processCSV] CSV data length:', csvData.length);
     console.log('[DuckDBOrchestrator.processCSV] CSV preview:', csvData.substring(0, 200));
 
-    // Create a file object for DuckDB
     const blob = new Blob([csvData], { type: 'text/csv' });
     const duckFile = new File([blob], file.name, { type: 'text/csv' });
 
-    // Register and read the file in DuckDB
     if (!Duck) throw new Error('DuckDB not initialized');
 
     console.log('[DuckDBOrchestrator.processCSV] Registering file with DuckDB');
@@ -93,10 +90,8 @@ class DuckDBOrchestratorService {
     const actualTableName = await Duck.read_tabular(duckFile, { tablename: tableName });
     console.log('[DuckDBOrchestrator.processCSV] Table created with name:', actualTableName);
 
-    // Use the actual table name returned by DuckDB
     const finalTableName = actualTableName || tableName;
 
-    // Analyze the table
     console.log('[DuckDBOrchestrator.processCSV] Analyzing table:', finalTableName);
     const columns = await Duck.analyse(finalTableName);
     console.log('[DuckDBOrchestrator.processCSV] Analysis complete, columns:', columns.length);
@@ -134,19 +129,15 @@ class DuckDBOrchestratorService {
   private async processGeoJSON(file: UploadedFile, tableName: string): Promise<DuckDBDataset> {
     console.log('[DuckDBOrchestrator.processGeoJSON] Processing GeoJSON file:', file.name);
 
-    // Convert to GeoJSON string
     const geoJsonData = JSON.stringify(file.parsedData);
 
-    // Create a file object for DuckDB
     const blob = new Blob([geoJsonData], { type: 'application/json' });
     const duckFile = new File([blob], file.name, { type: 'application/json' });
 
-    // Register and read the file in DuckDB
     if (!Duck) throw new Error('DuckDB not initialized');
     await Duck.register_files([duckFile]);
     await Duck.read_geofile(duckFile, { tablename: tableName });
 
-    // Analyze the table
     const columns = await Duck.analyse(tableName);
     const rowCount = await this.getRowCount(tableName);
 
@@ -181,10 +172,8 @@ class DuckDBOrchestratorService {
     const headers = Object.keys(data[0]);
     const csvRows = [];
 
-    // Add headers
     csvRows.push(headers.join(','));
 
-    // Add data rows
     for (const row of data) {
       const values = headers.map(header => {
         const value = row[header];
@@ -201,16 +190,13 @@ class DuckDBOrchestratorService {
   }
 
   private generateTableName(filename: string): string {
-    // Remove extension and special characters
     let name = filename.replace(/\.[^/.]+$/, '');
     name = name.replace(/[^a-zA-Z0-9_]/g, '_');
 
-    // Ensure it starts with a letter
     if (!/^[a-zA-Z]/.test(name)) {
       name = 't_' + name;
     }
 
-    // Add timestamp to ensure uniqueness
     const timestamp = Date.now().toString(36);
     return `${name}_${timestamp}`;
   }
@@ -261,7 +247,6 @@ class DuckDBOrchestratorService {
       }
     } catch (error) {
       console.error('[DuckDBOrchestrator.getTableData] Error:', error);
-      // Return empty data if table doesn't exist yet
       return { numRows: 0, get: () => ({}) };
     }
   }
@@ -274,16 +259,13 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new Error('DuckDB not initialized');
 
     try {
-      // Use the Duck.get_row_count method which is already implemented
       return await Duck.get_row_count(tableName);
     } catch (error) {
       console.error('[DuckDBOrchestrator.getRowCount] Error:', error);
-      // Fallback to manual query if get_row_count fails
       const result: any = await Duck.query(`SELECT COUNT(*) as count FROM ${tableName}`);
       if (result && result.get) {
         return result.get(0).count;
       } else if (result && result.numRows === 1) {
-        // Handle different result formats
         return Number(result.toArray()[0].count);
       }
       return 0;
@@ -383,7 +365,6 @@ class DuckDBOrchestratorService {
       if (!Duck) throw new Error('DuckDB not initialized');
       await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
 
-      // Remove from datasets
       for (const [id, dataset] of this.datasets.entries()) {
         if (dataset.tableName === tableName) {
           this.datasets.delete(id);
@@ -399,7 +380,6 @@ class DuckDBOrchestratorService {
   }
 
   async clear(): Promise<void> {
-    // Drop all tables
     for (const dataset of this.datasets.values()) {
       await this.dropTable(dataset.tableName);
     }
@@ -408,14 +388,12 @@ class DuckDBOrchestratorService {
     this.currentTableName = null;
   }
 
-  // Integration with existing ProcessedDataset format
   async convertToProcessedDataset(duckDataset: DuckDBDataset): Promise<ProcessedDataset> {
     console.log('[DuckDBOrchestrator.convertToProcessedDataset] Converting dataset:', duckDataset.name);
     console.log('[DuckDBOrchestrator.convertToProcessedDataset] Table name:', duckDataset.tableName);
     console.log('[DuckDBOrchestrator.convertToProcessedDataset] Duck columns:', duckDataset.columns.length);
     console.log('[DuckDBOrchestrator.convertToProcessedDataset] Sample column:', duckDataset.columns[0]);
 
-    // Fetch actual data from DuckDB
     let data: any[] = [];
     try {
       const tableData = await this.getTableData(duckDataset.tableName);
@@ -425,11 +403,9 @@ class DuckDBOrchestratorService {
       });
 
       if (tableData && tableData.numRows > 0) {
-        // Convert to array format for compatibility
-        const limit = Math.min(1000, tableData.numRows); // Limit to prevent memory issues
+        const limit = Math.min(1000, tableData.numRows); 
         for (let i = 0; i < limit; i++) {
           const row = tableData.get(i);
-          // Filter out system columns
           const cleanRow: any = {};
           for (const key in row) {
             if (!key.startsWith('__')) {
@@ -443,11 +419,9 @@ class DuckDBOrchestratorService {
       }
     } catch (error) {
       console.error('[DuckDBOrchestrator.convertToProcessedDataset] Error loading data:', error);
-      // If we can't get data, use empty array
       data = [];
     }
 
-    // Filter out system columns from DuckDB analysis
     const userColumns = duckDataset.columns.filter((col: any) => !col.name.startsWith('__'));
 
     const processedDataset = {

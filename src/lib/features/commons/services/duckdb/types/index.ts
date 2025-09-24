@@ -29,7 +29,6 @@ export interface VisualizationCriteria {
 	columns?: string[];
 }
 
-// Types pour la base de données DuckDB
 export type DuckDBValue = string | number | boolean | Date | null | ArrayBuffer | Uint8Array;
 
 export interface DuckDBColumn {
@@ -58,11 +57,11 @@ export interface AnalysisResult {
 	type_simple: 'numeric' | 'date' | 'string';
 	min?: number | Date;
 	max?: number | Date;
-	histogram?: unknown; // Sera typé plus précisément selon le contexte
+	histogram?: unknown; 
 	uniques?: number;
 	nulls?: number;
 	count?: number;
-	[key: string]: unknown; // Pour les propriétés additionnelles du summary
+	[key: string]: unknown; 
 }
 
 export type AnalysisResults = AnalysisResult[];
@@ -72,18 +71,15 @@ export interface ValidationResult<T = DuckDBValue> {
 	value: T;
 }
 
-// Types pour les options de requête
 export interface QueryResult<T = unknown> {
 	data: T[];
 	columns: DuckDBColumn[];
 }
 
-// Types pour les functions utilitaires
 export type TableName = string;
 export type ColumnName = string;
 export type SQLQuery = string;
 
-// Types pour les gestionnaires DuckDB
 export interface DuckDBBindings {
 	[key: string]: unknown;
 }
@@ -92,7 +88,6 @@ export interface DuckDBConnection {
 	useUnsafe<T>(callback: (bindings: DuckDBBindings, conn: unknown) => Promise<T>): Promise<T>;
 }
 
-// Types pour les résultats de requêtes DuckDB
 export interface ArrowTableLike {
 	get(index: number): Record<string, unknown>;
 	numRows: number;
@@ -108,7 +103,6 @@ export interface CountResult {
 	num_rows: number;
 }
 
-// Types pour les algorithmes de breaks
 export interface BreaksResult {
 	breaks: number[];
 }
