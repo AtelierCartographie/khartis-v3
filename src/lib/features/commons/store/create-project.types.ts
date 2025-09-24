@@ -44,21 +44,25 @@ export interface UploadedFile {
   };
 }
 
+export interface ExampleProject {
+  id: string;
+  title: string;
+  subtitle: string;
+  description?: string;
+  category: ExampleCategory;
+  thumbnail?: string;
+  dataUrl?: string;
+  baseMapId?: string;
+  visualizations?: any[];
+  tags?: string[];
+}
+
 export interface SavedProject {
   id: string;
   title: string;
   subtitle: string;
   createdAt: Date;
   thumbnail?: string;
-}
-
-export interface ExampleProject {
-  id: string;
-  title: string;
-  subtitle: string;
-  category: ExampleCategory;
-  thumbnail?: string;
-  dataUrl?: string;
 }
 
 export type ExampleCategory =

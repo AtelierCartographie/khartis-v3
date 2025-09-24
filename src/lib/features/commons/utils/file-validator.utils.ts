@@ -25,68 +25,48 @@ export interface DetailedValidationResult {
   };
 }
 
-// Configuration unifiée selon CDC et bonnes pratiques
 export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
-  maxFileSize: 50 * 1024 * 1024, // 50 MB par fichier (unifié)
-  maxTotalSize: 100 * 1024 * 1024, // 100 MB total
-  maxFileCount: 20, // Maximum 20 fichiers à la fois
+  maxFileSize: 50 * 1024 * 1024, 
+  maxTotalSize: 100 * 1024 * 1024, 
+  maxFileCount: 20, 
   allowedExtensions: [
-    // Données tabulaires
     'csv', 'tsv', 'txt',
-    // Données géographiques
     'geojson', 'json',
-    // Shapefile components
     'shp', 'shx', 'dbf', 'prj', 'cpg', 'sbn', 'sbx',
-    // GeoPackage
     'gpkg',
-    // KML (bonus)
     'kml', 'kmz'
   ],
   allowedMimeTypes: [
-    // CSV
     'text/csv',
     'application/csv',
     'text/plain',
     'text/tab-separated-values',
-    // JSON/GeoJSON
     'application/json',
     'application/geo+json',
     'application/vnd.geo+json',
-    // Shapefile
     'application/x-shapefile',
     'application/x-dbf',
     'application/octet-stream',
-    // GeoPackage
     'application/geopackage+sqlite3',
     'application/x-sqlite3',
-    // KML
     'application/vnd.google-earth.kml+xml',
     'application/vnd.google-earth.kmz'
   ],
   strictMode: true
 };
 
-// Magic numbers pour détecter le type réel des fichiers
 const FILE_SIGNATURES = {
-  // SQLite/GeoPackage
   SQLITE: [0x53, 0x51, 0x4C, 0x69, 0x74, 0x65],
-  // Shapefile
   SHP: [0x00, 0x00, 0x27, 0x0A],
   DBF: [0x03],
-  // ZIP (pour KMZ)
   ZIP: [0x50, 0x4B, 0x03, 0x04],
-  // GeoJSON/JSON (commence par { ou [)
   JSON: [0x7B, 0x5B],
-  // CSV/TSV (pas de signature, vérification du contenu)
   TEXT: null
 };
 
 export class FileValidator {
   private static config = FILE_VALIDATION_CONFIG;
 
-  /**
-   * Validation principale synchrone
-   */
   static validate(file: File): DetailedValidationResult {
     const result: DetailedValidationResult = {
       isValid: true,
@@ -97,35 +77,26 @@ export class FileValidator {
       metadata: {}
     };
 
-    // Validation de base
     this.validateBasicProperties(file, result);
 
-    // Détection du type de fichier
     result.fileType = this.detectFileType(file);
-    result.metadata!.detectedType = FileType[result.fileType];
+    result.metadata!.detectedType = result.fileType;
 
-    // Validation spécifique au type
     this.validateByType(file, result);
 
-    // Déterminer si validation async nécessaire
     result.requiresAsyncValidation = this.requiresAsyncValidation(result.fileType);
 
     result.isValid = result.errors.length === 0;
     return result;
   }
 
-  /**
-   * Validation asynchrone pour les formats complexes
-   */
   static async validateAsync(file: File, initialResult: DetailedValidationResult): Promise<DetailedValidationResult> {
     const result = { ...initialResult };
 
     try {
-      // Lire les premiers octets pour vérifier la signature
       const buffer = await this.readFileHeader(file, 512);
       result.metadata!.magicNumber = this.getMagicNumber(buffer);
 
-      // Validation spécifique selon le type
       switch (result.fileType) {
         case FileType.CSV:
         case FileType.TSV:
@@ -153,9 +124,6 @@ export class FileValidator {
     return result;
   }
 
-  /**
-   * Validation groupée pour plusieurs fichiers
-   */
   static validateMultiple(files: File[]): {
     results: Map<string, DetailedValidationResult>;
     globalErrors: string[];
@@ -165,26 +133,22 @@ export class FileValidator {
     const globalErrors: string[] = [];
     let totalSize = 0;
 
-    // Vérifications globales
     if (files.length > this.config.maxFileCount) {
       globalErrors.push(`Nombre maximum de fichiers dépassé (${this.config.maxFileCount})`);
     }
 
-    // Validation individuelle
     for (const file of files) {
       const result = this.validate(file);
       results.set(file.name, result);
       totalSize += file.size;
     }
 
-    // Vérification taille totale
     if (totalSize > this.config.maxTotalSize) {
       globalErrors.push(
         `Taille totale des fichiers dépasse ${this.config.maxTotalSize / (1024 * 1024)} MB`
       );
     }
 
-    // Détection des Shapefiles
     this.validateShapefileGroup(files, results, globalErrors);
 
     return {
@@ -195,7 +159,6 @@ export class FileValidator {
   }
 
   private static validateBasicProperties(file: File, result: DetailedValidationResult): void {
-    // Vérification taille
     if (file.size === 0) {
       result.errors.push('Le fichier est vide');
     } else if (file.size > this.config.maxFileSize) {
@@ -206,17 +169,15 @@ export class FileValidator {
       result.warnings.push('Fichier volumineux, le traitement pourrait être lent');
     }
 
-    // Vérification nom de fichier
     if (!file.name || file.name.length === 0) {
       result.errors.push('Nom de fichier invalide');
     }
 
-    // Détection de caractères suspects dans le nom
     const suspiciousPatterns = [
-      /\.\./,  // Path traversal
-      /[<>:"|?*\\]/,  // Caractères invalides Windows
-      /[\x00-\x1f\x7f]/,  // Caractères de contrôle
-      /^\./, // Fichiers cachés Unix
+      /\.\./,  
+      /[<>:"|?*\\]/,  
+      /[\x00-\x1f\x7f]/,  
+      /^\./, 
     ];
 
     for (const pattern of suspiciousPatterns) {
@@ -226,7 +187,6 @@ export class FileValidator {
       }
     }
 
-    // Vérification extension
     const extension = this.getFileExtension(file.name);
     if (!extension) {
       result.warnings.push('Fichier sans extension');
@@ -238,7 +198,6 @@ export class FileValidator {
       }
     }
 
-    // Vérification MIME type
     if (file.type) {
       result.metadata!.actualMimeType = file.type;
       if (!this.config.allowedMimeTypes.includes(file.type.toLowerCase())) {
@@ -251,7 +210,6 @@ export class FileValidator {
     const extension = this.getFileExtension(file.name);
     const mimeType = file.type?.toLowerCase() || '';
 
-    // CSV/TSV
     if (extension === 'csv' || mimeType.includes('csv')) {
       return FileType.CSV;
     }
@@ -259,10 +217,9 @@ export class FileValidator {
       return FileType.TSV;
     }
     if (extension === 'txt' && !mimeType.includes('json')) {
-      return FileType.CSV; // Par défaut pour .txt
+      return FileType.CSV; 
     }
 
-    // GeoJSON
     if (extension === 'geojson' ||
         extension === 'json' ||
         mimeType.includes('geo+json') ||
@@ -270,17 +227,14 @@ export class FileValidator {
       return FileType.GEOJSON;
     }
 
-    // Shapefile
     if (['shp', 'shx', 'dbf', 'prj', 'cpg', 'sbn', 'sbx'].includes(extension)) {
       return FileType.SHAPEFILE;
     }
 
-    // GeoPackage
     if (extension === 'gpkg' || mimeType.includes('geopackage')) {
       return FileType.GEOPACKAGE;
     }
 
-    // KML/KMZ
     if (extension === 'kml' || mimeType.includes('kml')) {
       return FileType.KML;
     }
@@ -337,7 +291,6 @@ export class FileValidator {
       return;
     }
 
-    // Détection du séparateur
     const separators = [',', ';', '\t', '|'];
     let detectedSeparator = ',';
     let maxCount = 0;
@@ -354,7 +307,6 @@ export class FileValidator {
       result.warnings.push('Aucun séparateur détecté, le fichier pourrait ne pas être un CSV valide');
     }
 
-    // Vérification de la cohérence des colonnes
     const firstLineColumns = lines[0].split(detectedSeparator).length;
     let inconsistentLines = 0;
 
@@ -368,7 +320,6 @@ export class FileValidator {
       result.warnings.push('Nombre de colonnes incohérent dans les premières lignes');
     }
 
-    // Détection d'encodage
     const hasBOM = buffer.byteLength >= 3 &&
                    new Uint8Array(buffer)[0] === 0xEF &&
                    new Uint8Array(buffer)[1] === 0xBB &&
@@ -385,16 +336,13 @@ export class FileValidator {
     const text = new TextDecoder('utf-8').decode(buffer);
 
     try {
-      // Vérification basique de la structure JSON
       const trimmed = text.trim();
       if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
         result.errors.push('Le fichier ne commence pas par { ou [');
         return;
       }
 
-      // Pour un GeoJSON complet, on devrait parser et vérifier la structure
-      // mais pour les gros fichiers, on se limite aux premiers caractères
-      if (file.size < 1024 * 1024) { // < 1MB, on peut parser
+      if (file.size < 1024 * 1024) { 
         const parsed = JSON.parse(text);
 
         if (!parsed.type) {
@@ -447,7 +395,6 @@ export class FileValidator {
       return;
     }
 
-    // Un GeoPackage valide doit avoir au moins quelques KB
     if (file.size < 10 * 1024) {
       result.warnings.push('Fichier GeoPackage suspicieusement petit');
     }
@@ -460,7 +407,6 @@ export class FileValidator {
   ): void {
     const shapefileComponents = new Map<string, Set<string>>();
 
-    // Grouper les composants par nom de base
     for (const file of files) {
       const result = results.get(file.name);
       if (result?.fileType === FileType.SHAPEFILE) {
@@ -474,7 +420,6 @@ export class FileValidator {
       }
     }
 
-    // Vérifier que chaque shapefile a les composants minimum
     for (const [baseName, extensions] of shapefileComponents) {
       const requiredExtensions = ['shp', 'shx', 'dbf'];
       const missing = requiredExtensions.filter(ext => !extensions.has(ext));
@@ -520,9 +465,6 @@ export class FileValidator {
     return filename.toLowerCase().split('.').pop() || '';
   }
 
-  /**
-   * Validation d'URL pour import distant
-   */
   static validateURL(url: string): DetailedValidationResult {
     const result: DetailedValidationResult = {
       isValid: true,
@@ -535,18 +477,15 @@ export class FileValidator {
     try {
       const parsed = new URL(url);
 
-      // Vérification protocole
       if (!['http:', 'https:'].includes(parsed.protocol)) {
         result.errors.push('Seuls les protocoles HTTP et HTTPS sont autorisés');
       }
 
-      // Vérification domaines interdits (exemple)
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
       if (blockedDomains.includes(parsed.hostname)) {
         result.errors.push('Domaine non autorisé');
       }
 
-      // Détection du type par l'extension dans l'URL
       const pathname = parsed.pathname;
       const extension = pathname.split('.').pop()?.toLowerCase();
 
@@ -556,7 +495,6 @@ export class FileValidator {
         result.warnings.push('Impossible de déterminer le type de fichier depuis l\'URL');
       }
 
-      // Warning pour les URLs non HTTPS
       if (parsed.protocol === 'http:') {
         result.warnings.push('Utilisation de HTTP non sécurisé');
       }
@@ -570,7 +508,6 @@ export class FileValidator {
   }
 }
 
-// Export des types de fichiers supportés pour l'UI
 export const SUPPORTED_FILE_TYPES = {
   tabular: {
     extensions: ['.csv', '.tsv', '.txt'],

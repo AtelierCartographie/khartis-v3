@@ -1,21 +1,22 @@
-import type {
-  KhartisProject,
-  ProjectState,
-  ProjectHistoryEntry,
-  VisualizationConfig,
-  LayoutConfig,
-  ProjectData,
-  SavedProjectMetadata
-} from './project.types';
-import { ProjectStorageKey } from './project.types';
-import { projectPersistence } from '../utils/project-persistence.utils';
-import { showError } from '../utils/notification.utils.svelte';
-import { generateProjectFilename, slugify } from '../utils/string.utils';
-import type { UploadedFile } from './create-project.types';
-import { globalActions } from './global.svelte';
+import { m } from '$lib/paraglide/messages';
 import { dataOrchestrator } from '../services/data-orchestrator.service';
 import { logger } from '../utils/logger.utils';
-import { ProjectValidator, STORAGE_LIMITS } from '../utils/validation.utils';
+import { showError } from '../utils/notification.utils.svelte';
+import { projectPersistence } from '../utils/project-persistence.utils';
+import { generateProjectFilename } from '../utils/string.utils';
+import { ProjectValidator } from '../utils/validation.utils';
+import type { UploadedFile } from './create-project.types';
+import { globalActions } from './global.svelte';
+import type {
+  KhartisProject,
+  LayoutConfig,
+  ProjectData,
+  ProjectHistoryEntry,
+  ProjectState,
+  SavedProjectMetadata,
+  VisualizationConfig
+} from './project.types';
+import { ProjectStorageKey } from './project.types';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -101,7 +102,8 @@ class ProjectStore {
       this._state.currentProject.data.sourceFiles = [];
     }
 
-    const isFirstFile = this._state.currentProject.data.sourceFiles.length === 0;
+    const isFirstFile =
+      this._state.currentProject.data.sourceFiles.length === 0;
     let addedFiles = 0;
 
     for (const file of newFiles) {
@@ -109,8 +111,6 @@ class ProjectStore {
         (f) => f.id === file.id || f.name === file.name
       );
       if (!exists) {
-        // Create a deep copy of the file to preserve parsedData
-        // Use JSON parse/stringify as structuredClone fails with proxy objects
         const fileCopy = {
           id: file.id,
           name: file.name,
@@ -121,7 +121,9 @@ class ProjectStore {
           uploadProgress: file.uploadProgress,
           errorMessage: file.errorMessage,
           validation: file.validation,
-          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : null,
+          parsedData: file.parsedData
+            ? JSON.parse(JSON.stringify(file.parsedData))
+            : null,
           content: file.content,
           duplicates: file.duplicates,
           statistics: file.statistics,
@@ -130,12 +132,13 @@ class ProjectStore {
 
         logger.debug('[ProjectStore] Adding file to sourceFiles:', {
           name: fileCopy.name,
-          parsedDataLength: Array.isArray(fileCopy.parsedData) ? fileCopy.parsedData.length : 0
+          parsedDataLength: Array.isArray(fileCopy.parsedData)
+            ? fileCopy.parsedData.length
+            : 0
         });
 
         this._state.currentProject.data.sourceFiles.push(fileCopy);
 
-        // Select the first file added or when it's the first file in the project
         const shouldSelect = isFirstFile && addedFiles === 0;
         globalActions.addDataButtonForFile(file.id, file.name, shouldSelect);
         addedFiles++;
@@ -145,18 +148,15 @@ class ProjectStore {
         } catch (error) {
           logger.error('[ProjectStore] Failed to process file:', error);
 
-          // Remove the file from sourceFiles if processing failed
           const index = this._state.currentProject.data.sourceFiles.findIndex(
-            f => f.id === fileCopy.id
+            (f) => f.id === fileCopy.id
           );
           if (index > -1) {
             this._state.currentProject.data.sourceFiles.splice(index, 1);
           }
 
-          // Remove the data button
           globalActions.removeDataButton(file.id);
 
-          // Re-throw the error to be handled by the caller
           throw error;
         }
       }
@@ -220,7 +220,7 @@ class ProjectStore {
 
     await this.saveCurrentProject();
 
-    projectPersistence.saveToLocalStorage(
+    await projectPersistence.saveToStorage(
       ProjectStorageKey.CURRENT,
       project.id
     );
@@ -247,7 +247,7 @@ class ProjectStore {
           }
         }
 
-        projectPersistence.saveToLocalStorage(
+        await projectPersistence.saveToStorage(
           ProjectStorageKey.CURRENT,
           project.id
         );
@@ -265,13 +265,15 @@ class ProjectStore {
     }
 
     try {
-      const projectValidation = ProjectValidator.validateProjectSize(this._state.currentProject);
+      const projectValidation = ProjectValidator.validateProjectSize(
+        this._state.currentProject
+      );
       if (!projectValidation.isValid) {
         throw new Error(projectValidation.errors.join(', '));
       }
 
       if (projectValidation.warnings.length > 0) {
-        projectValidation.warnings.forEach(warning => logger.warn(warning));
+        projectValidation.warnings.forEach((warning) => logger.warn(warning));
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
@@ -293,7 +295,7 @@ class ProjectStore {
 
       if (this._state.currentProject?.id === id) {
         this._state.currentProject = undefined;
-        projectPersistence.clearLocalStorage(ProjectStorageKey.CURRENT);
+        await projectPersistence.clearStorage(ProjectStorageKey.CURRENT);
       }
     } catch (error) {
       const message =
@@ -312,13 +314,20 @@ class ProjectStore {
       }
 
       const projects = await this.listProjects();
-      const capacityCheck = ProjectValidator.validateStorageCapacity(projects.length);
+      const capacityCheck = ProjectValidator.validateStorageCapacity(
+        projects.length
+      );
       if (!capacityCheck.isValid) {
         throw new Error(capacityCheck.errors.join(', '));
       }
 
-      const duplicatedName = newName || `${originalProject.manifest.name} (copie)`;
-      const nameValidation = ProjectValidator.validateProjectName(duplicatedName);
+      const duplicationSuffix = (m as any).project_duplicate_suffix
+        ? (m as any).project_duplicate_suffix()
+        : '(copy)';
+      const duplicatedName =
+        newName || `${originalProject.manifest.name} ${duplicationSuffix}`;
+      const nameValidation =
+        ProjectValidator.validateProjectName(duplicatedName);
       if (!nameValidation.isValid) {
         throw new Error(nameValidation.errors.join(', '));
       }
@@ -348,9 +357,11 @@ class ProjectStore {
   async listProjects(): Promise<SavedProjectMetadata[]> {
     const projects = await projectPersistence.listProjects();
 
-    const storageCheck = ProjectValidator.validateStorageCapacity(projects.length);
+    const storageCheck = ProjectValidator.validateStorageCapacity(
+      projects.length
+    );
     if (storageCheck.warnings.length > 0) {
-      storageCheck.warnings.forEach(warning => logger.warn(warning));
+      storageCheck.warnings.forEach((warning) => logger.warn(warning));
     }
 
     return projects;
@@ -393,7 +404,7 @@ class ProjectStore {
       this._state.history = [];
       this._state.historyIndex = -1;
 
-      projectPersistence.saveToLocalStorage(
+      await projectPersistence.saveToStorage(
         ProjectStorageKey.CURRENT,
         project.id
       );
@@ -502,14 +513,14 @@ class ProjectStore {
     }
   }
 
-  clearProject(): void {
+  async clearProject(): Promise<void> {
     this._state.currentProject = undefined;
     this._state.isDirty = false;
     this._state.lastSaved = undefined;
     this._state.history = [];
     this._state.historyIndex = -1;
 
-    projectPersistence.clearLocalStorage(ProjectStorageKey.CURRENT);
+    await projectPersistence.clearStorage(ProjectStorageKey.CURRENT);
   }
 
   private addToHistory(action: string, snapshot?: KhartisProject): void {
@@ -555,7 +566,7 @@ class ProjectStore {
   }
 
   private async loadLastProject(): Promise<void> {
-    const lastProjectId = projectPersistence.loadFromLocalStorage<string>(
+    const lastProjectId = await projectPersistence.loadFromStorage<string>(
       ProjectStorageKey.CURRENT
     );
 
@@ -564,7 +575,6 @@ class ProjectStore {
         await this.loadProject(lastProjectId);
       } catch (error) {
         logger.error('Failed to load last project:', error);
-        // Don't show toast here as it's during initialization
       }
     }
   }

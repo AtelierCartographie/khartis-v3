@@ -319,8 +319,6 @@ class VisualizationStore {
   }
 
   private jenksBreaks(values: number[], classes: number): number[] {
-    // Simplified Jenks implementation
-    // For production, use a proper implementation like simple-statistics
     return this.quantileBreaks(values, classes);
   }
 

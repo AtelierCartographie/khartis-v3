@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
   import {
@@ -15,9 +16,11 @@
     Theme
   } from 'carbon-components-svelte';
   import { CopyFile, Launch } from 'carbon-icons-svelte';
+  import DuplicateProjectModal from './commons/components/duplicate-project-modal.svelte';
   import Separator from './commons/components/separator.svelte';
 
   let currentLocale = $state(getLocale());
+  let isDuplicateModalOpen = $state(false);
 
   function handleNewProject() {
     createProjectActions.selectTab(1);
@@ -29,6 +32,31 @@
     createProjectActions.selectTab(2);
     globalState.isCreateProjectModalOpen = true;
     globalState.isSideNavOpen = false;
+  }
+
+  function handleDuplicateProject() {
+    isDuplicateModalOpen = true;
+    globalState.isSideNavOpen = false;
+  }
+
+  async function handleDuplicateConfirm(projectId: string, newName: string) {
+    const project = projectsStore.getProjectById(projectId);
+
+    if (project) {
+      const duplicatedProject = await projectsStore.duplicateProject(projectId);
+
+      if (duplicatedProject && newName !== duplicatedProject.name) {
+        await projectsStore.updateProject(duplicatedProject.id, {
+          name: newName
+        });
+      }
+
+      if (duplicatedProject) {
+        await projectsStore.openProject(duplicatedProject.id);
+      }
+    }
+
+    isDuplicateModalOpen = false;
   }
 
   const handleLanguageChange = (event: Event) => {
@@ -91,6 +119,7 @@
               kind="ghost"
               icon={CopyFile}
               class="menu-bar-item"
+              on:click={handleDuplicateProject}
               >{m.sidenav_duplicate_project()}
             </Button>
 
@@ -218,6 +247,12 @@
     </aside>
   </SideNav>
 </div>
+
+<DuplicateProjectModal
+  bind:open={isDuplicateModalOpen}
+  onClose={() => (isDuplicateModalOpen = false)}
+  onConfirm={handleDuplicateConfirm}
+/>
 
 <style>
   #khartis-side-nav :global(.sidenav-bottom-padding) {

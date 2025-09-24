@@ -83,7 +83,6 @@
     field: keyof LegendItem,
     value: string
   ): void {
-    // Sanitize input to prevent XSS attacks
     const sanitizedValue = sanitizeTextInput(value);
     legendActions.updateLegendItem(id, { [field]: sanitizedValue });
   }

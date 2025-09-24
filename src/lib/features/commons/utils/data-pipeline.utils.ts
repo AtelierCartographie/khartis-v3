@@ -247,7 +247,6 @@ export async function processUploadedFile(
 ): Promise<ProcessedDataset | null> {
   console.log('processUploadedFile - file:', file);
 
-  // Check if file is a proxy and try to access properties directly
   const parsedData = file.parsedData;
   const status = file.status;
 
@@ -256,7 +255,6 @@ export async function processUploadedFile(
   console.log('processUploadedFile - parsedData:', parsedData);
   console.log('processUploadedFile - status:', status);
 
-  // Try to access the data if it's an array
   if (Array.isArray(parsedData)) {
     console.log('processUploadedFile - parsedData length:', parsedData.length);
     console.log('processUploadedFile - first item:', parsedData[0]);

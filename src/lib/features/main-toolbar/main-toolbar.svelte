@@ -56,12 +56,10 @@
 
   const derivedToolbarState = $derived(getDerivedToolbarState());
 
-  // Update toolbar state when project changes
   $effect(() => {
     const project = projectStore.currentProject;
     const isDirty = projectStore.isDirty;
 
-    // Update navigation state based on project
     if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
       mainToolbarState.canNavigateToVisualization = true;
     } else {
