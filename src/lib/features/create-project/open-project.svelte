@@ -19,6 +19,7 @@
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import type { SavedProjectMetadata } from '$lib/features/commons/store/project.types';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { formatDate, formatFileSize } from '$lib/features/commons/utils/format.utils';
@@ -45,10 +46,13 @@
   async function loadProjects() {
     isLoading = true;
     error = '';
+    logger.info('Loading saved projects', LogCategory.PROJECT);
 
     try {
       savedProjects = await projectStore.listProjects();
+      logger.success('Projects loaded', LogCategory.PROJECT, { count: savedProjects.length });
     } catch (err) {
+      logger.error('Failed to load projects', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load projects';
     } finally {
       isLoading = false;
@@ -62,14 +66,17 @@
     }
 
     selectedProjectId = projectId;
+    logger.info('Opening project', LogCategory.PROJECT, { projectId });
 
     try {
       await projectStore.loadProject(projectId);
+      logger.success('Project loaded', LogCategory.PROJECT, { projectId });
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
       goto('/');
     } catch (err) {
+      logger.error('Failed to load project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load project';
       selectedProjectId = null;
     }
@@ -77,25 +84,31 @@
 
   async function handleFileImport(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
+    logger.info('Importing project file', LogCategory.PROJECT, { filesCount: files.length });
+
     const khFile = files.find(
       (f) => f.name.endsWith('.kh') || f.name.endsWith('.khartis')
     );
 
     if (!khFile) {
+      logger.error('No valid Khartis file found', LogCategory.PROJECT, { fileNames: files.map(f => f.name) });
       error = 'Please select a valid .kh or .khartis file';
       return;
     }
 
     isImporting = true;
     error = '';
+    logger.info('Importing file', LogCategory.PROJECT, { fileName: khFile.name, size: khFile.size });
 
     try {
       await projectStore.importProject(khFile);
+      logger.success('Project imported successfully', LogCategory.PROJECT);
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
       goto('/');
     } catch (err) {
+      logger.error('Failed to import project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to import project';
     } finally {
       isImporting = false;
@@ -105,12 +118,15 @@
   async function handleDuplicateProject(projectId: string, projectName: string) {
     isDuplicating = true;
     error = '';
+    logger.info('Duplicating project', LogCategory.PROJECT, { projectId, projectName });
 
     try {
       const newProjectId = await projectStore.duplicateProject(projectId);
+      logger.success('Project duplicated', LogCategory.PROJECT, { oldId: projectId, newId: newProjectId });
       await loadProjects();
       selectedProjectId = newProjectId;
     } catch (err) {
+      logger.error('Failed to duplicate project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to duplicate project';
     } finally {
       isDuplicating = false;
@@ -129,9 +145,11 @@
     const deletingId = projectToDelete;
     projectToDelete = null;
     showDeleteConfirm = false;
+    logger.info('Deleting project', LogCategory.PROJECT, { projectId: deletingId });
 
     try {
       await projectStore.deleteProject(deletingId);
+      logger.success('Project deleted', LogCategory.PROJECT, { projectId: deletingId });
 
       if (selectedProjectId === deletingId) {
         selectedProjectId = null;
@@ -139,6 +157,7 @@
 
       await loadProjects();
     } catch (err) {
+      logger.error('Failed to delete project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to delete project';
     }
   }

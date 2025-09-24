@@ -1,5 +1,6 @@
 import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
+import { logger, LogCategory } from './logger';
 
 export interface DataColumn {
   name: string;
@@ -245,25 +246,15 @@ function calculateCentroid(
 export async function processUploadedFile(
   file: UploadedFile
 ): Promise<ProcessedDataset | null> {
-  console.log('processUploadedFile - file:', file);
 
   const parsedData = file.parsedData;
   const status = file.status;
 
-  console.log('processUploadedFile - parsedData type:', typeof parsedData);
-  console.log('processUploadedFile - parsedData is array?', Array.isArray(parsedData));
-  console.log('processUploadedFile - parsedData:', parsedData);
-  console.log('processUploadedFile - status:', status);
 
   if (Array.isArray(parsedData)) {
-    console.log('processUploadedFile - parsedData length:', parsedData.length);
-    console.log('processUploadedFile - first item:', parsedData[0]);
   }
 
   if (!parsedData || status !== 'complete') {
-    console.log('processUploadedFile - returning null: no parsedData or not complete');
-    console.log('processUploadedFile - file has parsedData?', !!parsedData);
-    console.log('processUploadedFile - file status:', status);
     return null;
   }
 
@@ -281,10 +272,7 @@ export async function processUploadedFile(
   };
 
   if (file.fileType === FileType.CSV) {
-    console.log('processUploadedFile - processing CSV, parsedData length:', parsedData?.length);
     const { columns, processedData } = processTabularData(parsedData);
-    console.log('processUploadedFile - after processTabularData, columns:', columns);
-    console.log('processUploadedFile - after processTabularData, data length:', processedData.length);
     return {
       ...baseDataset,
       columns,
@@ -316,19 +304,19 @@ export async function processUploadedFile(
 export async function createDataPipeline(
   files: UploadedFile[]
 ): Promise<ProcessedDataset[]> {
-  console.log('createDataPipeline - input files:', files);
+  logger.info('Creating data pipeline', LogCategory.DATA, { filesCount: files.length });
   const datasets: ProcessedDataset[] = [];
 
   for (const file of files) {
-    console.log('createDataPipeline - processing file:', file);
     const dataset = await processUploadedFile(file);
-    console.log('createDataPipeline - dataset result:', dataset);
     if (dataset) {
       datasets.push(dataset);
     }
   }
 
-  console.log('createDataPipeline - final datasets:', datasets);
+  if (datasets.length > 0) {
+    logger.success('Data pipeline created', LogCategory.DATA, { datasetsCount: datasets.length });
+  }
   return datasets;
 }
 

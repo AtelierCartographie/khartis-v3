@@ -10,7 +10,7 @@
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { logger } from '$lib/features/commons/utils/logger.utils';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     InlineNotification,
@@ -73,7 +73,7 @@
       onClose?.();
       goto('/');
     } catch (err) {
-      logger.error('Failed to load example:', err);
+      logger.error('Failed to load example', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load example';
     } finally {
       isLoading = false;

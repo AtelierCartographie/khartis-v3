@@ -1,3 +1,5 @@
+import { logger, LogCategory } from './logger';
+
 export async function compressData(data: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const uint8Array = encoder.encode(data);
@@ -73,7 +75,7 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
       const decoder = new TextDecoder();
       return decoder.decode(result);
     } catch (error) {
-      console.warn('Failed to decompress as gzip, trying as plain text:', error);
+      logger.warn('Failed to decompress as gzip, trying as plain text', LogCategory.FILE, error);
       throw error;
     }
   }

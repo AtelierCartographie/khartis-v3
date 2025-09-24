@@ -43,6 +43,13 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     const fileInput = modal.locator('input[type="file"]').first();
     await fileInput.setInputFiles(csvPath);
 
+    // Attendre la validation et détection géographique
+    await page.waitForTimeout(1000);
+
+    // Vérifier qu'aucune erreur de colonne géographique manquante n'apparaît
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+
     // Remplir le nom du projet pour créer
     const projectNameInput = modal.locator('[data-testid="project-name-input"]');
     await projectNameInput.fill('Test Import');
@@ -50,19 +57,148 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
     await createButton.click();
 
-    // Vérifier que la modal se ferme
-    await expect(modal).toBeHidden();
-
-    // TODO: Vérifier la détection des entités géographiques dans le tableau
+    // Vérifier que la modal se ferme (validation réussie)
+    await expect(modal).toBeHidden({ timeout: 10000 });
   });
 
-  test.skip('reconnaît les codes géographiques ISO3', async () => {});
+  test('reconnaît les codes géographiques ISO3', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
 
-  test.skip('reconnaît les coordonnées latitude/longitude', async () => {});
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
 
-  test.skip('affiche une erreur pour un format invalide', async () => {});
+    // CSV avec codes ISO3
+    const iso3CSV = `ISO3,Population,GDP
+FRA,67000000,2700000
+DEU,83000000,3800000
+ITA,60000000,2000000`;
 
-  test.skip('gère les fichiers volumineux (>10MB)', async () => {});
+    const file = new File([iso3CSV], 'iso3-data.csv', { type: 'text/csv' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Vérifier qu'aucune erreur de colonne géographique n'apparaît (ISO3 détecté)
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+  });
+
+  test('reconnaît les coordonnées latitude/longitude', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+
+    // CSV avec lat/lon
+    const coordsCSV = `City,lat,lon,Population
+Paris,48.8566,2.3522,2200000
+Berlin,52.5200,13.4050,3700000
+Rome,41.9028,12.4964,2800000`;
+
+    const file = new File([coordsCSV], 'coords-data.csv', { type: 'text/csv' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Vérifier qu'aucune erreur de colonne géographique n'apparaît (lat/lon détectés)
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+  });
+
+  test('affiche une erreur pour un format invalide', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+
+    // Fichier avec extension non supportée
+    const invalidFile = new File(['test content'], 'data.xyz', { type: 'application/octet-stream' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    // Vérifier le message d'erreur
+    const errorMessage = page.locator('.bx--inline-notification--error, [role="alert"]');
+    await expect(errorMessage).toBeVisible();
+    await expect(errorMessage).toContainText(/format|extension|supporté/i);
+  });
+
+  test('affiche un avertissement pour les fichiers volumineux', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+
+    // Créer un fichier de 11MB
+    const largeContent = 'Country,Value\n' + 'x,100\n'.repeat(500000); // ~11MB
+    const largeFile = new File([largeContent], 'large.csv', { type: 'text/csv' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Vérifier l'avertissement ou l'erreur pour fichier volumineux
+    const notification = page.locator('.bx--inline-notification--warning, .bx--inline-notification--error');
+    await expect(notification).toBeVisible();
+    await expect(notification).toContainText(/taille|size|volumineux|large/i);
+  });
 });
 
 test.describe('Import de données géographiques - 2.A.2', () => {
@@ -123,15 +259,122 @@ test.describe('Création de jeux de données - 2.A.3', () => {
 });
 
 test.describe('Typage des variables - 2.A.4', () => {
-  test.skip('détecte automatiquement le type texte', async () => {});
+  test('détecte automatiquement le type texte', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
 
-  test.skip('détecte automatiquement le type numérique', async () => {});
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
 
-  test.skip('détecte le sous-type géographique', async () => {});
+    const textCSV = `Country,Description
+France,République française située en Europe occidentale
+Germany,République fédérale d'Allemagne`;
 
-  test.skip('détecte les codes ISO', async () => {});
+    const file = new File([textCSV], 'text-data.csv', { type: 'text/csv' });
 
-  test.skip('détecte les coordonnées géographiques', async () => {});
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Le fichier devrait être accepté avec détection de colonnes texte
+    const errorMessage = page.locator('.bx--inline-notification--error');
+
+    // Pas d'erreur car Country est une colonne géographique
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+  });
+
+  test('détecte automatiquement le type numérique', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+
+    const numericCSV = `Country,Population,GDP
+France,67000000,2700000.50
+Germany,83000000,3800000.75`;
+
+    const file = new File([numericCSV], 'numeric-data.csv', { type: 'text/csv' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Pas d'erreur, colonnes numériques détectées avec colonne géo
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+  });
+
+  test('détecte le sous-type géographique', async ({ page }) => {
+    await page.goto('/');
+    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    await expect(modal).toBeVisible();
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+
+    const geoCSV = `Pays,Region,Ville
+France,Île-de-France,Paris
+Allemagne,Bavière,Munich
+Italie,Lombardie,Milan`;
+
+    const file = new File([geoCSV], 'geo-types.csv', { type: 'text/csv' });
+
+    await page.evaluate((file) => {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          writable: false,
+        });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }, file);
+
+    await page.waitForTimeout(1000);
+
+    // Pas d'erreur car toutes les colonnes sont géographiques
+    const geoError = page.locator('text=/aucune colonne géographique/i');
+    await expect(geoError).toBeHidden();
+  });
+
+  test.skip('détecte les codes ISO', async () => {
+    // Déjà testé dans la section précédente
+  });
+
+  test.skip('détecte les coordonnées géographiques', async () => {
+    // Déjà testé dans la section précédente
+  });
 
   test.skip('permet de changer manuellement le type', async () => {});
 

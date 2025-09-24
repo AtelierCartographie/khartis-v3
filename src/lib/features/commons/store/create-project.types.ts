@@ -42,6 +42,8 @@ export interface UploadedFile {
     hasDuplicates: boolean;
     duplicateCount: number;
   };
+  deepAnalysis?: any;
+  geoMatchResult?: any;
 }
 
 export interface ExampleProject {

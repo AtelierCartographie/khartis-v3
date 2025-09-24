@@ -25,15 +25,21 @@ Data flows through two complementary systems:
 
 1. Group files (shapefile component detection)
 2. Basic validation (size, extension heuristics, sync + optional async checks)
-3. Parse (Papa CSV parse; shapefile → GeoJSON; GeoPackage experimental)
-4. **Dual processing**:
+3. **Deep validation** (NEW):
+   - Geographic column detection
+   - Data quality analysis
+   - Performance assessment
+   - Catalogue matching preparation
+4. Parse (Papa CSV parse; shapefile → GeoJSON; GeoPackage experimental)
+5. **Dual processing**:
    - DatasetsStore: Type inference → stats → store
    - DuckDBOrchestrator: Create table → analyze columns → prepare for SQL
-5. Column type inference (boolean → date → numeric → string) (geometry typing deferred)
-6. Stats (min,max,mean + counts; no median/stdDev at ingest)
-7. Store source file + derived stats
-8. (Planned) Geometry metrics (bounds, centroid)
-9. (Planned) Visualization suggestion hooks
+6. Column type inference (boolean → date → numeric → string) (geometry typing deferred)
+7. Stats (min,max,mean + counts; median/stdDev via deep analysis)
+8. Store source file + derived stats + validation results
+9. Geographic catalogue matching (if geo columns detected)
+10. (Planned) Geometry metrics (bounds, centroid)
+11. (Planned) Visualization suggestion hooks
 
 ## Core Types (Simplified)
 

@@ -35,10 +35,30 @@
   - DuckDB (Analytical Engine)
 - **Workflow Steps**
   - File validation
+  - Deep validation & analysis
   - Parsing
   - Type inference
   - Statistics computation
   - Geometry analysis
+
+### [Data Validation](VALIDATION.md)
+- **Validation Pipeline**
+  - Basic file checks
+  - Content validation
+  - Deep data analysis
+  - Geographic detection
+- **Geographic Column Detection**
+  - Pattern matching
+  - Value analysis
+  - Confidence scoring
+- **Catalogue Matching**
+  - Normalization
+  - Fuzzy matching
+  - Multi-language support
+- **Quality Assurance**
+  - Performance thresholds
+  - Error classification
+  - Contextual warnings
 
 ### [Type Reference](TYPES.md)
 - **Project Types**
@@ -184,6 +204,7 @@ Core terms and definitions
 |------|---------------|
 | **Understand architecture** | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | **Add new data format** | [PIPELINE.md](PIPELINE.md) |
+| **Add validation rules** | [VALIDATION.md](VALIDATION.md) |
 | **Create visualization** | [VISUALIZATION.md](VISUALIZATION.md) |
 | **Add new tool** | [FEATURES_TOOLS.md](FEATURES_TOOLS.md) |
 | **Manage state** | [STATE.md](STATE.md) |

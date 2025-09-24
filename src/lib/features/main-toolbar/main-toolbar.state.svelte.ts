@@ -2,6 +2,7 @@ import { ToolbarStep } from '$lib/features/commons/types/global';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
@@ -64,9 +65,7 @@ export const mainToolbarActions = {
     if (derived.canVisualize) {
       globalActions.setNavigationState(ToolbarStep.Visualizations);
     } else {
-      console.warn(
-        '[MainToolbar] ⚠️  Cannot navigate: no valid data or project'
-      );
+      logger.warn('Cannot navigate: no valid data or project', LogCategory.UI);
     }
   },
 

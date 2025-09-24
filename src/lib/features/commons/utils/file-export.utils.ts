@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
+import { logger, LogCategory } from './logger';
 
 export const generateExportFilename = generateFilename;
 
@@ -91,7 +92,7 @@ export async function exportProjectData(
       } else if (file.parsedData?.type === 'Feature') {
         allFeatures.push(file.parsedData);
       } else if (file.fileType === FileType.CSV && file.parsedData) {
-        console.warn(`Skipping CSV file ${file.name} for GeoJSON export`);
+        logger.warn(`Skipping CSV file ${file.name} for GeoJSON export`, LogCategory.EXPORT);
       }
     }
 
