@@ -6,6 +6,7 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
   interface Props {
     open: boolean;
@@ -29,7 +30,7 @@
         await projectStore.addFilesToProject(newFiles);
         closeModal();
       } catch (error) {
-        console.error('[AddDataModal] Failed to add files to project:', error);
+        logger.error('Failed to add files to project', LogCategory.FILE, error);
       }
     } else {
       closeModal();

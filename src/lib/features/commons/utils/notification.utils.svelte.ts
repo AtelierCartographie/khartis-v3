@@ -1,3 +1,5 @@
+import { logger, LogCategory } from './logger';
+
 export enum NotificationType {
   SUCCESS = 'success',
   ERROR = 'error',
@@ -55,7 +57,7 @@ class NotificationManager {
   }
 
   error(options: NotificationOptions): string {
-    console.error(`[Error] ${options.title}:`, options.subtitle);
+    logger.error(`${options.title}: ${options.subtitle || ''}`, LogCategory.NOTIFICATION);
     return this.addNotification(NotificationType.ERROR, {
       ...options,
       timeout: options.timeout ?? 10000
@@ -63,7 +65,7 @@ class NotificationManager {
   }
 
   warning(options: NotificationOptions): string {
-    console.warn(`[Warning] ${options.title}:`, options.subtitle);
+    logger.warn(`${options.title}: ${options.subtitle || ''}`, LogCategory.NOTIFICATION);
     return this.addNotification(NotificationType.WARNING, options);
   }
 
@@ -92,7 +94,7 @@ export function showError(
   logDetails?: any
 ): void {
   if (logDetails) {
-    console.error(`[Error] ${title}:`, subtitle, logDetails);
+    logger.error(`${title}: ${subtitle || ''}`, LogCategory.ERROR_HANDLER, logDetails);
   }
   notificationManager.error({ title, subtitle });
 }

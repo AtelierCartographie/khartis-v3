@@ -7,6 +7,7 @@ import {
   FileType
 } from '../store/create-project.types';
 import { sanitizeDisplayName } from './string.utils';
+import { logger, LogCategory } from './logger';
 
 export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
@@ -208,7 +209,7 @@ export async function parseCsvWithPapa(
   errors: string[];
   meta: any;
 }> {
-  console.log('[parseCsvWithPapa] Starting parse of file:', {
+  logger.info('Starting parse of file', LogCategory.FILE, {
     name: file.name,
     size: file.size,
     type: file.type
@@ -218,10 +219,7 @@ export async function parseCsvWithPapa(
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target?.result as string;
-      console.log(
-        '[parseCsvWithPapa] File content preview:',
-        text.substring(0, 500)
-      );
+      logger.debug('File content preview', LogCategory.FILE, text.substring(0, 500));
 
       Papa.parse(text, {
         header: true,
@@ -229,7 +227,7 @@ export async function parseCsvWithPapa(
         skipEmptyLines: true,
         delimiter: detectDelimiter(text),
         complete: (results) => {
-          console.log('[parseCsvWithPapa] Parse complete:', {
+          logger.info('Parse complete', LogCategory.FILE, {
             dataLength: results.data.length,
             headers: results.meta.fields,
             errors: results.errors,
@@ -238,9 +236,7 @@ export async function parseCsvWithPapa(
           });
 
           if (results.data.length === 0 && text.trim().length > 0) {
-            console.warn(
-              '[parseCsvWithPapa] Empty result but file has content, trying without header'
-            );
+            logger.warn('Empty result but file has content, trying without header', LogCategory.FILE);
 
             Papa.parse(text, {
               header: false,
@@ -248,7 +244,7 @@ export async function parseCsvWithPapa(
               skipEmptyLines: true,
               delimiter: detectDelimiter(text),
               complete: (retryResults) => {
-                console.log('[parseCsvWithPapa] Retry parse complete:', {
+                logger.info('Retry parse complete', LogCategory.FILE, {
                   dataLength: retryResults.data.length,
                   firstRow: retryResults.data[0]
                 });
@@ -293,7 +289,7 @@ export async function parseCsvWithPapa(
           }
         },
         error: (error: any) => {
-          console.error('[parseCsvWithPapa] Parse error:', error);
+          logger.error('Parse error', LogCategory.FILE, error);
           reject(error);
         }
       });
@@ -344,7 +340,7 @@ export async function parseShapefile(
 
     return geojson;
   } catch (error) {
-    console.error('Shapefile parsing error:', error);
+    logger.error('Shapefile parsing error', LogCategory.FILE, error);
     throw error;
   }
 }

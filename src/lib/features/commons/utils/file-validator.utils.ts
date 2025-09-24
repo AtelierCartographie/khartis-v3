@@ -1,4 +1,4 @@
-import { logger } from './logger.utils';
+import { logger, LogCategory } from './logger';
 import type { FileValidation } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 
@@ -116,7 +116,7 @@ export class FileValidator {
           break;
       }
     } catch (error) {
-      logger.error('Async validation failed', error);
+      logger.error('Async validation failed', LogCategory.FILE, error);
       result.errors.push('Impossible de valider le contenu du fichier');
       result.isValid = false;
     }

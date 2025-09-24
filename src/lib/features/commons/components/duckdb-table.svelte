@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
   import type { Table } from '@uwdata/flechette';
+  import { logger, LogCategory } from '../utils/logger';
 
   interface Props {
     tableName: string;
@@ -55,7 +56,7 @@
 
       rows = displayRows;
     } catch (error) {
-      console.error('Error loading table data:', error);
+      logger.error('Error loading table data', LogCategory.UI, error);
     } finally {
       isLoading = false;
     }

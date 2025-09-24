@@ -20,6 +20,7 @@ report.*.json
 /.svelte-kit
 /build
 dist
+khartis-pipeline-main
 
 # OS
 .DS_Store

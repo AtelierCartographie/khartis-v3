@@ -1,6 +1,6 @@
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestrator } from '../services/data-orchestrator.service';
-import { logger } from '../utils/logger.utils';
+import { logger, LogCategory } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { projectPersistence } from '../utils/project-persistence.utils';
 import { generateProjectFilename } from '../utils/string.utils';
@@ -130,7 +130,7 @@ class ProjectStore {
           sourceType: file.sourceType
         };
 
-        logger.debug('[ProjectStore] Adding file to sourceFiles:', {
+        logger.debug('Adding file to sourceFiles', LogCategory.PROJECT, {
           name: fileCopy.name,
           parsedDataLength: Array.isArray(fileCopy.parsedData)
             ? fileCopy.parsedData.length
@@ -146,7 +146,7 @@ class ProjectStore {
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
         } catch (error) {
-          logger.error('[ProjectStore] Failed to process file:', error);
+          logger.error('Failed to process file', LogCategory.PROJECT, error);
 
           const index = this._state.currentProject.data.sourceFiles.findIndex(
             (f) => f.id === fileCopy.id
@@ -272,7 +272,7 @@ class ProjectStore {
       }
 
       if (projectValidation.warnings.length > 0) {
-        projectValidation.warnings.forEach((warning) => logger.warn(warning));
+        projectValidation.warnings.forEach((warning) => logger.warn(warning, LogCategory.PROJECT));
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
@@ -360,7 +360,7 @@ class ProjectStore {
       projects.length
     );
     if (storageCheck.warnings.length > 0) {
-      storageCheck.warnings.forEach((warning) => logger.warn(warning));
+      storageCheck.warnings.forEach((warning) => logger.warn(warning, LogCategory.PERSISTENCE));
     }
 
     return projects;
@@ -573,7 +573,7 @@ class ProjectStore {
       try {
         await this.loadProject(lastProjectId);
       } catch (error) {
-        logger.error('Failed to load last project:', error);
+        logger.error('Failed to load last project', LogCategory.PROJECT, error);
       }
     }
   }

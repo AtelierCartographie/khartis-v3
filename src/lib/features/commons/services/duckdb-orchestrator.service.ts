@@ -3,6 +3,7 @@ import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import type { ProcessedDataset } from '../utils/data-pipeline.utils';
 import { showError } from '../utils/notification.utils.svelte';
+import { logger, LogCategory } from '../utils/logger';
 
 export interface DuckDBDataset {
   id: string;
@@ -28,27 +29,32 @@ class DuckDBOrchestratorService {
     try {
       await initDuckDB();
       this.initialized = true;
-      console.log('[DuckDBOrchestrator] DuckDB initialized successfully');
+      logger.success('DuckDB initialized successfully', LogCategory.DUCKDB);
     } catch (error) {
-      console.error('Failed to initialize DuckDB:', error);
+      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
       showError('DuckDB initialization failed', 'Please refresh the page');
       throw error;
     }
   }
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
-    console.log('[DuckDBOrchestrator.processFile] Starting with file:', file.name);
-    console.log('[DuckDBOrchestrator.processFile] File status:', file.status);
-    console.log('[DuckDBOrchestrator.processFile] Has parsedData?', !!file.parsedData);
-    console.log('[DuckDBOrchestrator.processFile] ParsedData sample:', file.parsedData?.[0]);
+    logger.debug('Processing file', LogCategory.DUCKDB, {
+      name: file.name,
+      status: file.status,
+      hasParsedData: !!file.parsedData,
+      parsedDataSample: file.parsedData?.[0]
+    });
 
     if (!this.initialized) {
-      console.log('[DuckDBOrchestrator.processFile] Not initialized, initializing...');
+      logger.info('DuckDB not initialized, initializing...', LogCategory.DUCKDB);
       await this.initialize();
     }
 
     if (!file.parsedData || file.status !== 'complete') {
-      console.log('[DuckDBOrchestrator.processFile] Returning null - parsedData:', !!file.parsedData, 'status:', file.status);
+      logger.debug('Returning null - file not ready', LogCategory.DUCKDB, {
+        hasParsedData: !!file.parsedData,
+        status: file.status
+      });
       return null;
     }
 
@@ -63,42 +69,48 @@ class DuckDBOrchestratorService {
 
       return null;
     } catch (error) {
-      console.error('[DuckDBOrchestrator.processFile] Error:', error);
+      logger.error('Error processing file', LogCategory.DUCKDB, error);
       showError('Failed to process file', error instanceof Error ? error.message : 'Unknown error');
       return null;
     }
   }
 
   private async processCSV(file: UploadedFile, tableName: string): Promise<DuckDBDataset> {
-    console.log('[DuckDBOrchestrator.processCSV] Processing CSV file:', file.name);
-    console.log('[DuckDBOrchestrator.processCSV] ParsedData length:', file.parsedData?.length);
-    console.log('[DuckDBOrchestrator.processCSV] First row:', file.parsedData?.[0]);
+    logger.debug('Processing CSV file', LogCategory.DUCKDB, {
+      name: file.name,
+      parsedDataLength: file.parsedData?.length,
+      firstRow: file.parsedData?.[0]
+    });
 
     const csvData = this.convertToCSV(file.parsedData);
-    console.log('[DuckDBOrchestrator.processCSV] CSV data length:', csvData.length);
-    console.log('[DuckDBOrchestrator.processCSV] CSV preview:', csvData.substring(0, 200));
+    logger.debug('CSV data prepared', LogCategory.DUCKDB, {
+      length: csvData.length,
+      preview: csvData.substring(0, 200)
+    });
 
     const blob = new Blob([csvData], { type: 'text/csv' });
     const duckFile = new File([blob], file.name, { type: 'text/csv' });
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
-    console.log('[DuckDBOrchestrator.processCSV] Registering file with DuckDB');
+    logger.debug('Registering file with DuckDB', LogCategory.DUCKDB);
     await Duck.register_files([duckFile]);
 
-    console.log('[DuckDBOrchestrator.processCSV] Reading tabular data into table:', tableName);
+    logger.debug('Reading tabular data into table', LogCategory.DUCKDB, { tableName });
     const actualTableName = await Duck.read_tabular(duckFile, { tablename: tableName });
-    console.log('[DuckDBOrchestrator.processCSV] Table created with name:', actualTableName);
+    logger.debug('Table created', LogCategory.DUCKDB, { actualTableName });
 
     const finalTableName = actualTableName || tableName;
 
-    console.log('[DuckDBOrchestrator.processCSV] Analyzing table:', finalTableName);
+    logger.debug('Analyzing table', LogCategory.DUCKDB, { finalTableName });
     const columns = await Duck.analyse(finalTableName);
-    console.log('[DuckDBOrchestrator.processCSV] Analysis complete, columns:', columns.length);
-    console.log('[DuckDBOrchestrator.processCSV] Columns sample:', columns.slice(0, 2));
+    logger.debug('Analysis complete', LogCategory.DUCKDB, {
+      columnCount: columns.length,
+      columnsSample: columns.slice(0, 2)
+    });
 
     const rowCount = await this.getRowCount(finalTableName);
-    console.log('[DuckDBOrchestrator.processCSV] Row count:', rowCount);
+    logger.debug('Row count retrieved', LogCategory.DUCKDB, { rowCount });
 
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
@@ -116,7 +128,7 @@ class DuckDBOrchestratorService {
     this.datasets.set(dataset.id, dataset);
     this.currentTableName = finalTableName;
 
-    console.log('[DuckDBOrchestrator.processCSV] Dataset created:', {
+    logger.info('Dataset created', LogCategory.DUCKDB, {
       tableName: finalTableName,
       columns: dataset.columns.length,
       rows: dataset.rowCount,
@@ -127,7 +139,7 @@ class DuckDBOrchestratorService {
   }
 
   private async processGeoJSON(file: UploadedFile, tableName: string): Promise<DuckDBDataset> {
-    console.log('[DuckDBOrchestrator.processGeoJSON] Processing GeoJSON file:', file.name);
+    logger.debug('Processing GeoJSON file', LogCategory.DUCKDB, { name: file.name });
 
     const geoJsonData = JSON.stringify(file.parsedData);
 
@@ -157,7 +169,7 @@ class DuckDBOrchestratorService {
     this.datasets.set(dataset.id, dataset);
     this.currentTableName = tableName;
 
-    console.log('[DuckDBOrchestrator.processGeoJSON] Dataset created:', {
+    logger.info('GeoJSON dataset created', LogCategory.DUCKDB, {
       tableName,
       columns: dataset.columns.length,
       rows: dataset.rowCount
@@ -210,7 +222,7 @@ class DuckDBOrchestratorService {
       order?: 'ASC' | 'DESC' | null;
     }
   ): Promise<any> {
-    console.log('[DuckDBOrchestrator.getTableData] Getting data for table:', tableName);
+    logger.debug('Getting data for table', LogCategory.DUCKDB, { tableName });
 
     if (!this.initialized) {
       await this.initialize();
@@ -234,11 +246,11 @@ class DuckDBOrchestratorService {
           query += ` OFFSET ${options.offset}`;
         }
 
-        console.log('[DuckDBOrchestrator.getTableData] Running query:', query);
+        logger.debug('Running query', LogCategory.DUCKDB, { query });
         return await Duck.query(query);
       } else {
         const data = await Duck.get_data(tableName, { geometry: false });
-        console.log('[DuckDBOrchestrator.getTableData] Data retrieved:', {
+        logger.debug('Data retrieved', LogCategory.DUCKDB, {
           tableName,
           hasData: !!data,
           numRows: data?.numRows
@@ -246,7 +258,7 @@ class DuckDBOrchestratorService {
         return data;
       }
     } catch (error) {
-      console.error('[DuckDBOrchestrator.getTableData] Error:', error);
+      logger.error('Error getting table data', LogCategory.DUCKDB, error);
       return { numRows: 0, get: () => ({}) };
     }
   }
@@ -261,7 +273,7 @@ class DuckDBOrchestratorService {
     try {
       return await Duck.get_row_count(tableName);
     } catch (error) {
-      console.error('[DuckDBOrchestrator.getRowCount] Error:', error);
+      logger.error('Error getting row count', LogCategory.DUCKDB, error);
       const result: any = await Duck.query(`SELECT COUNT(*) as count FROM ${tableName}`);
       if (result && result.get) {
         return result.get(0).count;
@@ -389,15 +401,17 @@ class DuckDBOrchestratorService {
   }
 
   async convertToProcessedDataset(duckDataset: DuckDBDataset): Promise<ProcessedDataset> {
-    console.log('[DuckDBOrchestrator.convertToProcessedDataset] Converting dataset:', duckDataset.name);
-    console.log('[DuckDBOrchestrator.convertToProcessedDataset] Table name:', duckDataset.tableName);
-    console.log('[DuckDBOrchestrator.convertToProcessedDataset] Duck columns:', duckDataset.columns.length);
-    console.log('[DuckDBOrchestrator.convertToProcessedDataset] Sample column:', duckDataset.columns[0]);
+    logger.debug('Converting to processed dataset', LogCategory.DUCKDB, {
+      name: duckDataset.name,
+      tableName: duckDataset.tableName,
+      columnsCount: duckDataset.columns.length,
+      sampleColumn: duckDataset.columns[0]
+    });
 
     let data: any[] = [];
     try {
       const tableData = await this.getTableData(duckDataset.tableName);
-      console.log('[DuckDBOrchestrator.convertToProcessedDataset] TableData received:', {
+      logger.debug('TableData received', LogCategory.DUCKDB, {
         hasData: !!tableData,
         numRows: tableData?.numRows
       });
@@ -414,11 +428,13 @@ class DuckDBOrchestratorService {
           }
           data.push(cleanRow);
         }
-        console.log('[DuckDBOrchestrator.convertToProcessedDataset] Loaded rows:', data.length);
-        console.log('[DuckDBOrchestrator.convertToProcessedDataset] First row:', data[0]);
+        logger.debug('Loaded rows', LogCategory.DUCKDB, {
+          count: data.length,
+          firstRow: data[0]
+        });
       }
     } catch (error) {
-      console.error('[DuckDBOrchestrator.convertToProcessedDataset] Error loading data:', error);
+      logger.error('Error loading data', LogCategory.DUCKDB, error);
       data = [];
     }
 
@@ -446,7 +462,7 @@ class DuckDBOrchestratorService {
       }
     };
 
-    console.log('[DuckDBOrchestrator.convertToProcessedDataset] Final dataset:', {
+    logger.debug('Final dataset converted', LogCategory.DUCKDB, {
       name: processedDataset.name,
       columns: processedDataset.columns.length,
       columnNames: processedDataset.columns.map(c => c.name),

@@ -10,6 +10,7 @@ import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?ur
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { derived, get, writable } from 'svelte/store';
+import { logger, LogCategory } from '../utils/logger';
 
 export interface DuckDBState {
   db: AsyncDuckDB | null;
@@ -107,7 +108,7 @@ class DuckDBManager {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to initialize DuckDB';
-      console.error('Failed to initialize DuckDB:', error);
+      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
 
       duckDbState.update((state) => ({
         ...state,
@@ -139,7 +140,7 @@ class DuckDBManager {
       await currentState.db.registerFileURL(name, url, protocol, cache);
       this.registeredFiles.add(name);
     } catch (error) {
-      console.error(`Failed to register file ${name}:`, error);
+      logger.error(`Failed to register file ${name}`, LogCategory.DUCKDB, error);
       throw error;
     }
   }
@@ -173,7 +174,7 @@ class DuckDBManager {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Query failed';
-      console.error('Query failed:', error);
+      logger.error('Query failed', LogCategory.DUCKDB, error);
 
       queryState.update((state) => ({
         ...state,
