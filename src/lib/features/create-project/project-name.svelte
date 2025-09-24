@@ -105,6 +105,7 @@
 
     <div class="flex-1 relative">
       <TextInput
+        data-testid="project-name-input"
         placeholder={m.project_name_placeholder()}
         bind:value={localProjectName}
         on:keydown={handleKeyDown}

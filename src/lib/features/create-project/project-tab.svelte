@@ -9,6 +9,7 @@
     selected?: boolean;
     name?: string;
     onclick?: (e: Event) => void | undefined;
+    'data-testid'?: string;
   }
 
   let {
@@ -16,7 +17,8 @@
     icon,
     selected = false,
     name = 'project-type',
-    onclick
+    onclick,
+    'data-testid': dataTestId
   }: ProjectCardProps = $props();
 </script>
 
@@ -29,6 +31,7 @@
   tabindex={0}
   onclick={onclick}
   onkeydown={onclick}
+  data-testid={dataTestId}
 >
   <div class="flex justify-between w-full items-start pb-3">
     <div

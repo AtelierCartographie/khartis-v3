@@ -32,7 +32,7 @@
   }
 </script>
 
-<div id="khartis-create-project">
+<div id="khartis-create-project" data-testid="create-project-modal">
   <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader title={m.create_project_welcome()}>
       <div class="mb-3"></div>
@@ -52,6 +52,7 @@
             selected={createProjectState.selectedTab === 1}
             onclick={() => selectTile(1)}
             title={m.create_project_new_project()}
+            data-testid="tab-create-new"
           >
             {#snippet icon()}
               <Upload size={20} />
@@ -62,6 +63,7 @@
             selected={createProjectState.selectedTab === 2}
             onclick={() => selectTile(2)}
             title={m.create_project_open_project()}
+            data-testid="tab-open-project"
           >
             {#snippet icon()}
               <FileStorage size={20} />
@@ -72,6 +74,7 @@
             selected={createProjectState.selectedTab === 3}
             onclick={() => selectTile(3)}
             title={m.create_project_try_example()}
+            data-testid="tab-try-example"
           >
             {#snippet icon()}
               <ShapeExclude size={20} />
@@ -79,7 +82,7 @@
           </ProjectTab>
         </section>
 
-        <div class="tab-content">
+        <div class="tab-content" data-testid="tab-content">
           {#if createProjectState.selectedTab === 1}
             <CreateNewProject onClose={handleClose} isModal />
           {:else if createProjectState.selectedTab === 2}
