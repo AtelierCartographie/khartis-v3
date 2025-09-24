@@ -175,7 +175,6 @@ class ProjectStore {
       (f) => f.id === fileId
     );
     if (index > -1) {
-      const fileName = this._state.currentProject.data.sourceFiles[index].name;
       this._state.currentProject.data.sourceFiles.splice(index, 1);
 
       await dataOrchestrator.onFileRemoved(fileId);

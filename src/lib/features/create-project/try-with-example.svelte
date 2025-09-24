@@ -1,18 +1,22 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
-  import { m } from '$lib/paraglide/messages';
-  import { Tag, InlineNotification, SkeletonPlaceholder } from 'carbon-components-svelte';
   import {
     EXAMPLE_CATEGORIES,
     EXAMPLE_PROJECTS,
     getExamplesByCategory,
     loadExampleData
-  } from '$lib/features/commons/data/examples.data';
+  } from '$lib/features/commons/mocks/examples.data';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { goto } from '$app/navigation';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { logger } from '$lib/features/commons/utils/logger.utils';
+  import { m } from '$lib/paraglide/messages';
+  import {
+    InlineNotification,
+    SkeletonPlaceholder,
+    Tag
+  } from 'carbon-components-svelte';
 
   interface Props {
     onClose?: () => void;
@@ -42,7 +46,7 @@
     error = '';
 
     try {
-      const example = EXAMPLE_PROJECTS.find(e => e.id === exampleId);
+      const example = EXAMPLE_PROJECTS.find((e) => e.id === exampleId);
       if (!example) {
         throw new Error('Example not found');
       }
@@ -52,7 +56,11 @@
       const file = new File(
         [typeof data === 'string' ? data : JSON.stringify(data)],
         example.dataUrl.split('/').pop() || 'example-data.csv',
-        { type: example.dataUrl.endsWith('.json') ? 'application/json' : 'text/csv' }
+        {
+          type: example.dataUrl.endsWith('.json')
+            ? 'application/json'
+            : 'text/csv'
+        }
       );
 
       await createProjectActions.processFiles([file]);
