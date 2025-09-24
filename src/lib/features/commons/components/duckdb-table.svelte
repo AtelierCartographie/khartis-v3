@@ -25,11 +25,9 @@
     try {
       isLoading = true;
 
-      // Get table data through orchestrator
       const tableData = await duckDBOrchestrator.getTableData(tableName);
       arrowTable = tableData;
 
-      // For now, create simple columns from the first row
       if (tableData && tableData.numRows > 0) {
         totalRows = tableData.numRows;
         const firstRow = tableData.get(0);
@@ -39,13 +37,11 @@
         }));
       }
 
-      // Transform data for Carbon DataTable
       const headers = columns.map(col => ({
         key: col.name,
         value: `${col.name} (${col.type_simple})`
       }));
 
-      // Get limited rows for display
       const displayRows = [];
       const limit = Math.min(maxRows, totalRows);
 

@@ -1,3 +1,5 @@
+import localforage from 'localforage';
+
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
@@ -8,14 +10,14 @@ export interface StorageLimits {
   maxFileSize: number;
   maxProjectSize: number;
   maxProjectCount: number;
-  maxLocalStorageSize: number;
+  maxStorageSize: number;
 }
 
 export const STORAGE_LIMITS: StorageLimits = {
-  maxFileSize: 50 * 1024 * 1024, // 50 MB par fichier
-  maxProjectSize: 100 * 1024 * 1024, // 100 MB par projet
-  maxProjectCount: 50, // Maximum 50 projets sauvegardés
-  maxLocalStorageSize: 5 * 1024 * 1024 // 5 MB pour localStorage
+  maxFileSize: 50 * 1024 * 1024,
+  maxProjectSize: 100 * 1024 * 1024,
+  maxProjectCount: 50,
+  maxStorageSize: 5 * 1024 * 1024
 };
 
 export class ProjectValidator {
@@ -82,7 +84,9 @@ export class ProjectValidator {
 
     if (name.length > 255) {
       result.isValid = false;
-      result.errors.push('Le nom du projet ne peut pas dépasser 255 caractères');
+      result.errors.push(
+        'Le nom du projet ne peut pas dépasser 255 caractères'
+      );
     }
 
     const invalidChars = /[<>:"/\\|?*]/g;
@@ -94,7 +98,9 @@ export class ProjectValidator {
     return result;
   }
 
-  static validateStorageCapacity(currentProjectCount: number): ValidationResult {
+  static validateStorageCapacity(
+    currentProjectCount: number
+  ): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -117,7 +123,7 @@ export class ProjectValidator {
     return result;
   }
 
-  static checkLocalStorageUsage(): ValidationResult {
+  static async checkStorageUsage(): Promise<ValidationResult> {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -126,28 +132,34 @@ export class ProjectValidator {
 
     try {
       let totalSize = 0;
-      for (const key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
-          totalSize += localStorage[key].length + key.length;
+      const keys = await localforage.keys();
+
+      for (const key of keys) {
+        const value = await localforage.getItem<string>(key);
+        if (value) {
+          totalSize +=
+            (typeof value === 'string'
+              ? value.length
+              : JSON.stringify(value).length) + key.length;
         }
       }
 
-      const sizeInBytes = totalSize * 2; // UTF-16 encoding
+      const sizeInBytes = totalSize * 2;
 
-      if (sizeInBytes > STORAGE_LIMITS.maxLocalStorageSize) {
+      if (sizeInBytes > STORAGE_LIMITS.maxStorageSize) {
         result.warnings.push(
-          'Le stockage local approche de sa limite. Certaines fonctionnalités pourraient être affectées.'
+          'Le stockage approche de sa limite. Certaines fonctionnalités pourraient être affectées.'
         );
       }
 
-      if (sizeInBytes > STORAGE_LIMITS.maxLocalStorageSize * 0.9) {
+      if (sizeInBytes > STORAGE_LIMITS.maxStorageSize * 0.9) {
         result.isValid = false;
         result.errors.push(
-          'Espace de stockage local insuffisant. Veuillez nettoyer le cache du navigateur.'
+          'Espace de stockage insuffisant. Veuillez nettoyer le cache du navigateur.'
         );
       }
     } catch (error) {
-      result.warnings.push('Impossible de vérifier l\'utilisation du stockage local');
+      result.warnings.push("Impossible de vérifier l'utilisation du stockage");
     }
 
     return result;

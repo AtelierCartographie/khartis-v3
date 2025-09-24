@@ -4,9 +4,15 @@
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
-  import { FileValidator, SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
+  import {
+    FileValidator,
+    SUPPORTED_FILE_TYPES
+  } from '$lib/features/commons/utils/file-validator.utils';
+  import {
+    showError,
+    showWarning
+  } from '$lib/features/commons/utils/notification.utils.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { showError, showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
   import {
     Button,
     FileUploaderDropContainer,
@@ -36,7 +42,10 @@
     const validationResult = FileValidator.validateMultiple(files);
 
     if (validationResult.globalErrors.length > 0) {
-      showError('Erreur de validation', validationResult.globalErrors.join(', '));
+      showError(
+        'Erreur de validation',
+        validationResult.globalErrors.join(', ')
+      );
       return;
     }
 
@@ -44,7 +53,7 @@
     const warnings: string[] = [];
 
     for (const [filename, result] of validationResult.results) {
-      const file = files.find(f => f.name === filename);
+      const file = files.find((f) => f.name === filename);
       if (!file) continue;
 
       if (result.isValid) {
@@ -130,13 +139,16 @@
           ...SUPPORTED_FILE_TYPES.geopackage.extensions
         ]}
         validateFiles={(files) => {
-          const validationResult = FileValidator.validateMultiple(Array.from(files));
+          const validationResult = FileValidator.validateMultiple(
+            Array.from(files)
+          );
 
           if (!validationResult.isValid) {
             const allErrors = [
               ...validationResult.globalErrors,
-              ...Array.from(validationResult.results.values())
-                .flatMap(r => r.errors)
+              ...Array.from(validationResult.results.values()).flatMap(
+                (r) => r.errors
+              )
             ];
 
             if (allErrors.length > 0) {
@@ -177,7 +189,7 @@
       <TextInput
         bind:value={onlineUrlValue}
         labelText={m.create_project_online_file_link()}
-        placeholder="https://"
+        placeholder="https://example.com/data.csv"
         disabled={createProjectState.newProject.isLoading}
       />
 

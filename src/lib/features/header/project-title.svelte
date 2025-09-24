@@ -8,12 +8,10 @@
   let inputValue = $state(projectStore.projectName);
   let originalName = $state(projectStore.projectName);
 
-  // Validation states
   const isEmpty = $derived(!inputValue.trim());
   const hasChanges = $derived(inputValue.trim() !== originalName);
   const canSave = $derived(!isEmpty && hasChanges);
 
-  // Sync with store changes
   $effect(() => {
     inputValue = projectStore.projectName;
     originalName = projectStore.projectName;
@@ -22,21 +20,18 @@
   function handleSave() {
     const trimmed = inputValue.trim();
 
-    // If empty, restore original
     if (!trimmed) {
       inputValue = originalName;
       return;
     }
 
-    // Sanitize the input for security
     const sanitized = sanitizeProjectName(trimmed);
 
-    // If changed, save
     if (sanitized !== originalName) {
       projectStore.updateProjectName(sanitized);
       projectStore.saveCurrentProject();
       originalName = sanitized;
-      inputValue = sanitized; // Update input to show sanitized value
+      inputValue = sanitized; 
     }
   }
 

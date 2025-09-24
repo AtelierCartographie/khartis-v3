@@ -19,7 +19,6 @@
   import { Add } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
-  // TODO hook to real data inputs when available
   const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
   const discretizationMethods = [
@@ -37,14 +36,12 @@
   let fillType = $state<string>('classes');
   let labelStrokeType = $state<string>('aucun');
 
-  // Symboles section
   let symbolMaxSize = $state<number>(24);
   let symbolSize = $state<number>(12);
   let symbolOpacity = $state<number>(80);
   let strokeWidth = $state<number>(1);
   let strokeOpacity = $state<number>(100);
 
-  // Feed section
   let feedFillType = $state<string>('unique');
   let feedDiscretizationId = $state<number>(0);
   let feedColorFieldId = $state<number>(0);
@@ -52,7 +49,6 @@
   let feedStrokeWidth = $state<number>(1);
   let feedStrokeOpacity = $state<number>(100);
 
-  // Polygones section
   let polyFillType = $state<string>('unique');
   let polyDiscretizationId = $state<number>(0);
   let polyColorFieldId = $state<number>(0);
@@ -60,11 +56,9 @@
   let polyStrokeWidth = $state<number>(2);
   let polyStrokeOpacity = $state<number>(100);
 
-  // Lignes section
   let lineWidth = $state<number>(1);
   let lineOpacity = $state<number>(100);
 
-  // Textes section
   let textFieldId = $state<number>(0);
   let textSecondaryFieldId = $state<number>(0);
   let textSize = $state<number>(12);

@@ -1,7 +1,3 @@
-/**
- * Slugify a string for safe file names
- * Removes special characters, accents, spaces and makes lowercase
- */
 export function slugify(text: string): string {
   if (!text) return '';
 
@@ -17,9 +13,6 @@ export function slugify(text: string): string {
 }
 
 
-/**
- * Generate a safe filename with optional timestamp
- */
 export function generateFilename(
   name: string,
   extension: string,
@@ -35,9 +28,6 @@ export function generateFilename(
   return `${slugifiedName}.${extension}`;
 }
 
-/**
- * Generate a safe project filename with timestamp
- */
 export function generateProjectFilename(
   projectName: string,
   extension: string = 'kh'
@@ -45,9 +35,6 @@ export function generateProjectFilename(
   return generateFilename(projectName || 'untitled-project', extension, true);
 }
 
-/**
- * Sanitize filename for display (keep original but remove path)
- */
 export function sanitizeDisplayName(filename: string): string {
   if (!filename) return '';
 

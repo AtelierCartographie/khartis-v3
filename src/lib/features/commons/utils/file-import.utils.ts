@@ -1,18 +1,17 @@
+import Papa from 'papaparse';
+import shp from 'shpjs';
 import {
   type FileValidation,
   type UploadedFile,
   DataSourceType,
   FileType
 } from '../store/create-project.types';
-import Papa from 'papaparse';
-import shp from 'shpjs';
 import { sanitizeDisplayName } from './string.utils';
-import { formatFileSize } from './format.utils';
 
-export { FileType, DataSourceType } from '../store/create-project.types';
+export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024; // Harmonisé à 50 MB
+export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 export const SUPPORTED_EXTENSIONS = {
   tabular: ['.csv', '.tsv', '.txt'],
@@ -176,7 +175,6 @@ export function createUploadedFile(
   };
 }
 
-
 export function detectDelimiter(csvContent: string): string {
   const firstLine = csvContent.split('\n')[0];
   if (!firstLine) return ',';
@@ -217,11 +215,13 @@ export async function parseCsvWithPapa(
   });
 
   return new Promise((resolve, reject) => {
-
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target?.result as string;
-      console.log('[parseCsvWithPapa] File content preview:', text.substring(0, 500));
+      console.log(
+        '[parseCsvWithPapa] File content preview:',
+        text.substring(0, 500)
+      );
 
       Papa.parse(text, {
         header: true,
@@ -238,7 +238,9 @@ export async function parseCsvWithPapa(
           });
 
           if (results.data.length === 0 && text.trim().length > 0) {
-            console.warn('[parseCsvWithPapa] Empty result but file has content, trying without header');
+            console.warn(
+              '[parseCsvWithPapa] Empty result but file has content, trying without header'
+            );
 
             Papa.parse(text, {
               header: false,
@@ -253,7 +255,9 @@ export async function parseCsvWithPapa(
 
                 if (retryResults.data.length > 0) {
                   const firstRow = retryResults.data[0] as any[];
-                  const headers = firstRow.map((_: any, i: number) => `Column_${i + 1}`);
+                  const headers = firstRow.map(
+                    (_: any, i: number) => `Column_${i + 1}`
+                  );
                   const dataRows = retryResults.data.slice(1) as any[][];
                   const data = dataRows.map((row: any[]) => {
                     const obj: any = {};
@@ -319,19 +323,22 @@ export async function parseShapefile(
 
     if (onProgress) onProgress(30);
 
-    const geojson: any = await shp.parseShp(shpBuffer as any, dbfBuffer as any);
-
-    if (onProgress) onProgress(80);
+    const shapefileData: any = {
+      shp: shpBuffer,
+      dbf: dbfBuffer
+    };
 
     if (files['prj']) {
-      const prjText = new TextDecoder().decode(files['prj']);
-      geojson.prj = prjText;
+      shapefileData.prj = new TextDecoder().decode(files['prj']);
     }
 
     if (files['cpg']) {
-      const cpgText = new TextDecoder().decode(files['cpg']);
-      geojson.encoding = cpgText.trim();
+      shapefileData.cpg = new TextDecoder().decode(files['cpg']).trim();
     }
+
+    const geojson: any = await shp(shapefileData);
+
+    if (onProgress) onProgress(80);
 
     if (onProgress) onProgress(100);
 

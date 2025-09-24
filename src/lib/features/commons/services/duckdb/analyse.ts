@@ -57,19 +57,6 @@ const describe_full_macro = `CREATE OR replace MACRO describe_full(tabname) AS T
 	WHERE table_name = tabname
 );`;
 
-/**
- * SQL macro to create or replace a function named `share_rank_interval`.
- * This function calculates the share of consecutive values in a specified column of a given table.
- *
- * The function performs the following steps:
- * 1. Creates a CTE `ordered_values` to select the column values and their previous values ordered by the column.
- * 2. Creates a CTE `differences` to calculate the difference between each value and its previous value.
- * 3. Calculates the share of consecutive values (where the difference is 1) over the total count of non-null values in the column.
- *
- * @param {string} tabname - The name of the table to query.
- * @param {string} colname - The name of the column to analyze.
- * @returns {number} - The share of consecutive values in the specified column.
- */
 const share_rank_interval_macro = `CREATE OR REPLACE FUNCTION share_rank_interval(tabname, colname) AS (
     WITH ordered_values AS (
         SELECT 
@@ -136,10 +123,6 @@ const summary_date_macro = `CREATE OR REPLACE MACRO summary_date(tabname, colnam
 	        max("colname") AS max
 );`;
 
-// HISTOGRAM NUMERIC
-// /!\ la macro histogram_values() incorporée à DuckDB génère une erreur dans cet usage.
-// En remplacement, une nouvelle macro qui n'utilise que les morceaux dont on a besoin pour Khartis
-// cf https://github.com/duckdb/duckdb/pull/12590
 const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabname, colname) AS TABLE(
 	WITH bins AS (
 		FROM query_table(tabname::VARCHAR)
@@ -160,7 +143,6 @@ const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabna
 	FROM nulls_count
 );`;
 
-// HISTOGRAM CATEGORICAL
 const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categorical(tabname, colname) AS TABLE (
 	WITH nrow AS (
 		SELECT count(*) AS total FROM query_table(tabname)

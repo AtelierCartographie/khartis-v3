@@ -1,11 +1,12 @@
+import localforage from 'localforage';
 import type {
   KhartisProject,
   SavedProjectMetadata
 } from '../store/project.types';
 import { ProjectStorageKey } from '../store/project.types';
-import { ProjectSerializer } from './project-serialization.utils';
 import { compressData, decompressData } from './compression.utils';
 import { logger } from './logger.utils';
+import { ProjectSerializer } from './project-serialization.utils';
 
 const DB_NAME = 'KhartisDB';
 const DB_VERSION = 1;
@@ -55,8 +56,8 @@ export class ProjectPersistence {
         const store = transaction.objectStore(STORE_NAME);
         const request = store.put(serializedProject);
 
-        request.onsuccess = () => {
-          this.updateMetadata(project);
+        request.onsuccess = async () => {
+          await this.updateMetadata(project);
           resolve();
         };
 
@@ -108,8 +109,8 @@ export class ProjectPersistence {
       const store = transaction.objectStore(STORE_NAME);
       const request = store.delete(id);
 
-      request.onsuccess = () => {
-        this.removeFromMetadata(id);
+      request.onsuccess = async () => {
+        await this.removeFromMetadata(id);
         resolve();
       };
 
@@ -120,7 +121,9 @@ export class ProjectPersistence {
   }
 
   async listProjects(): Promise<SavedProjectMetadata[]> {
-    const metadataJson = localStorage.getItem(ProjectStorageKey.METADATA);
+    const metadataJson = await localforage.getItem<string>(
+      ProjectStorageKey.METADATA
+    );
     if (!metadataJson) {
       return [];
     }
@@ -136,8 +139,8 @@ export class ProjectPersistence {
     }
   }
 
-  private updateMetadata(project: KhartisProject): void {
-    const metadata = this.getMetadataList();
+  private async updateMetadata(project: KhartisProject): Promise<void> {
+    const metadata = await this.getMetadataList();
     const existingIndex = metadata.findIndex((m) => m.id === project.id);
 
     const projectMetadata: SavedProjectMetadata = {
@@ -155,17 +158,25 @@ export class ProjectPersistence {
       metadata.push(projectMetadata);
     }
 
-    localStorage.setItem(ProjectStorageKey.METADATA, JSON.stringify(metadata));
+    await localforage.setItem(
+      ProjectStorageKey.METADATA,
+      JSON.stringify(metadata)
+    );
   }
 
-  private removeFromMetadata(id: string): void {
-    const metadata = this.getMetadataList();
+  private async removeFromMetadata(id: string): Promise<void> {
+    const metadata = await this.getMetadataList();
     const filtered = metadata.filter((m) => m.id !== id);
-    localStorage.setItem(ProjectStorageKey.METADATA, JSON.stringify(filtered));
+    await localforage.setItem(
+      ProjectStorageKey.METADATA,
+      JSON.stringify(filtered)
+    );
   }
 
-  private getMetadataList(): SavedProjectMetadata[] {
-    const metadataJson = localStorage.getItem(ProjectStorageKey.METADATA);
+  private async getMetadataList(): Promise<SavedProjectMetadata[]> {
+    const metadataJson = await localforage.getItem<string>(
+      ProjectStorageKey.METADATA
+    );
     if (!metadataJson) {
       return [];
     }
@@ -181,7 +192,6 @@ export class ProjectPersistence {
     const json = JSON.stringify(project);
     return new Blob([json]).size;
   }
-
 
   async exportProject(project: KhartisProject): Promise<Blob> {
     const serializedProject = ProjectSerializer.serialize(project);
@@ -254,26 +264,26 @@ export class ProjectPersistence {
     );
   }
 
-  saveToLocalStorage(key: string, data: any): void {
+  async saveToStorage(key: string, data: any): Promise<void> {
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      await localforage.setItem(key, JSON.stringify(data));
     } catch (error) {
-      logger.error('Failed to save to localStorage:', error);
-      throw new Error('Storage quota exceeded or localStorage unavailable');
+      logger.error('Failed to save to storage:', error);
+      throw new Error('Storage quota exceeded or storage unavailable');
     }
   }
 
-  loadFromLocalStorage<T>(key: string): T | null {
+  async loadFromStorage<T>(key: string): Promise<T | null> {
     try {
-      const item = localStorage.getItem(key);
+      const item = await localforage.getItem<string>(key);
       return item ? JSON.parse(item) : null;
     } catch {
       return null;
     }
   }
 
-  clearLocalStorage(key: string): void {
-    localStorage.removeItem(key);
+  async clearStorage(key: string): Promise<void> {
+    await localforage.removeItem(key);
   }
 
   async createProjectArchive(project: KhartisProject): Promise<Blob> {
@@ -293,7 +303,6 @@ export class ProjectPersistence {
     const compressed = await compressData(json);
     return new Blob([compressed], { type: 'application/octet-stream' });
   }
-
 }
 
 export const projectPersistence = new ProjectPersistence();

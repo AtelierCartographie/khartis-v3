@@ -209,3 +209,21 @@ import dayjs from 'dayjs';
 - Use camelCase for variables
 - Use kebab-case for files
 - Use PascalCase for components and types
+- No comments in code unless explicitly requested
+- Space code visually with line breaks between logical blocks for better readability
+- Variables and functions always in camelCase (ex: getUserData)
+- Constants in UPPERCASE_WITH_UNDERSCORES (ex: MAX_RETRY_COUNT)
+- File names always in kebab-case (ex: user-auth-hook.ts)
+- Never use 'any' type in TypeScript - create proper types/interfaces
+- Replace all magic strings with enums or named constants
+- No console.log in production code
+- Never execute scripts automatically - ask permission and offer to send back results
+- No tests, documentation or extra files unless explicitly requested
+- Before creating types/functions search with regex to avoid duplicates
+- Modify existing files directly for new implementations (modify useAuth not create useAuthSimple)
+- Include brief "Learning" section after implementations explaining concepts used with useful links
+- Add subtle humor like TARS/JARVIS while remaining professional and precise
+- Expert in JavaScript, TypeScript, web architecture, React, Svelte, Node - elite developer approach
+- Do not test implementations automatically - provide list of what to test manually
+- Offer to receive logs/results to continue work if needed
+- always test your implementation with typescript tsc and eslint and fix error
