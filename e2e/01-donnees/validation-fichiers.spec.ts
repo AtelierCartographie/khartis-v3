@@ -6,7 +6,9 @@ const DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv');
 const SPATIAL_PATH = join(process.cwd(), 'e2e', 'mocks', 'spatial');
 
 test.describe('Validation de base des fichiers - 2.A.1', () => {
-  test('rejette un fichier dépassant la taille limite (50MB)', async ({ page }) => {
+  test('rejette un fichier dépassant la taille limite (50MB)', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -16,7 +18,9 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
 
     // Créer un gros fichier en mémoire
     const largeContent = 'x'.repeat(51 * 1024 * 1024); // 51MB
-    const largeFile = new File([largeContent], 'large.csv', { type: 'text/csv' });
+    const largeFile = new File([largeContent], 'large.csv', {
+      type: 'text/csv'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
@@ -26,23 +30,22 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }, largeFile);
 
     // Vérifier le message d'erreur
-    const errorMessage = page.locator('.bx--inline-notification--error, [role="alert"]');
+    const errorMessage = page.locator(
+      '.bx--inline-notification--error, [role="alert"]'
+    );
     await expect(errorMessage).toBeVisible();
     await expect(errorMessage).toContainText(/taille|size|50.*MB/i);
   });
 
   test('accepte les extensions de fichiers supportées', async ({ page }) => {
-    const supportedFiles = [
-      'nuts2_data.csv',
-      'nuts2_data.geojson'
-    ];
+    const supportedFiles = ['nuts2_data.csv', 'nuts2_data.geojson'];
 
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -79,7 +82,9 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
     await createTab.click();
 
     // Créer un fichier avec extension non supportée
-    const unsupportedFile = new File(['test content'], 'test.xyz', { type: 'application/octet-stream' });
+    const unsupportedFile = new File(['test content'], 'test.xyz', {
+      type: 'application/octet-stream'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
@@ -89,14 +94,16 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }, unsupportedFile);
 
     // Vérifier le message d'erreur
-    const errorMessage = page.locator('.bx--inline-notification--error, [role="alert"]');
+    const errorMessage = page.locator(
+      '.bx--inline-notification--error, [role="alert"]'
+    );
     await expect(errorMessage).toBeVisible();
   });
 });
@@ -115,10 +122,15 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     const fileInput = modal.locator('input[type="file"]').first();
     await fileInput.setInputFiles(csvPath);
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Test Geo Detection');
 
-    const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+    const createButton = modal.getByRole('button', {
+      name: 'Créer',
+      exact: true
+    });
     await createButton.click();
 
     // Attendre que la détection soit faite
@@ -129,7 +141,9 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     await expect(geoError).toBeHidden();
   });
 
-  test('affiche une erreur si aucune colonne géographique', async ({ page }) => {
+  test('affiche une erreur si aucune colonne géographique', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -152,7 +166,7 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -161,7 +175,9 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     await page.waitForTimeout(1000);
 
     // Vérifier le message d'erreur pour colonnes géographiques manquantes
-    const errorMessage = page.locator('.bx--inline-notification--error, [role="alert"]');
+    const errorMessage = page.locator(
+      '.bx--inline-notification--error, [role="alert"]'
+    );
     await expect(errorMessage).toBeVisible();
     await expect(errorMessage).toContainText(/géographique|geographic/i);
   });
@@ -190,7 +206,7 @@ IT,ITA,60000000`;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -227,7 +243,7 @@ Rome,41.9028,12.4964`;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -242,7 +258,9 @@ Rome,41.9028,12.4964`;
 });
 
 test.describe('Analyse de qualité des données - 2.A.5', () => {
-  test('affiche un avertissement pour les valeurs nulles excessives', async ({ page }) => {
+  test('affiche un avertissement pour les valeurs nulles excessives', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -268,7 +286,7 @@ Portugal,,`;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -279,7 +297,9 @@ Portugal,,`;
     // Vérifier l'avertissement
     const warningMessage = page.locator('.bx--inline-notification--warning');
     await expect(warningMessage).toBeVisible();
-    await expect(warningMessage).toContainText(/valeurs manquantes|null|missing/i);
+    await expect(warningMessage).toContainText(
+      /valeurs manquantes|null|missing/i
+    );
   });
 
   test('détecte les doublons dans les données', async ({ page }) => {
@@ -297,7 +317,9 @@ Germany,200
 France,100
 Italy,300`;
 
-    const file = new File([duplicateCSV], 'duplicates.csv', { type: 'text/csv' });
+    const file = new File([duplicateCSV], 'duplicates.csv', {
+      type: 'text/csv'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
@@ -307,7 +329,7 @@ Italy,300`;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -323,7 +345,9 @@ Italy,300`;
 });
 
 test.describe('Validation de performance - 3.B', () => {
-  test('affiche un avertissement pour les fichiers volumineux (>5000 lignes)', async ({ page }) => {
+  test('affiche un avertissement pour les fichiers volumineux (>5000 lignes)', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -337,7 +361,9 @@ test.describe('Validation de performance - 3.B', () => {
       largeCSV += `Country${i},${i * 100}\n`;
     }
 
-    const file = new File([largeCSV], 'large-dataset.csv', { type: 'text/csv' });
+    const file = new File([largeCSV], 'large-dataset.csv', {
+      type: 'text/csv'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
@@ -347,7 +373,7 @@ test.describe('Validation de performance - 3.B', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -358,7 +384,9 @@ test.describe('Validation de performance - 3.B', () => {
     // Vérifier l'avertissement de performance
     const warningMessage = page.locator('.bx--inline-notification--warning');
     await expect(warningMessage).toBeVisible();
-    await expect(warningMessage).toContainText(/performance|volumineux|large|5000/i);
+    await expect(warningMessage).toContainText(
+      /performance|volumineux|large|5000/i
+    );
   });
 
   test('rejette les fichiers dépassant 10000 lignes', async ({ page }) => {
@@ -385,7 +413,7 @@ test.describe('Validation de performance - 3.B', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -399,7 +427,9 @@ test.describe('Validation de performance - 3.B', () => {
     await expect(errorMessage).toContainText(/10000|lignes|rows|maximum/i);
   });
 
-  test('affiche un avertissement pour plus de 50 colonnes', async ({ page }) => {
+  test('affiche un avertissement pour plus de 50 colonnes', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -413,9 +443,14 @@ test.describe('Validation de performance - 3.B', () => {
       headers.push(`Column${i}`);
     }
 
-    const wideCSV = headers.join(',') + '\n' +
-                    'France,' + Array(51).fill('100').join(',') + '\n' +
-                    'Germany,' + Array(51).fill('200').join(',');
+    const wideCSV =
+      headers.join(',') +
+      '\n' +
+      'France,' +
+      Array(51).fill('100').join(',') +
+      '\n' +
+      'Germany,' +
+      Array(51).fill('200').join(',');
 
     const file = new File([wideCSV], 'wide-dataset.csv', { type: 'text/csv' });
 
@@ -427,7 +462,7 @@ test.describe('Validation de performance - 3.B', () => {
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -443,7 +478,9 @@ test.describe('Validation de performance - 3.B', () => {
 });
 
 test.describe('Correspondance avec catalogues - 2.A.7', () => {
-  test('valide la correspondance avec le catalogue de pays', async ({ page }) => {
+  test('valide la correspondance avec le catalogue de pays', async ({
+    page
+  }) => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
@@ -456,10 +493,15 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     const fileInput = modal.locator('input[type="file"]').first();
     await fileInput.setInputFiles(csvPath);
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Test Catalogue');
 
-    const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+    const createButton = modal.getByRole('button', {
+      name: 'Créer',
+      exact: true
+    });
     await createButton.click();
 
     await page.waitForTimeout(2000);
@@ -468,7 +510,7 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     const matchError = page.locator('text=/correspondance|match.*%/i');
 
     // Si un message de correspondance apparaît, il devrait être > 50%
-    if (await matchError.count() > 0) {
+    if ((await matchError.count()) > 0) {
       const text = await matchError.textContent();
       const match = text?.match(/(\d+)%/);
       if (match) {
@@ -478,7 +520,9 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     }
   });
 
-  test('affiche des suggestions pour les valeurs non reconnues', async ({ page }) => {
+  test('affiche des suggestions pour les valeurs non reconnues', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -502,7 +546,7 @@ Italie,300`;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -511,10 +555,12 @@ Italie,300`;
     await page.waitForTimeout(1500);
 
     // Vérifier les suggestions (si implémentées dans l'UI)
-    const suggestions = page.locator('[data-testid="fuzzy-match-suggestion"], .suggestion');
+    const suggestions = page.locator(
+      '[data-testid="fuzzy-match-suggestion"], .suggestion'
+    );
 
     // Si des suggestions sont visibles, vérifier qu'elles existent
-    if (await suggestions.count() > 0) {
+    if ((await suggestions.count()) > 0) {
       await expect(suggestions.first()).toBeVisible();
     }
   });

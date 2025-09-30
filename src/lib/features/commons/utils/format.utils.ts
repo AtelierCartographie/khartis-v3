@@ -8,7 +8,10 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / Math.pow(k, i)).toFixed(2)} ${units[i]}`;
 }
 
-export function formatDate(date: Date | string, locale: string = 'fr-FR'): string {
+export function formatDate(
+  date: Date | string,
+  locale: string = 'fr-FR'
+): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleDateString(locale, {
     day: '2-digit',
@@ -17,7 +20,10 @@ export function formatDate(date: Date | string, locale: string = 'fr-FR'): strin
   });
 }
 
-export function formatDateTime(date: Date | string, locale: string = 'fr-FR'): string {
+export function formatDateTime(
+  date: Date | string,
+  locale: string = 'fr-FR'
+): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toLocaleString(locale, {
     day: '2-digit',

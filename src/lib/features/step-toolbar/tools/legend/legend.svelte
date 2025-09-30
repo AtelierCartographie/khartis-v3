@@ -198,7 +198,8 @@
                     placeholder={item.name}
                     id={`${item.id}-title`}
                     bind:value={item.title}
-                    on:change={() => updateItemField(item.id, 'title', item.title)}
+                    on:change={() =>
+                      updateItemField(item.id, 'title', item.title)}
                   />
                 </Column>
               </Row>
@@ -211,7 +212,8 @@
                     placeholder={m.legend_no_subtitle()}
                     id={`${item.id}-subtitle`}
                     bind:value={item.subtitle}
-                    on:change={() => updateItemField(item.id, 'subtitle', item.subtitle)}
+                    on:change={() =>
+                      updateItemField(item.id, 'subtitle', item.subtitle)}
                   />
                 </Column>
               </Row>
@@ -224,7 +226,8 @@
                     placeholder={m.legend_no_note()}
                     id={`${item.id}-note`}
                     bind:value={item.note}
-                    on:change={() => updateItemField(item.id, 'note', item.note)}
+                    on:change={() =>
+                      updateItemField(item.id, 'note', item.note)}
                   />
                 </Column>
               </Row>

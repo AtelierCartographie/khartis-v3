@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
-async function createTestProject(page: any, projectName: string = 'Test Project') {
+async function createTestProject(
+  page: any,
+  projectName: string = 'Test Project'
+) {
   await page.goto('/');
   const modal = page.locator(MODAL_CONTAINER_SELECTOR);
   await expect(modal).toBeVisible();
@@ -19,7 +28,10 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
   const projectNameInput = modal.locator('[data-testid="project-name-input"]');
   await projectNameInput.fill(projectName);
 
-  const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+  const createButton = modal.getByRole('button', {
+    name: 'Créer',
+    exact: true
+  });
   await createButton.click();
 
   await expect(modal).toBeHidden();
@@ -55,7 +67,7 @@ test.describe('Menu latéral (Side Navigation)', () => {
     await expect(page.getByText('Ouvrir un projet')).toBeVisible();
   });
 
-  test('affiche les liens d\'aide et documentation', async ({ page }) => {
+  test("affiche les liens d'aide et documentation", async ({ page }) => {
     await createTestProject(page, 'Test Help Links');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');
@@ -103,13 +115,15 @@ test.describe('Menu latéral (Side Navigation)', () => {
 
     // Vérifier que le thème a changé (la classe g100 devrait être appliquée au body)
     const hasThemeClass = await page.evaluate(() => {
-      return document.documentElement.classList.contains('g100') ||
-             document.documentElement.classList.contains('white');
+      return (
+        document.documentElement.classList.contains('g100') ||
+        document.documentElement.classList.contains('white')
+      );
     });
     expect(hasThemeClass).toBeTruthy();
   });
 
-  test('ferme le menu en cliquant à l\'extérieur', async ({ page }) => {
+  test("ferme le menu en cliquant à l'extérieur", async ({ page }) => {
     await createTestProject(page, 'Test Close Outside');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');

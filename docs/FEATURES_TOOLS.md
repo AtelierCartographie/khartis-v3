@@ -75,7 +75,7 @@ Errors show InlineNotification; logger records details.
 
 createProjectActions.resetAllTabs clears all three mode states each time modal closes. Store never writes directly to IndexedDB.
 
-```
+````
 
 ## Tool Lifecycle
 
@@ -144,54 +144,65 @@ interface AnnotationsState {
   textContent: string
   defaultStyle: AnnotationStyle
 }
-```
+````
 
 **Components**:
+
 - text-tool.svelte - Text annotations with rich formatting
 - shape-tool.svelte - Rectangles, circles, arrows
 - drawing-tool.svelte - Freehand lines and zones
 - image-tool.svelte - Import and position images
 
 ### Color Blindness Tool
+
 Simulate various color vision deficiencies.
 
 **Simulation Types**:
+
 - Protanopia (red-blind)
 - Deuteranopia (green-blind)
 - Tritanopia (blue-blind)
 - Achromatopsia (complete color blindness)
 
 ### Geo Indications Tool
+
 Add geographic reference elements.
 
 **Elements**:
+
 - Scale bar (automatic unit conversion)
 - North arrow (projection-aware)
 - Coordinate grid
 - Location indicator
 
 ### Simplification Tool
+
 Reduce geometry complexity for performance.
 
 **Settings**:
+
 - Tolerance slider (0.001 - 10)
 - Preview mode
 - Vertex count display
 - Quality vs performance trade-off
 
 ### Search Tool
+
 Find and highlight map features.
 
 **Capabilities**:
+
 - Text search in attributes
 - Spatial search (bbox, radius)
 - Filter by attribute values
 - Highlight results
 
 ### Layers Tool
+
 Manage visualization layers and ordering.
 
 **Features**:
+
 - Drag to reorder
 - Toggle visibility
 - Opacity control
@@ -199,9 +210,11 @@ Manage visualization layers and ordering.
 - Group management
 
 ### Projections Tool
+
 Select and configure map projections.
 
 **Categories**:
+
 - Cylindrical (Mercator, Equirectangular)
 - Pseudo-cylindrical (Robinson, Mollweide)
 - Conic (Albers, Lambert)
@@ -211,9 +224,11 @@ Select and configure map projections.
 **Auto-suggestion**: Ranks projections by dataset extent fit.
 
 ### Legend Tool
+
 Configure and edit map legends.
 
 **Operations**:
+
 - Reorder items
 - Edit labels
 - Merge classes
@@ -221,9 +236,11 @@ Configure and edit map legends.
 - Style customization
 
 ### Format Tool
+
 Configure map layout and export settings.
 
 **Sections**:
+
 - Page size (A4, A3, custom)
 - Orientation (portrait/landscape)
 - Margins and padding
@@ -231,9 +248,11 @@ Configure map layout and export settings.
 - Export resolution
 
 ### Facets Tool
+
 Create small multiples/collections.
 
 **Settings**:
+
 - Variable selection
 - Grid columns
 - Scale mode (common/independent)
@@ -246,4 +265,7 @@ Create small multiples/collections.
 - Derived only for pure computed state
 - Deactivate tools: clean timeouts/listeners
 - Keep UI responsive: offload heavy tasks
+
+```
+
 ```

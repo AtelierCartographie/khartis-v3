@@ -165,12 +165,12 @@ const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categoric
 );`;
 
 export const analyse =
-	get_js_type_macro +
-	get_simplified_type_macro +
-	describe_full_macro +
-	share_rank_interval_macro +
-	summary_general_macro +
-	summary_numeric_macro +
-	summary_date_macro +
-	histogram_numeric_macro +
-	histogram_categorical_macro;
+  get_js_type_macro +
+  get_simplified_type_macro +
+  describe_full_macro +
+  share_rank_interval_macro +
+  summary_general_macro +
+  summary_numeric_macro +
+  summary_date_macro +
+  histogram_numeric_macro +
+  histogram_categorical_macro;

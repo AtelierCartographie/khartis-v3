@@ -1,4 +1,3 @@
-
 const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb := 5) AS (
   FROM query(tabname)
   SELECT quantile_disc("colname", list_transform(range(1, nb), c -> c / nb))
@@ -204,12 +203,12 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
 );`;
 
 export const breaks =
-	quantile_macro +
-	q6_macro +
-	equi_width_macro +
-	nested_means_macro +
-	headtail_macro +
-	headtail2_macro +
-	kmeans_macro +
-	add_class_macro +
-	round_thresholds_macro;
+  quantile_macro +
+  q6_macro +
+  equi_width_macro +
+  nested_means_macro +
+  headtail_macro +
+  headtail2_macro +
+  kmeans_macro +
+  add_class_macro +
+  round_thresholds_macro;

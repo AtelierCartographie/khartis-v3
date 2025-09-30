@@ -3,6 +3,7 @@
 ## 🏗️ Architecture & Core
 
 ### [Architecture](ARCHITECTURE.md)
+
 - Runtime Flow
 - Core Data Shapes
 - Pillars (Client-only, Feature-first, Runes reactive, GPU rendering)
@@ -11,6 +12,7 @@
 - Extensibility Contracts
 
 ### [Services & Orchestrators](SERVICES.md)
+
 - **DataOrchestratorService**
   - File processing coordination
   - Store synchronization
@@ -25,6 +27,7 @@
 ## 📊 Data Processing
 
 ### [Data Pipeline](PIPELINE.md)
+
 - **Supported Formats**
   - CSV/TSV
   - GeoJSON
@@ -42,6 +45,7 @@
   - Geometry analysis
 
 ### [Data Validation](VALIDATION.md)
+
 - **Validation Pipeline**
   - Basic file checks
   - Content validation
@@ -61,6 +65,7 @@
   - Contextual warnings
 
 ### [Type Reference](TYPES.md)
+
 - **Project Types**
   - KhartisProject
   - SavedProjectMetadata
@@ -77,6 +82,7 @@
 ## 🗺️ Visualization
 
 ### [Visualization System](VISUALIZATION.md)
+
 - **Visualization Types**
   - Choropleth
   - Proportional Symbols
@@ -97,6 +103,7 @@
 ## 🛠️ Features & Tools
 
 ### [Features & Tools Pattern](FEATURES_TOOLS.md)
+
 - **Feature Structure**
   - Store pattern
   - Component organization
@@ -120,6 +127,7 @@
 ## 💾 State Management
 
 ### [State & Persistence](STATE.md)
+
 - **State Layers**
   - Component local
   - Feature stores
@@ -138,6 +146,7 @@
 ## 🔧 Utilities & Cross-Cutting
 
 ### [Utilities](UTILITIES.md)
+
 - Logger
 - Validation & Sanitization
 - Pipeline Helpers
@@ -145,6 +154,7 @@
 - Error Classes
 
 ### [Cross-Cutting Concerns](CROSS_CUTTING.md)
+
 - **Performance**
   - Code splitting
   - Compute optimization
@@ -166,9 +176,11 @@
 ## 📚 Reference
 
 ### [Glossary](GLOSSARY.md)
+
 Core terms and definitions
 
 ### [Roadmap](ROADMAP.md)
+
 - Near-term priorities
 - Thematic buckets
 - Prioritization criteria
@@ -176,12 +188,14 @@ Core terms and definitions
 ## 🚀 Quick Start Guide
 
 ### Getting Started
+
 1. Clone repository
 2. `npm install`
 3. `npm run dev`
 4. Open `src/lib/features/` to explore
 
 ### Adding a Feature
+
 1. Create folder under `src/lib/features/<name>`
 2. Add `<name>.store.svelte.ts` with $state model
 3. Add `<name>.svelte` entry component
@@ -190,6 +204,7 @@ Core terms and definitions
 6. Add i18n keys + tests
 
 ### Golden Rules
+
 - No comments unless explicitly required
 - No `any` type - type everything
 - No magic strings - use constants or enums
@@ -200,17 +215,17 @@ Core terms and definitions
 
 ## 📖 Navigation Guide
 
-| Task | Documentation |
-|------|---------------|
-| **Understand architecture** | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| **Add new data format** | [PIPELINE.md](PIPELINE.md) |
-| **Add validation rules** | [VALIDATION.md](VALIDATION.md) |
-| **Create visualization** | [VISUALIZATION.md](VISUALIZATION.md) |
-| **Add new tool** | [FEATURES_TOOLS.md](FEATURES_TOOLS.md) |
-| **Manage state** | [STATE.md](STATE.md) |
-| **Find type definitions** | [TYPES.md](TYPES.md) |
-| **Optimize performance** | [CROSS_CUTTING.md](CROSS_CUTTING.md) |
-| **Add service** | [SERVICES.md](SERVICES.md) |
+| Task                        | Documentation                          |
+| --------------------------- | -------------------------------------- |
+| **Understand architecture** | [ARCHITECTURE.md](ARCHITECTURE.md)     |
+| **Add new data format**     | [PIPELINE.md](PIPELINE.md)             |
+| **Add validation rules**    | [VALIDATION.md](VALIDATION.md)         |
+| **Create visualization**    | [VISUALIZATION.md](VISUALIZATION.md)   |
+| **Add new tool**            | [FEATURES_TOOLS.md](FEATURES_TOOLS.md) |
+| **Manage state**            | [STATE.md](STATE.md)                   |
+| **Find type definitions**   | [TYPES.md](TYPES.md)                   |
+| **Optimize performance**    | [CROSS_CUTTING.md](CROSS_CUTTING.md)   |
+| **Add service**             | [SERVICES.md](SERVICES.md)             |
 
 ## 🔄 Version & Updates
 

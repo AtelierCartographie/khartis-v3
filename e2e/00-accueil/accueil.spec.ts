@@ -6,8 +6,8 @@ const CREATE_BUTTON_LABEL = 'Créer';
 const SAVED_PROJECT_TAB_LABEL = 'Ouvrir un projet ou une sauvegarde';
 const EXAMPLES_TAB_LABEL = 'Essayer avec exemple';
 
-test.describe('Page d\'accueil - Écran initial', () => {
-  test('affiche les trois options d\'entrée au chargement', async ({ page }) => {
+test.describe("Page d'accueil - Écran initial", () => {
+  test("affiche les trois options d'entrée au chargement", async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -23,7 +23,9 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await expect(examplesTab).toBeVisible();
   });
 
-  test('affiche la liste des projets sauvegardés dans le navigateur', async ({ page }) => {
+  test('affiche la liste des projets sauvegardés dans le navigateur', async ({
+    page
+  }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -48,12 +50,19 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await page.waitForTimeout(500);
 
     const fileInput = modal.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv'));
+    await fileInput.setInputFiles(
+      join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv')
+    );
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Projet Original');
 
-    const createButton = modal.getByRole('button', { name: CREATE_BUTTON_LABEL, exact: true });
+    const createButton = modal.getByRole('button', {
+      name: CREATE_BUTTON_LABEL,
+      exact: true
+    });
     await createButton.click();
     await expect(modal).toBeHidden();
 
@@ -66,7 +75,10 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await page.waitForTimeout(500);
 
     // Trouver le projet et cliquer sur le menu overflow
-    const projectCard = page.locator('.bx--tile').filter({ hasText: 'Projet Original' }).first();
+    const projectCard = page
+      .locator('.bx--tile')
+      .filter({ hasText: 'Projet Original' })
+      .first();
     const overflowMenu = projectCard.locator('.bx--overflow-menu');
     await overflowMenu.click();
 
@@ -76,10 +88,14 @@ test.describe('Page d\'accueil - Écran initial', () => {
 
     // Vérifier que le projet dupliqué existe
     await page.waitForTimeout(1000);
-    await expect(page.locator('.bx--tile').filter({ hasText: 'Projet Original (copie)' })).toBeVisible();
+    await expect(
+      page.locator('.bx--tile').filter({ hasText: 'Projet Original (copie)' })
+    ).toBeVisible();
   });
 
-  test('permet de supprimer un projet sauvegardé avec confirmation', async ({ page }) => {
+  test('permet de supprimer un projet sauvegardé avec confirmation', async ({
+    page
+  }) => {
     // Créer d'abord un projet
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -90,12 +106,19 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await page.waitForTimeout(500);
 
     const fileInput = modal.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv'));
+    await fileInput.setInputFiles(
+      join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv')
+    );
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Projet à Supprimer');
 
-    const createButton = modal.getByRole('button', { name: CREATE_BUTTON_LABEL, exact: true });
+    const createButton = modal.getByRole('button', {
+      name: CREATE_BUTTON_LABEL,
+      exact: true
+    });
     await createButton.click();
     await expect(modal).toBeHidden();
 
@@ -108,7 +131,10 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await page.waitForTimeout(500);
 
     // Trouver le projet et cliquer sur le menu overflow
-    const projectCard = page.locator('.bx--tile').filter({ hasText: 'Projet à Supprimer' }).first();
+    const projectCard = page
+      .locator('.bx--tile')
+      .filter({ hasText: 'Projet à Supprimer' })
+      .first();
     const overflowMenu = projectCard.locator('.bx--overflow-menu');
     await overflowMenu.click();
 
@@ -117,12 +143,17 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await deleteOption.click();
 
     // Confirmer la suppression
-    const confirmButton = page.getByRole('button', { name: 'Supprimer', exact: true });
+    const confirmButton = page.getByRole('button', {
+      name: 'Supprimer',
+      exact: true
+    });
     await confirmButton.click();
 
     // Vérifier que le projet n'existe plus
     await page.waitForTimeout(1000);
-    await expect(page.locator('.bx--tile').filter({ hasText: 'Projet à Supprimer' })).not.toBeVisible();
+    await expect(
+      page.locator('.bx--tile').filter({ hasText: 'Projet à Supprimer' })
+    ).not.toBeVisible();
   });
 
   test('affiche les exemples de projets avec vignettes', async ({ page }) => {
@@ -195,9 +226,9 @@ test.describe('Page d\'accueil - Écran initial', () => {
 
   test.skip('restaure automatiquement le dernier projet ouvert', async () => {});
 
-  test.skip('affiche le nom du projet dans l\'en-tête', async () => {});
+  test.skip("affiche le nom du projet dans l'en-tête", async () => {});
 
-  test('permet d\'importer un fichier projet .kh', async ({ page }) => {
+  test("permet d'importer un fichier projet .kh", async ({ page }) => {
     // Créer d'abord un projet et l'exporter
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -208,12 +239,19 @@ test.describe('Page d\'accueil - Écran initial', () => {
     await page.waitForTimeout(500);
 
     const fileInput = modal.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv'));
+    await fileInput.setInputFiles(
+      join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv')
+    );
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Projet Export Test');
 
-    const createButton = modal.getByRole('button', { name: CREATE_BUTTON_LABEL, exact: true });
+    const createButton = modal.getByRole('button', {
+      name: CREATE_BUTTON_LABEL,
+      exact: true
+    });
     await createButton.click();
     await expect(modal).toBeHidden();
 
@@ -238,7 +276,9 @@ test.describe('Modal de création de projet', () => {
     await expect(createButton).toBeDisabled();
   });
 
-  test('accepte l\'import de fichier CSV depuis l\'appareil', async ({ page }) => {
+  test("accepte l'import de fichier CSV depuis l'appareil", async ({
+    page
+  }) => {
     const TEST_DATASET_PATH = join(
       process.cwd(),
       'e2e',
@@ -261,12 +301,14 @@ test.describe('Modal de création de projet', () => {
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
     // Vérifier que le fichier est affiché dans la modal
-    await expect(modal.locator('.bx--file-filename').first()).toContainText('nuts2_data.csv');
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(
+      'nuts2_data.csv'
+    );
   });
 
-  test.skip('accepte l\'import de fichier CSV via URL', async () => {});
+  test.skip("accepte l'import de fichier CSV via URL", async () => {});
 
-  test.skip('accepte l\'import de données par copier-coller', async () => {});
+  test.skip("accepte l'import de données par copier-coller", async () => {});
 
   test('affiche le nom du fichier après upload', async ({ page }) => {
     const TEST_DATASET_PATH = join(
@@ -291,7 +333,9 @@ test.describe('Modal de création de projet', () => {
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
     // Le nom du fichier doit être visible dans la modal
-    await expect(modal.locator('.bx--file-filename').first()).toContainText('nuts2_data.csv');
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(
+      'nuts2_data.csv'
+    );
   });
 
   test('permet de nommer le projet', async ({ page }) => {

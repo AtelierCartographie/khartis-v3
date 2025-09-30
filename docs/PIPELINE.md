@@ -10,12 +10,14 @@ Planned: KML/KMZ (not implemented yet).
 Data flows through two complementary systems:
 
 ### 1. Traditional JavaScript Processing (DatasetsStore)
+
 - Immediate parsing and type inference
 - Basic statistics computation
 - In-memory data storage
 - Direct visualization binding
 
 ### 2. DuckDB Analytical Engine (DuckDBOrchestrator)
+
 - SQL-based analysis capabilities
 - Advanced statistics and aggregations
 - Efficient joins and transformations
@@ -84,6 +86,7 @@ Not implemented. Target approach: join key controlled overwrite/append with futu
 ## DuckDB Integration
 
 ### Table Creation
+
 ```sql
 -- CSV import creates typed table
 CREATE TABLE dataset_name AS
@@ -95,6 +98,7 @@ SELECT * FROM ST_Read('file.geojson');
 ```
 
 ### Analysis Operations
+
 - Column profiling via `Duck.analyse(tableName)`
 - Break calculation via `Duck.breaks(column, method, k)`
 - Custom SQL queries for aggregations
@@ -102,13 +106,13 @@ SELECT * FROM ST_Read('file.geojson');
 
 ## Performance Tactics
 
-| Step     | Current                         | Planned                          |
-| -------- | ------------------------------- | -------------------------------- |
-| Parsing  | Papa parse in main thread       | Worker offload for large files   |
-| DuckDB   | WASM in main thread            | Dedicated worker with SharedArrayBuffer |
-| Typing   | Single pass + simple heuristics | Sampling + selective deep scan   |
-| Stats    | Single pass accumulation        | Streaming quantile sketches via DuckDB |
-| Geometry | Direct GeoJSON ingestion        | DuckDB spatial functions |
+| Step     | Current                         | Planned                                 |
+| -------- | ------------------------------- | --------------------------------------- |
+| Parsing  | Papa parse in main thread       | Worker offload for large files          |
+| DuckDB   | WASM in main thread             | Dedicated worker with SharedArrayBuffer |
+| Typing   | Single pass + simple heuristics | Sampling + selective deep scan          |
+| Stats    | Single pass accumulation        | Streaming quantile sketches via DuckDB  |
+| Geometry | Direct GeoJSON ingestion        | DuckDB spatial functions                |
 
 ## Logging & Diagnostics
 

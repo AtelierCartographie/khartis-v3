@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
-async function createTestProject(page: any, projectName: string = 'Test Project') {
+async function createTestProject(
+  page: any,
+  projectName: string = 'Test Project'
+) {
   await page.goto('/');
   const modal = page.locator(MODAL_CONTAINER_SELECTOR);
   await expect(modal).toBeVisible();
@@ -19,7 +28,10 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
   const projectNameInput = modal.locator('[data-testid="project-name-input"]');
   await projectNameInput.fill(projectName);
 
-  const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+  const createButton = modal.getByRole('button', {
+    name: 'Créer',
+    exact: true
+  });
   await createButton.click();
 
   await expect(modal).toBeHidden();
@@ -84,7 +96,9 @@ test.describe('Raccourcis clavier', () => {
     await expect(modal).not.toBeVisible();
   });
 
-  test('navigue entre les étapes avec les touches numériques', async ({ page }) => {
+  test('navigue entre les étapes avec les touches numériques', async ({
+    page
+  }) => {
     await createTestProject(page, 'Test Number Navigation');
 
     // Essayer Cmd+1 pour Données
@@ -94,7 +108,7 @@ test.describe('Raccourcis clavier', () => {
     const dataStep = page.locator('[data-testid="step-data"]');
 
     // Si le raccourci est implémenté, vérifier qu'on est sur Données
-    if (await dataStep.getAttribute('aria-pressed') === 'true') {
+    if ((await dataStep.getAttribute('aria-pressed')) === 'true') {
       await expect(dataStep).toHaveAttribute('aria-pressed', 'true');
 
       // Essayer Cmd+2 pour Visualisations

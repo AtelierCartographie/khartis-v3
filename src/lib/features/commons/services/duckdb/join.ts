@@ -99,8 +99,8 @@ const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS
 );`;
 
 export const join_macros =
-	normalize_text_macro +
-	get_similarity_macro +
-	apply_join_across_basemaps_macro +
-	get_join_table_from_basemap_macro +
-	join_synthesis_macro;
+  normalize_text_macro +
+  get_similarity_macro +
+  apply_join_across_basemaps_macro +
+  get_join_table_from_basemap_macro +
+  join_synthesis_macro;

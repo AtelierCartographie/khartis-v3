@@ -46,7 +46,10 @@ class DuckDBOrchestratorService {
     });
 
     if (!this.initialized) {
-      logger.info('DuckDB not initialized, initializing...', LogCategory.DUCKDB);
+      logger.info(
+        'DuckDB not initialized, initializing...',
+        LogCategory.DUCKDB
+      );
       await this.initialize();
     }
 
@@ -70,12 +73,18 @@ class DuckDBOrchestratorService {
       return null;
     } catch (error) {
       logger.error('Error processing file', LogCategory.DUCKDB, error);
-      showError('Failed to process file', error instanceof Error ? error.message : 'Unknown error');
+      showError(
+        'Failed to process file',
+        error instanceof Error ? error.message : 'Unknown error'
+      );
       return null;
     }
   }
 
-  private async processCSV(file: UploadedFile, tableName: string): Promise<DuckDBDataset> {
+  private async processCSV(
+    file: UploadedFile,
+    tableName: string
+  ): Promise<DuckDBDataset> {
     logger.debug('Processing CSV file', LogCategory.DUCKDB, {
       name: file.name,
       parsedDataLength: file.parsedData?.length,
@@ -96,8 +105,12 @@ class DuckDBOrchestratorService {
     logger.debug('Registering file with DuckDB', LogCategory.DUCKDB);
     await Duck.register_files([duckFile]);
 
-    logger.debug('Reading tabular data into table', LogCategory.DUCKDB, { tableName });
-    const actualTableName = await Duck.read_tabular(duckFile, { tablename: tableName });
+    logger.debug('Reading tabular data into table', LogCategory.DUCKDB, {
+      tableName
+    });
+    const actualTableName = await Duck.read_tabular(duckFile, {
+      tablename: tableName
+    });
     logger.debug('Table created', LogCategory.DUCKDB, { actualTableName });
 
     const finalTableName = actualTableName || tableName;
@@ -132,14 +145,19 @@ class DuckDBOrchestratorService {
       tableName: finalTableName,
       columns: dataset.columns.length,
       rows: dataset.rowCount,
-      columnNames: dataset.columns.map(c => c.name)
+      columnNames: dataset.columns.map((c) => c.name)
     });
 
     return dataset;
   }
 
-  private async processGeoJSON(file: UploadedFile, tableName: string): Promise<DuckDBDataset> {
-    logger.debug('Processing GeoJSON file', LogCategory.DUCKDB, { name: file.name });
+  private async processGeoJSON(
+    file: UploadedFile,
+    tableName: string
+  ): Promise<DuckDBDataset> {
+    logger.debug('Processing GeoJSON file', LogCategory.DUCKDB, {
+      name: file.name
+    });
 
     const geoJsonData = JSON.stringify(file.parsedData);
 
@@ -187,7 +205,7 @@ class DuckDBOrchestratorService {
     csvRows.push(headers.join(','));
 
     for (const row of data) {
-      const values = headers.map(header => {
+      const values = headers.map((header) => {
         const value = row[header];
         if (value === null || value === undefined) return '';
         if (typeof value === 'string' && value.includes(',')) {
@@ -274,7 +292,9 @@ class DuckDBOrchestratorService {
       return await Duck.get_row_count(tableName);
     } catch (error) {
       logger.error('Error getting row count', LogCategory.DUCKDB, error);
-      const result: any = await Duck.query(`SELECT COUNT(*) as count FROM ${tableName}`);
+      const result: any = await Duck.query(
+        `SELECT COUNT(*) as count FROM ${tableName}`
+      );
       if (result && result.get) {
         return result.get(0).count;
       } else if (result && result.numRows === 1) {
@@ -306,24 +326,36 @@ class DuckDBOrchestratorService {
     return columns;
   }
 
-  async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
+  async renameColumn(
+    tableName: string,
+    oldName: string,
+    newName: string
+  ): Promise<void> {
     if (!this.initialized) {
       await this.initialize();
     }
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
-    await Duck.query(`ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`);
+    await Duck.query(
+      `ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`
+    );
   }
 
-  async changeColumnType(tableName: string, columnName: string, newType: string): Promise<void> {
+  async changeColumnType(
+    tableName: string,
+    columnName: string,
+    newType: string
+  ): Promise<void> {
     if (!this.initialized) {
       await this.initialize();
     }
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
-    await Duck.query(`ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`);
+    await Duck.query(
+      `ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
+    );
   }
 
   async dropColumn(tableName: string, columnName: string): Promise<void> {
@@ -387,8 +419,7 @@ class DuckDBOrchestratorService {
       if (this.currentTableName === tableName) {
         this.currentTableName = null;
       }
-    } catch (error) {
-    }
+    } catch (error) {}
   }
 
   async clear(): Promise<void> {
@@ -400,7 +431,9 @@ class DuckDBOrchestratorService {
     this.currentTableName = null;
   }
 
-  async convertToProcessedDataset(duckDataset: DuckDBDataset): Promise<ProcessedDataset> {
+  async convertToProcessedDataset(
+    duckDataset: DuckDBDataset
+  ): Promise<ProcessedDataset> {
     logger.debug('Converting to processed dataset', LogCategory.DUCKDB, {
       name: duckDataset.name,
       tableName: duckDataset.tableName,
@@ -417,7 +450,7 @@ class DuckDBOrchestratorService {
       });
 
       if (tableData && tableData.numRows > 0) {
-        const limit = Math.min(1000, tableData.numRows); 
+        const limit = Math.min(1000, tableData.numRows);
         for (let i = 0; i < limit; i++) {
           const row = tableData.get(i);
           const cleanRow: any = {};
@@ -438,7 +471,9 @@ class DuckDBOrchestratorService {
       data = [];
     }
 
-    const userColumns = duckDataset.columns.filter((col: any) => !col.name.startsWith('__'));
+    const userColumns = duckDataset.columns.filter(
+      (col: any) => !col.name.startsWith('__')
+    );
 
     const processedDataset = {
       id: duckDataset.id,
@@ -465,25 +500,29 @@ class DuckDBOrchestratorService {
     logger.debug('Final dataset converted', LogCategory.DUCKDB, {
       name: processedDataset.name,
       columns: processedDataset.columns.length,
-      columnNames: processedDataset.columns.map(c => c.name),
+      columnNames: processedDataset.columns.map((c) => c.name),
       rows: processedDataset.rowCount,
       dataLength: processedDataset.data.length,
-      firstRowKeys: processedDataset.data[0] ? Object.keys(processedDataset.data[0]) : []
+      firstRowKeys: processedDataset.data[0]
+        ? Object.keys(processedDataset.data[0])
+        : []
     });
 
     return processedDataset;
   }
 
-  private mapDuckDBType(duckType: string): 'string' | 'number' | 'date' | 'boolean' | 'geometry' {
+  private mapDuckDBType(
+    duckType: string
+  ): 'string' | 'number' | 'date' | 'boolean' | 'geometry' {
     if (!duckType) return 'string';
 
     const typeMap: Record<string, any> = {
-      'numeric': 'number',
-      'text': 'string',
-      'string': 'string',
-      'date': 'date',
-      'boolean': 'boolean',
-      'geometry': 'geometry'
+      numeric: 'number',
+      text: 'string',
+      string: 'string',
+      date: 'date',
+      boolean: 'boolean',
+      geometry: 'geometry'
     };
     return typeMap[duckType.toLowerCase()] || 'string';
   }

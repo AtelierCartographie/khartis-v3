@@ -55,7 +55,11 @@
   }
 </script>
 
-<div id="khartis-project-title" class="project-title" data-testid="project-title">
+<div
+  id="khartis-project-title"
+  class="project-title"
+  data-testid="project-title"
+>
   <TextInput
     light
     size="sm"

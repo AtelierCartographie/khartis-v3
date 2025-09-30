@@ -10,7 +10,6 @@ const handleDevTools: Handle = ({ event, resolve }) => {
   return resolve(event);
 };
 
-
 const handleParaglide: Handle = ({ event, resolve }) =>
   paraglideMiddleware(event.request, ({ request, locale }) => {
     event.request = request;

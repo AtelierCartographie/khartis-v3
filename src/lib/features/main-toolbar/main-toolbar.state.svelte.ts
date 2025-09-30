@@ -50,15 +50,12 @@ export const mainToolbarActions = {
     mainToolbarState.canNavigateToVisualization = hasProject && hasValidFiles;
 
     if (!hasProject) {
-
     }
   },
 
   navigateToVisualization(): void {
     if (projectStore.isDirty) {
-      projectStore.saveCurrentProject().then(() => {
-
-      });
+      projectStore.saveCurrentProject().then(() => {});
     }
 
     const derived = getDerivedToolbarState();

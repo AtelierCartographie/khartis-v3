@@ -246,10 +246,8 @@ function calculateCentroid(
 export async function processUploadedFile(
   file: UploadedFile
 ): Promise<ProcessedDataset | null> {
-
   const parsedData = file.parsedData;
   const status = file.status;
-
 
   if (Array.isArray(parsedData)) {
   }
@@ -304,7 +302,9 @@ export async function processUploadedFile(
 export async function createDataPipeline(
   files: UploadedFile[]
 ): Promise<ProcessedDataset[]> {
-  logger.info('Creating data pipeline', LogCategory.DATA, { filesCount: files.length });
+  logger.info('Creating data pipeline', LogCategory.DATA, {
+    filesCount: files.length
+  });
   const datasets: ProcessedDataset[] = [];
 
   for (const file of files) {
@@ -315,7 +315,9 @@ export async function createDataPipeline(
   }
 
   if (datasets.length > 0) {
-    logger.success('Data pipeline created', LogCategory.DATA, { datasetsCount: datasets.length });
+    logger.success('Data pipeline created', LogCategory.DATA, {
+      datasetsCount: datasets.length
+    });
   }
   return datasets;
 }

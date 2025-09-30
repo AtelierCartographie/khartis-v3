@@ -20,12 +20,12 @@
 
 ## Quick Navigation
 
-| Need                         | Go To                    |
-| ---------------------------- | ------------------------ |
-| Add new service              | SERVICES.md              |
-| Understand data flow         | PIPELINE.md + SERVICES.md |
-| Add validation rules         | VALIDATION.md            |
-| Add visualization type       | VISUALIZATION.md         |
-| Create new tool              | FEATURES_TOOLS.md        |
-| Find type definitions        | TYPES.md                 |
-| Performance optimization     | CROSS_CUTTING.md         |
+| Need                     | Go To                     |
+| ------------------------ | ------------------------- |
+| Add new service          | SERVICES.md               |
+| Understand data flow     | PIPELINE.md + SERVICES.md |
+| Add validation rules     | VALIDATION.md             |
+| Add visualization type   | VISUALIZATION.md          |
+| Create new tool          | FEATURES_TOOLS.md         |
+| Find type definitions    | TYPES.md                  |
+| Performance optimization | CROSS_CUTTING.md          |
