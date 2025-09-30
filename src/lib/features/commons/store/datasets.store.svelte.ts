@@ -247,6 +247,51 @@ class DatasetsStore {
     }
   }
 
+  resetDataset(datasetId: string): boolean {
+    const datasetIndex = this._state.datasets.findIndex(
+      (d) => d.id === datasetId
+    );
+
+    if (datasetIndex === -1) {
+      logger.warn(`Dataset ${datasetId} not found`, LogCategory.DATA);
+      return false;
+    }
+
+    const dataset = this._state.datasets[datasetIndex];
+
+    if (!dataset.originalData) {
+      logger.warn(
+        `Dataset ${datasetId} has no original data to reset`,
+        LogCategory.DATA
+      );
+      return false;
+    }
+
+    logger.info(`Resetting dataset ${dataset.name}`, LogCategory.DATA);
+
+    this._state.datasets[datasetIndex] = {
+      ...dataset,
+      columns: JSON.parse(JSON.stringify(dataset.originalData.columns)),
+      data: JSON.parse(JSON.stringify(dataset.originalData.data)),
+      rowCount: dataset.originalData.rowCount,
+      metadata: {
+        ...dataset.metadata,
+        transformations: []
+      }
+    };
+
+    logger.success(
+      `Dataset ${dataset.name} reset to original state`,
+      LogCategory.DATA
+    );
+    return true;
+  }
+
+  hasModifications(datasetId: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    return dataset ? dataset.metadata.transformations.length > 0 : false;
+  }
+
   clear(): void {
     this._state.datasets = [];
     this._state.selectedDatasetId = undefined;

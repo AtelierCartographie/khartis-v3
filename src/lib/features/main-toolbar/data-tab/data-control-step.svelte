@@ -2,8 +2,10 @@
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
   import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { InlineNotification } from 'carbon-components-svelte';
+  import { InlineNotification, Button } from 'carbon-components-svelte';
+  import { Reset } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
@@ -15,6 +17,8 @@
           ?.tableName || null
       : null
   );
+
+  let resetModalOpen = $state(false);
 </script>
 
 <section id="data-control-step">
@@ -22,12 +26,31 @@
 
   {#if selectedDataset}
     <div class="dataset-info">
-      <span class="dataset-name">{selectedDataset.name}</span>
-      <span class="row-count">{selectedDataset.rowCount} lignes</span>
-      {#if currentDuckTable}
-        <span class="duck-badge">DuckDB ✓</span>
-      {/if}
+      <div class="dataset-meta">
+        <span class="dataset-name">{selectedDataset.name}</span>
+        <span class="row-count">{selectedDataset.rowCount} lignes</span>
+        {#if currentDuckTable}
+          <span class="duck-badge">DuckDB ✓</span>
+        {/if}
+      </div>
+      <Button
+        kind="danger-tertiary"
+        size="small"
+        icon={Reset}
+        tooltipPosition="left"
+        iconDescription="Réinitialiser les données"
+        on:click={() => (resetModalOpen = true)}
+      >
+        Réinitialiser
+      </Button>
     </div>
+
+    {#if selectedDataset.id}
+      <ResetDataModal
+        bind:open={resetModalOpen}
+        datasetId={selectedDataset.id}
+      />
+    {/if}
 
     <AdvancedDataTable
       dataset={selectedDataset}
@@ -81,6 +104,12 @@
     padding: var(--cds-spacing-03) 0;
     margin-bottom: var(--cds-spacing-03);
     flex-shrink: 0;
+  }
+
+  .dataset-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
   }
 
   .dataset-name {
