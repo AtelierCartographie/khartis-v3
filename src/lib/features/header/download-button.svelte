@@ -1,8 +1,10 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     exportProjectData,
+    exportProcessedDatasets,
     downloadFile,
     generateExportFilename
   } from '$lib/features/commons/utils/file-export.utils';
@@ -70,7 +72,7 @@
           break;
 
         case 2:
-          if (projectStore.currentProject?.data?.sourceFiles) {
+          if (datasetsStore.datasets.length > 0) {
             let format: 'csv' | 'geojson' | 'json';
             let extension: string;
 
@@ -92,12 +94,14 @@
                 extension = 'json';
             }
 
-            logger.info('Exporting data', LogCategory.EXPORT, {
+            logger.info('Exporting processed datasets', LogCategory.EXPORT, {
               format,
-              extension
+              extension,
+              datasetCount: datasetsStore.datasets.length
             });
-            const blob = await exportProjectData(
-              projectStore.currentProject.data.sourceFiles,
+
+            const blob = exportProcessedDatasets(
+              datasetsStore.datasets,
               format
             );
             const filename = generateExportFilename(exportFileName, extension);
