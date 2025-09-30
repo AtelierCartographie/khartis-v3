@@ -1,3 +1,16 @@
+<script lang="ts" module>
+  function getColumnTypeTag(type: string): string {
+    const tagMap: Record<string, string> = {
+      numeric: 'blue',
+      text: 'green',
+      date: 'magenta',
+      boolean: 'purple',
+      geometry: 'red'
+    };
+    return tagMap[type] || 'gray';
+  }
+</script>
+
 <script lang="ts">
   import { DataTable, DataTableSkeleton, Tag } from 'carbon-components-svelte';
   import { onMount } from 'svelte';
@@ -32,13 +45,15 @@
       if (tableData && tableData.numRows > 0) {
         totalRows = tableData.numRows;
         const firstRow = tableData.get(0);
-        columns = Object.keys(firstRow).filter(name => name !== 'geom').map(name => ({
-          name,
-          type_simple: typeof firstRow[name]
-        }));
+        columns = Object.keys(firstRow)
+          .filter((name) => name !== 'geom')
+          .map((name) => ({
+            name,
+            type_simple: typeof firstRow[name]
+          }));
       }
 
-      const headers = columns.map(col => ({
+      const headers = columns.map((col) => ({
         key: col.name,
         value: `${col.name} (${col.type_simple})`
       }));
@@ -64,11 +79,11 @@
 
   function getColumnType(type: string): string {
     const typeMap: Record<string, string> = {
-      'numeric': 'number',
-      'text': 'string',
-      'date': 'date',
-      'boolean': 'boolean',
-      'geometry': 'geometry'
+      numeric: 'number',
+      text: 'string',
+      date: 'date',
+      boolean: 'boolean',
+      geometry: 'geometry'
     };
     return typeMap[type] || 'string';
   }
@@ -88,10 +103,7 @@
 </script>
 
 {#if isLoading}
-  <DataTableSkeleton
-    headers={['Column 1', 'Column 2', 'Column 3']}
-    rows={10}
-  />
+  <DataTableSkeleton headers={['Column 1', 'Column 2', 'Column 3']} rows={10} />
 {:else}
   <div class="table-info">
     <p>Dataset: <strong>{tableName}</strong></p>
@@ -103,7 +115,7 @@
 
   <DataTable
     size="short"
-    headers={columns.map(col => ({
+    headers={columns.map((col) => ({
       key: col.name,
       value: col.name
     }))}
@@ -112,10 +124,13 @@
     batchSelection
   >
     <svelte:fragment slot="cell" let:row let:cell>
-      {@const column = columns.find(col => col.name === cell.key)}
+      {@const column = columns.find((col) => col.name === cell.key)}
       {@const value = cell.value}
 
-      <div class="cell-content" class:numeric={column?.type_simple === 'numeric'}>
+      <div
+        class="cell-content"
+        class:numeric={column?.type_simple === 'numeric'}
+      >
         {#if column}
           {formatValue(value, column.type_simple)}
         {:else}
@@ -147,11 +162,15 @@
             {#if col.type_simple === 'numeric'}
               <div class="stat">
                 <span class="stat-label">Min:</span>
-                <span class="stat-value">{col.min?.toLocaleString() || 'N/A'}</span>
+                <span class="stat-value"
+                  >{col.min?.toLocaleString() || 'N/A'}</span
+                >
               </div>
               <div class="stat">
                 <span class="stat-label">Max:</span>
-                <span class="stat-value">{col.max?.toLocaleString() || 'N/A'}</span>
+                <span class="stat-value"
+                  >{col.max?.toLocaleString() || 'N/A'}</span
+                >
               </div>
             {/if}
 
@@ -172,19 +191,6 @@
     </div>
   </div>
 {/if}
-
-<script lang="ts" module>
-  function getColumnTypeTag(type: string): string {
-    const tagMap: Record<string, string> = {
-      'numeric': 'blue',
-      'text': 'green',
-      'date': 'magenta',
-      'boolean': 'purple',
-      'geometry': 'red'
-    };
-    return tagMap[type] || 'gray';
-  }
-</script>
 
 <style>
   .table-info {

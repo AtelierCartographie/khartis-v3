@@ -1,79 +1,86 @@
 export type GeometryType = 'point' | 'line' | 'polygon';
 
 export interface Dataset {
-	tablename: string;
-	filename: string;
-	columns?: ColumnInfo[];
+  tablename: string;
+  filename: string;
+  columns?: ColumnInfo[];
 }
 
 export interface ColumnInfo {
-	name: string;
-	type: string;
-	type_js: string;
-	type_semio?: string;
-	score?: number;
+  name: string;
+  type: string;
+  type_js: string;
+  type_semio?: string;
+  score?: number;
 }
 
 export interface UIState {
-	selected_dataset: string;
-	current_page: string;
-	loading: boolean;
+  selected_dataset: string;
+  current_page: string;
+  loading: boolean;
 }
 
 export interface VisualizationCriteria {
-	id: string;
-	label_fr: string;
-	nb_column: number;
-	type_semio: string[];
-	geometry: GeometryType[];
-	columns?: string[];
+  id: string;
+  label_fr: string;
+  nb_column: number;
+  type_semio: string[];
+  geometry: GeometryType[];
+  columns?: string[];
 }
 
-export type DuckDBValue = string | number | boolean | Date | null | ArrayBuffer | Uint8Array;
+export type DuckDBValue =
+  | string
+  | number
+  | boolean
+  | Date
+  | null
+  | ArrayBuffer
+  | Uint8Array;
 
 export interface DuckDBColumn {
-	name: string;
-	type: string;
-	type_js: string;
+  name: string;
+  type: string;
+  type_js: string;
 }
 
 export interface DuckDBMetadata {
-	name: string;
-	format: string;
-	nb_entities: number;
-	geometry: string;
-	crs: string;
+  name: string;
+  format: string;
+  nb_entities: number;
+  geometry: string;
+  crs: string;
 }
 
 export interface TableData {
-	tablename: string;
-	filename: string;
-	columns: DuckDBColumn[];
-	analysis?: AnalysisResults | null;
+  tablename: string;
+  filename: string;
+  columns: DuckDBColumn[];
+  analysis?: AnalysisResults | null;
 }
 
 export interface AnalysisResult {
-	name: string;
-	type_simple: 'numeric' | 'date' | 'string';
-	min?: number | Date;
-	max?: number | Date;
-	histogram?: unknown; 
-	uniques?: number;
-	nulls?: number;
-	count?: number;
-	[key: string]: unknown; 
+  name: string;
+  type_simple: 'numeric' | 'date' | 'string';
+  min?: number | Date;
+  max?: number | Date;
+  histogram?: unknown;
+  uniques?: number;
+  nulls?: number;
+  count?: number;
+  [key: string]: unknown;
 }
 
 export type AnalysisResults = AnalysisResult[];
 
 export interface ValidationResult<T = DuckDBValue> {
-	isValid: boolean;
-	value: T;
+  isValid: boolean;
+  value: T;
 }
 
 export interface QueryResult<T = unknown> {
-	data: T[];
-	columns: DuckDBColumn[];
+  data: T[];
+  columns: DuckDBColumn[];
 }
 
 export type TableName = string;
@@ -81,36 +88,38 @@ export type ColumnName = string;
 export type SQLQuery = string;
 
 export interface DuckDBBindings {
-	[key: string]: unknown;
+  [key: string]: unknown;
 }
 
 export interface DuckDBConnection {
-	useUnsafe<T>(callback: (bindings: DuckDBBindings, conn: unknown) => Promise<T>): Promise<T>;
+  useUnsafe<T>(
+    callback: (bindings: DuckDBBindings, conn: unknown) => Promise<T>
+  ): Promise<T>;
 }
 
 export interface ArrowTableLike {
-	get(index: number): Record<string, unknown>;
-	numRows: number;
-	toArray(): Record<string, unknown>[];
+  get(index: number): Record<string, unknown>;
+  numRows: number;
+  toArray(): Record<string, unknown>[];
 }
 
 export interface TableDescribeResult {
-	column_name: string;
-	column_type: string;
+  column_name: string;
+  column_type: string;
 }
 
 export interface CountResult {
-	num_rows: number;
+  num_rows: number;
 }
 
 export interface BreaksResult {
-	breaks: number[];
+  breaks: number[];
 }
 
 export interface BreaksRoundedResult {
-	breaks_rounded: number[];
+  breaks_rounded: number[];
 }
 
 export interface BreakInsideResult {
-	is_inside: boolean;
+  is_inside: boolean;
 }

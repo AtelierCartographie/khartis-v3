@@ -1,4 +1,3 @@
-
 export function sanitizeProjectName(name: string): string {
   if (!name || typeof name !== 'string') {
     return '';
@@ -53,7 +52,7 @@ export function sanitizeCSVCell(value: string): string {
 
   const dangerousStarts = ['=', '+', '-', '@', '\t', '\r'];
 
-  if (dangerousStarts.some(char => value.startsWith(char))) {
+  if (dangerousStarts.some((char) => value.startsWith(char))) {
     return "'" + value;
   }
 

@@ -7,12 +7,13 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { Button, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
+  import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
     onClose?: () => void;
@@ -40,7 +41,10 @@
 
   const projectName = $derived(createProjectState.newProject.projectName);
   const uploadedFiles = $derived(createProjectState.newProject.uploadedFiles);
-  const hasValidName = $derived(projectName.trim().length > 0);
+  const nameValidation = $derived(
+    CreateProjectValidationService.validateProjectName(projectName)
+  );
+  const hasValidName = $derived(nameValidation.isValid);
   const validFiles = $derived(
     uploadedFiles.filter((f) => f.status === 'complete')
   );
@@ -48,17 +52,26 @@
   const canCreateProject = $derived(
     hasValidName && hasValidFiles && !isCreating
   );
+  const nameErrors = $derived(
+    hasTriedSubmit && !hasValidName ? nameValidation.errors : []
+  );
 
   async function handleCreate() {
     hasTriedSubmit = true;
 
     if (!hasValidName) {
-      logger.warn('Project creation attempted without name', LogCategory.PROJECT);
+      logger.warn(
+        'Project creation attempted without name',
+        LogCategory.PROJECT
+      );
       return;
     }
 
     if (!hasValidFiles) {
-      logger.warn('Project creation attempted without valid files', LogCategory.PROJECT);
+      logger.warn(
+        'Project creation attempted without valid files',
+        LogCategory.PROJECT
+      );
       showError('No files', 'Please add at least one valid file');
       return;
     }
@@ -74,7 +87,9 @@
       await projectStore.createProject(safeName, validFiles);
       await projectsStore.refresh();
 
-      logger.success('Project created successfully', LogCategory.PROJECT, { name: safeName });
+      logger.success('Project created successfully', LogCategory.PROJECT, {
+        name: safeName
+      });
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
@@ -119,8 +134,8 @@
         bind:value={localProjectName}
         on:keydown={handleKeyDown}
         disabled={isCreating}
-        invalid={hasTriedSubmit && !hasValidName}
-        invalidText="Project name is required"
+        invalid={nameErrors.length > 0}
+        invalidText={nameErrors[0] || ''}
         maxlength={100}
       />
       {#if hasValidName && !hasTriedSubmit}

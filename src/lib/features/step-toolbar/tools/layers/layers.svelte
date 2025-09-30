@@ -67,9 +67,7 @@
     store.toggleLayerVisibility(layerId);
   }
 
-  function handleOpenSettings(layerId: string): void {
-
-  }
+  function handleOpenSettings(layerId: string): void {}
 
   function reorderLayers(
     type: LayerType,

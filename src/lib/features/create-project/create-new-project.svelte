@@ -4,15 +4,8 @@
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
-  import {
-    FileValidator,
-    SUPPORTED_FILE_TYPES
-  } from '$lib/features/commons/utils/file-validator.utils';
-  import {
-    showError,
-    showWarning
-  } from '$lib/features/commons/utils/notification.utils.svelte';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+  import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -26,6 +19,7 @@
   import { CloudDownload, Link, TrashCan } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ProjectName from './project-name.svelte';
+  import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
     onClose?: () => void;
@@ -39,51 +33,24 @@
 
   async function handleFileDrop(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
-    logger.info('Files dropped', LogCategory.FILE, { count: files.length, names: files.map(f => f.name) });
+    logger.info('Files dropped', LogCategory.FILE, {
+      count: files.length,
+      names: files.map((f) => f.name)
+    });
 
-    const validationResult = FileValidator.validateMultiple(files);
+    const validationResult =
+      CreateProjectValidationService.validateFiles(files);
 
-    if (validationResult.globalErrors.length > 0) {
-      logger.error('Global validation errors', LogCategory.FILE, validationResult.globalErrors);
-      showError(
-        'Erreur de validation',
-        validationResult.globalErrors.join(', ')
-      );
-      return;
-    }
-
-    const validFiles: File[] = [];
-    const warnings: string[] = [];
-
-    for (const [filename, result] of validationResult.results) {
-      const file = files.find((f) => f.name === filename);
-      if (!file) continue;
-
-      if (result.isValid) {
-        validFiles.push(file);
-        if (result.warnings.length > 0) {
-          logger.warn('File validation warnings', LogCategory.FILE, { filename, warnings: result.warnings });
-          warnings.push(...result.warnings);
-        }
-      } else {
-        logger.error('File validation failed', LogCategory.FILE, { filename, errors: result.errors });
-        showError(`Erreur avec ${filename}`, result.errors.join(', '));
-      }
-    }
-
-    if (warnings.length > 0) {
-      showWarning('Avertissements', warnings.join(', '));
-    }
-
-    if (validFiles.length > 0) {
-      logger.info('Processing valid files', LogCategory.FILE, { count: validFiles.length });
-      await createProjectActions.processFiles(validFiles);
+    if (validationResult.isValid) {
+      await createProjectActions.processFiles(files);
     }
   }
 
   async function handlePasteData() {
     if (pastedDataValue.trim()) {
-      logger.info('Processing pasted data', LogCategory.FILE, { length: pastedDataValue.length });
+      logger.info('Processing pasted data', LogCategory.FILE, {
+        length: pastedDataValue.length
+      });
       await createProjectActions.processPastedData(pastedDataValue);
       pastedDataValue = '';
     }
@@ -91,17 +58,14 @@
 
   async function handleLoadOnlineFile() {
     if (onlineUrlValue.trim()) {
-      logger.info('Loading online file', LogCategory.FILE, { url: onlineUrlValue });
-      const urlValidation = FileValidator.validateURL(onlineUrlValue);
+      logger.info('Loading online file', LogCategory.FILE, {
+        url: onlineUrlValue
+      });
+      const urlValidation =
+        CreateProjectValidationService.validateURL(onlineUrlValue);
 
       if (!urlValidation.isValid) {
-        logger.error('Invalid URL', LogCategory.FILE, { url: onlineUrlValue, errors: urlValidation.errors });
-        showError('URL invalide', urlValidation.errors.join(', '));
         return;
-      }
-
-      if (urlValidation.warnings.length > 0) {
-        showWarning('Avertissement', urlValidation.warnings.join(', '));
       }
 
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
@@ -151,25 +115,10 @@
           ...SUPPORTED_FILE_TYPES.geopackage.extensions
         ]}
         validateFiles={(files) => {
-          const validationResult = FileValidator.validateMultiple(
+          const validationResult = CreateProjectValidationService.validateFiles(
             Array.from(files)
           );
-
-          if (!validationResult.isValid) {
-            const allErrors = [
-              ...validationResult.globalErrors,
-              ...Array.from(validationResult.results.values()).flatMap(
-                (r) => r.errors
-              )
-            ];
-
-            if (allErrors.length > 0) {
-              showError('Validation échouée', allErrors[0]);
-              return [];
-            }
-          }
-
-          return files;
+          return validationResult.isValid ? files : [];
         }}
         on:change={handleFileDrop}
       />

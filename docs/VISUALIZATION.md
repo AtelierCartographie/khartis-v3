@@ -25,13 +25,13 @@ interface VisualizationConfig {
 
 ## Classification
 
-| Method | Implementation | Notes |
-|--------|----------------|-------|
-| Equal Interval | Deterministic range slicing | Full implementation |
-| Quantile | Sorted values with ties collapsed | Full implementation |
-| Jenks | Falls back to quantile | Placeholder implementation |
-| Standard Deviation | Mean ± n\*σ bands | Full implementation |
-| Manual | User-specified breaks | Full implementation |
+| Method             | Implementation                    | Notes                      |
+| ------------------ | --------------------------------- | -------------------------- |
+| Equal Interval     | Deterministic range slicing       | Full implementation        |
+| Quantile           | Sorted values with ties collapsed | Full implementation        |
+| Jenks              | Falls back to quantile            | Placeholder implementation |
+| Standard Deviation | Mean ± n\*σ bands                 | Full implementation        |
+| Manual             | User-specified breaks             | Full implementation        |
 
 Classification computations run synchronously on main thread. DuckDB provides `Duck.breaks()` for efficient break calculation.
 
@@ -88,11 +88,11 @@ All-null → disable suggestion; single-valued numeric → suggest categorical; 
 
 ## Implementation Notes
 
-| Area      | Current State | Future Enhancement |
-| --------- | ------------- | ------------------ |
-| Jenks     | Quantile fallback | Real algorithm implementation |
-| Workers   | Main thread | Worker pool for large datasets |
-| Caching   | Basic reuse | Hash-based invalidation |
+| Area    | Current State     | Future Enhancement             |
+| ------- | ----------------- | ------------------------------ |
+| Jenks   | Quantile fallback | Real algorithm implementation  |
+| Workers | Main thread       | Worker pool for large datasets |
+| Caching | Basic reuse       | Hash-based invalidation        |
 
 ## Quick Reference
 

@@ -47,7 +47,7 @@ export const globalActions = {
   },
 
   selectDataButton(id: string): void {
-    const currentSelected = globalState.dataButtons.find(b => b.isSelected);
+    const currentSelected = globalState.dataButtons.find((b) => b.isSelected);
     if (currentSelected?.id === id) return;
 
     globalState.dataButtons.forEach((button) => {

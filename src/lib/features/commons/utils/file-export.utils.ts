@@ -92,7 +92,10 @@ export async function exportProjectData(
       } else if (file.parsedData?.type === 'Feature') {
         allFeatures.push(file.parsedData);
       } else if (file.fileType === FileType.CSV && file.parsedData) {
-        logger.warn(`Skipping CSV file ${file.name} for GeoJSON export`, LogCategory.EXPORT);
+        logger.warn(
+          `Skipping CSV file ${file.name} for GeoJSON export`,
+          LogCategory.EXPORT
+        );
       }
     }
 
@@ -125,4 +128,3 @@ export function downloadFile(blob: Blob, filename: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-

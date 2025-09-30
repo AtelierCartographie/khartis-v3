@@ -56,10 +56,10 @@ class DatasetsStore {
     try {
       logger.info('Processing files', LogCategory.DATA, {
         count: files.length,
-        files: files.map(f => ({ name: f.name, hasData: !!f.parsedData }))
+        files: files.map((f) => ({ name: f.name, hasData: !!f.parsedData }))
       });
 
-      const filesCopy = files.map(file => {
+      const filesCopy = files.map((file) => {
         if (!file.parsedData) {
           logger.warn(`File ${file.name} has no parsedData`, LogCategory.DATA);
         }
@@ -74,7 +74,9 @@ class DatasetsStore {
           uploadProgress: file.uploadProgress,
           errorMessage: file.errorMessage,
           validation: file.validation,
-          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
+          parsedData: file.parsedData
+            ? JSON.parse(JSON.stringify(file.parsedData))
+            : [],
           content: file.content,
           duplicates: file.duplicates,
           statistics: file.statistics,
@@ -83,7 +85,6 @@ class DatasetsStore {
 
         return cleanFile;
       });
-
 
       const newDatasets = await createDataPipeline(filesCopy);
 
@@ -106,7 +107,6 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-
       const fileCopy = {
         id: file.id,
         name: file.name,
@@ -117,13 +117,14 @@ class DatasetsStore {
         uploadProgress: file.uploadProgress,
         errorMessage: file.errorMessage,
         validation: file.validation,
-        parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
+        parsedData: file.parsedData
+          ? JSON.parse(JSON.stringify(file.parsedData))
+          : [],
         content: file.content,
         duplicates: file.duplicates,
         statistics: file.statistics,
         sourceType: file.sourceType
       };
-
 
       const dataset = await processUploadedFile(fileCopy);
 
