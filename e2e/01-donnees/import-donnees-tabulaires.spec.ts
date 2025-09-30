@@ -82,9 +82,10 @@ FRA,67000000,2700000
 DEU,83000000,3800000
 ITA,60000000,2000000`;
 
-    const file = new File([iso3CSV], 'iso3-data.csv', { type: 'text/csv' });
-
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'iso3-data.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -98,7 +99,7 @@ ITA,60000000,2000000`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, iso3CSV);
 
     await page.waitForTimeout(1000);
 
@@ -121,9 +122,10 @@ Paris,48.8566,2.3522,2200000
 Berlin,52.5200,13.4050,3700000
 Rome,41.9028,12.4964,2800000`;
 
-    const file = new File([coordsCSV], 'coords-data.csv', { type: 'text/csv' });
-
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'coords-data.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -137,7 +139,7 @@ Rome,41.9028,12.4964,2800000`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, coordsCSV);
 
     await page.waitForTimeout(1000);
 
@@ -155,11 +157,10 @@ Rome,41.9028,12.4964,2800000`;
     await createTab.click();
 
     // Fichier avec extension non supportée
-    const invalidFile = new File(['test content'], 'data.xyz', {
-      type: 'application/octet-stream'
-    });
-
-    await page.evaluate((file) => {
+    await page.evaluate(() => {
+      const file = new File(['test content'], 'data.xyz', {
+        type: 'application/octet-stream'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -173,12 +174,10 @@ Rome,41.9028,12.4964,2800000`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    });
 
     // Vérifier le message d'erreur
-    const errorMessage = page.locator(
-      '.bx--inline-notification--error, [role="alert"]'
-    );
+    const errorMessage = page.locator('.bx--toast-notification--error').first();
     await expect(errorMessage).toBeVisible();
     await expect(errorMessage).toContainText(/format|extension|supporté/i);
   });
@@ -195,11 +194,11 @@ Rome,41.9028,12.4964,2800000`;
 
     // Créer un fichier de 11MB
     const largeContent = 'Country,Value\n' + 'x,100\n'.repeat(500000); // ~11MB
-    const largeFile = new File([largeContent], 'large.csv', {
-      type: 'text/csv'
-    });
 
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'large.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -213,14 +212,16 @@ Rome,41.9028,12.4964,2800000`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, largeContent);
 
     await page.waitForTimeout(1000);
 
     // Vérifier l'avertissement ou l'erreur pour fichier volumineux
-    const notification = page.locator(
-      '.bx--inline-notification--warning, .bx--inline-notification--error'
-    );
+    const notification = page
+      .locator(
+        '.bx--toast-notification--warning, .bx--toast-notification--error'
+      )
+      .first();
     await expect(notification).toBeVisible();
     await expect(notification).toContainText(/taille|size|volumineux|large/i);
   });
@@ -304,9 +305,10 @@ test.describe('Typage des variables - 2.A.4', () => {
 France,République française située en Europe occidentale
 Germany,République fédérale d'Allemagne`;
 
-    const file = new File([textCSV], 'text-data.csv', { type: 'text/csv' });
-
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'text-data.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -320,7 +322,7 @@ Germany,République fédérale d'Allemagne`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, textCSV);
 
     await page.waitForTimeout(1000);
 
@@ -344,11 +346,10 @@ Germany,République fédérale d'Allemagne`;
 France,67000000,2700000.50
 Germany,83000000,3800000.75`;
 
-    const file = new File([numericCSV], 'numeric-data.csv', {
-      type: 'text/csv'
-    });
-
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'numeric-data.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -362,7 +363,7 @@ Germany,83000000,3800000.75`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, numericCSV);
 
     await page.waitForTimeout(1000);
 
@@ -384,9 +385,10 @@ France,Île-de-France,Paris
 Allemagne,Bavière,Munich
 Italie,Lombardie,Milan`;
 
-    const file = new File([geoCSV], 'geo-types.csv', { type: 'text/csv' });
-
-    await page.evaluate((file) => {
+    await page.evaluate((csvContent) => {
+      const file = new File([csvContent], 'geo-types.csv', {
+        type: 'text/csv'
+      });
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
@@ -400,7 +402,7 @@ Italie,Lombardie,Milan`;
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
-    }, file);
+    }, geoCSV);
 
     await page.waitForTimeout(1000);
 
