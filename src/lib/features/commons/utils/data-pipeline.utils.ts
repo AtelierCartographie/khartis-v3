@@ -35,6 +35,11 @@ export interface ProcessedDataset {
     processedAt: Date;
     transformations: string[];
   };
+  originalData?: {
+    columns: DataColumn[];
+    data: any[];
+    rowCount: number;
+  };
 }
 
 export function detectColumnType(values: any[]): DataColumn['type'] {
@@ -275,7 +280,12 @@ export async function processUploadedFile(
       ...baseDataset,
       columns,
       rowCount: processedData.length,
-      data: processedData
+      data: processedData,
+      originalData: {
+        columns: JSON.parse(JSON.stringify(columns)),
+        data: JSON.parse(JSON.stringify(processedData)),
+        rowCount: processedData.length
+      }
     };
   }
 
@@ -292,7 +302,12 @@ export async function processUploadedFile(
       columns,
       rowCount: processedData.length,
       data: processedData,
-      geometry
+      geometry,
+      originalData: {
+        columns: JSON.parse(JSON.stringify(columns)),
+        data: JSON.parse(JSON.stringify(processedData)),
+        rowCount: processedData.length
+      }
     };
   }
 
