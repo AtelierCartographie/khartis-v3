@@ -3,6 +3,7 @@ import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
 import { logger, LogCategory } from './logger';
+import type { ProcessedDataset } from './data-pipeline.utils';
 
 export const generateExportFilename = generateFilename;
 
@@ -14,6 +15,56 @@ export function exportToCsv(data: any[], headers?: string[]): Blob {
 
   const bom = '\uFEFF';
   return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
+}
+
+export function exportDatasetToCsv(dataset: ProcessedDataset): Blob {
+  const headers = dataset.columns
+    .filter((col) => col.type !== 'geometry')
+    .map((col) => col.name);
+
+  const data = dataset.data.map((row) => {
+    const cleanRow: Record<string, any> = {};
+    headers.forEach((header) => {
+      cleanRow[header] = row[header];
+    });
+    return cleanRow;
+  });
+
+  return exportToCsv(data, headers);
+}
+
+export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
+  if (!dataset.geometry) {
+    throw new Error('Dataset does not contain geometry data');
+  }
+
+  const features = dataset.data.map((row) => {
+    const properties: Record<string, any> = {};
+    dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .forEach((col) => {
+        properties[col.name] = row[col.name];
+      });
+
+    const geometryColumn = dataset.columns.find(
+      (col) => col.type === 'geometry'
+    );
+    const geometry = geometryColumn ? row[geometryColumn.name] : null;
+
+    return {
+      type: 'Feature',
+      geometry,
+      properties
+    };
+  });
+
+  const geojson = {
+    type: 'FeatureCollection',
+    features
+  };
+
+  const jsonString = JSON.stringify(geojson, null, 2);
+  return new Blob([jsonString], { type: 'application/geo+json' });
 }
 
 export function exportToGeoJson(data: any): Blob {
@@ -49,6 +100,104 @@ export function exportToGeoJson(data: any): Blob {
 export function exportToJson(data: any): Blob {
   const jsonString = JSON.stringify(data, null, 2);
   return new Blob([jsonString], { type: 'application/json' });
+}
+
+export function exportProcessedDatasets(
+  datasets: ProcessedDataset[],
+  format: 'csv' | 'geojson' | 'json' = 'json'
+): Blob {
+  if (datasets.length === 0) {
+    throw new Error('No datasets to export');
+  }
+
+  if (format === 'csv') {
+    if (datasets.length === 1) {
+      return exportDatasetToCsv(datasets[0]);
+    }
+
+    const allData: any[] = [];
+    for (const dataset of datasets) {
+      const dataWithSource = dataset.data.map((row) => ({
+        ...row,
+        _source_dataset: dataset.name
+      }));
+      allData.push(...dataWithSource);
+    }
+
+    const allHeaders = Array.from(
+      new Set(
+        datasets.flatMap((d) =>
+          d.columns
+            .filter((col) => col.type !== 'geometry')
+            .map((col) => col.name)
+        )
+      )
+    );
+    allHeaders.push('_source_dataset');
+
+    return exportToCsv(allData, allHeaders);
+  }
+
+  if (format === 'geojson') {
+    const allFeatures: any[] = [];
+
+    for (const dataset of datasets) {
+      if (!dataset.geometry) {
+        logger.warn(
+          `Skipping dataset ${dataset.name} without geometry for GeoJSON export`,
+          LogCategory.EXPORT
+        );
+        continue;
+      }
+
+      const geometryColumn = dataset.columns.find(
+        (col) => col.type === 'geometry'
+      );
+      dataset.data.forEach((row) => {
+        const properties: Record<string, any> = {};
+        dataset.columns
+          .filter((col) => col.type !== 'geometry')
+          .forEach((col) => {
+            properties[col.name] = row[col.name];
+          });
+        properties._source_dataset = dataset.name;
+
+        allFeatures.push({
+          type: 'Feature',
+          geometry: geometryColumn ? row[geometryColumn.name] : null,
+          properties
+        });
+      });
+    }
+
+    if (allFeatures.length === 0) {
+      throw new Error('No geometric data to export');
+    }
+
+    return exportToGeoJson({
+      type: 'FeatureCollection',
+      features: allFeatures
+    });
+  }
+
+  const exportData = {
+    exportDate: new Date().toISOString(),
+    datasets: datasets.map((d) => ({
+      id: d.id,
+      name: d.name,
+      rowCount: d.rowCount,
+      columns: d.columns.map((col) => ({
+        name: col.name,
+        type: col.type,
+        nullable: col.nullable
+      })),
+      data: d.data,
+      geometry: d.geometry,
+      metadata: d.metadata
+    }))
+  };
+
+  return exportToJson(exportData);
 }
 
 export async function exportProjectData(

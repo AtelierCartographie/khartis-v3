@@ -87,7 +87,7 @@ test.describe('Outil de recherche - 2.B.4.a', () => {
     await expect(highlightedElement).toBeVisible({ timeout: 5000 });
   });
 
-  test('affiche le nombre de résultats', async ({ page }) => {
+  test('displays le nombre de résultats', async ({ page }) => {
     const searchTool = page
       .locator('[data-testid="search-tool"]')
       .or(page.locator('.search-tool'));

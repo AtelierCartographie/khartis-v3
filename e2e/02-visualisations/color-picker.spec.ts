@@ -66,7 +66,7 @@ test.describe('Sélecteur de couleurs', () => {
     }
   });
 
-  test('affiche les sliders HSL', async ({ page }) => {
+  test('displays les sliders HSL', async ({ page }) => {
     await createTestProject(page, 'Test HSL Sliders');
 
     const colorTrigger = page
@@ -115,7 +115,7 @@ test.describe('Sélecteur de couleurs', () => {
     }
   });
 
-  test('affiche le code hexadécimal', async ({ page }) => {
+  test('displays le code hexadécimal', async ({ page }) => {
     await createTestProject(page, 'Test Hex Display');
 
     const colorTrigger = page
@@ -164,7 +164,7 @@ test.describe('Sélecteur de couleurs', () => {
 });
 
 test.describe('Palettes de couleurs', () => {
-  test('affiche des suggestions de palettes', async ({ page }) => {
+  test('displays des suggestions de palettes', async ({ page }) => {
     await createTestProject(page, 'Test Palettes');
 
     // Rechercher des éléments de palette
@@ -177,7 +177,7 @@ test.describe('Palettes de couleurs', () => {
     }
   });
 
-  test('permet de sélectionner une palette prédéfinie', async ({ page }) => {
+  test('allows sélectionner une palette prédéfinie', async ({ page }) => {
     await createTestProject(page, 'Test Palette Selection');
 
     const palettes = page.locator(

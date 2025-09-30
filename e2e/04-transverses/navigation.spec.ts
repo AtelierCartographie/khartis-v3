@@ -164,7 +164,7 @@ test.describe('Navigation principale - 4.A', () => {
 });
 
 test.describe('Interface - 4.C', () => {
-  test("affiche l'en-tête avec menu principal", async ({ page }) => {
+  test('displays header with main menu', async ({ page }) => {
     await createTestProject(page, 'Test Interface');
 
     // Attendre un peu que la page se charge complètement
@@ -180,7 +180,7 @@ test.describe('Interface - 4.C', () => {
     ).toBeVisible();
   });
 
-  test('affiche le nom du projet en cours', async ({ page }) => {
+  test('displays le nom du projet en cours', async ({ page }) => {
     const projectName = 'Mon Super Projet';
     await createTestProject(page, projectName);
 

@@ -63,7 +63,7 @@ test.describe('Sauvegarde automatique', () => {
     }
   });
 
-  test('affiche le statut de sauvegarde', async ({ page }) => {
+  test('displays le statut de sauvegarde', async ({ page }) => {
     await createTestProject(page, 'Test Save Status');
 
     // Modifier quelque chose pour déclencher la sauvegarde
@@ -81,7 +81,7 @@ test.describe('Sauvegarde automatique', () => {
     }
   });
 
-  test('permet de sauvegarder manuellement', async ({ page }) => {
+  test('allows sauvegarder manuellement', async ({ page }) => {
     await createTestProject(page, 'Test Manual Save');
 
     // Rechercher le bouton de sauvegarde
@@ -101,7 +101,7 @@ test.describe('Sauvegarde automatique', () => {
 });
 
 test.describe('Export du projet', () => {
-  test('affiche le bouton de téléchargement', async ({ page }) => {
+  test('displays le bouton de téléchargement', async ({ page }) => {
     await createTestProject(page, 'Test Download Button');
 
     // Le bouton de téléchargement devrait être dans l'en-tête
@@ -229,7 +229,7 @@ test.describe('Gestion des versions', () => {
     }
   });
 
-  test('permet de restaurer une version précédente', async ({ page }) => {
+  test('allows restaurer une version précédente', async ({ page }) => {
     await createTestProject(page, 'Test Restore Version');
 
     const projectTitle = page.locator('[data-testid="project-title"] input');

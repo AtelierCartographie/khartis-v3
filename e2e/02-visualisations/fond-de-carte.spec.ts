@@ -111,7 +111,7 @@ test.describe('Personnalisation du fond de carte - 2.B.3', () => {
 });
 
 test.describe('Fond de carte du catalogue - 2.B.3.a', () => {
-  test('affiche les couches disponibles', async ({ page }) => {
+  test('displays les couches disponibles', async ({ page }) => {
     await createTestProject(page);
 
     const layerCatalog = page

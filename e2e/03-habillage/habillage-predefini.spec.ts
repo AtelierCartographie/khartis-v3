@@ -49,14 +49,14 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
     await page.waitForTimeout(2000);
   });
 
-  test('affiche automatiquement la légende', async ({ page }) => {
+  test('displays automatiquement la légende', async ({ page }) => {
     const legend = page
       .locator('[data-testid="legend-tool"]')
       .or(page.locator('.legend-container'));
     await expect(legend).toBeVisible({ timeout: 10000 });
   });
 
-  test("affiche les textes prédéfinis à l'étape", async ({ page }) => {
+  test('displays predefined texts at step', async ({ page }) => {
     await page.waitForTimeout(2000);
 
     const textElements = page.locator(

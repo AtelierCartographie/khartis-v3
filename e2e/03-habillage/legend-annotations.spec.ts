@@ -96,7 +96,7 @@ test.describe('Outil Légende', () => {
     }
   });
 
-  test('permet de modifier le titre de la légende', async ({ page }) => {
+  test('allows modifier le titre de la légende', async ({ page }) => {
     await createTestProject(page, 'Test Legend Title');
 
     const legendTool = page
@@ -119,7 +119,7 @@ test.describe('Outil Légende', () => {
     }
   });
 
-  test('permet de modifier la police', async ({ page }) => {
+  test('allows modifier la police', async ({ page }) => {
     await createTestProject(page, 'Test Legend Font');
 
     const legendTool = page
@@ -145,7 +145,7 @@ test.describe('Outil Légende', () => {
     }
   });
 
-  test('permet de régler la taille du texte', async ({ page }) => {
+  test('allows régler la taille du texte', async ({ page }) => {
     await createTestProject(page, 'Test Legend Size');
 
     const legendTool = page
@@ -267,7 +267,7 @@ test.describe('Annotations - Texte', () => {
     }
   });
 
-  test('permet de saisir du texte', async ({ page }) => {
+  test('allows saisir du texte', async ({ page }) => {
     await createTestProject(page, 'Test Enter Text');
 
     const annotationsTool = page
@@ -300,7 +300,7 @@ test.describe('Annotations - Texte', () => {
     }
   });
 
-  test('permet de choisir un style prédéfini', async ({ page }) => {
+  test('allows choisir un style prédéfini', async ({ page }) => {
     await createTestProject(page, 'Test Text Style');
 
     const annotationsTool = page
@@ -327,7 +327,7 @@ test.describe('Annotations - Texte', () => {
     }
   });
 
-  test('permet de modifier la taille du texte', async ({ page }) => {
+  test('allows modifier la taille du texte', async ({ page }) => {
     await createTestProject(page, 'Test Text Size');
 
     const annotationsTool = page
@@ -350,7 +350,7 @@ test.describe('Annotations - Texte', () => {
     }
   });
 
-  test("permet de changer l'alignement du texte", async ({ page }) => {
+  test('allows changing text alignment', async ({ page }) => {
     await createTestProject(page, 'Test Text Align');
 
     const annotationsTool = page

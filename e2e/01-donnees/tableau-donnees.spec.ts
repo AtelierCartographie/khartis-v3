@@ -37,8 +37,8 @@ async function createTestProject(
   await expect(modal).toBeHidden();
 }
 
-test.describe('Aperçu du tableau de données', () => {
-  test('affiche le tableau de données importées', async ({ page }) => {
+test.describe('Table preview de données', () => {
+  test('displays le tableau de données importées', async ({ page }) => {
     await createTestProject(page, 'Test Tableau');
 
     // Attendre que le tableau soit chargé
@@ -59,7 +59,7 @@ test.describe('Aperçu du tableau de données', () => {
     expect(rowCount).toBeGreaterThan(0);
   });
 
-  test('affiche le nombre total de lignes', async ({ page }) => {
+  test('displays le nombre total de lignes', async ({ page }) => {
     await createTestProject(page, 'Test Comptage');
 
     await page.waitForTimeout(2000);
@@ -73,7 +73,7 @@ test.describe('Aperçu du tableau de données', () => {
     }
   });
 
-  test('affiche les types de colonnes', async ({ page }) => {
+  test('displays les types de colonnes', async ({ page }) => {
     await createTestProject(page, 'Test Types');
 
     await page.waitForTimeout(2000);
@@ -123,7 +123,9 @@ test.describe('Typage des variables', () => {
     }
   });
 
-  test('affiche une icône ou indication pour chaque type', async ({ page }) => {
+  test('displays une icône ou indication pour chaque type', async ({
+    page
+  }) => {
     await createTestProject(page, 'Test Type Icons');
 
     await page.waitForTimeout(2000);
@@ -139,7 +141,7 @@ test.describe('Typage des variables', () => {
 });
 
 test.describe('Gestion multi-fichiers', () => {
-  test('affiche les onglets pour plusieurs fichiers', async ({ page }) => {
+  test('displays les onglets pour plusieurs fichiers', async ({ page }) => {
     await createTestProject(page, 'Test Multi Files');
 
     // Ajouter un deuxième fichier
@@ -160,7 +162,7 @@ test.describe('Gestion multi-fichiers', () => {
     }
   });
 
-  test('permet de supprimer un fichier', async ({ page }) => {
+  test('allows supprimer un fichier', async ({ page }) => {
     await createTestProject(page, 'Test Delete File');
 
     // Rechercher un bouton de suppression ou menu overflow
