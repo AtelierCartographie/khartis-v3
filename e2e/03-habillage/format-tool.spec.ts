@@ -63,7 +63,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test('affiche les modes prédéfini et personnalisé', async ({ page }) => {
+  test('displays les modes prédéfini et personnalisé', async ({ page }) => {
     await createTestProject(page, 'Test Format Modes');
 
     const formatTool = page
@@ -96,7 +96,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test('permet de sélectionner un format prédéfini', async ({ page }) => {
+  test('allows sélectionner un format prédéfini', async ({ page }) => {
     await createTestProject(page, 'Test Preset Format');
 
     const formatTool = page
@@ -120,7 +120,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test('permet de définir une taille personnalisée', async ({ page }) => {
+  test('allows définir une taille personnalisée', async ({ page }) => {
     await createTestProject(page, 'Test Custom Size');
 
     const formatTool = page
@@ -159,7 +159,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test('permet de changer la couleur de fond', async ({ page }) => {
+  test('allows changer la couleur de fond', async ({ page }) => {
     await createTestProject(page, 'Test Background Color');
 
     const formatTool = page
@@ -192,7 +192,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test('permet de régler les marges', async ({ page }) => {
+  test('allows régler les marges', async ({ page }) => {
     await createTestProject(page, 'Test Margins');
 
     const formatTool = page
@@ -221,7 +221,7 @@ test.describe('Outil Format - Habillage', () => {
     }
   });
 
-  test("affiche et active la grille d'alignement", async ({ page }) => {
+  test('displays and activates alignment grid', async ({ page }) => {
     await createTestProject(page, 'Test Grid');
 
     const formatTool = page

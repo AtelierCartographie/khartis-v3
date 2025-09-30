@@ -72,7 +72,7 @@ test.describe('Création de visualisations - 2.B.1', () => {
     page
   }) => {});
 
-  test('permet de renommer une visualisation', async ({ page }) => {
+  test('allows renommer une visualisation', async ({ page }) => {
     await createTestProject(page);
 
     const vizName = page
@@ -90,7 +90,7 @@ test.describe('Création de visualisations - 2.B.1', () => {
 
   test.skip('permet de dupliquer une visualisation', async ({ page }) => {});
 
-  test('permet de supprimer une visualisation', async ({ page }) => {
+  test('allows supprimer une visualisation', async ({ page }) => {
     await createTestProject(page);
 
     const deleteBtn = page
@@ -114,7 +114,7 @@ test.describe('Création de visualisations - 2.B.1', () => {
     }
   });
 
-  test('permet de créer plusieurs visualisations', async ({ page }) => {
+  test('allows créer plusieurs visualisations', async ({ page }) => {
     await createTestProject(page);
 
     const addVizBtn = page
@@ -151,7 +151,7 @@ test.describe('Suggestions de visualisations - 2.B.2.a', () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test('affiche les vignettes des suggestions', async ({ page }) => {
+  test('displays les vignettes des suggestions', async ({ page }) => {
     await createTestProject(page);
 
     const suggestionThumbnails = page

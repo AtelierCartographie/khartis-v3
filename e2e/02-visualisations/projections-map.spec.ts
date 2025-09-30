@@ -66,7 +66,7 @@ test.describe('Projections cartographiques', () => {
     }
   });
 
-  test('affiche une liste de projections', async ({ page }) => {
+  test('displays une liste de projections', async ({ page }) => {
     await createTestProject(page, 'Test Projection List');
 
     const projectionTool = page
@@ -94,7 +94,7 @@ test.describe('Projections cartographiques', () => {
     }
   });
 
-  test('permet de sélectionner une projection', async ({ page }) => {
+  test('allows sélectionner une projection', async ({ page }) => {
     await createTestProject(page, 'Test Select Projection');
 
     const projectionTool = page
@@ -124,7 +124,7 @@ test.describe('Projections cartographiques', () => {
     }
   });
 
-  test('affiche les paramètres de projection', async ({ page }) => {
+  test('displays les paramètres de projection', async ({ page }) => {
     await createTestProject(page, 'Test Projection Settings');
 
     const projectionTool = page
@@ -151,7 +151,7 @@ test.describe('Projections cartographiques', () => {
     }
   });
 
-  test('permet de filtrer les projections', async ({ page }) => {
+  test('allows filtrer les projections', async ({ page }) => {
     await createTestProject(page, 'Test Filter Projections');
 
     const projectionTool = page
@@ -179,7 +179,7 @@ test.describe('Projections cartographiques', () => {
 });
 
 test.describe('Contrôles de la carte', () => {
-  test('affiche les contrôles de zoom', async ({ page }) => {
+  test('displays les contrôles de zoom', async ({ page }) => {
     await createTestProject(page, 'Test Zoom Controls');
 
     // Rechercher les contrôles de zoom
@@ -194,7 +194,7 @@ test.describe('Contrôles de la carte', () => {
     }
   });
 
-  test('permet de zoomer sur la carte', async ({ page }) => {
+  test('allows zoomer sur la carte', async ({ page }) => {
     await createTestProject(page, 'Test Map Zoom');
 
     // Rechercher le bouton zoom in
@@ -214,7 +214,7 @@ test.describe('Contrôles de la carte', () => {
     }
   });
 
-  test('permet de dézoomer la carte', async ({ page }) => {
+  test('allows dézoomer la carte', async ({ page }) => {
     await createTestProject(page, 'Test Map Unzoom');
 
     // Rechercher le bouton zoom out
@@ -234,7 +234,7 @@ test.describe('Contrôles de la carte', () => {
     }
   });
 
-  test('permet de réinitialiser le zoom', async ({ page }) => {
+  test('allows réinitialiser le zoom', async ({ page }) => {
     await createTestProject(page, 'Test Reset Zoom');
 
     // Zoomer d'abord
@@ -261,7 +261,7 @@ test.describe('Contrôles de la carte', () => {
     }
   });
 
-  test('affiche la carte principale', async ({ page }) => {
+  test('displays la carte principale', async ({ page }) => {
     await createTestProject(page, 'Test Main Map');
 
     // La carte devrait être visible

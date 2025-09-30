@@ -141,7 +141,7 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     await expect(geoError).toBeHidden();
   });
 
-  test('affiche une erreur si aucune colonne géographique', async ({
+  test('displays une erreur si aucune colonne géographique', async ({
     page
   }) => {
     await page.goto('/');
@@ -258,7 +258,7 @@ Rome,41.9028,12.4964`;
 });
 
 test.describe('Analyse de qualité des données - 2.A.5', () => {
-  test('affiche un avertissement pour les valeurs nulles excessives', async ({
+  test('displays un avertissement pour les valeurs nulles excessives', async ({
     page
   }) => {
     await page.goto('/');
@@ -345,7 +345,7 @@ Italy,300`;
 });
 
 test.describe('Validation de performance - 3.B', () => {
-  test('affiche un avertissement pour les fichiers volumineux (>5000 lignes)', async ({
+  test('displays un avertissement pour les fichiers volumineux (>5000 lignes)', async ({
     page
   }) => {
     await page.goto('/');
@@ -427,7 +427,7 @@ test.describe('Validation de performance - 3.B', () => {
     await expect(errorMessage).toContainText(/10000|lignes|rows|maximum/i);
   });
 
-  test('affiche un avertissement pour plus de 50 colonnes', async ({
+  test('displays un avertissement pour plus de 50 colonnes', async ({
     page
   }) => {
     await page.goto('/');
@@ -520,7 +520,7 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     }
   });
 
-  test('affiche des suggestions pour les valeurs non reconnues', async ({
+  test('displays des suggestions pour les valeurs non reconnues', async ({
     page
   }) => {
     await page.goto('/');

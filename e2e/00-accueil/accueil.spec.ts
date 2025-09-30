@@ -2,18 +2,17 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const CREATE_BUTTON_LABEL = 'Créer';
-const SAVED_PROJECT_TAB_LABEL = 'Ouvrir un projet ou une sauvegarde';
-const EXAMPLES_TAB_LABEL = 'Essayer avec exemple';
+const CREATE_BUTTON_LABEL = 'Create';
+const SAVED_PROJECT_TAB_LABEL = 'Open a project or backup';
+const EXAMPLES_TAB_LABEL = 'Try with example';
 
-test.describe("Page d'accueil - Écran initial", () => {
-  test("affiche les trois options d'entrée au chargement", async ({ page }) => {
+test.describe('Home page - Initial screen', () => {
+  test('displays three entry options on load', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Vérifier les trois onglets
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     const openTab = modal.locator('[data-testid="tab-open-project"]');
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
@@ -23,15 +22,12 @@ test.describe("Page d'accueil - Écran initial", () => {
     await expect(examplesTab).toBeVisible();
   });
 
-  test('affiche la liste des projets sauvegardés dans le navigateur', async ({
-    page
-  }) => {
+  test('displays list of saved projects in browser', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Naviguer vers l'onglet des projets sauvegardés
     const openTab = modal.locator('[data-testid="tab-open-project"]');
     await openTab.click();
 
@@ -39,8 +35,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     await expect(savedProjectsSection).toBeVisible();
   });
 
-  test('permet de dupliquer un projet sauvegardé', async ({ page }) => {
-    // Créer d'abord un projet
+  test('allows duplicating a saved project', async ({ page }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -66,7 +61,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     await createButton.click();
     await expect(modal).toBeHidden();
 
-    // Rouvrir la modal et aller à l'onglet des projets sauvegardés
+    // Reopen the modal and go to saved projects tab
     await page.keyboard.press('Shift+Meta+O');
     await page.waitForTimeout(500);
 
@@ -74,7 +69,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     await openTab.click();
     await page.waitForTimeout(500);
 
-    // Trouver le projet et cliquer sur le menu overflow
+    // Find the project and click overflow menu
     const projectCard = page
       .locator('.bx--tile')
       .filter({ hasText: 'Projet Original' })
@@ -82,21 +77,21 @@ test.describe("Page d'accueil - Écran initial", () => {
     const overflowMenu = projectCard.locator('.bx--overflow-menu');
     await overflowMenu.click();
 
-    // Cliquer sur dupliquer
+    // Click duplicate
     const duplicateOption = page.getByRole('menuitem', { name: /Dupliquer/i });
     await duplicateOption.click();
 
-    // Vérifier que le projet dupliqué existe
+    // Verify that the duplicated project exists
     await page.waitForTimeout(1000);
     await expect(
       page.locator('.bx--tile').filter({ hasText: 'Projet Original (copie)' })
     ).toBeVisible();
   });
 
-  test('permet de supprimer un projet sauvegardé avec confirmation', async ({
+  test('allows deleting a saved project with confirmation', async ({
     page
   }) => {
-    // Créer d'abord un projet
+    // Create a project first
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -113,7 +108,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     const projectNameInput = modal.locator(
       '[data-testid="project-name-input"]'
     );
-    await projectNameInput.fill('Projet à Supprimer');
+    await projectNameInput.fill('Project to Delete');
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
@@ -122,7 +117,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     await createButton.click();
     await expect(modal).toBeHidden();
 
-    // Rouvrir la modal et aller à l'onglet des projets sauvegardés
+    // Reopen modal and go to saved projects tab
     await page.keyboard.press('Shift+Meta+O');
     await page.waitForTimeout(500);
 
@@ -130,106 +125,105 @@ test.describe("Page d'accueil - Écran initial", () => {
     await openTab.click();
     await page.waitForTimeout(500);
 
-    // Trouver le projet et cliquer sur le menu overflow
+    // Find the project and click overflow menu
     const projectCard = page
       .locator('.bx--tile')
-      .filter({ hasText: 'Projet à Supprimer' })
+      .filter({ hasText: 'Project to Delete' })
       .first();
     const overflowMenu = projectCard.locator('.bx--overflow-menu');
     await overflowMenu.click();
 
-    // Cliquer sur supprimer
+    // Click delete
     const deleteOption = page.getByRole('menuitem', { name: /Supprimer/i });
     await deleteOption.click();
 
-    // Confirmer la suppression
+    // Confirm deletion
     const confirmButton = page.getByRole('button', {
       name: 'Supprimer',
       exact: true
     });
     await confirmButton.click();
 
-    // Vérifier que le projet n'existe plus
+    // Verify the project no longer exists
     await page.waitForTimeout(1000);
     await expect(
-      page.locator('.bx--tile').filter({ hasText: 'Projet à Supprimer' })
+      page.locator('.bx--tile').filter({ hasText: 'Project to Delete' })
     ).not.toBeVisible();
   });
 
-  test('affiche les exemples de projets avec vignettes', async ({ page }) => {
+  test('displays project examples with thumbnails', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Naviguer vers l'onglet des exemples
+    // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
     await examplesTab.click();
 
-    // Attendre un peu pour que le contenu se charge
+    // Wait for content to load
     await page.waitForTimeout(1000);
 
-    // Vérifier que l'onglet est sélectionné
-    // On vérifie simplement que l'onglet est bien cliqué
-    // L'implémentation des exemples peut varier
+    // Verify tab is selected
+    // We simply verify the tab was clicked
+    // Example implementation may vary
     await page.waitForTimeout(500);
   });
 
-  test('permet de filtrer les exemples de projets', async ({ page }) => {
+  test('allows filtering project examples', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Naviguer vers l'onglet des exemples
+    // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
     await examplesTab.click();
     await page.waitForTimeout(500);
 
-    // Vérifier que les catégories sont affichées
+    // Verify categories are displayed
     const categoryTags = modal.locator('.bx--tag');
     await expect(categoryTags.first()).toBeVisible();
 
-    // Cliquer sur une catégorie
+    // Click on a category
     const firstCategory = categoryTags.first();
     await firstCategory.click();
     await page.waitForTimeout(500);
 
-    // Vérifier que les exemples sont filtrés (au moins un exemple visible)
+    // Verify examples are filtered (at least one example visible)
     const exampleCards = modal.locator('.project-card');
     await expect(exampleCards.first()).toBeVisible();
   });
 
-  test('charge un exemple de projet au clic', async ({ page }) => {
+  test('loads a project example on click', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Naviguer vers l'onglet des exemples
+    // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
     await examplesTab.click();
     await page.waitForTimeout(500);
 
-    // Cliquer sur le premier exemple
+    // Click on first example
     const firstExample = modal.locator('.project-card').first();
     await expect(firstExample).toBeVisible();
     await firstExample.click();
     await page.waitForTimeout(1000);
 
-    // Vérifier que la modal se ferme après chargement
+    // Verify modal closes after loading
     await expect(modal).toBeHidden({ timeout: 10000 });
 
-    // Vérifier qu'on est sur la page principale avec le projet chargé
+    // Verify we're on main page with loaded project
     await expect(page.locator('[data-testid="step-data"]')).toBeVisible();
   });
 
-  test.skip('restaure automatiquement le dernier projet ouvert', async () => {});
+  test.skip('automatically restores last opened project', async () => {});
 
-  test.skip("affiche le nom du projet dans l'en-tête", async () => {});
+  test.skip('displays project name in header', async () => {});
 
-  test("permet d'importer un fichier projet .kh", async ({ page }) => {
-    // Créer d'abord un projet et l'exporter
+  test('allows importing .kh project file', async ({ page }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -246,7 +240,7 @@ test.describe("Page d'accueil - Écran initial", () => {
     const projectNameInput = modal.locator(
       '[data-testid="project-name-input"]'
     );
-    await projectNameInput.fill('Projet Export Test');
+    await projectNameInput.fill('Export Test Project');
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
@@ -255,13 +249,13 @@ test.describe("Page d'accueil - Écran initial", () => {
     await createButton.click();
     await expect(modal).toBeHidden();
 
-    // TODO: Exporter le projet en .kh et le réimporter
-    // Cette fonctionnalité nécessite l'implémentation du bouton de téléchargement
+    // TODO: Export project as .kh and re-import it
+    // This functionality requires implementation of download button
   });
 });
 
-test.describe('Modal de création de projet', () => {
-  test('bloque le bouton Créer sans données', async ({ page }) => {
+test.describe('Project creation modal', () => {
+  test('disables Create button without data', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -272,13 +266,11 @@ test.describe('Modal de création de projet', () => {
       exact: true
     });
 
-    // Le bouton doit être désactivé sans données
+    // Button must be disabled without data
     await expect(createButton).toBeDisabled();
   });
 
-  test("accepte l'import de fichier CSV depuis l'appareil", async ({
-    page
-  }) => {
+  test('accepts CSV file import from device', async ({ page }) => {
     const TEST_DATASET_PATH = join(
       process.cwd(),
       'e2e',
@@ -292,7 +284,6 @@ test.describe('Modal de création de projet', () => {
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -300,17 +291,16 @@ test.describe('Modal de création de projet', () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
-    // Vérifier que le fichier est affiché dans la modal
     await expect(modal.locator('.bx--file-filename').first()).toContainText(
       'nuts2_data.csv'
     );
   });
 
-  test.skip("accepte l'import de fichier CSV via URL", async () => {});
+  test.skip('accepts CSV file import via URL', async () => {});
 
-  test.skip("accepte l'import de données par copier-coller", async () => {});
+  test.skip('accepts data import via copy-paste', async () => {});
 
-  test('affiche le nom du fichier après upload', async ({ page }) => {
+  test('displays file name after upload', async ({ page }) => {
     const TEST_DATASET_PATH = join(
       process.cwd(),
       'e2e',
@@ -324,7 +314,6 @@ test.describe('Modal de création de projet', () => {
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -332,19 +321,17 @@ test.describe('Modal de création de projet', () => {
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
-    // Le nom du fichier doit être visible dans la modal
     await expect(modal.locator('.bx--file-filename').first()).toContainText(
       'nuts2_data.csv'
     );
   });
 
-  test('permet de nommer le projet', async ({ page }) => {
+  test('allows naming the project', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -352,17 +339,16 @@ test.describe('Modal de création de projet', () => {
     const projectNameInput = page.locator('[data-testid="project-name-input"]');
     await expect(projectNameInput).toBeVisible();
 
-    await projectNameInput.fill('Mon projet test');
-    await expect(projectNameInput).toHaveValue('Mon projet test');
+    await projectNameInput.fill('My test project');
+    await expect(projectNameInput).toHaveValue('My test project');
   });
 
-  test('utilise "Sans nom" comme placeholder', async ({ page }) => {
+  test('uses "Untitled" as placeholder', async ({ page }) => {
     await page.goto('/');
 
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -372,7 +358,7 @@ test.describe('Modal de création de projet', () => {
     await expect(projectNameInput).toHaveAttribute('placeholder', 'Sans nom');
   });
 
-  test('active le bouton Créer après upload et nom', async ({ page }) => {
+  test('enables Create button after upload and name', async ({ page }) => {
     const TEST_DATASET_PATH = join(
       process.cwd(),
       'e2e',
@@ -386,7 +372,6 @@ test.describe('Modal de création de projet', () => {
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -402,11 +387,10 @@ test.describe('Modal de création de projet', () => {
       exact: true
     });
 
-    // Le bouton doit être activé
     await expect(createButton).toBeEnabled();
   });
 
-  test('ferme la modal après création réussie', async ({ page }) => {
+  test('closes modal after successful creation', async ({ page }) => {
     const TEST_DATASET_PATH = join(
       process.cwd(),
       'e2e',
@@ -420,7 +404,6 @@ test.describe('Modal de création de projet', () => {
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
 
-    // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
     await page.waitForTimeout(500);
@@ -438,7 +421,6 @@ test.describe('Modal de création de projet', () => {
 
     await createButton.click();
 
-    // La modal doit se fermer
     await expect(modal).toBeHidden();
   });
 });

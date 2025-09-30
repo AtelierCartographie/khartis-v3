@@ -54,7 +54,7 @@ test.describe('Menu latéral (Side Navigation)', () => {
     await expect(sideNav).toBeVisible();
   });
 
-  test('affiche les options de projet dans le menu', async ({ page }) => {
+  test('displays les options de projet dans le menu', async ({ page }) => {
     await createTestProject(page, 'Test Menu Options');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');
@@ -67,7 +67,7 @@ test.describe('Menu latéral (Side Navigation)', () => {
     await expect(page.getByText('Ouvrir un projet')).toBeVisible();
   });
 
-  test("affiche les liens d'aide et documentation", async ({ page }) => {
+  test('displays help and documentation links', async ({ page }) => {
     await createTestProject(page, 'Test Help Links');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');
@@ -80,7 +80,7 @@ test.describe('Menu latéral (Side Navigation)', () => {
     await expect(page.getByText('Suggérer une fonctionnalité')).toBeVisible();
   });
 
-  test('permet de changer la langue', async ({ page }) => {
+  test('allows changer la langue', async ({ page }) => {
     await createTestProject(page, 'Test Language');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');
@@ -98,7 +98,7 @@ test.describe('Menu latéral (Side Navigation)', () => {
     await expect(enOption).toBeVisible();
   });
 
-  test('permet de basculer entre thème clair et sombre', async ({ page }) => {
+  test('allows basculer entre thème clair et sombre', async ({ page }) => {
     await createTestProject(page, 'Test Theme');
 
     const hamburgerButton = page.locator('.bx--header__menu-trigger');

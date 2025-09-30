@@ -35,8 +35,8 @@ async function createTestProject(page: any, projectName: string = 'Test Data') {
   await page.waitForTimeout(2000);
 }
 
-test.describe('Aperçu du tableau de données - 2.A.5', () => {
-  test('affiche le tableau dans un panneau latéral', async ({ page }) => {
+test.describe('Table preview de données - 2.A.5', () => {
+  test('displays le tableau dans un panneau latéral', async ({ page }) => {
     await createTestProject(page);
 
     const dataTable = page
@@ -51,7 +51,7 @@ test.describe('Aperçu du tableau de données - 2.A.5', () => {
 
   test.skip('permet de redimensionner le panneau', async ({ page }) => {});
 
-  test('affiche un nombre limité de lignes avec scroll', async ({ page }) => {
+  test('displays un nombre limité de lignes avec scroll', async ({ page }) => {
     await createTestProject(page);
 
     const dataTable = page
@@ -72,7 +72,7 @@ test.describe('Aperçu du tableau de données - 2.A.5', () => {
   }) => {});
 });
 
-test.describe('Actions sur les variables - 2.A.5.a', () => {
+test.describe('Actions on variables - 2.A.5.a', () => {
   test("change le type d'une variable", async ({ page }) => {
     await createTestProject(page);
 
@@ -92,8 +92,8 @@ test.describe('Actions sur les variables - 2.A.5.a', () => {
   test.skip('modifie et manipule les variables', async ({ page }) => {});
 });
 
-test.describe('Résumé statistique - 2.A.5.b', () => {
-  test('affiche le nombre de lignes du tableau', async ({ page }) => {
+test.describe('Statistical summary - 2.A.5.b', () => {
+  test('displays le nombre de lignes du tableau', async ({ page }) => {
     await createTestProject(page);
 
     const statsPanel = page
@@ -124,7 +124,7 @@ test.describe('Résumé statistique - 2.A.5.b', () => {
     page
   }) => {});
 
-  test('affiche les valeurs min/max pour variables numériques', async ({
+  test('displays les valeurs min/max pour variables numériques', async ({
     page
   }) => {
     await createTestProject(page);
@@ -138,7 +138,7 @@ test.describe('Résumé statistique - 2.A.5.b', () => {
   test.skip('peut masquer/afficher le résumé', async ({ page }) => {});
 });
 
-test.describe('Tri des données - 2.A.5.c', () => {
+test.describe('Data sorting - 2.A.5.c', () => {
   test('trie les données par différents critères', async ({ page }) => {
     await createTestProject(page);
 
@@ -153,7 +153,7 @@ test.describe('Tri des données - 2.A.5.c', () => {
   });
 });
 
-test.describe('Recherche dans le tableau - 2.A.5.d', () => {
+test.describe('Table search - 2.A.5.d', () => {
   test('recherche dans tout le tableau', async ({ page }) => {
     await createTestProject(page);
 
@@ -176,7 +176,7 @@ test.describe('Recherche dans le tableau - 2.A.5.d', () => {
 
   test.skip('recherche dans une variable spécifique', async ({ page }) => {});
 
-  test('affiche le nombre de résultats', async ({ page }) => {
+  test('displays le nombre de résultats', async ({ page }) => {
     await createTestProject(page);
 
     const searchInput = page
@@ -201,7 +201,7 @@ test.describe('Recherche dans le tableau - 2.A.5.d', () => {
   test.skip('permet rechercher/remplacer', async ({ page }) => {});
 });
 
-test.describe('Filtres - 2.A.5.e', () => {
+test.describe('Filters - 2.A.5.e', () => {
   test.skip('applique différents types de filtres sur les données', async ({
     page
   }) => {});
@@ -211,7 +211,7 @@ test.describe('Filtres - 2.A.5.e', () => {
   test.skip('affiche les statistiques de filtrage', async ({ page }) => {});
 });
 
-test.describe('Calculatrice - 2.A.5.f', () => {
+test.describe('Calculator - 2.A.5.f', () => {
   test.skip('ajoute une nouvelle variable calculée', async ({ page }) => {});
 
   test.skip("utilise l'addition entre variables", async ({ page }) => {});
@@ -239,7 +239,7 @@ test.describe('Calculatrice - 2.A.5.f', () => {
   test.skip('teste la formule avant validation', async ({ page }) => {});
 });
 
-test.describe('Corbeille et réinitialisation - 2.A.5.g et 2.A.5.h', () => {
+test.describe('Trash and reset - 2.A.5.g et 2.A.5.h', () => {
   test.skip('supprime des variables sélectionnées', async ({ page }) => {});
 
   test.skip('supprime des lignes sélectionnées', async ({ page }) => {});
@@ -263,7 +263,7 @@ test.describe('Corbeille et réinitialisation - 2.A.5.g et 2.A.5.h', () => {
   test.skip('annule la suppression avec Ctrl+Z', async ({ page }) => {});
 });
 
-test.describe('Performance avec gros volumes - 2.A.5 & 3.B', () => {
+test.describe('Performance with large volumes - 2.A.5 & 3.B', () => {
   test.skip('gère un tableau de 10000 lignes avec pagination', async ({
     page
   }) => {});

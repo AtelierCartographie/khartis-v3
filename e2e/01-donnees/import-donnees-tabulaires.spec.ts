@@ -148,7 +148,7 @@ Rome,41.9028,12.4964,2800000`;
     await expect(geoError).toBeHidden();
   });
 
-  test('affiche une erreur pour un format invalide', async ({ page }) => {
+  test('displays une erreur pour un format invalide', async ({ page }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -182,7 +182,7 @@ Rome,41.9028,12.4964,2800000`;
     await expect(errorMessage).toContainText(/format|extension|supporté/i);
   });
 
-  test('affiche un avertissement pour les fichiers volumineux', async ({
+  test('displays un avertissement pour les fichiers volumineux', async ({
     page
   }) => {
     await page.goto('/');
