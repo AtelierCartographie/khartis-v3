@@ -92,7 +92,7 @@
 
         <RadioButtonGroup
           bind:selected={selectedProjectId}
-          on:change={(e) => handleProjectSelection(e.detail)}
+          on:change={(e) => handleProjectSelection(String(e.detail))}
         >
           {#each projectsStore.projects as project}
             <RadioButton value={project.id} labelText={project.name} />

@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
-async function createTestProject(page: any, projectName: string = 'Test Project') {
+async function createTestProject(
+  page: any,
+  projectName: string = 'Test Project'
+) {
   await page.goto('/');
   const modal = page.locator(MODAL_CONTAINER_SELECTOR);
   await expect(modal).toBeVisible();
@@ -19,7 +28,10 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
   const projectNameInput = modal.locator('[data-testid="project-name-input"]');
   await projectNameInput.fill(projectName);
 
-  const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+  const createButton = modal.getByRole('button', {
+    name: 'Créer',
+    exact: true
+  });
   await createButton.click();
 
   await expect(modal).toBeHidden();
@@ -70,7 +82,7 @@ test.describe('Aperçu du tableau de données', () => {
     const headers = page.locator('th');
     const firstHeader = headers.first();
 
-    if (await firstHeader.count() > 0) {
+    if ((await firstHeader.count()) > 0) {
       const headerText = await firstHeader.textContent();
       // Les types sont souvent affichés entre parenthèses ou avec une icône
       expect(headerText).toBeTruthy();
@@ -85,8 +97,8 @@ test.describe('Aperçu du tableau de données', () => {
     // Vérifier la présence d'un conteneur avec scroll
     const scrollableContainer = page.locator('[style*="overflow"]').first();
 
-    if (await scrollableContainer.count() > 0) {
-      const hasOverflow = await scrollableContainer.evaluate(el => {
+    if ((await scrollableContainer.count()) > 0) {
+      const hasOverflow = await scrollableContainer.evaluate((el) => {
         return el.scrollHeight > el.clientHeight;
       });
 
@@ -106,7 +118,7 @@ test.describe('Typage des variables', () => {
     // Rechercher des indicateurs de type (texte, numérique, géographique)
     const typeIndicators = page.locator('[class*="type"], [data-type]');
 
-    if (await typeIndicators.count() > 0) {
+    if ((await typeIndicators.count()) > 0) {
       await expect(typeIndicators.first()).toBeVisible();
     }
   });
@@ -119,7 +131,7 @@ test.describe('Typage des variables', () => {
     // Rechercher des icônes ou badges de type
     const typeIcons = page.locator('[class*="icon"], [class*="badge"], svg');
 
-    if (await typeIcons.count() > 0) {
+    if ((await typeIcons.count()) > 0) {
       const iconCount = await typeIcons.count();
       expect(iconCount).toBeGreaterThan(0);
     }
@@ -131,16 +143,18 @@ test.describe('Gestion multi-fichiers', () => {
     await createTestProject(page, 'Test Multi Files');
 
     // Ajouter un deuxième fichier
-    const addButton = page.locator('[aria-label*="Ajouter"], button:has(svg[class*="add"])').first();
+    const addButton = page
+      .locator('[aria-label*="Ajouter"], button:has(svg[class*="add"])')
+      .first();
 
-    if (await addButton.count() > 0) {
+    if ((await addButton.count()) > 0) {
       await addButton.click();
       await page.waitForTimeout(1000);
 
       // Vérifier si une modal d'ajout s'ouvre
       const addModal = page.locator('.bx--modal[aria-label*="Ajouter"]');
 
-      if (await addModal.count() > 0) {
+      if ((await addModal.count()) > 0) {
         await expect(addModal).toBeVisible();
       }
     }
@@ -150,9 +164,11 @@ test.describe('Gestion multi-fichiers', () => {
     await createTestProject(page, 'Test Delete File');
 
     // Rechercher un bouton de suppression ou menu overflow
-    const deleteButton = page.locator('[aria-label*="Supprimer"], .bx--overflow-menu').first();
+    const deleteButton = page
+      .locator('[aria-label*="Supprimer"], .bx--overflow-menu')
+      .first();
 
-    if (await deleteButton.count() > 0) {
+    if ((await deleteButton.count()) > 0) {
       await expect(deleteButton).toBeVisible();
     }
   });

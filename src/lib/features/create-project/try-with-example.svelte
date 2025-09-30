@@ -8,6 +8,15 @@
     loadExampleData
   } from '$lib/features/commons/mocks/examples.data';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import type {
+    DataSourceType,
+    FileType,
+    UploadedFile
+  } from '$lib/features/commons/store/create-project.types';
+  import {
+    DataSourceType as DataSource,
+    FileType as FType
+  } from '$lib/features/commons/store/create-project.types';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
@@ -53,20 +62,33 @@
 
       const data = await loadExampleData(example);
 
+      const fileName = example.dataUrl
+        ? example.dataUrl.split('/').pop()
+        : 'example-data.csv';
+      const fileType = example.dataUrl?.endsWith('.json')
+        ? 'application/json'
+        : 'text/csv';
+
       const file = new File(
         [typeof data === 'string' ? data : JSON.stringify(data)],
-        example.dataUrl.split('/').pop() || 'example-data.csv',
-        {
-          type: example.dataUrl.endsWith('.json')
-            ? 'application/json'
-            : 'text/csv'
-        }
+        fileName || 'example-data.csv',
+        { type: fileType }
       );
+
+      const uploadedFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        fileType: file.type.includes('json') ? FType.GEOJSON : FType.CSV,
+        status: 'complete',
+        sourceType: DataSource.FILE_UPLOAD
+      };
 
       await createProjectActions.processFiles([file]);
       createProjectActions.setProjectName(example.title);
 
-      await projectStore.createProject(example.title, [file]);
+      await projectStore.createProject(example.title, [uploadedFile]);
 
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
@@ -112,7 +134,21 @@
           interactive
           on:click={() => selectCategory(category.id)}
         >
-          {m[category.label]()}
+          {#if category.label === 'try_example_all'}
+            {m.try_example_all()}
+          {:else if category.label === 'try_example_symbols'}
+            {m.try_example_symbols()}
+          {:else if category.label === 'try_example_polygons'}
+            {m.try_example_polygons()}
+          {:else if category.label === 'try_example_lines'}
+            {m.try_example_lines()}
+          {:else if category.label === 'try_example_texts'}
+            {m.try_example_texts()}
+          {:else if category.label === 'try_example_hybrids'}
+            {m.try_example_hybrids()}
+          {:else}
+            {category.label}
+          {/if}
         </Tag>
       {/each}
     </div>
@@ -139,7 +175,9 @@
           onclick={() => handleExampleClick(example.id)}
         >
           {#snippet footer()}
-            <span class="text-xs text-grey">{example.tags.join(' • ')}</span>
+            <span class="text-xs text-grey"
+              >{example.tags?.join(' • ') || ''}</span
+            >
           {/snippet}
         </ProjectCard>
       {/each}

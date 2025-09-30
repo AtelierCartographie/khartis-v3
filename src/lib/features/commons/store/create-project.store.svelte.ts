@@ -1,3 +1,22 @@
+import {
+  FileProcessorService,
+  type ProcessingCallbacks
+} from '../../create-project/services/file-processor.service';
+import { CreateProjectValidationService } from '../../create-project/services/validation.service';
+import {
+  createUploadedFile,
+  DataSourceType,
+  extractDataFromPaste,
+  FileType,
+  getFilenameFromUrl,
+  groupShapefiles,
+  isShapefileComponent,
+  isValidUrl,
+  parseShapefile,
+  readFileContent
+} from '../utils/file-import.utils';
+import { LogCategory, logger } from '../utils/logger';
+import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
   ExampleCategory,
@@ -6,38 +25,8 @@ import type {
   SavedProject,
   UploadedFile
 } from './create-project.types';
-import {
-  createUploadedFile,
-  readFileContent,
-  validateFile,
-  groupShapefiles,
-  isShapefileComponent,
-  extractDataFromPaste,
-  FileType,
-  isValidUrl,
-  getFilenameFromUrl,
-  validateCsvStructure,
-  validateGeospatialFile,
-  parseCsvWithPapa,
-  parseShapefile,
-  detectDuplicateRows,
-  getDataStatistics,
-  parseGeoPackage,
-  DataSourceType
-} from '../utils/file-import.utils';
-import {
-  showSuccess,
-  showError,
-  showWarning
-} from '../utils/notification.utils.svelte';
 import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
-import { logger, LogCategory } from '../utils/logger';
-import { ProjectValidator, DataValidator } from '../utils/validation.utils';
-import { FileValidator } from '../utils/file-validator.utils';
-import { DeepDataValidator, type DataAnalysisResult } from '../utils/deep-validator.utils';
-import { GeoMatcher } from '../utils/geo-matcher.utils';
-import { DuckDBValidatorService, type ValidationResult } from '../services/duckdb-validator.service';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -104,25 +93,11 @@ export const createProjectActions = {
   },
 
   async processFiles(files: File[]): Promise<void> {
-    const validationResult = FileValidator.validateMultiple(files);
+    const validationResult =
+      CreateProjectValidationService.validateFiles(files);
 
-    if (validationResult.globalErrors.length > 0) {
-      this.setNewProjectError(validationResult.globalErrors.join(', '));
-      showError('Erreur de validation', validationResult.globalErrors.join(', '));
+    if (!validationResult.isValid) {
       return;
-    }
-
-    for (const [filename, result] of validationResult.results) {
-      if (!result.isValid) {
-        this.setNewProjectError(result.errors.join(', '));
-        showError(`Erreur avec ${filename}`, result.errors.join(', '));
-        return;
-      }
-
-      if (result.warnings.length > 0) {
-        result.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
-        showWarning('Avertissement', result.warnings.join(', '));
-      }
     }
 
     const fileGroups = groupShapefiles(files);
@@ -171,254 +146,23 @@ export const createProjectActions = {
       return;
     }
 
-    const validation = FileValidator.validate(file);
     const uploadedFile = createUploadedFile(file, sourceType);
-
-    uploadedFile.validation = {
-      isValid: validation.isValid,
-      errors: validation.errors,
-      warnings: validation.warnings
-    };
-    uploadedFile.status = validation.isValid ? 'uploading' : 'error';
-    uploadedFile.errorMessage = validation.isValid ? undefined : validation.errors[0];
-
     this.addUploadedFile(uploadedFile);
 
-    if (!validation.isValid) {
-      return;
-    }
+    const callbacks: ProcessingCallbacks = {
+      onProgress: (fileId: string, progress: number) =>
+        this.updateFileProgress(fileId, progress),
+      onStatusChange: (
+        fileId: string,
+        status: UploadedFile['status'],
+        errorMessage?: string
+      ) => this.updateFileStatus(fileId, status, errorMessage),
+      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
+        this.updateFileData(fileId, data)
+    };
 
-
-    try {
-      this.updateFileStatus(uploadedFile.id, 'processing');
-
-      if (validation.requiresAsyncValidation) {
-        const asyncValidation = await FileValidator.validateAsync(file, validation);
-        if (!asyncValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: asyncValidation.errors.join(', '),
-            validation: {
-              isValid: asyncValidation.isValid,
-              errors: asyncValidation.errors,
-              warnings: asyncValidation.warnings
-            }
-          });
-          return;
-        }
-
-        if (asyncValidation.warnings.length > 0) {
-          asyncValidation.warnings.forEach(w => logger.warn(w, LogCategory.FILE));
-        }
-      }
-
-      if (uploadedFile.fileType === FileType.CSV || uploadedFile.fileType === FileType.TSV) {
-        const result = await parseCsvWithPapa(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-
-
-        const csvValidation = DataValidator.validateCSVData(result.data);
-        if (!csvValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: csvValidation.errors.join(', ')
-          });
-          return;
-        }
-        if (csvValidation.warnings.length > 0) {
-          csvValidation.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
-        }
-
-        const duplicates = detectDuplicateRows(result.data);
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: result.data,
-          content: JSON.stringify(result.data),
-          duplicates: {
-            hasDuplicates: duplicates.hasDuplicates,
-            duplicateCount: duplicates.duplicateCount
-          }
-        });
-
-        if (duplicates.hasDuplicates) {
-          showWarning(
-            'Duplicate rows detected',
-            `Found ${duplicates.duplicateCount} duplicate rows`
-          );
-        }
-
-        uploadedFile.statistics = getDataStatistics(
-          result.data,
-          result.headers
-        );
-
-        const headers = result.data[0] ? Object.keys(result.data[0]) : [];
-        const dataRows = result.data.map(row => headers.map(h => row[h]));
-
-        const deepAnalysis = await DeepDataValidator.analyzeDataContent(
-          headers,
-          dataRows,
-          { sampleSize: Math.min(100, dataRows.length) }
-        );
-
-        if (!deepAnalysis.geoDetection.hasGeoColumns) {
-          showError(
-            'Aucune colonne géographique détectée',
-            'Assurez-vous d\'avoir une colonne avec des noms de lieux, codes ISO ou coordonnées.'
-          );
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: 'Pas de données géographiques détectées'
-          });
-          return;
-        }
-
-        if (deepAnalysis.geoDetection.suggestedPrimaryGeoColumn) {
-          logger.info('Colonne géographique détectée', LogCategory.FILE, {
-            column: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.columnName,
-            type: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.type,
-            confidence: deepAnalysis.geoDetection.suggestedPrimaryGeoColumn.confidence
-          });
-        }
-
-        if (deepAnalysis.performanceWarnings.length > 0) {
-          deepAnalysis.performanceWarnings.forEach(warning =>
-            showWarning('Performance', warning)
-          );
-        }
-
-        if (deepAnalysis.suggestions.length > 0) {
-          logger.info('Suggestions d\'analyse', LogCategory.FILE, deepAnalysis.suggestions);
-        }
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: result.data,
-          deepAnalysis: deepAnalysis
-        });
-
-
-        if (result.errors.length > 0) {
-          this.updateFileData(uploadedFile.id, {
-            validation: {
-              isValid: false,
-              errors: result.errors,
-              warnings: []
-            },
-            status: 'error',
-            errorMessage: result.errors[0]
-          });
-          return;
-        }
-
-        this.updateFileStatus(uploadedFile.id, 'complete');
-
-        const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
-
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else if (uploadedFile.fileType === FileType.GEOJSON) {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-
-        try {
-          const parsedData = JSON.parse(content as string);
-
-          const geoValidation = DataValidator.validateGeoData(parsedData);
-          if (!geoValidation.isValid) {
-            this.updateFileData(uploadedFile.id, {
-              status: 'error',
-              errorMessage: geoValidation.errors.join(', ')
-            });
-            return;
-          }
-          if (geoValidation.warnings.length > 0) {
-            geoValidation.warnings.forEach(warning => logger.warn(warning, LogCategory.FILE));
-          }
-          this.updateFileData(uploadedFile.id, {
-            content: content,
-            parsedData: parsedData
-          });
-        } catch (e) {
-          this.updateFileData(uploadedFile.id, {
-            content: content,
-            status: 'error',
-            errorMessage: 'Invalid JSON format'
-          });
-          return;
-        }
-
-        const geoValidation = await validateGeospatialFile(content as string);
-        this.updateFileData(uploadedFile.id, {
-          validation: {
-            ...uploadedFile.validation,
-            ...geoValidation
-          }
-        });
-
-        if (!geoValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: geoValidation.errors[0]
-          });
-          return;
-        }
-
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else if (uploadedFile.fileType === FileType.GEOPACKAGE) {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress * 0.5);
-        });
-
-        const geojson = await parseGeoPackage(
-          content as ArrayBuffer,
-          (progress) => {
-            this.updateFileProgress(uploadedFile.id, 50 + progress * 0.5);
-          }
-        );
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: geojson,
-          content: JSON.stringify(geojson)
-        });
-
-        const geoValidation = await validateGeospatialFile(
-          JSON.stringify(geojson)
-        );
-        this.updateFileData(uploadedFile.id, {
-          validation: {
-            ...uploadedFile.validation,
-            ...geoValidation
-          }
-        });
-
-        if (!geoValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: geoValidation.errors[0]
-          });
-          return;
-        }
-
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-        this.updateFileData(uploadedFile.id, {
-          content: content,
-          status: 'complete'
-        });
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to process file';
-      this.updateFileData(uploadedFile.id, {
-        status: 'error',
-        errorMessage: message
-      });
-      showError('File processing failed', message, error);
-    }
+    const processor = new FileProcessorService(callbacks);
+    await processor.processFile(uploadedFile, file);
   },
 
   async processShapefileGroup(baseName: string, files: File[]): Promise<void> {

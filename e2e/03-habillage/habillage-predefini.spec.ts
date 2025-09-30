@@ -2,7 +2,13 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
 test.describe('Habillage prédéfini - 2.C.1', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,12 +24,17 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
     const fileInput = modal.locator('input[type="file"]').first();
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Test Habillage');
 
     await page.waitForTimeout(1000);
 
-    const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+    const createButton = modal.getByRole('button', {
+      name: 'Créer',
+      exact: true
+    });
     await expect(createButton).toBeEnabled();
     await createButton.click();
 
@@ -31,27 +42,35 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
 
     await page.waitForTimeout(2000);
 
-    const habillageStep = page.getByRole('button', { name: /Habillage/i }).or(page.locator('[data-testid="step-habillage"]'));
+    const habillageStep = page
+      .getByRole('button', { name: /Habillage/i })
+      .or(page.locator('[data-testid="step-habillage"]'));
     await habillageStep.click();
     await page.waitForTimeout(2000);
   });
 
   test('affiche automatiquement la légende', async ({ page }) => {
-    const legend = page.locator('[data-testid="legend-tool"]').or(page.locator('.legend-container'));
+    const legend = page
+      .locator('[data-testid="legend-tool"]')
+      .or(page.locator('.legend-container'));
     await expect(legend).toBeVisible({ timeout: 10000 });
   });
 
-  test('affiche les textes prédéfinis à l\'étape', async ({ page }) => {
+  test("affiche les textes prédéfinis à l'étape", async ({ page }) => {
     await page.waitForTimeout(2000);
 
-    const textElements = page.locator('.habillage-text-element, .map-text-element');
+    const textElements = page.locator(
+      '.habillage-text-element, .map-text-element'
+    );
     const count = await textElements.count();
     expect(count).toBeGreaterThan(0);
   });
 
   test.skip('affiche un placeholder pour le titre', async ({ page }) => {});
 
-  test.skip('affiche un placeholder pour le sous-titre', async ({ page }) => {});
+  test.skip('affiche un placeholder pour le sous-titre', async ({
+    page
+  }) => {});
 
   test.skip('affiche un placeholder pour la source', async ({ page }) => {});
 
@@ -78,5 +97,5 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
     expect(hasDefaultStyles).toBeTruthy();
   });
 
-  test.skip('masque les placeholders vides à l\'export', async ({ page }) => {});
+  test.skip("masque les placeholders vides à l'export", async ({ page }) => {});
 });

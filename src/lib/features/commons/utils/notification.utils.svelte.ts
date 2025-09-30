@@ -57,7 +57,10 @@ class NotificationManager {
   }
 
   error(options: NotificationOptions): string {
-    logger.error(`${options.title}: ${options.subtitle || ''}`, LogCategory.NOTIFICATION);
+    logger.error(
+      `${options.title}: ${options.subtitle || ''}`,
+      LogCategory.NOTIFICATION
+    );
     return this.addNotification(NotificationType.ERROR, {
       ...options,
       timeout: options.timeout ?? 10000
@@ -65,7 +68,10 @@ class NotificationManager {
   }
 
   warning(options: NotificationOptions): string {
-    logger.warn(`${options.title}: ${options.subtitle || ''}`, LogCategory.NOTIFICATION);
+    logger.warn(
+      `${options.title}: ${options.subtitle || ''}`,
+      LogCategory.NOTIFICATION
+    );
     return this.addNotification(NotificationType.WARNING, options);
   }
 
@@ -94,7 +100,11 @@ export function showError(
   logDetails?: any
 ): void {
   if (logDetails) {
-    logger.error(`${title}: ${subtitle || ''}`, LogCategory.ERROR_HANDLER, logDetails);
+    logger.error(
+      `${title}: ${subtitle || ''}`,
+      LogCategory.ERROR_HANDLER,
+      logDetails
+    );
   }
   notificationManager.error({ title, subtitle });
 }

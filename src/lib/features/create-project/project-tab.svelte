@@ -30,7 +30,13 @@
   role="button"
   tabindex={0}
   onclick={onclick}
-  onkeydown={onclick}
+  onkeydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onclick?.(e);
+    }
+  }}
+  aria-pressed={selected}
   data-testid={dataTestId}
 >
   <div class="flex justify-between w-full items-start pb-3">

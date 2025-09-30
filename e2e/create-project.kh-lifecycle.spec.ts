@@ -55,10 +55,14 @@ test.describe('Create project kh', () => {
     await fileInput.setInputFiles(TEST_DATASET_PATH);
 
     // Verify the uploaded filename appears in the modal summary
-    await expect(modal.locator('.bx--file-filename').first()).toContainText(DATASET_FILENAME);
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(
+      DATASET_FILENAME
+    );
 
     // Fill in the project name using the data-testid input
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill(projectName);
 
     const createButton = modal.getByRole('button', {

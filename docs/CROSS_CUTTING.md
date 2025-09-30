@@ -6,7 +6,7 @@
 | ----------- | ----------------------------------- | ----------------------------------- |
 | Load        | Code splitting; lazy heavy libs     | Bundle budget CI gate               |
 | Compute     | Main thread (classification, joins) | Worker pool + transferable buffers  |
-| DuckDB      | WASM in main thread                | Dedicated worker                    |
+| DuckDB      | WASM in main thread                 | Dedicated worker                    |
 | Interaction | Debounce + preview LOD              | Predictive precompute               |
 | Rendering   | Attribute packing; minimal redraws  | GPU instancing refinements          |
 | Caching     | Palette + basic breaks reuse        | Formal cache w/ invalidation hashes |

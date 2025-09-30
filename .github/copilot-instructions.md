@@ -49,8 +49,8 @@ export class ToolNameStore {
     return this._state.property;
   }
 
-  action() {
-    this._state.property = newValue;
+  updateProperty(value: Type) {
+    this._state.property = value;
   }
 }
 
@@ -61,7 +61,11 @@ export const toolNameStore = new ToolNameStore();
 
 ```
 src/lib/features/
-├── commons/          # Shared components, utilities
+├── commons/          # Shared utilities, types, stores, components
+│   ├── store/       # Global stores (project, datasets, visualization)
+│   ├── services/    # Core services (DuckDB, data orchestrator)
+│   ├── utils/       # Utilities (validation, file handling, geo)
+│   └── components/  # Reusable UI components
 ├── create-project/   # Project creation flow
 ├── main-toolbar/     # Navigation tabs
 ├── step-toolbar/     # Tool panels
@@ -76,22 +80,14 @@ src/lib/features/
 │       ├── projections/
 │       ├── search/
 │       └── simplification/
-└── map/              # Map rendering
+└── map/              # Map rendering with Deck.gl/MapLibre
 ```
 
 ## Common Patterns
 
-### Tool Components
-
-Each tool follows this structure:
-
-- `tool-name.svelte` - Main component
-- `tool-name.store.svelte.ts` - State management
-- Supporting components for features
-
 ### Data Flow
 
-1. Import → Validation → Typing → Cleaning → Enrichment → Visualization → Export
+Import → Validation → Parsing → Typing + Stats → Dataset Store → Visualization → Rendering → Export
 
 ### Visualization Types
 
@@ -110,9 +106,9 @@ import { onMount, tick } from 'svelte';
 import { Button, Modal } from 'carbon-components-svelte';
 import { Add, Edit } from 'carbon-icons-svelte';
 
-// Project
-import { toolStore } from '$lib/features/step-toolbar/tools/tool.store.svelte';
-import type { ToolState } from './tool.types';
+// Project stores
+import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
 // Libraries
 import { deck } from '@deck.gl/core';
@@ -123,43 +119,83 @@ import * as d3 from 'd3-geo';
 
 ### Files
 
-- **Components**: `kebab-case.svelte` (e.g., `user-profile.svelte`)
-- **Stores**: `kebab-case.store.svelte.ts` (e.g., `user.store.svelte.ts`)
-- **Types**: `kebab-case.types.ts` (e.g., `user.types.ts`)
-- **Utils**: `kebab-case.ts` (e.g., `data-utils.ts`)
+- **Components**: `kebab-case.svelte`
+- **Stores**: `kebab-case.store.svelte.ts`
+- **Types**: `kebab-case.types.ts`
+- **Utils**: `kebab-case.utils.ts`
+- **Services**: `kebab-case.service.ts`
 - **Constants**: `kebab-case.constants.ts`
 - **Tests**: `kebab-case.test.ts` or `kebab-case.spec.ts`
 
 ### Code
 
-- **Variables**: camelCase (e.g., `userData`, `isLoading`, `currentIndex`)
-- **Functions**: camelCase (e.g., `getUserData`, `formatDate`)
-- **Components**: PascalCase when imported (e.g., `UserProfile`, `DataTable`)
-- **Types/Interfaces**: PascalCase (e.g., `UserData`, `MapConfig`)
-- **Constants**: UPPER_SNAKE_CASE (e.g., `MAX_ZOOM`, `DEFAULT_COLOR`)
-- **Enums**: PascalCase with UPPER_SNAKE_CASE values
-- **CSS Classes**: kebab-case (e.g., `.user-profile`, `.data-table`)
-- **CSS Variables**: kebab-case (e.g., `--primary-color`, `--max-width`)
+- **Variables/Functions**: `camelCase` (e.g., `getUserData`, `isLoading`)
+- **Components**: `PascalCase` when imported
+- **Types/Interfaces**: `PascalCase` (e.g., `ProjectState`, `DataColumn`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_ZOOM_LEVEL`, `DEFAULT_COLOR`)
+- **Enums**: `PascalCase` with `UPPER_SNAKE_CASE` values
+- **CSS Classes**: `kebab-case`
+- **CSS Variables**: `kebab-case` (e.g., `--primary-color`)
+
+## Error Handling
+
+```typescript
+import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { m } from '$lib/paraglide/messages';
+
+try {
+  // operation
+} catch (error) {
+  showError(m.error_message());
+}
+```
+
+## File Validation
+
+```typescript
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+
+const validation = await FileValidator.validate(file);
+if (!validation.isValid) {
+  showError(validation.error);
+  return;
+}
+```
+
+## Data Processing
+
+```typescript
+import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service';
+
+const processed = await dataOrchestrator.processData(rawData);
+```
 
 ## Testing
 
-- Unit tests: `*.test.ts`
-- Component tests: `*.svelte.test.ts`
-- E2E tests: in `e2e/` directory
+- Unit tests: `yarn test:unit`
+- E2E tests: `yarn test:e2e`
+- Type checking: `yarn check`
+- Linting: `yarn lint`
 
 ## Commands
 
-- `yarn dev` - Development server
-- `yarn build` - Production build
-- `yarn lint` - Check code style
-- `yarn test` - Run all tests
+```bash
+yarn dev           # Development server (port 5176)
+yarn build         # Production build
+yarn preview       # Preview production build
+yarn check         # TypeScript type checking
+yarn lint          # ESLint and Prettier check
+yarn format        # Auto-fix formatting
+yarn test          # Run all tests
+```
 
-## Performance
+## Performance Guidelines
 
 - Use Web Workers for heavy computations
 - Implement lazy loading for large dependencies
 - Cache computed values with `$derived`
 - Use GPU acceleration via Deck.gl
+- Process large datasets with DuckDB WASM
 
 ## Accessibility
 
@@ -175,55 +211,76 @@ import * as d3 from 'd3-geo';
 - Content Security Policy enforced
 - User data never leaves browser
 
-## Common Imports
+## Common Type Imports
 
 ```typescript
-// Types
+// GeoJSON types
 import type { Feature, FeatureCollection } from 'geojson';
-import type { ColorScale, DataPoint, Visualization } from '$lib/types';
 
-// Utilities
-import { clsx } from 'clsx';
-import dayjs from 'dayjs';
+// Project types
+import type {
+  ProjectState,
+  KhartisProject
+} from '$lib/features/commons/store/project.types';
+import type { ProcessedDataset } from '$lib/features/commons/store/datasets.types';
+import type { VisualizationConfig } from '$lib/features/commons/store/visualization.types';
 ```
 
-## DO NOT
+## Code Principles
 
-- Add comments in code unless explicitly requested
+### FOLLOW ALWAYS
+
+- KISS (Keep It Simple, Stupid)
+- DRY (Don't Repeat Yourself)
+- YAGNI (You Aren't Gonna Need It)
+- SOLID principles
+- Single Responsibility Principle
+- Separation of Concerns
+- Fail Fast
+- Boy Scout Rule (leave code better than you found it)
+- Prefer composition over inheritance
+- Write self-documenting code
+- Use meaningful names
+- Keep functions small
+- Minimize dependencies
+- Handle errors explicitly
+- Avoid magic numbers
+- Follow consistent naming conventions
+- Refactor continuously
+
+### DO NOT
+
+- Add comments unless explicitly requested
 - Create files unless necessary
-- Add documentation unless requested
 - Use relative imports for `$lib`
 - Commit without user permission
 - Add emojis unless requested
-- Use non-English names for variables or functions
+- Use non-English names
 - Use `any` type in TypeScript
+- Leave console.log statements
+- Execute scripts automatically
+- Create tests/docs unless requested
 
-## ALWAYS
+### ALWAYS
 
-- Write code and documentation in English
-- Follow existing code patterns
+- Write code in English
+- Follow existing patterns
 - Use Carbon components first
 - Type all variables properly
-- Test before committing
+- Test before committing (yarn check && yarn lint)
 - Keep data client-side
-- Use camelCase for variables
-- Use kebab-case for files
-- Use PascalCase for components and types
-- No comments in code unless explicitly requested
-- Space code visually with line breaks between logical blocks for better readability
-- Variables and functions always in camelCase (ex: getUserData)
-- Constants in UPPERCASE_WITH_UNDERSCORES (ex: MAX_RETRY_COUNT)
-- File names always in kebab-case (ex: user-auth-hook.ts)
-- Never use 'any' type in TypeScript - create proper types/interfaces
-- Replace all magic strings with enums or named constants
-- No console.log in production code
-- Never execute scripts automatically - ask permission and offer to send back results
-- No tests, documentation or extra files unless explicitly requested
-- Before creating types/functions search with regex to avoid duplicates
-- Modify existing files directly for new implementations (modify useAuth not create useAuthSimple)
-- Include brief "Learning" section after implementations explaining concepts used with useful links
-- Add subtle humor like TARS/JARVIS while remaining professional and precise
-- Expert in JavaScript, TypeScript, web architecture, React, Svelte, Node - elite developer approach
-- Do not test implementations automatically - provide list of what to test manually
-- Offer to receive logs/results to continue work if needed
-- always test your implementation with typescript tsc and eslint and fix error
+- Space code with line breaks between logical blocks
+- Search for existing types/functions before creating new ones
+- Modify existing files rather than creating similar new ones
+- Handle errors explicitly
+- Use enums or constants for magic strings
+
+## Key Dependencies
+
+- `@duckdb/duckdb-wasm`: In-browser SQL database
+- `deck.gl`: WebGL-powered visualization
+- `maplibre-gl`: Map rendering
+- `carbon-components-svelte`: UI framework
+- `@inlang/paraglide-js`: Type-safe i18n
+- `d3-geo`: Geographic projections
+- `localforage`: Client-side storage

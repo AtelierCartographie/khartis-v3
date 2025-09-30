@@ -26,15 +26,25 @@ export interface DetailedValidationResult {
 }
 
 export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
-  maxFileSize: 50 * 1024 * 1024, 
-  maxTotalSize: 100 * 1024 * 1024, 
-  maxFileCount: 20, 
+  maxFileSize: 50 * 1024 * 1024,
+  maxTotalSize: 100 * 1024 * 1024,
+  maxFileCount: 20,
   allowedExtensions: [
-    'csv', 'tsv', 'txt',
-    'geojson', 'json',
-    'shp', 'shx', 'dbf', 'prj', 'cpg', 'sbn', 'sbx',
+    'csv',
+    'tsv',
+    'txt',
+    'geojson',
+    'json',
+    'shp',
+    'shx',
+    'dbf',
+    'prj',
+    'cpg',
+    'sbn',
+    'sbx',
     'gpkg',
-    'kml', 'kmz'
+    'kml',
+    'kmz'
   ],
   allowedMimeTypes: [
     'text/csv',
@@ -56,11 +66,11 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
 };
 
 const FILE_SIGNATURES = {
-  SQLITE: [0x53, 0x51, 0x4C, 0x69, 0x74, 0x65],
-  SHP: [0x00, 0x00, 0x27, 0x0A],
+  SQLITE: [0x53, 0x51, 0x4c, 0x69, 0x74, 0x65],
+  SHP: [0x00, 0x00, 0x27, 0x0a],
   DBF: [0x03],
-  ZIP: [0x50, 0x4B, 0x03, 0x04],
-  JSON: [0x7B, 0x5B],
+  ZIP: [0x50, 0x4b, 0x03, 0x04],
+  JSON: [0x7b, 0x5b],
   TEXT: null
 };
 
@@ -84,13 +94,18 @@ export class FileValidator {
 
     this.validateByType(file, result);
 
-    result.requiresAsyncValidation = this.requiresAsyncValidation(result.fileType);
+    result.requiresAsyncValidation = this.requiresAsyncValidation(
+      result.fileType
+    );
 
     result.isValid = result.errors.length === 0;
     return result;
   }
 
-  static async validateAsync(file: File, initialResult: DetailedValidationResult): Promise<DetailedValidationResult> {
+  static async validateAsync(
+    file: File,
+    initialResult: DetailedValidationResult
+  ): Promise<DetailedValidationResult> {
     const result = { ...initialResult };
 
     try {
@@ -134,7 +149,9 @@ export class FileValidator {
     let totalSize = 0;
 
     if (files.length > this.config.maxFileCount) {
-      globalErrors.push(`Nombre maximum de fichiers dépassé (${this.config.maxFileCount})`);
+      globalErrors.push(
+        `Nombre maximum de fichiers dépassé (${this.config.maxFileCount})`
+      );
     }
 
     for (const file of files) {
@@ -154,11 +171,16 @@ export class FileValidator {
     return {
       results,
       globalErrors,
-      isValid: globalErrors.length === 0 && Array.from(results.values()).every(r => r.isValid)
+      isValid:
+        globalErrors.length === 0 &&
+        Array.from(results.values()).every((r) => r.isValid)
     };
   }
 
-  private static validateBasicProperties(file: File, result: DetailedValidationResult): void {
+  private static validateBasicProperties(
+    file: File,
+    result: DetailedValidationResult
+  ): void {
     if (file.size === 0) {
       result.errors.push('Le fichier est vide');
     } else if (file.size > this.config.maxFileSize) {
@@ -166,7 +188,9 @@ export class FileValidator {
         `Le fichier dépasse la limite de ${this.config.maxFileSize / (1024 * 1024)} MB`
       );
     } else if (file.size > this.config.maxFileSize * 0.8) {
-      result.warnings.push('Fichier volumineux, le traitement pourrait être lent');
+      result.warnings.push(
+        'Fichier volumineux, le traitement pourrait être lent'
+      );
     }
 
     if (!file.name || file.name.length === 0) {
@@ -174,15 +198,17 @@ export class FileValidator {
     }
 
     const suspiciousPatterns = [
-      /\.\./,  
-      /[<>:"|?*\\]/,  
-      /[\x00-\x1f\x7f]/,  
-      /^\./, 
+      /\.\./,
+      /[<>:"|?*\\]/,
+      /[\x00-\x1f\x7f]/,
+      /^\./
     ];
 
     for (const pattern of suspiciousPatterns) {
       if (pattern.test(file.name)) {
-        result.warnings.push('Le nom du fichier contient des caractères inhabituels');
+        result.warnings.push(
+          'Le nom du fichier contient des caractères inhabituels'
+        );
         break;
       }
     }
@@ -194,7 +220,9 @@ export class FileValidator {
       if (this.config.strictMode) {
         result.errors.push(`Extension .${extension} non supportée`);
       } else {
-        result.warnings.push(`Extension .${extension} pourrait ne pas être supportée`);
+        result.warnings.push(
+          `Extension .${extension} pourrait ne pas être supportée`
+        );
       }
     }
 
@@ -217,13 +245,15 @@ export class FileValidator {
       return FileType.TSV;
     }
     if (extension === 'txt' && !mimeType.includes('json')) {
-      return FileType.CSV; 
+      return FileType.CSV;
     }
 
-    if (extension === 'geojson' ||
-        extension === 'json' ||
-        mimeType.includes('geo+json') ||
-        mimeType.includes('json')) {
+    if (
+      extension === 'geojson' ||
+      extension === 'json' ||
+      mimeType.includes('geo+json') ||
+      mimeType.includes('json')
+    ) {
       return FileType.GEOJSON;
     }
 
@@ -245,12 +275,17 @@ export class FileValidator {
     return FileType.UNKNOWN;
   }
 
-  private static validateByType(file: File, result: DetailedValidationResult): void {
+  private static validateByType(
+    file: File,
+    result: DetailedValidationResult
+  ): void {
     switch (result.fileType) {
       case FileType.CSV:
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
-          result.warnings.push('Fichier CSV/TSV volumineux, le parsing pourrait être lent');
+          result.warnings.push(
+            'Fichier CSV/TSV volumineux, le parsing pourrait être lent'
+          );
         }
         break;
 
@@ -260,7 +295,9 @@ export class FileValidator {
           result.warnings.push('Fichier SHP suspicieusement petit');
         }
         if (ext === 'shp' || ext === 'dbf') {
-          result.warnings.push(`Assurez-vous d'importer tous les fichiers du Shapefile (.shp, .shx, .dbf minimum)`);
+          result.warnings.push(
+            `Assurez-vous d'importer tous les fichiers du Shapefile (.shp, .shx, .dbf minimum)`
+          );
         }
         break;
 
@@ -272,7 +309,9 @@ export class FileValidator {
 
       case FileType.GEOJSON:
         if (file.size > 20 * 1024 * 1024) {
-          result.warnings.push('GeoJSON volumineux, considérez un format plus efficace comme GeoPackage');
+          result.warnings.push(
+            'GeoJSON volumineux, considérez un format plus efficace comme GeoPackage'
+          );
         }
         break;
 
@@ -282,9 +321,13 @@ export class FileValidator {
     }
   }
 
-  private static async validateCSVContent(file: File, buffer: ArrayBuffer, result: DetailedValidationResult): Promise<void> {
+  private static async validateCSVContent(
+    file: File,
+    buffer: ArrayBuffer,
+    result: DetailedValidationResult
+  ): Promise<void> {
     const text = new TextDecoder('utf-8').decode(buffer);
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
     if (lines.length === 0) {
       result.errors.push('Fichier CSV vide');
@@ -304,7 +347,9 @@ export class FileValidator {
     }
 
     if (maxCount === 0) {
-      result.warnings.push('Aucun séparateur détecté, le fichier pourrait ne pas être un CSV valide');
+      result.warnings.push(
+        'Aucun séparateur détecté, le fichier pourrait ne pas être un CSV valide'
+      );
     }
 
     const firstLineColumns = lines[0].split(detectedSeparator).length;
@@ -317,13 +362,16 @@ export class FileValidator {
     }
 
     if (inconsistentLines > 0) {
-      result.warnings.push('Nombre de colonnes incohérent dans les premières lignes');
+      result.warnings.push(
+        'Nombre de colonnes incohérent dans les premières lignes'
+      );
     }
 
-    const hasBOM = buffer.byteLength >= 3 &&
-                   new Uint8Array(buffer)[0] === 0xEF &&
-                   new Uint8Array(buffer)[1] === 0xBB &&
-                   new Uint8Array(buffer)[2] === 0xBF;
+    const hasBOM =
+      buffer.byteLength >= 3 &&
+      new Uint8Array(buffer)[0] === 0xef &&
+      new Uint8Array(buffer)[1] === 0xbb &&
+      new Uint8Array(buffer)[2] === 0xbf;
 
     if (hasBOM) {
       result.metadata!.encoding = 'UTF-8 with BOM';
@@ -332,7 +380,11 @@ export class FileValidator {
     }
   }
 
-  private static async validateGeoJSONContent(file: File, buffer: ArrayBuffer, result: DetailedValidationResult): Promise<void> {
+  private static async validateGeoJSONContent(
+    file: File,
+    buffer: ArrayBuffer,
+    result: DetailedValidationResult
+  ): Promise<void> {
     const text = new TextDecoder('utf-8').decode(buffer);
 
     try {
@@ -342,14 +394,26 @@ export class FileValidator {
         return;
       }
 
-      if (file.size < 1024 * 1024) { 
+      if (file.size < 1024 * 1024) {
         const parsed = JSON.parse(text);
 
         if (!parsed.type) {
-          result.warnings.push('Propriété "type" manquante, pourrait ne pas être un GeoJSON valide');
-        } else if (!['Feature', 'FeatureCollection', 'Point', 'LineString', 'Polygon',
-                    'MultiPoint', 'MultiLineString', 'MultiPolygon', 'GeometryCollection']
-                    .includes(parsed.type)) {
+          result.warnings.push(
+            'Propriété "type" manquante, pourrait ne pas être un GeoJSON valide'
+          );
+        } else if (
+          ![
+            'Feature',
+            'FeatureCollection',
+            'Point',
+            'LineString',
+            'Polygon',
+            'MultiPoint',
+            'MultiLineString',
+            'MultiPolygon',
+            'GeometryCollection'
+          ].includes(parsed.type)
+        ) {
           result.errors.push(`Type GeoJSON invalide: ${parsed.type}`);
         }
 
@@ -361,12 +425,18 @@ export class FileValidator {
       if (file.size < 1024 * 1024) {
         result.errors.push('JSON invalide');
       } else {
-        result.warnings.push('Impossible de valider complètement le JSON (fichier trop gros)');
+        result.warnings.push(
+          'Impossible de valider complètement le JSON (fichier trop gros)'
+        );
       }
     }
   }
 
-  private static async validateShapefileContent(file: File, buffer: ArrayBuffer, result: DetailedValidationResult): Promise<void> {
+  private static async validateShapefileContent(
+    file: File,
+    buffer: ArrayBuffer,
+    result: DetailedValidationResult
+  ): Promise<void> {
     const view = new DataView(buffer);
     const ext = this.getFileExtension(file.name);
 
@@ -379,14 +449,18 @@ export class FileValidator {
 
     if (ext === 'dbf' && buffer.byteLength >= 1) {
       const version = view.getUint8(0);
-      const validVersions = [0x03, 0x83, 0x8B, 0xCB, 0xF5, 0xFB];
+      const validVersions = [0x03, 0x83, 0x8b, 0xcb, 0xf5, 0xfb];
       if (!validVersions.includes(version)) {
         result.warnings.push('Version DBF non standard');
       }
     }
   }
 
-  private static async validateGeoPackageContent(file: File, buffer: ArrayBuffer, result: DetailedValidationResult): Promise<void> {
+  private static async validateGeoPackageContent(
+    file: File,
+    buffer: ArrayBuffer,
+    result: DetailedValidationResult
+  ): Promise<void> {
     const signature = new Uint8Array(buffer.slice(0, 16));
     const sqliteSignature = new TextDecoder('ascii').decode(signature);
 
@@ -422,11 +496,11 @@ export class FileValidator {
 
     for (const [baseName, extensions] of shapefileComponents) {
       const requiredExtensions = ['shp', 'shx', 'dbf'];
-      const missing = requiredExtensions.filter(ext => !extensions.has(ext));
+      const missing = requiredExtensions.filter((ext) => !extensions.has(ext));
 
       if (missing.length > 0) {
         globalErrors.push(
-          `Shapefile "${baseName}" incomplet. Fichiers manquants: ${missing.map(e => `.${e}`).join(', ')}`
+          `Shapefile "${baseName}" incomplet. Fichiers manquants: ${missing.map((e) => `.${e}`).join(', ')}`
         );
       }
     }
@@ -442,7 +516,10 @@ export class FileValidator {
     ].includes(fileType);
   }
 
-  private static async readFileHeader(file: File, bytes: number = 512): Promise<ArrayBuffer> {
+  private static async readFileHeader(
+    file: File,
+    bytes: number = 512
+  ): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       const blob = file.slice(0, Math.min(bytes, file.size));
@@ -456,7 +533,7 @@ export class FileValidator {
   private static getMagicNumber(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer.slice(0, 8));
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join(' ')
       .toUpperCase();
   }
@@ -490,15 +567,19 @@ export class FileValidator {
       const extension = pathname.split('.').pop()?.toLowerCase();
 
       if (extension && this.config.allowedExtensions.includes(extension)) {
-        result.fileType = this.detectFileType({ name: pathname, type: '' } as File);
+        result.fileType = this.detectFileType({
+          name: pathname,
+          type: ''
+        } as File);
       } else {
-        result.warnings.push('Impossible de déterminer le type de fichier depuis l\'URL');
+        result.warnings.push(
+          "Impossible de déterminer le type de fichier depuis l'URL"
+        );
       }
 
       if (parsed.protocol === 'http:') {
         result.warnings.push('Utilisation de HTTP non sécurisé');
       }
-
     } catch (error) {
       result.errors.push('URL invalide');
     }

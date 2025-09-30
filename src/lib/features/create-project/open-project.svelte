@@ -1,28 +1,28 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
+  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import type { SavedProjectMetadata } from '$lib/features/commons/store/project.types';
+  import {
+    formatDate,
+    formatFileSize
+  } from '$lib/features/commons/utils/format.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     FileUploaderDropContainer,
-    Tooltip,
     InlineNotification,
-    SkeletonPlaceholder,
     Modal,
-    Button,
     OverflowMenu,
-    OverflowMenuItem
+    OverflowMenuItem,
+    SkeletonPlaceholder,
+    Tooltip
   } from 'carbon-components-svelte';
-  import { Calendar, Link, Copy, TrashCan } from 'carbon-icons-svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import {
-    createProjectActions,
-    createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import type { SavedProjectMetadata } from '$lib/features/commons/store/project.types';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-  import { goto } from '$app/navigation';
+  import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
-  import { formatDate, formatFileSize } from '$lib/features/commons/utils/format.utils';
+  import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
     onClose?: () => void;
@@ -50,7 +50,9 @@
 
     try {
       savedProjects = await projectStore.listProjects();
-      logger.success('Projects loaded', LogCategory.PROJECT, { count: savedProjects.length });
+      logger.success('Projects loaded', LogCategory.PROJECT, {
+        count: savedProjects.length
+      });
     } catch (err) {
       logger.error('Failed to load projects', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load projects';
@@ -84,21 +86,28 @@
 
   async function handleFileImport(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
-    logger.info('Importing project file', LogCategory.PROJECT, { filesCount: files.length });
+    logger.info('Importing project file', LogCategory.PROJECT, {
+      filesCount: files.length
+    });
 
     const khFile = files.find(
       (f) => f.name.endsWith('.kh') || f.name.endsWith('.khartis')
     );
 
     if (!khFile) {
-      logger.error('No valid Khartis file found', LogCategory.PROJECT, { fileNames: files.map(f => f.name) });
+      logger.error('No valid Khartis file found', LogCategory.PROJECT, {
+        fileNames: files.map((f) => f.name)
+      });
       error = 'Please select a valid .kh or .khartis file';
       return;
     }
 
     isImporting = true;
     error = '';
-    logger.info('Importing file', LogCategory.PROJECT, { fileName: khFile.name, size: khFile.size });
+    logger.info('Importing file', LogCategory.PROJECT, {
+      fileName: khFile.name,
+      size: khFile.size
+    });
 
     try {
       await projectStore.importProject(khFile);
@@ -115,19 +124,29 @@
     }
   }
 
-  async function handleDuplicateProject(projectId: string, projectName: string) {
+  async function handleDuplicateProject(
+    projectId: string,
+    projectName: string
+  ) {
     isDuplicating = true;
     error = '';
-    logger.info('Duplicating project', LogCategory.PROJECT, { projectId, projectName });
+    logger.info('Duplicating project', LogCategory.PROJECT, {
+      projectId,
+      projectName
+    });
 
     try {
       const newProjectId = await projectStore.duplicateProject(projectId);
-      logger.success('Project duplicated', LogCategory.PROJECT, { oldId: projectId, newId: newProjectId });
+      logger.success('Project duplicated', LogCategory.PROJECT, {
+        oldId: projectId,
+        newId: newProjectId
+      });
       await loadProjects();
       selectedProjectId = newProjectId;
     } catch (err) {
       logger.error('Failed to duplicate project', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to duplicate project';
+      error =
+        err instanceof Error ? err.message : 'Failed to duplicate project';
     } finally {
       isDuplicating = false;
     }
@@ -145,11 +164,15 @@
     const deletingId = projectToDelete;
     projectToDelete = null;
     showDeleteConfirm = false;
-    logger.info('Deleting project', LogCategory.PROJECT, { projectId: deletingId });
+    logger.info('Deleting project', LogCategory.PROJECT, {
+      projectId: deletingId
+    });
 
     try {
       await projectStore.deleteProject(deletingId);
-      logger.success('Project deleted', LogCategory.PROJECT, { projectId: deletingId });
+      logger.success('Project deleted', LogCategory.PROJECT, {
+        projectId: deletingId
+      });
 
       if (selectedProjectId === deletingId) {
         selectedProjectId = null;
@@ -167,36 +190,11 @@
     showDeleteConfirm = false;
   }
 
-  function validateKhartisFiles(files: File[]): File[] {
-    const validFiles: File[] = [];
-
-    for (const file of files) {
-      const extension = file.name.split('.').pop()?.toLowerCase();
-
-      if (extension !== 'kh' && extension !== 'khartis') {
-        continue;
-      }
-
-      if (file.size === 0) {
-        error = m.validation_file_empty();
-        continue;
-      }
-
-      if (file.size > 100 * 1024 * 1024) {
-        error = m.validation_file_too_large();
-        continue;
-      }
-
-      validFiles.push(file);
-    }
-
-    if (validFiles.length === 0 && files.length > 0) {
-      error = m.validation_invalid_format();
-    }
-
-    return validFiles;
+  function validateKhartisFiles(files: readonly File[]): readonly File[] {
+    return CreateProjectValidationService.validateKhartisFiles(
+      Array.from(files)
+    );
   }
-
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
@@ -254,7 +252,9 @@
                     size={16}
                     style="color: var(--calendar-color); fill: var(--calendar-color);"
                   />
-                  <span class="ml-2 text-sm">{formatDate(project.updatedAt)}</span>
+                  <span class="ml-2 text-sm"
+                    >{formatDate(project.updatedAt)}</span
+                  >
                 </div>
                 <OverflowMenu
                   size="sm"
@@ -269,7 +269,7 @@
                       handleDuplicateProject(project.id, project.name);
                     }}
                   >
-                    <Copy slot="icon" size={16} />
+                    <Copy size={16} />
                   </OverflowMenuItem>
                   <OverflowMenuItem
                     danger
@@ -279,7 +279,7 @@
                       confirmDeleteProject(project.id);
                     }}
                   >
-                    <TrashCan slot="icon" size={16} />
+                    <TrashCan size={16} />
                   </OverflowMenuItem>
                 </OverflowMenu>
               </div>
@@ -364,7 +364,8 @@
     fill: var(--cds-icon-secondary);
   }
 
-  .project-card-wrapper :global(.bx--overflow-menu:hover .bx--overflow-menu__icon) {
+  .project-card-wrapper
+    :global(.bx--overflow-menu:hover .bx--overflow-menu__icon) {
     fill: var(--cds-icon-primary);
   }
 </style>

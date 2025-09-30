@@ -9,6 +9,7 @@ Services layer coordinates data flow between stores, external libraries, and UI 
 Central coordinator for data flow across the application.
 
 ### Responsibilities
+
 - Initialize and synchronize all data stores
 - Process files when added/removed
 - Create default visualizations
@@ -19,13 +20,13 @@ Central coordinator for data flow across the application.
 
 ```ts
 class DataOrchestratorService {
-  initialize(): Promise<void>
-  onFileAdded(file: UploadedFile): Promise<void>
-  onFileRemoved(fileId: string): Promise<void>
-  onProjectChanged(): Promise<void>
-  exportData(format: 'csv' | 'geojson' | 'json'): Promise<Blob>
-  getVisualizationData(visualizationId: string): any
-  syncAllStores(): void
+  initialize(): Promise<void>;
+  onFileAdded(file: UploadedFile): Promise<void>;
+  onFileRemoved(fileId: string): Promise<void>;
+  onProjectChanged(): Promise<void>;
+  exportData(format: 'csv' | 'geojson' | 'json'): Promise<Blob>;
+  getVisualizationData(visualizationId: string): any;
+  syncAllStores(): void;
 }
 ```
 
@@ -41,6 +42,7 @@ File Added → DataOrchestrator
 ```
 
 ### Auto-Visualization Logic
+
 - Geometry + numeric columns → Choropleth
 - Geometry + string columns → Categorical
 - Numeric columns only → Proportional symbols
@@ -51,6 +53,7 @@ File Added → DataOrchestrator
 Analytical engine for advanced data operations using DuckDB WASM.
 
 ### Responsibilities
+
 - Initialize DuckDB WASM instance
 - Convert data to DuckDB tables
 - Perform SQL-based analysis
@@ -61,18 +64,24 @@ Analytical engine for advanced data operations using DuckDB WASM.
 
 ```ts
 class DuckDBOrchestratorService {
-  initialize(): Promise<void>
-  processFile(file: UploadedFile): Promise<DuckDBDataset | null>
-  analyzeTable(tableName: string): Promise<ColumnAnalysis[]>
-  computeBreaks(tableName: string, column: string, method: string, k: number): Promise<number[]>
-  joinTables(left: string, right: string, on: string): Promise<string>
-  executeQuery(sql: string): Promise<any[]>
-  getDataset(id: string): DuckDBDataset | undefined
-  clearAllTables(): Promise<void>
+  initialize(): Promise<void>;
+  processFile(file: UploadedFile): Promise<DuckDBDataset | null>;
+  analyzeTable(tableName: string): Promise<ColumnAnalysis[]>;
+  computeBreaks(
+    tableName: string,
+    column: string,
+    method: string,
+    k: number
+  ): Promise<number[]>;
+  joinTables(left: string, right: string, on: string): Promise<string>;
+  executeQuery(sql: string): Promise<any[]>;
+  getDataset(id: string): DuckDBDataset | undefined;
+  clearAllTables(): Promise<void>;
 }
 ```
 
 ### Supported File Types
+
 - CSV/TSV → Direct table creation
 - GeoJSON → Spatial table with geometry column
 - Shapefile → Via GeoJSON conversion (planned)
@@ -106,20 +115,22 @@ App Mount
 
 ### Error Handling
 
-| Service | Error | Recovery |
-|---------|-------|----------|
-| DataOrchestrator | File processing fail | Show notification, continue |
-| DuckDBOrchestrator | Init fail | Fallback to basic processing |
-| DuckDBOrchestrator | Query fail | Log warning, return null |
+| Service            | Error                | Recovery                     |
+| ------------------ | -------------------- | ---------------------------- |
+| DataOrchestrator   | File processing fail | Show notification, continue  |
+| DuckDBOrchestrator | Init fail            | Fallback to basic processing |
+| DuckDBOrchestrator | Query fail           | Log warning, return null     |
 
 ## Performance Considerations
 
 ### Current Implementation
+
 - **Synchronous**: All processing on main thread
 - **In-memory**: DuckDB tables stored in WASM memory
 - **Eager**: Process files immediately on add
 
 ### Optimization Opportunities
+
 - Move to Web Worker for heavy operations
 - Implement lazy loading for large datasets
 - Add query result caching
@@ -160,6 +171,7 @@ Duck.query('SELECT my_func(column) FROM table');
 ## Testing Services
 
 ### Unit Tests
+
 ```ts
 // Mock dependencies
 vi.mock('../store/project.store.svelte');
@@ -174,6 +186,7 @@ test('processFile creates dataset', async () => {
 ```
 
 ### Integration Tests
+
 ```ts
 // Test service coordination
 test('file add triggers visualization', async () => {
@@ -195,16 +208,19 @@ if (import.meta.env.DEV) {
 ## Future Roadmap
 
 ### Near Term
+
 - [ ] Move console.log to conditional logger
 - [ ] Add service-level error boundaries
 - [ ] Implement query result caching
 
 ### Medium Term
+
 - [ ] Web Worker for DuckDB operations
 - [ ] Streaming file parser integration
 - [ ] Advanced join UI/logic
 
 ### Long Term
+
 - [ ] Multi-file transaction support
 - [ ] Undo/redo for data operations
 - [ ] Cloud function offloading option

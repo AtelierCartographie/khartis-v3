@@ -15,6 +15,7 @@ File Input → Basic Validation → Async Content Check → Deep Analysis → Ge
 ### 1. Basic File Validation (`file-validator.utils.ts`)
 
 **Checks performed:**
+
 - File size limits (50MB per file, 100MB total)
 - Extension validation (CSV, TSV, GeoJSON, Shapefile, GeoPackage)
 - MIME type verification
@@ -22,6 +23,7 @@ File Input → Basic Validation → Async Content Check → Deep Analysis → Ge
 - Magic number validation for binary formats
 
 **Usage:**
+
 ```typescript
 const validation = FileValidator.validate(file);
 if (!validation.isValid) {
@@ -32,6 +34,7 @@ if (!validation.isValid) {
 ### 2. Deep Data Analysis (`deep-validator.utils.ts`)
 
 **Analysis includes:**
+
 - Column type detection (numeric, string, date, boolean, mixed)
 - Statistical computation (min, max, mean, median, std deviation)
 - Null value and duplicate detection
@@ -49,12 +52,14 @@ if (!validation.isValid) {
 ### 3. Geographic Column Detection (`geo-detector.utils.ts`)
 
 **Auto-detected patterns:**
+
 - **Coordinates:** lat/latitude, lon/longitude, x/y_coord
 - **ISO Codes:** ISO2 (2 letters), ISO3 (3 letters)
 - **Place Names:** country, region, city, province
 - **Mixed Formats:** WKT, coordinate pairs
 
 **Detection Methods:**
+
 1. Column name pattern matching
 2. Value pattern analysis
 3. Sample matching against known entities
@@ -63,6 +68,7 @@ if (!validation.isValid) {
 ### 4. Catalogue Matching (`geo-matcher.utils.ts`)
 
 **Features:**
+
 - Exact match with normalization
 - Fuzzy matching (Levenshtein distance)
 - Alternative names support
@@ -70,6 +76,7 @@ if (!validation.isValid) {
 - Match rate calculation
 
 **Normalization Applied:**
+
 - Accent removal
 - Case harmonization
 - Article stripping (le, la, the)
@@ -98,12 +105,14 @@ SELECT * FROM histogram_numeric('table_name', 'column');
 ## Error Handling
 
 ### Critical Errors (Block Creation)
+
 - No geographic columns detected
 - Match rate < 10% with selected catalogue
 - File exceeds size limits
 - Empty dataset
 
 ### Warnings (Allow with Caution)
+
 - High percentage of null values (>50%)
 - Performance concerns (large dataset)
 - Low match confidence
@@ -143,9 +152,7 @@ const customCatalogue: CatalogueInfo = {
   name: 'My Custom Regions',
   type: 'custom',
   entries: new Set(['REGION1', 'REGION2']),
-  alternativeNames: new Map([
-    ['REGION1', ['R1', 'REG1']]
-  ])
+  alternativeNames: new Map([['REGION1', ['R1', 'REG1']]])
 };
 ```
 
@@ -156,8 +163,8 @@ Messages are contextual and localized:
 ```typescript
 const ValidationMessages = {
   geoColumnNotFound: {
-    fr: "Aucune colonne géographique détectée.",
-    en: "No geographic column detected."
+    fr: 'Aucune colonne géographique détectée.',
+    en: 'No geographic column detected.'
   },
   lowMatchRate: (rate: number) => ({
     fr: `Seulement ${rate}% de correspondance.`,
@@ -169,16 +176,21 @@ const ValidationMessages = {
 ## Testing Validation
 
 ### Unit Tests
+
 ```typescript
 // Test geographic detection
 const result = await GeoColumnDetector.detectGeoColumns(
   ['country', 'population'],
-  [['France', 67000000], ['Germany', 83000000]]
+  [
+    ['France', 67000000],
+    ['Germany', 83000000]
+  ]
 );
 expect(result.hasGeoColumns).toBe(true);
 ```
 
 ### E2E Tests
+
 ```typescript
 // Test file import with validation
 await page.setInputFiles('input[type="file"]', 'test-data.csv');
@@ -187,16 +199,17 @@ await expect(page.locator('.validation-error')).toBeHidden();
 
 ## Performance Considerations
 
-| Operation | Strategy | Impact |
-|-----------|----------|--------|
-| Large Files | Sampling first 100 rows | Fast initial validation |
-| Geo Detection | Parallel column analysis | Reduced latency |
-| Fuzzy Matching | Levenshtein with cutoff | Bounded computation |
-| Statistics | Streaming computation | Memory efficient |
+| Operation      | Strategy                 | Impact                  |
+| -------------- | ------------------------ | ----------------------- |
+| Large Files    | Sampling first 100 rows  | Fast initial validation |
+| Geo Detection  | Parallel column analysis | Reduced latency         |
+| Fuzzy Matching | Levenshtein with cutoff  | Bounded computation     |
+| Statistics     | Streaming computation    | Memory efficient        |
 
 ## Future Enhancements
 
 ### Planned Features
+
 - Machine learning for improved geo detection
 - External catalogue APIs integration
 - Streaming validation for huge files
@@ -204,6 +217,7 @@ await expect(page.locator('.validation-error')).toBeHidden();
 - Validation history and reports
 
 ### Performance Optimizations
+
 - Web Worker offloading for heavy validation
 - Incremental validation on data changes
 - Catalogue caching with IndexedDB
@@ -211,10 +225,10 @@ await expect(page.locator('.validation-error')).toBeHidden();
 
 ## Quick Reference
 
-| Need | Module | Method |
-|------|--------|--------|
-| Validate file | FileValidator | `validate(file)` |
-| Detect geo columns | GeoColumnDetector | `detectGeoColumns()` |
-| Match with catalogue | GeoMatcher | `validateAgainstCatalogue()` |
-| Deep analysis | DeepDataValidator | `analyzeDataContent()` |
-| DuckDB validation | DuckDBValidatorService | `validateWithDuckDB()` |
+| Need                 | Module                 | Method                       |
+| -------------------- | ---------------------- | ---------------------------- |
+| Validate file        | FileValidator          | `validate(file)`             |
+| Detect geo columns   | GeoColumnDetector      | `detectGeoColumns()`         |
+| Match with catalogue | GeoMatcher             | `validateAgainstCatalogue()` |
+| Deep analysis        | DeepDataValidator      | `analyzeDataContent()`       |
+| DuckDB validation    | DuckDBValidatorService | `validateWithDuckDB()`       |

@@ -219,7 +219,11 @@ export async function parseCsvWithPapa(
     const reader = new FileReader();
     reader.onload = async (e) => {
       const text = e.target?.result as string;
-      logger.debug('File content preview', LogCategory.FILE, text.substring(0, 500));
+      logger.debug(
+        'File content preview',
+        LogCategory.FILE,
+        text.substring(0, 500)
+      );
 
       Papa.parse(text, {
         header: true,
@@ -236,7 +240,10 @@ export async function parseCsvWithPapa(
           });
 
           if (results.data.length === 0 && text.trim().length > 0) {
-            logger.warn('Empty result but file has content, trying without header', LogCategory.FILE);
+            logger.warn(
+              'Empty result but file has content, trying without header',
+              LogCategory.FILE
+            );
 
             Papa.parse(text, {
               header: false,

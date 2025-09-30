@@ -5,7 +5,7 @@ const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
 const DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv');
 
 test.describe('Import de données tabulaires - 2.A.1', () => {
-  test('importe un fichier CSV depuis l\'appareil', async ({ page }) => {
+  test("importe un fichier CSV depuis l'appareil", async ({ page }) => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
@@ -21,7 +21,9 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     await fileInput.setInputFiles(csvPath);
 
     // Vérifier que le fichier est affiché
-    await expect(modal.locator('.bx--file-filename').first()).toContainText('nuts2_data.csv');
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(
+      'nuts2_data.csv'
+    );
   });
 
   test.skip('importe un fichier CSV via une URL', async () => {});
@@ -51,10 +53,15 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     await expect(geoError).toBeHidden();
 
     // Remplir le nom du projet pour créer
-    const projectNameInput = modal.locator('[data-testid="project-name-input"]');
+    const projectNameInput = modal.locator(
+      '[data-testid="project-name-input"]'
+    );
     await projectNameInput.fill('Test Import');
 
-    const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+    const createButton = modal.getByRole('button', {
+      name: 'Créer',
+      exact: true
+    });
     await createButton.click();
 
     // Vérifier que la modal se ferme (validation réussie)
@@ -81,11 +88,13 @@ ITA,60000000,2000000`;
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -118,11 +127,13 @@ Rome,41.9028,12.4964,2800000`;
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -144,29 +155,37 @@ Rome,41.9028,12.4964,2800000`;
     await createTab.click();
 
     // Fichier avec extension non supportée
-    const invalidFile = new File(['test content'], 'data.xyz', { type: 'application/octet-stream' });
+    const invalidFile = new File(['test content'], 'data.xyz', {
+      type: 'application/octet-stream'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }, file);
 
     // Vérifier le message d'erreur
-    const errorMessage = page.locator('.bx--inline-notification--error, [role="alert"]');
+    const errorMessage = page.locator(
+      '.bx--inline-notification--error, [role="alert"]'
+    );
     await expect(errorMessage).toBeVisible();
     await expect(errorMessage).toContainText(/format|extension|supporté/i);
   });
 
-  test('affiche un avertissement pour les fichiers volumineux', async ({ page }) => {
+  test('affiche un avertissement pour les fichiers volumineux', async ({
+    page
+  }) => {
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
     await expect(modal).toBeVisible();
@@ -176,17 +195,21 @@ Rome,41.9028,12.4964,2800000`;
 
     // Créer un fichier de 11MB
     const largeContent = 'Country,Value\n' + 'x,100\n'.repeat(500000); // ~11MB
-    const largeFile = new File([largeContent], 'large.csv', { type: 'text/csv' });
+    const largeFile = new File([largeContent], 'large.csv', {
+      type: 'text/csv'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -195,7 +218,9 @@ Rome,41.9028,12.4964,2800000`;
     await page.waitForTimeout(1000);
 
     // Vérifier l'avertissement ou l'erreur pour fichier volumineux
-    const notification = page.locator('.bx--inline-notification--warning, .bx--inline-notification--error');
+    const notification = page.locator(
+      '.bx--inline-notification--warning, .bx--inline-notification--error'
+    );
     await expect(notification).toBeVisible();
     await expect(notification).toContainText(/taille|size|volumineux|large/i);
   });
@@ -204,12 +229,18 @@ Rome,41.9028,12.4964,2800000`;
 test.describe('Import de données géographiques - 2.A.2', () => {
   test.skip('importe un fichier Shapefile complet (.shp, .dbf, .shx, .prj)', async () => {});
 
-  test.skip('gère l\'import multi-fichiers Shapefile par drag & drop', async () => {});
+  test.skip("gère l'import multi-fichiers Shapefile par drag & drop", async () => {});
 
   test.skip('vérifie la projection du Shapefile importé', async () => {});
 
   test('importe un fichier GeoJSON', async ({ page }) => {
-    const geoJsonPath = join(process.cwd(), 'e2e', 'mocks', 'spatial', 'nuts2_data.geojson');
+    const geoJsonPath = join(
+      process.cwd(),
+      'e2e',
+      'mocks',
+      'spatial',
+      'nuts2_data.geojson'
+    );
 
     await page.goto('/');
     const modal = page.locator(MODAL_CONTAINER_SELECTOR);
@@ -224,12 +255,14 @@ test.describe('Import de données géographiques - 2.A.2', () => {
     await fileInput.setInputFiles(geoJsonPath);
 
     // Vérifier que le fichier est affiché
-    await expect(modal.locator('.bx--file-filename').first()).toContainText('nuts2_data.geojson');
+    await expect(modal.locator('.bx--file-filename').first()).toContainText(
+      'nuts2_data.geojson'
+    );
   });
 
   test.skip('importe un fichier GeoPackage', async () => {});
 
-  test.skip('gère les différentes couches d\'un GeoPackage', async () => {});
+  test.skip("gère les différentes couches d'un GeoPackage", async () => {});
 
   test.skip('importe un fichier géographique via URL', async () => {});
 
@@ -277,11 +310,13 @@ Germany,République fédérale d'Allemagne`;
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -309,17 +344,21 @@ Germany,République fédérale d'Allemagne`;
 France,67000000,2700000.50
 Germany,83000000,3800000.75`;
 
-    const file = new File([numericCSV], 'numeric-data.csv', { type: 'text/csv' });
+    const file = new File([numericCSV], 'numeric-data.csv', {
+      type: 'text/csv'
+    });
 
     await page.evaluate((file) => {
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -351,11 +390,13 @@ Italie,Lombardie,Milan`;
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
 
-      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const input = document.querySelector(
+        'input[type="file"]'
+      ) as HTMLInputElement;
       if (input) {
         Object.defineProperty(input, 'files', {
           value: dataTransfer.files,
-          writable: false,
+          writable: false
         });
         input.dispatchEvent(new Event('change', { bubbles: true }));
       }
@@ -384,17 +425,17 @@ Italie,Lombardie,Milan`;
 test.describe('Enrichissement de fichier géographique - 2.A.8', () => {
   test.skip('importe des données tabulaires pour enrichir un fichier géographique', async () => {});
 
-  test.skip('affiche l\'aperçu du tableau importé pour enrichissement', async () => {});
+  test.skip("affiche l'aperçu du tableau importé pour enrichissement", async () => {});
 
   test.skip('sélectionne les variables communes pour la jointure', async () => {});
 
-  test.skip('utilise le module de jointure assistée pour l\'enrichissement', async () => {});
+  test.skip("utilise le module de jointure assistée pour l'enrichissement", async () => {});
 
   test.skip('affiche les catégories de jointure (jointes, à vérifier, non uniques, non reconnues)', async () => {});
 
   test.skip('permet de corriger les identifiants non reconnus', async () => {});
 
-  test.skip('affiche les données jointes dans l\'aperçu du tableau', async () => {});
+  test.skip("affiche les données jointes dans l'aperçu du tableau", async () => {});
 
   test.skip('gère les erreurs de jointure avec messages explicites', async () => {});
 });

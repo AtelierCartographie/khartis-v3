@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
-async function createTestProject(page: any, projectName: string = 'Test Project') {
+async function createTestProject(
+  page: any,
+  projectName: string = 'Test Project'
+) {
   await page.goto('/');
   const modal = page.locator(MODAL_CONTAINER_SELECTOR);
   await expect(modal).toBeVisible();
@@ -23,7 +32,10 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
   await projectNameInput.fill(projectName);
 
   // Create project
-  const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+  const createButton = modal.getByRole('button', {
+    name: 'Créer',
+    exact: true
+  });
   await createButton.click();
 
   // Wait for modal to close
@@ -35,22 +47,33 @@ test.describe('Navigation principale - 4.A', () => {
     await createTestProject(page, 'Test Navigation');
 
     // Vérifier qu'on est sur l'étape Données par défaut
-    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
 
     // Naviguer vers Visualisations
     await page.locator('[data-testid="step-visualizations"]').click();
-    await expect(page.locator('[data-testid="step-visualizations"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.locator('[data-testid="step-visualizations"]')
+    ).toHaveAttribute('aria-pressed', 'true');
 
     // Naviguer vers Habillage
     await page.locator('[data-testid="step-styling"]').click();
-    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
 
     // Retourner vers Données
     await page.locator('[data-testid="step-data"]').click();
-    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
   });
 
-  test('accède à l\'étape Données', async ({ page }) => {
+  test("accède à l'étape Données", async ({ page }) => {
     await createTestProject(page, 'Test Données');
 
     // Naviguer vers une autre étape
@@ -58,23 +81,31 @@ test.describe('Navigation principale - 4.A', () => {
 
     // Retourner à Données
     await page.locator('[data-testid="step-data"]').click();
-    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-data"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
   });
 
-  test('accède à l\'étape Visualisations', async ({ page }) => {
+  test("accède à l'étape Visualisations", async ({ page }) => {
     await createTestProject(page, 'Test Visualisations');
 
     // Naviguer vers Visualisations
     await page.locator('[data-testid="step-visualizations"]').click();
-    await expect(page.locator('[data-testid="step-visualizations"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.locator('[data-testid="step-visualizations"]')
+    ).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('accède à l\'étape Habillage', async ({ page }) => {
+  test("accède à l'étape Habillage", async ({ page }) => {
     await createTestProject(page, 'Test Habillage');
 
     // Naviguer vers Habillage
     await page.locator('[data-testid="step-styling"]').click();
-    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
   });
 
   test('navigue librement sans ordre imposé', async ({ page }) => {
@@ -82,42 +113,58 @@ test.describe('Navigation principale - 4.A', () => {
 
     // Aller directement à Habillage depuis Données
     await page.locator('[data-testid="step-styling"]').click();
-    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
 
     // Aller à Visualisations depuis Habillage
     await page.locator('[data-testid="step-visualizations"]').click();
-    await expect(page.locator('[data-testid="step-visualizations"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(
+      page.locator('[data-testid="step-visualizations"]')
+    ).toHaveAttribute('aria-pressed', 'true');
 
     // Retourner à Habillage
     await page.locator('[data-testid="step-styling"]').click();
-    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-testid="step-styling"]')).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
   });
 
-  test('conserve l\'état entre les navigations', async ({ page }) => {
+  test("conserve l'état entre les navigations", async ({ page }) => {
     const projectName = 'Test Persistance État';
     await createTestProject(page, projectName);
 
     // Vérifier que le nom du projet est affiché
-    await expect(page.locator('[data-testid="project-title"] input')).toHaveValue(projectName);
+    await expect(
+      page.locator('[data-testid="project-title"] input')
+    ).toHaveValue(projectName);
 
     // Naviguer entre les étapes
     await page.locator('[data-testid="step-visualizations"]').click();
-    await expect(page.locator('[data-testid="project-title"] input')).toHaveValue(projectName);
+    await expect(
+      page.locator('[data-testid="project-title"] input')
+    ).toHaveValue(projectName);
 
     await page.locator('[data-testid="step-styling"]').click();
-    await expect(page.locator('[data-testid="project-title"] input')).toHaveValue(projectName);
+    await expect(
+      page.locator('[data-testid="project-title"] input')
+    ).toHaveValue(projectName);
 
     await page.locator('[data-testid="step-data"]').click();
-    await expect(page.locator('[data-testid="project-title"] input')).toHaveValue(projectName);
+    await expect(
+      page.locator('[data-testid="project-title"] input')
+    ).toHaveValue(projectName);
   });
 
-  test.skip('affiche le fil d\'Ariane', async ({ page }) => {});
+  test.skip("affiche le fil d'Ariane", async ({ page }) => {});
 
-  test.skip('utilise les raccourcis du fil d\'Ariane', async ({ page }) => {});
+  test.skip("utilise les raccourcis du fil d'Ariane", async ({ page }) => {});
 });
 
 test.describe('Interface - 4.C', () => {
-  test('affiche l\'en-tête avec menu principal', async ({ page }) => {
+  test("affiche l'en-tête avec menu principal", async ({ page }) => {
     await createTestProject(page, 'Test Interface');
 
     // Attendre un peu que la page se charge complètement
@@ -128,7 +175,9 @@ test.describe('Interface - 4.C', () => {
     await expect(header).toBeVisible();
 
     // Vérifier que le bouton de menu est présent
-    await expect(page.locator('.bx--header__menu-trigger').first()).toBeVisible();
+    await expect(
+      page.locator('.bx--header__menu-trigger').first()
+    ).toBeVisible();
   });
 
   test('affiche le nom du projet en cours', async ({ page }) => {
@@ -136,16 +185,24 @@ test.describe('Interface - 4.C', () => {
     await createTestProject(page, projectName);
 
     // Vérifier que le nom est affiché dans l'en-tête
-    await expect(page.locator('[data-testid="project-title"] input')).toHaveValue(projectName);
+    await expect(
+      page.locator('[data-testid="project-title"] input')
+    ).toHaveValue(projectName);
   });
 
-  test.skip('accède à l\'aide depuis l\'en-tête', async ({ page }) => {});
+  test.skip("accède à l'aide depuis l'en-tête", async ({ page }) => {});
 
-  test.skip('accède au téléchargement depuis l\'en-tête', async ({ page }) => {});
+  test.skip("accède au téléchargement depuis l'en-tête", async ({
+    page
+  }) => {});
 
-  test.skip('affiche la barre d\'outils à gauche (desktop)', async ({ page }) => {});
+  test.skip("affiche la barre d'outils à gauche (desktop)", async ({
+    page
+  }) => {});
 
-  test.skip('affiche la barre d\'outils en bas (mobile)', async ({ page }) => {});
+  test.skip("affiche la barre d'outils en bas (mobile)", async ({
+    page
+  }) => {});
 
   test.skip('affiche le panneau latéral par défaut', async ({ page }) => {});
 
@@ -153,7 +210,9 @@ test.describe('Interface - 4.C', () => {
 
   test.skip('redimensionne le panneau latéral', async ({ page }) => {});
 
-  test.skip('affiche les onglets données/visualisations', async ({ page }) => {});
+  test.skip('affiche les onglets données/visualisations', async ({
+    page
+  }) => {});
 
   test.skip('déploie les panneaux déportés', async ({ page }) => {});
 
@@ -167,7 +226,9 @@ test.describe('Interface - 4.C', () => {
 });
 
 test.describe('Exemples introductifs - 2.F', () => {
-  test.skip('affiche les exemples sur la page d\'accueil', async ({ page }) => {});
+  test.skip("affiche les exemples sur la page d'accueil", async ({
+    page
+  }) => {});
 
   test.skip('présente avec des vignettes', async ({ page }) => {});
 

@@ -12,7 +12,6 @@ export function slugify(text: string): string {
     .replace(/-{2,}/g, '-');
 }
 
-
 export function generateFilename(
   name: string,
   extension: string,

@@ -140,7 +140,11 @@ class DuckDBManager {
       await currentState.db.registerFileURL(name, url, protocol, cache);
       this.registeredFiles.add(name);
     } catch (error) {
-      logger.error(`Failed to register file ${name}`, LogCategory.DUCKDB, error);
+      logger.error(
+        `Failed to register file ${name}`,
+        LogCategory.DUCKDB,
+        error
+      );
       throw error;
     }
   }

@@ -272,7 +272,9 @@ class ProjectStore {
       }
 
       if (projectValidation.warnings.length > 0) {
-        projectValidation.warnings.forEach((warning) => logger.warn(warning, LogCategory.PROJECT));
+        projectValidation.warnings.forEach((warning) =>
+          logger.warn(warning, LogCategory.PROJECT)
+        );
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
@@ -360,7 +362,9 @@ class ProjectStore {
       projects.length
     );
     if (storageCheck.warnings.length > 0) {
-      storageCheck.warnings.forEach((warning) => logger.warn(warning, LogCategory.PERSISTENCE));
+      storageCheck.warnings.forEach((warning) =>
+        logger.warn(warning, LogCategory.PERSISTENCE)
+      );
     }
 
     return projects;

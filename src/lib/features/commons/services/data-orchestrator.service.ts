@@ -15,7 +15,6 @@ class DataOrchestratorService {
   private isInitialized = false;
 
   async initialize(): Promise<void> {
-
     await projectStore.waitForInit();
 
     const currentProject = projectStore.currentProject;
@@ -43,7 +42,11 @@ class DataOrchestratorService {
 
       try {
         const duckDataset = await duckDBOrchestrator.processFile(file);
-        logger.info('DuckDB processing completed', LogCategory.DUCKDB, !!duckDataset);
+        logger.info(
+          'DuckDB processing completed',
+          LogCategory.DUCKDB,
+          !!duckDataset
+        );
       } catch (duckError) {
         logger.warn('DuckDB processing failed', LogCategory.DUCKDB, duckError);
       }
@@ -106,7 +109,6 @@ class DataOrchestratorService {
 
       this.createDefaultVisualization(geoDatasets[0].id);
     } else if (tabularDatasets.length > 0) {
-
     }
 
     layersActions.syncWithVisualizations();

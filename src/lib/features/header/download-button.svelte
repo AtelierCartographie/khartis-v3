@@ -53,7 +53,9 @@
       switch (selectedTabIndex) {
         case 0:
           if (projectStore.currentProject) {
-            logger.info('Exporting project', LogCategory.EXPORT, { fileName: exportFileName });
+            logger.info('Exporting project', LogCategory.EXPORT, {
+              fileName: exportFileName
+            });
             await projectStore.exportProject(exportFileName);
             logger.success('Project exported successfully', LogCategory.EXPORT);
           }
@@ -61,7 +63,10 @@
 
         case 1:
           logger.warn('Map export not yet implemented', LogCategory.EXPORT);
-          showError(m.export_map_error(), m.export_map_feature_in_development());
+          showError(
+            m.export_map_error(),
+            m.export_map_feature_in_development()
+          );
           break;
 
         case 2:
@@ -87,14 +92,19 @@
                 extension = 'json';
             }
 
-            logger.info('Exporting data', LogCategory.EXPORT, { format, extension });
+            logger.info('Exporting data', LogCategory.EXPORT, {
+              format,
+              extension
+            });
             const blob = await exportProjectData(
               projectStore.currentProject.data.sourceFiles,
               format
             );
             const filename = generateExportFilename(exportFileName, extension);
             downloadFile(blob, filename);
-            logger.success('Data exported successfully', LogCategory.EXPORT, { filename });
+            logger.success('Data exported successfully', LogCategory.EXPORT, {
+              filename
+            });
           } else {
             logger.error('No data to export', LogCategory.EXPORT);
             showError(m.export_data_error(), m.export_data_no_data());

@@ -2,9 +2,18 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 
 const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const TEST_DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
+const TEST_DATASET_PATH = join(
+  process.cwd(),
+  'e2e',
+  'mocks',
+  'csv',
+  'nuts2_data.csv'
+);
 
-async function createTestProject(page: any, projectName: string = 'Test Project') {
+async function createTestProject(
+  page: any,
+  projectName: string = 'Test Project'
+) {
   await page.goto('/');
   const modal = page.locator(MODAL_CONTAINER_SELECTOR);
   await expect(modal).toBeVisible();
@@ -19,7 +28,10 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
   const projectNameInput = modal.locator('[data-testid="project-name-input"]');
   await projectNameInput.fill(projectName);
 
-  const createButton = modal.getByRole('button', { name: 'Créer', exact: true });
+  const createButton = modal.getByRole('button', {
+    name: 'Créer',
+    exact: true
+  });
   await createButton.click();
 
   await expect(modal).toBeHidden();
@@ -31,20 +43,24 @@ async function createTestProject(page: any, projectName: string = 'Test Project'
 }
 
 test.describe('Projections cartographiques', () => {
-  test('ouvre l\'outil de projection', async ({ page }) => {
+  test("ouvre l'outil de projection", async ({ page }) => {
     await createTestProject(page, 'Test Projection');
 
     // Rechercher l'outil projection
-    const projectionTool = page.locator('button:has-text("Projection"), [aria-label*="Projection"]').first();
+    const projectionTool = page
+      .locator('button:has-text("Projection"), [aria-label*="Projection"]')
+      .first();
 
-    if (await projectionTool.count() > 0) {
+    if ((await projectionTool.count()) > 0) {
       await projectionTool.click();
       await page.waitForTimeout(500);
 
       // Vérifier que le panneau projection est ouvert
-      const projectionPanel = page.locator('[class*="projection"], #khartis-projection-tool').first();
+      const projectionPanel = page
+        .locator('[class*="projection"], #khartis-projection-tool')
+        .first();
 
-      if (await projectionPanel.count() > 0) {
+      if ((await projectionPanel.count()) > 0) {
         await expect(projectionPanel).toBeVisible();
       }
     }
@@ -53,16 +69,20 @@ test.describe('Projections cartographiques', () => {
   test('affiche une liste de projections', async ({ page }) => {
     await createTestProject(page, 'Test Projection List');
 
-    const projectionTool = page.locator('button:has-text("Projection"), [aria-label*="Projection"]').first();
+    const projectionTool = page
+      .locator('button:has-text("Projection"), [aria-label*="Projection"]')
+      .first();
 
-    if (await projectionTool.count() > 0) {
+    if ((await projectionTool.count()) > 0) {
       await projectionTool.click();
       await page.waitForTimeout(500);
 
       // Rechercher les cartes de projection
-      const projectionCards = page.locator('[class*="projection-card"], .bx--tile:has(text)');
+      const projectionCards = page.locator(
+        '[class*="projection-card"], .bx--tile:has(text)'
+      );
 
-      if (await projectionCards.count() > 0) {
+      if ((await projectionCards.count()) > 0) {
         const cardCount = await projectionCards.count();
         expect(cardCount).toBeGreaterThan(0);
 
@@ -77,23 +97,27 @@ test.describe('Projections cartographiques', () => {
   test('permet de sélectionner une projection', async ({ page }) => {
     await createTestProject(page, 'Test Select Projection');
 
-    const projectionTool = page.locator('button:has-text("Projection"), [aria-label*="Projection"]').first();
+    const projectionTool = page
+      .locator('button:has-text("Projection"), [aria-label*="Projection"]')
+      .first();
 
-    if (await projectionTool.count() > 0) {
+    if ((await projectionTool.count()) > 0) {
       await projectionTool.click();
       await page.waitForTimeout(500);
 
       // Sélectionner la première projection
-      const firstProjection = page.locator('[class*="projection-card"], .bx--tile').first();
+      const firstProjection = page
+        .locator('[class*="projection-card"], .bx--tile')
+        .first();
 
-      if (await firstProjection.count() > 0) {
+      if ((await firstProjection.count()) > 0) {
         await firstProjection.click();
         await page.waitForTimeout(1000);
 
         // Vérifier que la projection est appliquée (la carte devrait changer)
         const mapContainer = page.locator('[class*="map"], canvas').first();
 
-        if (await mapContainer.count() > 0) {
+        if ((await mapContainer.count()) > 0) {
           await expect(mapContainer).toBeVisible();
         }
       }
@@ -103,16 +127,20 @@ test.describe('Projections cartographiques', () => {
   test('affiche les paramètres de projection', async ({ page }) => {
     await createTestProject(page, 'Test Projection Settings');
 
-    const projectionTool = page.locator('button:has-text("Projection"), [aria-label*="Projection"]').first();
+    const projectionTool = page
+      .locator('button:has-text("Projection"), [aria-label*="Projection"]')
+      .first();
 
-    if (await projectionTool.count() > 0) {
+    if ((await projectionTool.count()) > 0) {
       await projectionTool.click();
       await page.waitForTimeout(500);
 
       // Rechercher les paramètres
-      const settingsSection = page.locator('[class*="settings"], [class*="parameters"]').first();
+      const settingsSection = page
+        .locator('[class*="settings"], [class*="parameters"]')
+        .first();
 
-      if (await settingsSection.count() > 0) {
+      if ((await settingsSection.count()) > 0) {
         await expect(settingsSection).toBeVisible();
 
         // Vérifier qu'il y a des contrôles
@@ -126,16 +154,18 @@ test.describe('Projections cartographiques', () => {
   test('permet de filtrer les projections', async ({ page }) => {
     await createTestProject(page, 'Test Filter Projections');
 
-    const projectionTool = page.locator('button:has-text("Projection"), [aria-label*="Projection"]').first();
+    const projectionTool = page
+      .locator('button:has-text("Projection"), [aria-label*="Projection"]')
+      .first();
 
-    if (await projectionTool.count() > 0) {
+    if ((await projectionTool.count()) > 0) {
       await projectionTool.click();
       await page.waitForTimeout(500);
 
       // Rechercher les filtres ou catégories
       const filterButtons = page.locator('button[role="tab"], .bx--tag');
 
-      if (await filterButtons.count() > 0) {
+      if ((await filterButtons.count()) > 0) {
         const firstFilter = filterButtons.first();
         await firstFilter.click();
         await page.waitForTimeout(500);
@@ -153,9 +183,11 @@ test.describe('Contrôles de la carte', () => {
     await createTestProject(page, 'Test Zoom Controls');
 
     // Rechercher les contrôles de zoom
-    const zoomControls = page.locator('[class*="zoom"], button[aria-label*="zoom"]');
+    const zoomControls = page.locator(
+      '[class*="zoom"], button[aria-label*="zoom"]'
+    );
 
-    if (await zoomControls.count() > 0) {
+    if ((await zoomControls.count()) > 0) {
       // Il devrait y avoir au moins 2 boutons (zoom in/out)
       const controlCount = await zoomControls.count();
       expect(controlCount).toBeGreaterThanOrEqual(2);
@@ -166,9 +198,11 @@ test.describe('Contrôles de la carte', () => {
     await createTestProject(page, 'Test Map Zoom');
 
     // Rechercher le bouton zoom in
-    const zoomInButton = page.locator('button[aria-label*="Zoom in"], button:has(svg[class*="plus"])').first();
+    const zoomInButton = page
+      .locator('button[aria-label*="Zoom in"], button:has(svg[class*="plus"])')
+      .first();
 
-    if (await zoomInButton.count() > 0) {
+    if ((await zoomInButton.count()) > 0) {
       // Cliquer plusieurs fois pour zoomer
       await zoomInButton.click();
       await page.waitForTimeout(500);
@@ -184,9 +218,13 @@ test.describe('Contrôles de la carte', () => {
     await createTestProject(page, 'Test Map Unzoom');
 
     // Rechercher le bouton zoom out
-    const zoomOutButton = page.locator('button[aria-label*="Zoom out"], button:has(svg[class*="minus"])').first();
+    const zoomOutButton = page
+      .locator(
+        'button[aria-label*="Zoom out"], button:has(svg[class*="minus"])'
+      )
+      .first();
 
-    if (await zoomOutButton.count() > 0) {
+    if ((await zoomOutButton.count()) > 0) {
       await zoomOutButton.click();
       await page.waitForTimeout(500);
       await zoomOutButton.click();
@@ -200,16 +238,20 @@ test.describe('Contrôles de la carte', () => {
     await createTestProject(page, 'Test Reset Zoom');
 
     // Zoomer d'abord
-    const zoomInButton = page.locator('button[aria-label*="Zoom in"], button:has(svg[class*="plus"])').first();
+    const zoomInButton = page
+      .locator('button[aria-label*="Zoom in"], button:has(svg[class*="plus"])')
+      .first();
 
-    if (await zoomInButton.count() > 0) {
+    if ((await zoomInButton.count()) > 0) {
       await zoomInButton.click();
       await page.waitForTimeout(500);
 
       // Rechercher le bouton de reset
-      const resetButton = page.locator('button[aria-label*="Reset"], button[aria-label*="Fit"]').first();
+      const resetButton = page
+        .locator('button[aria-label*="Reset"], button[aria-label*="Fit"]')
+        .first();
 
-      if (await resetButton.count() > 0) {
+      if ((await resetButton.count()) > 0) {
         await resetButton.click();
         await page.waitForTimeout(500);
 
@@ -223,9 +265,11 @@ test.describe('Contrôles de la carte', () => {
     await createTestProject(page, 'Test Main Map');
 
     // La carte devrait être visible
-    const mapContainer = page.locator('[class*="main-map"], canvas, svg:has(path)').first();
+    const mapContainer = page
+      .locator('[class*="main-map"], canvas, svg:has(path)')
+      .first();
 
-    if (await mapContainer.count() > 0) {
+    if ((await mapContainer.count()) > 0) {
       await expect(mapContainer).toBeVisible();
 
       // Vérifier que la carte a une taille
