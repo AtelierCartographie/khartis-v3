@@ -171,6 +171,12 @@ class DuckDBOrchestratorService {
     const columns = await Duck.analyse(tableName);
     const rowCount = await this.getRowCount(tableName);
 
+    logger.info('GeoJSON columns after read_geofile', LogCategory.DUCKDB, {
+      tableName,
+      columns: columns.map((c) => c.name),
+      types: columns.map((c) => c.type_simple)
+    });
+
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
       tableName,
@@ -324,6 +330,16 @@ class DuckDBOrchestratorService {
       columns.push(result.get(i));
     }
     return columns;
+  }
+
+  async getFullAnalysis(tableName: string): Promise<any[]> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    return await Duck.analyse(tableName);
   }
 
   async renameColumn(

@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 const TEST_DATASET_PATH = join(
   process.cwd(),
   'e2e',
@@ -14,8 +13,7 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -29,7 +27,7 @@ test.describe('Habillage prédéfini - 2.C.1', () => {
     );
     await projectNameInput.fill('Test Habillage');
 
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',

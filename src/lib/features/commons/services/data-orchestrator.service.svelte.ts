@@ -13,6 +13,7 @@ import { logger, LogCategory } from '../utils/logger';
 
 class DataOrchestratorService {
   private isInitialized = false;
+  private _geometryDatasetsVersion = $state(0);
 
   async initialize(): Promise<void> {
     await projectStore.waitForInit();
@@ -55,6 +56,7 @@ class DataOrchestratorService {
       if (!dataset) return;
 
       if (dataset.geometry) {
+        this._geometryDatasetsVersion++;
         projectionActions.suggestProjectionForCurrentData();
       }
 
@@ -71,6 +73,10 @@ class DataOrchestratorService {
     }
   }
 
+  get geometryDatasetsVersion() {
+    return this._geometryDatasetsVersion;
+  }
+
   async onFileRemoved(fileId: string): Promise<void> {
     const dataset = datasetsStore.getDatasetBySourceFile(fileId);
     if (dataset) {
@@ -80,6 +86,18 @@ class DataOrchestratorService {
       visualizations.forEach((viz) => {
         visualizationStore.removeVisualization(viz.id);
       });
+
+      const duckDataset = duckDBOrchestrator
+        .getAllDatasets()
+        .find((d) => d.sourceFileId === fileId);
+      if (duckDataset) {
+        await duckDBOrchestrator.dropTable(duckDataset.tableName);
+        logger.info(
+          `Dropped DuckDB table: ${duckDataset.tableName}`,
+          LogCategory.DUCKDB
+        );
+        this._geometryDatasetsVersion++;
+      }
 
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
@@ -101,10 +119,22 @@ class DataOrchestratorService {
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
     await datasetsStore.processFiles(files);
 
+    for (const file of files) {
+      if (file.status === 'complete' && file.parsedData) {
+        try {
+          await duckDBOrchestrator.processFile(file);
+          logger.info('DuckDB file reloaded on project restore', LogCategory.DUCKDB, { name: file.name });
+        } catch (error) {
+          logger.warn('Failed to reload file in DuckDB', LogCategory.DUCKDB, error);
+        }
+      }
+    }
+
     const geoDatasets = datasetsStore.getDatasetsByType(true);
     const tabularDatasets = datasetsStore.getDatasetsByType(false);
 
     if (geoDatasets.length > 0) {
+      this._geometryDatasetsVersion++;
       projectionActions.suggestProjectionForCurrentData();
 
       this.createDefaultVisualization(geoDatasets[0].id);

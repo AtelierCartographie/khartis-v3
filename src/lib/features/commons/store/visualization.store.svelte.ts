@@ -129,14 +129,17 @@ class VisualizationStore {
   }
 
   removeVisualization(id: string): void {
-    this._state.visualizations = this._state.visualizations.filter(
+    const filteredVisualizations = this._state.visualizations.filter(
       (v) => v.id !== id
     );
+
     this._state.activeVisualizationIds.delete(id);
 
     if (this._state.selectedVisualizationId === id) {
-      this._state.selectedVisualizationId = this._state.visualizations[0]?.id;
+      this._state.selectedVisualizationId = filteredVisualizations[0]?.id;
     }
+
+    this._state.visualizations = filteredVisualizations;
   }
 
   toggleVisualization(id: string): void {

@@ -8,6 +8,9 @@
   import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
   import type { ProcessedDataset } from '../utils/data-pipeline.utils';
   import { logger, LogCategory } from '../utils/logger';
+  import { create_summary_plot } from '../services/duckdb/summary-plot';
+  import SummaryPlot from '../services/duckdb/SummaryPlot.svelte';
+  import type { AnalysisResult } from '../services/duckdb/types';
 
   interface Props {
     dataset?: ProcessedDataset;
@@ -34,6 +37,7 @@
   }
 
   let columns = $state<ColumnInfo[]>([]);
+  let columnAnalysis = $state<Map<string, AnalysisResult>>(new Map());
   let numRows = $state(0);
   let isLoading = $state(false);
   let error = $state<string | null>(null);
@@ -160,10 +164,67 @@
 
   async function loadColumnsInfo() {
     if (tableName) {
-      columns = await duckDBOrchestrator.analyzeTable(tableName);
+      logger.debug('Loading columns with analysis', LogCategory.UI, {
+        tableName
+      });
+      const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
+      logger.debug('Analysis loaded', LogCategory.UI, {
+        count: analysis.length,
+        sample: analysis[0]
+      });
+      columns = analysis.map((a: AnalysisResult) => ({
+        name: a.name,
+        type: a.type_simple
+      }));
       columns = columns.filter((c) => c.name !== 'geom' && c.name !== '__id');
+
+      const analysisMap = new Map<string, AnalysisResult>();
+      analysis.forEach((a: AnalysisResult) => {
+        if (a.name !== 'geom' && a.name !== '__id') {
+          analysisMap.set(a.name, a);
+        }
+      });
+      columnAnalysis = analysisMap;
+      logger.debug('Column analysis map created', LogCategory.UI, {
+        size: columnAnalysis.size
+      });
     } else if (dataset) {
+      logger.debug(
+        'Loading columns from dataset (no analysis)',
+        LogCategory.UI
+      );
       columns = dataset.columns.filter((c) => c.name !== 'geometry');
+    }
+  }
+
+  function getPlotForColumn(columnName: string) {
+    const analysis = columnAnalysis.get(columnName);
+    if (!analysis) {
+      logger.debug('No analysis for column', LogCategory.UI, {
+        columnName,
+        analysisSize: columnAnalysis.size
+      });
+      return null;
+    }
+
+    logger.debug('Creating plot for column', LogCategory.UI, {
+      columnName,
+      typeSimple: analysis.type_simple,
+      hasHistogram: !!analysis.histogram
+    });
+
+    try {
+      const plot = create_summary_plot(analysis as any, {
+        width: 150,
+        height: 48,
+        main_color: '#a56eff',
+        nulls_color: '#ffd666'
+      });
+      logger.debug('Plot created successfully', LogCategory.UI, { columnName });
+      return plot;
+    } catch (err) {
+      logger.error('Error creating histogram', LogCategory.UI, err);
+      return null;
     }
   }
 
@@ -191,6 +252,16 @@
   $effect(() => {
     if (highlightIds.length > 0 && numRows > 0) {
       untrack(() => goToId(highlightIds[0]));
+    }
+  });
+
+  $effect(() => {
+    if (tableName) {
+      untrack(async () => {
+        await loadColumnsInfo();
+        numRows = await duckDBOrchestrator.getRowCount(tableName);
+        initializeRows(0);
+      });
     }
   });
 
@@ -234,52 +305,74 @@
         <thead>
           <tr>
             {#each columns as column}
+              {@const analysis = columnAnalysis.get(column.name)}
               <th>
                 <div class="col-header">
-                  <div class="col-title">
+                  <div class="col-title-row">
                     <span class="col-name">{column.name}</span>
-                    <span class="col-type">{column.type}</span>
-                    {#if tableName}
-                      <OverflowMenu size="sm" light>
-                        <OverflowMenuItem
-                          text="Renommer"
-                          on:click={() =>
-                            renameColumn(column.name, `${column.name}_new`)}
-                        />
-                        <OverflowMenuItem
-                          text="Changer le type"
-                          on:click={() =>
-                            changeColumnType(column.name, 'VARCHAR')}
-                        />
-                        <OverflowMenuItem
-                          text="Supprimer"
-                          on:click={() => dropColumn(column.name)}
-                        />
-                      </OverflowMenu>
-                    {/if}
+                    <div class="col-actions">
+                      <div class="sort-buttons">
+                        <button
+                          class="sort-btn"
+                          class:active={sortColumn === column.name &&
+                            sortOrder === 'ASC'}
+                          onclick={() => sortTable(column.name, 'ASC')}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          class="sort-btn"
+                          class:active={sortColumn === column.name &&
+                            sortOrder === 'DESC'}
+                          onclick={() => sortTable(column.name, 'DESC')}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                      {#if tableName}
+                        <OverflowMenu size="sm" light>
+                          <OverflowMenuItem
+                            text="Renommer"
+                            on:click={() =>
+                              renameColumn(column.name, `${column.name}_new`)}
+                          />
+                          <OverflowMenuItem
+                            text="Changer le type"
+                            on:click={() =>
+                              changeColumnType(column.name, 'VARCHAR')}
+                          />
+                          <OverflowMenuItem
+                            text="Supprimer"
+                            on:click={() => dropColumn(column.name)}
+                          />
+                        </OverflowMenu>
+                      {/if}
+                    </div>
                   </div>
-                  <div class="sort-buttons">
-                    <button
-                      class="sort-btn"
-                      class:active={sortColumn === column.name &&
-                        sortOrder === 'ASC'}
-                      onclick={() => sortTable(column.name, 'ASC')}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      class="sort-btn"
-                      class:active={sortColumn === column.name &&
-                        sortOrder === 'DESC'}
-                      onclick={() => sortTable(column.name, 'DESC')}
-                    >
-                      ▼
-                    </button>
-                  </div>
+                  {#if showSummaryPlots && analysis}
+                    {@const plotElement = getPlotForColumn(column.name)}
+                    <div class="summary-plot">
+                      {#if analysis.type_simple === 'numeric' || analysis.type_simple === 'date'}
+                        {#if plotElement}
+                          <div class="plot-container">
+                            <SummaryPlot svgElement={plotElement} />
+                          </div>
+                        {/if}
+                      {:else if analysis.type_simple === 'string'}
+                        <div class="categorical-info">
+                          <span class="unique-count"
+                            >{analysis.uniques ?? 0} valeurs uniques</span
+                          >
+                        </div>
+                        {#if plotElement}
+                          <div class="plot-container">
+                            <SummaryPlot svgElement={plotElement} />
+                          </div>
+                        {/if}
+                      {/if}
+                    </div>
+                  {/if}
                 </div>
-                {#if showSummaryPlots}
-                  <div class="summary-plot"></div>
-                {/if}
               </th>
             {/each}
           </tr>
@@ -390,25 +483,24 @@
     gap: var(--cds-spacing-02);
   }
 
-  .col-title {
+  .col-title-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--cds-spacing-02);
-    position: relative;
   }
 
   .col-name {
     font-weight: 600;
     color: var(--cds-text-01);
+    font-size: 0.875rem;
     flex: 1;
   }
 
-  .col-type {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    background-color: var(--cds-ui-03);
-    padding: 2px 6px;
-    border-radius: 10px;
+  .col-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
   }
 
   .sort-buttons {
@@ -435,10 +527,33 @@
   }
 
   .summary-plot {
-    height: 48px;
-    margin-top: var(--cds-spacing-02);
-    border-top: 1px solid var(--cds-ui-03);
-    padding-top: var(--cds-spacing-02);
+    margin-top: var(--cds-spacing-03);
+    min-height: 48px;
+  }
+
+  .plot-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .plot-container :global(svg) {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .categorical-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--cds-spacing-02) 0;
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+  }
+
+  .unique-count {
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
   }
 
   tbody tr {

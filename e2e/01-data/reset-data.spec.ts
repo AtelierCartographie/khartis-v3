@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 const DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv');
 
 test.describe('Réinitialisation des données - 2.A.5.h', () => {
@@ -11,8 +10,7 @@ test.describe('Réinitialisation des données - 2.A.5.h', () => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -27,11 +25,13 @@ test.describe('Réinitialisation des données - 2.A.5.h', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Test Reset Feature');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
 
     await expect(modal).toBeHidden({ timeout: 10000 });

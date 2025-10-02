@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 const DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv');
 const SPATIAL_PATH = join(process.cwd(), 'e2e', 'mocks', 'spatial');
 
@@ -10,8 +9,7 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -48,11 +46,11 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
     const supportedFiles = ['nuts2_data.csv', 'nuts2_data.geojson'];
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
+    const modal = await waitForModalVisible(page);
 
     for (const fileName of supportedFiles) {
       await page.reload();
-      await expect(modal).toBeVisible();
+      await waitForModalVisible(page);
 
       const createTab = modal.locator('[data-testid="tab-create-new"]');
       await createTab.click();
@@ -75,8 +73,7 @@ test.describe('Validation de base des fichiers - 2.A.1', () => {
 
   test('rejette les extensions non supportées', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -113,8 +110,7 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -126,11 +122,13 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Test Geo Detection');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
 
     // Attendre que la détection soit faite
@@ -145,8 +143,7 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -184,8 +181,7 @@ test.describe('Détection des colonnes géographiques - 2.A.4', () => {
 
   test('détecte les codes ISO2 et ISO3', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -221,8 +217,7 @@ IT,ITA,60000000`;
 
   test('détecte les coordonnées latitude/longitude', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -262,8 +257,7 @@ test.describe('Analyse de qualité des données - 2.A.5', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -304,8 +298,7 @@ Portugal,,`;
 
   test('détecte les doublons dans les données', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -349,8 +342,7 @@ test.describe('Validation de performance - 3.B', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -391,8 +383,7 @@ test.describe('Validation de performance - 3.B', () => {
 
   test('rejette les fichiers dépassant 10000 lignes', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -431,8 +422,7 @@ test.describe('Validation de performance - 3.B', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -484,8 +474,7 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -497,11 +486,13 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Test Catalogue');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
 
     await page.waitForTimeout(2000);
@@ -524,8 +515,7 @@ test.describe('Correspondance avec catalogues - 2.A.7', () => {
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();

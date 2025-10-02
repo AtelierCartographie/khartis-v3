@@ -527,11 +527,10 @@ class DuckDB {
     const result = (await this.query(
       `SELECT COUNT(*) as num_rows FROM ${table}`,
       {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE
       }
-    )) as ArrowTableLike;
-    const row = result.get(0) as unknown as CountResult;
-    return Number(row.num_rows);
+    )) as Table;
+    return Number(result.get(0)?.num_rows) || 0;
   }
 
   async get_data(table: string, options: GetDataOptions = {}): Promise<Table> {
@@ -719,7 +718,7 @@ class DuckDB {
       return this.table_geoparquet_cache.get(table)!;
 
     await this.query(
-      `COPY ${table} TO '${table}.parquet' (COMPRESSION ZSTD);`,
+      `COPY ${table} TO '${table}.parquet' (FORMAT 'parquet', COMPRESSION 'zstd');`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -729,6 +728,40 @@ class DuckDB {
     this.table_geoparquet_cache.set(table, buffer);
 
     return buffer;
+  }
+
+  async filter_datasets_with_geometry(): Promise<
+    Array<{ tablename: string; filename: string }>
+  > {
+    try {
+      const with_geom = (await this.query(
+        `FROM information_schema.columns
+         SELECT table_name
+         WHERE (column_name = 'geom' OR column_name = 'geometry') AND data_type = 'GEOMETRY'`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+      )) as Array<{ table_name: string }>;
+
+      const datasets = Array.from(
+        this.loaded_files,
+        ([tablename, filename]) => ({
+          tablename,
+          filename
+        })
+      );
+
+      const filtered = datasets.filter((dataset) =>
+        with_geom.map((d) => d.table_name).includes(dataset.tablename)
+      );
+
+      return filtered;
+    } catch (error) {
+      logger.error(
+        'Failed to filter datasets with geometry',
+        LogCategory.DUCKDB,
+        error
+      );
+      return [];
+    }
   }
 
   async export_table(

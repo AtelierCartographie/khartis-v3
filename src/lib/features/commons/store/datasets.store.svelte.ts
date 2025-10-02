@@ -6,6 +6,7 @@ import {
 import type { UploadedFile } from './create-project.types';
 import { projectStore } from './project.store.svelte';
 import { logger, LogCategory } from '../utils/logger';
+import { sanitizeTextInput } from '../utils/sanitize.utils';
 
 interface DatasetsState {
   datasets: ProcessedDataset[];
@@ -152,13 +153,15 @@ class DatasetsStore {
   }
 
   removeDataset(datasetId: string): void {
-    this._state.datasets = this._state.datasets.filter(
+    const filteredDatasets = this._state.datasets.filter(
       (d) => d.id !== datasetId
     );
 
     if (this._state.selectedDatasetId === datasetId) {
-      this._state.selectedDatasetId = this._state.datasets[0]?.id;
+      this._state.selectedDatasetId = filteredDatasets[0]?.id;
     }
+
+    this._state.datasets = filteredDatasets;
   }
 
   getDatasetBySourceFile(sourceFileId: string): ProcessedDataset | undefined {
@@ -290,6 +293,24 @@ class DatasetsStore {
   hasModifications(datasetId: string): boolean {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     return dataset ? dataset.metadata.transformations.length > 0 : false;
+  }
+
+  renameDataset(datasetId: string, newName: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      logger.warn(`Dataset ${datasetId} not found`, LogCategory.DATA);
+      return false;
+    }
+
+    const sanitizedName = sanitizeTextInput(newName);
+    if (!sanitizedName) {
+      logger.warn('Cannot rename dataset with empty name', LogCategory.DATA);
+      return false;
+    }
+
+    dataset.name = sanitizedName;
+    logger.info(`Dataset renamed to ${sanitizedName}`, LogCategory.DATA);
+    return true;
   }
 
   clear(): void {
