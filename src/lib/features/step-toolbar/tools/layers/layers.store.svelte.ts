@@ -217,9 +217,10 @@ export const layersActions = {
     });
 
     const vizIds = new Set(visualizations.map((v) => v.id));
-    layersState.layers = layersState.layers.filter(
+    const filteredLayers = layersState.layers.filter(
       (layer) => layer.type === 'geographic' || vizIds.has(layer.id)
     );
+    layersState.layers = filteredLayers;
   },
 
   createLayerFromVisualization(vizId: string): Layer | null {

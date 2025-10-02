@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
-const CREATE_BUTTON_LABEL = 'Create';
+const CREATE_BUTTON_LABEL = 'Créer';
 const SAVED_PROJECT_TAB_LABEL = 'Open a project or backup';
 const EXAMPLES_TAB_LABEL = 'Try with example';
 
@@ -10,8 +10,7 @@ test.describe('Home page - Initial screen', () => {
   test('displays three entry options on load', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     const openTab = modal.locator('[data-testid="tab-open-project"]');
@@ -25,8 +24,7 @@ test.describe('Home page - Initial screen', () => {
   test('displays list of saved projects in browser', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const openTab = modal.locator('[data-testid="tab-open-project"]');
     await openTab.click();
@@ -37,8 +35,7 @@ test.describe('Home page - Initial screen', () => {
 
   test('allows duplicating a saved project', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -53,20 +50,26 @@ test.describe('Home page - Initial screen', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Projet Original');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
     await expect(modal).toBeHidden();
 
-    // Reopen the modal and go to saved projects tab
-    await page.keyboard.press('Shift+Meta+O');
+    // Reopen the modal via hamburger menu
+    const hamburger = page.locator('[aria-label="Open menu"]');
+    await hamburger.click();
     await page.waitForTimeout(500);
 
-    const openTab = modal.locator('[data-testid="tab-open-project"]');
-    await openTab.click();
+    const openProjectMenuItem = page.getByRole('button', {
+      name: /Ouvrir un projet/
+    });
+    await openProjectMenuItem.click();
+    await waitForModalVisible(page);
     await page.waitForTimeout(500);
 
     // Find the project and click overflow menu
@@ -91,10 +94,8 @@ test.describe('Home page - Initial screen', () => {
   test('allows deleting a saved project with confirmation', async ({
     page
   }) => {
-    // Create a project first
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -109,20 +110,26 @@ test.describe('Home page - Initial screen', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Project to Delete');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
     await expect(modal).toBeHidden();
 
-    // Reopen modal and go to saved projects tab
-    await page.keyboard.press('Shift+Meta+O');
+    // Reopen modal via hamburger menu
+    const hamburger = page.locator('[aria-label="Open menu"]');
+    await hamburger.click();
     await page.waitForTimeout(500);
 
-    const openTab = modal.locator('[data-testid="tab-open-project"]');
-    await openTab.click();
+    const openProjectMenuItem = page.getByRole('button', {
+      name: /Ouvrir un projet/
+    });
+    await openProjectMenuItem.click();
+    await waitForModalVisible(page);
     await page.waitForTimeout(500);
 
     // Find the project and click overflow menu
@@ -154,8 +161,7 @@ test.describe('Home page - Initial screen', () => {
   test('displays project examples with thumbnails', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
@@ -173,8 +179,7 @@ test.describe('Home page - Initial screen', () => {
   test('allows filtering project examples', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
@@ -198,8 +203,7 @@ test.describe('Home page - Initial screen', () => {
   test('loads a project example on click', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Navigate to examples tab
     const examplesTab = modal.locator('[data-testid="tab-try-example"]');
@@ -225,8 +229,7 @@ test.describe('Home page - Initial screen', () => {
 
   test('allows importing .kh project file', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -241,11 +244,13 @@ test.describe('Home page - Initial screen', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Export Test Project');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
     await expect(modal).toBeHidden();
 
@@ -258,15 +263,17 @@ test.describe('Project creation modal', () => {
   test('disables Create button without data', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
+
+    const createTab = modal.locator('[data-testid="tab-create-new"]');
+    await createTab.click();
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
 
-    // Button must be disabled without data
     await expect(createButton).toBeDisabled();
   });
 
@@ -281,8 +288,7 @@ test.describe('Project creation modal', () => {
 
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -311,8 +317,7 @@ test.describe('Project creation modal', () => {
 
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -329,8 +334,7 @@ test.describe('Project creation modal', () => {
   test('allows naming the project', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -346,8 +350,7 @@ test.describe('Project creation modal', () => {
   test('uses "Untitled" as placeholder', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -369,8 +372,7 @@ test.describe('Project creation modal', () => {
 
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -381,8 +383,9 @@ test.describe('Project creation modal', () => {
 
     const projectNameInput = page.locator('[data-testid="project-name-input"]');
     await projectNameInput.fill('Test Project');
+    await page.waitForTimeout(500);
 
-    const createButton = page.getByRole('button', {
+    const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
@@ -401,8 +404,7 @@ test.describe('Project creation modal', () => {
 
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -413,12 +415,13 @@ test.describe('Project creation modal', () => {
 
     const projectNameInput = page.locator('[data-testid="project-name-input"]');
     await projectNameInput.fill('Test Project');
+    await page.waitForTimeout(500);
 
     const createButton = page.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
       exact: true
     });
-
+    await expect(createButton).toBeEnabled();
     await createButton.click();
 
     await expect(modal).toBeHidden();

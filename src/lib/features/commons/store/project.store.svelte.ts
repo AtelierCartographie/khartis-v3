@@ -1,12 +1,12 @@
 import { m } from '$lib/paraglide/messages';
-import { dataOrchestrator } from '../services/data-orchestrator.service';
+import { dataOrchestrator } from '../services/data-orchestrator.service.svelte';
+import { downloadFile } from '../utils/file-export.utils';
 import { logger, LogCategory } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { projectPersistence } from '../utils/project-persistence.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import type { UploadedFile } from './create-project.types';
-import { globalActions } from './global.svelte';
 import type {
   KhartisProject,
   LayoutConfig,
@@ -137,10 +137,11 @@ class ProjectStore {
             : 0
         });
 
-        this._state.currentProject.data.sourceFiles.push(fileCopy);
+        this._state.currentProject.data.sourceFiles = [
+          ...this._state.currentProject.data.sourceFiles,
+          fileCopy
+        ];
 
-        const shouldSelect = isFirstFile && addedFiles === 0;
-        globalActions.addDataButtonForFile(file.id, file.name, shouldSelect);
         addedFiles++;
 
         try {
@@ -148,14 +149,10 @@ class ProjectStore {
         } catch (error) {
           logger.error('Failed to process file', LogCategory.PROJECT, error);
 
-          const index = this._state.currentProject.data.sourceFiles.findIndex(
-            (f) => f.id === fileCopy.id
-          );
-          if (index > -1) {
-            this._state.currentProject.data.sourceFiles.splice(index, 1);
-          }
-
-          globalActions.removeDataButton(file.id);
+          this._state.currentProject.data.sourceFiles =
+            this._state.currentProject.data.sourceFiles.filter(
+              (f) => f.id !== fileCopy.id
+            );
 
           throw error;
         }
@@ -171,17 +168,15 @@ class ProjectStore {
       return;
     }
 
-    const index = this._state.currentProject.data.sourceFiles.findIndex(
-      (f) => f.id === fileId
-    );
-    if (index > -1) {
-      this._state.currentProject.data.sourceFiles.splice(index, 1);
+    this._state.currentProject.data.sourceFiles =
+      this._state.currentProject.data.sourceFiles.filter(
+        (f) => f.id !== fileId
+      );
 
-      await dataOrchestrator.onFileRemoved(fileId);
+    await dataOrchestrator.onFileRemoved(fileId);
 
-      this._state.isDirty = true;
-      await this.saveCurrentProject();
-    }
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
   }
 
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
@@ -210,11 +205,6 @@ class ProjectStore {
     this._state.isDirty = false;
     this._state.lastSaved = new Date();
 
-    globalActions.clearAllDataButtons();
-    for (const file of files) {
-      globalActions.addDataButtonForFile(file.id, file.name);
-    }
-
     this.addToHistory('Project created', project);
 
     await this.saveCurrentProject();
@@ -237,14 +227,6 @@ class ProjectStore {
         this._state.lastSaved = new Date();
         this._state.history = [];
         this._state.historyIndex = -1;
-
-        globalActions.clearAllDataButtons();
-
-        if (project.data?.sourceFiles) {
-          for (const file of project.data.sourceFiles) {
-            globalActions.addDataButtonForFile(file.id, file.name);
-          }
-        }
 
         await projectPersistence.saveToStorage(
           ProjectStorageKey.CURRENT,
@@ -380,15 +362,11 @@ class ProjectStore {
         this._state.currentProject
       );
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const projectName =
         customName || this._state.currentProject.manifest.name;
       const filename = generateProjectFilename(projectName);
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      downloadFile(blob, filename);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to export project';

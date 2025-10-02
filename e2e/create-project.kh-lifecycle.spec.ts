@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from './helpers';
 const CREATE_BUTTON_LABEL = 'Créer';
 const SAVED_PROJECT_TAB_LABEL = 'Ouvrir un projet ou une sauvegarde';
 const PROJECT_NAME_PREFIX = 'E2E Project';
@@ -20,9 +19,7 @@ test.describe('Create project kh', () => {
   test('renders create project modal on load', async ({ page }) => {
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    // Confirm the create-project modal appears automatically after navigation
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
@@ -41,9 +38,7 @@ test.describe('Create project kh', () => {
     // Load the app and wait for the modal to render
     await page.goto('/');
 
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    // Guard that the modal is visible before interacting with it
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
@@ -64,6 +59,7 @@ test.describe('Create project kh', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill(projectName);
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: CREATE_BUTTON_LABEL,
@@ -98,7 +94,7 @@ test.describe('Create project kh', () => {
     await page.reload();
 
     // Ensure the modal is displayed again after reload
-    await expect(modal).toBeVisible();
+    await waitForModalVisible(page);
 
     const openProjectTab = modal.getByRole('button', {
       name: SAVED_PROJECT_TAB_LABEL,

@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 const TEST_DATASET_PATH = join(
   process.cwd(),
   'e2e',
@@ -13,8 +12,7 @@ const TEST_DATASET_PATH = join(
 test.describe('Outil de recherche - 2.B.4.a', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -27,11 +25,13 @@ test.describe('Outil de recherche - 2.B.4.a', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Test Search');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
     await expect(modal).toBeHidden({ timeout: 10000 });
 
@@ -118,8 +118,7 @@ test.describe('Outil de recherche - 2.B.4.a', () => {
 test.describe('Gestion des calques - 2.B.4.b', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -280,8 +279,7 @@ test.describe('Gestion des calques - 2.B.4.b', () => {
 test.describe('Projections cartographiques - 2.B.4.c', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();

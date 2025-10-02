@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
-
-const MODAL_CONTAINER_SELECTOR = '#khartis-create-project .bx--modal-container';
+import { MODAL_CONTAINER_SELECTOR, waitForModalVisible } from '../helpers';
 const DATASET_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv');
 
 test.describe('Import de données tabulaires - 2.A.1', () => {
@@ -9,8 +8,7 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
@@ -34,8 +32,7 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
     const csvPath = join(DATASET_PATH, 'nuts2_data.csv');
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
@@ -57,11 +54,13 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
       '[data-testid="project-name-input"]'
     );
     await projectNameInput.fill('Test Import');
+    await page.waitForTimeout(500);
 
     const createButton = modal.getByRole('button', {
       name: 'Créer',
       exact: true
     });
+    await expect(createButton).toBeEnabled();
     await createButton.click();
 
     // Vérifier que la modal se ferme (validation réussie)
@@ -70,8 +69,7 @@ test.describe('Import de données tabulaires - 2.A.1', () => {
 
   test('reconnaît les codes géographiques ISO3', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -110,8 +108,7 @@ ITA,60000000,2000000`;
 
   test('reconnaît les coordonnées latitude/longitude', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -150,8 +147,7 @@ Rome,41.9028,12.4964,2800000`;
 
   test('displays une erreur pour un format invalide', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -186,8 +182,7 @@ Rome,41.9028,12.4964,2800000`;
     page
   }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -244,8 +239,7 @@ test.describe('Import de données géographiques - 2.A.2', () => {
     );
 
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     // Sélectionner l'onglet "Créer un nouveau projet" d'abord
     const createTab = modal.locator('[data-testid="tab-create-new"]');
@@ -295,8 +289,7 @@ test.describe('Création de jeux de données - 2.A.3', () => {
 test.describe('Typage des variables - 2.A.4', () => {
   test('détecte automatiquement le type texte', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -336,8 +329,7 @@ Germany,République fédérale d'Allemagne`;
 
   test('détecte automatiquement le type numérique', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();
@@ -374,8 +366,7 @@ Germany,83000000,3800000.75`;
 
   test('détecte le sous-type géographique', async ({ page }) => {
     await page.goto('/');
-    const modal = page.locator(MODAL_CONTAINER_SELECTOR);
-    await expect(modal).toBeVisible();
+    const modal = await waitForModalVisible(page);
 
     const createTab = modal.locator('[data-testid="tab-create-new"]');
     await createTab.click();

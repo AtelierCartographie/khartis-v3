@@ -8,38 +8,39 @@ Le composant `keyboard-shortcuts.svelte` gère tous les raccourcis clavier de l'
 
 ### Navigation entre étapes
 
-| Touche | Action | Description |
-|--------|--------|-------------|
-| `1` | Données | Navigue vers l'étape de gestion des données |
-| `2` | Visualisations | Navigue vers l'étape de visualisation |
-| `3` | Habillage | Navigue vers l'étape d'habillage et mise en page |
+| Touche | Action         | Description                                      |
+| ------ | -------------- | ------------------------------------------------ |
+| `1`    | Données        | Navigue vers l'étape de gestion des données      |
+| `2`    | Visualisations | Navigue vers l'étape de visualisation            |
+| `3`    | Habillage      | Navigue vers l'étape d'habillage et mise en page |
 
 Si la barre latérale est réduite, elle s'ouvre automatiquement lors de la navigation.
 
 ### Contrôles de zoom
 
-| Raccourci | Action | Description |
-|-----------|--------|-------------|
-| `Ctrl/Cmd` + `+` | Zoom avant | Augmente le niveau de zoom |
-| `Ctrl/Cmd` + `=` | Zoom avant | Alternative au + |
-| `Ctrl/Cmd` + `-` | Zoom arrière | Diminue le niveau de zoom |
-| `Ctrl/Cmd` + `0` | Réinitialiser | Retour au niveau de zoom par défaut |
-| `Alt` + `Z` | Basculer mode | Bascule entre zoom carte et zoom page |
-| `Ctrl/Cmd` + molette | Zoom dynamique | Zoom continu avec la molette |
+| Raccourci            | Action         | Description                           |
+| -------------------- | -------------- | ------------------------------------- |
+| `Ctrl/Cmd` + `+`     | Zoom avant     | Augmente le niveau de zoom            |
+| `Ctrl/Cmd` + `=`     | Zoom avant     | Alternative au +                      |
+| `Ctrl/Cmd` + `-`     | Zoom arrière   | Diminue le niveau de zoom             |
+| `Ctrl/Cmd` + `0`     | Réinitialiser  | Retour au niveau de zoom par défaut   |
+| `Alt` + `Z`          | Basculer mode  | Bascule entre zoom carte et zoom page |
+| `Ctrl/Cmd` + molette | Zoom dynamique | Zoom continu avec la molette          |
 
 ### Échappement et fermeture
 
-| Touche | Action | Priorité |
-|--------|--------|----------|
-| `Escape` | Fermer modal | 1. Ferme le modal de création de projet |
-| `Escape` | Réduire barre | 2. Réduit la barre latérale à 50px |
-| `Escape` | Fermer outil | 3. Désélectionne l'outil actif |
+| Touche   | Action        | Priorité                                |
+| -------- | ------------- | --------------------------------------- |
+| `Escape` | Fermer modal  | 1. Ferme le modal de création de projet |
+| `Escape` | Réduire barre | 2. Réduit la barre latérale à 50px      |
+| `Escape` | Fermer outil  | 3. Désélectionne l'outil actif          |
 
 L'ordre de priorité garantit un comportement prévisible.
 
 ## Sécurité des champs de saisie
 
 Les raccourcis sont **automatiquement désactivés** dans les contextes suivants:
+
 - Champs `<input>`
 - Zones `<textarea>`
 - Éléments avec `contentEditable="true"`
@@ -76,7 +77,7 @@ const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
   '1': ToolbarStep.Data,
   '2': ToolbarStep.Visualizations,
   '3': ToolbarStep.Styling,
-  '4': ToolbarStep.NewStep  // Ajouter ici
+  '4': ToolbarStep.NewStep // Ajouter ici
 };
 ```
 
@@ -89,7 +90,7 @@ function handleZoomKey(key: string): boolean {
     case '=':
       globalActions.zoomIn();
       return true;
-    case 'r':  // Nouveau raccourci
+    case 'r': // Nouveau raccourci
       globalActions.resetToDefaultView();
       return true;
     // ...
@@ -123,6 +124,7 @@ Fichier: `e2e/04-transverses/raccourcis-clavier.spec.ts`
 ## Références CDC
 
 **Section 3.F** - Raccourcis clavier de base
+
 - Navigation entre étapes du parcours utilisateur
 - Accès rapide aux outils
 - Touche Escape pour annuler/fermer
@@ -137,6 +139,7 @@ Fichier: `e2e/04-transverses/raccourcis-clavier.spec.ts`
 ## Maintenance
 
 Le code suit les principes:
+
 - **Single Responsibility** - chaque fonction a un rôle unique
 - **DRY** - configuration centralisée dans `NAVIGATION_SHORTCUTS`
 - **KISS** - logique simple sans abstractions inutiles
