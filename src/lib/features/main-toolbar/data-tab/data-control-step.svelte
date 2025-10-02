@@ -2,15 +2,19 @@
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
   import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { InlineNotification, Button } from 'carbon-components-svelte';
-  import { Reset } from 'carbon-icons-svelte';
+  import {
+    InlineNotification,
+    Button,
+    TextInput
+  } from 'carbon-components-svelte';
+  import { Reset, Edit, Checkmark, Close } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
   const currentDuckTable = $derived(
-    selectedDataset
+    selectedDataset?.sourceFileId
       ? duckDBOrchestrator
           .getAllDatasets()
           .find((d) => d.sourceFileId === selectedDataset.sourceFileId)
@@ -19,6 +23,37 @@
   );
 
   let resetModalOpen = $state(false);
+  let isEditingName = $state(false);
+  let editedName = $state('');
+
+  function startEditing() {
+    if (!selectedDataset) return;
+    editedName = selectedDataset.name;
+    isEditingName = true;
+  }
+
+  function saveRename() {
+    if (!selectedDataset || !editedName.trim()) {
+      cancelEditing();
+      return;
+    }
+
+    datasetsStore.renameDataset(selectedDataset.id, editedName);
+    isEditingName = false;
+  }
+
+  function cancelEditing() {
+    isEditingName = false;
+    editedName = '';
+  }
+
+  function handleKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      saveRename();
+    } else if (event.key === 'Escape') {
+      cancelEditing();
+    }
+  }
 </script>
 
 <section id="data-control-step">
@@ -27,7 +62,44 @@
   {#if selectedDataset}
     <div class="dataset-info">
       <div class="dataset-meta">
-        <span class="dataset-name">{selectedDataset.name}</span>
+        {#if isEditingName}
+          <div class="dataset-name-edit">
+            <TextInput
+              size="sm"
+              bind:value={editedName}
+              onkeydown={handleKeyPress}
+              placeholder="Nom du jeu de données"
+            />
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Checkmark}
+              iconDescription="Valider"
+              tooltipPosition="bottom"
+              on:click={saveRename}
+            />
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Close}
+              iconDescription="Annuler"
+              tooltipPosition="bottom"
+              on:click={cancelEditing}
+            />
+          </div>
+        {:else}
+          <div class="dataset-name-display">
+            <span class="dataset-name">{selectedDataset.name}</span>
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Edit}
+              iconDescription="Renommer"
+              tooltipPosition="bottom"
+              on:click={startEditing}
+            />
+          </div>
+        {/if}
         <span class="row-count">{selectedDataset.rowCount} lignes</span>
         {#if currentDuckTable}
           <span class="duck-badge">DuckDB ✓</span>
@@ -55,7 +127,7 @@
     <AdvancedDataTable
       dataset={selectedDataset}
       tableName={currentDuckTable || undefined}
-      showSummaryPlots={false}
+      showSummaryPlots={true}
     />
 
     <InlineNotification
@@ -110,6 +182,18 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
+  }
+
+  .dataset-name-display {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+  }
+
+  .dataset-name-edit {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
   }
 
   .dataset-name {

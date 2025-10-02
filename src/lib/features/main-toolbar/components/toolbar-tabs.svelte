@@ -3,24 +3,35 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { Button, Modal, Tag } from 'carbon-components-svelte';
   import { Add, Close } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { untrack } from 'svelte';
   import AddDataModal from './add-data-modal.svelte';
 
   let tabsScroller: HTMLDivElement | null = null;
 
+  const currentSourceFiles = $derived(
+    projectStore.currentProject?.data?.sourceFiles || []
+  );
+
+  const currentFileIds = $derived(
+    currentSourceFiles.map((f) => f.id).join(',')
+  );
+
   $effect(() => {
-    const project = projectStore.currentProject;
-    if (project?.data?.sourceFiles && globalState.dataButtons.length === 0) {
+    currentFileIds;
+
+    untrack(() => {
       globalActions.clearAllDataButtons();
-      for (const file of project.data.sourceFiles) {
-        globalActions.addDataButtonForFile(file.id, file.name);
+
+      for (const file of currentSourceFiles) {
+        globalActions.addDataButtonForFile(file.id, file.name, false);
       }
-    }
+    });
   });
 
   const onWheel = (e: WheelEvent) => {
@@ -59,7 +70,6 @@
   const handleDeleteFile = async () => {
     if (fileToDelete && projectStore.currentProject) {
       await projectStore.removeFileFromProject(fileToDelete.id);
-      globalActions.removeDataButton(fileToDelete.id);
     }
     isDeleteConfirmOpen = false;
     fileToDelete = null;
@@ -183,6 +193,7 @@
   modalHeading="Supprimer le fichier"
   primaryButtonText="Supprimer"
   secondaryButtonText="Annuler"
+  size="sm"
   on:click:button--secondary={cancelDelete}
   on:click:button--primary={handleDeleteFile}
   on:close={cancelDelete}
