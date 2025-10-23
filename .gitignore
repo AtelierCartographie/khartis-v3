@@ -8,6 +8,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*-old
 
 # Diagnostic reports
 report.*.json
@@ -20,7 +21,6 @@ report.*.json
 /.svelte-kit
 /build
 dist
-khartis-pipeline-main
 
 # OS
 .DS_Store

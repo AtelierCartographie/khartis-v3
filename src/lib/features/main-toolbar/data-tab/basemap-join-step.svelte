@@ -1,10 +1,18 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
+  import BasemapCard from '$lib/features/commons/components/basemap-card.svelte';
+  import BasemapCatalogModal from '$lib/features/commons/components/basemap-catalog-modal.svelte';
   import {
     dataTabActions,
     dataTabState
   } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import type {
+    BasemapMetadata,
+    BasemapSuggestion
+  } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -16,37 +24,60 @@
   import { Grid as GridIcon, Upload } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
-  type Basemap = {
-    id: string;
-    title: string;
-    subtitle?: string;
-    ratio?: string;
-    matchScore?: number;
-  };
-
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
-  let basemapSuggestions: Basemap[] = [
-    {
-      id: 'world-admin',
-      title: 'Monde',
-      subtitle: 'par pays',
-      ratio: '16:9',
-      matchScore: 75
-    },
-    {
-      id: 'europe-admin',
-      title: 'Europe',
-      subtitle: 'par pays',
-      ratio: '1:1',
-      matchScore: 65
-    }
-  ];
+  const selectedDataset = $derived(datasetsStore.selectedDataset);
+
+  let catalogModalOpen = $state(false);
+  let basemapSuggestions = $state<BasemapSuggestion[]>([]);
 
   const joinRows = $derived(dataTabState.basemapJoin.joinMappings);
   const duplicates = $derived(dataTabState.basemapJoin.duplicateEntities);
   const unknowns = $derived(dataTabState.basemapJoin.unrecognizedEntities);
   const joinedCount = $derived(dataTabState.basemapJoin.joinedEntities);
   const toVerifyCount = $derived(dataTabState.basemapJoin.entitiesToVerify);
+
+  const allBasemaps = $derived(basemapCatalogService.basemaps);
+
+  const suggestedBasemaps = $derived(() => {
+    return basemapSuggestions
+      .map((s: BasemapSuggestion) => ({
+        basemap: allBasemaps.find((b: BasemapMetadata) => b.file === s.file),
+        score: s.matchScore
+      }))
+      .filter((item) => item.basemap !== undefined) as {
+      basemap: BasemapMetadata;
+      score: number;
+    }[];
+  });
+
+  function handleOpenCatalog() {
+    catalogModalOpen = true;
+  }
+
+  function handleSelectBasemap(basemap: BasemapMetadata) {
+    dataTabActions.selectBasemap(basemap.file);
+  }
+
+  async function loadSuggestions() {
+    if (selectedDataset) {
+      const suggestions = await basemapCatalogService.getSuggestions(
+        selectedDataset,
+        3
+      );
+      basemapSuggestions = suggestions;
+    }
+  }
+
+  onMount(async () => {
+    await basemapCatalogService.loadCatalog();
+    await loadSuggestions();
+  });
+
+  $effect(() => {
+    if (selectedDataset) {
+      loadSuggestions();
+    }
+  });
 </script>
 
 <section id="basemap-join-step">
@@ -57,33 +88,46 @@
   </p>
 
   <div class="basemap-toolbar">
-    <Button kind="primary">{m.basemap_catalog()}</Button>
+    <Button kind="primary" on:click={handleOpenCatalog}>
+      {m.basemap_catalog()}
+    </Button>
     <Button kind="ghost" icon={Upload} iconDescription={m.basemap_import()} />
     <Button kind="ghost" icon={GridIcon} iconDescription={m.basemap_osm()} />
   </div>
 
-  <ExpandableSection title={m.basemap_suggestions()} defaultOpen>
-    {#snippet children()}
-      <div class="basemap-cards">
-        {#each basemapSuggestions as b}
-          <ProjectionCard
-            title={b.title}
-            subtitle={b.subtitle}
-            ratio={b.ratio}
-            selected={basemapSelected === b.id}
-            onclick={() => dataTabActions.selectBasemap(b.id)}
-            showInfo={true}
-          />
-        {/each}
-      </div>
-    {/snippet}
-  </ExpandableSection>
+  {#if suggestedBasemaps().length > 0}
+    <ExpandableSection title={m.basemap_suggestions()} defaultOpen>
+      {#snippet children()}
+        <div class="basemap-cards">
+          {#each suggestedBasemaps() as { basemap, score }}
+            <BasemapCard
+              basemap={basemap}
+              matchScore={score}
+              selected={basemapSelected === basemap.file}
+              onclick={() => handleSelectBasemap(basemap)}
+            />
+          {/each}
+        </div>
+      {/snippet}
+    </ExpandableSection>
+  {/if}
 
   <ExpandableSection title={m.basemap_other()} defaultOpen={false}>
     {#snippet children()}
       <p class="kh-help">{m.basemap_browse_other()}</p>
+      <Button kind="tertiary" on:click={handleOpenCatalog}>
+        {m.basemap_catalog()}
+      </Button>
     {/snippet}
   </ExpandableSection>
+
+  <BasemapCatalogModal
+    bind:open={catalogModalOpen}
+    selectedBasemapId={basemapSelected}
+    suggestions={basemapSuggestions}
+    onClose={() => (catalogModalOpen = false)}
+    onSelect={handleSelectBasemap}
+  />
 
   <ExpandableSection title="Jointure assistée par Khartis" defaultOpen>
     {#snippet children()}

@@ -1,215 +1,181 @@
 <script lang="ts">
-  import placeholderGlobe from '$lib/features/commons/assets/images/commons/placeholder-globe.png';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { onMount } from 'svelte';
-  import { dataOrchestrator } from '../commons/services/data-orchestrator.service.svelte';
-  import { Duck } from '../commons/services/duckdb/duckdb';
-  import { globalActions, globalState } from '../commons/store/global.svelte';
-  import { ZoomMode } from '../commons/types/global';
+  import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { LogCategory, logger } from '../commons/utils/logger';
   import DeckMap from './components/deck-map.svelte';
-  import { readGeoParquet } from './utils/geoparquet';
+  import { basemapService } from './services/basemap.service.svelte';
 
-  interface LoadedFile {
-    tablename: string;
-    filename: string;
-  }
+  let isInitializing = $state(true);
+  let displayTable = $state<ArrowTable | null>(null);
+  let displayGeoJSON = $state<any | null>(null);
 
-  interface UIState {
-    selectedDataset: string | null;
-    isLoading: boolean;
-    jsTable: ArrowTable | null;
-    hasGeometry: boolean;
-  }
+  const selectedDataset = $derived(datasetsStore.selectedDataset);
 
-  let datasetsList = $state<LoadedFile[]>([]);
-  let uiState = $state<UIState>({
-    selectedDataset: null,
-    isLoading: true,
-    jsTable: null,
-    hasGeometry: false
-  });
-
-  const transformStyle = $derived(
-    globalState.zoom.mode === ZoomMode.Map && !uiState.hasGeometry
-      ? `transform: scale(${globalState.zoom.mapZoomLevel}); transform-origin: center center;`
-      : ''
-  );
-
-  async function geofileToGeoarrowMemory(
-    tablename: string
-  ): Promise<ArrowTable> {
-    const buffer = await Duck!.copy_to_geoparquet_as_buffer(tablename);
-    const jsTable = await readGeoParquet(buffer.buffer as ArrayBuffer);
-    return jsTable;
-  }
-
-  async function handleDatasetChange(event: Event): Promise<void> {
-    const target = event.target as HTMLSelectElement;
-    uiState.selectedDataset = target.value;
-    uiState.jsTable = await geofileToGeoarrowMemory(uiState.selectedDataset);
-  }
-
-  function handleDoubleClick(): void {
-    if (globalState.zoom.mode === ZoomMode.Map && !uiState.hasGeometry) {
-      globalActions.resetZoom();
-    }
-  }
-
-  function handleWheel(event: WheelEvent): void {
-    if (globalState.zoom.mode !== ZoomMode.Map || uiState.hasGeometry) return;
-
-    event.preventDefault();
-
-    if (event.deltaY < 0) {
-      globalActions.zoomIn();
-    } else {
-      globalActions.zoomOut();
-    }
-  }
-
-  let initialLoadDone = $state(false);
-
-  async function loadGeometryDatasets(): Promise<void> {
-    if (!Duck) return;
-
+  async function convertDatasetToGeoJSON(dataset: any): Promise<any | null> {
     try {
-      uiState.isLoading = true;
-      const newDatasetsList = await Duck.filter_datasets_with_geometry();
-      datasetsList = newDatasetsList;
+      logger.info('Processing dataset for geometry', LogCategory.MAP, {
+        name: dataset.name,
+        hasGeometry: !!dataset.geometry,
+        dataLength: dataset.data?.length
+      });
 
-      if (datasetsList.length > 0) {
-        const currentSelectedExists = datasetsList.some(
-          (d) => d.tablename === uiState.selectedDataset
-        );
+      if (dataset.geometry && dataset.data && dataset.data.length > 0) {
+        logger.info('Converting dataset to GeoJSON', LogCategory.MAP, {
+          name: dataset.name,
+          featureCount: dataset.data.length
+        });
 
-        if (!currentSelectedExists) {
-          uiState.selectedDataset = datasetsList[0].tablename;
-        }
+        const features = dataset.data.map((row: any, index: number) => ({
+          type: 'Feature',
+          id: index,
+          properties: { ...row },
+          geometry: row.geometry || null
+        }));
 
-        uiState.jsTable = await geofileToGeoarrowMemory(
-          uiState.selectedDataset!
-        );
-        uiState.hasGeometry = true;
-      } else {
-        uiState.selectedDataset = null;
-        uiState.jsTable = null;
-        uiState.hasGeometry = false;
+        const geojson = {
+          type: 'FeatureCollection',
+          features
+        };
+
+        logger.success('GeoJSON created for display', LogCategory.MAP, {
+          featureCount: features.length,
+          sampleGeometry: features[0]?.geometry?.type
+        });
+
+        return geojson;
       }
+
+      logger.info('Dataset has no geometry', LogCategory.MAP, {
+        name: dataset.name
+      });
+      return null;
     } catch (error) {
-      uiState.selectedDataset = null;
-      uiState.jsTable = null;
-      uiState.hasGeometry = false;
-    } finally {
-      uiState.isLoading = false;
+      logger.error(
+        'Failed to convert dataset to GeoJSON',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
+  }
+
+  async function loadFallbackBasemap(): Promise<void> {
+    logger.info('Loading fallback basemap', LogCategory.MAP);
+
+    const basemap = await basemapService.loadDefaultBasemap();
+
+    if (basemap?.geometryTable) {
+      displayTable = basemap.geometryTable;
+      logger.success('Fallback basemap loaded', LogCategory.MAP);
+    } else {
+      logger.error('Failed to load fallback basemap', LogCategory.MAP);
     }
   }
 
   $effect(() => {
-    if (initialLoadDone) {
-      const version = dataOrchestrator.geometryDatasetsVersion;
-      loadGeometryDatasets();
+    if (isInitializing) {
+      logger.info('Skipping effect during initialization', LogCategory.MAP);
+      return;
+    }
+
+    if (selectedDataset) {
+      logger.info('Dataset selected, processing...', LogCategory.MAP, {
+        name: selectedDataset.name,
+        hasGeometry: !!selectedDataset.geometry
+      });
+
+      if (selectedDataset.geometry) {
+        convertDatasetToGeoJSON(selectedDataset).then((geojson) => {
+          if (geojson) {
+            displayTable = null;
+            displayGeoJSON = geojson;
+            logger.success(
+              'Dataset GeoJSON ready for display',
+              LogCategory.MAP,
+              {
+                featureCount: geojson.features.length
+              }
+            );
+          } else {
+            logger.warn(
+              'Dataset conversion failed, loading basemap',
+              LogCategory.MAP
+            );
+            loadFallbackBasemap();
+          }
+        });
+      } else {
+        logger.info(
+          'Dataset has no geometry, loading basemap',
+          LogCategory.MAP
+        );
+        loadFallbackBasemap();
+      }
+    } else {
+      logger.info('No dataset selected, loading basemap', LogCategory.MAP);
+      loadFallbackBasemap();
     }
   });
 
   onMount(async () => {
-    await loadGeometryDatasets();
-    initialLoadDone = true;
+    logger.info('Initializing map component', LogCategory.MAP);
+
+    await basemapService.initialize();
+
+    if (selectedDataset?.geometry) {
+      logger.info(
+        'Initial dataset has geometry, converting...',
+        LogCategory.MAP
+      );
+      const geojson = await convertDatasetToGeoJSON(selectedDataset);
+      if (geojson) {
+        displayGeoJSON = geojson;
+        logger.success('Initial dataset GeoJSON loaded', LogCategory.MAP);
+      } else {
+        await loadFallbackBasemap();
+      }
+    } else {
+      logger.info(
+        'No initial dataset geometry, loading basemap',
+        LogCategory.MAP
+      );
+      await loadFallbackBasemap();
+    }
+
+    isInitializing = false;
+    logger.success('Map component initialized', LogCategory.MAP);
   });
 </script>
 
-{#if uiState.isLoading}
-  <div class="loading-state">Loading geographic data...</div>
-{:else if uiState.hasGeometry && datasetsList.length > 0}
-  <div class="spatial-container">
-    {#if datasetsList.length > 1}
-      <div class="dataset-selector">
-        <label for="dataset-select">Choose a basemap:</label>
-        <select
-          id="dataset-select"
-          onchange={handleDatasetChange}
-          bind:value={uiState.selectedDataset}
-        >
-          {#each datasetsList as { tablename, filename }}
-            <option value={tablename}>{filename}</option>
-          {/each}
-        </select>
-      </div>
-    {/if}
-    {#if uiState.jsTable}
-      <DeckMap jsTable={uiState.jsTable} />
-    {/if}
-  </div>
-{:else}
-  <div class="map-container">
-    <img
-      class="placeholder-globe"
-      src={placeholderGlobe}
-      alt="placeholder map"
-      style={transformStyle}
-      ondblclick={handleDoubleClick}
-      onwheel={handleWheel}
-    />
-  </div>
-{/if}
+<div class="map-container">
+  {#if isInitializing}
+    <div class="loading-state">Initializing map...</div>
+  {:else if displayTable}
+    <DeckMap jsTable={displayTable} userGeoJSON={null} />
+  {:else if displayGeoJSON}
+    <DeckMap jsTable={null} userGeoJSON={displayGeoJSON} />
+  {:else}
+    <div class="empty-state">No data loaded</div>
+  {/if}
+</div>
 
 <style>
   .map-container {
     width: 100%;
-    height: 100%;
-    max-height: 80vh;
-    max-width: 80vw;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    height: 700px;
+    background-color: white;
+    position: relative;
   }
 
-  .placeholder-globe {
+  .loading-state,
+  .empty-state {
     width: 100%;
-    height: 100%;
-    object-fit: contain;
-    transition: transform 0.2s ease-in-out;
-    cursor: grab;
-  }
-
-  .placeholder-globe:active {
-    cursor: grabbing;
-  }
-
-  .spatial-container {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .dataset-selector {
-    padding: 1rem;
-    background: var(--cds-layer);
-    border-bottom: 1px solid var(--cds-border-subtle);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .dataset-selector label {
-    font-weight: 500;
-  }
-
-  .dataset-selector select {
-    padding: 0.5rem;
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    background: var(--cds-field);
-    color: var(--cds-text-primary);
-  }
-
-  .loading-state {
-    width: 100%;
-    height: 100%;
+    height: 700px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--cds-text-secondary);
+    background-color: white;
   }
 </style>

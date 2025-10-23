@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    createProjectActions,
+    createProjectState
+  } from '$lib/features/commons/store/create-project.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     ComposedModal,
@@ -7,13 +12,8 @@
   } from 'carbon-components-svelte';
   import { FileStorage, ShapeExclude, Upload } from 'carbon-icons-svelte';
   import CreateNewProject from './create-new-project.svelte';
-  import ProjectName from './project-name.svelte';
-  import {
-    createProjectActions,
-    createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import OpenProject from './open-project.svelte';
+  import ProjectName from './project-name.svelte';
   import ProjectTab from './project-tab.svelte';
   import TryWithExample from './try-with-example.svelte';
 
@@ -164,7 +164,6 @@
 
   #khartis-create-project :global(.bx--tile) {
     flex: 1;
-    background: linear-gradient(to bottom, white 0%, #e6142d 100%) !important;
   }
 
   @media (max-width: 1024px) {

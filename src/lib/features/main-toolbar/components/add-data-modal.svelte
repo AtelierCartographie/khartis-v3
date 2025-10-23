@@ -15,31 +15,54 @@
 
   let { open = $bindable(), addDataButton }: Props = $props();
 
-  const closeModal = () => {
+  const closeModal = async () => {
+    logger.info('Closing add data modal', LogCategory.FILE, {
+      filesCount: createProjectState.newProject.uploadedFiles.length
+    });
     open = false;
-    createProjectActions.clearAllFiles();
+    await createProjectActions.clearAllFiles(false);
   };
 
   const handleImport = async () => {
-    const newFiles = createProjectState.newProject.uploadedFiles.filter(
-      (f) => f.status === 'complete'
+    const validFiles = createProjectState.newProject.uploadedFiles.filter(
+      (f) =>
+        f.status === 'complete' &&
+        (!f.validation?.errors || f.validation.errors.length === 0)
     );
 
-    if (newFiles.length > 0 && projectStore.currentProject) {
+    if (validFiles.length === 0) {
+      logger.warn('No valid files to import', LogCategory.FILE);
+      return;
+    }
+
+    if (projectStore.currentProject) {
       try {
-        await projectStore.addFilesToProject(newFiles);
+        logger.info('Adding files to project', LogCategory.FILE, {
+          count: validFiles.length,
+          files: validFiles.map((f) => f.name)
+        });
+
+        await projectStore.addFilesToProject(validFiles);
         closeModal();
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);
       }
     } else {
-      closeModal();
+      logger.error('No current project', LogCategory.PROJECT);
     }
   };
 
-  const canImport = $derived(
+  const hasValidFiles = $derived(
     createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === 'complete'
+      (f) =>
+        f.status === 'complete' &&
+        (!f.validation?.errors || f.validation.errors.length === 0)
+    )
+  );
+
+  const hasErrors = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.validation?.errors && f.validation.errors.length > 0
     )
   );
 
@@ -48,6 +71,8 @@
       (f) => f.status === 'processing'
     )
   );
+
+  const canImport = $derived(hasValidFiles && !hasErrors && !isProcessing);
 </script>
 
 <Modal

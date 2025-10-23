@@ -85,6 +85,7 @@ export interface CreateProjectState {
     projectName: string;
     isLoading: boolean;
     error?: string;
+    validationErrors: string[];
   };
 
   openProject: {
