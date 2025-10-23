@@ -123,9 +123,17 @@ class DataOrchestratorService {
       if (file.status === 'complete' && file.parsedData) {
         try {
           await duckDBOrchestrator.processFile(file);
-          logger.info('DuckDB file reloaded on project restore', LogCategory.DUCKDB, { name: file.name });
+          logger.info(
+            'DuckDB file reloaded on project restore',
+            LogCategory.DUCKDB,
+            { name: file.name }
+          );
         } catch (error) {
-          logger.warn('Failed to reload file in DuckDB', LogCategory.DUCKDB, error);
+          logger.warn(
+            'Failed to reload file in DuckDB',
+            LogCategory.DUCKDB,
+            error
+          );
         }
       }
     }

@@ -2,8 +2,17 @@
   import {
     DataTableSkeleton,
     OverflowMenu,
-    OverflowMenuItem
+    OverflowMenuItem,
+    Search
   } from 'carbon-components-svelte';
+  import {
+    ChevronUp,
+    ChevronLeft,
+    ChevronRight,
+    Close,
+    View,
+    ViewOff
+  } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
   import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
   import type { ProcessedDataset } from '../utils/data-pipeline.utils';
@@ -11,6 +20,7 @@
   import { create_summary_plot } from '../services/duckdb/summary-plot';
   import SummaryPlot from '../services/duckdb/SummaryPlot.svelte';
   import type { AnalysisResult } from '../services/duckdb/types';
+  import ColumnRenameModal from './column-rename-modal.svelte';
 
   interface Props {
     dataset?: ProcessedDataset;
@@ -51,16 +61,22 @@
   let tableData = $state<TableRow[]>([]);
   let sortColumn = $state<string | null>(null);
   let sortOrder = $state<'ASC' | 'DESC' | null>(null);
+  let hiddenColumns = $state<Set<string>>(new Set());
+  let renameModalOpen = $state(false);
+  let columnToRename = $state<string | null>(null);
+  let searchQuery = $state('');
+  let searchResults = $state<number[]>([]);
+  let currentSearchIndex = $state(0);
 
   function createIndexArray(length: number, start = 0): number[] {
     return Array.from({ length }, (_, i) => i + start);
   }
 
-  function initializeRows(start: number) {
+  async function initializeRows(start: number) {
     const end = numRows - start;
     const length = Math.min(end, maxRows * 2);
     rows = createIndexArray(length, start);
-    loadRowsData();
+    await loadRowsData();
   }
 
   async function loadRowsData() {
@@ -124,16 +140,20 @@
       sortColumn = column;
       sortOrder = order;
     }
-    await loadRowsData();
+    startIndex = 0;
+    await initializeRows(0);
+    if (tableContainer) {
+      tableContainer.scrollTop = 0;
+    }
   }
 
-  function goToId(id: number) {
+  async function goToId(id: number) {
     if (numRows === 0 || id > numRows) return;
 
     const index = id - 1;
     if (index !== -1) {
       startIndex = Math.max(0, index - offsetRows);
-      initializeRows(startIndex);
+      await initializeRows(startIndex);
       const scrollPosition = offsetRows * rowHeight;
       if (tableContainer) {
         tableContainer.scrollTop = scrollPosition;
@@ -143,8 +163,41 @@
 
   async function renameColumn(oldName: string, newName: string) {
     if (tableName) {
+      logger.debug('Renaming column', LogCategory.UI, {
+        oldName,
+        newName,
+        currentSortColumn: sortColumn
+      });
+
       await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
+
+      if (sortColumn === oldName) {
+        sortColumn = newName;
+        logger.debug('Updated sort column after rename', LogCategory.UI, {
+          oldName,
+          newName,
+          newSortColumn: sortColumn
+        });
+      }
+
+      if (hiddenColumns.has(oldName)) {
+        hiddenColumns.delete(oldName);
+        hiddenColumns.add(newName);
+        hiddenColumns = hiddenColumns;
+        logger.debug('Updated hidden columns after rename', LogCategory.UI, {
+          oldName,
+          newName
+        });
+      }
+
       await loadColumnsInfo();
+      await initializeRows(startIndex);
+
+      logger.debug('Rename complete', LogCategory.UI, {
+        columns: columns.map((c) => c.name),
+        sortColumn,
+        sortOrder
+      });
     }
   }
 
@@ -158,9 +211,117 @@
   async function dropColumn(columnName: string) {
     if (tableName) {
       await duckDBOrchestrator.dropColumn(tableName, columnName);
+
+      if (sortColumn === columnName) {
+        sortColumn = null;
+        sortOrder = null;
+        logger.debug('Reset sort after column deletion', LogCategory.UI, {
+          columnName
+        });
+      }
+
+      if (hiddenColumns.has(columnName)) {
+        hiddenColumns.delete(columnName);
+        hiddenColumns = hiddenColumns;
+      }
+
       await loadColumnsInfo();
     }
   }
+
+  function openRenameModal(columnName: string) {
+    columnToRename = columnName;
+    renameModalOpen = true;
+  }
+
+  async function handleRename(newName: string) {
+    if (columnToRename) {
+      const oldName = columnToRename;
+      logger.debug('handleRename called', LogCategory.UI, {
+        oldName,
+        newName
+      });
+
+      await renameColumn(oldName, newName);
+
+      renameModalOpen = false;
+      columnToRename = null;
+    }
+  }
+
+  function toggleColumnVisibility(columnName: string) {
+    logger.debug('Toggle column visibility', LogCategory.UI, {
+      columnName,
+      wasHidden: hiddenColumns.has(columnName),
+      currentHiddenColumns: Array.from(hiddenColumns)
+    });
+
+    if (hiddenColumns.has(columnName)) {
+      hiddenColumns.delete(columnName);
+      logger.debug('Column shown', LogCategory.UI, { columnName });
+    } else {
+      hiddenColumns.add(columnName);
+      logger.debug('Column hidden', LogCategory.UI, { columnName });
+    }
+
+    logger.debug('Hidden columns after toggle', LogCategory.UI, {
+      hiddenColumns: Array.from(hiddenColumns),
+      visibleColumnsCount: visibleColumns.length
+    });
+  }
+
+  function performSearch() {
+    if (!searchQuery.trim()) {
+      searchResults = [];
+      currentSearchIndex = 0;
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const results: number[] = [];
+
+    tableData.forEach((row, index) => {
+      const rowIndex = rows[index];
+      const values = Object.values(row);
+      const hasMatch = values.some((value) => {
+        if (value === null || value === undefined) return false;
+        return String(value).toLowerCase().includes(query);
+      });
+      if (hasMatch) {
+        results.push(rowIndex + 1);
+      }
+    });
+
+    searchResults = results;
+    currentSearchIndex = 0;
+    if (results.length > 0) {
+      goToId(results[0]);
+    }
+  }
+
+  function goToNextSearchResult() {
+    if (searchResults.length === 0) return;
+    currentSearchIndex = (currentSearchIndex + 1) % searchResults.length;
+    goToId(searchResults[currentSearchIndex]);
+  }
+
+  function goToPreviousSearchResult() {
+    if (searchResults.length === 0) return;
+    currentSearchIndex =
+      (currentSearchIndex - 1 + searchResults.length) % searchResults.length;
+    goToId(searchResults[currentSearchIndex]);
+  }
+
+  function clearSearch() {
+    searchQuery = '';
+    searchResults = [];
+    currentSearchIndex = 0;
+  }
+
+  const visibleColumns = $derived.by(() => {
+    const hidden = Array.from(hiddenColumns);
+    return columns.filter((col) => !hidden.includes(col.name));
+  });
 
   async function loadColumnsInfo() {
     if (tableName) {
@@ -188,12 +349,30 @@
       logger.debug('Column analysis map created', LogCategory.UI, {
         size: columnAnalysis.size
       });
+
+      if (sortColumn && !columns.some((c) => c.name === sortColumn)) {
+        logger.debug('Reset sort - column not found', LogCategory.UI, {
+          sortColumn,
+          availableColumns: columns.map((c) => c.name)
+        });
+        sortColumn = null;
+        sortOrder = null;
+      }
     } else if (dataset) {
       logger.debug(
         'Loading columns from dataset (no analysis)',
         LogCategory.UI
       );
       columns = dataset.columns.filter((c) => c.name !== 'geometry');
+
+      if (sortColumn && !columns.some((c) => c.name === sortColumn)) {
+        logger.debug(
+          'Reset sort - column not found in dataset',
+          LogCategory.UI
+        );
+        sortColumn = null;
+        sortOrder = null;
+      }
     }
   }
 
@@ -240,7 +419,7 @@
         numRows = dataset.rowCount;
       }
 
-      initializeRows(startIndex);
+      await initializeRows(startIndex);
     } catch (err) {
       logger.error('Error on mount', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to initialize table';
@@ -260,17 +439,19 @@
       untrack(async () => {
         await loadColumnsInfo();
         numRows = await duckDBOrchestrator.getRowCount(tableName);
-        initializeRows(0);
+        await initializeRows(0);
       });
     }
   });
 
   $effect(() => {
     if (dataset) {
-      untrack(() => {
-        loadColumnsInfo();
+      const datasetData = dataset.data;
+      const datasetColumns = dataset.columns;
+      untrack(async () => {
+        await loadColumnsInfo();
         numRows = dataset.rowCount;
-        initializeRows(0);
+        await initializeRows(0);
       });
     }
   });
@@ -278,13 +459,74 @@
 
 <div class="advanced-data-table" bind:this={root}>
   {#if numRows > 0}
-    <div class="table-info">
-      <span class="data-count">
-        {numRows.toLocaleString('fr-FR')} lignes au total
-      </span>
-      <span class="visible-count">
-        {rows.length.toLocaleString('fr-FR')} lignes affichées
-      </span>
+    <div class="table-header">
+      <div class="table-info">
+        <span class="data-count">
+          {numRows.toLocaleString('fr-FR')} lignes au total
+        </span>
+        <span class="visible-count">
+          {rows.length.toLocaleString('fr-FR')} lignes affichées
+        </span>
+      </div>
+      <div class="search-bar">
+        <Search
+          size="sm"
+          placeholder="Rechercher dans le tableau..."
+          bind:value={searchQuery}
+          on:input={performSearch}
+          on:clear={clearSearch}
+        />
+        {#if searchResults.length > 0}
+          <div class="search-results">
+            <span class="result-count">
+              {currentSearchIndex + 1} / {searchResults.length}
+            </span>
+            <button
+              class="nav-btn"
+              onclick={goToPreviousSearchResult}
+              title="Résultat précédent"
+              aria-label="Résultat précédent"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              class="nav-btn"
+              onclick={goToNextSearchResult}
+              title="Résultat suivant"
+              aria-label="Résultat suivant"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              class="nav-btn"
+              onclick={clearSearch}
+              title="Effacer la recherche"
+              aria-label="Effacer la recherche"
+            >
+              <Close size={16} />
+            </button>
+          </div>
+        {/if}
+      </div>
+      {#if hiddenColumns.size > 0}
+        <div class="hidden-columns-info">
+          <ViewOff size={16} />
+          <span class="hidden-count">
+            {hiddenColumns.size} colonne{hiddenColumns.size > 1 ? 's' : ''}
+            masquée{hiddenColumns.size > 1 ? 's' : ''}
+          </span>
+          {#each Array.from(hiddenColumns) as hiddenCol}
+            <button
+              class="show-column-btn"
+              onclick={() => toggleColumnVisibility(hiddenCol)}
+              title={`Afficher ${hiddenCol}`}
+            >
+              <View size={16} />
+              {hiddenCol}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -304,7 +546,7 @@
       <table bind:this={tableElement}>
         <thead>
           <tr>
-            {#each columns as column}
+            {#each visibleColumns as column}
               {@const analysis = columnAnalysis.get(column.name)}
               <th>
                 <div class="col-header">
@@ -314,35 +556,48 @@
                       <div class="sort-buttons">
                         <button
                           class="sort-btn"
-                          class:active={sortColumn === column.name &&
+                          class:active-asc={sortColumn === column.name &&
                             sortOrder === 'ASC'}
-                          onclick={() => sortTable(column.name, 'ASC')}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          class="sort-btn"
-                          class:active={sortColumn === column.name &&
+                          class:active-desc={sortColumn === column.name &&
                             sortOrder === 'DESC'}
-                          onclick={() => sortTable(column.name, 'DESC')}
+                          onclick={() => {
+                            if (sortColumn === column.name) {
+                              if (sortOrder === 'ASC') {
+                                sortTable(column.name, 'DESC');
+                              } else if (sortOrder === 'DESC') {
+                                sortTable(column.name, 'ASC');
+                              }
+                            } else {
+                              sortTable(column.name, 'ASC');
+                            }
+                          }}
+                          title={sortColumn === column.name
+                            ? sortOrder === 'ASC'
+                              ? `Tri croissant sur ${column.name} - Cliquer pour tri décroissant`
+                              : `Tri décroissant sur ${column.name} - Cliquer pour tri croissant`
+                            : `Trier ${column.name}`}
+                          aria-label={sortColumn === column.name
+                            ? `Colonne ${column.name} triée par ordre ${sortOrder === 'ASC' ? 'croissant' : 'décroissant'}`
+                            : `Trier la colonne ${column.name}`}
                         >
-                          ▼
+                          <ChevronUp size={16} />
                         </button>
                       </div>
                       {#if tableName}
                         <OverflowMenu size="sm" light>
                           <OverflowMenuItem
                             text="Renommer"
-                            on:click={() =>
-                              renameColumn(column.name, `${column.name}_new`)}
+                            on:click={() => openRenameModal(column.name)}
                           />
                           <OverflowMenuItem
-                            text="Changer le type"
-                            on:click={() =>
-                              changeColumnType(column.name, 'VARCHAR')}
+                            text={hiddenColumns.has(column.name)
+                              ? 'Afficher'
+                              : 'Masquer'}
+                            on:click={() => toggleColumnVisibility(column.name)}
                           />
                           <OverflowMenuItem
                             text="Supprimer"
+                            danger
                             on:click={() => dropColumn(column.name)}
                           />
                         </OverflowMenu>
@@ -381,15 +636,21 @@
           {#if tableData.length === 0}
             {#each rows as _}
               <tr>
-                {#each columns as _}
+                {#each visibleColumns as _}
                   <td><div class="skeleton-cell"></div></td>
                 {/each}
               </tr>
             {/each}
           {:else}
             {#each tableData as row, i}
-              <tr class:highlight={highlightIds.includes(rows[i] + 1)}>
-                {#each columns as col}
+              {@const rowId = rows[i] + 1}
+              <tr
+                class:highlight={highlightIds.includes(rowId)}
+                class:search-highlight={searchResults.includes(rowId)}
+                class:search-active={searchResults.length > 0 &&
+                  searchResults[currentSearchIndex] === rowId}
+              >
+                {#each visibleColumns as col}
                   {@const value = row[col.name]}
                   {@const isNumeric =
                     col.type === 'number' ||
@@ -421,6 +682,18 @@
   {/if}
 </div>
 
+{#if columnToRename}
+  <ColumnRenameModal
+    bind:open={renameModalOpen}
+    columnName={columnToRename}
+    onClose={() => {
+      renameModalOpen = false;
+      columnToRename = null;
+    }}
+    onRename={handleRename}
+  />
+{/if}
+
 <style>
   .advanced-data-table {
     background-color: var(--cds-ui-background);
@@ -430,17 +703,122 @@
     flex-direction: column;
   }
 
+  .table-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03) 0;
+    margin-bottom: var(--cds-spacing-03);
+  }
+
   .table-info {
     display: flex;
     justify-content: space-between;
-    padding: var(--cds-spacing-03) 0;
-    margin-bottom: var(--cds-spacing-03);
     font-size: 0.875rem;
     color: var(--cds-text-02);
   }
 
   .data-count {
     font-weight: 600;
+  }
+
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .search-bar :global(.bx--search) {
+    flex: 1;
+    max-width: 400px;
+  }
+
+  .search-results {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    background-color: var(--cds-ui-02);
+    border-radius: 4px;
+  }
+
+  .result-count {
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  .nav-btn {
+    border: none;
+    background: none;
+    padding: 4px;
+    color: var(--cds-icon-02);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+  }
+
+  .nav-btn:hover {
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-icon-01);
+  }
+
+  .nav-btn:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: 2px;
+  }
+
+  .hidden-columns-info {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03);
+    background-color: var(--cds-ui-03);
+    border-radius: 4px;
+    flex-wrap: wrap;
+  }
+
+  .hidden-columns-info :global(svg) {
+    color: var(--cds-icon-02);
+  }
+
+  .hidden-count {
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 600;
+  }
+
+  .show-column-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-04);
+    border-radius: 4px;
+    color: var(--cds-text-01);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .show-column-btn:hover {
+    background-color: var(--cds-hover-ui);
+    border-color: var(--cds-interactive-01);
+  }
+
+  .show-column-btn :global(svg) {
+    color: var(--cds-icon-01);
+  }
+
+  .show-column-btn:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: 2px;
   }
 
   .table-container {
@@ -505,25 +883,59 @@
 
   .sort-buttons {
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: 4px;
   }
 
   .sort-btn {
     border: none;
     background: none;
-    padding: 2px 4px;
-    color: var(--cds-text-03);
-    font-size: 0.625rem;
+    padding: 4px;
+    color: var(--cds-icon-02);
     cursor: pointer;
-    transition: color 0.15s;
+    transition: all 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    position: relative;
+  }
+
+  .sort-btn :global(svg) {
+    transition: transform 0.2s ease-in-out;
   }
 
   .sort-btn:hover {
-    color: var(--cds-text-01);
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-icon-01);
   }
 
-  .sort-btn.active {
-    color: var(--cds-interactive-01);
+  .sort-btn.active-asc {
+    background-color: var(--cds-interactive-01);
+    color: var(--cds-text-04);
+  }
+
+  .sort-btn.active-asc :global(svg) {
+    transform: rotate(0deg);
+  }
+
+  .sort-btn.active-desc {
+    background-color: var(--cds-interactive-01);
+    color: var(--cds-text-04);
+  }
+
+  .sort-btn.active-desc :global(svg) {
+    transform: rotate(180deg);
+  }
+
+  .sort-btn.active-asc:hover,
+  .sort-btn.active-desc:hover {
+    background-color: var(--cds-hover-primary);
+  }
+
+  .sort-btn:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: 2px;
   }
 
   .summary-plot {
@@ -567,6 +979,16 @@
 
   tbody tr.highlight {
     background-color: var(--cds-support-03);
+  }
+
+  tbody tr.search-highlight {
+    background-color: var(--cds-highlight);
+  }
+
+  tbody tr.search-active {
+    background-color: var(--cds-interactive-02);
+    outline: 2px solid var(--cds-interactive-01);
+    outline-offset: -2px;
   }
 
   tbody td {

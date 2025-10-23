@@ -272,7 +272,7 @@ class DatasetsStore {
 
     logger.info(`Resetting dataset ${dataset.name}`, LogCategory.DATA);
 
-    this._state.datasets[datasetIndex] = {
+    const resetDataset = {
       ...dataset,
       columns: JSON.parse(JSON.stringify(dataset.originalData.columns)),
       data: JSON.parse(JSON.stringify(dataset.originalData.data)),
@@ -282,6 +282,12 @@ class DatasetsStore {
         transformations: []
       }
     };
+
+    this._state.datasets = [
+      ...this._state.datasets.slice(0, datasetIndex),
+      resetDataset,
+      ...this._state.datasets.slice(datasetIndex + 1)
+    ];
 
     logger.success(
       `Dataset ${dataset.name} reset to original state`,

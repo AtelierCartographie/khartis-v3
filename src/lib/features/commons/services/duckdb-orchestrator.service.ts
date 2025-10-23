@@ -353,9 +353,22 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
+    logger.debug('Renaming column in DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      oldName,
+      newName
+    });
+
     await Duck.query(
       `ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`
     );
+
+    await Duck.analyse(tableName, { force: true });
+
+    logger.success('Column renamed and cache refreshed', LogCategory.DUCKDB, {
+      tableName,
+      newName
+    });
   }
 
   async changeColumnType(
@@ -369,8 +382,26 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
+    logger.debug('Changing column type in DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      newType
+    });
+
     await Duck.query(
       `ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
+    );
+
+    await Duck.analyse(tableName, { force: true });
+
+    logger.success(
+      'Column type changed and cache refreshed',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        columnName,
+        newType
+      }
     );
   }
 
@@ -381,7 +412,19 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
+    logger.debug('Dropping column in DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      columnName
+    });
+
     await Duck.query(`ALTER TABLE ${tableName} DROP COLUMN "${columnName}"`);
+
+    await Duck.analyse(tableName, { force: true });
+
+    logger.success('Column dropped and cache refreshed', LogCategory.DUCKDB, {
+      tableName,
+      columnName
+    });
   }
 
   async runQuery(query: string): Promise<any> {
@@ -541,6 +584,94 @@ class DuckDBOrchestratorService {
       geometry: 'geometry'
     };
     return typeMap[duckType.toLowerCase()] || 'string';
+  }
+
+  async joinDataWithBasemap(
+    dataTableName: string,
+    dataColumnName: string,
+    basemapTableName: string,
+    basemapColumnName: string
+  ): Promise<string> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    try {
+      logger.info('Performing data-basemap join', LogCategory.DUCKDB);
+
+      const joinedTableName = `joined_${Date.now().toString(36)}`;
+
+      await Duck.query(`
+        CREATE TABLE ${joinedTableName} AS
+        SELECT
+          b.*,
+          d.* EXCLUDE (${dataColumnName})
+        FROM ${basemapTableName} b
+        INNER JOIN ${dataTableName} d
+        ON LOWER(TRIM(b.${basemapColumnName})) = LOWER(TRIM(d.${dataColumnName}))
+      `);
+
+      const countResult: any = await Duck.query(`
+        SELECT COUNT(*) as count FROM ${joinedTableName}
+      `);
+
+      const joinedCount =
+        countResult && Array.isArray(countResult) && countResult.length > 0
+          ? Number(countResult[0].count)
+          : 0;
+
+      logger.success(
+        `Join completed: ${joinedCount} rows in ${joinedTableName}`,
+        LogCategory.DUCKDB
+      );
+
+      return joinedTableName;
+    } catch (error) {
+      logger.error(
+        'Failed to join data with basemap',
+        LogCategory.DUCKDB,
+        error
+      );
+      throw error;
+    }
+  }
+
+  async applyJoinCorrections(
+    dataTableName: string,
+    dataColumnName: string,
+    corrections: Map<string, string>
+  ): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    try {
+      logger.info('Applying join corrections', LogCategory.DUCKDB);
+
+      for (const [dataValue, correctedValue] of corrections.entries()) {
+        await Duck.query(`
+          UPDATE ${dataTableName}
+          SET ${dataColumnName} = '${correctedValue}'
+          WHERE ${dataColumnName} = '${dataValue}'
+        `);
+      }
+
+      logger.success(
+        `Applied ${corrections.size} corrections to ${dataTableName}`,
+        LogCategory.DUCKDB
+      );
+    } catch (error) {
+      logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
+      throw error;
+    }
   }
 }
 

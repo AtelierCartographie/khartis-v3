@@ -18,24 +18,24 @@ export const EXAMPLE_CATEGORIES: ExampleCategory[] = [
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
   {
     id: 'world-population',
-    title: 'Population mondiale 2023',
+    title: 'Population Europe 2023',
     subtitle: 'Carte choroplèthe de la population par pays',
     description:
-      'Visualisation de la répartition de la population mondiale avec une palette séquentielle',
+      'Visualisation de la répartition de la population européenne avec une palette séquentielle',
     category: 'polygons',
     thumbnail: '/examples/world-population-thumb.png',
-    dataUrl: '/examples/data/world-population-2023.csv',
+    dataUrl: '/examples/data/countries-population-simple.csv',
     baseMapId: 'world-countries',
     visualizations: [
       {
         type: 'choropleth',
-        variable: 'population',
+        variable: 'Population 2023',
         classification: 'quantile',
         classes: 5,
         palette: 'Blues'
       }
     ],
-    tags: ['population', 'monde', 'choroplèthe']
+    tags: ['population', 'europe', 'choroplèthe']
   },
 
   {
@@ -62,24 +62,23 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
   },
 
   {
-    id: 'transport-network',
-    title: 'Réseau de transport',
-    subtitle: 'Flux et connexions entre villes',
+    id: 'world-countries-map',
+    title: 'Carte du monde',
+    subtitle: 'Pays du monde avec géométries',
     description:
-      'Visualisation des flux de transport avec épaisseur variable selon le trafic',
-    category: 'lines',
-    thumbnail: '/examples/transport-network-thumb.png',
-    dataUrl: '/examples/data/transport-flows.geojson',
+      'Visualisation des frontières de tous les pays du monde avec données GeoJSON',
+    category: 'polygons',
+    thumbnail: '/examples/world-countries-thumb.png',
+    dataUrl: '/examples/data/world-countries.geojson',
     visualizations: [
       {
-        type: 'flow',
-        variable: 'traffic',
-        minWidth: 1,
-        maxWidth: 10,
-        color: '#FF6B6B'
+        type: 'simple',
+        fillColor: '#4A90E2',
+        strokeColor: '#FFFFFF',
+        strokeWidth: 1
       }
     ],
-    tags: ['transport', 'flux', 'réseau']
+    tags: ['monde', 'pays', 'frontières']
   },
 
   {

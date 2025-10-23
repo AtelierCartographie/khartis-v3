@@ -14,9 +14,16 @@
     InlineNotification,
     ProgressBar,
     TextArea,
-    TextInput
+    TextInput,
+    Tile,
+    Tag
   } from 'carbon-components-svelte';
-  import { CloudDownload, Link, TrashCan } from 'carbon-icons-svelte';
+  import {
+    CloudDownload,
+    Link,
+    TrashCan,
+    DocumentBlank
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from './services/validation.service';
@@ -31,6 +38,10 @@
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
 
+  const globalValidationErrors = $derived(
+    createProjectState.newProject.validationErrors
+  );
+
   async function handleFileDrop(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
     logger.info('Files dropped', LogCategory.FILE, {
@@ -38,12 +49,7 @@
       names: files.map((f) => f.name)
     });
 
-    const validationResult =
-      CreateProjectValidationService.validateFiles(files);
-
-    if (validationResult.isValid) {
-      await createProjectActions.processFiles(files);
-    }
+    await createProjectActions.processFiles(files);
   }
 
   async function handlePasteData() {
@@ -80,9 +86,9 @@
     createProjectActions.removeUploadedFile(fileId);
   }
 
-  function handleClearAllFiles() {
+  async function handleClearAllFiles() {
     logger.info('Clearing all files', LogCategory.FILE);
-    createProjectActions.clearAllFiles();
+    await createProjectActions.clearAllFiles(true);
   }
 </script>
 
@@ -180,6 +186,16 @@
     {/if}
 
     <div class="files-section">
+      {#if globalValidationErrors.length > 0}
+        <InlineNotification
+          kind="error"
+          title="Validation errors"
+          subtitle={globalValidationErrors.join(', ')}
+          lowContrast
+          hideCloseButton
+        />
+      {/if}
+
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
           <span class="files-count">
@@ -245,38 +261,55 @@
               />
             </div>
           {:else if file.status === 'complete'}
-            <div class="file-complete-row">
-              <FileUploaderItem
-                class="w-full"
-                name={`${file.name} (${formatFileSize(file.size)})`}
-                status="complete"
-              />
-              <Button
-                size="field"
-                kind="ghost"
-                iconDescription="Remove file"
-                icon={TrashCan}
-                on:click={() => handleRemoveFile(file.id)}
-              />
-            </div>
-            {#if file.validation?.warnings && file.validation.warnings.length > 0}
-              <InlineNotification
-                lowContrast
-                kind="warning"
-                title="Warnings:"
-                subtitle={file.validation.warnings.join(', ')}
-                hideCloseButton
-              />
-            {/if}
-          {/if}
+            <Tile class="file-complete-tile">
+              <div class="file-header">
+                <div class="file-info">
+                  <DocumentBlank size={20} class="file-icon" />
+                  <div class="file-details">
+                    <div class="file-name">{file.name}</div>
+                    <div class="file-size">{formatFileSize(file.size)}</div>
+                  </div>
+                </div>
+                <Button
+                  size="small"
+                  kind="ghost"
+                  iconDescription="Remove file"
+                  icon={TrashCan}
+                  on:click={() => handleRemoveFile(file.id)}
+                />
+              </div>
 
-          {#if file.relatedFiles && file.relatedFiles.length > 0}
-            <div class="related-files">
-              <span class="related-files-label">Related files:</span>
-              <span class="related-files-list"
-                >{file.relatedFiles.join(', ')}</span
-              >
-            </div>
+              {#if file.relatedFiles && file.relatedFiles.length > 0}
+                <div class="related-files-tags">
+                  <span class="related-files-label">Related files:</span>
+                  <div class="tags-container">
+                    {#each file.relatedFiles as relatedFile}
+                      <Tag size="sm" type="gray">{relatedFile}</Tag>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              {#if file.validation?.errors && file.validation.errors.length > 0}
+                <InlineNotification
+                  lowContrast
+                  kind="error"
+                  title="Errors"
+                  subtitle={file.validation.errors.join(', ')}
+                  hideCloseButton
+                />
+              {/if}
+
+              {#if file.validation?.warnings && file.validation.warnings.length > 0}
+                <InlineNotification
+                  lowContrast
+                  kind="warning"
+                  title="Warnings"
+                  subtitle={file.validation.warnings.join(', ')}
+                  hideCloseButton
+                />
+              {/if}
+            </Tile>
           {/if}
         </div>
       {/each}
@@ -347,25 +380,74 @@
     gap: var(--cds-spacing-02);
   }
 
-  .related-files {
-    padding-left: var(--cds-spacing-05);
+  .file-complete-tile :global(.bx--tile) {
+    padding: var(--cds-spacing-04);
+    border: 1px solid var(--cds-border-subtle);
+    background: var(--cds-layer-01);
+  }
+
+  .file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-info :global(.file-icon) {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary);
+  }
+
+  .file-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-01);
+    min-width: 0;
+  }
+
+  .file-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-size {
     font-size: 0.75rem;
     color: var(--cds-text-secondary);
+  }
+
+  .related-files-tags {
+    margin-top: var(--cds-spacing-04);
     display: flex;
+    flex-direction: column;
     gap: var(--cds-spacing-02);
   }
 
   .related-files-label {
+    font-size: 0.75rem;
     font-weight: 500;
+    color: var(--cds-text-secondary);
   }
 
-  .related-files-list {
-    font-style: italic;
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cds-spacing-02);
   }
 
   .file-processing-row,
-  .file-error-row,
-  .file-complete-row {
+  .file-error-row {
     display: flex;
     align-items: flex-start;
     gap: var(--cds-spacing-03);
@@ -380,15 +462,13 @@
   }
 
   .file-processing-row :global(.bx--file__selected-file),
-  .file-error-row :global(.bx--file__selected-file),
-  .file-complete-row :global(.bx--file__selected-file) {
+  .file-error-row :global(.bx--file__selected-file) {
     max-width: none;
     width: 100%;
   }
 
   .file-processing-row :global(.bx--btn),
-  .file-error-row :global(.bx--btn),
-  .file-complete-row :global(.bx--btn) {
+  .file-error-row :global(.bx--btn) {
     flex-shrink: 0;
     min-width: auto;
   }

@@ -28,9 +28,9 @@ export class GeoColumnDetector {
     latitude: /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i,
     longitude:
       /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i,
-    country: /^(country|pays|nation|country_name|country_code|state|etat)$/i,
-    iso2: /^(iso2|iso_2|iso_alpha2|country_iso2|code_iso2|alpha2)$/i,
-    iso3: /^(iso3|iso_3|iso_alpha3|country_iso3|code_iso3|alpha3)$/i,
+    country: /^(country[\s_]?(name|code)?|pays|nation|state|etat)$/i,
+    iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
+    iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
     region:
       /^(region|province|department|departement|county|oblast|prefecture)$/i,
     city: /^(city|ville|town|commune|municipality|ciudad|stadt)$/i,

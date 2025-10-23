@@ -1,6 +1,10 @@
 import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import { logger, LogCategory } from './logger';
+import {
+  GeoColumnDetector,
+  type GeoDetectionResult
+} from './geo-detector.utils';
 
 export interface DataColumn {
   name: string;
@@ -20,6 +24,7 @@ export interface ProcessedDataset {
   columns: DataColumn[];
   rowCount: number;
   data: any[];
+  duckdbTableName?: string;
   geometry?: {
     type:
       | 'Point'
@@ -31,6 +36,7 @@ export interface ProcessedDataset {
     bounds?: [number, number, number, number];
     centroid?: [number, number];
   };
+  geoDetection?: GeoDetectionResult;
   metadata: {
     processedAt: Date;
     transformations: string[];
@@ -276,11 +282,29 @@ export async function processUploadedFile(
 
   if (file.fileType === FileType.CSV) {
     const { columns, processedData } = processTabularData(parsedData);
+
+    const headers = columns.map((c) => c.name);
+    const dataArray = processedData.map((row) =>
+      headers.map((header) => row[header])
+    );
+
+    const geoDetection = await GeoColumnDetector.detectGeoColumns(
+      headers,
+      dataArray
+    );
+
+    logger.info('Geo detection completed', LogCategory.DATA, {
+      hasGeoColumns: geoDetection.hasGeoColumns,
+      geoColumnsCount: geoDetection.geoColumns.length,
+      suggestedColumn: geoDetection.suggestedPrimaryGeoColumn?.columnName
+    });
+
     return {
       ...baseDataset,
       columns,
       rowCount: processedData.length,
       data: processedData,
+      geoDetection,
       originalData: {
         columns: JSON.parse(JSON.stringify(columns)),
         data: JSON.parse(JSON.stringify(processedData)),
