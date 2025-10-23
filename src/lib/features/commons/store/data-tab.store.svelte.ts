@@ -41,8 +41,8 @@ const DEFAULT_STATE: DataTabState = {
     correctionEnabled: false
   },
   notifications: {
-    variableTypes: true,
-    warnings: true
+    variableTypes: false,
+    warnings: false
   }
 };
 

@@ -21,13 +21,13 @@ export const globalState = $state<GlobalState>({
   projectionViewMode: 'list',
   zoom: {
     mode: ZoomMode.Map,
-    mapZoomLevel: 1,
+    mapZoomLevel: 100,
     pageZoomLevel: 100,
-    minMapZoom: 0.1,
-    maxMapZoom: 10,
+    minMapZoom: 10,
+    maxMapZoom: 1000,
     minPageZoom: 10,
     maxPageZoom: 500,
-    zoomStep: 0.2,
+    zoomStep: 10,
     pageZoomStep: 10
   }
 });
@@ -154,7 +154,7 @@ export const globalActions = {
 
   resetZoom(): void {
     if (globalState.zoom.mode === ZoomMode.Map) {
-      globalState.zoom.mapZoomLevel = 1;
+      globalState.zoom.mapZoomLevel = 100;
     } else {
       globalState.zoom.pageZoomLevel = 100;
     }

@@ -1,9 +1,5 @@
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  showError,
-  showWarning
-} from '$lib/features/commons/utils/notification.utils.svelte';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -28,7 +24,6 @@ export class CreateProjectValidationService {
         LogCategory.FILE,
         result.globalErrors
       );
-      showError('Erreur de validation globale', result.globalErrors.join(', '));
     }
 
     for (const [filename, fileResult] of result.results) {
@@ -37,10 +32,6 @@ export class CreateProjectValidationService {
           filename,
           errors: fileResult.errors
         });
-        showError(
-          `Erreur avec le fichier ${filename}`,
-          fileResult.errors.join(', ')
-        );
       }
 
       if (fileResult.warnings.length > 0) {
@@ -48,7 +39,6 @@ export class CreateProjectValidationService {
           filename,
           warnings: fileResult.warnings
         });
-        showWarning('Avertissements', fileResult.warnings.join(', '));
       }
     }
 
@@ -63,7 +53,6 @@ export class CreateProjectValidationService {
         url,
         errors: result.errors
       });
-      showError('URL invalide', result.errors.join(', '));
     }
 
     if (result.warnings.length > 0) {
@@ -71,7 +60,6 @@ export class CreateProjectValidationService {
         url,
         warnings: result.warnings
       });
-      showWarning('Avertissement URL', result.warnings.join(', '));
     }
 
     return result;
@@ -117,13 +105,11 @@ export class CreateProjectValidationService {
       }
 
       if (file.size === 0) {
-        showError('Le fichier est vide', '');
         hasErrors = true;
         continue;
       }
 
       if (file.size > 100 * 1024 * 1024) {
-        showError('Le fichier dépasse la taille limite (100MB)', '');
         hasErrors = true;
         continue;
       }
@@ -132,7 +118,7 @@ export class CreateProjectValidationService {
     }
 
     if (validFiles.length === 0 && files.length > 0 && !hasErrors) {
-      showError('Format de fichier invalide', '');
+      logger.error('No valid files', LogCategory.FILE);
     }
 
     return validFiles;

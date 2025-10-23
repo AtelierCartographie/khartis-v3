@@ -27,6 +27,9 @@ import type {
 } from './create-project.types';
 import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
+import { datasetsStore } from './datasets.store.svelte';
+import { visualizationStore } from './visualization.store.svelte';
+import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -36,7 +39,8 @@ const DEFAULT_STATE: CreateProjectState = {
     pastedData: '',
     onlineFileUrl: '',
     projectName: '',
-    isLoading: false
+    isLoading: false,
+    validationErrors: []
   },
 
   openProject: {
@@ -96,9 +100,8 @@ export const createProjectActions = {
     const validationResult =
       CreateProjectValidationService.validateFiles(files);
 
-    if (!validationResult.isValid) {
-      return;
-    }
+    createProjectState.newProject.validationErrors =
+      validationResult.globalErrors;
 
     const fileGroups = groupShapefiles(files);
     const duplicates: string[] = [];
@@ -113,6 +116,61 @@ export const createProjectActions = {
       } else {
         toProcess.set(baseName, groupFiles);
       }
+    }
+
+    if (!validationResult.isValid) {
+      for (const [baseName, groupFiles] of toProcess) {
+        const mainFile =
+          groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
+        const mainFileName = mainFile.name;
+        const fileValidation = validationResult.results.get(mainFileName);
+
+        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
+          err.includes(`Shapefile "${baseName}"`)
+        );
+
+        const errors: string[] = [];
+        const warnings: string[] = [];
+
+        if (fileValidation) {
+          errors.push(...fileValidation.errors);
+          warnings.push(...fileValidation.warnings);
+        }
+
+        if (shapefileGlobalError) {
+          errors.push(
+            shapefileGlobalError.replace(
+              `Shapefile "${baseName}" incomplet. `,
+              ''
+            )
+          );
+        }
+
+        if (errors.length > 0 || warnings.length > 0) {
+          const errorFile: UploadedFile = {
+            id: crypto.randomUUID(),
+            name: mainFileName,
+            size: mainFile.size,
+            status: 'error',
+            uploadProgress: 100,
+            type: mainFile.type,
+            fileType: mainFile.name.endsWith('.shp')
+              ? FileType.SHAPEFILE
+              : FileType.UNKNOWN,
+            sourceType: DataSourceType.FILE_UPLOAD,
+            relatedFiles: groupFiles
+              .filter((f) => f !== mainFile)
+              .map((f) => f.name),
+            validation: {
+              isValid: errors.length === 0,
+              errors,
+              warnings
+            }
+          };
+          this.addUploadedFile(errorFile);
+        }
+      }
+      return;
     }
 
     if (duplicates.length > 0) {
@@ -393,10 +451,32 @@ export const createProjectActions = {
     }
   },
 
-  clearAllFiles(): void {
+  async clearAllFiles(saveProject: boolean = false): Promise<void> {
+    logger.info('clearAllFiles called', LogCategory.FILE, {
+      uploadedFilesCount: createProjectState.newProject.uploadedFiles.length,
+      hasCurrentProject: !!projectStore.currentProject,
+      projectId: projectStore.currentProject?.id,
+      saveProject
+    });
+
     createProjectState.newProject.uploadedFiles = [];
+    createProjectState.newProject.validationErrors = [];
 
     globalActions.clearAllDataButtons();
+
+    datasetsStore.clear();
+    visualizationStore.clear();
+    await duckDBOrchestrator.clear();
+
+    if (saveProject && projectStore.currentProject?.id && projectStore.currentProject.data) {
+      logger.info('Clearing and saving project sourceFiles', LogCategory.FILE, {
+        projectId: projectStore.currentProject.id
+      });
+
+      projectStore.currentProject.data.sourceFiles = [];
+      projectStore.markAsDirty();
+      await projectStore.saveCurrentProject();
+    }
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {

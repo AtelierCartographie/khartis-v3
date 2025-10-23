@@ -12,11 +12,6 @@
     justify-content: center;
     align-items: center;
     flex: 1;
-  }
-
-  article {
-    position: relative;
     background-color: white;
-    padding: 40px;
   }
 </style>

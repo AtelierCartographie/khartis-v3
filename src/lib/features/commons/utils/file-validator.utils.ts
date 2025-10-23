@@ -294,11 +294,6 @@ export class FileValidator {
         if (ext === 'shp' && file.size < 100) {
           result.warnings.push('Fichier SHP suspicieusement petit');
         }
-        if (ext === 'shp' || ext === 'dbf') {
-          result.warnings.push(
-            `Assurez-vous d'importer tous les fichiers du Shapefile (.shp, .shx, .dbf minimum)`
-          );
-        }
         break;
 
       case FileType.GEOPACKAGE:

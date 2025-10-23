@@ -1,4 +1,4 @@
-# Khartis v3 - Copilot Instructions
+# Khartis v3 - GitHub Copilot Instructions
 
 ## Project Overview
 

@@ -1,31 +1,31 @@
-city,country,latitude,longitude,population,capital
-Paris,France,48.8566,2.3522,2161000,true
-Berlin,Germany,52.5200,13.4050,3748000,true
-Madrid,Spain,40.4168,-3.7038,3223000,true
-Rome,Italy,41.9028,12.4964,2873000,true
-Vienna,Austria,48.2082,16.3738,1897000,true
-Hamburg,Germany,53.5511,9.9937,1841000,false
-Warsaw,Poland,52.2297,21.0122,1790000,true
-Barcelona,Spain,41.3851,2.1734,1620000,false
-Munich,Germany,48.1351,11.5820,1472000,false
-Milan,Italy,45.4642,9.1900,1366000,false
-Prague,Czech Republic,50.0755,14.4378,1309000,true
-Sofia,Bulgaria,42.6977,23.3219,1260000,true
-Brussels,Belgium,50.8503,4.3517,1175000,true
-Amsterdam,Netherlands,52.3702,4.8952,1132000,true
-Stockholm,Sweden,59.3293,18.0686,962000,true
-Marseille,France,43.2965,5.3698,861000,false
-Zagreb,Croatia,45.8150,15.9819,790000,true
-Athens,Greece,37.9838,23.7275,745000,true
-Valencia,Spain,39.4699,-0.3763,791000,false
-Kraków,Poland,50.0647,19.9450,766000,false
-Frankfurt,Germany,50.1109,8.6821,732000,false
-Lisbon,Portugal,38.7223,-9.1393,544000,true
-Copenhagen,Denmark,55.6761,12.5683,602000,true
-Dublin,Ireland,53.3498,-6.2603,544000,true
-Helsinki,Finland,60.1695,24.9355,631000,true
-Oslo,Norway,59.9139,10.7522,681000,true
-Tallinn,Estonia,59.4370,24.7535,434000,true
-Riga,Latvia,56.9496,24.1052,632000,true
-Vilnius,Lithuania,54.6872,25.2797,542000,true
-Ljubljana,Slovenia,46.0569,14.5058,279000,true
+city,lat,lng,country,population
+Paris,48.8667,2.3333,France,9904000
+London,51.5,-0.1167,United Kingdom,8567000
+Madrid,40.4,-3.6834,Spain,5567000
+Barcelona,41.3833,2.1834,Spain,4920000
+Berlin,52.5218,13.4015,Germany,3406000
+Rome,41.896,12.4833,Italy,3339000
+Athens,37.9833,23.7333,Greece,3242000
+Milan,45.47,9.205,Italy,2945000
+Stuttgart,48.78,9.2,Germany,2944700
+Frankfurt,50.1,8.675,Germany,2895000
+Lisbon,38.7227,-9.1449,Portugal,2812000
+Katowice,50.2604,19.02,Poland,2746000
+Vienna,48.2,16.3666,Austria,2400000
+Mannheim,49.5004,8.47,Germany,2362000
+Birmingham,52.475,-1.92,United Kingdom,2285000
+Naples,40.84,14.245,Italy,2250000
+Manchester,53.5004,-2.248,United Kingdom,2230000
+Bucharest,44.4334,26.0999,Romania,1942000
+Hamburg,53.55,10,Germany,1757000
+Brussels,50.8333,4.3333,Belgium,1743000
+Essen,51.45,7.0166,Germany,1742135
+Warsaw,52.25,21,Poland,1707000
+Budapest,47.5,19.0833,Hungary,1679000
+Turin,45.0704,7.67,Italy,1652000
+Leeds,53.83,-1.58,United Kingdom,1529000
+Florence,43.78,11.25,Italy,1500000
+Lyon,45.77,4.83,France,1423000
+The Hague,52.08,4.27,Netherlands,1406000
+Marseille,43.29,5.375,France,1400000
+Porto,41.15,-8.62,Portugal,1337000

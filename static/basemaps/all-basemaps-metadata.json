@@ -1,0 +1,126 @@
+[
+  {
+    "file": "world-countries-50m",
+    "title": "World > countries",
+    "description": "Natural Earth 50m admin 0 countries",
+    "source": "Natural Earth",
+    "date": "2024",
+    "bbox": [-180, -90, 180, 90],
+    "projection": "WGS84",
+    "layers": []
+  },
+  {
+    "file": "nuts2-europe-2021",
+    "title": "Europe > NUTS 2 regions",
+    "description": "NUTS level 2 regions (basic regions for the application of regional policies) - 2021 classification",
+    "source": "Eurostat GISCO",
+    "date": "2021",
+    "bbox": [-31.27, 27.64, 44.82, 71.19],
+    "projection": "WGS84",
+    "layers": []
+  },
+  {
+    "file": "france-canton-2025",
+    "title": "France > cantons",
+    "description": "Fond de carte des cantons français issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
+    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
+    "date": "2025",
+    "bbox": [-5.52, 40.98, 10.7, 50.85],
+    "projection": "Lambert-93",
+    "layers": [
+      {
+        "title": "Centroids des cantons",
+        "type": "centroid",
+        "file": "france-canton-centroids-2025"
+      },
+      {
+        "title": "Limites des cantons",
+        "type": "limit",
+        "file": "france-canton-limites-2025"
+      },
+      {
+        "title": "Limites des départements",
+        "type": "limit",
+        "file": "france-departement-limites-2025"
+      },
+      {
+        "title": "Limites des régions",
+        "type": "limit",
+        "file": "france-region-limites-2025"
+      }
+    ]
+  },
+  {
+    "file": "france-commune-2025",
+    "title": "France > communes",
+    "description": "Fond de carte des communes françaises compatible COG 2025",
+    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
+    "date": "2025",
+    "bbox": [-5.52, 40.98, 10.7, 50.85],
+    "projection": "Lambert-93",
+    "layers": [
+      {
+        "title": "Chefs-lieux des communes",
+        "type": "centroid",
+        "file": "france-commune-centroids-2025"
+      },
+      {
+        "title": "Limites des départements",
+        "type": "limit",
+        "file": "france-departement-limites-2025"
+      },
+      {
+        "title": "Limites des régions",
+        "type": "limit",
+        "file": "france-region-limites-2025"
+      }
+    ]
+  },
+  {
+    "file": "france-departement-2025",
+    "title": "France > départements",
+    "description": "Fond de carte des départements français issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
+    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
+    "date": "2025",
+    "bbox": [-5.52, 40.98, 10.7, 50.85],
+    "projection": "Lambert-93",
+    "layers": [
+      {
+        "title": "Centroids des départements",
+        "type": "centroid",
+        "file": "france-departement-centroids-2025"
+      },
+      {
+        "title": "Limites des départements",
+        "type": "limit",
+        "file": "france-departement-limites-2025"
+      },
+      {
+        "title": "Limites des régions",
+        "type": "limit",
+        "file": "france-region-limites-2025"
+      }
+    ]
+  },
+  {
+    "file": "france-region-2025",
+    "title": "France > régions",
+    "description": "Fond de carte des régions françaises issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
+    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
+    "date": "2025",
+    "bbox": [-5.52, 40.98, 10.7, 50.85],
+    "projection": "Lambert-93",
+    "layers": [
+      {
+        "title": "Centroids des régions",
+        "type": "centroid",
+        "file": "france-region-centroids-2025"
+      },
+      {
+        "title": "Limites des régions",
+        "type": "limit",
+        "file": "france-region-limites-2025"
+      }
+    ]
+  }
+]

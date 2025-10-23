@@ -2,12 +2,18 @@
   import { m } from '$lib/paraglide/messages.js';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import {
     exportProjectData,
     exportProcessedDatasets,
     downloadFile,
     generateExportFilename
   } from '$lib/features/commons/utils/file-export.utils';
+  import {
+    exportMapToSvg,
+    exportMapToJpg
+  } from '$lib/features/commons/utils/map-export.utils';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import {
@@ -64,11 +70,71 @@
           break;
 
         case 1:
-          logger.warn('Map export not yet implemented', LogCategory.EXPORT);
-          showError(
-            m.export_map_error(),
-            m.export_map_feature_in_development()
-          );
+          if (!mapInstanceStore.isMapLoaded) {
+            logger.error('Map not loaded for export', LogCategory.EXPORT);
+            showError(m.export_map_error(), m.export_map_not_loaded());
+            break;
+          }
+
+          if (datasetsStore.datasets.length === 0) {
+            logger.error('No data to export', LogCategory.EXPORT);
+            showError(m.export_map_error(), m.export_map_no_data());
+            break;
+          }
+
+          logger.info('Exporting map', LogCategory.EXPORT, {
+            format: selectedMapFormat,
+            fileName: exportFileName,
+            datasetsCount: datasetsStore.datasets.length,
+            visualizationsCount: visualizationStore.activeVisualizations.length
+          });
+
+          try {
+            let blob: Blob;
+
+            if (selectedMapFormat === 'svg') {
+              blob = exportMapToSvg(
+                datasetsStore.datasets,
+                visualizationStore.activeVisualizations
+              );
+              const filename = generateExportFilename(exportFileName, 'svg');
+              downloadFile(blob, filename);
+              logger.success(
+                'SVG map exported successfully',
+                LogCategory.EXPORT,
+                {
+                  filename
+                }
+              );
+            } else if (selectedMapFormat === 'jpg') {
+              blob = await exportMapToJpg(
+                datasetsStore.datasets,
+                visualizationStore.activeVisualizations
+              );
+              const filename = generateExportFilename(exportFileName, 'jpg');
+              downloadFile(blob, filename);
+              logger.success(
+                'JPG map exported successfully',
+                LogCategory.EXPORT,
+                {
+                  filename
+                }
+              );
+            }
+          } catch (mapExportError) {
+            logger.error(
+              'Map export failed',
+              LogCategory.EXPORT,
+              mapExportError
+            );
+            showError(
+              m.export_map_error(),
+              mapExportError instanceof Error
+                ? mapExportError.message
+                : m.export_unknown_error()
+            );
+            break;
+          }
           break;
 
         case 2:

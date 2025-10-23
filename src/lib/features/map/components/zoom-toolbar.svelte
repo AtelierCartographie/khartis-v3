@@ -54,7 +54,7 @@
 
   const displayValue = $derived(
     globalState.zoom.mode === ZoomMode.Map
-      ? globalState.zoom.mapZoomLevel.toString()
+      ? `${Math.round(globalState.zoom.mapZoomLevel)} %`
       : `${globalState.zoom.pageZoomLevel} %`
   );
 </script>
