@@ -48,14 +48,19 @@ class Logger {
     switch (level) {
       case LogLevel.ERROR:
         return '🔴';
+
       case LogLevel.WARN:
         return '⚠️';
+
       case LogLevel.INFO:
         return '🔵';
+
       case LogLevel.DEBUG:
         return '🔍';
+
       case LogLevel.SUCCESS:
         return '✅';
+
       default:
         return '📝';
     }
@@ -65,14 +70,19 @@ class Logger {
     switch (level) {
       case LogLevel.ERROR:
         return 'color: #ff0000; font-weight: bold';
+
       case LogLevel.WARN:
         return 'color: #ff9800; font-weight: bold';
+
       case LogLevel.INFO:
         return 'color: #2196f3';
+
       case LogLevel.DEBUG:
         return 'color: #9e9e9e';
+
       case LogLevel.SUCCESS:
         return 'color: #4caf50; font-weight: bold';
+
       default:
         return 'color: #000000';
     }

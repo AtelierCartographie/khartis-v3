@@ -9,12 +9,16 @@
     switch (type) {
       case NotificationType.SUCCESS:
         return 'success';
+
       case NotificationType.ERROR:
         return 'error';
+
       case NotificationType.WARNING:
         return 'warning';
+
       case NotificationType.INFO:
         return 'info';
+
       default:
         return 'info';
     }

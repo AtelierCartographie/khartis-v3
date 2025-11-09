@@ -5,6 +5,14 @@ import type { ProcessedDataset } from '../utils/data-pipeline.utils';
 import { showError } from '../utils/notification.utils.svelte';
 import { logger, LogCategory } from '../utils/logger';
 
+export enum RefineOperation {
+  UPPERCASE = 'uppercase',
+  LOWERCASE = 'lowercase',
+  TITLECASE = 'titlecase',
+  TRIM = 'trim',
+  TRIM_ALL = 'trim_all'
+}
+
 export interface DuckDBDataset {
   id: string;
   tableName: string;
@@ -20,7 +28,9 @@ export interface DuckDBDataset {
 
 class DuckDBOrchestratorService {
   private initialized = false;
+
   private datasets = new Map<string, DuckDBDataset>();
+
   private currentTableName: string | null = null;
 
   async initialize(): Promise<void> {
@@ -71,11 +81,11 @@ class DuckDBOrchestratorService {
       }
 
       return null;
-    } catch (error) {
-      logger.error('Error processing file', LogCategory.DUCKDB, error);
+    } catch (_error) {
+      logger.error('Error processing file', LogCategory.DUCKDB, _error);
       showError(
         'Failed to process file',
-        error instanceof Error ? error.message : 'Unknown error'
+        _error instanceof Error ? _error.message : 'Unknown error'
       );
       return null;
     }
@@ -281,8 +291,8 @@ class DuckDBOrchestratorService {
         });
         return data;
       }
-    } catch (error) {
-      logger.error('Error getting table data', LogCategory.DUCKDB, error);
+    } catch (_error) {
+      logger.error('Error getting table data', LogCategory.DUCKDB, _error);
       return { numRows: 0, get: () => ({}) };
     }
   }
@@ -296,8 +306,8 @@ class DuckDBOrchestratorService {
 
     try {
       return await Duck.get_row_count(tableName);
-    } catch (error) {
-      logger.error('Error getting row count', LogCategory.DUCKDB, error);
+    } catch (_error) {
+      logger.error('Error getting row count', LogCategory.DUCKDB, _error);
       const result: any = await Duck.query(
         `SELECT COUNT(*) as count FROM ${tableName}`
       );
@@ -427,6 +437,88 @@ class DuckDBOrchestratorService {
     });
   }
 
+  async refineColumn(
+    tableName: string,
+    columnName: string,
+    operation: RefineOperation
+  ): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    logger.debug('Refining column in DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      operation
+    });
+
+    const operations: Record<RefineOperation, string> = {
+      [RefineOperation.UPPERCASE]: `UPDATE ${tableName} SET "${columnName}" = UPPER("${columnName}")`,
+      [RefineOperation.LOWERCASE]: `UPDATE ${tableName} SET "${columnName}" = LOWER("${columnName}")`,
+      [RefineOperation.TITLECASE]: `UPDATE ${tableName} SET "${columnName}" = INITCAP("${columnName}")`,
+      [RefineOperation.TRIM]: `UPDATE ${tableName} SET "${columnName}" = TRIM("${columnName}")`,
+      [RefineOperation.TRIM_ALL]: `UPDATE ${tableName} SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
+    };
+
+    await Duck.query(operations[operation]);
+
+    await Duck.analyse(tableName, { force: true });
+
+    logger.success('Column refined and cache refreshed', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      operation
+    });
+  }
+
+  async replaceInColumn(
+    tableName: string,
+    columnName: string,
+    searchValue: string,
+    replaceValue: string
+  ): Promise<number> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new Error('DuckDB not initialized');
+
+    logger.debug('Replacing in column', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      searchValue,
+      replaceValue
+    });
+
+    const countResult = await Duck.query(
+      `SELECT COUNT(*) as count FROM ${tableName} WHERE "${columnName}"::TEXT LIKE '%${searchValue}%'`
+    );
+
+    const count = (countResult as any).get(0)?.count || 0;
+
+    if (count > 0) {
+      await Duck.query(
+        `UPDATE ${tableName} SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${searchValue}', '${replaceValue}')`
+      );
+
+      await Duck.analyse(tableName, { force: true });
+
+      logger.success(
+        'Values replaced and cache refreshed',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          columnName,
+          count
+        }
+      );
+    }
+
+    return count;
+  }
+
   async runQuery(query: string): Promise<any> {
     if (!this.initialized) {
       await this.initialize();
@@ -478,7 +570,7 @@ class DuckDBOrchestratorService {
       if (this.currentTableName === tableName) {
         this.currentTableName = null;
       }
-    } catch (error) {}
+    } catch (_error) {}
   }
 
   async clear(): Promise<void> {
@@ -525,8 +617,8 @@ class DuckDBOrchestratorService {
           firstRow: data[0]
         });
       }
-    } catch (error) {
-      logger.error('Error loading data', LogCategory.DUCKDB, error);
+    } catch (_error) {
+      logger.error('Error loading data', LogCategory.DUCKDB, _error);
       data = [];
     }
 
@@ -630,13 +722,13 @@ class DuckDBOrchestratorService {
       );
 
       return joinedTableName;
-    } catch (error) {
+    } catch (_error) {
       logger.error(
         'Failed to join data with basemap',
         LogCategory.DUCKDB,
-        error
+        _error
       );
-      throw error;
+      throw _error;
     }
   }
 
@@ -668,9 +760,9 @@ class DuckDBOrchestratorService {
         `Applied ${corrections.size} corrections to ${dataTableName}`,
         LogCategory.DUCKDB
       );
-    } catch (error) {
-      logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
-      throw error;
+    } catch (_error) {
+      logger.error('Failed to apply corrections', LogCategory.DUCKDB, _error);
+      throw _error;
     }
   }
 }

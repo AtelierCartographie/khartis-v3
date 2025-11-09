@@ -94,8 +94,10 @@
     switch (type) {
       case 'date':
         return new Date(value).toLocaleDateString();
+
       case 'numeric':
         return typeof value === 'number' ? value.toLocaleString() : value;
+
       default:
         return String(value);
     }

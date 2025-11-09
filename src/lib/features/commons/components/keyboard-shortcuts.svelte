@@ -50,15 +50,19 @@
     function handleZoomKey(key: string): boolean {
       switch (key) {
         case '+':
+
         case '=':
           globalActions.zoomIn();
           return true;
+
         case '-':
           globalActions.zoomOut();
           return true;
+
         case '0':
           globalActions.resetZoom();
           return true;
+
         default:
           return false;
       }

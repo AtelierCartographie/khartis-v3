@@ -455,5 +455,10 @@
   "source": "Source",
   "date": "Date",
   "projection": "Projection",
-  "loading_basemap_suggestions": "Chargement des suggestions de fonds de carte..."
+  "loading_basemap_suggestions": "Chargement des suggestions de fonds de carte...",
+  "pwa_update_title": "Mise à jour disponible",
+  "pwa_update_subtitle": "Une nouvelle version de Khartis est disponible",
+  "pwa_update_action": "Recharger pour mettre à jour",
+  "pwa_offline_ready_title": "Prêt pour une utilisation hors ligne",
+  "pwa_offline_ready_subtitle": "Khartis peut maintenant fonctionner hors ligne"
 }

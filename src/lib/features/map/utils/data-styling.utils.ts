@@ -35,10 +35,12 @@ export function getSizeForValue(
   switch (scale) {
     case 'sqrt':
       return minSize + Math.sqrt(normalized) * (maxSize - minSize);
+
     case 'log':
       return (
         minSize + (Math.log1p(normalized) / Math.log1p(1)) * (maxSize - minSize)
       );
+
     default:
       return minSize + normalized * (maxSize - minSize);
   }

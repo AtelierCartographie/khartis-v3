@@ -72,6 +72,7 @@ async function instantiateDuckDb(): Promise<AsyncDuckDB> {
 
 class DuckDBManager {
   private static instance: DuckDBManager;
+
   private registeredFiles = new Set<string>();
 
   static getInstance(): DuckDBManager {

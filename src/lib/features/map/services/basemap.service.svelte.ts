@@ -18,7 +18,9 @@ interface LoadedBasemap {
 
 class BasemapService {
   private _availableBasemaps: BasemapMetadata[] = [];
+
   private _currentBasemap: LoadedBasemap | null = null;
+
   private _attributesLoaded = false;
 
   async initialize(): Promise<void> {

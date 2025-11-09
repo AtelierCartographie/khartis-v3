@@ -36,24 +36,24 @@ export default ts.config(
           next: ['const', 'let', 'var', 'function', 'class']
         }
       ],
-      'lines-between-class-members': ['error', 'always'],
-      '@typescript-eslint/padding-line-between-statements': [
-        'error',
-        { blankLine: 'always', prev: 'interface', next: '*' },
-        { blankLine: 'always', prev: '*', next: 'interface' },
-        { blankLine: 'always', prev: 'type', next: '*' },
-        { blankLine: 'always', prev: '*', next: 'type' }
-      ]
+      'lines-between-class-members': ['error', 'always']
     }
   },
   {
-    files: ['***.svelte.ts', '**/*.svelte.js'],
+    files: ['**/*.svelte'],
     languageOptions: {
       parserOptions: {
-        projectService: true,
-        extraFileExtensions: ['.svelte'],
         parser: ts.parser,
+        extraFileExtensions: ['.svelte'],
         svelteConfig
+      }
+    }
+  },
+  {
+    files: ['**/*.svelte.ts', '**/*.svelte.js'],
+    languageOptions: {
+      parserOptions: {
+        parser: ts.parser
       }
     }
   }

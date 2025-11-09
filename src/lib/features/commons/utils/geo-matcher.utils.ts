@@ -22,7 +22,9 @@ export interface CatalogueInfo {
 
 export class GeoMatcher {
   private static catalogueCache = new Map<string, CatalogueInfo>();
+
   private static readonly MIN_FUZZY_SIMILARITY = 0.7;
+
   private static readonly MAX_FUZZY_SUGGESTIONS = 3;
 
   static async validateAgainstCatalogue(
@@ -44,7 +46,6 @@ export class GeoMatcher {
       values,
       options.caseSensitive
     );
-    const uniqueValues = new Set(normalizedValues.map((v) => v.normalized));
 
     const result: MatchResult = {
       matched: [],
@@ -56,7 +57,7 @@ export class GeoMatcher {
     };
 
     const valueCounts = new Map<string, number>();
-    normalizedValues.forEach(({ original, normalized }) => {
+    normalizedValues.forEach(({ normalized }) => {
       valueCounts.set(normalized, (valueCounts.get(normalized) || 0) + 1);
     });
 
@@ -241,7 +242,7 @@ export class GeoMatcher {
 
   private static calculateConfidence(
     result: MatchResult,
-    catalogue: CatalogueInfo
+    _catalogue: CatalogueInfo
   ): number {
     let confidence = result.matchRate;
 

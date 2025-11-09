@@ -59,12 +59,16 @@ export class FileProcessorService {
   private getProcessor(fileType: FileType): FileProcessor {
     switch (fileType) {
       case FileType.CSV:
+
       case FileType.TSV:
         return new CsvProcessor(this.callbacks);
+
       case FileType.GEOJSON:
         return new GeoJsonProcessor(this.callbacks);
+
       case FileType.GEOPACKAGE:
         return new GeoPackageProcessor(this.callbacks);
+
       default:
         return new GenericProcessor(this.callbacks);
     }
@@ -73,6 +77,7 @@ export class FileProcessorService {
 
 abstract class FileProcessor {
   constructor(protected callbacks: ProcessingCallbacks) {}
+
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
 
   protected async validateAsync(

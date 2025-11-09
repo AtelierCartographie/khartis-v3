@@ -2,175 +2,233 @@ import {
   ToolbarState,
   ToolbarStep,
   ZoomMode,
+  StylingTools,
+  VisualizationTools,
   type GlobalState,
   type ProjectionFilterId,
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
 import { datasetsStore } from './datasets.store.svelte';
+import { projectStore } from './project.store.svelte';
 
-export const globalState = $state<GlobalState>({
-  settingPanel: false,
-  mainPanel: true,
-  isSideNavOpen: false,
-  isCreateProjectModalOpen: false,
-  selectedStep: ToolbarStep.Data,
-  selectedTool: undefined,
-  toolbarState: ToolbarState.Full,
-  dataButtons: [],
-  projectionFilter: 'all',
-  projectionViewMode: 'list',
-  zoom: {
-    mode: ZoomMode.Map,
-    mapZoomLevel: 100,
-    pageZoomLevel: 100,
-    minMapZoom: 10,
-    maxMapZoom: 1000,
-    minPageZoom: 10,
-    maxPageZoom: 500,
-    zoomStep: 10,
-    pageZoomStep: 10
+class GlobalStore {
+  private _state = $state<GlobalState>({
+    settingPanel: false,
+    mainPanel: true,
+    isSideNavOpen: false,
+    isCreateProjectModalOpen: false,
+    selectedStep: ToolbarStep.Data,
+    selectedTool: undefined,
+    toolbarState: ToolbarState.Full,
+    projectionFilter: 'all',
+    projectionViewMode: 'list',
+    zoom: {
+      mode: ZoomMode.Map,
+      mapZoomLevel: 100,
+      pageZoomLevel: 100,
+      minMapZoom: 10,
+      maxMapZoom: 1000,
+      minPageZoom: 10,
+      maxPageZoom: 500,
+      zoomStep: 10,
+      pageZoomStep: 10
+    }
+  });
+
+  private _selectedDataButtonId = $state<string | undefined>(undefined);
+
+  dataButtons = $derived.by(() => {
+    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+
+    return sourceFiles.map((file) => ({
+      id: file.id,
+      label: file.name,
+      isSelected:
+        file.id === this._selectedDataButtonId ||
+        (sourceFiles.length === 1 && !this._selectedDataButtonId)
+    }));
+  });
+
+  get settingPanel() {
+    return this._state.settingPanel;
   }
-});
 
-export const globalActions = {
+  set settingPanel(value: boolean) {
+    this._state.settingPanel = value;
+  }
+
+  get mainPanel() {
+    return this._state.mainPanel;
+  }
+
+  set mainPanel(value: boolean) {
+    this._state.mainPanel = value;
+  }
+
+  get isSideNavOpen() {
+    return this._state.isSideNavOpen;
+  }
+
+  set isSideNavOpen(value: boolean) {
+    this._state.isSideNavOpen = value;
+  }
+
+  get isCreateProjectModalOpen() {
+    return this._state.isCreateProjectModalOpen;
+  }
+
+  set isCreateProjectModalOpen(value: boolean) {
+    this._state.isCreateProjectModalOpen = value;
+  }
+
+  get selectedStep() {
+    return this._state.selectedStep;
+  }
+
+  set selectedStep(value: ToolbarStep) {
+    this._state.selectedStep = value;
+  }
+
+  get selectedTool() {
+    return this._state.selectedTool;
+  }
+
+  set selectedTool(value: StylingTools | VisualizationTools | undefined) {
+    this._state.selectedTool = value;
+  }
+
+  get toolbarState() {
+    return this._state.toolbarState;
+  }
+
+  set toolbarState(value: ToolbarState) {
+    this._state.toolbarState = value;
+  }
+
+  get projectionFilter(): ProjectionFilterId | undefined {
+    return this._state.projectionFilter;
+  }
+
+  set projectionFilter(value: ProjectionFilterId | undefined) {
+    this._state.projectionFilter = value;
+  }
+
+  get projectionViewMode(): ProjectionViewMode | undefined {
+    return this._state.projectionViewMode;
+  }
+
+  set projectionViewMode(value: ProjectionViewMode | undefined) {
+    this._state.projectionViewMode = value;
+  }
+
+  get zoom() {
+    return this._state.zoom;
+  }
+
   setNavigationState(selectedStep: ToolbarStep): void {
-    globalState.selectedStep = selectedStep;
+    this.selectedStep = selectedStep;
 
     if (selectedStep === ToolbarStep.Styling)
-      globalState.toolbarState = ToolbarState.Collapsed;
-    else if (globalState.toolbarState === ToolbarState.Collapsed)
-      globalState.toolbarState = ToolbarState.Full;
-  },
+      this.toolbarState = ToolbarState.Collapsed;
+    else if (this.toolbarState === ToolbarState.Collapsed)
+      this.toolbarState = ToolbarState.Full;
+  }
 
   setToolbarState(state: ToolbarState): void {
-    globalState.toolbarState = state;
-  },
+    this.toolbarState = state;
+  }
 
   selectDataButton(id: string): void {
-    const currentSelected = globalState.dataButtons.find((b) => b.isSelected);
-    if (currentSelected?.id === id) return;
-
-    globalState.dataButtons.forEach((button) => {
-      button.isSelected = button.id === id;
-    });
+    if (this._selectedDataButtonId === id) return;
+    this._selectedDataButtonId = id;
 
     const dataset = datasetsStore.getDatasetBySourceFile(id);
     if (dataset) {
       datasetsStore.selectDataset(dataset.id);
     }
-  },
-
-  addDataButtonForFile(
-    fileId: string,
-    fileName: string,
-    autoSelect: boolean = true
-  ): void {
-    const existingTab = globalState.dataButtons.find(
-      (btn) => btn.id === fileId
-    );
-    if (existingTab) {
-      if (autoSelect) {
-        globalState.dataButtons.forEach((button) => {
-          button.isSelected = button.id === fileId;
-        });
-      }
-      return;
-    }
-
-    if (autoSelect) {
-      globalState.dataButtons.forEach((button) => {
-        button.isSelected = false;
-      });
-    }
-
-    globalState.dataButtons.push({
-      id: fileId,
-      label: fileName,
-      isSelected: autoSelect
-    });
-  },
-
-  removeDataButton(fileId: string): void {
-    const index = globalState.dataButtons.findIndex((btn) => btn.id === fileId);
-    if (index > -1) {
-      globalState.dataButtons.splice(index, 1);
-
-      if (
-        globalState.dataButtons.length > 0 &&
-        !globalState.dataButtons.some((btn) => btn.isSelected)
-      ) {
-        globalState.dataButtons[0].isSelected = true;
-      }
-    }
-  },
-
-  clearAllDataButtons(): void {
-    globalState.dataButtons = [];
-  },
+  }
 
   setProjectionFilter(id: ProjectionFilterId): void {
-    globalState.projectionFilter = id;
-  },
+    this.projectionFilter = id;
+  }
 
   setProjectionViewMode(mode: ProjectionViewMode): void {
-    globalState.projectionViewMode = mode;
-  },
+    this.projectionViewMode = mode;
+  }
 
   setZoomMode(mode: ZoomMode): void {
-    globalState.zoom.mode = mode;
-  },
+    this._state.zoom.mode = mode;
+  }
+
+  private adjustZoom(direction: 1 | -1): void {
+    const isMap = this._state.zoom.mode === ZoomMode.Map;
+    const currentLevel = isMap
+      ? this._state.zoom.mapZoomLevel
+      : this._state.zoom.pageZoomLevel;
+    const step = isMap
+      ? this._state.zoom.zoomStep
+      : this._state.zoom.pageZoomStep;
+    const minZoom = isMap
+      ? this._state.zoom.minMapZoom
+      : this._state.zoom.minPageZoom;
+    const maxZoom = isMap
+      ? this._state.zoom.maxMapZoom
+      : this._state.zoom.maxPageZoom;
+
+    const clamp = direction === 1 ? Math.min : Math.max;
+    const limit = direction === 1 ? maxZoom : minZoom;
+    const newZoomLevel = clamp(currentLevel + direction * step, limit);
+
+    if (isMap) {
+      this._state.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
+    } else {
+      this._state.zoom.pageZoomLevel = newZoomLevel;
+    }
+  }
 
   zoomIn(): void {
-    if (globalState.zoom.mode === ZoomMode.Map) {
-      const newZoomLevel = Math.min(
-        globalState.zoom.mapZoomLevel + globalState.zoom.zoomStep,
-        globalState.zoom.maxMapZoom
-      );
-      globalState.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
-    } else {
-      const newZoomLevel = Math.min(
-        globalState.zoom.pageZoomLevel + globalState.zoom.pageZoomStep,
-        globalState.zoom.maxPageZoom
-      );
-      globalState.zoom.pageZoomLevel = newZoomLevel;
-    }
-  },
+    this.adjustZoom(1);
+  }
 
   zoomOut(): void {
-    if (globalState.zoom.mode === ZoomMode.Map) {
-      const newZoomLevel = Math.max(
-        globalState.zoom.mapZoomLevel - globalState.zoom.zoomStep,
-        globalState.zoom.minMapZoom
-      );
-      globalState.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
-    } else {
-      const newZoomLevel = Math.max(
-        globalState.zoom.pageZoomLevel - globalState.zoom.pageZoomStep,
-        globalState.zoom.minPageZoom
-      );
-      globalState.zoom.pageZoomLevel = newZoomLevel;
-    }
-  },
+    this.adjustZoom(-1);
+  }
 
   resetZoom(): void {
-    if (globalState.zoom.mode === ZoomMode.Map) {
-      globalState.zoom.mapZoomLevel = 100;
+    if (this._state.zoom.mode === ZoomMode.Map) {
+      this._state.zoom.mapZoomLevel = 100;
     } else {
-      globalState.zoom.pageZoomLevel = 100;
+      this._state.zoom.pageZoomLevel = 100;
     }
-  },
+  }
 
   setMapZoom(level: number): void {
-    globalState.zoom.mapZoomLevel = Math.max(
-      globalState.zoom.minMapZoom,
-      Math.min(level, globalState.zoom.maxMapZoom)
-    );
-  },
-
-  setPageZoom(level: number): void {
-    globalState.zoom.pageZoomLevel = Math.max(
-      globalState.zoom.minPageZoom,
-      Math.min(level, globalState.zoom.maxPageZoom)
+    this._state.zoom.mapZoomLevel = Math.max(
+      this._state.zoom.minMapZoom,
+      Math.min(level, this._state.zoom.maxMapZoom)
     );
   }
+
+  setPageZoom(level: number): void {
+    this._state.zoom.pageZoomLevel = Math.max(
+      this._state.zoom.minPageZoom,
+      Math.min(level, this._state.zoom.maxPageZoom)
+    );
+  }
+}
+
+export const globalState = new GlobalStore();
+
+export const globalActions = {
+  setNavigationState: globalState.setNavigationState.bind(globalState),
+  setToolbarState: globalState.setToolbarState.bind(globalState),
+  selectDataButton: globalState.selectDataButton.bind(globalState),
+  setProjectionFilter: globalState.setProjectionFilter.bind(globalState),
+  setProjectionViewMode: globalState.setProjectionViewMode.bind(globalState),
+  setZoomMode: globalState.setZoomMode.bind(globalState),
+  zoomIn: globalState.zoomIn.bind(globalState),
+  zoomOut: globalState.zoomOut.bind(globalState),
+  resetZoom: globalState.resetZoom.bind(globalState),
+  setMapZoom: globalState.setMapZoom.bind(globalState),
+  setPageZoom: globalState.setPageZoom.bind(globalState)
 };

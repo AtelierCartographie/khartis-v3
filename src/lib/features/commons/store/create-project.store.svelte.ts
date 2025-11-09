@@ -5,7 +5,6 @@ import {
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
 import {
   createUploadedFile,
-  DataSourceType,
   extractDataFromPaste,
   FileType,
   getFilenameFromUrl,
@@ -25,7 +24,6 @@ import type {
   SavedProject,
   UploadedFile
 } from './create-project.types';
-import { globalActions, globalState } from './global.svelte';
 import { projectStore } from './project.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
@@ -66,15 +64,6 @@ export const createProjectActions = {
 
   addUploadedFile(file: UploadedFile): void {
     createProjectState.newProject.uploadedFiles.push(file);
-
-    const hasExistingSelection = globalState.dataButtons.some(
-      (btn) => btn.isSelected
-    );
-    globalActions.addDataButtonForFile(
-      file.id,
-      file.name,
-      !hasExistingSelection
-    );
   },
 
   isFileDuplicate(fileName: string): boolean {
@@ -194,7 +183,7 @@ export const createProjectActions = {
 
   async processSingleFile(
     file: File,
-    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+    sourceType = 'file_upload' as const
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
       showWarning(
@@ -213,8 +202,8 @@ export const createProjectActions = {
       onStatusChange: (
         fileId: string,
         status: UploadedFile['status'],
-        errorMessage?: string
-      ) => this.updateFileStatus(fileId, status, errorMessage),
+        _errorMessage?: string
+      ) => this.updateFileStatus(fileId, status, _errorMessage),
       onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
         this.updateFileData(fileId, data)
     };
@@ -234,7 +223,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: 'Missing .shp file in shapefile set',
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType: 'file_upload' as const
       };
       this.addUploadedFile(errorFile);
       showError('Invalid shapefile', 'Missing .shp file in shapefile set');
@@ -258,7 +247,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType: 'file_upload' as const
       };
       this.addUploadedFile(errorFile);
       showError(
@@ -275,7 +264,7 @@ export const createProjectActions = {
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
       status: 'processing',
-      sourceType: DataSourceType.FILE_UPLOAD,
+      sourceType: 'file_upload' as const,
       relatedFiles: files.map((f) => f.name)
     };
 
@@ -300,22 +289,22 @@ export const createProjectActions = {
         content: JSON.stringify(geojson),
         status: 'complete'
       });
-    } catch (error) {
+    } catch (_error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to process shapefile';
+        _error instanceof Error ? _error.message : 'Failed to process shapefile';
       this.updateFileData(uploadedFile.id, {
         status: 'error',
         errorMessage: message
       });
-      showError('Shapefile processing failed', message, error);
+      showError('Shapefile processing failed', message, _error);
     }
   },
 
   async processPastedData(pastedText: string): Promise<void> {
     const { fileType, validation } = extractDataFromPaste(pastedText);
 
-    let baseName = 'pasted-data';
-    let extension =
+    const baseName = 'pasted-data';
+    const extension =
       fileType === FileType.CSV
         ? 'csv'
         : fileType === FileType.GEOJSON
@@ -338,7 +327,7 @@ export const createProjectActions = {
       status: validation.isValid ? 'complete' : 'error',
       content: pastedText,
       validation,
-      sourceType: DataSourceType.PASTE,
+      sourceType: 'paste' as const,
       errorMessage: validation.isValid ? undefined : validation.errors[0]
     };
 
@@ -355,10 +344,7 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      const fileName = createProjectState.newProject.uploadedFiles[index].name;
       createProjectState.newProject.uploadedFiles.splice(index, 1);
-
-      globalActions.removeDataButton(fileId);
     }
   },
 
@@ -439,13 +425,13 @@ export const createProjectActions = {
       const blob = await response.blob();
       const file = new File([blob], filename, { type: blob.type });
 
-      await this.processSingleFile(file, DataSourceType.URL);
+      await this.processSingleFile(file, 'url' as const);
       this.setOnlineFileUrl('');
-    } catch (error) {
+    } catch (_error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to load online file';
+        _error instanceof Error ? _error.message : 'Failed to load online file';
       this.setNewProjectError(message);
-      showError('Failed to load online file', message, error);
+      showError('Failed to load online file', message, _error);
     } finally {
       this.setNewProjectLoading(false);
     }
@@ -462,13 +448,15 @@ export const createProjectActions = {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
 
-    globalActions.clearAllDataButtons();
-
     datasetsStore.clear();
     visualizationStore.clear();
     await duckDBOrchestrator.clear();
 
-    if (saveProject && projectStore.currentProject?.id && projectStore.currentProject.data) {
+    if (
+      saveProject &&
+      projectStore.currentProject?.id &&
+      projectStore.currentProject.data
+    ) {
       logger.info('Clearing and saving project sourceFiles', LogCategory.FILE, {
         projectId: projectStore.currentProject.id
       });

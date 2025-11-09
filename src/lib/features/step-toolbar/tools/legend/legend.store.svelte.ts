@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { LegendItem, LegendState } from './legend.types';
 
 const DEFAULT_LEGEND_STATE: LegendState = {
@@ -78,7 +79,5 @@ export const legendActions = {
     legendState.activeTab = tab;
   },
 
-  reset(): void {
-    Object.assign(legendState, DEFAULT_LEGEND_STATE);
-  }
+  reset: createResetFunction(legendState, DEFAULT_LEGEND_STATE)
 };

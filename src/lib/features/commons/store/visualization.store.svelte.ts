@@ -128,6 +128,52 @@ class VisualizationStore {
     }
   }
 
+  duplicateVisualization(id: string): VisualizationConfig | null {
+    const original = this._state.visualizations.find((v) => v.id === id);
+    if (!original) {
+      return null;
+    }
+
+    const duplicateName = this.generateDuplicateName(original.name);
+
+    const duplicate: VisualizationConfig = {
+      ...structuredClone(original),
+      id: crypto.randomUUID(),
+      name: duplicateName
+    };
+
+    this._state.visualizations.push(duplicate);
+    this._state.selectedVisualizationId = duplicate.id;
+    this._state.activeVisualizationIds.add(duplicate.id);
+
+    return duplicate;
+  }
+
+  private generateDuplicateName(originalName: string): string {
+    const baseMatch = originalName.match(/^(.*?)(?:\s*\((\d+)\))?$/);
+    const baseName = baseMatch?.[1] || originalName;
+
+    const existingNumbers: number[] = [];
+
+    this._state.visualizations.forEach((viz) => {
+      const match = viz.name.match(
+        new RegExp(
+          `^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\((\\d+)\\)$`
+        )
+      );
+      if (match) {
+        existingNumbers.push(parseInt(match[1], 10));
+      }
+    });
+
+    if (existingNumbers.length === 0) {
+      return `${baseName} (1)`;
+    }
+
+    const nextNumber = Math.max(...existingNumbers) + 1;
+    return `${baseName} (${nextNumber})`;
+  }
+
   removeVisualization(id: string): void {
     const filteredVisualizations = this._state.visualizations.filter(
       (v) => v.id !== id
@@ -170,6 +216,7 @@ class VisualizationStore {
           strokeWidth: 1,
           strokeOpacity: 1
         };
+
       case VisualizationType.PROPORTIONAL:
         return {
           fillColor: '#3b82f6',
@@ -178,6 +225,7 @@ class VisualizationStore {
           strokeWidth: 2,
           strokeOpacity: 1
         };
+
       case VisualizationType.CATEGORICAL:
         return {
           fillOpacity: 0.8,
@@ -185,6 +233,7 @@ class VisualizationStore {
           strokeWidth: 1,
           strokeOpacity: 1
         };
+
       default:
         return {
           fillColor: '#3b82f6',
@@ -212,12 +261,15 @@ class VisualizationStore {
       case VisualizationType.CHOROPLETH:
         mapping.valueColumn = numericColumns[0]?.name;
         break;
+
       case VisualizationType.PROPORTIONAL:
         mapping.sizeColumn = numericColumns[0]?.name;
         break;
+
       case VisualizationType.CATEGORICAL:
         mapping.categoryColumn = stringColumns[0]?.name;
         break;
+
       case VisualizationType.BIVARIATE:
         mapping.valueColumn = numericColumns[0]?.name;
         mapping.colorColumn = numericColumns[1]?.name;

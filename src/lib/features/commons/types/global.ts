@@ -35,7 +35,6 @@ export interface GlobalState {
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;
-  dataButtons: DataButton[];
   projectionFilter?: ProjectionFilterId;
   projectionViewMode?: ProjectionViewMode;
   zoom: ZoomState;

@@ -130,7 +130,7 @@ export class DeepDataValidator {
 
     const type = this.detectColumnType(nonNullValues);
 
-    let stats: Partial<ColumnStatistics> = {
+    const stats: Partial<ColumnStatistics> = {
       name,
       type,
       nullCount,

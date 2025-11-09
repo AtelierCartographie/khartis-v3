@@ -10,17 +10,6 @@
 
   let { x, y, data, visualizationVariables = [] }: TooltipProps = $props();
 
-  $effect(() => {
-    if (data) {
-      console.log('[MapTooltip] Tooltip data received:', {
-        x,
-        y,
-        dataKeys: Object.keys(data),
-        visualizationVariables
-      });
-    }
-  });
-
   const primaryData = $derived.by(() => {
     if (!data) return [];
     return Object.entries(data).filter(([key]) =>
