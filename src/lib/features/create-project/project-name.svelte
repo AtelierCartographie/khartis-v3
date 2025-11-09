@@ -23,11 +23,7 @@
 
   let isCreating = $state(false);
   let hasTriedSubmit = $state(false);
-  let localProjectName = $state(createProjectState.newProject.projectName);
-
-  $effect(() => {
-    localProjectName = createProjectState.newProject.projectName;
-  });
+  let localProjectName = $state.raw(createProjectState.newProject.projectName);
 
   $effect(() => {
     if (localProjectName !== createProjectState.newProject.projectName) {
@@ -93,7 +89,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (error) {
       logger.error('Failed to create project', LogCategory.PROJECT, error);
       const errorMessage =

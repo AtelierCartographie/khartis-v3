@@ -5,11 +5,7 @@
 
   const formatState = $derived(getFormatState());
 
-  let grid = $state(false);
-
-  $effect(() => {
-    grid = formatState.gridEnabled;
-  });
+  let grid = $derived(formatState.gridEnabled);
 
   function handleToggle() {
     formatActions.toggleGrid();

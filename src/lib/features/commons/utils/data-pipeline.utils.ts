@@ -5,16 +5,21 @@ import {
   GeoColumnDetector,
   type GeoDetectionResult
 } from './geo-detector.utils';
+import {
+  isTabularData,
+  isGeoJSONFeatureCollection,
+  type GeoJSONFeatureCollection
+} from '$lib/types/data';
 
 export interface DataColumn {
   name: string;
   type: 'string' | 'number' | 'date' | 'boolean' | 'geometry';
   nullable: boolean;
   unique: boolean;
-  min?: number;
-  max?: number;
-  uniqueValues?: Set<any>;
-  sampleValues?: any[];
+  min?: number | Date;
+  max?: number | Date;
+  uniqueValues?: Set<unknown>;
+  sampleValues?: unknown[];
 }
 
 export interface ProcessedDataset {
@@ -23,7 +28,7 @@ export interface ProcessedDataset {
   sourceFileId: string;
   columns: DataColumn[];
   rowCount: number;
-  data: any[];
+  data: Record<string, unknown>[];
   duckdbTableName?: string;
   geometry?: {
     type:
@@ -43,12 +48,12 @@ export interface ProcessedDataset {
   };
   originalData?: {
     columns: DataColumn[];
-    data: any[];
+    data: Record<string, unknown>[];
     rowCount: number;
   };
 }
 
-export function detectColumnType(values: any[]): DataColumn['type'] {
+export function detectColumnType(values: unknown[]): DataColumn['type'] {
   if (!values || values.length === 0) return 'string';
 
   const nonNullValues = values.filter(
@@ -86,7 +91,7 @@ export function detectColumnType(values: any[]): DataColumn['type'] {
   return 'string';
 }
 
-export function analyzeColumn(name: string, values: any[]): DataColumn {
+export function analyzeColumn(name: string, values: unknown[]): DataColumn {
   const type = detectColumnType(values);
   const nonNullValues = values.filter(
     (v) => v !== null && v !== undefined && v !== ''
@@ -113,9 +118,9 @@ export function analyzeColumn(name: string, values: any[]): DataColumn {
 }
 
 export function processTabularData(
-  data: any[],
+  data: Record<string, unknown>[],
   headers?: string[]
-): { columns: DataColumn[]; processedData: any[] } {
+): { columns: DataColumn[]; processedData: Record<string, unknown>[] } {
   if (!data || data.length === 0) {
     return { columns: [], processedData: [] };
   }
@@ -129,7 +134,7 @@ export function processTabularData(
   }
 
   const processedData = data.map((row) => {
-    const processedRow: any = {};
+    const processedRow: Record<string, unknown> = {};
 
     columns.forEach((col) => {
       const value = row[col.name];
@@ -142,7 +147,7 @@ export function processTabularData(
         const str = String(value).toLowerCase();
         processedRow[col.name] = ['true', '1', 'yes', 'oui'].includes(str);
       } else if (col.type === 'date') {
-        processedRow[col.name] = new Date(value);
+        processedRow[col.name] = new Date(value as string | number | Date);
       } else {
         processedRow[col.name] = String(value);
       }
@@ -154,16 +159,16 @@ export function processTabularData(
   return { columns, processedData };
 }
 
-export function processGeospatialData(geojson: any): {
+export function processGeospatialData(geojson: GeoJSONFeatureCollection): {
   columns: DataColumn[];
-  processedData: any[];
+  processedData: Record<string, unknown>[];
   geometry: ProcessedDataset['geometry'];
 } {
   if (!geojson || !geojson.features) {
     return { columns: [], processedData: [], geometry: undefined };
   }
 
-  const allProperties = new Map<string, any[]>();
+  const allProperties = new Map<string, unknown[]>();
   const geometryTypes = new Set<string>();
   const bounds: [number, number, number, number] = [
     Infinity,
@@ -172,10 +177,11 @@ export function processGeospatialData(geojson: any): {
     -Infinity
   ];
 
-  geojson.features.forEach((feature: any) => {
-    if (feature.geometry) {
-      geometryTypes.add(feature.geometry.type);
-      updateBounds(bounds, feature.geometry);
+  geojson.features.forEach((feature) => {
+    const geometry = feature.geometry;
+    if (geometry && geometry.coordinates !== undefined) {
+      geometryTypes.add(geometry.type);
+      updateBounds(bounds, geometry as { coordinates: unknown });
     }
 
     if (feature.properties) {
@@ -201,7 +207,7 @@ export function processGeospatialData(geojson: any): {
     columns.push(analyzeColumn(name, values));
   });
 
-  const processedData = geojson.features.map((feature: any, index: number) => {
+  const processedData = geojson.features.map((feature, index) => {
     return {
       _id: index,
       geometry: feature.geometry,
@@ -209,7 +215,13 @@ export function processGeospatialData(geojson: any): {
     };
   });
 
-  const geometryType = Array.from(geometryTypes)[0] as any;
+  const geometryTypeArray = Array.from(geometryTypes);
+  const geometryType =
+    geometryTypeArray[0] as ProcessedDataset['geometry'] extends {
+      type: infer T;
+    }
+      ? T
+      : never;
   const centroid = calculateCentroid(bounds);
 
   return {
@@ -223,7 +235,10 @@ export function processGeospatialData(geojson: any): {
   };
 }
 
-function updateBounds(bounds: [number, number, number, number], geometry: any) {
+function updateBounds(
+  bounds: [number, number, number, number],
+  geometry: { coordinates: unknown }
+) {
   if (!geometry || !geometry.coordinates) return;
 
   function processCoordinate(coord: number[]) {
@@ -235,7 +250,7 @@ function updateBounds(bounds: [number, number, number, number], geometry: any) {
     }
   }
 
-  function processCoordinates(coords: any) {
+  function processCoordinates(coords: unknown): void {
     if (Array.isArray(coords)) {
       if (typeof coords[0] === 'number') {
         processCoordinate(coords);
@@ -260,9 +275,6 @@ export async function processUploadedFile(
   const parsedData = file.parsedData;
   const status = file.status;
 
-  if (Array.isArray(parsedData)) {
-  }
-
   if (!parsedData || status !== 'complete') {
     return null;
   }
@@ -280,7 +292,11 @@ export async function processUploadedFile(
     }
   };
 
-  if (file.fileType === FileType.CSV) {
+  if (
+    file.fileType === FileType.CSV &&
+    parsedData &&
+    isTabularData(parsedData)
+  ) {
     const { columns, processedData } = processTabularData(parsedData);
 
     const headers = columns.map((c) => c.name);
@@ -316,11 +332,12 @@ export async function processUploadedFile(
   if (
     [FileType.GEOJSON, FileType.SHAPEFILE, FileType.GEOPACKAGE].includes(
       file.fileType
-    )
+    ) &&
+    parsedData &&
+    isGeoJSONFeatureCollection(parsedData)
   ) {
-    const { columns, processedData, geometry } = processGeospatialData(
-      file.parsedData
-    );
+    const { columns, processedData, geometry } =
+      processGeospatialData(parsedData);
     return {
       ...baseDataset,
       columns,
@@ -374,7 +391,7 @@ export function mergeDatasets(
   }
 
   const mergedColumns = new Map<string, DataColumn>();
-  const mergedData: any[] = [];
+  const mergedData: Record<string, unknown>[] = [];
 
   datasets.forEach((dataset) => {
     dataset.columns.forEach((col) => {
@@ -385,7 +402,7 @@ export function mergeDatasets(
   });
 
   if (joinColumn) {
-    const joinIndex = new Map<any, any[]>();
+    const joinIndex = new Map<unknown, Record<string, unknown>[]>();
 
     datasets.forEach((dataset) => {
       dataset.data.forEach((row) => {
@@ -398,7 +415,7 @@ export function mergeDatasets(
     });
 
     joinIndex.forEach((rows, key) => {
-      const mergedRow: any = { [joinColumn]: key };
+      const mergedRow: Record<string, unknown> = { [joinColumn]: key };
       rows.forEach((row) => {
         Object.assign(mergedRow, row);
       });

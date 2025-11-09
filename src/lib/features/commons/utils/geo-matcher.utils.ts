@@ -242,7 +242,7 @@ export class GeoMatcher {
 
   private static calculateConfidence(
     result: MatchResult,
-    _catalogue: CatalogueInfo
+    _catalogue_UNUSED: CatalogueInfo
   ): number {
     let confidence = result.matchRate;
 

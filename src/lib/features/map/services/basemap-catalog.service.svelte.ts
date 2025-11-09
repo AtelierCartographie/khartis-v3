@@ -71,7 +71,7 @@ class BasemapCatalogService {
     }
 
     const geoColumn = dataset.columns.find(
-      (c: any) => c.type === 'text' && c.subtype === 'geographic'
+      (c) => c.type === 'string' && (c as any).subtype === 'geographic'
     );
 
     if (!geoColumn) {

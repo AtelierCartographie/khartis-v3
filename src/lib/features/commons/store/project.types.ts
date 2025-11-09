@@ -12,12 +12,12 @@ export interface ProjectManifest {
 
 export interface ProjectData {
   sourceFiles: UploadedFile[];
-  processedData?: any;
-  joinedData?: any;
+  processedData?: Record<string, unknown>;
+  joinedData?: Record<string, unknown>;
   basemap?: {
     type: string;
     id: string;
-    data?: any;
+    data?: Record<string, unknown>;
   };
 }
 
@@ -29,9 +29,9 @@ export interface VisualizationConfig {
     | 'bivariate'
     | 'combined';
   variables?: string[];
-  classification?: any;
-  palette?: any;
-  parameters?: Record<string, any>;
+  classification?: Record<string, unknown>;
+  palette?: Record<string, unknown>;
+  parameters?: Record<string, unknown>;
 }
 
 export interface LayoutConfig {
@@ -47,7 +47,7 @@ export interface LayoutConfig {
     enabled: boolean;
     size: number;
   };
-  elements?: any[];
+  elements?: Record<string, unknown>[];
 }
 
 export interface KhartisProject {
@@ -56,7 +56,7 @@ export interface KhartisProject {
   data: ProjectData;
   visualization?: VisualizationConfig;
   layout?: LayoutConfig;
-  resources?: Record<string, any>;
+  resources?: Record<string, unknown>;
 }
 
 export interface ProjectState {

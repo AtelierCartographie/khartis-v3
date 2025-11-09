@@ -158,7 +158,7 @@ export class ProjectValidator {
           'Espace de stockage insuffisant. Veuillez nettoyer le cache du navigateur.'
         );
       }
-    } catch (error) {
+    } catch (_error) {
       result.warnings.push("Impossible de vérifier l'utilisation du stockage");
     }
 

@@ -76,7 +76,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to load project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load project';
@@ -115,7 +115,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to import project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to import project';
@@ -226,7 +226,7 @@
 
   <div class="flex gap-5 overflow-x-auto pb-3">
     {#if isLoading}
-      {#each Array(3) as _}
+      {#each Array(3) as _item, idx (idx)}
         <div class="project-card-skeleton">
           <SkeletonPlaceholder style="width: 200px; height: 150px;" />
         </div>
@@ -236,7 +236,7 @@
         <p class="text-grey">No saved projects yet</p>
       </div>
     {:else}
-      {#each savedProjects as project}
+      {#each savedProjects as project (project.id)}
         <div class="project-card-wrapper">
           <ProjectCard
             title={project.name}

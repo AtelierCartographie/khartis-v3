@@ -98,7 +98,7 @@ export function showSuccess(title: string, subtitle?: string): void {
 export function showError(
   title: string,
   subtitle?: string,
-  logDetails?: any
+  logDetails?: unknown
 ): void {
   if (logDetails) {
     logger.error(

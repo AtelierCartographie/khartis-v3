@@ -89,7 +89,7 @@
     if (!tooltip) return;
 
     if (object) {
-      const { geom, geometry, ...attributes } = object;
+      const { geom: _geom, geometry: _geometry, ...attributes } = object;
 
       const primaryData: [string, any][] = [];
       const secondaryData: [string, any][] = [];
@@ -189,6 +189,7 @@
     switch (geometryType.toUpperCase()) {
       case 'POINT':
 
+      // fallthrough
       case 'MULTIPOINT': {
         const pointChild = jsTable.getChild(geoColumn);
         if (!pointChild) return [];
@@ -274,6 +275,7 @@
 
       case 'LINESTRING':
 
+      // fallthrough
       case 'MULTILINESTRING':
         deckLayer = new geodecklayers.GeoArrowPathLayer({
           id: 'line-layer',
@@ -291,6 +293,7 @@
 
       case 'POLYGON':
 
+      // fallthrough
       case 'MULTIPOLYGON': {
         const polygonChild = jsTable.getChild(geoColumn);
         if (!polygonChild) return [];
@@ -476,12 +479,12 @@
   });
 
   $effect(() => {
-    const zoomLevel = globalState.zoom.mapZoomLevel;
+    const _zoomLevel = globalState.zoom.mapZoomLevel;
     syncZoomToMap();
   });
 
   $effect(() => {
-    const styleUrl = basemapStyleStore.selectedStyleUrl;
+    const _styleUrl = basemapStyleStore.selectedStyleUrl;
     syncBasemapStyle();
   });
 

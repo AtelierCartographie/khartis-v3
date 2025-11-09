@@ -13,7 +13,7 @@
     addDataButton: () => void;
   }
 
-  let { open = $bindable(), addDataButton }: Props = $props();
+  let { open = $bindable(), addDataButton: _addDataButton }: Props = $props();
 
   const closeModal = async () => {
     logger.info('Closing add data modal', LogCategory.FILE, {

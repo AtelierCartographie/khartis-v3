@@ -528,7 +528,7 @@ export function validateGeospatialFile(
         }
       }
     }
-  } catch (error) {
+  } catch (_error) {
     errors.push('Invalid JSON structure');
   }
 

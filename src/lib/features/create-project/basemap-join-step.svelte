@@ -4,10 +4,9 @@
     InlineNotification,
     ProgressBar,
     Tile,
-    Tag,
-    Modal
+    Tag
   } from 'carbon-components-svelte';
-  import { Catalog, Checkmark, Map, WarningAlt } from 'carbon-icons-svelte';
+  import { Catalog, Checkmark, Map } from 'carbon-icons-svelte';
   import BasemapCatalogModal from '$lib/features/commons/components/basemap-catalog-modal.svelte';
   import type {
     BasemapMetadata,
@@ -24,8 +23,7 @@
     onBasemapSelected?: (basemap: BasemapMetadata) => void;
   }
 
-  const { datasetId, geoColumn, geoCodePattern, onBasemapSelected }: Props =
-    $props();
+  const { geoColumn, geoCodePattern, onBasemapSelected }: Props = $props();
 
   let catalogModalOpen = $state(false);
   let suggestions = $state<BasemapMatchResult[]>([]);
@@ -107,7 +105,7 @@
       </p>
 
       <div class="suggestions-grid">
-        {#each suggestions as suggestion}
+        {#each suggestions as suggestion (suggestion.basemap.file)}
           <Tile
             class={`basemap-suggestion-card ${selectedBasemap?.file === suggestion.basemap.file ? 'selected' : ''}`}
             on:click={() => handleSelectBasemap(suggestion.basemap)}

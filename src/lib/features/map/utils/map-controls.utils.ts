@@ -56,7 +56,7 @@ export function calculateBoundsFromGeoArrow(
       [minLng, minLat],
       [maxLng, maxLat]
     ];
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -70,11 +70,13 @@ function extractCoordsFromGeometry(geometry: any): number[][] {
 
     case 'MultiPoint':
 
+    // fallthrough
     case 'LineString':
       return geometry.coordinates;
 
     case 'MultiLineString':
 
+    // fallthrough
     case 'Polygon':
       return geometry.coordinates.flat();
 
@@ -145,7 +147,7 @@ export function calculateBoundsFromGeoJSON(
       [minLng, minLat],
       [maxLng, maxLat]
     ];
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }

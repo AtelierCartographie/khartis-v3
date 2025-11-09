@@ -16,6 +16,7 @@
     ViewOff
   } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import {
     duckDBOrchestrator,
     RefineOperation
@@ -207,7 +208,6 @@
     }
   }
 
-
   async function dropColumn(columnName: string) {
     if (tableName) {
       await duckDBOrchestrator.dropColumn(tableName, columnName);
@@ -376,7 +376,7 @@
       }));
       columns = columns.filter((c) => c.name !== 'geom' && c.name !== '__id');
 
-      const analysisMap = new Map<string, AnalysisResult>();
+      const analysisMap = new SvelteMap<string, AnalysisResult>();
       analysis.forEach((a: AnalysisResult) => {
         if (a.name !== 'geom' && a.name !== '__id') {
           analysisMap.set(a.name, a);
@@ -578,7 +578,7 @@
             {hiddenColumns.size} colonne{hiddenColumns.size > 1 ? 's' : ''}
             masquée{hiddenColumns.size > 1 ? 's' : ''}
           </span>
-          {#each Array.from(hiddenColumns) as hiddenCol}
+          {#each Array.from(hiddenColumns) as hiddenCol (hiddenCol)}
             <button
               class="show-column-btn"
               onclick={() => toggleColumnVisibility(hiddenCol)}
@@ -609,7 +609,7 @@
       <table bind:this={tableElement}>
         <thead>
           <tr>
-            {#each visibleColumns as column}
+            {#each visibleColumns as column (column.name)}
               {@const analysis = columnAnalysis.get(column.name)}
               <th>
                 <div class="col-header">
@@ -736,15 +736,15 @@
         </thead>
         <tbody>
           {#if tableData.length === 0}
-            {#each rows as _}
+            {#each rows as _row, idx (idx)}
               <tr>
-                {#each visibleColumns as _}
+                {#each visibleColumns as _col, colIdx (colIdx)}
                   <td><div class="skeleton-cell"></div></td>
                 {/each}
               </tr>
             {/each}
           {:else}
-            {#each tableData as row, i}
+            {#each tableData as row, i (rows[i])}
               {@const rowId = rows[i] + 1}
               <tr
                 class:highlight={highlightIds.includes(rowId)}
@@ -752,7 +752,7 @@
                 class:search-active={searchResults.length > 0 &&
                   searchResults[currentSearchIndex] === rowId}
               >
-                {#each visibleColumns as col}
+                {#each visibleColumns as col (col.name)}
                   {@const value = row[col.name]}
                   {@const isNumeric =
                     col.type === 'number' ||

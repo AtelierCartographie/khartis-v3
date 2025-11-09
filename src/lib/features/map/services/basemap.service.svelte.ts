@@ -4,6 +4,7 @@ import { logger, LogCategory } from '../../commons/utils/logger';
 import { Duck } from '../../commons/services/duckdb/duckdb';
 import { readGeoArrowParquet } from '../utils/read-geoarrow-parquet';
 import { readGeoJSONAsArrow } from '../utils/read-geojson-arrow';
+import { SvelteMap } from 'svelte/reactivity';
 
 const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_URL = '/basemaps/all-basemaps-attributes.parquet';
@@ -13,7 +14,7 @@ const DEFAULT_BASEMAP_ID = 'france-region-2025';
 interface LoadedBasemap {
   metadata: BasemapMetadata;
   geometryTable: ArrowTable;
-  layerTables: Map<string, ArrowTable>;
+  layerTables: SvelteMap<string, ArrowTable>;
 }
 
 class BasemapService {
@@ -93,7 +94,7 @@ class BasemapService {
       await Duck.register_files([attributesFile]);
 
       const fileId =
-        (attributesFile as any).id ||
+        (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
       const result = await Duck.query(`
@@ -150,8 +151,8 @@ class BasemapService {
 
   private async loadBasemapLayers(
     layers: BasemapLayer[]
-  ): Promise<Map<string, ArrowTable>> {
-    const layerTables = new Map<string, ArrowTable>();
+  ): Promise<SvelteMap<string, ArrowTable>> {
+    const layerTables = new SvelteMap<string, ArrowTable>();
 
     for (const layer of layers) {
       try {

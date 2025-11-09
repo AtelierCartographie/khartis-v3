@@ -149,7 +149,7 @@
 
       <Select bind:selected={selectedYear} labelText={m.basemap_filter_year()}>
         <SelectItem value="all" text={m.basemap_all_years()} />
-        {#each availableYears() as year}
+        {#each availableYears() as year (year)}
           <SelectItem value={year as string} text={year as string} />
         {/each}
       </Select>
@@ -159,7 +159,7 @@
       <div class="section">
         <h5 class="section-title">{m.basemap_suggestions()}</h5>
         <div class="basemap-grid">
-          {#each suggestionsWithBasemap() as { basemap, score }}
+          {#each suggestionsWithBasemap() as { basemap, score } (basemap.file)}
             <BasemapCard
               basemap={basemap}
               matchScore={score}
@@ -180,7 +180,7 @@
         <p class="no-results">{m.basemap_no_results()}</p>
       {:else}
         <div class="basemap-grid">
-          {#each displayedBasemaps() as basemap}
+          {#each displayedBasemaps() as basemap (basemap.file)}
             <BasemapCard
               basemap={basemap}
               selected={selectedBasemap?.file === basemap.file}
