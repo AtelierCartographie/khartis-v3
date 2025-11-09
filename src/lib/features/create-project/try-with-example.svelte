@@ -8,11 +8,7 @@
     loadExampleData
   } from '$lib/features/commons/mocks/examples.data';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
-  import type {
-    DataSourceType,
-    FileType,
-    UploadedFile
-  } from '$lib/features/commons/store/create-project.types';
+  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
   import {
     DataSourceType as DataSource,
     FileType as FType
@@ -93,7 +89,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to load example', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load example';
@@ -128,7 +124,7 @@
     <span class="text-grey">{m.try_example_graphic_primitives()}</span>
 
     <div class="mt-2 flex gap-2 flex-wrap">
-      {#each EXAMPLE_CATEGORIES as category}
+      {#each EXAMPLE_CATEGORIES as category (category.id)}
         <Tag
           type={selectedCategory === category.id ? 'high-contrast' : 'gray'}
           interactive
@@ -156,7 +152,7 @@
 
   <div class="flex gap-5 overflow-x-auto pb-3">
     {#if isLoading}
-      {#each Array(3) as _}
+      {#each Array(3) as _item, idx (idx)}
         <div class="example-card-skeleton">
           <SkeletonPlaceholder style="width: 200px; height: 150px;" />
         </div>
@@ -166,7 +162,7 @@
         <p class="text-grey">No examples available in this category</p>
       </div>
     {:else}
-      {#each filteredExamples as example}
+      {#each filteredExamples as example (example.id)}
         <ProjectCard
           title={example.title}
           subtitle={example.subtitle}

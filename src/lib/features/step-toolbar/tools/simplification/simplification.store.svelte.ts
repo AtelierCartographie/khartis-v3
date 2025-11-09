@@ -61,7 +61,7 @@ export const simplificationActions = {
 
     simplificationState.isProcessing = true;
 
-    const sourceType =
+    const _sourceType =
       simplificationState.source === SimplificationSource.Basemap
         ? 'basemap'
         : 'geodata';
@@ -83,15 +83,13 @@ export const simplificationActions = {
       };
 
       return result;
-    } catch (error) {
-      throw error;
     } finally {
       simplificationState.isProcessing = false;
     }
   },
 
   async performSimplification(
-    geometryData?: unknown
+    _geometryData?: unknown
   ): Promise<SimplificationResult> {
     return new Promise((resolve) => {
       setTimeout(() => {

@@ -103,9 +103,8 @@ class ProjectStore {
       this._state.currentProject.data.sourceFiles = [];
     }
 
-    const isFirstFile =
+    const _isFirstFile =
       this._state.currentProject.data.sourceFiles.length === 0;
-    let addedFiles = 0;
 
     for (const file of newFiles) {
       const exists = this._state.currentProject.data.sourceFiles.find(
@@ -140,8 +139,6 @@ class ProjectStore {
           ...this._state.currentProject.data.sourceFiles,
           fileCopy
         ];
-
-        addedFiles++;
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
@@ -217,25 +214,21 @@ class ProjectStore {
   }
 
   async loadProject(id: string): Promise<void> {
-    try {
-      const project = await projectPersistence.loadProject(id);
+    const project = await projectPersistence.loadProject(id);
 
-      if (project) {
-        this._state.currentProject = project;
-        this._state.isDirty = false;
-        this._state.lastSaved = new Date();
-        this._state.history = [];
-        this._state.historyIndex = -1;
+    if (project) {
+      this._state.currentProject = project;
+      this._state.isDirty = false;
+      this._state.lastSaved = new Date();
+      this._state.history = [];
+      this._state.historyIndex = -1;
 
-        await projectPersistence.saveToStorage(
-          ProjectStorageKey.CURRENT,
-          project.id
-        );
+      await projectPersistence.saveToStorage(
+        ProjectStorageKey.CURRENT,
+        project.id
+      );
 
-        await dataOrchestrator.onProjectChanged();
-      }
-    } catch (error) {
-      throw error;
+      await dataOrchestrator.onProjectChanged();
     }
   }
 

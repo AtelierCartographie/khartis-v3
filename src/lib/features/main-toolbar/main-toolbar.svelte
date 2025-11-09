@@ -48,7 +48,7 @@
     globalActions.setToolbarState(state);
   }
 
-  const selectStep = (step: ToolbarStep): void => {
+  const _selectStep = (step: ToolbarStep): void => {
     globalActions.setNavigationState(step);
 
     globalState.selectedTool = undefined;
@@ -58,7 +58,7 @@
 
   $effect(() => {
     const project = projectStore.currentProject;
-    const isDirty = projectStore.isDirty;
+    const _isDirty = projectStore.isDirty;
 
     if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
       mainToolbarState.canNavigateToVisualization = true;

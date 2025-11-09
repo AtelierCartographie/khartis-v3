@@ -216,7 +216,7 @@ export class ProjectPersistence {
 
           try {
             content = await decompressData(buffer);
-          } catch (decompressError) {
+          } catch (_decompressError) {
             const decoder = new TextDecoder();
             content = decoder.decode(buffer);
           }

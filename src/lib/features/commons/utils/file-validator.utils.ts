@@ -105,6 +105,7 @@ export class FileValidator {
       switch (result.fileType) {
         case FileType.CSV:
 
+        // fallthrough
         case FileType.TSV:
           await this.validateCSVContent(file, buffer, result);
           break;
@@ -121,8 +122,8 @@ export class FileValidator {
           await this.validateGeoPackageContent(file, buffer, result);
           break;
       }
-    } catch (error) {
-      logger.error('Async validation failed', LogCategory.FILE, error);
+    } catch (_error) {
+      logger.error('Async validation failed', LogCategory.FILE, _error);
       result.errors.push('Impossible de valider le contenu du fichier');
       result.isValid = false;
     }
@@ -191,6 +192,7 @@ export class FileValidator {
     const suspiciousPatterns = [
       /\.\./,
       /[<>:"|?*\\]/,
+      // eslint-disable-next-line no-control-regex
       /[\x00-\x1f\x7f]/,
       /^\./
     ];
@@ -273,6 +275,7 @@ export class FileValidator {
     switch (result.fileType) {
       case FileType.CSV:
 
+      // fallthrough
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
           result.warnings.push(
@@ -281,12 +284,13 @@ export class FileValidator {
         }
         break;
 
-      case FileType.SHAPEFILE:
+      case FileType.SHAPEFILE: {
         const ext = this.getFileExtension(file.name);
         if (ext === 'shp' && file.size < 100) {
           result.warnings.push('Fichier SHP suspicieusement petit');
         }
         break;
+      }
 
       case FileType.GEOPACKAGE:
         if (file.size < 1024) {
@@ -408,7 +412,7 @@ export class FileValidator {
           result.errors.push('FeatureCollection sans propriété "features"');
         }
       }
-    } catch (error) {
+    } catch (_error) {
       if (file.size < 1024 * 1024) {
         result.errors.push('JSON invalide');
       } else {
@@ -567,7 +571,7 @@ export class FileValidator {
       if (parsed.protocol === 'http:') {
         result.warnings.push('Utilisation de HTTP non sécurisé');
       }
-    } catch (error) {
+    } catch (_error) {
       result.errors.push('URL invalide');
     }
 

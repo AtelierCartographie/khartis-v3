@@ -40,7 +40,9 @@ function calculateDatasetBounds(
   let maxY = -Infinity;
 
   dataset.data.forEach((row) => {
-    const geometry = row[geometryColumn.name];
+    const geometry = row[geometryColumn.name] as
+      | { coordinates?: unknown }
+      | undefined;
     if (!geometry || !geometry.coordinates) return;
 
     const processCoords = (coords: any) => {
@@ -274,7 +276,9 @@ function getFeatureStyle(
     if (value !== null && value !== undefined && visualization.symbols) {
       const values = dataset.data
         .map((r) => r[visualization.mapping.sizeColumn!])
-        .filter((v) => v !== null && v !== undefined);
+        .filter(
+          (v) => v !== null && v !== undefined && typeof v === 'number'
+        ) as number[];
 
       const min = Math.min(...values);
       const max = Math.max(...values);
@@ -344,7 +348,7 @@ export function exportMapToSvg(
     svgContent += `    <g id="${visualization.id}" class="visualization-layer">\n`;
 
     for (const row of dataset.data) {
-      const geometry = row[geometryColumn.name];
+      const geometry = row[geometryColumn.name] as any;
       if (!geometry) continue;
 
       const { style, radius } = getFeatureStyle(visualization, row, dataset);

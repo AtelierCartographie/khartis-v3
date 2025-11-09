@@ -114,7 +114,7 @@
   </div>
 
   <div class="results">
-    {#each results as result, i}
+    {#each results as result, i (i)}
       <div
         class="result-item"
         style="border-left-color: {getStatusColor(result.status)}"

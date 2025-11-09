@@ -25,6 +25,8 @@ const ERROR_NO_GEO_COLUMN_MESSAGE =
 const WARNING_DUPLICATE_ROWS_TITLE = 'Duplicate rows detected';
 const WARNING_PERFORMANCE_TITLE = 'Performance';
 
+import type { TabularData, JsonValue } from '$lib/types/data';
+
 type CsvPrimitive = string | number | boolean | null | Date;
 type CsvRow = Record<string, CsvPrimitive>;
 type CsvMatrix = CsvPrimitive[][];
@@ -60,6 +62,7 @@ export class FileProcessorService {
     switch (fileType) {
       case FileType.CSV:
 
+      // fallthrough
       case FileType.TSV:
         return new CsvProcessor(this.callbacks);
 
@@ -142,10 +145,11 @@ class CsvProcessor extends FileProcessor {
 
     const duplicates = detectDuplicateRows(csvRows);
     const statistics = getDataStatistics(csvRows, headers);
+    const tabularData = csvRowsToTabularData(csvRows);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: csvRows,
-      content: JSON.stringify(csvRows),
+      parsedData: tabularData,
+      content: JSON.stringify(tabularData),
       duplicates: {
         hasDuplicates: duplicates.hasDuplicates,
         duplicateCount: duplicates.duplicateCount
@@ -251,7 +255,7 @@ class GeoJsonProcessor extends FileProcessor {
       }
 
       this.callbacks.onStatusChange(uploadedFile.id, 'complete');
-    } catch (e) {
+    } catch (_e) {
       this.callbacks.onStatusChange(
         uploadedFile.id,
         'error',
@@ -307,6 +311,20 @@ class GenericProcessor extends FileProcessor {
       status: 'complete'
     });
   }
+}
+
+function csvRowsToTabularData(csvRows: CsvRow[]): TabularData {
+  return csvRows.map((row) => {
+    const tabularRow: Record<string, JsonValue> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (value instanceof Date) {
+        tabularRow[key] = value.toISOString();
+      } else {
+        tabularRow[key] = value;
+      }
+    }
+    return tabularRow;
+  });
 }
 
 function normalizeCsvRow(

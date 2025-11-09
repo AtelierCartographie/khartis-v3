@@ -6,7 +6,7 @@
     Tag,
     Tile
   } from 'carbon-components-svelte';
-  import { Checkmark, Location, WarningAlt } from 'carbon-icons-svelte';
+  import { Checkmark, Location } from 'carbon-icons-svelte';
   import type { GeoColumnDetection } from './types/basemap.types';
   import { m } from '$lib/paraglide/messages';
 
@@ -92,7 +92,7 @@
           selected={selectedGeoColumn}
           on:change={handleColumnChange}
         >
-          {#each columns.filter((c) => c.type === 'string' || c.type === 'number') as column}
+          {#each columns.filter((c) => c.type === 'string' || c.type === 'number') as column (column.name)}
             <SelectItem value={column.name} text={column.name} />
           {/each}
         </Select>
@@ -122,7 +122,7 @@
         on:change={handleColumnChange}
       >
         <SelectItem value="" text={m.select_column()} />
-        {#each columns as column}
+        {#each columns as column (column.name)}
           <SelectItem value={column.name} text={column.name} />
         {/each}
       </Select>

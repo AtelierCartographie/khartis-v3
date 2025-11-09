@@ -91,6 +91,7 @@ export function create_summary_plot(
   switch (type_simple) {
     case 'numeric':
 
+    // fallthrough
     case 'date':
       return create_plot_numeric(data as NumericData, options);
 
@@ -285,7 +286,7 @@ function create_plot_categorical(
         histogramData as CategoryHistogramItem[],
         Plot.pointerX({
           px: 'count',
-          text: (d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
+          text: (_d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
           frameAnchor: 'bottom-left',
           dy: 10,
           fill: '#222',

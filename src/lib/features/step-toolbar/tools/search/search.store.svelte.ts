@@ -202,7 +202,7 @@ export function getSearchPattern(): RegExp | string {
 
   try {
     return new RegExp(pattern, searchState.caseSensitive ? 'g' : 'gi');
-  } catch (error) {
+  } catch (_error) {
     return searchState.searchValue;
   }
 }

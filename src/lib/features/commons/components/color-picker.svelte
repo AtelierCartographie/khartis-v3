@@ -12,7 +12,7 @@
     saturation = 50,
     lightness = 50,
     onCancel = () => {},
-    onValidate = (_: {
+    onValidate = (_color: {
       hex: string;
       hue: number;
       saturation: number;

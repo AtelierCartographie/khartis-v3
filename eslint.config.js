@@ -22,6 +22,16 @@ export default ts.config(
     },
     rules: {
       'no-undef': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_'
+        }
+      ],
       'padding-line-between-statements': [
         'error',
         { blankLine: 'always', prev: '*', next: 'function' },
@@ -47,6 +57,9 @@ export default ts.config(
         extraFileExtensions: ['.svelte'],
         svelteConfig
       }
+    },
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off'
     }
   },
   {

@@ -18,7 +18,6 @@
 
   let selectedProjectId = $state('');
   let newProjectName = $state('');
-  let showNameInput = $state(false);
 
   $effect(() => {
     if (open) {
@@ -66,7 +65,6 @@
   function resetForm() {
     selectedProjectId = '';
     newProjectName = '';
-    showNameInput = false;
   }
 </script>
 
@@ -94,7 +92,7 @@
           bind:selected={selectedProjectId}
           on:change={(e) => handleProjectSelection(String(e.detail))}
         >
-          {#each projectsStore.projects as project}
+          {#each projectsStore.projects as project (project.id)}
             <RadioButton value={project.id} labelText={project.name} />
           {/each}
         </RadioButtonGroup>

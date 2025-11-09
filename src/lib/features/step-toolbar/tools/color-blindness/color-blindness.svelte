@@ -48,7 +48,7 @@
             on:change={handleSimulationChange}
             size="xl"
           >
-            {#each simulationOptions as option}
+            {#each simulationOptions as option (option.value)}
               <SelectItem value={option.value} text={option.text} />
             {/each}
           </Select>

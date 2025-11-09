@@ -4,6 +4,7 @@ import { FileType } from '../store/create-project.types';
 import type { ProcessedDataset } from '../utils/data-pipeline.utils';
 import { showError } from '../utils/notification.utils.svelte';
 import { logger, LogCategory } from '../utils/logger';
+import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
 
 export enum RefineOperation {
   UPPERCASE = 'uppercase',
@@ -18,7 +19,7 @@ export interface DuckDBDataset {
   tableName: string;
   sourceFileId: string;
   name: string;
-  columns: any[];
+  columns: AnalysisResult[];
   rowCount: number;
   metadata: {
     processedAt: Date;
@@ -48,11 +49,12 @@ class DuckDBOrchestratorService {
   }
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
+    const { getParsedDataSample } = await import('$lib/types/data');
     logger.debug('Processing file', LogCategory.DUCKDB, {
       name: file.name,
       status: file.status,
       hasParsedData: !!file.parsedData,
-      parsedDataSample: file.parsedData?.[0]
+      parsedDataSample: getParsedDataSample(file.parsedData)
     });
 
     if (!this.initialized) {
@@ -95,11 +97,17 @@ class DuckDBOrchestratorService {
     file: UploadedFile,
     tableName: string
   ): Promise<DuckDBDataset> {
+    const { getParsedDataLength, getParsedDataSample, isTabularData } =
+      await import('$lib/types/data');
     logger.debug('Processing CSV file', LogCategory.DUCKDB, {
       name: file.name,
-      parsedDataLength: file.parsedData?.length,
-      firstRow: file.parsedData?.[0]
+      parsedDataLength: getParsedDataLength(file.parsedData),
+      firstRow: getParsedDataSample(file.parsedData)
     });
+
+    if (!file.parsedData || !isTabularData(file.parsedData)) {
+      throw new Error('Invalid or missing parsed data for CSV file');
+    }
 
     const csvData = this.convertToCSV(file.parsedData);
     logger.debug('CSV data prepared', LogCategory.DUCKDB, {
@@ -212,7 +220,7 @@ class DuckDBOrchestratorService {
     return dataset;
   }
 
-  private convertToCSV(data: any[]): string {
+  private convertToCSV(data: Record<string, unknown>[]): string {
     if (!data || data.length === 0) return '';
 
     const headers = Object.keys(data[0]);
@@ -255,7 +263,7 @@ class DuckDBOrchestratorService {
       orderBy?: string | null;
       order?: 'ASC' | 'DESC' | null;
     }
-  ): Promise<any> {
+  ): Promise<ArrowTableLike> {
     logger.debug('Getting data for table', LogCategory.DUCKDB, { tableName });
 
     if (!this.initialized) {
@@ -281,7 +289,7 @@ class DuckDBOrchestratorService {
         }
 
         logger.debug('Running query', LogCategory.DUCKDB, { query });
-        return await Duck.query(query);
+        return (await Duck.query(query)) as ArrowTableLike;
       } else {
         const data = await Duck.get_data(tableName, { geometry: false });
         logger.debug('Data retrieved', LogCategory.DUCKDB, {
@@ -293,7 +301,7 @@ class DuckDBOrchestratorService {
       }
     } catch (_error) {
       logger.error('Error getting table data', LogCategory.DUCKDB, _error);
-      return { numRows: 0, get: () => ({}) };
+      return { numRows: 0, get: () => ({}), toArray: () => [] };
     }
   }
 
@@ -308,32 +316,34 @@ class DuckDBOrchestratorService {
       return await Duck.get_row_count(tableName);
     } catch (_error) {
       logger.error('Error getting row count', LogCategory.DUCKDB, _error);
-      const result: any = await Duck.query(
+      const result = (await Duck.query(
         `SELECT COUNT(*) as count FROM ${tableName}`
-      );
+      )) as ArrowTableLike;
       if (result && result.get) {
-        return result.get(0).count;
+        const row = result.get(0) as Record<string, unknown>;
+        return Number(row.count);
       } else if (result && result.numRows === 1) {
-        return Number(result.toArray()[0].count);
+        const row = result.toArray()[0] as Record<string, unknown>;
+        return Number(row.count);
       }
       return 0;
     }
   }
 
-  async analyzeTable(tableName: string): Promise<any[]> {
+  async analyzeTable(tableName: string): Promise<Record<string, unknown>[]> {
     if (!this.initialized) {
       await this.initialize();
     }
 
     if (!Duck) throw new Error('DuckDB not initialized');
 
-    const result: any = await Duck.query(`
+    const result = (await Duck.query(`
       SELECT
         column_name as name,
         data_type as type
       FROM duckdb_columns()
       WHERE table_name = '${tableName}'
-    `);
+    `)) as ArrowTableLike;
 
     const columns = [];
     for (let i = 0; i < result.numRows; i++) {
@@ -342,7 +352,7 @@ class DuckDBOrchestratorService {
     return columns;
   }
 
-  async getFullAnalysis(tableName: string): Promise<any[]> {
+  async getFullAnalysis(tableName: string): Promise<AnalysisResult[]> {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -492,11 +502,12 @@ class DuckDBOrchestratorService {
       replaceValue
     });
 
-    const countResult = await Duck.query(
+    const countResult = (await Duck.query(
       `SELECT COUNT(*) as count FROM ${tableName} WHERE "${columnName}"::TEXT LIKE '%${searchValue}%'`
-    );
+    )) as ArrowTableLike;
 
-    const count = (countResult as any).get(0)?.count || 0;
+    const countRow = countResult.get(0) as Record<string, unknown>;
+    const count = Number(countRow?.count) || 0;
 
     if (count > 0) {
       await Duck.query(
@@ -519,13 +530,13 @@ class DuckDBOrchestratorService {
     return count;
   }
 
-  async runQuery(query: string): Promise<any> {
+  async runQuery(query: string): Promise<ArrowTableLike> {
     if (!this.initialized) {
       await this.initialize();
     }
 
     if (!Duck) throw new Error('DuckDB not initialized');
-    return Duck.query(query);
+    return Duck.query(query) as Promise<ArrowTableLike>;
   }
 
   getDataset(id: string): DuckDBDataset | undefined {
@@ -570,7 +581,13 @@ class DuckDBOrchestratorService {
       if (this.currentTableName === tableName) {
         this.currentTableName = null;
       }
-    } catch (_error) {}
+    } catch (error) {
+      logger.debug(
+        `Failed to drop table ${tableName}`,
+        LogCategory.DATA,
+        error
+      );
+    }
   }
 
   async clear(): Promise<void> {
@@ -592,7 +609,7 @@ class DuckDBOrchestratorService {
       sampleColumn: duckDataset.columns[0]
     });
 
-    let data: any[] = [];
+    let data: Record<string, unknown>[] = [];
     try {
       const tableData = await this.getTableData(duckDataset.tableName);
       logger.debug('TableData received', LogCategory.DUCKDB, {
@@ -604,7 +621,7 @@ class DuckDBOrchestratorService {
         const limit = Math.min(1000, tableData.numRows);
         for (let i = 0; i < limit; i++) {
           const row = tableData.get(i);
-          const cleanRow: any = {};
+          const cleanRow: Record<string, unknown> = {};
           for (const key in row) {
             if (!key.startsWith('__')) {
               cleanRow[key] = row[key];
@@ -623,18 +640,20 @@ class DuckDBOrchestratorService {
     }
 
     const userColumns = duckDataset.columns.filter(
-      (col: any) => !col.name.startsWith('__')
+      (col) => !col.name.startsWith('__')
     );
 
     const processedDataset = {
       id: duckDataset.id,
       name: duckDataset.name,
       sourceFileId: duckDataset.sourceFileId,
-      columns: userColumns.map((col: any) => ({
+      columns: userColumns.map((col) => ({
         name: col.name,
-        type: this.mapDuckDBType(col.type_simple || col.type || col.type_js),
-        nullable: (col.nulls || 0) > 0,
-        unique: col.unique || false,
+        type: this.mapDuckDBType(
+          String(col.type_simple || col.type || col.type_js)
+        ),
+        nullable: (Number(col.nulls) || 0) > 0,
+        unique: Boolean(col.unique),
         min: col.min,
         max: col.max,
         uniqueValues: col.unique ? new Set() : undefined,
@@ -667,7 +686,10 @@ class DuckDBOrchestratorService {
   ): 'string' | 'number' | 'date' | 'boolean' | 'geometry' {
     if (!duckType) return 'string';
 
-    const typeMap: Record<string, any> = {
+    const typeMap: Record<
+      string,
+      'string' | 'number' | 'date' | 'boolean' | 'geometry'
+    > = {
       numeric: 'number',
       text: 'string',
       string: 'string',
@@ -707,14 +729,12 @@ class DuckDBOrchestratorService {
         ON LOWER(TRIM(b.${basemapColumnName})) = LOWER(TRIM(d.${dataColumnName}))
       `);
 
-      const countResult: any = await Duck.query(`
+      const countResult = (await Duck.query(`
         SELECT COUNT(*) as count FROM ${joinedTableName}
-      `);
+      `)) as ArrowTableLike;
 
-      const joinedCount =
-        countResult && Array.isArray(countResult) && countResult.length > 0
-          ? Number(countResult[0].count)
-          : 0;
+      const countRow = countResult.get(0) as Record<string, unknown>;
+      const joinedCount = Number(countRow?.count) || 0;
 
       logger.success(
         `Join completed: ${joinedCount} rows in ${joinedTableName}`,

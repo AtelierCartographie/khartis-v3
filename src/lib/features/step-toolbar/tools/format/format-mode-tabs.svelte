@@ -14,11 +14,7 @@
     { icon: Edit, label: customLabel, iconSize: 20 }
   ]);
 
-  let modeIndex = $state(0);
-
-  $effect(() => {
-    modeIndex = formatState.mode === 'preset' ? 0 : 1;
-  });
+  let modeIndex = $derived(formatState.mode === 'preset' ? 0 : 1);
 </script>
 
 <Grid padding noGutter>

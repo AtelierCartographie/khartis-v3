@@ -49,7 +49,7 @@
   >
     {#if primaryData.length > 0}
       <div class="tooltip-section primary">
-        {#each primaryData as [key, value]}
+        {#each primaryData as [key, value] (key)}
           <div class="tooltip-row">
             <span class="tooltip-label">{key}:</span>
             <span class="tooltip-value primary-value">{formatValue(value)}</span
@@ -63,7 +63,7 @@
       <Accordion size="sm">
         <AccordionItem title="Autres attributs" open={false}>
           <div class="tooltip-section secondary">
-            {#each secondaryData as [key, value]}
+            {#each secondaryData as [key, value] (key)}
               <div class="tooltip-row">
                 <span class="tooltip-label">{key}:</span>
                 <span class="tooltip-value">{formatValue(value)}</span>

@@ -283,7 +283,7 @@
                 <div class="related-files-tags">
                   <span class="related-files-label">Related files:</span>
                   <div class="tags-container">
-                    {#each file.relatedFiles as relatedFile}
+                    {#each file.relatedFiles as relatedFile, idx (idx)}
                       <Tag size="sm" type="gray">{relatedFile}</Tag>
                     {/each}
                   </div>

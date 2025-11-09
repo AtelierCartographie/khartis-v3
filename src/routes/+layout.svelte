@@ -31,7 +31,7 @@
     // Initialize DuckDB first
     try {
       await duckDBOrchestrator.initialize();
-    } catch (error) {
+    } catch (_error) {
       // Silent fail - DuckDB initialization is optional
     }
 

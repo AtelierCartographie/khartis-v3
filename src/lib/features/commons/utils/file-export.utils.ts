@@ -1,9 +1,13 @@
 import Papa from 'papaparse';
 import type { UploadedFile } from '../store/create-project.types';
-import { FileType } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
 import { logger, LogCategory } from './logger';
 import type { ProcessedDataset } from './data-pipeline.utils';
+import {
+  isTabularData,
+  isGeoJSONFeatureCollection,
+  isGeoJSONFeature
+} from '$lib/types/data';
 
 export const generateExportFilename = generateFilename;
 
@@ -216,16 +220,17 @@ export async function exportProjectData(
     const allData: any[] = [];
 
     for (const file of validFiles) {
-      if (file.fileType === FileType.CSV && file.parsedData) {
-        allData.push(...file.parsedData);
-      } else if (file.parsedData?.features) {
-        const features = file.parsedData.features;
-        const flatData = features.map((f: any) => ({
-          ...f.properties,
-          geometry_type: f.geometry?.type,
-          coordinates: JSON.stringify(f.geometry?.coordinates)
-        }));
-        allData.push(...flatData);
+      if (file.parsedData) {
+        if (isTabularData(file.parsedData)) {
+          allData.push(...file.parsedData);
+        } else if (isGeoJSONFeatureCollection(file.parsedData)) {
+          const flatData = file.parsedData.features.map((f) => ({
+            ...f.properties,
+            geometry_type: f.geometry?.type,
+            coordinates: JSON.stringify(f.geometry?.coordinates)
+          }));
+          allData.push(...flatData);
+        }
       }
     }
 
@@ -236,15 +241,17 @@ export async function exportProjectData(
     const allFeatures: any[] = [];
 
     for (const file of validFiles) {
-      if (file.parsedData?.type === 'FeatureCollection') {
-        allFeatures.push(...file.parsedData.features);
-      } else if (file.parsedData?.type === 'Feature') {
-        allFeatures.push(file.parsedData);
-      } else if (file.fileType === FileType.CSV && file.parsedData) {
-        logger.warn(
-          `Skipping CSV file ${file.name} for GeoJSON export`,
-          LogCategory.EXPORT
-        );
+      if (file.parsedData) {
+        if (isGeoJSONFeatureCollection(file.parsedData)) {
+          allFeatures.push(...file.parsedData.features);
+        } else if (isGeoJSONFeature(file.parsedData)) {
+          allFeatures.push(file.parsedData);
+        } else if (isTabularData(file.parsedData)) {
+          logger.warn(
+            `Skipping CSV file ${file.name} for GeoJSON export`,
+            LogCategory.EXPORT
+          );
+        }
       }
     }
 

@@ -2,7 +2,6 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
-    ButtonSet,
     Column,
     Grid,
     NumberInput,
@@ -92,7 +91,7 @@
             (e.currentTarget as HTMLSelectElement).value
           )}
       >
-        {#each predefinedStyles as style}
+        {#each predefinedStyles as style (style.value)}
           <SelectItem value={style.value} text={style.text} />
         {/each}
       </Select>

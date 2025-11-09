@@ -13,7 +13,11 @@ export async function compressData(data: string): Promise<ArrayBuffer> {
     });
 
     const compressedStream = stream.pipeThrough(
-      new (window as any).CompressionStream('gzip')
+      new (
+        window as Window & {
+          CompressionStream: new (format: string) => TransformStream;
+        }
+      ).CompressionStream('gzip')
     ) as ReadableStream<Uint8Array>;
 
     const chunks: Uint8Array[] = [];
@@ -51,7 +55,11 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
       });
 
       const decompressedStream = stream.pipeThrough(
-        new (window as any).DecompressionStream('gzip')
+        new (
+          window as Window & {
+            DecompressionStream: new (format: string) => TransformStream;
+          }
+        ).DecompressionStream('gzip')
       ) as ReadableStream<Uint8Array>;
 
       const chunks: Uint8Array[] = [];

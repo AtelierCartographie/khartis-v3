@@ -32,10 +32,6 @@
     isAddDataModalOpen = true;
   };
 
-  const closeAddDataModal = () => {
-    isAddDataModalOpen = false;
-  };
-
   const openDeleteConfirm = (
     fileId: string,
     fileName: string,
@@ -84,20 +80,25 @@
     switch (ext) {
       case 'csv':
 
+      // fallthrough
       case 'tsv':
 
+      // fallthrough
       case 'txt':
         return 'blue';
 
       case 'json':
 
+      // fallthrough
       case 'geojson':
         return 'green';
 
       case 'shp':
 
+      // fallthrough
       case 'gpkg':
 
+      // fallthrough
       case 'kml':
         return 'purple';
 
@@ -169,10 +170,7 @@
   </div>
 </div>
 
-<AddDataModal
-  bind:open={isAddDataModalOpen}
-  {closeAddDataModal}
-/>
+<AddDataModal bind:open={isAddDataModalOpen} addDataButton={openAddDataModal} />
 
 <Modal
   danger

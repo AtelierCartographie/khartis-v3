@@ -5,7 +5,6 @@ import {
   suggestProjection,
   fitProjectionToGeoJSON,
   projectGeoJSON,
-  getBoundsFromGeoJSON,
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';

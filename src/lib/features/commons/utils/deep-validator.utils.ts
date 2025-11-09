@@ -331,7 +331,7 @@ export class DeepDataValidator {
   private static checkPerformance(
     rowCount: number,
     columnCount: number,
-    data: any[][]
+    _data: unknown[][]
   ): string[] {
     const warnings: string[] = [];
 

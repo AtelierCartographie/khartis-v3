@@ -51,6 +51,7 @@
       switch (key) {
         case '+':
 
+        // fallthrough
         case '=':
           globalActions.zoomIn();
           return true;
