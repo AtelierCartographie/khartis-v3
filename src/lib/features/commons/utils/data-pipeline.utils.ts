@@ -61,7 +61,9 @@ export function detectColumnType(values: unknown[]): DataColumn['type'] {
   );
   if (nonNullValues.length === 0) return 'string';
 
-  const sample = nonNullValues.slice(0, 100);
+  // Nombre de valeurs à échantillonner pour la détection de type
+  const SAMPLE_SIZE_FOR_TYPE_DETECTION = 100;
+  const sample = nonNullValues.slice(0, SAMPLE_SIZE_FOR_TYPE_DETECTION);
 
   const allNumbers = sample.every((v) => {
     const num = Number(v);
@@ -103,7 +105,8 @@ export function analyzeColumn(name: string, values: unknown[]): DataColumn {
     nullable: nonNullValues.length < values.length,
     unique: new Set(nonNullValues).size === nonNullValues.length,
     uniqueValues: new Set(nonNullValues),
-    sampleValues: nonNullValues.slice(0, 10)
+    // Nombre de valeurs à afficher dans les échantillons de colonnes
+    sampleValues: nonNullValues.slice(0, 10) // SAMPLE_VALUES_DISPLAY_SIZE = 10
   };
 
   if (type === 'number') {

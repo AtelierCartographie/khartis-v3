@@ -1,24 +1,12 @@
 import localforage from 'localforage';
+import {
+  STORAGE_LIMITS,
+  type ValidationResult,
+  type StorageLimits
+} from '../configs/validation.config';
 
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
-}
-
-export interface StorageLimits {
-  maxFileSize: number;
-  maxProjectSize: number;
-  maxProjectCount: number;
-  maxStorageSize: number;
-}
-
-export const STORAGE_LIMITS: StorageLimits = {
-  maxFileSize: 50 * 1024 * 1024,
-  maxProjectSize: 100 * 1024 * 1024,
-  maxProjectCount: 50,
-  maxStorageSize: 5 * 1024 * 1024
-};
+// Re-export pour compatibilité avec le code existant
+export { STORAGE_LIMITS, type ValidationResult, type StorageLimits };
 
 export class ProjectValidator {
   static validateFileSize(file: File): ValidationResult {

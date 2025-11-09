@@ -1,5 +1,9 @@
 import { FileType } from '../store/create-project.types';
 import { LogCategory, logger } from './logger';
+import {
+  STORAGE_LIMITS,
+  type ValidationResult
+} from '../configs/validation.config';
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -10,10 +14,11 @@ export interface FileValidationConfig {
   strictMode: boolean;
 }
 
-export interface DetailedValidationResult {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
+/**
+ * Résultat de validation détaillé, hérite de ValidationResult
+ * et ajoute des informations spécifiques aux fichiers
+ */
+export interface DetailedValidationResult extends ValidationResult {
   fileType: FileType;
   requiresAsyncValidation: boolean;
   metadata?: {
@@ -25,9 +30,9 @@ export interface DetailedValidationResult {
 }
 
 export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
-  maxFileSize: 50 * 1024 * 1024,
-  maxTotalSize: 100 * 1024 * 1024,
-  maxFileCount: 20,
+  maxFileSize: STORAGE_LIMITS.maxFileSize,
+  maxTotalSize: STORAGE_LIMITS.maxTotalFileSize,
+  maxFileCount: STORAGE_LIMITS.maxFileCount,
   allowedExtensions: [
     'csv',
     'tsv',
