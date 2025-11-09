@@ -1,33 +1,42 @@
 # Architecture
 
+> **Mental model and core design principles of Khartis v3**
+
 ## Runtime Flow
 
 ```
-Import → Validation → Parsing → Typing + Stats → Dataset Store → Visualization Suggest → User Configure → Layer Build (Deck.gl) + Basemap (MapLibre) → Layout/Annotations → Export
+Import → Validate → Parse → Type Inference + Stats → Dataset Store
+  ↓
+Visualization Suggestion → User Configuration → Layer Assembly (Deck.gl)
+  ↓
+Basemap (MapLibre) + Annotations + Layout → Export (PNG/SVG/PDF/CSV/GeoJSON)
 ```
 
-## Core Data Shapes (Simplified)
+## Core Data Shapes
 
 ```ts
 interface DataColumn {
   name: string;
-  type: ColumnType;
-  stats?: ColumnStats;
+  type: ColumnType;        // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
+  stats?: ColumnStats;     // min, max, mean, nulls, uniques
 }
+
 interface ProcessedDataset {
   id: string;
   name: string;
   columns: DataColumn[];
   rowCount: number;
-  geometry?: GeometryInfo;
+  geometry?: GeometryInfo;  // type, bbox, crs
 }
+
 interface Visualization {
   id: string;
   datasetId: string;
-  type: VizType;
+  type: VizType;            // 'choropleth' | 'proportional' | 'categorical' | 'bivariate'
   classification?: Classification;
   color?: ColorConfig;
 }
+
 interface Project {
   id: string;
   datasets: ProcessedDataset[];
@@ -37,67 +46,120 @@ interface Project {
 }
 ```
 
-## Pillars
+## Four Pillars
 
-- Client-only privacy (IndexedDB + memory)
-- Feature-first modularity
-- Runes reactive state (explicit mutation methods)
-- GPU-first rendering pipeline
-- Registry-driven extensibility (viz, color, export, classification, projection)
+1. **Client-only Privacy**
+   - All processing in browser (IndexedDB + memory)
+   - No server upload or external API calls for user data
+   - Offline-capable
 
-## Stores Layering
+2. **Feature-first Modularity**
+   - Self-contained features in `src/lib/features/`
+   - Each feature owns its store, components, types
+   - Minimal cross-feature coupling
 
-| Layer           | Purpose                     |
-| --------------- | --------------------------- |
-| Component local | Ephemeral UI state          |
-| Feature store   | Canonical domain state      |
-| Global store    | Cross-feature coordination  |
-| Persistence     | Project snapshot & datasets |
+3. **Runes Reactive State**
+   - Svelte 5 `$state` and `$derived`
+   - Explicit mutation methods (no direct assignment)
+   - Predictable state updates
 
-## Performance Anchors
+4. **GPU-first Rendering**
+   - Deck.gl for thematic layers
+   - MapLibre for basemaps
+   - Hardware-accelerated pan/zoom/render
 
-| Concern             | Mitigation                              |
-| ------------------- | --------------------------------------- |
-| Large imports       | Streaming parse + sample type inference |
-| Heavy stats         | Worker offload                          |
-| Geometry complexity | Pre-simplified tiers + dynamic LOD      |
-| Recompute churn     | $derived memoization + debounce         |
+## Store Layering
 
-## Failure Principles
+| Layer | Purpose | Example |
+|-------|---------|---------|
+| **Component Local** | Ephemeral UI state | Form inputs, modal visibility |
+| **Feature Store** | Canonical domain state | Dataset list, visualization config |
+| **Global Store** | Cross-feature coordination | Project metadata, active dataset |
+| **Persistence** | Long-term storage | IndexedDB snapshots, auto-save |
 
-Fail fast on invalid input; fallback gracefully (default projection, safe classification); never block UI thread for long tasks (use workers + progress tokens).
+**State flow**: Component → Feature Store → Global Store → IndexedDB
 
-## Extensibility Contracts (Sketch)
+## Performance Strategy
+
+| Challenge | Solution |
+|-----------|----------|
+| Large file imports | Streaming parse + sampled type inference |
+| Heavy computations | Web Workers (classification, joins, simplification) |
+| Complex geometry | Pre-simplified tiers + dynamic LOD |
+| Rapid edits | `$derived` memoization + debounced recompute |
+
+**Target**: <3s load, ~60fps rendering (small-medium datasets)
+
+## Extensibility Contracts
 
 ```ts
+// Add new file parser
 type Parser = (file: File) => Promise<RawDataset>;
+
+// Add new classification method
 interface ClassificationStrategy {
   id: string;
   compute(values: number[], k: number): number[];
 }
+
+// Add new export format
 interface Exporter {
   id: string;
   export(project: Project): Promise<Blob>;
 }
+
+// Add new visualization type
+interface VizFactory {
+  id: string;
+  create(dataset: Dataset, config: VizConfig): Visualization;
+}
 ```
 
-## Security Snapshot
+All extensions register in respective registries (parser, classification, export, visualization).
 
-Sanitize filenames & CSV cells, size quotas, dependency audits. Not applicable: CSRF, server auth, multi-tenant isolation.
+## Error Handling Principles
 
-## Accessibility Snapshot
+- **Fail fast** on invalid input (validation)
+- **Fallback gracefully** on computation errors (default projection, safe classification)
+- **Never block UI** for long tasks (workers + progress feedback)
+- **User-friendly messages** (contextual, actionable)
 
-Keyboard-first navigation, visible focus, contrast-aware palettes, textual summaries for key map stats.
+## Security & Privacy
+
+- **Client-only**: No server attack surface
+- **Sanitization**: File names, CSV cells, user inputs
+- **Size quotas**: 50MB file, 100MB project, 50 projects max
+- **Dependency audits**: Regular security checks
+
+Not applicable: CSRF, server auth, multi-tenant isolation
+
+## Accessibility
+
+- **Keyboard-first**: Full keyboard navigation
+- **Focus management**: Visible focus indicators
+- **Contrast-aware**: Color palette suggestions respect WCAG
+- **Textual summaries**: Stats and map descriptions for screen readers
 
 ## Internationalization
 
-Paraglide compile-time messages; semantic keys; no runtime string concatenation.
+- **Paraglide**: Compile-time message extraction
+- **Semantic keys**: `m.projectCreate()` not `m.label1()`
+- **No concatenation**: Use message parameters
+- **Supported locales**: en, fr
 
-## When To Dive Deeper
+## Extension Points Quick Reference
 
-| Task              | Detailed Source                          |
-| ----------------- | ---------------------------------------- |
-| New format        | Data pipeline parsers                    |
-| New viz type      | Visualization registry                   |
-| Performance audit | Cross-cutting perf section               |
-| Undo logic        | State & persistence store implementation |
+| Task | Entry Point |
+|------|-------------|
+| New file format | `src/lib/features/commons/services/parsers/` |
+| New visualization | `src/lib/features/map/utils/visualization-registry.ts` |
+| New classification | `src/lib/features/map/utils/classification/` |
+| New export format | `src/lib/features/commons/utils/export/` |
+| New tool | `src/lib/features/step-toolbar/tools/<tool-name>` |
+
+---
+
+**See also:**
+- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing details
+- [VISUALIZATION.md](VISUALIZATION.md) - Rendering system
+- [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management

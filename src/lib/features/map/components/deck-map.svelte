@@ -14,7 +14,7 @@
     globalActions
   } from '../../commons/store/global.svelte';
   import { ZoomMode } from '../../commons/types/global';
-  import { hexToRgb } from '../utils/color.utils';
+  import { hexToRgb } from '../../commons/utils/color-utils';
   import {
     getColorForValue,
     getSizeForValue,

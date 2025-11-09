@@ -1,102 +1,284 @@
 # Visualization & Rendering
 
-## Types
+> **Thematic map configuration and GPU rendering pipeline**
 
-Choropleth, Proportional Symbols, Categorical, Bivariate, Collections (facets).
+## Visualization Types
+
+| Type | Use Case | Requirements |
+|------|----------|--------------|
+| **Choropleth** | Color-coded regions | Geometry + numeric variable |
+| **Proportional Symbols** | Sized markers | Geometry + numeric variable |
+| **Categorical** | Distinct categories | Geometry + categorical variable |
+| **Bivariate** | Two variables combined | Geometry + 2 numeric variables |
+| **Collections (Facets)** | Multi-map comparison | Geometry + grouping variable |
 
 ## Lifecycle
 
-Dataset → Suggestion → User config (classification/color/projection) → Layer build → Render → Legend.
+```
+Dataset → Auto-Suggestion → User Configuration
+  ↓
+Classification + Color Selection + Projection
+  ↓
+Layer Assembly (Deck.gl) → GPU Rendering → Legend Generation
+```
 
-## Config (Minimal)
+## Configuration Structure
 
 ```ts
 interface VisualizationConfig {
   id: string;
   datasetId: string;
-  type: VizType;
+  type: 'choropleth' | 'proportional' | 'categorical' | 'bivariate' | 'facets';
   classification?: Classification;
   color?: ColorConfig;
   proportional?: SymbolConfig;
-  categorical?: CatConfig;
-  bivariate?: BiConfig;
+  categorical?: CategoryConfig;
+  bivariate?: BivariateConfig;
 }
 ```
 
-## Classification
+## Classification Methods
 
-| Method             | Implementation                    | Notes                      |
-| ------------------ | --------------------------------- | -------------------------- |
-| Equal Interval     | Deterministic range slicing       | Full implementation        |
-| Quantile           | Sorted values with ties collapsed | Full implementation        |
-| Jenks              | Falls back to quantile            | Placeholder implementation |
-| Standard Deviation | Mean ± n\*σ bands                 | Full implementation        |
-| Manual             | User-specified breaks             | Full implementation        |
+| Method | Algorithm | Status | Notes |
+|--------|-----------|--------|-------|
+| **Equal Interval** | `(max - min) / k` uniform ranges | ✅ Full | Simple, consistent |
+| **Quantile** | Equal-count bins with tie handling | ✅ Full | Balanced distribution |
+| **Jenks** | Natural breaks optimization | ⚠️ Fallback | Falls back to Quantile |
+| **Std Deviation** | `mean ± n×σ` bands | ✅ Full | Statistical breaks |
+| **Manual** | User-specified breaks | ✅ Full | Full control |
 
-Classification computations run synchronously on main thread. DuckDB provides `Duck.breaks()` for efficient break calculation.
+**Default**: 5 classes (recommended range: 3-9)
+
+**Performance**: Main thread computation; DuckDB `breaks()` for large datasets
+
+### Break Calculation
+
+```ts
+// Via DuckDB for efficiency
+const breaks = await Duck.breaks(tableName, column, 'quantile', 5);
+
+// Or via classification utilities
+import { classifyEqualInterval } from '$lib/features/map/utils/classification';
+const breaks = classifyEqualInterval(values, 5);
+```
 
 ## Color Palettes
 
-Sequential, Diverging, Qualitative, Bivariate matrix. Accessibility filter flags unsafe combos. Palette inversion toggle.
+### Palette Types
+
+- **Sequential**: Single hue progression (light → dark)
+- **Diverging**: Two hues with neutral midpoint
+- **Qualitative**: Distinct colors for categories
+- **Bivariate**: 2D color matrix (3×3 or 4×4)
+
+**Accessibility**: Palette filter flags WCAG contrast issues, color-blind unsafe combos
+
+**Features**: Palette inversion toggle, custom color picker
 
 ## Projections
 
-Ranked by dataset extent & distortion heuristics. Categories: cylindrical, pseudo-cylindrical, conic, azimuthal, discontinuous. Custom WKT/PROJ.4 accepted.
+**Selection Strategy**: Ranked by dataset extent fit and distortion heuristics
+
+### Projection Categories
+
+- **Cylindrical**: Mercator, Equirectangular
+- **Pseudo-cylindrical**: Robinson, Natural Earth
+- **Conic**: Albers, Lambert Conformal
+- **Azimuthal**: Orthographic, Stereographic
+- **Discontinuous**: Interrupted projections
+
+**Custom Support**: WKT or PROJ.4 string accepted
+
+### Auto-Selection
+
+```ts
+// Ranked by fit to dataset bbox
+const suggestions = ProjectionSelector.rankProjections(datasetBounds);
+const best = suggestions[0]; // Highest score
+```
 
 ## Layer Assembly
 
-1. Bind dataset slice
-2. Map attributes (fillColor/size/pattern)
-3. Enable picking
-4. Composite ordering: basemap → thematic → overlays (annotations, indicators)
+### Rendering Pipeline
+
+```
+1. Dataset Slice (filtered rows)
+   ↓
+2. Attribute Mapping (fillColor, size, pattern)
+   ↓
+3. Deck.gl Layer Creation (GeoJsonLayer, ScatterplotLayer, etc.)
+   ↓
+4. Picking Configuration (interactive selection)
+   ↓
+5. Layer Compositing (basemap → thematic → annotations)
+   ↓
+6. GPU Rendering (hardware-accelerated)
+```
+
+### Layer Order
+
+```
+Bottom: Basemap (MapLibre)
+  ↓
+Middle: Thematic Layers (Deck.gl)
+  ↓
+Top: Overlays (annotations, scale, north arrow)
+```
 
 ## Collections (Facets)
 
-Common vs independent scale modes. Grid layout (configurable columns). Optional synchronized interactions (pan/zoom linking).
+**Purpose**: Multi-map comparison by grouping variable
 
-## Simplification
+**Features:**
+- **Common scale**: Same breaks/colors across all maps (comparison)
+- **Independent scale**: Per-map optimization (exploration)
+- **Grid layout**: Configurable columns
+- **Synchronized interactions**: Optional pan/zoom linking
 
-- Catalog basemap: tiered preprocessed levels
-- Imported: adjustable tolerance (warn on excessive loss)
-  Preview uses simplified geometry; final settle re-renders full detail.
+**Example**: Compare sales by region across years
 
-## Performance Levers
+## Geometry Simplification
 
-| Concern          | Strategy                                                               |
-| ---------------- | ---------------------------------------------------------------------- |
-| Rapid edits      | Throttle recompute + temporary simplified rendering                    |
-| Large geometry   | LOD + partial redraw                                                   |
-| Classification   | Intended caching keyed by dataset + params (basic in-memory reuse now) |
-| Picking overhead | Compact binary attributes                                              |
+### Strategy
 
-## Legends
+| Source | Approach |
+|--------|----------|
+| **Catalog basemaps** | Pre-simplified tiers (multiple LOD levels) |
+| **Imported geometry** | Adjustable tolerance with preview |
 
-Choropleth (breaks), Proportional (size samples), Categorical (mapping), Bivariate (matrix). Regenerated on relevant param change.
+**Performance**: Simplify geometries >10k vertices
 
-## Edge Handling
+**Workflow**:
+1. Preview uses simplified geometry (fast interaction)
+2. Final render uses full detail (or user-selected tolerance)
+3. Warning if excessive geometry loss
 
-All-null → disable suggestion; single-valued numeric → suggest categorical; too many categories → collapse into Other; projection failure → fallback default.
+### Simplification Tolerance
+
+```ts
+// Adjust tolerance (0 = no simplification, 1 = max)
+const simplified = simplifyGeometry(geometry, tolerance);
+```
+
+## Performance Optimization
+
+| Challenge | Solution |
+|-----------|----------|
+| **Rapid edits** | Throttle recompute + temporary simplified render |
+| **Large geometry** | LOD + partial redraw |
+| **Classification** | In-memory cache keyed by dataset + params |
+| **Picking overhead** | Compact binary attributes |
+
+**Targets**: 60fps pan/zoom, <1s classification recompute
+
+## Legend Generation
+
+### Legend Types
+
+| Visualization | Legend Style |
+|---------------|-------------|
+| **Choropleth** | Color ramp with break values |
+| **Proportional** | Size samples (min, mid, max) |
+| **Categorical** | Category → color mapping |
+| **Bivariate** | 2D color matrix with axes labels |
+
+**Auto-regeneration**: On classification, color, or data change
+
+## Edge Case Handling
+
+| Issue | Handling |
+|-------|----------|
+| **All-null values** | Disable visualization suggestion |
+| **Single value** | Suggest categorical instead of numeric |
+| **Too many categories** | Collapse low-frequency into "Other" |
+| **Projection failure** | Fallback to Equirectangular (default) |
+| **Invalid breaks** | Revert to Equal Interval with warning |
 
 ## Extension Points
 
-| Area           | Contract                                 |
-| -------------- | ---------------------------------------- |
-| New viz type   | Factory returning config → layer builder |
-| Classification | Strategy interface compute(values,k)     |
-| Palette        | Provider metadata + generator            |
-| Projection     | Add to catalog + ranking metadata        |
+### Add New Visualization Type
 
-## Implementation Notes
+```ts
+// 1. Define config interface
+interface MyVizConfig extends BaseVizConfig {
+  myParam: string;
+}
 
-| Area    | Current State     | Future Enhancement             |
-| ------- | ----------------- | ------------------------------ |
-| Jenks   | Quantile fallback | Real algorithm implementation  |
-| Workers | Main thread       | Worker pool for large datasets |
-| Caching | Basic reuse       | Hash-based invalidation        |
+// 2. Create factory
+export function createMyViz(dataset: Dataset, config: MyVizConfig): Visualization {
+  // Implementation
+}
+
+// 3. Register in visualization registry
+VizRegistry.register('my-viz', {
+  create: createMyViz,
+  validate: validateMyViz
+});
+```
+
+### Add New Classification Method
+
+```ts
+// 1. Implement strategy
+export function classifyMyMethod(values: number[], k: number): number[] {
+  // Calculate breaks
+  return breaks;
+}
+
+// 2. Register method
+ClassificationRegistry.register('my-method', {
+  id: 'my-method',
+  label: 'My Method',
+  compute: classifyMyMethod
+});
+```
+
+### Add Custom Palette
+
+```ts
+// 1. Define palette
+const myPalette: ColorPalette = {
+  id: 'my-palette',
+  name: 'My Palette',
+  type: 'sequential',
+  colors: ['#fff', '#f00'],
+  accessible: true
+};
+
+// 2. Register
+PaletteRegistry.register(myPalette);
+```
+
+## Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Choropleth** | ✅ Full | Complete implementation |
+| **Proportional** | ✅ Full | Symbol sizing working |
+| **Categorical** | ✅ Full | Category mapping complete |
+| **Bivariate** | ✅ Full | 2D classification working |
+| **Facets** | ✅ Full | Multi-map comparison ready |
+| **Jenks** | ⚠️ Partial | Fallback to Quantile |
+| **Worker offload** | ❌ Planned | Main thread currently |
+| **Advanced caching** | ❌ Planned | Basic reuse only |
 
 ## Quick Reference
 
-- Default classes: 5 (range 3-9 recommended)
-- Bivariate: requires two numeric variables
-- Facets: common scale for comparison, independent for exploration
-- Performance: simplification for >10k vertices recommended
+### Default Settings
+- **Classes**: 5 (range 3-9 recommended)
+- **Projection**: Auto-selected by dataset bounds
+- **Color**: Sequential for numeric, qualitative for categorical
+- **Simplification**: Enabled for >10k vertices
+
+### Performance Tips
+- Use simplification for complex geometry
+- Limit classes to 5-7 for readability
+- Enable DuckDB for large datasets (>5k rows)
+- Use collections sparingly (memory intensive)
+
+---
+
+**See also:**
+- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data preparation
+- [ARCHITECTURE.md](ARCHITECTURE.md) - GPU rendering architecture
+- [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - Visualization store

@@ -1,6 +1,6 @@
 import type { ProcessedDataset } from './data-pipeline.utils';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
-import { hexToRgb } from '../../map/utils/color.utils';
+import { hexToRgb } from './color-utils';
 import {
   getColorForValue,
   getSizeForValue,

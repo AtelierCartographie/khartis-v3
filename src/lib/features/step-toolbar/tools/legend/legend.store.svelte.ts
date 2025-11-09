@@ -1,4 +1,7 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
+import {
+  createResetFunction,
+  createSetStateFunction
+} from '$lib/features/commons/utils/store.utils';
 import type { LegendItem, LegendState } from './legend.types';
 
 const DEFAULT_LEGEND_STATE: LegendState = {
@@ -41,9 +44,7 @@ export function getLegendState(): LegendState {
 }
 
 export const legendActions = {
-  setState(newState: Partial<LegendState>): void {
-    Object.assign(legendState, newState);
-  },
+  setState: createSetStateFunction(legendState),
 
   addLegendItem(item: Omit<LegendItem, 'id'>): LegendItem {
     const newItem: LegendItem = {
