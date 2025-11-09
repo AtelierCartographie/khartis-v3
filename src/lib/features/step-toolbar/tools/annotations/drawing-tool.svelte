@@ -68,7 +68,7 @@
     annotationsActions.updateDefaultStyle({ smoothness: e.detail });
   }
 
-  function handleColorChange(color: string) {
+  function _handleColorChange(color: string) {
     strokeColor = color;
     const hsl = hexToHsl(color);
     hue = hsl.hue;
@@ -146,7 +146,7 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e) =>
+            ontoggle={(e: CustomEvent) =>
               annotationsActions.updateDefaultStyle({
                 strokeStyle: ((e as any).detail ? 'dotted' : 'solid') as
                   | 'dotted'

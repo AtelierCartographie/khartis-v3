@@ -1,3 +1,6 @@
+import type { ParsedData } from '$lib/types/data';
+import type { DataAnalysisResult } from '../utils/deep-validator.utils';
+
 export type ProjectTab = 1 | 2 | 3;
 
 export enum FileType {
@@ -30,20 +33,20 @@ export interface UploadedFile {
   type: string;
   fileType: FileType;
   content?: string | ArrayBuffer;
-  parsedData?: any;
+  parsedData?: ParsedData;
   status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
   errorMessage?: string;
   validation?: FileValidation;
   sourceType: DataSourceType;
   relatedFiles?: string[];
   uploadProgress?: number;
-  statistics?: Record<string, any>;
+  statistics?: Record<string, unknown>;
   duplicates?: {
     hasDuplicates: boolean;
     duplicateCount: number;
   };
-  deepAnalysis?: any;
-  geoMatchResult?: any;
+  deepAnalysis?: DataAnalysisResult;
+  geoMatchResult?: Record<string, unknown>;
 }
 
 export interface ExampleProject {
@@ -55,7 +58,7 @@ export interface ExampleProject {
   thumbnail?: string;
   dataUrl?: string;
   baseMapId?: string;
-  visualizations?: any[];
+  visualizations?: Record<string, unknown>[];
   tags?: string[];
 }
 

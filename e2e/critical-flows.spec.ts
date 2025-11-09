@@ -1,10 +1,10 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 const CSV_PATH = join(process.cwd(), 'e2e', 'mocks', 'csv', 'nuts2_data.csv');
 const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 
-async function cleanState(page: any) {
+async function cleanState(page: Page) {
   await page.goto('/');
   await page.evaluate(() => {
     return new Promise<void>((resolve) => {

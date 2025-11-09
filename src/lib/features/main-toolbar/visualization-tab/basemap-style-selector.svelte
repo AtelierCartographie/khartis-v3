@@ -41,7 +41,7 @@
     bind:selected={selectedValue}
     on:change={(e) => handleChange(e.detail as BasemapStyle)}
   >
-    {#each basemapOptions as option}
+    {#each basemapOptions as option (option.value)}
       <RadioButton labelText={option.label} value={option.value} />
     {/each}
   </RadioButtonGroup>

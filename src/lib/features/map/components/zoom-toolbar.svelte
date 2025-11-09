@@ -9,11 +9,9 @@
   } from '../../commons/store/global.svelte';
   import { ZoomMode } from '../../commons/types/global';
 
-  let activeTabIndex: number = $state(0);
-
-  $effect(() => {
-    activeTabIndex = globalState.zoom.mode === ZoomMode.Map ? 0 : 1;
-  });
+  let activeTabIndex: number = $derived(
+    globalState.zoom.mode === ZoomMode.Map ? 0 : 1
+  );
 
   const zoomItems = [
     {

@@ -10,7 +10,7 @@
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
-  let selectedModel = $state('');
+  let selectedModel = $state.raw(formatState.model);
 
   const modelOptions = [
     { value: 'page-a4-landscape', text: m.format_model_a4_landscape() },
@@ -18,10 +18,6 @@
     { value: 'page-a3-landscape', text: m.format_model_a3_landscape() },
     { value: 'page-a3-portrait', text: m.format_model_a3_portrait() }
   ];
-
-  $effect(() => {
-    selectedModel = formatState.model;
-  });
 
   $effect(() => {
     if (selectedModel && selectedModel !== formatState.model) {
@@ -39,7 +35,7 @@
         labelText={m.format_model()}
         size="xl"
       >
-        {#each modelOptions as option}
+        {#each modelOptions as option (option.value)}
           <SelectItem value={option.value} text={option.text} />
         {/each}
       </Select>

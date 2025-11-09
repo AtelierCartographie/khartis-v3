@@ -1,4 +1,4 @@
-export function createResetFunction<T extends Record<string, any>>(
+export function createResetFunction<T extends object>(
   state: T,
   defaultState: T
 ): () => void {

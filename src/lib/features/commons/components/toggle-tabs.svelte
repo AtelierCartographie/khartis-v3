@@ -17,7 +17,7 @@
 </script>
 
 <div id="khartis-toggle-tabs" class="toggle-tabs {className}">
-  {#each items as item, index}
+  {#each items as item, index (index)}
     <button
       class="toggle-tab {activeIndex === index
         ? activeClass

@@ -51,7 +51,7 @@
     </div>
 
     <div class="tags">
-      {#each tags as t}
+      {#each tags as t, idx (idx)}
         <span class="tag">{t}</span>
       {/each}
     </div>

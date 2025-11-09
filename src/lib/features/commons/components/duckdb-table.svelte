@@ -15,7 +15,7 @@
   import { DataTable, DataTableSkeleton, Tag } from 'carbon-components-svelte';
   import { onMount } from 'svelte';
   import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
-  import type { Table } from '@uwdata/flechette';
+  import type { ArrowTableLike } from '../services/duckdb/types';
   import { logger, LogCategory } from '../utils/logger';
 
   interface Props {
@@ -29,7 +29,7 @@
   let rows = $state<any[]>([]);
   let totalRows = $state(0);
   let isLoading = $state(true);
-  let arrowTable = $state<Table | null>(null);
+  let arrowTable = $state<ArrowTableLike | null>(null);
 
   onMount(async () => {
     await loadTableData();
@@ -53,11 +53,6 @@
           }));
       }
 
-      const headers = columns.map((col) => ({
-        key: col.name,
-        value: `${col.name} (${col.type_simple})`
-      }));
-
       const displayRows = [];
       const limit = Math.min(maxRows, totalRows);
 
@@ -77,7 +72,7 @@
     }
   }
 
-  function getColumnType(type: string): string {
+  function _getColumnType(type: string): string {
     const typeMap: Record<string, string> = {
       numeric: 'number',
       text: 'string',
@@ -125,7 +120,7 @@
     batchExpansion
     batchSelection
   >
-    <svelte:fragment slot="cell" let:row let:cell>
+    <svelte:fragment slot="cell" let:cell>
       {@const column = columns.find((col) => col.name === cell.key)}
       {@const value = cell.value}
 
@@ -151,7 +146,7 @@
   <div class="column-summary">
     <h4>Column Summary</h4>
     <div class="summary-grid">
-      {#each columns as col}
+      {#each columns as col (col.name)}
         <div class="column-card">
           <div class="column-header">
             <span class="column-name">{col.name}</span>

@@ -5,7 +5,6 @@
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import {
-    exportProjectData,
     exportProcessedDatasets,
     downloadFile,
     generateExportFilename
@@ -34,13 +33,9 @@
 
   let open = $state(false);
   let selectedTabIndex = $state(0);
-  let exportFileName = $state('');
+  let exportFileName = $state.raw(projectStore.projectName || 'untitled');
   let selectedMapFormat = $state('svg');
   let selectedDataFormat = $state('csv');
-
-  $effect(() => {
-    exportFileName = projectStore.projectName || 'untitled';
-  });
 
   async function handleDownload() {
     if (exportFileName !== projectStore.projectName) {

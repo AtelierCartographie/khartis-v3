@@ -48,9 +48,6 @@ export const mainToolbarActions = {
     mainToolbarState.currentProjectName =
       projectStore.currentProject?.manifest.name || '';
     mainToolbarState.canNavigateToVisualization = hasProject && hasValidFiles;
-
-    if (!hasProject) {
-    }
   },
 
   navigateToVisualization(): void {

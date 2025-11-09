@@ -1,5 +1,5 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { tableFromIPC } from '@uwdata/flechette';
+import { tableFromIPC, type Table } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
@@ -31,7 +31,7 @@ const DUCK_CONST = {
     COLUMN_VALIDATION_BOOLEAN_NUMBER: /[0-1]/,
     COLUMN_VALIDATION_BOOLEAN_STRING: /^(true|false)$/i,
     COLUMN_VALIDATION_DATE:
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+\-]\d{2}:\d{2})?$/
+      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-]\d{2}:\d{2})?$/
   }
 };
 
@@ -55,7 +55,6 @@ import type {
   BreakInsideResult,
   BreaksResult,
   BreaksRoundedResult,
-  CountResult,
   DuckDBMetadata,
   DuckDBValue,
   ValidationResult
@@ -196,6 +195,7 @@ function validate_and_cast_value(
   switch (column_type.toLowerCase()) {
     case 'integer':
 
+    // fallthrough
     case 'bigint':
       isValid = isValidInteger(new_value as string | number);
       value =
@@ -241,8 +241,10 @@ function validate_and_cast_value(
 
     case 'geometry':
 
+    // fallthrough
     case 'other':
 
+    // fallthrough
     default:
       throw new Error(`Unsupported column type: ${column_type}.`);
   }
@@ -352,9 +354,11 @@ class DuckDB {
     }
     for (const file of files) {
       const fileWithId = file as FileWithId;
-      shapefile && shape_date
-        ? (fileWithId.id = shape_date + '-' + normalize_name(file.name))
-        : add_file_id(fileWithId);
+      if (shapefile && shape_date) {
+        fileWithId.id = shape_date + '-' + normalize_name(file.name);
+      } else {
+        add_file_id(fileWithId);
+      }
       if (this.registered_files.has(fileWithId.id)) {
         continue;
       }
@@ -390,11 +394,10 @@ class DuckDB {
     input: string | File,
     options: ReadTabularOptions = {}
   ): Promise<string> {
-    let {
-      tablename,
-      decimal_separator = DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR,
-      format = DUCK_CONST.DEFAULT.FORMAT_TABULAR
-    } = options;
+    let { tablename } = options;
+    const decimal_separator =
+      options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
+    const format = options.format ?? DUCK_CONST.DEFAULT.FORMAT_TABULAR;
     let filename: string;
     let fileid: string;
     try {
@@ -442,7 +445,8 @@ class DuckDB {
     geofile: File,
     options: ReadGeofileOptions = {}
   ): Promise<DuckDBMetadata | string> {
-    let { tablename, meta = false } = options;
+    let { tablename } = options;
+    const meta = options.meta ?? false;
     try {
       await this.register_files([geofile]);
       const geofileWithId = geofile as FileWithId;
@@ -476,10 +480,9 @@ class DuckDB {
   }
 
   async read_link(url: string, options: ReadLinkOptions = {}): Promise<string> {
-    let {
-      tablename,
-      decimal_separator = DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR
-    } = options;
+    let { tablename } = options;
+    const decimal_separator =
+      options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
 
     const filename = extract_filename(url);
     const file_type = get_file_type(filename);

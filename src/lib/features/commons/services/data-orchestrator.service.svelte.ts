@@ -10,6 +10,7 @@ import type { UploadedFile } from '../store/create-project.types';
 import { showError } from '../utils/notification.utils.svelte';
 import { duckDBOrchestrator } from './duckdb-orchestrator.service';
 import { logger, LogCategory } from '../utils/logger';
+import { getParsedDataLength } from '$lib/types/data';
 
 class DataOrchestratorService {
   private isInitialized = false;
@@ -35,7 +36,7 @@ class DataOrchestratorService {
       status: file.status,
       fileType: file.fileType,
       hasParsedData: !!file.parsedData,
-      parsedDataLength: file.parsedData?.length
+      parsedDataLength: getParsedDataLength(file.parsedData)
     });
 
     try {
@@ -156,14 +157,12 @@ class DataOrchestratorService {
     }
 
     const geoDatasets = datasetsStore.getDatasetsByType(true);
-    const tabularDatasets = datasetsStore.getDatasetsByType(false);
 
     if (geoDatasets.length > 0) {
       this._geometryDatasetsVersion++;
       projectionActions.suggestProjectionForCurrentData();
 
       this.createDefaultVisualization(geoDatasets[0].id);
-    } else if (tabularDatasets.length > 0) {
     }
 
     layersActions.syncWithVisualizations();

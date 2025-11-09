@@ -14,6 +14,7 @@ import {
   parseShapefile,
   readFileContent
 } from '../utils/file-import.utils';
+import { DataSourceType } from './create-project.types';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
@@ -28,6 +29,7 @@ import { projectStore } from './project.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
+import { SvelteMap } from 'svelte/reactivity';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -94,7 +96,7 @@ export const createProjectActions = {
 
     const fileGroups = groupShapefiles(files);
     const duplicates: string[] = [];
-    const toProcess: Map<string, File[]> = new Map();
+    const toProcess: SvelteMap<string, File[]> = new SvelteMap();
 
     for (const [baseName, groupFiles] of fileGroups) {
       const mainFileName =
@@ -183,7 +185,7 @@ export const createProjectActions = {
 
   async processSingleFile(
     file: File,
-    sourceType = 'file_upload' as const
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
       showWarning(
@@ -223,7 +225,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: 'Missing .shp file in shapefile set',
-        sourceType: 'file_upload' as const
+        sourceType: DataSourceType.FILE_UPLOAD
       };
       this.addUploadedFile(errorFile);
       showError('Invalid shapefile', 'Missing .shp file in shapefile set');
@@ -247,7 +249,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
-        sourceType: 'file_upload' as const
+        sourceType: DataSourceType.FILE_UPLOAD
       };
       this.addUploadedFile(errorFile);
       showError(
@@ -264,7 +266,7 @@ export const createProjectActions = {
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
       status: 'processing',
-      sourceType: 'file_upload' as const,
+      sourceType: DataSourceType.FILE_UPLOAD,
       relatedFiles: files.map((f) => f.name)
     };
 
@@ -291,7 +293,9 @@ export const createProjectActions = {
       });
     } catch (_error) {
       const message =
-        _error instanceof Error ? _error.message : 'Failed to process shapefile';
+        _error instanceof Error
+          ? _error.message
+          : 'Failed to process shapefile';
       this.updateFileData(uploadedFile.id, {
         status: 'error',
         errorMessage: message
@@ -327,7 +331,7 @@ export const createProjectActions = {
       status: validation.isValid ? 'complete' : 'error',
       content: pastedText,
       validation,
-      sourceType: 'paste' as const,
+      sourceType: DataSourceType.PASTE,
       errorMessage: validation.isValid ? undefined : validation.errors[0]
     };
 
@@ -425,7 +429,7 @@ export const createProjectActions = {
       const blob = await response.blob();
       const file = new File([blob], filename, { type: blob.type });
 
-      await this.processSingleFile(file, 'url' as const);
+      await this.processSingleFile(file, DataSourceType.URL);
       this.setOnlineFileUrl('');
     } catch (_error) {
       const message =

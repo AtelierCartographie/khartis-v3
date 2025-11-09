@@ -84,7 +84,7 @@
         on:change={(e) =>
           (selectedShape = (e.currentTarget as HTMLSelectElement).value)}
       >
-        {#each shapes as s}
+        {#each shapes as s (s.value)}
           <SelectItem value={s.value} text={s.text} />
         {/each}
       </Select>
@@ -145,7 +145,8 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e) => toggleDotted((e as any).detail ?? true)}
+            ontoggle={(e: CustomEvent) =>
+              toggleDotted((e as any).detail ?? true)}
           >
             <span slot="labelA">Oui</span>
             <span slot="labelB">Non</span>

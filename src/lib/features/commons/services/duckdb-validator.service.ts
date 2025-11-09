@@ -6,12 +6,25 @@ import {
 import { GeoMatcher, type MatchResult } from '../utils/geo-matcher.utils';
 import { logger, LogCategory } from '../utils/logger';
 
+interface DuckDBAnalysisColumn {
+  name: string;
+  type_simple?: string;
+  id_words?: boolean;
+  lat_words?: boolean;
+  lon_words?: boolean;
+  [key: string]: unknown;
+}
+
 export interface ValidationResult {
   dataAnalysis: DataAnalysisResult;
   duckdbAnalysis?: {
-    columns: any[];
-    summaries: any[];
-    histograms: any[];
+    columns: DuckDBAnalysisColumn[];
+    summaries: Record<string, unknown>[];
+    histograms: Array<{
+      column: string;
+      type: string;
+      data: unknown;
+    }>;
   };
   geoMatchResult?: MatchResult;
   suggestedCatalogue?: {
@@ -26,7 +39,7 @@ export class DuckDBValidatorService {
   static async validateWithDuckDB(
     tableName: string,
     headers: string[],
-    data: any[][],
+    data: unknown[][],
     options: {
       skipGeoDetection?: boolean;
       catalogueId?: string;
@@ -62,7 +75,8 @@ export class DuckDBValidatorService {
         const geoValues = data
           .slice(0, Math.min(1000, data.length))
           .map((row) => row[columnIndex])
-          .filter((v) => v != null && v !== '');
+          .filter((v) => v != null && v !== '')
+          .map((v) => String(v));
 
         if (options.catalogueId) {
           geoMatchResult = await GeoMatcher.validateAgainstCatalogue(
@@ -126,49 +140,60 @@ export class DuckDBValidatorService {
     tableName: string,
     headers: string[]
   ): Promise<{
-    columns: any[];
-    summaries: any[];
-    histograms: any[];
+    columns: DuckDBAnalysisColumn[];
+    summaries: Record<string, unknown>[];
+    histograms: Array<{
+      column: string;
+      type: string;
+      data: unknown;
+    }>;
   }> {
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    const columns = [];
-    const summaries = [];
-    const histograms = [];
+    const columns: DuckDBAnalysisColumn[] = [];
+    const summaries: Record<string, unknown>[] = [];
+    const histograms: Array<{ column: string; type: string; data: unknown }> =
+      [];
 
     try {
       const describeResult = (await Duck.query(
         `SELECT * FROM describe_full('${tableName}')`
-      )) as any;
-      columns.push(...(describeResult?.data || []));
+      )) as Record<string, unknown>;
+      const resultData = (describeResult?.data || []) as DuckDBAnalysisColumn[];
+      columns.push(...resultData);
 
       for (const header of headers) {
         try {
           const summaryResult = (await Duck.query(
             `SELECT * FROM summary_general('${tableName}', '${header}')`
-          )) as any;
-          if (summaryResult?.data && summaryResult.data.length > 0) {
-            summaries.push(summaryResult.data[0]);
+          )) as Record<string, unknown>;
+          const summaryData = summaryResult?.data as Record<string, unknown>[];
+          if (summaryData && summaryData.length > 0) {
+            summaries.push(summaryData[0]);
           }
 
-          const columnInfo = columns.find((c: any) => c.name === header);
+          const columnInfo = columns.find((c) => c.name === header);
           if (columnInfo) {
             if (columnInfo.type_simple === 'numeric') {
               const numericSummary = (await Duck.query(
                 `SELECT * FROM summary_numeric('${tableName}', '${header}')`
-              )) as any;
-              if (numericSummary?.data && numericSummary.data.length > 0) {
+              )) as Record<string, unknown>;
+              const numericData = numericSummary?.data as Record<
+                string,
+                unknown
+              >[];
+              if (numericData && numericData.length > 0) {
                 summaries.push({
                   ...summaries[summaries.length - 1],
-                  ...numericSummary.data[0]
+                  ...numericData[0]
                 });
               }
 
               const histogram = (await Duck.query(
                 `SELECT * FROM histogram_numeric('${tableName}', '${header}')`
-              )) as any;
+              )) as Record<string, unknown>;
               if (histogram?.data) {
                 histograms.push({
                   column: header,
@@ -179,7 +204,7 @@ export class DuckDBValidatorService {
             } else if (columnInfo.type_simple === 'string') {
               const histogram = (await Duck.query(
                 `SELECT * FROM histogram_categorical('${tableName}', '${header}')`
-              )) as any;
+              )) as Record<string, unknown>;
               if (histogram?.data) {
                 histograms.push({
                   column: header,
@@ -294,11 +319,11 @@ export class DuckDBValidatorService {
       );
 
       const geoColumns = validation.duckdbAnalysis.columns.filter(
-        (c: any) => c.id_words || c.lat_words || c.lon_words
+        (c) => c.id_words || c.lat_words || c.lon_words
       );
       if (geoColumns.length > 0) {
         lines.push('\nColonnes géographiques détectées par DuckDB:');
-        geoColumns.forEach((col: any) => {
+        geoColumns.forEach((col) => {
           const types = [];
           if (col.id_words) types.push('identifiant');
           if (col.lat_words) types.push('latitude');

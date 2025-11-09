@@ -87,7 +87,6 @@ export const facetsActions = {
   },
 
   removeCollection(id: string): void {
-    const collection = facetsState.collections.find((c) => c.id === id);
     facetsState.collections = facetsState.collections.filter(
       (c) => c.id !== id
     );

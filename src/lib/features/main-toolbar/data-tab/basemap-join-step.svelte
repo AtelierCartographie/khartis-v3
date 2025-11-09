@@ -97,28 +97,24 @@
 
   {#if suggestedBasemaps().length > 0}
     <ExpandableSection title={m.basemap_suggestions()} defaultOpen>
-      {#snippet children()}
-        <div class="basemap-cards">
-          {#each suggestedBasemaps() as { basemap, score }}
-            <BasemapCard
-              basemap={basemap}
-              matchScore={score}
-              selected={basemapSelected === basemap.file}
-              onclick={() => handleSelectBasemap(basemap)}
-            />
-          {/each}
-        </div>
-      {/snippet}
+      <div class="basemap-cards">
+        {#each suggestedBasemaps() as { basemap, score } (basemap.file)}
+          <BasemapCard
+            basemap={basemap}
+            matchScore={score}
+            selected={basemap.file === basemapSelected}
+            onclick={() => handleSelectBasemap(basemap)}
+          />
+        {/each}
+      </div>
     </ExpandableSection>
   {/if}
 
   <ExpandableSection title={m.basemap_other()} defaultOpen={false}>
-    {#snippet children()}
-      <p class="kh-help">{m.basemap_browse_other()}</p>
-      <Button kind="tertiary" on:click={handleOpenCatalog}>
-        {m.basemap_catalog()}
-      </Button>
-    {/snippet}
+    <p class="kh-help">{m.basemap_browse_other()}</p>
+    <Button kind="tertiary" on:click={handleOpenCatalog}>
+      {m.basemap_catalog()}
+    </Button>
   </ExpandableSection>
 
   <BasemapCatalogModal
@@ -130,93 +126,84 @@
   />
 
   <ExpandableSection title="Jointure assistée par Khartis" defaultOpen>
-    {#snippet children()}
-      <div class="join-stats">
-        <Tag type="green">{joinedCount} entités jointes</Tag>
-        <Tag type="magenta">{toVerifyCount} entités à vérifier</Tag>
-      </div>
+    <div class="join-stats">
+      <Tag type="green">{joinedCount} entités jointes</Tag>
+      <Tag type="magenta">{toVerifyCount} entités à vérifier</Tag>
+    </div>
 
-      <div class="join-table">
-        <div class="head">
-          <div class="col a">
-            Données tabulaires <Tag type="teal">Nom pays</Tag>
-          </div>
-          <div class="col b">Fond de carte</div>
+    <div class="join-table">
+      <div class="head">
+        <div class="col a">
+          Données tabulaires <Tag type="teal">Nom pays</Tag>
         </div>
-        {#each joinRows as row, i}
-          <div class="join-row">
-            <div class="col a">{row.dataValue}</div>
-            <div class="col eq">=</div>
-            <div class="col b">
-              <Select
-                id={`join-${i}`}
-                labelText=""
-                selected={row.selectedMapping}
-                on:change={(e) => {
-                  const event = e as CustomEvent<{ selectedValue: string }>;
-                  dataTabActions.updateJoinMapping(
-                    i,
-                    event.detail.selectedValue
-                  );
-                }}
-                size="xl"
-              >
-                {#each row.basemapOptions as opt}
-                  <SelectItem value={opt} text={opt} />
-                {/each}
-              </Select>
-            </div>
+        <div class="col b">Fond de carte</div>
+      </div>
+      {#each joinRows as row, i (i)}
+        <div class="join-row">
+          <div class="col a">{row.dataValue}</div>
+          <div class="col eq">=</div>
+          <div class="col b">
+            <Select
+              id={`join-${i}`}
+              labelText=""
+              selected={row.selectedMapping}
+              on:change={(e) => {
+                const event = e as CustomEvent<{ selectedValue: string }>;
+                dataTabActions.updateJoinMapping(i, event.detail.selectedValue);
+              }}
+              size="xl"
+            >
+              {#each row.basemapOptions as opt (opt)}
+                <SelectItem value={opt} text={opt} />
+              {/each}
+            </Select>
           </div>
+        </div>
+      {/each}
+    </div>
+
+    <ExpandableSection
+      title="{duplicates.length} entités en double"
+      defaultOpen={false}
+    >
+      <ul class="issues-list">
+        {#each duplicates as d, idx (idx)}
+          <li>{d}</li>
         {/each}
-      </div>
+      </ul>
+    </ExpandableSection>
 
-      <ExpandableSection
-        title="{duplicates.length} entités en double"
-        defaultOpen={false}
+    <ExpandableSection
+      title="{unknowns.length} entités non reconnues"
+      defaultOpen={false}
+    >
+      <ul class="issues-list">
+        {#each unknowns as u, idx (idx)}
+          <li>{u}</li>
+        {/each}
+      </ul>
+    </ExpandableSection>
+
+    <InlineNotification
+      title="Attention"
+      subtitle="Khartis a détecté des erreurs lors de la jointure. Vérifier les entités jointes ci‑dessus."
+      kind="warning"
+      lowContrast
+      hideCloseButton={false}
+    />
+
+    <div class="correction">
+      <div class="title">Correction</div>
+      <p>
+        Remplacer les entités incorrectes du tableau de données par celles du
+        fond de carte ?
+      </p>
+      <Button
+        kind="secondary"
+        size="small"
+        on:click={dataTabActions.applyCorrections}>Remplacer</Button
       >
-        {#snippet children()}
-          <ul class="issues-list">
-            {#each duplicates as d}
-              <li>{d}</li>
-            {/each}
-          </ul>
-        {/snippet}
-      </ExpandableSection>
-
-      <ExpandableSection
-        title="{unknowns.length} entités non reconnues"
-        defaultOpen={false}
-      >
-        {#snippet children()}
-          <ul class="issues-list">
-            {#each unknowns as u}
-              <li>{u}</li>
-            {/each}
-          </ul>
-        {/snippet}
-      </ExpandableSection>
-
-      <InlineNotification
-        title="Attention"
-        subtitle="Khartis a détecté des erreurs lors de la jointure. Vérifier les entités jointes ci‑dessus."
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-
-      <div class="correction">
-        <div class="title">Correction</div>
-        <p>
-          Remplacer les entités incorrectes du tableau de données par celles du
-          fond de carte ?
-        </p>
-        <Button
-          kind="secondary"
-          size="small"
-          on:click={dataTabActions.applyCorrections}>Remplacer</Button
-        >
-      </div>
-    {/snippet}
+    </div>
   </ExpandableSection>
 </section>
 

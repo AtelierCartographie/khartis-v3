@@ -130,9 +130,9 @@ export const annotationsActions = {
   },
 
   toggleVisibility(id: string): void {
-    const annotation = annotationsState.items.find((item) => item.id === id);
-    if (annotation) {
-    }
+    annotationsState.items = annotationsState.items.map((item) =>
+      item.id === id ? { ...item, visible: !item.visible } : item
+    );
   },
 
   clearAll(): void {
