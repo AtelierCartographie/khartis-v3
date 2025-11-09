@@ -47,7 +47,6 @@ interface CategoricalData {
 type SummaryData = NumericData | CategoricalData;
 
 type LabelFunction = (label: string | null) => string;
-type FilterFunction = (d: CategoryHistogramItem) => boolean;
 type PercentRange = [number, number];
 
 interface ObservablePlotStackOptions {
@@ -84,12 +83,6 @@ interface ObservablePlotStackOptions {
   fontVariant?: string;
 }
 
-type PlotData =
-  | HistogramBin[]
-  | CategoryHistogramItem[]
-  | NumericHistogram
-  | CategoricalHistogram;
-
 export function create_summary_plot(
   data: SummaryData,
   options: SummaryPlotOptions = {}
@@ -97,8 +90,10 @@ export function create_summary_plot(
   const { type_simple } = data;
   switch (type_simple) {
     case 'numeric':
+
     case 'date':
       return create_plot_numeric(data as NumericData, options);
+
     case 'string':
       return create_plot_categorical(data as CategoricalData, options);
   }
@@ -108,7 +103,7 @@ function create_plot_numeric(
   data: NumericData,
   options: SummaryPlotOptions = {}
 ) {
-  let {
+  const {
     width = 144,
     height = 64,
     main_color = '#a56eff',
@@ -169,7 +164,7 @@ function create_plot_categorical(
   data: CategoricalData,
   options: SummaryPlotOptions = {}
 ) {
-  let {
+  const {
     width = 144,
     height = 64,
     geoid = false,
@@ -181,7 +176,7 @@ function create_plot_categorical(
     stroke_unique = 'none'
   } = options;
 
-  let { uniques, histogram } = data;
+  const { uniques, histogram } = data;
   let histogramData: CategoricalHistogram | CategoryHistogramItem[] = histogram;
 
   if (geoid) {

@@ -6,7 +6,6 @@ import {
   getSizeForValue,
   getCategoricalColorMap
 } from '../../map/utils/data-styling.utils';
-import type { Table as ArrowTable } from 'apache-arrow';
 
 interface ExportOptions {
   width: number;

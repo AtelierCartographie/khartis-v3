@@ -1,5 +1,4 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { readFileSync, writeFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -25,7 +24,6 @@ async function convertToGeoParquet() {
     __dirname,
     '../static/basemaps/geometry/world-countries-50m.geojson'
   );
-  const geojson = readFileSync(geojsonPath, 'utf8');
 
   console.log('Creating table from GeoJSON...');
   await db.query(`
@@ -34,7 +32,7 @@ async function convertToGeoParquet() {
   `);
 
   console.log('Exporting to GeoParquet...');
-  const result = await db.query(`
+  await db.query(`
     COPY (
       SELECT
         COALESCE(ISO_A2, NAME) as id,

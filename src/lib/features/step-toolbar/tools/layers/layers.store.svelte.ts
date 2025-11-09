@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { Layer, LayersState } from './layers.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -189,9 +190,7 @@ export const layersActions = {
     };
   },
 
-  reset(): void {
-    Object.assign(layersState, DEFAULT_STATE);
-  },
+  reset: createResetFunction(layersState, DEFAULT_STATE),
 
   syncWithVisualizations(): void {
     const visualizations = visualizationStore.visualizations;

@@ -84,12 +84,16 @@
     switch (status) {
       case RoboticArmStatus.SUCCESS:
         return 'green';
+
       case RoboticArmStatus.ERROR:
         return 'red';
+
       case RoboticArmStatus.WARNING:
         return 'orange';
+
       case RoboticArmStatus.INFO:
         return 'blue';
+
       default:
         return 'gray';
     }

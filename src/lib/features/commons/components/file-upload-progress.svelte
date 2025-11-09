@@ -13,8 +13,10 @@
     switch (status) {
       case 'complete':
         return CheckmarkFilled;
+
       case 'error':
         return ErrorFilled;
+
       default:
         return null;
     }
@@ -24,10 +26,13 @@
     switch (status) {
       case 'complete':
         return 'green';
+
       case 'error':
         return 'red';
+
       case 'processing':
         return 'blue';
+
       default:
         return 'gray';
     }

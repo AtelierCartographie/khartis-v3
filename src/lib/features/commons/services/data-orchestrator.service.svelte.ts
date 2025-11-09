@@ -13,6 +13,7 @@ import { logger, LogCategory } from '../utils/logger';
 
 class DataOrchestratorService {
   private isInitialized = false;
+
   private _geometryDatasetsVersion = $state(0);
 
   async initialize(): Promise<void> {
@@ -53,15 +54,31 @@ class DataOrchestratorService {
       }
 
       const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-      if (!dataset) return;
+      if (!dataset) {
+        logger.warn('Dataset not found after processing', LogCategory.DATA, {
+          fileId: file.id
+        });
+        return;
+      }
 
       if (dataset.geometry) {
         this._geometryDatasetsVersion++;
         projectionActions.suggestProjectionForCurrentData();
       }
 
-      if (visualizationStore.visualizations.length === 0) {
+      const existingVisualizations =
+        visualizationStore.getVisualizationsByDataset(dataset.id);
+      if (existingVisualizations.length === 0) {
         this.createDefaultVisualization(dataset.id);
+        logger.info('Default visualization created', LogCategory.DATA, {
+          datasetId: dataset.id
+        });
+      } else {
+        logger.info(
+          'Visualization already exists for dataset',
+          LogCategory.DATA,
+          { datasetId: dataset.id }
+        );
       }
 
       layersActions.syncWithVisualizations();
@@ -204,11 +221,6 @@ class DataOrchestratorService {
         600
       )
     };
-  }
-
-  syncAllStores(): void {
-    datasetsStore.syncWithProject();
-    layersActions.syncWithVisualizations();
   }
 }
 

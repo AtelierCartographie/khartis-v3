@@ -26,7 +26,6 @@ class DataOrchestratorService {
   onProjectChanged(): Promise<void>;
   exportData(format: 'csv' | 'geojson' | 'json'): Promise<Blob>;
   getVisualizationData(visualizationId: string): any;
-  syncAllStores(): void;
 }
 ```
 

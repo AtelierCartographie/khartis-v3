@@ -9,30 +9,9 @@
   import { Button, Modal, Tag } from 'carbon-components-svelte';
   import { Add, Close } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { untrack } from 'svelte';
   import AddDataModal from './add-data-modal.svelte';
 
-  let tabsScroller: HTMLDivElement | null = null;
-
-  const currentSourceFiles = $derived(
-    projectStore.currentProject?.data?.sourceFiles || []
-  );
-
-  const currentFileIds = $derived(
-    currentSourceFiles.map((f) => f.id).join(',')
-  );
-
-  $effect(() => {
-    currentFileIds;
-
-    untrack(() => {
-      globalActions.clearAllDataButtons();
-
-      for (const file of currentSourceFiles) {
-        globalActions.addDataButtonForFile(file.id, file.name, false);
-      }
-    });
-  });
+  let tabsScroller: HTMLDivElement | null = $state(null);
 
   const onWheel = (e: WheelEvent) => {
     if (!tabsScroller) return;
@@ -104,16 +83,24 @@
     const ext = extension.toLowerCase();
     switch (ext) {
       case 'csv':
+
       case 'tsv':
+
       case 'txt':
         return 'blue';
+
       case 'json':
+
       case 'geojson':
         return 'green';
+
       case 'shp':
+
       case 'gpkg':
+
       case 'kml':
         return 'purple';
+
       default:
         return 'gray';
     }
@@ -184,7 +171,7 @@
 
 <AddDataModal
   bind:open={isAddDataModalOpen}
-  addDataButton={closeAddDataModal}
+  {closeAddDataModal}
 />
 
 <Modal

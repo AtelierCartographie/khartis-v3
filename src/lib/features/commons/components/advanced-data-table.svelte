@@ -3,7 +3,9 @@
     DataTableSkeleton,
     OverflowMenu,
     OverflowMenuItem,
-    Search
+    Search,
+    TextInput,
+    Button
   } from 'carbon-components-svelte';
   import {
     ChevronUp,
@@ -14,7 +16,10 @@
     ViewOff
   } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
-  import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
+  import {
+    duckDBOrchestrator,
+    RefineOperation
+  } from '../services/duckdb-orchestrator.service';
   import type { ProcessedDataset } from '../utils/data-pipeline.utils';
   import { logger, LogCategory } from '../utils/logger';
   import { create_summary_plot } from '../services/duckdb/summary-plot';
@@ -65,6 +70,7 @@
   let renameModalOpen = $state(false);
   let columnToRename = $state<string | null>(null);
   let searchQuery = $state('');
+  let replaceValue = $state('');
   let searchResults = $state<number[]>([]);
   let currentSearchIndex = $state(0);
 
@@ -201,12 +207,6 @@
     }
   }
 
-  async function changeColumnType(columnName: string, newType: string) {
-    if (tableName) {
-      await duckDBOrchestrator.changeColumnType(tableName, columnName, newType);
-      await loadColumnsInfo();
-    }
-  }
 
   async function dropColumn(columnName: string) {
     if (tableName) {
@@ -314,8 +314,45 @@
 
   function clearSearch() {
     searchQuery = '';
+    replaceValue = '';
     searchResults = [];
     currentSearchIndex = 0;
+  }
+
+  async function handleReplace() {
+    if (!tableName || !searchQuery || !replaceValue) return;
+
+    const count = await duckDBOrchestrator.replaceInColumn(
+      tableName,
+      '',
+      searchQuery,
+      replaceValue
+    );
+
+    clearSearch();
+    await loadColumnsInfo();
+    await initializeRows(startIndex);
+
+    logger.success(`${count} valeurs remplacées`, LogCategory.UI);
+  }
+
+  async function handleRefine(columnName: string, operation: RefineOperation) {
+    if (!tableName) return;
+
+    logger.debug('Refining column', LogCategory.UI, {
+      columnName,
+      operation
+    });
+
+    await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
+
+    await loadColumnsInfo();
+    await initializeRows(startIndex);
+
+    logger.success('Colonne affinée avec succès', LogCategory.UI, {
+      columnName,
+      operation
+    });
   }
 
   const visibleColumns = $derived.by(() => {
@@ -441,18 +478,26 @@
         numRows = await duckDBOrchestrator.getRowCount(tableName);
         await initializeRows(0);
       });
+    } else {
+      columns = [];
+      numRows = 0;
+      tableData = [];
+      rows = [];
     }
   });
 
   $effect(() => {
     if (dataset) {
-      const datasetData = dataset.data;
-      const datasetColumns = dataset.columns;
       untrack(async () => {
         await loadColumnsInfo();
         numRows = dataset.rowCount;
         await initializeRows(0);
       });
+    } else {
+      columns = [];
+      numRows = 0;
+      tableData = [];
+      rows = [];
     }
   });
 </script>
@@ -505,6 +550,24 @@
             >
               <Close size={16} />
             </button>
+          </div>
+        {/if}
+        {#if searchQuery && tableName}
+          <div class="replace-bar">
+            <TextInput
+              size="sm"
+              placeholder="Remplacer par..."
+              bind:value={replaceValue}
+              labelText=""
+            />
+            <Button
+              size="small"
+              kind="primary"
+              disabled={!replaceValue}
+              on:click={handleReplace}
+            >
+              Remplacer tout ({searchResults.length})
+            </Button>
           </div>
         {/if}
       </div>
@@ -589,10 +652,49 @@
                             text="Renommer"
                             on:click={() => openRenameModal(column.name)}
                           />
+                          <OverflowMenuItem text="Affiner..." hasDivider />
+                          <OverflowMenuItem
+                            text="  → MAJUSCULES"
+                            on:click={() =>
+                              handleRefine(
+                                column.name,
+                                RefineOperation.UPPERCASE
+                              )}
+                          />
+                          <OverflowMenuItem
+                            text="  → minuscules"
+                            on:click={() =>
+                              handleRefine(
+                                column.name,
+                                RefineOperation.LOWERCASE
+                              )}
+                          />
+                          <OverflowMenuItem
+                            text="  → Casse Titre"
+                            on:click={() =>
+                              handleRefine(
+                                column.name,
+                                RefineOperation.TITLECASE
+                              )}
+                          />
+                          <OverflowMenuItem
+                            text="  → Supprimer espaces"
+                            on:click={() =>
+                              handleRefine(column.name, RefineOperation.TRIM)}
+                          />
+                          <OverflowMenuItem
+                            text="  → Espaces multiples"
+                            on:click={() =>
+                              handleRefine(
+                                column.name,
+                                RefineOperation.TRIM_ALL
+                              )}
+                          />
                           <OverflowMenuItem
                             text={hiddenColumns.has(column.name)
                               ? 'Afficher'
                               : 'Masquer'}
+                            hasDivider
                             on:click={() => toggleColumnVisibility(column.name)}
                           />
                           <OverflowMenuItem

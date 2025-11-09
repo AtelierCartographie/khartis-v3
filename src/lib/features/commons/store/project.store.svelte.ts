@@ -33,6 +33,7 @@ class ProjectStore {
   });
 
   private autoSaveTimer?: number;
+
   private initPromise?: Promise<void>;
 
   constructor() {
@@ -121,9 +122,7 @@ class ProjectStore {
           uploadProgress: file.uploadProgress,
           errorMessage: file.errorMessage,
           validation: file.validation,
-          parsedData: file.parsedData
-            ? JSON.parse(JSON.stringify(file.parsedData))
-            : null,
+          parsedData: file.parsedData,
           content: file.content,
           duplicates: file.duplicates,
           statistics: file.statistics,
@@ -316,7 +315,7 @@ class ProjectStore {
       }
 
       const duplicatedProject: KhartisProject = {
-        ...JSON.parse(JSON.stringify(originalProject)),
+        ...structuredClone(originalProject),
         id: crypto.randomUUID(),
         manifest: {
           ...originalProject.manifest,

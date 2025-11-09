@@ -202,7 +202,7 @@ export function parseCsvHeaders(csvContent: string): string[] {
 
 export async function parseCsvWithPapa(
   file: File,
-  onProgress?: (progress: number) => void
+  _onProgress?: (progress: number) => void
 ): Promise<{
   data: any[];
   headers: string[];
@@ -295,9 +295,9 @@ export async function parseCsvWithPapa(
             });
           }
         },
-        error: (error: any) => {
-          logger.error('Parse error', LogCategory.FILE, error);
-          reject(error);
+        error: (_error: any) => {
+          logger.error('Parse error', LogCategory.FILE, _error);
+          reject(_error);
         }
       });
     };

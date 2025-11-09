@@ -106,7 +106,7 @@ export async function openHamburgerMenu(page: Page): Promise<Locator> {
 }
 
 export async function reopenProjectModal(page: Page): Promise<Locator> {
-  const menu = await openHamburgerMenu(page);
+  await openHamburgerMenu(page);
   const openProjectMenuItem = page.getByRole('button', {
     name: /Ouvrir un projet/
   });

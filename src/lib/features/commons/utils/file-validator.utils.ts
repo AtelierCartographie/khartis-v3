@@ -1,6 +1,5 @@
-import { logger, LogCategory } from './logger';
-import type { FileValidation } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
+import { LogCategory, logger } from './logger';
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -65,15 +64,6 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
   strictMode: true
 };
 
-const FILE_SIGNATURES = {
-  SQLITE: [0x53, 0x51, 0x4c, 0x69, 0x74, 0x65],
-  SHP: [0x00, 0x00, 0x27, 0x0a],
-  DBF: [0x03],
-  ZIP: [0x50, 0x4b, 0x03, 0x04],
-  JSON: [0x7b, 0x5b],
-  TEXT: null
-};
-
 export class FileValidator {
   private static config = FILE_VALIDATION_CONFIG;
 
@@ -114,6 +104,7 @@ export class FileValidator {
 
       switch (result.fileType) {
         case FileType.CSV:
+
         case FileType.TSV:
           await this.validateCSVContent(file, buffer, result);
           break;
@@ -281,6 +272,7 @@ export class FileValidator {
   ): void {
     switch (result.fileType) {
       case FileType.CSV:
+
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
           result.warnings.push(
