@@ -1,163 +1,150 @@
-# Khartis v3 Developer Documentation
+# Khartis v3 - Documentation
 
-## Core Modules
+> **Thematic mapping application built with SvelteKit 5, TypeScript, and Deck.gl**
 
-| Area                | Purpose                                            | Key Artifacts                           |
-| ------------------- | -------------------------------------------------- | --------------------------------------- |
-| Data Pipeline       | Import → validate → type → stats → enrich → export | ProcessedDataset, Column, Dataset store |
-| Visualization       | Build thematic configurations + layers             | Visualization config, LayerConfig       |
-| Rendering           | Deck.gl + MapLibre orchestration                   | GPU layers + basemap composite          |
-| State & Persistence | Reactive runes stores + IndexedDB                  | Project snapshot (.kh)                  |
-| Features & Tools    | Modular UI / domain logic units                    | Feature stores, tool panels             |
-| Cross-Cutting       | Performance, a11y, security, i18n                  | Budgets, compliance, messages           |
+## 📚 Documentation Structure
 
-## Quick Start
+This documentation is organized into focused guides covering different aspects of the codebase:
 
-1. Clone + `npm install` + `npm run dev`
-2. Open `src/lib/features/` to explore structure
-3. Add a feature: copy minimal pattern from an existing simple feature
-4. Run tests: `npm test`; add new tests before PR
+| Document | Description |
+|----------|-------------|
+| **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** | Quick start, golden rules, and common development tasks |
+| **[ARCHITECTURE.md](ARCHITECTURE.md)** | System design, core principles, and mental models |
+| **[DATA_PIPELINE.md](DATA_PIPELINE.md)** | Data import, validation, processing, and export |
+| **[VISUALIZATION.md](VISUALIZATION.md)** | Thematic map configuration and GPU rendering |
+| **[STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)** | State management, persistence, and feature patterns |
+| **[REFERENCE.md](REFERENCE.md)** | Types, utilities, performance, and cross-cutting concerns |
+| **[BASEMAPS.md](BASEMAPS.md)** | Basemap preparation, formats, and catalog management |
 
-## Golden Rules
+## 🚀 Quick Start
 
-- No comments unless explicitly required
-- No `any`; type everything
-- No magic strings: constants or enums
-- Derived values pure ($derived)
-- One store per domain responsibility
-- i18n for all visible text (Paraglide messages)
-- User data never leaves browser
-
-## Adding a Feature (Checklist)
-
-| Step | Action                                         |
-| ---- | ---------------------------------------------- |
-| 1    | Create folder under `src/lib/features/<name>`  |
-| 2    | Add `<name>.store.svelte.ts` with $state model |
-| 3    | Add `<name>.svelte` entry component            |
-| 4    | Provide `<name>.types.ts` (public types)       |
-| 5    | Register navigation/tool entry if needed       |
-| 6    | Add i18n keys + tests                          |
-
-## Adding a Tool (Step Toolbar)
-
-Minimal store pattern:
-
-```ts
-export class ToolStore {
-  protected _state = $state({ enabled: false });
-  enable() {
-    this._state.enabled = true;
-  }
-  disable() {
-    this._state.enabled = false;
-  }
-}
+```bash
+git clone <repo-url>
+cd khartis-v3
+npm install
+npm run dev
 ```
 
-Register, lazy-load component, wire actions to underlying feature / visualization stores.
+Open http://localhost:5173
 
-## Data Pipeline Essentials
+## 🎯 Core Concepts
 
-Workflow: File(s) → shallow validation → parsing (stream where possible) → column type inference → stats → geometry analysis → dataset store → visualization suggestions.
+### Four Pillars
 
-Key heuristics (type inference order): boolean → date → numeric → geometry → text.
-Stats at ingest: numeric (min,max,mean) + counts/nulls/uniques. Median/stdDev computed on-demand only (not persisted). Text top categories and geometric metrics planned.
+1. **Client-only Privacy**: All processing in browser, no server upload
+2. **Feature-first Modularity**: Self-contained features in `src/lib/features/`
+3. **Runes Reactive State**: Svelte 5 `$state` and `$derived`
+4. **GPU-first Rendering**: Deck.gl + MapLibre for performance
 
-Export types: Map (PNG/JPEG/SVG/PDF), Data (CSV/GeoJSON), Project (.kh JSON aggregate).
+### Data Flow
 
-## Visualization Essentials
+```
+Import → Validate → Parse → Type Inference → Statistics
+  ↓
+Dataset Store + DuckDB → Visualization Suggestion
+  ↓
+User Configuration → Layer Assembly → GPU Rendering → Export
+```
 
-Types: choropleth, proportional symbols, categorical, bivariate, collections (facets).
-Classification: equal interval, quantile, Jenks (placeholder → quantile fallback), std dev, manual. Geometric planned.
-Color palettes: sequential, diverging, qualitative, bivariate matrix.
-Projection selection ranked by fit to dataset extent (suggestion engine).
+## 📖 For New Developers
 
-Layer Assembly: dataset + style config → Deck.gl layers (picking enabled) + basemap → composited render.
+Start here:
+1. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for onboarding
+2. Explore [ARCHITECTURE.md](ARCHITECTURE.md) for system overview
+3. Check [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) for feature patterns
+4. Reference [REFERENCE.md](REFERENCE.md) for types and utilities
 
-## Performance Snapshot
+## 🛠️ Common Tasks
 
-| Concern       | Strategy                                            |
-| ------------- | --------------------------------------------------- |
-| Load          | Code splitting, lazy heavy libs                     |
-| Heavy compute | Web Workers (classification, joins, simplification) |
-| Rapid edits   | Throttled recompute + preview LOD                   |
-| Geometry      | Pre-simplification tiers + dynamic simplification   |
-| Caching       | Memoized classification + palettes keyed by config  |
+| Task | Documentation |
+|------|---------------|
+| **Add new feature** | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-feature) |
+| **Add new tool** | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-tool) |
+| **Add file format** | [DATA_PIPELINE.md](DATA_PIPELINE.md#add-new-file-format) |
+| **Add visualization** | [VISUALIZATION.md](VISUALIZATION.md#add-new-visualization-type) |
+| **Add classification** | [VISUALIZATION.md](VISUALIZATION.md#add-new-classification-method) |
+| **Understand state** | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) |
+| **Find type definitions** | [REFERENCE.md](REFERENCE.md#core-type-definitions) |
 
-Target: interactive <3s typical device, smooth pan/zoom (~60fps small to medium datasets).
+## 🏗️ Project Structure
 
-## State & Persistence
+```
+src/lib/
+├── features/           # Feature-based architecture
+│   ├── commons/        # Shared components, utils, services
+│   ├── create-project/ # Project creation modal
+│   ├── header/         # Top navigation
+│   ├── main-toolbar/   # Left sidebar
+│   ├── map/            # Map visualization
+│   └── step-toolbar/   # Right panel tools
+├── paraglide/          # i18n messages (en, fr)
+└── types/              # Shared TypeScript types
+```
 
-Layers: component local → feature store → global coordination → IndexedDB persistence → metadata (localforage).
-Auto-save: dirty flag + debounce interval (≈30s). Undo/redo: bounded snapshots of meaningful structural changes.
-Serialization: JSON; potential future compression for large projects.
+## 📊 Tech Stack
 
-## Project Creation Modal
+- **Framework**: SvelteKit 5 (Runes)
+- **Language**: TypeScript
+- **Rendering**: Deck.gl + MapLibre GL
+- **Data Engine**: DuckDB WASM
+- **Storage**: IndexedDB + localforage
+- **i18n**: Paraglide (compile-time)
+- **Testing**: Vitest + Playwright
 
-Three modes backed by an ephemeral create-project store (not persisted):
+## 🎨 Supported Features
 
-- New: multi file upload (CSV/TSV, GeoJSON, Shapefile set, GeoPackage), pasted tabular text, remote URL fetch. Files transition uploading → processing → complete; shapefile related component names listed. Project name sanitized live; create enabled only when ≥1 file complete.
-- Open: list saved projects (load/duplicate/delete) plus archive import (.kh / .khartis). Duplicate currently appends literal suffix " (copie)" to the original name before sanitization.
-- Try Example: fetch curated example dataset, wrap as File, process, set project name to example title, persist and navigate home.
+### Data Import
+- CSV/TSV, GeoJSON, Shapefile, GeoPackage
+- Paste tabular text
+- URL fetch
+- Auto type inference and validation
 
-Ephemeral store resets (resetAllTabs) after creation, project load, example selection, or modal close.
+### Visualizations
+- Choropleth (color-coded regions)
+- Proportional symbols (sized markers)
+- Categorical (distinct categories)
+- Bivariate (two variables)
+- Collections/Facets (small multiples)
 
-## Cross-Cutting
+### Export
+- Maps: PNG, JPEG, SVG, PDF
+- Data: CSV, GeoJSON
+- Projects: .kh archive
 
-Performance: Monitor long tasks & frame pacing; regression gates in CI.
-Accessibility: Keyboard coverage, focus ring, contrast-safe suggestions, alternative textual summaries.
-Security: Sanitize file names & CSV cells, size quotas, dependency auditing. No server attack surface (client-only).
-Internationalization: Paraglide compile-time messages (en, fr). Keys semantic; no string concatenation.
+### Tools
+- Annotations (text, shapes, drawings, images)
+- Legend editing
+- Layers management
+- Projections
+- Simplification
+- Color blindness simulation
+- Geo indicators (scale, north arrow)
+- Format & layout
 
-## Extension Points
+## 🧪 Testing
 
-| Area               | Mechanism                               |
-| ------------------ | --------------------------------------- |
-| File format        | Parser + signature + validator          |
-| Visualization type | Registry + factory signature            |
-| Classification     | Strategy interface (data → breaks[])    |
-| Color scale        | Palette provider (metadata + generator) |
-| Export format      | (project → Blob) strategy               |
-| Projection         | Catalog + custom CRS parser             |
+```bash
+npm test              # Unit tests
+npm run test:e2e      # E2E tests
+npm run test:coverage # Coverage report
+```
 
-## Error Handling Pattern
+## 📝 Contributing
 
-| Error               | Response                                  |
-| ------------------- | ----------------------------------------- |
-| Import validation   | Inline explanation + abort dataset insert |
-| Classification fail | Fallback method + notify                  |
-| Projection fail     | Revert to safe default                    |
-| Export fail         | Retry suggestion + alternative format     |
+1. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for guidelines
+2. Follow conventional commits: `feat:`, `fix:`, `docs:`, etc.
+3. Run lint + tests before PR
+4. Keep PRs focused and reviewable
 
-## Testing Focus
+## 🔗 Additional Resources
 
-Unit: pure utils, store logic. Component: interactions + state reflection. E2E: primary flows (import → visualize → export). Performance: synthetic dataset benchmarks. Accessibility: keyboard paths.
+- **Root README**: [../README.md](../README.md) - Project overview
+- **Contributing**: [../CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
+- **E2E Tests**: [../e2e/README.md](../e2e/README.md) - Testing documentation
+- **Basemaps**: [basemaps/](basemaps/) - Basemap documentation
 
-## Glossary
+---
 
-Aggregation, Choropleth, Jenks, Projection, Quantile, Simplification, LOD, CRS, Worker.
-
-## Roadmap Snapshot (Top 5)
-
-1. Geometry worker pool
-2. Template gallery
-3. Locale number/date formatting
-4. Performance regression harness
-5. Adaptive classification updates
-
-## Quick Reference Table
-
-| Need              | Doc / Section                          |
-| ----------------- | -------------------------------------- |
-| Add projection    | Visualization (projections)            |
-| New export        | Data pipeline (export subsystem)       |
-| Add tool          | Features & Tools checklist             |
-| Persist change    | State & Persistence (mutation wrapper) |
-| Optimize slow map | Visualization + Performance snapshot   |
-
-## Contribution Hygiene
-
-- Conventional commits (feat/fix/docs/refactor/test/chore)
-- Run lint + tests pre-PR
-- Keep feature scope minimal & reviewable
+**Documentation Version**: 3.1.0
+**Last Updated**: 2025-01-09
+**Codebase**: Khartis v3

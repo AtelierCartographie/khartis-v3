@@ -1,3 +1,6 @@
+import { normalizeForMatching } from './string.utils';
+import { logger, LogCategory } from './logger';
+
 export interface MatchResult {
   matched: string[];
   unmatched: string[];
@@ -100,7 +103,7 @@ export class GeoMatcher {
     result.matchRate =
       values.length > 0 ? result.matched.length / values.length : 0;
 
-    result.confidence = this.calculateConfidence(result, catalogue);
+    result.confidence = this.calculateConfidence(result);
 
     return result;
   }
@@ -120,51 +123,16 @@ export class GeoMatcher {
 
     let normalized = value.trim();
 
-    if (!caseSensitive) {
-      normalized = normalized.toUpperCase();
-    }
-
+    // Normalisation des quotes et espaces avant l'appel à normalizeForMatching
     normalized = normalized
       .replace(/[''`]/g, "'")
       .replace(/[""«»]/g, '"')
       .replace(/\s+/g, ' ')
       .replace(/^(LE|LA|LES|L'|THE)\s+/i, '');
 
-    const accentsMap: { [key: string]: string } = {
-      À: 'A',
-      Á: 'A',
-      Â: 'A',
-      Ã: 'A',
-      Ä: 'A',
-      Å: 'A',
-      È: 'E',
-      É: 'E',
-      Ê: 'E',
-      Ë: 'E',
-      Ì: 'I',
-      Í: 'I',
-      Î: 'I',
-      Ï: 'I',
-      Ò: 'O',
-      Ó: 'O',
-      Ô: 'O',
-      Õ: 'O',
-      Ö: 'O',
-      Ù: 'U',
-      Ú: 'U',
-      Û: 'U',
-      Ü: 'U',
-      Ñ: 'N',
-      Ç: 'C'
-    };
-
-    for (const [accent, base] of Object.entries(accentsMap)) {
-      normalized = normalized.replace(new RegExp(accent, 'g'), base);
-      normalized = normalized.replace(
-        new RegExp(accent.toLowerCase(), 'g'),
-        base.toLowerCase()
-      );
-    }
+    // Utiliser la fonction de normalisation centralisée pour enlever les accents
+    // et normaliser la casse de manière efficace (remplace ~40 lignes de code manuel)
+    normalized = normalizeForMatching(normalized, caseSensitive);
 
     return normalized;
   }
@@ -209,6 +177,13 @@ export class GeoMatcher {
     return 1 - distance / maxLen;
   }
 
+  /**
+   * Calcule la distance de Levenshtein entre deux chaînes
+   * Optimisé pour utiliser O(min(m,n)) en espace au lieu de O(m×n)
+   * @param str1 Première chaîne
+   * @param str2 Deuxième chaîne
+   * @returns Distance de Levenshtein
+   */
   private static levenshteinDistance(str1: string, str2: string): number {
     const m = str1.length;
     const n = str2.length;
@@ -216,34 +191,44 @@ export class GeoMatcher {
     if (m === 0) return n;
     if (n === 0) return m;
 
-    const matrix: number[][] = [];
-
-    for (let i = 0; i <= m; i++) {
-      matrix[i] = [i];
+    // Limiter la taille pour éviter des calculs trop coûteux
+    const MAX_LENGTH = 1000;
+    if (m > MAX_LENGTH || n > MAX_LENGTH) {
+      // Pour les très longues chaînes, utiliser une heuristique simple
+      return Math.max(m, n);
     }
 
+    // Optimisation : utiliser seulement deux lignes au lieu d'une matrice complète
+    // Complexité spatiale O(min(m,n)) au lieu de O(m×n)
+    let prevRow = new Array(n + 1);
+    let currRow = new Array(n + 1);
+
+    // Initialiser la première ligne
     for (let j = 0; j <= n; j++) {
-      matrix[0][j] = j;
+      prevRow[j] = j;
     }
 
+    // Calculer les lignes suivantes
     for (let i = 1; i <= m; i++) {
+      currRow[0] = i;
+
       for (let j = 1; j <= n; j++) {
         const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j - 1] + cost
+        currRow[j] = Math.min(
+          currRow[j - 1] + 1, // insertion
+          prevRow[j] + 1, // suppression
+          prevRow[j - 1] + cost // substitution
         );
       }
+
+      // Échanger les lignes
+      [prevRow, currRow] = [currRow, prevRow];
     }
 
-    return matrix[m][n];
+    return prevRow[n];
   }
 
-  private static calculateConfidence(
-    result: MatchResult,
-    _catalogue_UNUSED: CatalogueInfo
-  ): number {
+  private static calculateConfidence(result: MatchResult): number {
     let confidence = result.matchRate;
 
     if (result.fuzzyMatches.length > 0) {
@@ -387,8 +372,9 @@ export class GeoMatcher {
           confidence: result.confidence
         });
       } catch (error) {
-        console.error(
-          `Erreur lors du test du catalogue ${catalogueId}:`,
+        logger.error(
+          `Erreur lors du test du catalogue ${catalogueId}`,
+          LogCategory.DATA,
           error
         );
       }
