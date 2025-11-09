@@ -1,5 +1,5 @@
 declare module 'svelte/elements' {
-  interface HTMLAttributes<T> {
+  interface HTMLAttributes<_T> {
     onoutsideclick?: (event: CustomEvent) => void;
   }
 }

@@ -188,6 +188,7 @@
     let deckLayer;
     switch (geometryType.toUpperCase()) {
       case 'POINT':
+
       case 'MULTIPOINT': {
         const pointChild = jsTable.getChild(geoColumn);
         if (!pointChild) return [];
@@ -270,7 +271,9 @@
         });
         break;
       }
+
       case 'LINESTRING':
+
       case 'MULTILINESTRING':
         deckLayer = new geodecklayers.GeoArrowPathLayer({
           id: 'line-layer',
@@ -285,7 +288,9 @@
           autoHighlight: true
         });
         break;
+
       case 'POLYGON':
+
       case 'MULTIPOLYGON': {
         const polygonChild = jsTable.getChild(geoColumn);
         if (!polygonChild) return [];
@@ -321,6 +326,7 @@
         });
         break;
       }
+
       default:
         return [];
     }

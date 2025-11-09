@@ -147,14 +147,17 @@
                 format = 'csv';
                 extension = 'csv';
                 break;
+
               case 'geojson':
                 format = 'geojson';
                 extension = 'geojson';
                 break;
+
               case 'csv-geo':
                 format = 'json';
                 extension = 'json';
                 break;
+
               default:
                 format = 'json';
                 extension = 'json';

@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import {
   SimplificationLevel,
   SimplificationSource
@@ -129,9 +130,7 @@ export const simplificationActions = {
     }
   },
 
-  reset(): void {
-    Object.assign(simplificationState, DEFAULT_SIMPLIFICATION_STATE);
-  }
+  reset: createResetFunction(simplificationState, DEFAULT_SIMPLIFICATION_STATE)
 };
 
 export function getVertexReduction(level: SimplificationLevel): number {

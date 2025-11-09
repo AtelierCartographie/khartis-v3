@@ -455,5 +455,10 @@
   "source": "Source",
   "date": "Date",
   "projection": "Projection",
-  "loading_basemap_suggestions": "Loading basemap suggestions..."
+  "loading_basemap_suggestions": "Loading basemap suggestions...",
+  "pwa_update_title": "Update available",
+  "pwa_update_subtitle": "A new version of Khartis is available",
+  "pwa_update_action": "Reload to update",
+  "pwa_offline_ready_title": "Ready for offline use",
+  "pwa_offline_ready_subtitle": "Khartis can now work offline"
 }

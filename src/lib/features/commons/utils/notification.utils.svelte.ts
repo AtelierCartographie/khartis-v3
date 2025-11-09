@@ -23,6 +23,7 @@ interface Notification extends NotificationOptions {
 
 class NotificationManager {
   private _notifications = $state<Notification[]>([]);
+
   private defaultTimeout = 5000;
 
   get notifications() {

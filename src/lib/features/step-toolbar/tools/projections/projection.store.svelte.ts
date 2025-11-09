@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { ProjectionState } from './projections.types';
 import {
   getProjectionById,
@@ -54,9 +55,7 @@ export const projectionActions = {
     projectionState.scale = Math.max(0.1, Math.min(10, scale));
   },
 
-  reset(): void {
-    Object.assign(projectionState, DEFAULT_PROJECTION_STATE);
-  },
+  reset: createResetFunction(projectionState, DEFAULT_PROJECTION_STATE),
 
   suggestProjectionForCurrentData(): void {
     const geoDatasets = datasetsStore.getDatasetsByType(true);

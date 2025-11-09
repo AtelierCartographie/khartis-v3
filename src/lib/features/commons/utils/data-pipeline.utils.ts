@@ -132,7 +132,7 @@ export function processTabularData(
     const processedRow: any = {};
 
     columns.forEach((col) => {
-      let value = row[col.name];
+      const value = row[col.name];
 
       if (value === null || value === undefined || value === '') {
         processedRow[col.name] = null;
@@ -165,7 +165,7 @@ export function processGeospatialData(geojson: any): {
 
   const allProperties = new Map<string, any[]>();
   const geometryTypes = new Set<string>();
-  let bounds: [number, number, number, number] = [
+  const bounds: [number, number, number, number] = [
     Infinity,
     Infinity,
     -Infinity,

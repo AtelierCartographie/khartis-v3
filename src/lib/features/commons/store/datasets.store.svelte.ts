@@ -21,6 +21,19 @@ class DatasetsStore {
     isProcessing: false
   });
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      $effect.root(() => {
+        $effect(() => {
+          const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
+          if (sourceFiles !== undefined) {
+            void this.syncWithProject();
+          }
+        });
+      });
+    }
+  }
+
   get datasets() {
     return this._state.datasets;
   }
@@ -50,6 +63,25 @@ class DatasetsStore {
     return this._state.error;
   }
 
+  private createFileCopy(file: UploadedFile): UploadedFile {
+    return {
+      id: file.id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      fileType: file.fileType,
+      status: file.status,
+      uploadProgress: file.uploadProgress,
+      errorMessage: file.errorMessage,
+      validation: file.validation,
+      parsedData: file.parsedData || [],
+      content: file.content,
+      duplicates: file.duplicates,
+      statistics: file.statistics,
+      sourceType: file.sourceType
+    };
+  }
+
   async processFiles(files: UploadedFile[]): Promise<void> {
     this._state.isProcessing = true;
     this._state.error = undefined;
@@ -64,27 +96,7 @@ class DatasetsStore {
         if (!file.parsedData) {
           logger.warn(`File ${file.name} has no parsedData`, LogCategory.DATA);
         }
-
-        const cleanFile = {
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          fileType: file.fileType,
-          status: file.status,
-          uploadProgress: file.uploadProgress,
-          errorMessage: file.errorMessage,
-          validation: file.validation,
-          parsedData: file.parsedData
-            ? JSON.parse(JSON.stringify(file.parsedData))
-            : [],
-          content: file.content,
-          duplicates: file.duplicates,
-          statistics: file.statistics,
-          sourceType: file.sourceType
-        };
-
-        return cleanFile;
+        return this.createFileCopy(file);
       });
 
       const newDatasets = await createDataPipeline(filesCopy);
@@ -108,24 +120,7 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
-      const fileCopy = {
-        id: file.id,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        fileType: file.fileType,
-        status: file.status,
-        uploadProgress: file.uploadProgress,
-        errorMessage: file.errorMessage,
-        validation: file.validation,
-        parsedData: file.parsedData
-          ? JSON.parse(JSON.stringify(file.parsedData))
-          : [],
-        content: file.content,
-        duplicates: file.duplicates,
-        statistics: file.statistics,
-        sourceType: file.sourceType
-      };
+      const fileCopy = this.createFileCopy(file);
 
       const dataset = await processUploadedFile(fileCopy);
 
@@ -223,7 +218,7 @@ class DatasetsStore {
       : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
-  async syncWithProject(): Promise<void> {
+  private async syncWithProject(): Promise<void> {
     const currentProject = projectStore.currentProject;
     if (!currentProject?.data?.sourceFiles) {
       this.clear();
@@ -274,8 +269,8 @@ class DatasetsStore {
 
     const resetDataset = {
       ...dataset,
-      columns: JSON.parse(JSON.stringify(dataset.originalData.columns)),
-      data: JSON.parse(JSON.stringify(dataset.originalData.data)),
+      columns: structuredClone(dataset.originalData.columns),
+      data: structuredClone(dataset.originalData.data),
       rowCount: dataset.originalData.rowCount,
       metadata: {
         ...dataset.metadata,

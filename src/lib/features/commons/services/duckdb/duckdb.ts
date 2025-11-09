@@ -1,5 +1,5 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { tableFromIPC, type Table } from '@uwdata/flechette';
+import { tableFromIPC } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
@@ -195,6 +195,7 @@ function validate_and_cast_value(
 
   switch (column_type.toLowerCase()) {
     case 'integer':
+
     case 'bigint':
       isValid = isValidInteger(new_value as string | number);
       value =
@@ -202,6 +203,7 @@ function validate_and_cast_value(
           ? parseInt(new_value, 10)
           : (new_value as number);
       break;
+
     case 'number':
       isValid = isValidFloat(new_value as string | number);
       value =
@@ -209,10 +211,12 @@ function validate_and_cast_value(
           ? parseFloat(new_value)
           : (new_value as number);
       break;
+
     case 'string':
       isValid = true;
       value = String(new_value);
       break;
+
     case 'boolean':
       isValid = isValidBoolean(new_value as string | number | boolean);
       if (typeof new_value === 'number' || typeof new_value === 'boolean')
@@ -224,6 +228,7 @@ function validate_and_cast_value(
           value = false;
       }
       break;
+
     case 'date':
       if (
         new_value instanceof Date ||
@@ -233,8 +238,11 @@ function validate_and_cast_value(
         if (!(new_value instanceof Date)) value = new Date(new_value);
       }
       break;
+
     case 'geometry':
+
     case 'other':
+
     default:
       throw new Error(`Unsupported column type: ${column_type}.`);
   }
@@ -243,10 +251,15 @@ function validate_and_cast_value(
 
 class DuckDB {
   public db: duckdb.AsyncDuckDB | null = null;
+
   public connection: duckdb.AsyncDuckDBConnection | null = null;
+
   public loaded_files: Map<string, string> = new Map();
+
   public registered_files: Set<string> = new Set();
+
   public table_metadata: Map<string, TableMetadata> = new Map();
+
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
 
   constructor() {}
@@ -305,7 +318,7 @@ class DuckDB {
   }
 
   async query(query: string, options: QueryOptions = {}): Promise<unknown> {
-    let { format = DUCK_CONST.QUERY_FORMAT.ARROW_TABLE, useProxy = true } =
+    const { format = DUCK_CONST.QUERY_FORMAT.ARROW_TABLE, useProxy = true } =
       options;
 
     const buffer = await this.connection!.useUnsafe(
@@ -331,7 +344,7 @@ class DuckDB {
     files: File[],
     options: RegisterFilesOptions = {}
   ): Promise<void> {
-    let { shapefile = false } = options;
+    const { shapefile = false } = options;
     let shape_date: number | undefined;
     if (shapefile) {
       const shp = files.reverse().find((file) => file.name.endsWith('.shp'));
@@ -489,6 +502,7 @@ class DuckDB {
           );
           await this.add_row_id(tablename);
           break;
+
         case DUCK_CONST.TYPE.PARQUET:
           await this.query(
             `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${filename}');`,
@@ -496,6 +510,7 @@ class DuckDB {
           );
           await this.add_row_id(tablename);
           break;
+
         case DUCK_CONST.TYPE.GEOFILE:
           await this.query(
             `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${filename}');`,
@@ -534,8 +549,8 @@ class DuckDB {
   }
 
   async get_data(table: string, options: GetDataOptions = {}): Promise<Table> {
-    let { geometry = false } = options;
-    let query_end = geometry
+    const { geometry = false } = options;
+    const query_end = geometry
       ? 'SELECT *'
       : `SELECT COLUMNS(c -> c NOT ILIKE '%geom%')`;
     const result = await this.query(`FROM ${table} ${query_end}`);
@@ -641,12 +656,15 @@ class DuckDB {
       case 'string':
         value_for_query = `'${new_value.replace(/'/g, "''")}'`;
         break;
+
       case 'number':
         value_for_query = new_value;
         break;
+
       case 'boolean':
         value_for_query = new_value ? 'TRUE' : 'FALSE';
         break;
+
       default:
         if (new_value instanceof Date) {
           value_for_query = `'${new_value.toISOString()}'`;
@@ -784,7 +802,7 @@ class DuckDB {
     column: string,
     options: CalculateBreaksOptions = {}
   ): Promise<number[]> {
-    let {
+    const {
       method = 'quantile',
       nclass = 5,
       nclass_right = nclass,
@@ -893,6 +911,7 @@ class DuckDB {
             `FROM histogram_numeric(${table}, "${d.name}")`
           );
           break;
+
         case 'date':
           summary_general = (await this.query(
             `FROM summary_general(${table}, "${d.name}")`,
@@ -910,6 +929,7 @@ class DuckDB {
             `FROM histogram_numeric(${table}, "${d.name}")`
           );
           break;
+
         case 'string':
           summary_general = (await this.query(
             `FROM summary_general(${table}, "${d.name}")`,
