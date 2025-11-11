@@ -4,13 +4,13 @@
 
 ## State Layers
 
-| Layer | Purpose | Lifetime | Storage |
-|-------|---------|----------|---------|
-| **Component Local** | Ephemeral UI state | Component mount | `$state` in component |
-| **Feature Store** | Domain model + actions | Session | `$state` in store |
-| **Global Store** | Cross-feature coordination | Session | ProjectStore singleton |
-| **IndexedDB** | Durable projects + datasets | Persistent | IndexedDB API |
-| **localforage** | Metadata (recent projects) | Persistent | localforage wrapper |
+| Layer               | Purpose                     | Lifetime        | Storage                |
+| ------------------- | --------------------------- | --------------- | ---------------------- |
+| **Component Local** | Ephemeral UI state          | Component mount | `$state` in component  |
+| **Feature Store**   | Domain model + actions      | Session         | `$state` in store      |
+| **Global Store**    | Cross-feature coordination  | Session         | ProjectStore singleton |
+| **IndexedDB**       | Durable projects + datasets | Persistent      | IndexedDB API          |
+| **localforage**     | Metadata (recent projects)  | Persistent      | localforage wrapper    |
 
 ## Design Principles
 
@@ -26,7 +26,7 @@
 interface KhartisProject {
   id: string;
   manifest: {
-    version: string;           // '3.0.0'
+    version: string; // '3.0.0'
     createdAt: Date;
     updatedAt: Date;
     name: string;
@@ -36,8 +36,8 @@ interface KhartisProject {
   };
   data: {
     sourceFiles: UploadedFile[];
-    processedData?: any;       // Future enrichment
-    joinedData?: any;          // Future joins
+    processedData?: any; // Future enrichment
+    joinedData?: any; // Future joins
     basemap?: {
       type: string;
       id: string;
@@ -55,6 +55,7 @@ interface KhartisProject {
 ## Auto-Save Mechanism
 
 **Flow:**
+
 ```
 State Mutation → Set Dirty Flag → Start/Reset Debounce Timer (30s)
   ↓
@@ -62,12 +63,14 @@ Timer Fires → Serialize to JSON → Validate Size → Write to IndexedDB
 ```
 
 **Triggers immediate save** (bypass debounce):
+
 - Project creation
 - Import completion
 - File add/remove
 - Explicit export
 
 **Configuration:**
+
 ```ts
 projectStore.setAutoSave(enabled: boolean, delayMs?: number);
 ```
@@ -77,6 +80,7 @@ projectStore.setAutoSave(enabled: boolean, delayMs?: number);
 ### Snapshot Triggers
 
 **Creates history snapshot:**
+
 - Project created
 - Project name change
 - Project data metadata updated
@@ -84,35 +88,36 @@ projectStore.setAutoSave(enabled: boolean, delayMs?: number);
 - Layout updated
 
 **No snapshot:**
+
 - Transient UI changes (panel toggle, selection)
 - Typing in inputs (until debounced commit)
 - File add/remove (saved, but not in history)
 
 ### History Limits
 
-| Limit | Value | Behavior |
-|-------|-------|----------|
-| Max snapshots | 50 | Oldest dropped FIFO |
-| Storage | Full snapshots | No structural diffs |
-| Timeline | Linear | Truncated after undo + new mutation |
+| Limit         | Value          | Behavior                            |
+| ------------- | -------------- | ----------------------------------- |
+| Max snapshots | 50             | Oldest dropped FIFO                 |
+| Storage       | Full snapshots | No structural diffs                 |
+| Timeline      | Linear         | Truncated after undo + new mutation |
 
 ### Store API
 
 ```ts
-projectStore.undo();              // Navigate back
-projectStore.redo();              // Navigate forward
-projectStore.canUndo;             // Boolean derived
-projectStore.canRedo;             // Boolean derived
+projectStore.undo(); // Navigate back
+projectStore.redo(); // Navigate forward
+projectStore.canUndo; // Boolean derived
+projectStore.canRedo; // Boolean derived
 ```
 
 ## Storage Limits
 
-| Limit | Value | Notes |
-|-------|-------|-------|
-| **Max file size** | 50 MB | Validation error if exceeded |
-| **Max project size** | 100 MB | Warning at 80% |
-| **Max project count** | 50 | Warning at 80% |
-| **Metadata size** | ~5 MB | Last project ID + metadata list |
+| Limit                 | Value  | Notes                           |
+| --------------------- | ------ | ------------------------------- |
+| **Max file size**     | 50 MB  | Validation error if exceeded    |
+| **Max project size**  | 100 MB | Warning at 80%                  |
+| **Max project count** | 50     | Warning at 80%                  |
+| **Metadata size**     | ~5 MB  | Last project ID + metadata list |
 
 **Quota handling**: On error, purge oldest project metadata and retry (planned)
 
@@ -155,6 +160,7 @@ redo(): void
 ### Export Strategies
 
 **Compressed Archive** (default):
+
 ```ts
 createProjectArchive(name);
 // → gzip-compressed JSON (CompressionStream)
@@ -162,6 +168,7 @@ createProjectArchive(name);
 ```
 
 **Plain JSON** (diagnostics):
+
 ```ts
 exportProject(name);
 // → Pretty-printed JSON (uncompressed)
@@ -178,19 +185,20 @@ exportProject(name);
 
 ### localforage Keys
 
-| Key | Value | Purpose |
-|-----|-------|---------|
-| `CURRENT` | `string` | Last opened project ID |
-| `METADATA` | `SavedProjectMetadata[]` | Project list (id, name, size, dates) |
-| `AUTOSAVE` | (reserved) | Future preferences |
-| `PREFERENCES` | (reserved) | Future user settings |
+| Key           | Value                    | Purpose                              |
+| ------------- | ------------------------ | ------------------------------------ |
+| `CURRENT`     | `string`                 | Last opened project ID               |
+| `METADATA`    | `SavedProjectMetadata[]` | Project list (id, name, size, dates) |
+| `AUTOSAVE`    | (reserved)               | Future preferences                   |
+| `PREFERENCES` | (reserved)               | Future user settings                 |
 
 **Metadata structure:**
+
 ```ts
 interface SavedProjectMetadata {
   id: string;
   name: string;
-  size: number;              // Bytes (serialized JSON length)
+  size: number; // Bytes (serialized JSON length)
   createdAt: Date;
   updatedAt: Date;
   description?: string;
@@ -224,8 +232,12 @@ export class FeatureStore {
   });
 
   // Public getters
-  get enabled() { return this._state.enabled; }
-  get data() { return this._state.data; }
+  get enabled() {
+    return this._state.enabled;
+  }
+  get data() {
+    return this._state.data;
+  }
 
   // Derived state
   get isValid() {
@@ -259,11 +271,13 @@ The create-project modal uses an **ephemeral store** (not persisted):
 #### 1. New Mode
 
 **Upload sources:**
+
 - Multi-file: CSV/TSV, GeoJSON, Shapefile bundle, GeoPackage
 - Paste: Tabular text (textarea)
 - URL: Remote file fetch
 
 **Workflow:**
+
 ```
 File Drop → Validation → Processing (uploading → processing → complete/error)
   ↓
@@ -317,74 +331,84 @@ User Actions → Mutate Store → Derived Ripple → Update Layers/Layout
 
 ### State Guidelines
 
-| Rule | Reason |
-|------|--------|
-| **Ephemeral UI local** | Reduce global state noise |
-| **Persist only domain state** | Clean project JSON |
-| **Heavy compute in $derived** | Automatic memoization |
-| **Workers for expensive tasks** | Responsive UI |
+| Rule                            | Reason                    |
+| ------------------------------- | ------------------------- |
+| **Ephemeral UI local**          | Reduce global state noise |
+| **Persist only domain state**   | Clean project JSON        |
+| **Heavy compute in $derived**   | Automatic memoization     |
+| **Workers for expensive tasks** | Responsive UI             |
 
 ## Tool Implementations Reference
 
 ### Annotations
+
 - **Types**: Text, shapes, drawings, images
 - **Features**: Rich formatting, positioning, layering
 - **State**: Items list, selection, active type, styles
 
 ### Color Blindness
+
 - **Simulations**: Protanopia, deuteranopia, tritanopia, achromatopsia
 - **Purpose**: Accessibility testing for color palettes
 
 ### Geo Indicators
+
 - **Elements**: Scale bar, north arrow, coordinate grid
 - **Features**: Projection-aware, auto-unit conversion
 
 ### Simplification
+
 - **Purpose**: Reduce geometry complexity
 - **Settings**: Tolerance slider, preview mode, vertex count
 
 ### Search
+
 - **Capabilities**: Text search, spatial search, attribute filter
 - **Actions**: Highlight results, zoom to selection
 
 ### Layers
+
 - **Features**: Reorder, visibility toggle, opacity, blend modes
 - **Organization**: Layer groups, drag-and-drop
 
 ### Projections
+
 - **Categories**: Cylindrical, conic, azimuthal, custom
 - **Auto-suggestion**: Ranked by dataset extent fit
 
 ### Legend
+
 - **Operations**: Reorder items, edit labels, merge classes
 - **Customization**: Style, visibility, positioning
 
 ### Format & Layout
+
 - **Settings**: Page size, orientation, margins
 - **Export**: Resolution, title/subtitle configuration
 
 ### Facets (Collections)
+
 - **Purpose**: Small multiples for comparison
 - **Modes**: Common scale vs independent scale
 - **Layout**: Grid columns, synchronized interactions
 
 ## Cross-Tool Interactions
 
-| Trigger | Affected Tools | Action |
-|---------|---------------|--------|
+| Trigger               | Affected Tools              | Action              |
+| --------------------- | --------------------------- | ------------------- |
 | **Projection change** | Annotations, Geo Indicators | Recompute positions |
-| **Simplification** | Layers, Map | Refresh geometry |
-| **Legend edit** | Map, Export | Re-render legend |
-| **Format change** | Layout, Export | Scaling adjustments |
+| **Simplification**    | Layers, Map                 | Refresh geometry    |
+| **Legend edit**       | Map, Export                 | Re-render legend    |
+| **Format change**     | Layout, Export              | Scaling adjustments |
 
 ## Error Handling
 
-| Context | Strategy |
-|---------|----------|
-| **Invalid expression** | Highlight error, keep prior value |
+| Context                    | Strategy                           |
+| -------------------------- | ---------------------------------- |
+| **Invalid expression**     | Highlight error, keep prior value  |
 | **Simplification failure** | Revert geometry, show notification |
-| **Projection missing** | Fallback to Equirectangular |
-| **Quota exceeded** | Purge oldest project, retry save |
+| **Projection missing**     | Fallback to Equirectangular        |
+| **Quota exceeded**         | Purge oldest project, retry save   |
 
 ## Testing Checklist
 
@@ -403,6 +427,7 @@ User Actions → Mutate Store → Derived Ripple → Update Layers/Layout
 **Future**: Ordered migration scripts based on version comparison
 
 **Serialization**:
+
 - Dates → ISO strings
 - ArrayBuffer → numeric arrays
 - Restoration rebuilds typed arrays and Date instances
@@ -410,6 +435,7 @@ User Actions → Mutate Store → Derived Ripple → Update Layers/Layout
 ---
 
 **See also:**
+
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Store layering architecture
 - [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing
 - [VISUALIZATION.md](VISUALIZATION.md) - Visualization store integration

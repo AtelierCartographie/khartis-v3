@@ -14,7 +14,7 @@
 <script lang="ts">
   import { DataTable, DataTableSkeleton, Tag } from 'carbon-components-svelte';
   import { onMount } from 'svelte';
-  import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
+  import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
   import type { ArrowTableLike } from '../services/duckdb/types';
   import { logger, LogCategory } from '../utils/logger';
 

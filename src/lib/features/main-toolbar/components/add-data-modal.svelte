@@ -15,12 +15,13 @@
 
   let { open = $bindable(), addDataButton: _addDataButton }: Props = $props();
 
-  const closeModal = async () => {
+  const closeModal = () => {
     logger.info('Closing add data modal', LogCategory.FILE, {
       filesCount: createProjectState.newProject.uploadedFiles.length
     });
     open = false;
-    await createProjectActions.clearAllFiles(false);
+    // Clear only the upload UI state, don't touch DuckDB tables or project data
+    createProjectActions.clearUploadState();
   };
 
   const handleImport = async () => {

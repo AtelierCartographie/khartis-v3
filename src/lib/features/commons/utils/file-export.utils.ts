@@ -2,16 +2,18 @@ import Papa from 'papaparse';
 import type { UploadedFile } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
 import { logger, LogCategory } from './logger';
-import type { ProcessedDataset } from './data-pipeline.utils';
+import type { ProcessedDataset } from '$lib/features/data';
 import {
   isTabularData,
   isGeoJSONFeatureCollection,
   isGeoJSONFeature
 } from '$lib/types/data';
+import type { CsvData, GeoJsonExportData } from '$lib/types/export.types';
+import type { GeoJsonFeature } from '$lib/types/geometry.types';
 
 export const generateExportFilename = generateFilename;
 
-export function exportToCsv(data: any[], headers?: string[]): Blob {
+export function exportToCsv(data: Record<string, unknown>[], headers?: string[]): Blob {
   const csv = Papa.unparse({
     fields: headers || (data.length > 0 ? Object.keys(data[0]) : []),
     data
@@ -27,7 +29,7 @@ export function exportDatasetToCsv(dataset: ProcessedDataset): Blob {
     .map((col) => col.name);
 
   const data = dataset.data.map((row) => {
-    const cleanRow: Record<string, any> = {};
+    const cleanRow: Record<string, unknown> = {};
     headers.forEach((header) => {
       cleanRow[header] = row[header];
     });
@@ -43,7 +45,7 @@ export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
   }
 
   const features = dataset.data.map((row) => {
-    const properties: Record<string, any> = {};
+    const properties: Record<string, unknown> = {};
     dataset.columns
       .filter((col) => col.type !== 'geometry')
       .forEach((col) => {
@@ -56,7 +58,7 @@ export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
     const geometry = geometryColumn ? row[geometryColumn.name] : null;
 
     return {
-      type: 'Feature',
+      type: 'Feature' as const,
       geometry,
       properties
     };
@@ -71,25 +73,27 @@ export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
   return new Blob([jsonString], { type: 'application/geo+json' });
 }
 
-export function exportToGeoJson(data: any): Blob {
-  let geojson: any;
+export function exportToGeoJson(data: unknown): Blob {
+  const dataObj = data as Record<string, unknown>;
 
-  if (data.type === 'FeatureCollection' || data.type === 'Feature') {
-    geojson = data;
+  let geojson: unknown;
+
+  if (dataObj.type === 'FeatureCollection' || dataObj.type === 'Feature') {
+    geojson = dataObj;
   } else if (Array.isArray(data)) {
     geojson = {
       type: 'FeatureCollection',
       features: data
         .filter(
-          (item) =>
+          (item: Record<string, unknown>) =>
             item.type === 'Feature' || (item.geometry && item.properties)
         )
-        .map((item) => {
+        .map((item: Record<string, unknown>) => {
           if (item.type === 'Feature') return item;
           return {
-            type: 'Feature',
+            type: 'Feature' as const,
             geometry: item.geometry,
-            properties: item.properties || {}
+            properties: (item.properties as Record<string, unknown>) || {}
           };
         })
     };
@@ -101,7 +105,7 @@ export function exportToGeoJson(data: any): Blob {
   return new Blob([jsonString], { type: 'application/geo+json' });
 }
 
-export function exportToJson(data: any): Blob {
+export function exportToJson(data: unknown): Blob {
   const jsonString = JSON.stringify(data, null, 2);
   return new Blob([jsonString], { type: 'application/json' });
 }
@@ -119,7 +123,7 @@ export function exportProcessedDatasets(
       return exportDatasetToCsv(datasets[0]);
     }
 
-    const allData: any[] = [];
+    const allData: Record<string, unknown>[] = [];
     for (const dataset of datasets) {
       const dataWithSource = dataset.data.map((row) => ({
         ...row,
@@ -143,7 +147,7 @@ export function exportProcessedDatasets(
   }
 
   if (format === 'geojson') {
-    const allFeatures: any[] = [];
+    const allFeatures: unknown[] = [];
 
     for (const dataset of datasets) {
       if (!dataset.geometry) {
@@ -158,7 +162,7 @@ export function exportProcessedDatasets(
         (col) => col.type === 'geometry'
       );
       dataset.data.forEach((row) => {
-        const properties: Record<string, any> = {};
+        const properties: Record<string, unknown> = {};
         dataset.columns
           .filter((col) => col.type !== 'geometry')
           .forEach((col) => {
@@ -167,7 +171,7 @@ export function exportProcessedDatasets(
         properties._source_dataset = dataset.name;
 
         allFeatures.push({
-          type: 'Feature',
+          type: 'Feature' as const,
           geometry: geometryColumn ? row[geometryColumn.name] : null,
           properties
         });
@@ -217,7 +221,7 @@ export async function exportProjectData(
   }
 
   if (format === 'csv') {
-    const allData: any[] = [];
+    const allData: Record<string, unknown>[] = [];
 
     for (const file of validFiles) {
       if (file.parsedData) {
@@ -238,7 +242,7 @@ export async function exportProjectData(
   }
 
   if (format === 'geojson') {
-    const allFeatures: any[] = [];
+    const allFeatures: unknown[] = [];
 
     for (const file of validFiles) {
       if (file.parsedData) {

@@ -3,7 +3,7 @@
  * Permet de rechercher dans toutes les colonnes et de remplacer des valeurs
  */
 
-import { duckDBOrchestrator } from '../../../services/duckdb-orchestrator.service';
+import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
 import { logger, LogCategory } from '../../../utils/logger';
 import type { TableRow } from '../types';
 

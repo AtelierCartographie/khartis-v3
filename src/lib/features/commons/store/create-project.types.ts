@@ -33,6 +33,7 @@ export interface UploadedFile {
   type: string;
   fileType: FileType;
   content?: string | ArrayBuffer;
+  originalFile?: File; // Keep reference to original File object to avoid re-parsing
   parsedData?: ParsedData;
   status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
   errorMessage?: string;

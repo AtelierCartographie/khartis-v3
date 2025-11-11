@@ -4,8 +4,8 @@ export enum Environment {
   PRODUCTION = 'production'
 }
 
-export class EnvironmentUtils {
-  static getEnvironment(): Environment {
+export const EnvironmentUtils = {
+  getEnvironment(): Environment {
     if (typeof window === 'undefined') {
       return Environment.DEVELOPMENT;
     }
@@ -21,17 +21,17 @@ export class EnvironmentUtils {
     }
 
     return Environment.PREPRODUCTION;
-  }
+  },
 
-  static isProduction(): boolean {
-    return this.getEnvironment() === Environment.PRODUCTION;
-  }
+  isProduction(): boolean {
+    return EnvironmentUtils.getEnvironment() === Environment.PRODUCTION;
+  },
 
-  static isPreproduction(): boolean {
-    return this.getEnvironment() === Environment.PREPRODUCTION;
-  }
+  isPreproduction(): boolean {
+    return EnvironmentUtils.getEnvironment() === Environment.PREPRODUCTION;
+  },
 
-  static isDevelopment(): boolean {
-    return this.getEnvironment() === Environment.DEVELOPMENT;
+  isDevelopment(): boolean {
+    return EnvironmentUtils.getEnvironment() === Environment.DEVELOPMENT;
   }
-}
+} as const;

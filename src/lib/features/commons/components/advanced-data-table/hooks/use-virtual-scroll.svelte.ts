@@ -82,7 +82,9 @@ function createIndexArray(length: number, start = 0): number[] {
  * </div>
  * ```
  */
-export function useVirtualScroll(props: UseVirtualScrollProps): UseVirtualScrollReturn {
+export function useVirtualScroll(
+  props: UseVirtualScrollProps
+): UseVirtualScrollReturn {
   let rows = $state<number[]>([]);
   let startIndex = $state<number>(0);
   let tableContainer = $state<HTMLDivElement | undefined>(props.tableContainer);
@@ -96,7 +98,9 @@ export function useVirtualScroll(props: UseVirtualScrollProps): UseVirtualScroll
    * Obtient le nombre total de lignes
    */
   function getNumRows(): number {
-    return typeof props.numRows === 'function' ? props.numRows() : props.numRows;
+    return typeof props.numRows === 'function'
+      ? props.numRows()
+      : props.numRows;
   }
 
   /**

@@ -17,8 +17,8 @@ Basemap (MapLibre) + Annotations + Layout → Export (PNG/SVG/PDF/CSV/GeoJSON)
 ```ts
 interface DataColumn {
   name: string;
-  type: ColumnType;        // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
-  stats?: ColumnStats;     // min, max, mean, nulls, uniques
+  type: ColumnType; // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
+  stats?: ColumnStats; // min, max, mean, nulls, uniques
 }
 
 interface ProcessedDataset {
@@ -26,13 +26,13 @@ interface ProcessedDataset {
   name: string;
   columns: DataColumn[];
   rowCount: number;
-  geometry?: GeometryInfo;  // type, bbox, crs
+  geometry?: GeometryInfo; // type, bbox, crs
 }
 
 interface Visualization {
   id: string;
   datasetId: string;
-  type: VizType;            // 'choropleth' | 'proportional' | 'categorical' | 'bivariate'
+  type: VizType; // 'choropleth' | 'proportional' | 'categorical' | 'bivariate'
   classification?: Classification;
   color?: ColorConfig;
 }
@@ -70,23 +70,23 @@ interface Project {
 
 ## Store Layering
 
-| Layer | Purpose | Example |
-|-------|---------|---------|
-| **Component Local** | Ephemeral UI state | Form inputs, modal visibility |
-| **Feature Store** | Canonical domain state | Dataset list, visualization config |
-| **Global Store** | Cross-feature coordination | Project metadata, active dataset |
-| **Persistence** | Long-term storage | IndexedDB snapshots, auto-save |
+| Layer               | Purpose                    | Example                            |
+| ------------------- | -------------------------- | ---------------------------------- |
+| **Component Local** | Ephemeral UI state         | Form inputs, modal visibility      |
+| **Feature Store**   | Canonical domain state     | Dataset list, visualization config |
+| **Global Store**    | Cross-feature coordination | Project metadata, active dataset   |
+| **Persistence**     | Long-term storage          | IndexedDB snapshots, auto-save     |
 
 **State flow**: Component → Feature Store → Global Store → IndexedDB
 
 ## Performance Strategy
 
-| Challenge | Solution |
-|-----------|----------|
-| Large file imports | Streaming parse + sampled type inference |
+| Challenge          | Solution                                            |
+| ------------------ | --------------------------------------------------- |
+| Large file imports | Streaming parse + sampled type inference            |
 | Heavy computations | Web Workers (classification, joins, simplification) |
-| Complex geometry | Pre-simplified tiers + dynamic LOD |
-| Rapid edits | `$derived` memoization + debounced recompute |
+| Complex geometry   | Pre-simplified tiers + dynamic LOD                  |
+| Rapid edits        | `$derived` memoization + debounced recompute        |
 
 **Target**: <3s load, ~60fps rendering (small-medium datasets)
 
@@ -149,17 +149,18 @@ Not applicable: CSRF, server auth, multi-tenant isolation
 
 ## Extension Points Quick Reference
 
-| Task | Entry Point |
-|------|-------------|
-| New file format | `src/lib/features/commons/services/parsers/` |
-| New visualization | `src/lib/features/map/utils/visualization-registry.ts` |
-| New classification | `src/lib/features/map/utils/classification/` |
-| New export format | `src/lib/features/commons/utils/export/` |
-| New tool | `src/lib/features/step-toolbar/tools/<tool-name>` |
+| Task               | Entry Point                                            |
+| ------------------ | ------------------------------------------------------ |
+| New file format    | `src/lib/features/commons/services/parsers/`           |
+| New visualization  | `src/lib/features/map/utils/visualization-registry.ts` |
+| New classification | `src/lib/features/map/utils/classification/`           |
+| New export format  | `src/lib/features/commons/utils/export/`               |
+| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>`      |
 
 ---
 
 **See also:**
+
 - [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing details
 - [VISUALIZATION.md](VISUALIZATION.md) - Rendering system
 - [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management

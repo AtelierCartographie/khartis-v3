@@ -10,7 +10,7 @@
 interface KhartisProject {
   id: string;
   manifest: {
-    version: string;              // '3.0.0'
+    version: string; // '3.0.0'
     createdAt: Date;
     updatedAt: Date;
     name: string;
@@ -35,7 +35,7 @@ interface SavedProjectMetadata {
   createdAt: string;
   updatedAt: string;
   description?: string;
-  size: number;                   // Bytes
+  size: number; // Bytes
 }
 ```
 
@@ -52,7 +52,7 @@ interface UploadedFile {
   fileType: FileType;
   status: 'uploading' | 'processing' | 'complete' | 'error';
   errorMessage?: string;
-  relatedFiles?: string[];       // Shapefile components
+  relatedFiles?: string[]; // Shapefile components
   validation?: FileValidation;
   statistics?: DataStatistics;
 }
@@ -67,7 +67,7 @@ interface ProcessedDataset {
 
 interface DataColumn {
   name: string;
-  type: ColumnType;               // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
+  type: ColumnType; // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
   stats?: ColumnStats;
 }
 
@@ -96,7 +96,7 @@ interface VisualizationConfig {
 
 interface Classification {
   method: 'equal-interval' | 'quantile' | 'jenks' | 'stddev' | 'manual';
-  classes: number;                // 3-9 recommended
+  classes: number; // 3-9 recommended
   breaks: number[];
 }
 
@@ -112,8 +112,8 @@ enum FileType {
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
-  KML = 'kml',                    // Planned
-  KMZ = 'kmz',                    // Planned
+  KML = 'kml', // Planned
+  KMZ = 'kmz', // Planned
   UNKNOWN = 'unknown'
 }
 ```
@@ -122,18 +122,22 @@ enum FileType {
 
 ### Validation & Sanitization
 
-| Function | Purpose | Usage |
-|----------|---------|-------|
-| `validateProjectName` | Name constraints | Max 100 chars, no special chars |
-| `checkStorageQuota` | Estimate remaining storage | Before save |
-| `sanitizeFileName` | Safe portable filename | Export file names |
-| `sanitizeCSVCell` | Neutralize formula injection | Leading `=`, `+`, `-`, `@` |
-| `sanitizeNumericInput` | Replace NaN/Infinity | Numeric validation |
-| `sanitizeTextInput` | Trim + collapse whitespace | Text inputs |
+| Function               | Purpose                      | Usage                           |
+| ---------------------- | ---------------------------- | ------------------------------- |
+| `validateProjectName`  | Name constraints             | Max 100 chars, no special chars |
+| `checkStorageQuota`    | Estimate remaining storage   | Before save                     |
+| `sanitizeFileName`     | Safe portable filename       | Export file names               |
+| `sanitizeCSVCell`      | Neutralize formula injection | Leading `=`, `+`, `-`, `@`      |
+| `sanitizeNumericInput` | Replace NaN/Infinity         | Numeric validation              |
+| `sanitizeTextInput`    | Trim + collapse whitespace   | Text inputs                     |
 
 **Example:**
+
 ```ts
-import { sanitizeFileName, sanitizeCSVCell } from '$lib/features/commons/utils/validation.utils';
+import {
+  sanitizeFileName,
+  sanitizeCSVCell
+} from '$lib/features/commons/utils/validation.utils';
 
 const safeFileName = sanitizeFileName('My Project! (2024).csv');
 // → 'My_Project_2024.csv'
@@ -176,7 +180,10 @@ datasetMutation.subscribe(() => cache.clear());
 
 ```ts
 class DataValidationError extends Error {
-  constructor(message: string, public details?: any) {
+  constructor(
+    message: string,
+    public details?: any
+  ) {
     super(message);
   }
 }
@@ -187,6 +194,7 @@ class FileGroupError extends Error {}
 ```
 
 **Usage:**
+
 ```ts
 try {
   validateData(dataset);
@@ -201,25 +209,25 @@ try {
 
 ### Current Implementation
 
-| Aspect | Strategy |
-|--------|----------|
-| **Load** | Code splitting, lazy heavy libs (Deck.gl, MapLibre, DuckDB) |
-| **Compute** | Main thread (classification, joins) |
-| **DuckDB** | WASM in main thread |
-| **Interaction** | Debounce + preview LOD |
-| **Rendering** | Attribute packing, minimal redraws |
-| **Caching** | Palette + basic breaks reuse |
+| Aspect          | Strategy                                                    |
+| --------------- | ----------------------------------------------------------- |
+| **Load**        | Code splitting, lazy heavy libs (Deck.gl, MapLibre, DuckDB) |
+| **Compute**     | Main thread (classification, joins)                         |
+| **DuckDB**      | WASM in main thread                                         |
+| **Interaction** | Debounce + preview LOD                                      |
+| **Rendering**   | Attribute packing, minimal redraws                          |
+| **Caching**     | Palette + basic breaks reuse                                |
 
 ### Planned Optimizations
 
-| Aspect | Enhancement |
-|--------|-------------|
-| **Load** | Bundle budget CI gate |
-| **Compute** | Worker pool + transferable buffers |
-| **DuckDB** | Dedicated worker + SharedArrayBuffer |
-| **Interaction** | Predictive precompute |
-| **Rendering** | GPU instancing refinements |
-| **Caching** | Formal cache with invalidation hashes |
+| Aspect          | Enhancement                           |
+| --------------- | ------------------------------------- |
+| **Load**        | Bundle budget CI gate                 |
+| **Compute**     | Worker pool + transferable buffers    |
+| **DuckDB**      | Dedicated worker + SharedArrayBuffer  |
+| **Interaction** | Predictive precompute                 |
+| **Rendering**   | GPU instancing refinements            |
+| **Caching**     | Formal cache with invalidation hashes |
 
 ### Performance Targets
 
@@ -274,11 +282,11 @@ try {
 
 ### Size Quotas
 
-| Limit | Value | Enforcement |
-|-------|-------|-------------|
-| **File size** | 50 MB | Hard limit (validation error) |
-| **Project size** | 100 MB | Warning at 80%, error at 100% |
-| **Project count** | 50 | Warning at 80% |
+| Limit             | Value  | Enforcement                   |
+| ----------------- | ------ | ----------------------------- |
+| **File size**     | 50 MB  | Hard limit (validation error) |
+| **Project size**  | 100 MB | Warning at 80%, error at 100% |
+| **Project count** | 50     | Warning at 80%                |
 
 ### Dependency Auditing
 
@@ -340,34 +348,34 @@ logger.error('Error', error);
 
 ## Storage Limits (Default Values)
 
-| Limit | Value | Warning Threshold |
-|-------|-------|-------------------|
-| **Max file size** | 50 MB | 25 MB |
-| **Max project size** | 100 MB | 80 MB |
-| **Max project count** | 50 | 40 |
+| Limit                 | Value  | Warning Threshold |
+| --------------------- | ------ | ----------------- |
+| **Max file size**     | 50 MB  | 25 MB             |
+| **Max project size**  | 100 MB | 80 MB             |
+| **Max project count** | 50     | 40                |
 
 ## Glossary
 
-| Term | Definition |
-|------|------------|
-| **Aggregation** | Grouping and summarizing data (e.g., sum, average) |
-| **Basemap** | Background map layer (e.g., world countries, terrain) |
-| **Bivariate** | Visualization combining two variables |
-| **Choropleth** | Map with regions colored by data values |
-| **Classification** | Method to divide data into classes/bins |
-| **CRS** | Coordinate Reference System (e.g., WGS84, Web Mercator) |
-| **Dataset** | Processed data with columns and rows |
-| **Deck.gl Layer** | GPU-accelerated visualization layer |
-| **Facet** | Small multiple map for comparison |
-| **Geometry** | Geographic shapes (point, line, polygon) |
-| **Jenks** | Natural breaks classification (optimal binning) |
-| **Join** | Merging datasets by common key |
-| **LOD** | Level of Detail (geometry simplification) |
-| **Projection** | Method to flatten 3D Earth onto 2D map |
-| **Proportional Symbols** | Sized markers based on data values |
-| **Quantile** | Equal-count classification (balanced bins) |
-| **Simplification** | Reducing geometry complexity for performance |
-| **Worker** | Web Worker for background processing |
+| Term                     | Definition                                              |
+| ------------------------ | ------------------------------------------------------- |
+| **Aggregation**          | Grouping and summarizing data (e.g., sum, average)      |
+| **Basemap**              | Background map layer (e.g., world countries, terrain)   |
+| **Bivariate**            | Visualization combining two variables                   |
+| **Choropleth**           | Map with regions colored by data values                 |
+| **Classification**       | Method to divide data into classes/bins                 |
+| **CRS**                  | Coordinate Reference System (e.g., WGS84, Web Mercator) |
+| **Dataset**              | Processed data with columns and rows                    |
+| **Deck.gl Layer**        | GPU-accelerated visualization layer                     |
+| **Facet**                | Small multiple map for comparison                       |
+| **Geometry**             | Geographic shapes (point, line, polygon)                |
+| **Jenks**                | Natural breaks classification (optimal binning)         |
+| **Join**                 | Merging datasets by common key                          |
+| **LOD**                  | Level of Detail (geometry simplification)               |
+| **Projection**           | Method to flatten 3D Earth onto 2D map                  |
+| **Proportional Symbols** | Sized markers based on data values                      |
+| **Quantile**             | Equal-count classification (balanced bins)              |
+| **Simplification**       | Reducing geometry complexity for performance            |
+| **Worker**               | Web Worker for background processing                    |
 
 ## Extension Guidelines
 
@@ -394,6 +402,7 @@ logger.error('Error', error);
 ---
 
 **See also:**
+
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Overall design principles
 - [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing utilities
 - [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management patterns

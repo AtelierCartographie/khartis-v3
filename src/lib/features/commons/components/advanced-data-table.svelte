@@ -20,8 +20,8 @@
   import {
     duckDBOrchestrator,
     RefineOperation
-  } from '../services/duckdb-orchestrator.service';
-  import type { ProcessedDataset } from '../utils/data-pipeline.utils';
+  } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+  import type { ProcessedDataset } from '$lib/features/data';
   import { logger, LogCategory } from '../utils/logger';
   import { create_summary_plot } from '../services/duckdb/summary-plot';
   import SummaryPlot from '../services/duckdb/SummaryPlot.svelte';
@@ -472,28 +472,50 @@
   });
 
   $effect(() => {
-    if (tableName) {
-      untrack(async () => {
-        await loadColumnsInfo();
-        numRows = await duckDBOrchestrator.getRowCount(tableName);
-        await initializeRows(0);
-      });
-    } else {
-      columns = [];
-      numRows = 0;
-      tableData = [];
-      rows = [];
-    }
-  });
+    console.log('[AdvancedDataTable] $effect TRIGGERED', {
+      hasDataset: !!dataset,
+      hasTableName: !!tableName,
+      datasetId: dataset?.id,
+      datasetName: dataset?.name,
+      datasetSourceFileId: dataset?.sourceFileId,
+      tableName,
+      timestamp: new Date().toISOString()
+    });
 
-  $effect(() => {
-    if (dataset) {
+    logger.debug('[AdvancedDataTable] Data source $effect triggered', LogCategory.UI, {
+      hasDataset: !!dataset,
+      hasTableName: !!tableName,
+      datasetId: dataset?.id,
+      datasetName: dataset?.name,
+      tableName
+    });
+
+    if (dataset || tableName) {
+      console.log('[AdvancedDataTable] Has data source - LOADING', {
+        willLoadFromTable: !!tableName,
+        willLoadFromDataset: !!dataset && !tableName
+      });
+
       untrack(async () => {
+        console.log('[AdvancedDataTable] Starting data load...');
         await loadColumnsInfo();
-        numRows = dataset.rowCount;
+
+        if (tableName) {
+          console.log('[AdvancedDataTable] Getting row count from DuckDB table:', tableName);
+          numRows = await duckDBOrchestrator.getRowCount(tableName);
+          console.log('[AdvancedDataTable] Row count received:', numRows);
+        } else if (dataset) {
+          console.log('[AdvancedDataTable] Using dataset row count:', dataset.rowCount);
+          numRows = dataset.rowCount;
+        }
+
+        console.log('[AdvancedDataTable] Initializing rows with numRows:', numRows);
         await initializeRows(0);
+        console.log('[AdvancedDataTable] Data load complete');
       });
     } else {
+      console.log('[AdvancedDataTable] No data source - CLEARING DATA');
+      logger.debug('[AdvancedDataTable] No data source - CLEARING DATA', LogCategory.UI);
       columns = [];
       numRows = 0;
       tableData = [];
