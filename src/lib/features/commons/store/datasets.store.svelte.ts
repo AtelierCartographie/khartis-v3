@@ -1,15 +1,12 @@
-import type { ProcessedDataset } from '../utils/data-pipeline.utils';
-import {
-  createDataPipeline,
-  processUploadedFile
-} from '../utils/data-pipeline.utils';
+import { dataPipeline } from '$lib/features/data';
+import type { DatasetResult } from '$lib/features/data';
 import type { UploadedFile } from './create-project.types';
 import { projectStore } from './project.store.svelte';
 import { logger, LogCategory } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 
 interface DatasetsState {
-  datasets: ProcessedDataset[];
+  datasets: DatasetResult[];
   selectedDatasetId?: string;
   isProcessing: boolean;
   error?: string;
@@ -22,16 +19,20 @@ class DatasetsStore {
   });
 
   constructor() {
-    if (typeof window !== 'undefined') {
-      $effect.root(() => {
-        $effect(() => {
-          const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
-          if (sourceFiles !== undefined) {
-            void this.syncWithProject();
-          }
-        });
-      });
-    }
+    // DISABLED: Reactive sync causes triple processing
+    // DataOrchestrator.onProjectChanged() already handles project file loading
+    // This $effect was triggering addFile() for each file when project changes,
+    // causing files to be processed multiple times
+    // if (typeof window !== 'undefined') {
+    //   $effect.root(() => {
+    //     $effect(() => {
+    //       const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
+    //       if (sourceFiles !== undefined) {
+    //         void this.syncWithProject();
+    //       }
+    //     });
+    //   });
+    // }
   }
 
   get datasets() {
@@ -39,9 +40,21 @@ class DatasetsStore {
   }
 
   get selectedDataset() {
-    return this._state.datasets.find(
+    const dataset = this._state.datasets.find(
       (d) => d.id === this._state.selectedDatasetId
     );
+
+    console.log('[datasetsStore] selectedDataset getter accessed', {
+      selectedDatasetId: this._state.selectedDatasetId,
+      found: !!dataset,
+      datasetName: dataset?.name,
+      datasetSourceFileId: dataset?.sourceFileId,
+      datasetTableName: dataset?.tableName,
+      totalDatasets: this._state.datasets.length,
+      timestamp: new Date().toISOString()
+    });
+
+    return dataset;
   }
 
   get selectedDatasetId() {
@@ -52,8 +65,9 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
-  addProcessedDataset(dataset: ProcessedDataset): void {
-    this._state.datasets.push(dataset);
+  addProcessedDataset(dataset: DatasetResult): void {
+    // Force reactivity by creating a new array
+    this._state.datasets = [...this._state.datasets, dataset];
     if (!this._state.selectedDatasetId) {
       this._state.selectedDatasetId = dataset.id;
     }
@@ -63,26 +77,15 @@ class DatasetsStore {
     return this._state.error;
   }
 
-  private createFileCopy(file: UploadedFile): UploadedFile {
-    return {
-      id: file.id,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      fileType: file.fileType,
-      status: file.status,
-      uploadProgress: file.uploadProgress,
-      errorMessage: file.errorMessage,
-      validation: file.validation,
-      parsedData: file.parsedData || [],
-      content: file.content,
-      duplicates: file.duplicates,
-      statistics: file.statistics,
-      sourceType: file.sourceType
-    };
-  }
-
   async processFiles(files: UploadedFile[]): Promise<void> {
+    const startTime = performance.now();
+    console.log(
+      `[${new Date().toISOString()}] [datasetsStore:processFiles] START`,
+      {
+        fileCount: files.length
+      }
+    );
+
     this._state.isProcessing = true;
     this._state.error = undefined;
 
@@ -92,21 +95,54 @@ class DatasetsStore {
         files: files.map((f) => ({ name: f.name, hasData: !!f.parsedData }))
       });
 
-      const filesCopy = files.map((file) => {
-        if (!file.parsedData) {
-          logger.warn(`File ${file.name} has no parsedData`, LogCategory.DATA);
-        }
-        return this.createFileCopy(file);
-      });
+      console.log(
+        `[${new Date().toISOString()}] [datasetsStore:processFiles] Processing with new dataPipeline...`
+      );
+      const pipelineStart = performance.now();
 
-      const newDatasets = await createDataPipeline(filesCopy);
+      // Process files in parallel using new unified dataPipeline
+      const newDatasets = await Promise.all(
+        files.map(async (file) => {
+          if (!file.content && !file.originalFile) {
+            logger.warn(`File ${file.name} has no content or originalFile`, LogCategory.DATA);
+            throw new Error(`File ${file.name} has no content or originalFile`);
+          }
+          // Pass originalFile to avoid re-parsing already processed content
+          return dataPipeline.processUploadedFile(file, file.originalFile);
+        })
+      );
+
+      console.log(
+        `[${new Date().toISOString()}] [datasetsStore:processFiles] Pipeline completed`,
+        {
+          duration: `${(performance.now() - pipelineStart).toFixed(2)}ms`,
+          newDatasetsCount: newDatasets.length
+        }
+      );
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
 
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
+
+      const totalDuration = performance.now() - startTime;
+      console.log(
+        `[${new Date().toISOString()}] [datasetsStore:processFiles] END`,
+        {
+          totalDuration: `${totalDuration.toFixed(2)}ms`
+        }
+      );
     } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(
+        `[${new Date().toISOString()}] [datasetsStore:processFiles] ERROR`,
+        {
+          duration: `${duration.toFixed(2)}ms`,
+          error
+        }
+      );
+
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
@@ -116,22 +152,87 @@ class DatasetsStore {
   }
 
   async addFile(file: UploadedFile): Promise<void> {
+    const startTime = performance.now();
+    console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] START`, {
+      fileName: file.name,
+      fileId: file.id
+    });
+
     this._state.isProcessing = true;
     this._state.error = undefined;
 
     try {
-      const fileCopy = this.createFileCopy(file);
+      if (!file.content) {
+        logger.warn(`File ${file.name} has no content`, LogCategory.DATA);
+        throw new Error(`File ${file.name} has no content`);
+      }
 
-      const dataset = await processUploadedFile(fileCopy);
+      console.log(
+        `[${new Date().toISOString()}] [datasetsStore:addFile] Processing with new dataPipeline...`
+      );
+      const processStart = performance.now();
+      const dataset = await dataPipeline.processUploadedFile(file, file.originalFile);
+      console.log(
+        `[${new Date().toISOString()}] [datasetsStore:addFile] File processed`,
+        {
+          duration: `${(performance.now() - processStart).toFixed(2)}ms`,
+          hasDataset: !!dataset
+        }
+      );
 
       if (dataset) {
-        this._state.datasets.push(dataset);
+        // Check for duplicates by sourceFileId
+        const existingDataset = this._state.datasets.find(
+          (d) => d.sourceFileId === dataset.sourceFileId
+        );
+
+        if (existingDataset) {
+          console.warn(`[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`, {
+            existingDatasetId: existingDataset.id,
+            newDatasetId: dataset.id,
+            sourceFileId: dataset.sourceFileId
+          });
+          // Replace the existing dataset
+          this._state.datasets = this._state.datasets.map((d) =>
+            d.sourceFileId === dataset.sourceFileId ? dataset : d
+          );
+          // Update selection if we replaced the selected dataset
+          if (this._state.selectedDatasetId === existingDataset.id) {
+            this._state.selectedDatasetId = dataset.id;
+          }
+        } else {
+          // Force reactivity by creating a new array
+          this._state.datasets = [...this._state.datasets, dataset];
+        }
 
         if (!this._state.selectedDatasetId) {
           this._state.selectedDatasetId = dataset.id;
         }
+
+        console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`, {
+          datasetId: dataset.id,
+          datasetName: dataset.name,
+          sourceFileId: dataset.sourceFileId,
+          totalDatasets: this._state.datasets.length,
+          selectedDatasetId: this._state.selectedDatasetId,
+          wasReplacement: !!existingDataset
+        });
       }
+
+      const totalDuration = performance.now() - startTime;
+      console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] END`, {
+        totalDuration: `${totalDuration.toFixed(2)}ms`
+      });
     } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(
+        `[${new Date().toISOString()}] [datasetsStore:addFile] ERROR`,
+        {
+          duration: `${duration.toFixed(2)}ms`,
+          error
+        }
+      );
+
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
@@ -141,29 +242,82 @@ class DatasetsStore {
   }
 
   selectDataset(datasetId: string): void {
+    console.log('[datasetsStore] selectDataset called', {
+      datasetId,
+      currentSelectedId: this._state.selectedDatasetId,
+      totalDatasets: this._state.datasets.length
+    });
+
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    console.log('[datasetsStore] Dataset found?', {
+      found: !!dataset,
+      datasetName: dataset?.name
+    });
+
     if (dataset) {
       this._state.selectedDatasetId = datasetId;
+      console.log('[datasetsStore] Selected dataset updated', {
+        newSelectedId: this._state.selectedDatasetId
+      });
     }
   }
 
   removeDataset(datasetId: string): void {
+    console.log('[datasetsStore] removeDataset called', {
+      datasetId,
+      currentSelectedId: this._state.selectedDatasetId,
+      totalDatasetsBefore: this._state.datasets.length,
+      willUpdateSelection: this._state.selectedDatasetId === datasetId
+    });
+
     const filteredDatasets = this._state.datasets.filter(
       (d) => d.id !== datasetId
     );
 
+    console.log('[datasetsStore] Filtered datasets', {
+      totalDatasetsAfter: filteredDatasets.length,
+      remainingIds: filteredDatasets.map(d => d.id)
+    });
+
     if (this._state.selectedDatasetId === datasetId) {
-      this._state.selectedDatasetId = filteredDatasets[0]?.id;
+      const newSelectedId = filteredDatasets[0]?.id;
+      console.log('[datasetsStore] Updating selected dataset', {
+        oldId: this._state.selectedDatasetId,
+        newId: newSelectedId
+      });
+      this._state.selectedDatasetId = newSelectedId;
     }
 
     this._state.datasets = filteredDatasets;
+
+    console.log('[datasetsStore] removeDataset complete', {
+      finalSelectedId: this._state.selectedDatasetId,
+      finalDatasetCount: this._state.datasets.length
+    });
   }
 
-  getDatasetBySourceFile(sourceFileId: string): ProcessedDataset | undefined {
-    return this._state.datasets.find((d) => d.sourceFileId === sourceFileId);
+  getAllDatasets(): DatasetResult[] {
+    return this._state.datasets;
   }
 
-  getDatasetsByType(hasGeometry: boolean): ProcessedDataset[] {
+  getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
+    console.log('[datasetsStore] getDatasetBySourceFile called', {
+      sourceFileId,
+      totalDatasets: this._state.datasets.length,
+      allSourceFileIds: this._state.datasets.map(d => d.sourceFileId)
+    });
+
+    const dataset = this._state.datasets.find((d) => d.sourceFileId === sourceFileId);
+    console.log('[datasetsStore] getDatasetBySourceFile result', {
+      found: !!dataset,
+      datasetId: dataset?.id,
+      datasetName: dataset?.name
+    });
+
+    return dataset;
+  }
+
+  getDatasetsByType(hasGeometry: boolean): DatasetResult[] {
     return this._state.datasets.filter((d) =>
       hasGeometry ? !!d.geometry : !d.geometry
     );
@@ -171,7 +325,7 @@ class DatasetsStore {
 
   getColumnValues(datasetId: string, columnName: string): any[] {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    if (!dataset) return [];
+    if (!dataset || !dataset.data) return [];
 
     return dataset.data.map((row) => row[columnName]);
   }
@@ -293,7 +447,9 @@ class DatasetsStore {
 
   hasModifications(datasetId: string): boolean {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    return dataset ? dataset.metadata.transformations.length > 0 : false;
+    return dataset
+      ? (dataset.metadata.transformations?.length ?? 0) > 0
+      : false;
   }
 
   renameDataset(datasetId: string, newName: string): boolean {

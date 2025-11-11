@@ -23,14 +23,17 @@ export interface CatalogueInfo {
   alternativeNames?: Map<string, string[]>;
 }
 
-export class GeoMatcher {
-  private static catalogueCache = new Map<string, CatalogueInfo>();
+/**
+ * Creates a GeoMatcher instance with encapsulated cache
+ * @returns GeoMatcher object with matching functions
+ */
+function createGeoMatcher() {
+  // Private state encapsulated in closure
+  const catalogueCache = new Map<string, CatalogueInfo>();
+  const MIN_FUZZY_SIMILARITY = 0.7;
+  const MAX_FUZZY_SUGGESTIONS = 3;
 
-  private static readonly MIN_FUZZY_SIMILARITY = 0.7;
-
-  private static readonly MAX_FUZZY_SUGGESTIONS = 3;
-
-  static async validateAgainstCatalogue(
+  async function validateAgainstCatalogue(
     values: string[],
     catalogueId: string,
     options: {
@@ -39,16 +42,13 @@ export class GeoMatcher {
       suggestionLimit?: number;
     } = {}
   ): Promise<MatchResult> {
-    const catalogue = await this.loadCatalogue(catalogueId);
+    const catalogue = await loadCatalogue(catalogueId);
 
     if (!catalogue) {
       throw new Error(`Catalogue "${catalogueId}" non trouvé`);
     }
 
-    const normalizedValues = this.preprocessValues(
-      values,
-      options.caseSensitive
-    );
+    const normalizedValues = preprocessValues(values, options.caseSensitive);
 
     const result: MatchResult = {
       matched: [],
@@ -73,13 +73,13 @@ export class GeoMatcher {
     for (const { original, normalized } of normalizedValues) {
       if (catalogue.entries.has(normalized)) {
         result.matched.push(original);
-      } else if (this.checkAlternativeNames(normalized, catalogue)) {
+      } else if (checkAlternativeNames(normalized, catalogue)) {
         result.matched.push(original);
       } else if (options.fuzzyMatch !== false) {
-        const fuzzyMatch = this.findFuzzyMatch(
+        const fuzzyMatch = findFuzzyMatch(
           normalized,
           catalogue,
-          options.suggestionLimit || this.MAX_FUZZY_SUGGESTIONS
+          options.suggestionLimit || MAX_FUZZY_SUGGESTIONS
         );
 
         if (fuzzyMatch.length > 0) {
@@ -96,29 +96,29 @@ export class GeoMatcher {
       }
     }
 
-    const uniqueMatches = new Set(result.matched.map((v) => this.normalize(v)));
+    const uniqueMatches = new Set(result.matched.map((v) => normalize(v)));
     result.catalogueCoverage =
       (uniqueMatches.size / catalogue.entries.size) * 100;
 
     result.matchRate =
       values.length > 0 ? result.matched.length / values.length : 0;
 
-    result.confidence = this.calculateConfidence(result);
+    result.confidence = calculateConfidence(result);
 
     return result;
   }
 
-  private static preprocessValues(
+  function preprocessValues(
     values: string[],
     caseSensitive?: boolean
   ): Array<{ original: string; normalized: string }> {
     return values.map((value) => ({
       original: value,
-      normalized: this.normalize(value, caseSensitive)
+      normalized: normalize(value, caseSensitive)
     }));
   }
 
-  private static normalize(value: string, caseSensitive?: boolean): string {
+  function normalize(value: string, caseSensitive?: boolean): string {
     if (value == null) return '';
 
     let normalized = value.trim();
@@ -137,14 +137,14 @@ export class GeoMatcher {
     return normalized;
   }
 
-  private static checkAlternativeNames(
+  function checkAlternativeNames(
     value: string,
     catalogue: CatalogueInfo
   ): boolean {
     if (!catalogue.alternativeNames) return false;
 
     for (const alternatives of catalogue.alternativeNames.values()) {
-      if (alternatives.some((alt) => this.normalize(alt) === value)) {
+      if (alternatives.some((alt) => normalize(alt) === value)) {
         return true;
       }
     }
@@ -152,7 +152,7 @@ export class GeoMatcher {
     return false;
   }
 
-  private static findFuzzyMatch(
+  function findFuzzyMatch(
     value: string,
     catalogue: CatalogueInfo,
     limit: number
@@ -160,8 +160,8 @@ export class GeoMatcher {
     const matches: Array<{ match: string; similarity: number }> = [];
 
     catalogue.entries.forEach((entry) => {
-      const similarity = this.calculateSimilarity(value, entry);
-      if (similarity >= this.MIN_FUZZY_SIMILARITY) {
+      const similarity = calculateSimilarity(value, entry);
+      if (similarity >= MIN_FUZZY_SIMILARITY) {
         matches.push({ match: entry, similarity });
       }
     });
@@ -169,11 +169,11 @@ export class GeoMatcher {
     return matches.sort((a, b) => b.similarity - a.similarity).slice(0, limit);
   }
 
-  private static calculateSimilarity(str1: string, str2: string): number {
+  function calculateSimilarity(str1: string, str2: string): number {
     const maxLen = Math.max(str1.length, str2.length);
     if (maxLen === 0) return 1;
 
-    const distance = this.levenshteinDistance(str1, str2);
+    const distance = levenshteinDistance(str1, str2);
     return 1 - distance / maxLen;
   }
 
@@ -184,7 +184,7 @@ export class GeoMatcher {
    * @param str2 Deuxième chaîne
    * @returns Distance de Levenshtein
    */
-  private static levenshteinDistance(str1: string, str2: string): number {
+  function levenshteinDistance(str1: string, str2: string): number {
     const m = str1.length;
     const n = str2.length;
 
@@ -228,7 +228,7 @@ export class GeoMatcher {
     return prevRow[n];
   }
 
-  private static calculateConfidence(result: MatchResult): number {
+  function calculateConfidence(result: MatchResult): number {
     let confidence = result.matchRate;
 
     if (result.fuzzyMatches.length > 0) {
@@ -249,11 +249,11 @@ export class GeoMatcher {
     return Math.min(confidence, 1);
   }
 
-  static async loadCatalogue(
+  async function loadCatalogue(
     catalogueId: string
   ): Promise<CatalogueInfo | null> {
-    if (this.catalogueCache.has(catalogueId)) {
-      return this.catalogueCache.get(catalogueId)!;
+    if (catalogueCache.has(catalogueId)) {
+      return catalogueCache.get(catalogueId)!;
     }
 
     const mockCatalogues: Record<string, CatalogueInfo> = {
@@ -338,13 +338,13 @@ export class GeoMatcher {
 
     const catalogue = mockCatalogues[catalogueId];
     if (catalogue) {
-      this.catalogueCache.set(catalogueId, catalogue);
+      catalogueCache.set(catalogueId, catalogue);
     }
 
     return catalogue || null;
   }
 
-  static async suggestCatalogue(
+  async function suggestCatalogue(
     sampleValues: string[],
     availableCatalogues?: string[]
   ): Promise<{ catalogueId: string; confidence: number } | null> {
@@ -360,7 +360,7 @@ export class GeoMatcher {
 
     for (const catalogueId of cataloguesToTest) {
       try {
-        const result = await this.validateAgainstCatalogue(
+        const result = await validateAgainstCatalogue(
           sampleValues.slice(0, 100),
           catalogueId,
           { fuzzyMatch: true }
@@ -390,7 +390,7 @@ export class GeoMatcher {
       : null;
   }
 
-  static formatMatchReport(result: MatchResult): string {
+  function formatMatchReport(result: MatchResult): string {
     const lines: string[] = [];
 
     lines.push('=== RAPPORT DE CORRESPONDANCE ===\n');
@@ -451,4 +451,18 @@ export class GeoMatcher {
 
     return lines.join('\n');
   }
+
+  // Return public API
+  return {
+    validateAgainstCatalogue,
+    loadCatalogue,
+    suggestCatalogue,
+    formatMatchReport
+  } as const;
 }
+
+/**
+ * GeoMatcher singleton instance
+ * Provides geographic data matching with caching
+ */
+export const GeoMatcher = createGeoMatcher();

@@ -3,7 +3,7 @@
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
   import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service.svelte';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
+  import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ZoomMode } from '$lib/features/commons/types/global';

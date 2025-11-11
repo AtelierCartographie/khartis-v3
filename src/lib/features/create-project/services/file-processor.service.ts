@@ -4,7 +4,6 @@ import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.ut
 import {
   detectDuplicateRows,
   getDataStatistics,
-  parseCsvWithPapa,
   parseGeoPackage,
   readFileContent,
   validateGeospatialFile
@@ -16,6 +15,7 @@ import {
   showWarning
 } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
+import { dataPipeline } from '$lib/features/data';
 
 const ERROR_FILE_PROCESSING = 'Failed to process file';
 const ERROR_INVALID_JSON_FORMAT = 'Invalid JSON format';
@@ -45,12 +45,41 @@ export class FileProcessorService {
   constructor(private callbacks: ProcessingCallbacks) {}
 
   async processFile(uploadedFile: UploadedFile, file: File): Promise<void> {
+    const startTime = performance.now();
+    console.log(
+      `[${new Date().toISOString()}] [FileProcessorService:processFile] START`,
+      {
+        fileId: uploadedFile.id,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: uploadedFile.fileType
+      }
+    );
+
     try {
       this.callbacks.onStatusChange(uploadedFile.id, 'processing');
 
       const processor = this.getProcessor(uploadedFile.fileType);
       await processor.process(uploadedFile, file);
+
+      const duration = performance.now() - startTime;
+      console.log(
+        `[${new Date().toISOString()}] [FileProcessorService:processFile] END`,
+        {
+          fileId: uploadedFile.id,
+          duration: `${duration.toFixed(2)}ms`
+        }
+      );
     } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(
+        `[${new Date().toISOString()}] [FileProcessorService:processFile] ERROR`,
+        {
+          fileId: uploadedFile.id,
+          duration: `${duration.toFixed(2)}ms`,
+          error
+        }
+      );
       const message =
         error instanceof Error ? error.message : ERROR_FILE_PROCESSING;
       this.callbacks.onStatusChange(uploadedFile.id, 'error', message);
@@ -61,8 +90,6 @@ export class FileProcessorService {
   private getProcessor(fileType: FileType): FileProcessor {
     switch (fileType) {
       case FileType.CSV:
-
-      // fallthrough
       case FileType.TSV:
         return new CsvProcessor(this.callbacks);
 
@@ -82,6 +109,27 @@ abstract class FileProcessor {
   constructor(protected callbacks: ProcessingCallbacks) {}
 
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
+
+  protected async stringifyInChunks(data: any[]): Promise<string> {
+    // For small datasets, use regular JSON.stringify
+    if (data.length < 1000) {
+      return JSON.stringify(data);
+    }
+
+    // For large datasets, stringify in chunks to avoid blocking
+    const chunks: string[] = [];
+    const CHUNK_SIZE = 500;
+
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+      // Yield to event loop between chunks
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const chunk = data.slice(i, i + CHUNK_SIZE);
+      chunks.push(JSON.stringify(chunk).slice(1, -1)); // Remove [ and ]
+    }
+
+    return '[' + chunks.join(',') + ']';
+  }
 
   protected async validateAsync(
     uploadedFile: UploadedFile,
@@ -116,17 +164,47 @@ abstract class FileProcessor {
 
 class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    if (!(await this.validateAsync(uploadedFile, file))) return;
-
-    const result = await parseCsvWithPapa(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress);
+    const startTime = performance.now();
+    console.log(`[${new Date().toISOString()}] [CsvProcessor:process] START`, {
+      fileId: uploadedFile.id,
+      fileName: file.name
     });
 
-    const headers = result.headers;
-    const csvRows = (result.data as Array<Record<string, unknown>>).map((row) =>
-      normalizeCsvRow(row, headers)
+    if (!(await this.validateAsync(uploadedFile, file))) return;
+
+    // Use new dataPipeline CSV parser (no Web Worker issues)
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Parsing CSV with dataPipeline...`
+    );
+    const parseStart = performance.now();
+
+    // Import CSV parser from new architecture
+    const { CSVParser } = await import('$lib/features/data');
+    const csvParser = new CSVParser();
+    const rawDataset = await csvParser.parse(file);
+
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] CSV parsed`,
+      {
+        duration: `${(performance.now() - parseStart).toFixed(2)}ms`,
+        rowCount: rawDataset.rows.length,
+        columnCount: rawDataset.columns.length
+      }
     );
 
+    // Convert RawDataset to the format expected by the rest of the code
+    const headers = rawDataset.columns.map((col) => col.name);
+    const csvRows = rawDataset.columns[0].values.map((_, rowIndex) => {
+      const row: Record<string, any> = {};
+      rawDataset.columns.forEach((col) => {
+        row[col.name] = col.values[rowIndex];
+      });
+      return normalizeCsvRow(row, headers);
+    });
+
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Validating CSV data...`
+    );
     const csvValidation = DataValidator.validateCSVData(csvRows);
     if (!csvValidation.isValid) {
       this.callbacks.onStatusChange(
@@ -143,13 +221,58 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
-    const duplicates = detectDuplicateRows(csvRows);
-    const statistics = getDataStatistics(csvRows, headers);
+    // Use async versions of data analysis functions to avoid blocking
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Detecting duplicates...`
+    );
+    const dupStart = performance.now();
+    const duplicates = await detectDuplicateRows(csvRows);
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Duplicates detected`,
+      {
+        duration: `${(performance.now() - dupStart).toFixed(2)}ms`,
+        hasDuplicates: duplicates.hasDuplicates,
+        count: duplicates.duplicateCount
+      }
+    );
+
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Computing statistics...`
+    );
+    const statsStart = performance.now();
+    const statistics = await getDataStatistics(csvRows, headers);
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Statistics computed`,
+      {
+        duration: `${(performance.now() - statsStart).toFixed(2)}ms`
+      }
+    );
+
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Converting to tabular data...`
+    );
     const tabularData = csvRowsToTabularData(csvRows);
+
+    // Yield before JSON.stringify to avoid blocking
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Stringify in chunks for large datasets to avoid blocking
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Stringifying data...`
+    );
+    const stringifyStart = performance.now();
+    const content = await this.stringifyInChunks(tabularData);
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Data stringified`,
+      {
+        duration: `${(performance.now() - stringifyStart).toFixed(2)}ms`,
+        size: content.length
+      }
+    );
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
-      content: JSON.stringify(tabularData),
+      content,
       duplicates: {
         hasDuplicates: duplicates.hasDuplicates,
         duplicateCount: duplicates.duplicateCount
@@ -164,16 +287,34 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Starting deep analysis...`
+    );
+    const deepAnalysisStart = performance.now();
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
       csvRows,
       headers
     );
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:process] Deep analysis completed`,
+      {
+        duration: `${(performance.now() - deepAnalysisStart).toFixed(2)}ms`,
+        success: deepAnalysisCompleted
+      }
+    );
+
     if (!deepAnalysisCompleted) {
       return;
     }
 
     this.callbacks.onStatusChange(uploadedFile.id, 'complete');
+
+    const totalDuration = performance.now() - startTime;
+    console.log(`[${new Date().toISOString()}] [CsvProcessor:process] END`, {
+      fileId: uploadedFile.id,
+      totalDuration: `${totalDuration.toFixed(2)}ms`
+    });
   }
 
   private async performDeepAnalysis(
@@ -181,14 +322,36 @@ class CsvProcessor extends FileProcessor {
     rows: CsvRow[],
     headers: string[]
   ): Promise<boolean> {
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:performDeepAnalysis] START`,
+      {
+        rowCount: rows.length,
+        columnCount: headers.length
+      }
+    );
+
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:performDeepAnalysis] Creating data matrix...`
+    );
     const dataMatrix: CsvMatrix = rows.map((row) =>
       headers.map((header) => row[header] ?? null)
     );
 
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:performDeepAnalysis] Calling DeepDataValidator...`
+    );
+    const deepAnalysisStart = performance.now();
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
       dataMatrix,
       { sampleSize: Math.min(100, dataMatrix.length) }
+    );
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:performDeepAnalysis] DeepDataValidator completed`,
+      {
+        duration: `${(performance.now() - deepAnalysisStart).toFixed(2)}ms`,
+        hasGeoColumns: deepAnalysis.geoDetection.hasGeoColumns
+      }
     );
 
     if (!deepAnalysis.geoDetection.hasGeoColumns) {
@@ -208,6 +371,9 @@ class CsvProcessor extends FileProcessor {
     }
 
     this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
+    console.log(
+      `[${new Date().toISOString()}] [CsvProcessor:performDeepAnalysis] END`
+    );
     return true;
   }
 }

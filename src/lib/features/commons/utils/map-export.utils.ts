@@ -1,4 +1,4 @@
-import type { ProcessedDataset } from './data-pipeline.utils';
+import type { ProcessedDataset } from '$lib/features/data';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { hexToRgb } from './color-utils';
 import {

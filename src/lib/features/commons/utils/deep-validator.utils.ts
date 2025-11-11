@@ -38,19 +38,23 @@ export interface DataAnalysisResult {
   estimatedProcessingTime?: number;
 }
 
-export class DeepDataValidator {
-  private static readonly PERFORMANCE_THRESHOLDS = {
-    maxRows: 10000,
-    warningRows: 5000,
-    maxColumns: 100,
-    warningColumns: 50,
-    maxCellLength: 2000,
-    maxFileSize: 50 * 1024 * 1024
-  };
+const PERFORMANCE_THRESHOLDS = {
+  maxRows: 10000,
+  warningRows: 5000,
+  maxColumns: 100,
+  warningColumns: 50,
+  maxCellLength: 2000,
+  maxFileSize: 50 * 1024 * 1024
+} as const;
 
-  private static readonly TYPE_DETECTION_SAMPLES = 100;
+const TYPE_DETECTION_SAMPLES = 100;
 
-  static async analyzeDataContent(
+/**
+ * Deep Data Validator
+ * Provides comprehensive data analysis including statistics, type detection, and quality checks
+ */
+export const DeepDataValidator = {
+  async analyzeDataContent(
     headers: string[],
     data: any[][],
     options: {
@@ -58,33 +62,97 @@ export class DeepDataValidator {
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
+    const startTime = performance.now();
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] START`,
+      {
+        rowCount: data.length,
+        columnCount: headers.length,
+        skipGeoDetection: options.skipGeoDetection
+      }
+    );
+
     const rowCount = data.length;
     const columnCount = headers.length;
 
-    const columns = this.analyzeColumns(headers, data);
+    // Yield before heavy analysis
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Analyzing columns...`
+    );
+    const columnsStart = performance.now();
+    const columns = await DeepDataValidator.analyzeColumns(headers, data);
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Columns analyzed`,
+      {
+        duration: `${(performance.now() - columnsStart).toFixed(2)}ms`,
+        columnCount: columns.length
+      }
+    );
+
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Detecting geographic columns...`
+    );
+    const geoStart = performance.now();
     const geoDetection = options.skipGeoDetection
       ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
       : await GeoColumnDetector.detectGeoColumns(headers, data);
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Geographic detection completed`,
+      {
+        duration: `${(performance.now() - geoStart).toFixed(2)}ms`,
+        hasGeoColumns: geoDetection.hasGeoColumns,
+        geoColumnsCount: geoDetection.geoColumns.length
+      }
+    );
 
-    const qualityIssues = this.detectQualityIssues(columns, data);
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Detecting quality issues...`
+    );
+    const qualityStart = performance.now();
+    const qualityIssues = await DeepDataValidator.detectQualityIssues(
+      columns,
+      data
+    );
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Quality issues detected`,
+      {
+        duration: `${(performance.now() - qualityStart).toFixed(2)}ms`,
+        issueCount: qualityIssues.length
+      }
+    );
 
-    const performanceWarnings = this.checkPerformance(
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Checking performance...`
+    );
+    const performanceWarnings = DeepDataValidator.checkPerformance(
       rowCount,
       columnCount,
       data
     );
 
-    const suggestions = this.generateSuggestions(
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Generating suggestions...`
+    );
+    const suggestions = DeepDataValidator.generateSuggestions(
       columns,
       geoDetection,
       qualityIssues,
       performanceWarnings
     );
 
-    const estimatedProcessingTime = this.estimateProcessingTime(
+    const estimatedProcessingTime = DeepDataValidator.estimateProcessingTime(
       rowCount,
       columnCount
+    );
+
+    const totalDuration = performance.now() - startTime;
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] END`,
+      {
+        totalDuration: `${totalDuration.toFixed(2)}ms`
+      }
     );
 
     return {
@@ -97,38 +165,103 @@ export class DeepDataValidator {
       suggestions,
       estimatedProcessingTime
     };
-  }
+  },
 
-  private static analyzeColumns(
+  async analyzeColumns(
     headers: string[],
     data: any[][]
-  ): ColumnStatistics[] {
-    return headers.map((header, index) => {
-      const columnValues = data.map((row) => row[index]);
-      return this.analyzeColumn(header, columnValues);
-    });
-  }
+  ): Promise<ColumnStatistics[]> {
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] START`,
+      {
+        columnCount: headers.length,
+        rowCount: data.length
+      }
+    );
 
-  private static analyzeColumn(name: string, values: any[]): ColumnStatistics {
-    const nullCount = values.filter(
-      (v) => v == null || v === '' || v === 'null' || v === 'NULL'
-    ).length;
+    const columns: ColumnStatistics[] = [];
+    const COLUMN_CHUNK_SIZE = 10;
+
+    // Process columns in chunks to avoid blocking
+    for (let i = 0; i < headers.length; i += COLUMN_CHUNK_SIZE) {
+      // Yield to event loop between chunks
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
+      console.log(
+        `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] Processing chunk ${Math.floor(i / COLUMN_CHUNK_SIZE) + 1}/${Math.ceil(headers.length / COLUMN_CHUNK_SIZE)}`
+      );
+
+      for (let colIndex = i; colIndex < endIndex; colIndex++) {
+        const header = headers[colIndex];
+        const columnValues = data.map((row) => row[colIndex]);
+        const columnStats = await DeepDataValidator.analyzeColumn(
+          header,
+          columnValues
+        );
+        columns.push(columnStats);
+      }
+    }
+
+    console.log(
+      `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] END`,
+      {
+        analyzedColumns: columns.length
+      }
+    );
+
+    return columns;
+  },
+
+  async analyzeColumn(name: string, values: any[]): Promise<ColumnStatistics> {
+    // Single-pass algorithm for statistics computation with chunking
+    // Uses Welford's algorithm for mean and variance
+
+    let nullCount = 0;
+    const uniqueValues = new Set();
+    const valueOccurrences = new Map<any, number>();
+    const sampleValues: any[] = [];
+
+    // Process values in chunks to avoid blocking
+    const CHUNK_SIZE = 1000;
+    for (let i = 0; i < values.length; i += CHUNK_SIZE) {
+      // Yield to event loop between chunks
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const chunk = values.slice(i, i + CHUNK_SIZE);
+      for (const value of chunk) {
+        // Check for null
+        if (
+          value == null ||
+          value === '' ||
+          value === 'null' ||
+          value === 'NULL'
+        ) {
+          nullCount++;
+          continue;
+        }
+
+        // Track unique values and occurrences
+        uniqueValues.add(value);
+        valueOccurrences.set(value, (valueOccurrences.get(value) || 0) + 1);
+
+        // Collect sample values
+        if (sampleValues.length < 5) {
+          sampleValues.push(value);
+        }
+      }
+    }
+
     const nonNullValues = values.filter(
       (v) => v != null && v !== '' && v !== 'null' && v !== 'NULL'
     );
 
-    const uniqueValues = new Set(nonNullValues);
     const uniqueCount = uniqueValues.size;
-
-    const valueOccurrences = new Map<any, number>();
-    nonNullValues.forEach((v) => {
-      valueOccurrences.set(v, (valueOccurrences.get(v) || 0) + 1);
-    });
     const duplicateCount = Array.from(valueOccurrences.values()).filter(
       (count) => count > 1
     ).length;
 
-    const type = this.detectColumnType(nonNullValues);
+    const type = DeepDataValidator.detectColumnType(nonNullValues);
 
     const stats: Partial<ColumnStatistics> = {
       name,
@@ -138,48 +271,103 @@ export class DeepDataValidator {
       uniqueCount,
       uniquePercentage: (uniqueCount / values.length) * 100,
       duplicateCount,
-      sampleValues: nonNullValues.slice(0, 5)
+      sampleValues
     };
 
+    // Type-specific statistics with Welford's algorithm for numeric data
     if (type === 'numeric' && nonNullValues.length > 0) {
-      const numericValues = nonNullValues
-        .map((v) => parseFloat(v))
-        .filter((v) => !isNaN(v));
+      let numericCount = 0;
+      let numericMin = Infinity;
+      let numericMax = -Infinity;
+      let numericMean = 0;
+      let numericM2 = 0; // Sum of squared differences from mean
+      const numericValues: number[] = []; // For median calculation
 
-      if (numericValues.length > 0) {
-        stats.min = Math.min(...numericValues);
-        stats.max = Math.max(...numericValues);
-        stats.mean =
-          numericValues.reduce((a, b) => a + b, 0) / numericValues.length;
+      // Process numeric values in chunks
+      for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const chunk = nonNullValues.slice(i, i + CHUNK_SIZE);
+        for (const value of chunk) {
+          const numValue = parseFloat(value);
+          if (!isNaN(numValue)) {
+            numericValues.push(numValue);
+            numericCount++;
+
+            // Update min/max
+            if (numValue < numericMin) numericMin = numValue;
+            if (numValue > numericMax) numericMax = numValue;
+
+            // Welford's algorithm for online mean and variance
+            const delta = numValue - numericMean;
+            numericMean += delta / numericCount;
+            const delta2 = numValue - numericMean;
+            numericM2 += delta * delta2;
+          }
+        }
+      }
+
+      if (numericCount > 0) {
+        stats.min = numericMin;
+        stats.max = numericMax;
+        stats.mean = numericMean;
         stats.median = this.calculateMedian(numericValues);
-        stats.standardDeviation = this.calculateStandardDeviation(
-          numericValues,
-          stats.mean
-        );
+        // Standard deviation from Welford's algorithm
+        stats.standardDeviation =
+          numericCount > 1 ? Math.sqrt(numericM2 / numericCount) : 0;
       }
     } else if (type === 'string' && nonNullValues.length > 0) {
-      const stringValues = nonNullValues.map((v) => String(v));
-      stats.min = stringValues.reduce((a, b) => (a < b ? a : b));
-      stats.max = stringValues.reduce((a, b) => (a > b ? a : b));
-    } else if (type === 'date' && nonNullValues.length > 0) {
-      const dateValues = nonNullValues
-        .map((v) => new Date(v))
-        .filter((d) => !isNaN(d.getTime()));
+      let stringMin: string | undefined;
+      let stringMax: string | undefined;
 
-      if (dateValues.length > 0) {
-        const timestamps = dateValues.map((d) => d.getTime());
-        stats.min = new Date(Math.min(...timestamps));
-        stats.max = new Date(Math.max(...timestamps));
+      // Process string values in chunks
+      for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const chunk = nonNullValues.slice(i, i + CHUNK_SIZE);
+        for (const value of chunk) {
+          const strValue = String(value);
+          if (stringMin === undefined || strValue < stringMin)
+            stringMin = strValue;
+          if (stringMax === undefined || strValue > stringMax)
+            stringMax = strValue;
+        }
+      }
+
+      stats.min = stringMin;
+      stats.max = stringMax;
+    } else if (type === 'date' && nonNullValues.length > 0) {
+      let dateMin: number = Infinity;
+      let dateMax: number = -Infinity;
+
+      // Process date values in chunks
+      for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
+        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const chunk = nonNullValues.slice(i, i + CHUNK_SIZE);
+        for (const value of chunk) {
+          const dateValue = new Date(value);
+          if (!isNaN(dateValue.getTime())) {
+            const timestamp = dateValue.getTime();
+            if (timestamp < dateMin) dateMin = timestamp;
+            if (timestamp > dateMax) dateMax = timestamp;
+          }
+        }
+      }
+
+      if (dateMin !== Infinity) {
+        stats.min = new Date(dateMin);
+        stats.max = new Date(dateMax);
       }
     }
 
     return stats as ColumnStatistics;
-  }
+  },
 
-  private static detectColumnType(values: any[]): ColumnStatistics['type'] {
+  detectColumnType(values: any[]): ColumnStatistics['type'] {
     if (values.length === 0) return 'string';
 
-    const sample = values.slice(0, this.TYPE_DETECTION_SAMPLES);
+    const sample = values.slice(0, TYPE_DETECTION_SAMPLES);
 
     const types = {
       numeric: 0,
@@ -228,9 +416,9 @@ export class DeepDataValidator {
     if (types.string >= threshold) return 'string';
 
     return 'mixed';
-  }
+  },
 
-  private static calculateMedian(values: number[]): number {
+  calculateMedian(values: number[]): number {
     const sorted = values.slice().sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
 
@@ -239,23 +427,16 @@ export class DeepDataValidator {
     } else {
       return sorted[mid];
     }
-  }
+  },
 
-  private static calculateStandardDeviation(
-    values: number[],
-    mean: number
-  ): number {
-    const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
-    const avgSquaredDiff =
-      squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
-    return Math.sqrt(avgSquaredDiff);
-  }
-
-  private static detectQualityIssues(
+  async detectQualityIssues(
     columns: ColumnStatistics[],
     data: any[][]
-  ): DataQualityIssue[] {
+  ): Promise<DataQualityIssue[]> {
     const issues: DataQualityIssue[] = [];
+
+    // Yield before processing
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     columns.forEach((column) => {
       if (column.nullPercentage > 50) {
@@ -304,68 +485,82 @@ export class DeepDataValidator {
       }
     });
 
-    for (let rowIndex = 0; rowIndex < Math.min(data.length, 100); rowIndex++) {
-      const row = data[rowIndex];
-      for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
-        const cell = row[cellIndex];
-        if (
-          typeof cell === 'string' &&
-          cell.length > this.PERFORMANCE_THRESHOLDS.maxCellLength
-        ) {
-          issues.push({
-            severity: 'warning',
-            column: columns[cellIndex]?.name,
-            message: `Cellule avec ${cell.length} caractères détectée`,
-            affectedRows: [rowIndex],
-            suggestion:
-              'Les cellules très longues peuvent affecter les performances'
-          });
-          break;
+    // Check for long cells in chunks to avoid blocking
+    const maxRowsToCheck = Math.min(data.length, 100);
+    const ROW_CHUNK_SIZE = 20;
+
+    for (
+      let rowIndex = 0;
+      rowIndex < maxRowsToCheck;
+      rowIndex += ROW_CHUNK_SIZE
+    ) {
+      // Yield to event loop between chunks
+      if (rowIndex > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const endIndex = Math.min(rowIndex + ROW_CHUNK_SIZE, maxRowsToCheck);
+      for (let currentRow = rowIndex; currentRow < endIndex; currentRow++) {
+        const row = data[currentRow];
+        for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
+          const cell = row[cellIndex];
+          if (
+            typeof cell === 'string' &&
+            cell.length > PERFORMANCE_THRESHOLDS.maxCellLength
+          ) {
+            issues.push({
+              severity: 'warning',
+              column: columns[cellIndex]?.name,
+              message: `Cellule avec ${cell.length} caractères détectée`,
+              affectedRows: [currentRow],
+              suggestion:
+                'Les cellules très longues peuvent affecter les performances'
+            });
+            break;
+          }
         }
       }
     }
 
     return issues;
-  }
+  },
 
-  private static checkPerformance(
+  checkPerformance(
     rowCount: number,
     columnCount: number,
     _data: unknown[][]
   ): string[] {
     const warnings: string[] = [];
 
-    if (rowCount > this.PERFORMANCE_THRESHOLDS.maxRows) {
+    if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
       warnings.push(
-        `Fichier volumineux: ${rowCount} lignes. Le traitement sera limité aux ${this.PERFORMANCE_THRESHOLDS.maxRows} premières lignes.`
+        `Fichier volumineux: ${rowCount} lignes. Le traitement sera limité aux ${PERFORMANCE_THRESHOLDS.maxRows} premières lignes.`
       );
-    } else if (rowCount > this.PERFORMANCE_THRESHOLDS.warningRows) {
+    } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
       warnings.push(
         `Fichier important: ${rowCount} lignes. Le traitement pourrait prendre du temps.`
       );
     }
 
-    if (columnCount > this.PERFORMANCE_THRESHOLDS.maxColumns) {
+    if (columnCount > PERFORMANCE_THRESHOLDS.maxColumns) {
       warnings.push(
-        `Trop de colonnes: ${columnCount}. Maximum supporté: ${this.PERFORMANCE_THRESHOLDS.maxColumns}.`
+        `Trop de colonnes: ${columnCount}. Maximum supporté: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
       );
-    } else if (columnCount > this.PERFORMANCE_THRESHOLDS.warningColumns) {
+    } else if (columnCount > PERFORMANCE_THRESHOLDS.warningColumns) {
       warnings.push(
         `Nombreuses colonnes: ${columnCount}. Considérez de sélectionner uniquement les colonnes nécessaires.`
       );
     }
 
     const estimatedSize = rowCount * columnCount * 50;
-    if (estimatedSize > this.PERFORMANCE_THRESHOLDS.maxFileSize) {
+    if (estimatedSize > PERFORMANCE_THRESHOLDS.maxFileSize) {
       warnings.push(
         'Taille estimée du fichier très importante. Considérez de diviser vos données.'
       );
     }
 
     return warnings;
-  }
+  },
 
-  private static generateSuggestions(
+  generateSuggestions(
     columns: ColumnStatistics[],
     geoDetection: GeoDetectionResult,
     qualityIssues: DataQualityIssue[],
@@ -412,21 +607,18 @@ export class DeepDataValidator {
     }
 
     return suggestions;
-  }
+  },
 
-  private static estimateProcessingTime(
-    rowCount: number,
-    columnCount: number
-  ): number {
+  estimateProcessingTime(rowCount: number, columnCount: number): number {
     const baseTime = 100;
     const rowFactor = rowCount * 0.5;
     const columnFactor = columnCount * 10;
     const complexityFactor = Math.log10(rowCount * columnCount) * 100;
 
     return Math.round(baseTime + rowFactor + columnFactor + complexityFactor);
-  }
+  },
 
-  static formatQualityReport(analysis: DataAnalysisResult): string {
+  formatQualityReport(analysis: DataAnalysisResult): string {
     const lines: string[] = [];
 
     lines.push("=== RAPPORT D'ANALYSE DES DONNÉES ===\n");
@@ -473,4 +665,4 @@ export class DeepDataValidator {
 
     return lines.join('\n');
   }
-}
+} as const;

@@ -1,4 +1,4 @@
-import type { ProcessedDataset } from '../utils/data-pipeline.utils';
+import type { ProcessedDataset, DatasetResult } from '$lib/features/data';
 import { datasetsStore } from './datasets.store.svelte';
 
 export enum VisualizationType {
@@ -247,7 +247,7 @@ class VisualizationStore {
 
   private getDefaultMapping(
     type: VisualizationType,
-    dataset: ProcessedDataset
+    dataset: ProcessedDataset | DatasetResult
   ) {
     const numericColumns = dataset.columns.filter((c) => c.type === 'number');
     const stringColumns = dataset.columns.filter((c) => c.type === 'string');

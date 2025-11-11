@@ -5,6 +5,7 @@ import {
 } from '../utils/deep-validator.utils';
 import { GeoMatcher, type MatchResult } from '../utils/geo-matcher.utils';
 import { logger, LogCategory } from '../utils/logger';
+import { DuckDBError } from '../errors/pipeline.errors';
 
 interface DuckDBAnalysisColumn {
   name: string;
@@ -35,8 +36,8 @@ export interface ValidationResult {
   criticalErrors: string[];
 }
 
-export class DuckDBValidatorService {
-  static async validateWithDuckDB(
+export const DuckDBValidatorService = {
+  async validateWithDuckDB(
     tableName: string,
     headers: string[],
     data: unknown[][],
@@ -51,7 +52,7 @@ export class DuckDBValidatorService {
         tableName
       });
 
-      await this.installAnalysisMacros();
+      await DuckDBValidatorService.installAnalysisMacros();
 
       const dataAnalysis = await DeepDataValidator.analyzeDataContent(
         headers,
@@ -59,7 +60,10 @@ export class DuckDBValidatorService {
         { skipGeoDetection: options.skipGeoDetection }
       );
 
-      const duckdbAnalysis = await this.runDuckDBAnalysis(tableName, headers);
+      const duckdbAnalysis = await DuckDBValidatorService.runDuckDBAnalysis(
+        tableName,
+        headers
+      );
 
       let geoMatchResult: MatchResult | undefined;
       let suggestedCatalogue:
@@ -97,7 +101,7 @@ export class DuckDBValidatorService {
         }
       }
 
-      const criticalErrors = this.detectCriticalErrors(
+      const criticalErrors = DuckDBValidatorService.detectCriticalErrors(
         dataAnalysis,
         geoMatchResult
       );
@@ -114,11 +118,11 @@ export class DuckDBValidatorService {
       logger.error('Validation error', LogCategory.DUCKDB, error);
       throw error;
     }
-  }
+  },
 
-  private static async installAnalysisMacros(): Promise<void> {
+  async installAnalysisMacros(): Promise<void> {
     if (!Duck) {
-      throw new Error('DuckDB not initialized');
+      throw new DuckDBError('DuckDB not initialized');
     }
 
     try {
@@ -134,9 +138,9 @@ export class DuckDBValidatorService {
       );
       throw error;
     }
-  }
+  },
 
-  private static async runDuckDBAnalysis(
+  async runDuckDBAnalysis(
     tableName: string,
     headers: string[]
   ): Promise<{
@@ -149,7 +153,7 @@ export class DuckDBValidatorService {
     }>;
   }> {
     if (!Duck) {
-      throw new Error('DuckDB not initialized');
+      throw new DuckDBError('DuckDB not initialized');
     }
 
     const columns: DuckDBAnalysisColumn[] = [];
@@ -234,9 +238,9 @@ export class DuckDBValidatorService {
       logger.error('DuckDB analysis failed', LogCategory.DUCKDB, error);
       return { columns: [], summaries: [], histograms: [] };
     }
-  }
+  },
 
-  private static detectCriticalErrors(
+  detectCriticalErrors(
     dataAnalysis: DataAnalysisResult,
     geoMatchResult?: MatchResult
   ): string[] {
@@ -276,9 +280,9 @@ export class DuckDBValidatorService {
     }
 
     return errors;
-  }
+  },
 
-  static formatValidationReport(validation: ValidationResult): string {
+  formatValidationReport(validation: ValidationResult): string {
     const lines: string[] = [];
 
     lines.push('=== RAPPORT DE VALIDATION COMPLET ===\n');
@@ -340,4 +344,4 @@ export class DuckDBValidatorService {
 
     return lines.join('\n');
   }
-}
+} as const;

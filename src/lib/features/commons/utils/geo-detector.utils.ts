@@ -23,89 +23,89 @@ export interface GeoDetectionResult {
   warnings: string[];
 }
 
-export class GeoColumnDetector {
-  private static readonly COLUMN_NAME_PATTERNS = {
-    latitude: /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i,
-    longitude:
-      /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i,
-    country: /^(country[\s_]?(name|code)?|pays|nation|state|etat)$/i,
-    iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
-    iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
-    region:
-      /^(region|province|department|departement|county|oblast|prefecture)$/i,
-    city: /^(city|ville|town|commune|municipality|ciudad|stadt)$/i,
-    coordinates: /^(coord|coords|coordinates|point|location|geometry|wkt)$/i,
-    name: /^(name|nom|designation|libelle|label|title)$/i,
-    code: /^(code|id|identifier|identifiant|key|geocode)$/i
-  };
+const COLUMN_NAME_PATTERNS = {
+  latitude: /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i,
+  longitude:
+    /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i,
+  country: /^(country[\s_]?(name|code)?|pays|nation|state|etat)$/i,
+  iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
+  iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
+  region:
+    /^(region|province|department|departement|county|oblast|prefecture)$/i,
+  city: /^(city|ville|town|commune|municipality|ciudad|stadt)$/i,
+  coordinates: /^(coord|coords|coordinates|point|location|geometry|wkt)$/i,
+  name: /^(name|nom|designation|libelle|label|title)$/i,
+  code: /^(code|id|identifier|identifiant|key|geocode)$/i
+} as const;
 
-  private static readonly VALUE_PATTERNS = {
-    latitude: (value: string) => {
-      const num = parseFloat(value);
-      return !isNaN(num) && num >= -90 && num <= 90;
-    },
-    longitude: (value: string) => {
-      const num = parseFloat(value);
-      return !isNaN(num) && num >= -180 && num <= 180;
-    },
-    iso2: (value: string) => /^[A-Z]{2}$/.test(value.trim().toUpperCase()),
-    iso3: (value: string) => /^[A-Z]{3}$/.test(value.trim().toUpperCase()),
-    coordinates: (value: string) => {
-      return (
-        /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(value) ||
-        /^POINT\s*\(/.test(value.toUpperCase()) ||
-        /^\[?\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*\]?$/.test(value)
-      );
-    }
-  };
+const VALUE_PATTERNS = {
+  latitude: (value: string) => {
+    const num = parseFloat(value);
+    return !isNaN(num) && num >= -90 && num <= 90;
+  },
+  longitude: (value: string) => {
+    const num = parseFloat(value);
+    return !isNaN(num) && num >= -180 && num <= 180;
+  },
+  iso2: (value: string) => /^[A-Z]{2}$/.test(value.trim().toUpperCase()),
+  iso3: (value: string) => /^[A-Z]{3}$/.test(value.trim().toUpperCase()),
+  coordinates: (value: string) => {
+    return (
+      /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(value) ||
+      /^POINT\s*\(/.test(value.toUpperCase()) ||
+      /^\[?\s*-?\d+\.?\d*\s*,\s*-?\d+\.?\d*\s*\]?$/.test(value)
+    );
+  }
+} as const;
 
-  private static readonly COUNTRY_SAMPLES = [
-    'FRANCE',
-    'GERMANY',
-    'SPAIN',
-    'ITALY',
-    'UNITED KINGDOM',
-    'POLAND',
-    'ALLEMAGNE',
-    'ESPAGNE',
-    'ITALIE',
-    'ROYAUME-UNI',
-    'POLOGNE',
-    'DEUTSCHLAND',
-    'SPANIEN',
-    'ITALIEN',
-    'POLEN'
-  ];
+const COUNTRY_SAMPLES = [
+  'FRANCE',
+  'GERMANY',
+  'SPAIN',
+  'ITALY',
+  'UNITED KINGDOM',
+  'POLAND',
+  'ALLEMAGNE',
+  'ESPAGNE',
+  'ITALIE',
+  'ROYAUME-UNI',
+  'POLOGNE',
+  'DEUTSCHLAND',
+  'SPANIEN',
+  'ITALIEN',
+  'POLEN'
+] as const;
 
-  private static readonly REGION_SAMPLES = [
-    'ILE-DE-FRANCE',
-    'BAVARIA',
-    'CATALONIA',
-    'LOMBARDY',
-    'MAZOWIECKIE',
-    'BRETAGNE',
-    'BAYERN',
-    'ANDALUSIA',
-    'LAZIO',
-    'WIELKOPOLSKIE'
-  ];
+const REGION_SAMPLES = [
+  'ILE-DE-FRANCE',
+  'BAVARIA',
+  'CATALONIA',
+  'LOMBARDY',
+  'MAZOWIECKIE',
+  'BRETAGNE',
+  'BAYERN',
+  'ANDALUSIA',
+  'LAZIO',
+  'WIELKOPOLSKIE'
+] as const;
 
-  private static readonly CITY_SAMPLES = [
-    'PARIS',
-    'BERLIN',
-    'MADRID',
-    'ROME',
-    'WARSAW',
-    'LONDON',
-    'LYON',
-    'MUNICH',
-    'BARCELONA',
-    'MILAN',
-    'KRAKOW',
-    'MANCHESTER'
-  ];
+const CITY_SAMPLES = [
+  'PARIS',
+  'BERLIN',
+  'MADRID',
+  'ROME',
+  'WARSAW',
+  'LONDON',
+  'LYON',
+  'MUNICH',
+  'BARCELONA',
+  'MILAN',
+  'KRAKOW',
+  'MANCHESTER'
+] as const;
 
-  static async detectGeoColumns(
+export const GeoColumnDetector = {
+  async detectGeoColumns(
     headers: string[],
     data: any[][],
     options: { sampleSize?: number } = {}
@@ -114,24 +114,35 @@ export class GeoColumnDetector {
     const results: GeoColumnResult[] = [];
     const warnings: string[] = [];
 
-    for (let colIndex = 0; colIndex < headers.length; colIndex++) {
-      const header = headers[colIndex];
-      const columnValues = data
-        .slice(0, sampleSize)
-        .map((row) => row[colIndex])
-        .filter((val) => val != null && val !== '');
+    // Process columns in chunks to avoid blocking
+    const COLUMN_CHUNK_SIZE = 10;
+    for (let i = 0; i < headers.length; i += COLUMN_CHUNK_SIZE) {
+      // Yield to event loop between chunks
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      if (columnValues.length === 0) {
-        continue;
-      }
+      const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
+      for (let colIndex = i; colIndex < endIndex; colIndex++) {
+        const header = headers[colIndex];
+        const columnValues = data
+          .slice(0, sampleSize)
+          .map((row) => row[colIndex])
+          .filter((val) => val != null && val !== '');
 
-      const detection = this.detectColumnType(header, columnValues);
-      if (detection && detection.confidence > 0.5) {
-        results.push({
-          ...detection,
-          index: colIndex,
-          columnName: header
-        });
+        if (columnValues.length === 0) {
+          continue;
+        }
+
+        const detection = GeoColumnDetector.detectColumnType(
+          header,
+          columnValues
+        );
+        if (detection && detection.confidence > 0.5) {
+          results.push({
+            ...detection,
+            index: colIndex,
+            columnName: header
+          });
+        }
       }
     }
 
@@ -144,7 +155,8 @@ export class GeoColumnDetector {
     }
 
     const hasGeoColumns = results.length > 0;
-    const suggestedPrimaryGeoColumn = this.selectPrimaryGeoColumn(results);
+    const suggestedPrimaryGeoColumn =
+      GeoColumnDetector.selectPrimaryGeoColumn(results);
 
     return {
       hasGeoColumns,
@@ -152,18 +164,18 @@ export class GeoColumnDetector {
       suggestedPrimaryGeoColumn,
       warnings
     };
-  }
+  },
 
-  private static detectColumnType(
+  detectColumnType(
     header: string,
     values: any[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
     const headerLower = header.toLowerCase().trim();
     const sampleValues = values.slice(0, 5).map((v) => String(v));
 
-    for (const [type, pattern] of Object.entries(this.COLUMN_NAME_PATTERNS)) {
+    for (const [type, pattern] of Object.entries(COLUMN_NAME_PATTERNS)) {
       if (pattern.test(header)) {
-        const confidence = this.validateColumnValues(type, values);
+        const confidence = GeoColumnDetector.validateColumnValues(type, values);
         if (confidence > 0.5) {
           return {
             type: type as GeoColumnResult['type'],
@@ -175,7 +187,7 @@ export class GeoColumnDetector {
       }
     }
 
-    const valueBasedType = this.detectByValues(values);
+    const valueBasedType = GeoColumnDetector.detectByValues(values);
     if (valueBasedType) {
       return {
         ...valueBasedType,
@@ -184,7 +196,10 @@ export class GeoColumnDetector {
     }
 
     if (headerLower.includes('lat')) {
-      const latConfidence = this.validateColumnValues('latitude', values);
+      const latConfidence = GeoColumnDetector.validateColumnValues(
+        'latitude',
+        values
+      );
       if (latConfidence > 0.5) {
         return {
           type: 'latitude',
@@ -195,7 +210,10 @@ export class GeoColumnDetector {
     }
 
     if (headerLower.includes('lon') || headerLower.includes('lng')) {
-      const lonConfidence = this.validateColumnValues('longitude', values);
+      const lonConfidence = GeoColumnDetector.validateColumnValues(
+        'longitude',
+        values
+      );
       if (lonConfidence > 0.5) {
         return {
           type: 'longitude',
@@ -206,9 +224,9 @@ export class GeoColumnDetector {
     }
 
     return null;
-  }
+  },
 
-  private static detectByValues(
+  detectByValues(
     values: any[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
     const stringValues = values
@@ -218,7 +236,7 @@ export class GeoColumnDetector {
     if (stringValues.length === 0) return null;
 
     const iso2Match =
-      stringValues.filter((v) => this.VALUE_PATTERNS.iso2(v)).length /
+      stringValues.filter((v) => VALUE_PATTERNS.iso2(v)).length /
       stringValues.length;
     if (iso2Match > 0.8) {
       return {
@@ -229,7 +247,7 @@ export class GeoColumnDetector {
     }
 
     const iso3Match =
-      stringValues.filter((v) => this.VALUE_PATTERNS.iso3(v)).length /
+      stringValues.filter((v) => VALUE_PATTERNS.iso3(v)).length /
       stringValues.length;
     if (iso3Match > 0.8) {
       return {
@@ -240,7 +258,7 @@ export class GeoColumnDetector {
     }
 
     const latMatch =
-      stringValues.filter((v) => this.VALUE_PATTERNS.latitude(v)).length /
+      stringValues.filter((v) => VALUE_PATTERNS.latitude(v)).length /
       stringValues.length;
     if (latMatch > 0.8) {
       return {
@@ -251,7 +269,7 @@ export class GeoColumnDetector {
     }
 
     const lonMatch =
-      stringValues.filter((v) => this.VALUE_PATTERNS.longitude(v)).length /
+      stringValues.filter((v) => VALUE_PATTERNS.longitude(v)).length /
       stringValues.length;
     if (lonMatch > 0.8) {
       return {
@@ -261,9 +279,9 @@ export class GeoColumnDetector {
       };
     }
 
-    const countryMatch = this.matchAgainstSamples(
+    const countryMatch = GeoColumnDetector.matchAgainstSamples(
       stringValues,
-      this.COUNTRY_SAMPLES
+      COUNTRY_SAMPLES
     );
     if (countryMatch > 0.3) {
       return {
@@ -273,9 +291,9 @@ export class GeoColumnDetector {
       };
     }
 
-    const regionMatch = this.matchAgainstSamples(
+    const regionMatch = GeoColumnDetector.matchAgainstSamples(
       stringValues,
-      this.REGION_SAMPLES
+      REGION_SAMPLES
     );
     if (regionMatch > 0.3) {
       return {
@@ -285,7 +303,10 @@ export class GeoColumnDetector {
       };
     }
 
-    const cityMatch = this.matchAgainstSamples(stringValues, this.CITY_SAMPLES);
+    const cityMatch = GeoColumnDetector.matchAgainstSamples(
+      stringValues,
+      CITY_SAMPLES
+    );
     if (cityMatch > 0.3) {
       return {
         type: 'city',
@@ -295,11 +316,10 @@ export class GeoColumnDetector {
     }
 
     return null;
-  }
+  },
 
-  private static validateColumnValues(type: string, values: any[]): number {
-    const validator =
-      this.VALUE_PATTERNS[type as keyof typeof this.VALUE_PATTERNS];
+  validateColumnValues(type: string, values: any[]): number {
+    const validator = VALUE_PATTERNS[type as keyof typeof VALUE_PATTERNS];
     if (!validator) return 0;
 
     const validValues = values
@@ -310,21 +330,18 @@ export class GeoColumnDetector {
 
     const validCount = validValues.filter((v) => validator(v)).length;
     return validCount / validValues.length;
-  }
+  },
 
-  private static matchAgainstSamples(
-    values: string[],
-    samples: string[]
-  ): number {
+  matchAgainstSamples(values: string[], samples: readonly string[]): number {
     const upperValues = values.map((v) => v.toUpperCase());
     const matchCount = upperValues.filter((v) =>
       samples.some((s) => s === v || v.includes(s) || s.includes(v))
     ).length;
 
     return matchCount / values.length;
-  }
+  },
 
-  private static selectPrimaryGeoColumn(
+  selectPrimaryGeoColumn(
     columns: GeoColumnResult[]
   ): GeoColumnResult | undefined {
     if (columns.length === 0) return undefined;
@@ -348,9 +365,9 @@ export class GeoColumnDetector {
     }
 
     return columns.sort((a, b) => b.confidence - a.confidence)[0];
-  }
+  },
 
-  static getGeoColumnDescription(column: GeoColumnResult): string {
+  getGeoColumnDescription(column: GeoColumnResult): string {
     const descriptions: Record<GeoColumnResult['type'], string> = {
       latitude: 'Coordonnées de latitude',
       longitude: 'Coordonnées de longitude',
@@ -365,4 +382,4 @@ export class GeoColumnDetector {
 
     return descriptions[column.type] || 'Colonne géographique';
   }
-}
+} as const;

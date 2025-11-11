@@ -3,7 +3,7 @@ import type {
   BasemapSuggestion,
   BasemapCatalog
 } from '../types/basemap.types';
-import type { ProcessedDataset } from '../../commons/utils/data-pipeline.utils';
+import type { ProcessedDataset } from '$lib/features/data';
 import { logger, LogCategory } from '../../commons/utils/logger';
 
 const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';

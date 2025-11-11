@@ -5,6 +5,7 @@
 ## 📚 Vue d'Ensemble
 
 Les basemaps (fonds de carte) dans Khartis v3 utilisent une architecture **géométrie/attributs séparés** pour :
+
 - Fichiers légers et rendu rapide avec Deck.gl
 - Jointures efficaces via DuckDB
 - Support d'identifiants multiples
@@ -13,18 +14,21 @@ Les basemaps (fonds de carte) dans Khartis v3 utilisent une architecture **géom
 ## 🗺️ Basemaps Disponibles
 
 ### Monde
+
 - **world-countries-50m** - Natural Earth, ~200 pays (5.8 MB GeoJSON)
 
 ### Europe
+
 - **nuts2-europe-2021** - NUTS 2 régions, 242 entités (636 KB GeoParquet)
 
 ### France (IGN ADMIN EXPRESS 2025)
-| Basemap | Niveau | Entités | Taille | Layers |
-|---------|--------|---------|--------|--------|
-| `france-region-2025` | Régions | 18 | 262 KB | centroids, limites |
-| `france-departement-2025` | Départements | 101 | 679 KB | centroids, limites |
-| `france-commune-2025` | Communes | ~35,000 | 6.7 MB | centroids, limites |
-| `france-canton-2025` | Cantons | ~4,000 | 2.4 MB | centroids, limites |
+
+| Basemap                   | Niveau       | Entités | Taille | Layers             |
+| ------------------------- | ------------ | ------- | ------ | ------------------ |
+| `france-region-2025`      | Régions      | 18      | 262 KB | centroids, limites |
+| `france-departement-2025` | Départements | 101     | 679 KB | centroids, limites |
+| `france-commune-2025`     | Communes     | ~35,000 | 6.7 MB | centroids, limites |
+| `france-canton-2025`      | Cantons      | ~4,000  | 2.4 MB | centroids, limites |
 
 **Total** : 6 basemaps, 15 fichiers géométriques
 
@@ -50,19 +54,20 @@ static/basemaps/
 
 ### Spécifications Techniques
 
-| Propriété | Valeur | Notes |
-|-----------|--------|-------|
-| Format géométrie | GeoParquet | GeoArrow encoding obligatoire |
-| Colonne géométrie | `geom` | Nom standardisé |
-| Compression | ZSTD | Meilleur ratio compression/vitesse |
-| Type géométrie | Multi* | `PROMOTE_TO_MULTI` pour uniformité |
-| Projection | WGS84 (EPSG:4326) | Par défaut, sauf besoin spécifique |
+| Propriété         | Valeur            | Notes                              |
+| ----------------- | ----------------- | ---------------------------------- |
+| Format géométrie  | GeoParquet        | GeoArrow encoding obligatoire      |
+| Colonne géométrie | `geom`            | Nom standardisé                    |
+| Compression       | ZSTD              | Meilleur ratio compression/vitesse |
+| Type géométrie    | Multi\*           | `PROMOTE_TO_MULTI` pour uniformité |
+| Projection        | WGS84 (EPSG:4326) | Par défaut, sauf besoin spécifique |
 
 ## ➕ Ajouter un Nouveau Basemap
 
 ### 1. Conversion en GeoParquet
 
 **Depuis Shapefile :**
+
 ```bash
 ogr2ogr \
   static/basemaps/geometry/mon-fond.parquet \
@@ -75,6 +80,7 @@ ogr2ogr \
 ```
 
 **Depuis GeoJSON :**
+
 ```bash
 ogr2ogr \
   static/basemaps/geometry/mon-fond.parquet \
@@ -87,6 +93,7 @@ ogr2ogr \
 ```
 
 **Options utiles :**
+
 ```bash
 # Reprojection vers WGS84
 -t_srs EPSG:4326
@@ -102,16 +109,17 @@ ogr2ogr \
 
 **Structure de la table normalisée :**
 
-| Colonne | Type | Description |
-|---------|------|-------------|
-| `raw` | TEXT | Nom original |
-| `id` | TEXT | Identifiant unique (ISO, code) |
-| `variant` | TEXT | Type de variant (name, iso3, code) |
-| `normalized` | TEXT | Nom normalisé (minuscules, sans accents) |
-| `basemap` | TEXT | ID du basemap |
-| `basemap_count` | INTEGER | Nombre d'entités |
+| Colonne         | Type    | Description                              |
+| --------------- | ------- | ---------------------------------------- |
+| `raw`           | TEXT    | Nom original                             |
+| `id`            | TEXT    | Identifiant unique (ISO, code)           |
+| `variant`       | TEXT    | Type de variant (name, iso3, code)       |
+| `normalized`    | TEXT    | Nom normalisé (minuscules, sans accents) |
+| `basemap`       | TEXT    | ID du basemap                            |
+| `basemap_count` | INTEGER | Nombre d'entités                         |
 
 **Script DuckDB :**
+
 ```sql
 -- Macro de normalisation
 CREATE OR REPLACE MACRO normalize_text(s) AS
@@ -155,6 +163,7 @@ TO 'static/basemaps/mon-basemap-attributes.parquet'
 ### 3. Métadonnées
 
 **Template JSON :**
+
 ```json
 {
   "file": "mon-basemap-id",
@@ -180,6 +189,7 @@ TO 'static/basemaps/mon-basemap-attributes.parquet'
 ```
 
 **Calculer la bbox :**
+
 ```bash
 # Avec GDAL
 ogrinfo -al -so source.shp | grep Extent
@@ -205,22 +215,26 @@ duckdb :memory: "
 ## ✅ Checklist de Validation
 
 ### Fichiers
+
 - [ ] Géométrie : `[id].parquet` (GeoArrow)
 - [ ] Centroids : `[id]-centroids.parquet` (optionnel)
 - [ ] Limites : `[id]-limites.parquet` (optionnel)
 
 ### Métadonnées
+
 - [ ] Entrée dans `all-basemaps-metadata.json`
 - [ ] Bounding box calculée
 - [ ] Projection documentée
 - [ ] Layers définis
 
 ### Attributs
+
 - [ ] Table normalisée générée
 - [ ] Concaténation avec attributs existants
 - [ ] Variants multiples (name, iso, code)
 
 ### Technique
+
 - [ ] Format : GeoParquet + GEOARROW
 - [ ] Compression : ZSTD
 - [ ] Colonne : `geom`
@@ -228,6 +242,7 @@ duckdb :memory: "
 - [ ] Taille : <10 MB (idéal)
 
 ### Tests
+
 - [ ] Chargement dans interface
 - [ ] Affichage sur carte
 - [ ] Jointure avec données
@@ -237,6 +252,7 @@ duckdb :memory: "
 ## 🎨 Layers d'Habillage
 
 ### Centroids
+
 Points centraux pour affichage de labels à petite échelle.
 
 ```bash
@@ -255,6 +271,7 @@ EOF
 ```
 
 ### Limites
+
 Limites administratives supérieures pour contexte.
 
 ```bash
@@ -331,21 +348,25 @@ duckdb :memory: "
 ### À Ajouter
 
 **Europe (NUTS Eurostat) :**
+
 - [ ] NUTS 0 - Pays
 - [ ] NUTS 1 - Macro-régions
 - [x] NUTS 2 - Régions ✅
 - [ ] NUTS 3 - Sous-régions
 
 **Monde :**
+
 - [ ] Admin 1 (provinces/états)
 - [ ] Villes majeures (>100k habitants)
 
 **France :**
+
 - [ ] EPCI (Intercommunalités)
 - [ ] Arrondissements
 - [ ] Anciennes régions (pré-2016)
 
 ### Améliorations
+
 - [ ] Convertir `world-countries-50m.geojson` en Parquet (~90% compression)
 - [ ] Scripts de génération automatisés
 - [ ] Tests de validation automatiques
@@ -353,18 +374,21 @@ duckdb :memory: "
 ## 🔧 Dépannage
 
 ### Basemap ne s'affiche pas
+
 1. Vérifier fichier existe dans `static/basemaps/geometry/`
 2. Vérifier métadonnées dans `all-basemaps-metadata.json`
 3. Console navigateur pour erreurs
 4. Colonne géométrie = `geom`
 
 ### Jointure échoue
+
 1. Vérifier attributs dans `all-basemaps-attributes.parquet`
 2. Normalisation correcte (minuscules, sans accents)
 3. Tester requête DuckDB manuellement
 4. `basemap` ID correspond au `file` des métadonnées
 
 ### Fichier trop volumineux
+
 1. Simplifier géométrie : `-simplify 0.001`
 2. Vérifier compression ZSTD
 3. Résolution plus basse (20M au lieu de 10M)
@@ -373,12 +397,14 @@ duckdb :memory: "
 ## 🔗 Ressources
 
 ### Sources de Données
+
 - **Natural Earth** : https://www.naturalearthdata.com/
 - **Eurostat GISCO** : https://ec.europa.eu/eurostat/web/gisco/geodata
 - **IGN France** : https://geoservices.ign.fr/adminexpress
 - **OpenStreetMap** : https://download.geofabrik.de/
 
 ### Documentation Technique
+
 - **GeoParquet Spec** : https://geoparquet.org/
 - **GeoArrow Spec** : https://geoarrow.org/
 - **GDAL/OGR** : https://gdal.org/programs/ogr2ogr.html
@@ -403,6 +429,7 @@ duckdb --version    # DuckDB 1.0.0+
 ---
 
 **Voir aussi :**
+
 - [Documentation détaillée basemaps](basemaps/) - Guides complets et exemples
 - [DATA_PIPELINE.md](DATA_PIPELINE.md) - Intégration données utilisateur
 - [VISUALIZATION.md](VISUALIZATION.md) - Rendu des basemaps

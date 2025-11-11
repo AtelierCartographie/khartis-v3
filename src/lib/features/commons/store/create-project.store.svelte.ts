@@ -28,7 +28,7 @@ import type {
 import { projectStore } from './project.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
-import { duckDBOrchestrator } from '../services/duckdb-orchestrator.service';
+import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
 import { SvelteMap } from 'svelte/reactivity';
 
 const DEFAULT_STATE: CreateProjectState = {
@@ -196,6 +196,8 @@ export const createProjectActions = {
     }
 
     const uploadedFile = createUploadedFile(file, sourceType);
+    // IMPORTANT: Store the original File object to avoid re-parsing
+    uploadedFile.originalFile = file;
     this.addUploadedFile(uploadedFile);
 
     const callbacks: ProcessingCallbacks = {
@@ -469,6 +471,22 @@ export const createProjectActions = {
       projectStore.markAsDirty();
       await projectStore.saveCurrentProject();
     }
+  },
+
+  /**
+   * Clear only the upload UI state without touching DuckDB tables or project data.
+   * Used when closing the add-data modal after successful import.
+   */
+  clearUploadState(): void {
+    logger.info('clearUploadState called - clearing UI only', LogCategory.FILE, {
+      uploadedFilesCount: createProjectState.newProject.uploadedFiles.length
+    });
+
+    createProjectState.newProject.uploadedFiles = [];
+    createProjectState.newProject.validationErrors = [];
+
+    // Do NOT call datasetsStore.clear(), visualizationStore.clear(), or duckDBOrchestrator.clear()
+    // The data has been successfully added to the project and should remain
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {

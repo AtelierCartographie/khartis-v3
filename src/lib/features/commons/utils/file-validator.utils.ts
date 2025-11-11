@@ -69,10 +69,10 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
   strictMode: true
 };
 
-export class FileValidator {
-  private static config = FILE_VALIDATION_CONFIG;
+const config = FILE_VALIDATION_CONFIG;
 
-  static validate(file: File): DetailedValidationResult {
+export const FileValidator = {
+  validate(file: File): DetailedValidationResult {
     const result: DetailedValidationResult = {
       isValid: true,
       errors: [],
@@ -82,49 +82,49 @@ export class FileValidator {
       metadata: {}
     };
 
-    this.validateBasicProperties(file, result);
+    FileValidator.validateBasicProperties(file, result);
 
-    result.fileType = this.detectFileType(file);
+    result.fileType = FileValidator.detectFileType(file);
     result.metadata!.detectedType = result.fileType;
 
-    this.validateByType(file, result);
+    FileValidator.validateByType(file, result);
 
-    result.requiresAsyncValidation = this.requiresAsyncValidation(
+    result.requiresAsyncValidation = FileValidator.requiresAsyncValidation(
       result.fileType
     );
 
     result.isValid = result.errors.length === 0;
     return result;
-  }
+  },
 
-  static async validateAsync(
+  async validateAsync(
     file: File,
     initialResult: DetailedValidationResult
   ): Promise<DetailedValidationResult> {
     const result = { ...initialResult };
 
     try {
-      const buffer = await this.readFileHeader(file, 512);
-      result.metadata!.magicNumber = this.getMagicNumber(buffer);
+      const buffer = await FileValidator.readFileHeader(file, 512);
+      result.metadata!.magicNumber = FileValidator.getMagicNumber(buffer);
 
       switch (result.fileType) {
         case FileType.CSV:
 
         // fallthrough
         case FileType.TSV:
-          await this.validateCSVContent(file, buffer, result);
+          await FileValidator.validateCSVContent(file, buffer, result);
           break;
 
         case FileType.GEOJSON:
-          await this.validateGeoJSONContent(file, buffer, result);
+          await FileValidator.validateGeoJSONContent(file, buffer, result);
           break;
 
         case FileType.SHAPEFILE:
-          await this.validateShapefileContent(file, buffer, result);
+          await FileValidator.validateShapefileContent(file, buffer, result);
           break;
 
         case FileType.GEOPACKAGE:
-          await this.validateGeoPackageContent(file, buffer, result);
+          await FileValidator.validateGeoPackageContent(file, buffer, result);
           break;
       }
     } catch (_error) {
@@ -134,9 +134,9 @@ export class FileValidator {
     }
 
     return result;
-  }
+  },
 
-  static validateMultiple(files: File[]): {
+  validateMultiple(files: File[]): {
     results: Map<string, DetailedValidationResult>;
     globalErrors: string[];
     isValid: boolean;
@@ -145,25 +145,25 @@ export class FileValidator {
     const globalErrors: string[] = [];
     let totalSize = 0;
 
-    if (files.length > this.config.maxFileCount) {
+    if (files.length > config.maxFileCount) {
       globalErrors.push(
-        `Nombre maximum de fichiers dépassé (${this.config.maxFileCount})`
+        `Nombre maximum de fichiers dépassé (${config.maxFileCount})`
       );
     }
 
     for (const file of files) {
-      const result = this.validate(file);
+      const result = FileValidator.validate(file);
       results.set(file.name, result);
       totalSize += file.size;
     }
 
-    if (totalSize > this.config.maxTotalSize) {
+    if (totalSize > config.maxTotalSize) {
       globalErrors.push(
-        `Taille totale des fichiers dépasse ${this.config.maxTotalSize / (1024 * 1024)} MB`
+        `Taille totale des fichiers dépasse ${config.maxTotalSize / (1024 * 1024)} MB`
       );
     }
 
-    this.validateShapefileGroup(files, results, globalErrors);
+    FileValidator.validateShapefileGroup(files, results, globalErrors);
 
     return {
       results,
@@ -172,19 +172,16 @@ export class FileValidator {
         globalErrors.length === 0 &&
         Array.from(results.values()).every((r) => r.isValid)
     };
-  }
+  },
 
-  private static validateBasicProperties(
-    file: File,
-    result: DetailedValidationResult
-  ): void {
+  validateBasicProperties(file: File, result: DetailedValidationResult): void {
     if (file.size === 0) {
       result.errors.push('Le fichier est vide');
-    } else if (file.size > this.config.maxFileSize) {
+    } else if (file.size > config.maxFileSize) {
       result.errors.push(
-        `Le fichier dépasse la limite de ${this.config.maxFileSize / (1024 * 1024)} MB`
+        `Le fichier dépasse la limite de ${config.maxFileSize / (1024 * 1024)} MB`
       );
-    } else if (file.size > this.config.maxFileSize * 0.8) {
+    } else if (file.size > config.maxFileSize * 0.8) {
       result.warnings.push(
         'Fichier volumineux, le traitement pourrait être lent'
       );
@@ -211,11 +208,11 @@ export class FileValidator {
       }
     }
 
-    const extension = this.getFileExtension(file.name);
+    const extension = FileValidator.getFileExtension(file.name);
     if (!extension) {
       result.warnings.push('Fichier sans extension');
-    } else if (!this.config.allowedExtensions.includes(extension)) {
-      if (this.config.strictMode) {
+    } else if (!config.allowedExtensions.includes(extension)) {
+      if (config.strictMode) {
         result.errors.push(`Extension .${extension} non supportée`);
       } else {
         result.warnings.push(
@@ -226,14 +223,14 @@ export class FileValidator {
 
     if (file.type) {
       result.metadata!.actualMimeType = file.type;
-      if (!this.config.allowedMimeTypes.includes(file.type.toLowerCase())) {
+      if (!config.allowedMimeTypes.includes(file.type.toLowerCase())) {
         result.warnings.push(`Type MIME ${file.type} non reconnu`);
       }
     }
-  }
+  },
 
-  private static detectFileType(file: File): FileType {
-    const extension = this.getFileExtension(file.name);
+  detectFileType(file: File): FileType {
+    const extension = FileValidator.getFileExtension(file.name);
     const mimeType = file.type?.toLowerCase() || '';
 
     if (extension === 'csv' || mimeType.includes('csv')) {
@@ -271,12 +268,9 @@ export class FileValidator {
     }
 
     return FileType.UNKNOWN;
-  }
+  },
 
-  private static validateByType(
-    file: File,
-    result: DetailedValidationResult
-  ): void {
+  validateByType(file: File, result: DetailedValidationResult): void {
     switch (result.fileType) {
       case FileType.CSV:
 
@@ -290,7 +284,7 @@ export class FileValidator {
         break;
 
       case FileType.SHAPEFILE: {
-        const ext = this.getFileExtension(file.name);
+        const ext = FileValidator.getFileExtension(file.name);
         if (ext === 'shp' && file.size < 100) {
           result.warnings.push('Fichier SHP suspicieusement petit');
         }
@@ -315,9 +309,9 @@ export class FileValidator {
         result.errors.push('Type de fichier non reconnu');
         break;
     }
-  }
+  },
 
-  private static async validateCSVContent(
+  async validateCSVContent(
     file: File,
     buffer: ArrayBuffer,
     result: DetailedValidationResult
@@ -374,9 +368,9 @@ export class FileValidator {
     } else {
       result.metadata!.encoding = 'UTF-8';
     }
-  }
+  },
 
-  private static async validateGeoJSONContent(
+  async validateGeoJSONContent(
     file: File,
     buffer: ArrayBuffer,
     result: DetailedValidationResult
@@ -426,15 +420,15 @@ export class FileValidator {
         );
       }
     }
-  }
+  },
 
-  private static async validateShapefileContent(
+  async validateShapefileContent(
     file: File,
     buffer: ArrayBuffer,
     result: DetailedValidationResult
   ): Promise<void> {
     const view = new DataView(buffer);
-    const ext = this.getFileExtension(file.name);
+    const ext = FileValidator.getFileExtension(file.name);
 
     if (ext === 'shp' && buffer.byteLength >= 4) {
       const magic = view.getUint32(0, false);
@@ -450,9 +444,9 @@ export class FileValidator {
         result.warnings.push('Version DBF non standard');
       }
     }
-  }
+  },
 
-  private static async validateGeoPackageContent(
+  async validateGeoPackageContent(
     file: File,
     buffer: ArrayBuffer,
     result: DetailedValidationResult
@@ -468,9 +462,9 @@ export class FileValidator {
     if (file.size < 10 * 1024) {
       result.warnings.push('Fichier GeoPackage suspicieusement petit');
     }
-  }
+  },
 
-  private static validateShapefileGroup(
+  validateShapefileGroup(
     files: File[],
     results: Map<string, DetailedValidationResult>,
     globalErrors: string[]
@@ -481,7 +475,7 @@ export class FileValidator {
       const result = results.get(file.name);
       if (result?.fileType === FileType.SHAPEFILE) {
         const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-        const ext = this.getFileExtension(file.name);
+        const ext = FileValidator.getFileExtension(file.name);
 
         if (!shapefileComponents.has(baseName)) {
           shapefileComponents.set(baseName, new Set());
@@ -500,9 +494,9 @@ export class FileValidator {
         );
       }
     }
-  }
+  },
 
-  private static requiresAsyncValidation(fileType: FileType): boolean {
+  requiresAsyncValidation(fileType: FileType): boolean {
     return [
       FileType.CSV,
       FileType.TSV,
@@ -510,12 +504,9 @@ export class FileValidator {
       FileType.SHAPEFILE,
       FileType.GEOPACKAGE
     ].includes(fileType);
-  }
+  },
 
-  private static async readFileHeader(
-    file: File,
-    bytes: number = 512
-  ): Promise<ArrayBuffer> {
+  async readFileHeader(file: File, bytes: number = 512): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       const blob = file.slice(0, Math.min(bytes, file.size));
@@ -524,21 +515,21 @@ export class FileValidator {
       reader.onerror = () => reject(reader.error);
       reader.readAsArrayBuffer(blob);
     });
-  }
+  },
 
-  private static getMagicNumber(buffer: ArrayBuffer): string {
+  getMagicNumber(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer.slice(0, 8));
     return Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join(' ')
       .toUpperCase();
-  }
+  },
 
-  private static getFileExtension(filename: string): string {
+  getFileExtension(filename: string): string {
     return filename.toLowerCase().split('.').pop() || '';
-  }
+  },
 
-  static validateURL(url: string): DetailedValidationResult {
+  validateURL(url: string): DetailedValidationResult {
     const result: DetailedValidationResult = {
       isValid: true,
       errors: [],
@@ -562,8 +553,8 @@ export class FileValidator {
       const pathname = parsed.pathname;
       const extension = pathname.split('.').pop()?.toLowerCase();
 
-      if (extension && this.config.allowedExtensions.includes(extension)) {
-        result.fileType = this.detectFileType({
+      if (extension && config.allowedExtensions.includes(extension)) {
+        result.fileType = FileValidator.detectFileType({
           name: pathname,
           type: ''
         } as File);
@@ -583,7 +574,7 @@ export class FileValidator {
     result.isValid = result.errors.length === 0;
     return result;
   }
-}
+} as const;
 
 export const SUPPORTED_FILE_TYPES = {
   tabular: {

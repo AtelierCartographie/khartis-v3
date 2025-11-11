@@ -23,6 +23,7 @@
 
   let isCreating = $state(false);
   let hasTriedSubmit = $state(false);
+  let creationStep = $state('');
   let localProjectName = $state.raw(createProjectState.newProject.projectName);
 
   $effect(() => {
@@ -53,9 +54,17 @@
   );
 
   async function handleCreate() {
+    const startTime = performance.now();
+    console.log(
+      `[${new Date().toISOString()}] [project-name:handleCreate] START`
+    );
+
     hasTriedSubmit = true;
 
     if (!hasValidName) {
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Aborted - invalid project name`
+      );
       logger.warn(
         'Project creation attempted without name',
         LogCategory.PROJECT
@@ -64,6 +73,9 @@
     }
 
     if (!hasValidFiles) {
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Aborted - no valid files`
+      );
       logger.warn(
         'Project creation attempted without valid files',
         LogCategory.PROJECT
@@ -73,30 +85,86 @@
     }
 
     isCreating = true;
+    creationStep = 'Processing files...';
+    console.log(
+      `[${new Date().toISOString()}] [project-name:handleCreate] Creating project...`,
+      {
+        projectName: projectName.trim(),
+        validFilesCount: validFiles.length
+      }
+    );
+
     logger.info('Creating new project', LogCategory.PROJECT, {
       name: projectName.trim(),
       filesCount: validFiles.length
     });
 
     try {
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Sanitizing project name...`
+      );
       const safeName = sanitizeProjectName(projectName.trim());
+
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Calling projectStore.createProject...`
+      );
+      creationStep = 'Analyzing data...';
+      const createStart = performance.now();
       await projectStore.createProject(safeName, validFiles);
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Project created`,
+        {
+          duration: `${(performance.now() - createStart).toFixed(2)}ms`
+        }
+      );
+
+      creationStep = 'Finalizing...';
+
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Refreshing projects store...`
+      );
       await projectsStore.refresh();
 
       logger.success('Project created successfully', LogCategory.PROJECT, {
         name: safeName
       });
-      globalState.isCreateProjectModalOpen = false;
+
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] Resetting tabs and navigating...`
+      );
       createProjectActions.resetAllTabs();
-      onClose?.();
       await goto('/', { replaceState: true });
+
+      const totalDuration = performance.now() - startTime;
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] END`,
+        {
+          totalDuration: `${totalDuration.toFixed(2)}ms`
+        }
+      );
     } catch (error) {
+      const duration = performance.now() - startTime;
+      console.error(
+        `[${new Date().toISOString()}] [project-name:handleCreate] ERROR`,
+        {
+          duration: `${duration.toFixed(2)}ms`,
+          error
+        }
+      );
+
       logger.error('Failed to create project', LogCategory.PROJECT, error);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to create project';
       showError('Failed to create project', errorMessage);
     } finally {
+      console.log(
+        `[${new Date().toISOString()}] [project-name:handleCreate] FINALLY - closing modal`
+      );
+      // Always close modal and reset state, even on error
       isCreating = false;
+      creationStep = '';
+      globalState.isCreateProjectModalOpen = false;
+      onClose?.();
     }
   }
 
@@ -148,7 +216,7 @@
       on:click={handleCreate}
       kind="primary"
     >
-      {isCreating ? 'Creating...' : m.project_name_create()}
+      {isCreating ? creationStep || 'Creating...' : m.project_name_create()}
     </Button>
   </div>
 </div>
