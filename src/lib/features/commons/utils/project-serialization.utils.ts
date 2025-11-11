@@ -1,8 +1,13 @@
 import type { KhartisProject } from '../store/project.types';
 import type { UploadedFile } from '../store/create-project.types';
+import type {
+  SerializedProject,
+  SerializedProjectData,
+  SerializedUploadedFile
+} from '$lib/types/serialization.types';
 
-export class ProjectSerializer {
-  static serialize(project: KhartisProject): any {
+export const ProjectSerializer = {
+  serialize(project: KhartisProject): SerializedProject {
     return {
       ...project,
       manifest: {
@@ -16,55 +21,64 @@ export class ProjectSerializer {
             ? project.manifest.updatedAt.toISOString()
             : project.manifest.updatedAt
       },
-      data: project.data ? this.serializeProjectData(project.data) : undefined,
+      data: project.data
+        ? ProjectSerializer.serializeProjectData(project.data)
+        : undefined,
       visualization: project.visualization,
       layout: project.layout,
       resources: project.resources
     };
-  }
+  },
 
-  static deserialize(data: any): KhartisProject {
-    return {
+  deserialize(data: SerializedProject): KhartisProject {
+    const project: KhartisProject = {
       ...data,
       manifest: {
         ...data.manifest,
         createdAt: new Date(data.manifest.createdAt),
         updatedAt: new Date(data.manifest.updatedAt)
-      },
-      data: data.data ? this.deserializeProjectData(data.data) : undefined
-    };
-  }
+      } as KhartisProject['manifest'],
+      data: data.data
+        ? (ProjectSerializer.deserializeProjectData(data.data) as KhartisProject['data'])
+        : undefined
+    } as KhartisProject;
 
-  private static serializeProjectData(data: any): any {
-    if (!data) return data;
+    return project;
+  },
 
-    const serialized = { ...data };
+  serializeProjectData(data: unknown): SerializedProjectData | undefined {
+    if (!data) return undefined;
+    if (typeof data !== 'object' || data === null) return undefined;
 
-    if (data.sourceFiles && Array.isArray(data.sourceFiles)) {
-      serialized.sourceFiles = data.sourceFiles.map((file: UploadedFile) =>
-        this.serializeUploadedFile(file)
+    const serialized = { ...data } as SerializedProjectData;
+    const dataObj = data as Record<string, unknown>;
+
+    if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
+      serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) =>
+        ProjectSerializer.serializeUploadedFile(file)
       );
     }
 
     return serialized;
-  }
+  },
 
-  private static deserializeProjectData(data: any): any {
+  deserializeProjectData(data: SerializedProjectData): unknown {
     if (!data) return data;
 
     const deserialized = { ...data };
 
     if (data.sourceFiles && Array.isArray(data.sourceFiles)) {
-      deserialized.sourceFiles = data.sourceFiles.map((file: any) =>
-        this.deserializeUploadedFile(file)
-      );
+      deserialized.sourceFiles = data.sourceFiles.map(
+        (file: SerializedUploadedFile) =>
+          ProjectSerializer.deserializeUploadedFile(file)
+      ) as SerializedUploadedFile[];
     }
 
     return deserialized;
-  }
+  },
 
-  private static serializeUploadedFile(file: UploadedFile): any {
-    const serialized: any = {
+  serializeUploadedFile(file: UploadedFile): SerializedUploadedFile {
+    const serialized = {
       id: file.id,
       name: file.name,
       size: file.size,
@@ -76,7 +90,7 @@ export class ProjectSerializer {
       sourceType: file.sourceType,
       relatedFiles: file.relatedFiles,
       uploadProgress: file.uploadProgress
-    };
+    } as SerializedUploadedFile;
 
     if (file.parsedData) {
       serialized.parsedData = file.parsedData;
@@ -97,33 +111,33 @@ export class ProjectSerializer {
     }
 
     return serialized;
-  }
+  },
 
-  private static deserializeUploadedFile(data: any): UploadedFile {
-    const file: UploadedFile = {
+  deserializeUploadedFile(data: SerializedUploadedFile): UploadedFile {
+    const file = {
       id: data.id,
       name: data.name,
       size: data.size,
       type: data.type,
-      fileType: data.fileType,
-      status: data.status,
+      fileType: data.fileType as UploadedFile['fileType'],
+      status: data.status as UploadedFile['status'],
       errorMessage: data.errorMessage,
-      validation: data.validation,
-      sourceType: data.sourceType,
+      validation: data.validation as UploadedFile['validation'],
+      sourceType: data.sourceType as UploadedFile['sourceType'],
       relatedFiles: data.relatedFiles,
       uploadProgress: data.uploadProgress
-    };
+    } as UploadedFile;
 
     if (data.parsedData) {
-      file.parsedData = data.parsedData;
+      file.parsedData = data.parsedData as UploadedFile['parsedData'];
     }
 
     if (data.statistics) {
-      file.statistics = data.statistics;
+      file.statistics = data.statistics as UploadedFile['statistics'];
     }
 
     if (data.content) {
-      if (data.contentType === 'string') {
+      if (data.contentType === 'string' && typeof data.content === 'string') {
         file.content = data.content;
       } else if (
         data.contentType === 'arraybuffer' &&
@@ -133,14 +147,14 @@ export class ProjectSerializer {
       }
     }
 
-    return file;
-  }
+    return file as UploadedFile;
+  },
 
-  static prepareForIndexedDB(project: KhartisProject): any {
-    const serialized = this.serialize(project);
+  prepareForIndexedDB(project: KhartisProject): SerializedProject {
+    const serialized = ProjectSerializer.serialize(project);
 
     const cleaned = JSON.parse(JSON.stringify(serialized));
 
     return cleaned;
   }
-}
+} as const;

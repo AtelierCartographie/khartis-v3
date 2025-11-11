@@ -135,20 +135,45 @@ class ProjectStore {
             : 0
         });
 
-        this._state.currentProject.data.sourceFiles = [
-          ...this._state.currentProject.data.sourceFiles,
-          fileCopy
-        ];
+        // Force reactivity by reassigning currentProject with deep copy of data
+        // Do everything in one assignment to avoid intermediate states
+        console.log('[projectStore] BEFORE adding file to currentProject', {
+          currentSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
+          fileToAdd: fileCopy.name
+        });
+
+        this._state.currentProject = {
+          ...this._state.currentProject,
+          data: {
+            ...this._state.currentProject.data,
+            sourceFiles: [
+              ...this._state.currentProject.data.sourceFiles,
+              fileCopy
+            ]
+          }
+        };
+
+        console.log('[projectStore] AFTER adding file to currentProject', {
+          newSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
+          allFileNames: this._state.currentProject.data.sourceFiles.map(f => f.name)
+        });
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
         } catch (error) {
           logger.error('Failed to process file', LogCategory.PROJECT, error);
 
-          this._state.currentProject.data.sourceFiles =
-            this._state.currentProject.data.sourceFiles.filter(
-              (f) => f.id !== fileCopy.id
-            );
+          // Force reactivity by reassigning currentProject with deep copy of data
+          // Remove the failed file in one assignment
+          this._state.currentProject = {
+            ...this._state.currentProject,
+            data: {
+              ...this._state.currentProject.data,
+              sourceFiles: this._state.currentProject.data.sourceFiles.filter(
+                (f) => f.id !== fileCopy.id
+              )
+            }
+          };
 
           throw error;
         }
@@ -164,10 +189,17 @@ class ProjectStore {
       return;
     }
 
-    this._state.currentProject.data.sourceFiles =
-      this._state.currentProject.data.sourceFiles.filter(
-        (f) => f.id !== fileId
-      );
+    // Force reactivity by reassigning currentProject with deep copy of data
+    // Remove the file in one assignment to avoid intermediate states
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: this._state.currentProject.data.sourceFiles.filter(
+          (f) => f.id !== fileId
+        )
+      }
+    };
 
     await dataOrchestrator.onFileRemoved(fileId);
 

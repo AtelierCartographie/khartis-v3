@@ -1,4 +1,3 @@
-import Papa from 'papaparse';
 import shp from 'shpjs';
 import {
   type FileValidation,
@@ -8,6 +7,7 @@ import {
 } from '../store/create-project.types';
 import { sanitizeDisplayName } from './string.utils';
 import { logger, LogCategory } from './logger';
+import { ParseError, FileGroupError } from '../errors/pipeline.errors';
 
 export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
@@ -132,12 +132,17 @@ export async function readFileContent(
         if (onProgress) onProgress(100);
         resolve(reader.result);
       } else {
-        reject(new Error('Failed to read file'));
+        reject(new ParseError('Failed to read file', detectFileType(file)));
       }
     };
 
     reader.onerror = () => {
-      reject(new Error(`Error reading file: ${reader.error?.message}`));
+      reject(
+        new ParseError(
+          `Error reading file: ${reader.error?.message}`,
+          detectFileType(file)
+        )
+      );
     };
 
     reader.onprogress = (event) => {
@@ -200,116 +205,6 @@ export function parseCsvHeaders(csvContent: string): string[] {
     .map((header) => header.trim().replace(/^["']|["']$/g, ''));
 }
 
-export async function parseCsvWithPapa(
-  file: File,
-  _onProgress?: (progress: number) => void
-): Promise<{
-  data: any[];
-  headers: string[];
-  errors: string[];
-  meta: any;
-}> {
-  logger.info('Starting parse of file', LogCategory.FILE, {
-    name: file.name,
-    size: file.size,
-    type: file.type
-  });
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      logger.debug(
-        'File content preview',
-        LogCategory.FILE,
-        text.substring(0, 500)
-      );
-
-      Papa.parse(text, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        delimiter: detectDelimiter(text),
-        complete: (results) => {
-          logger.info('Parse complete', LogCategory.FILE, {
-            dataLength: results.data.length,
-            headers: results.meta.fields,
-            errors: results.errors,
-            firstRow: results.data[0],
-            delimiter: results.meta.delimiter
-          });
-
-          if (results.data.length === 0 && text.trim().length > 0) {
-            logger.warn(
-              'Empty result but file has content, trying without header',
-              LogCategory.FILE
-            );
-
-            Papa.parse(text, {
-              header: false,
-              dynamicTyping: true,
-              skipEmptyLines: true,
-              delimiter: detectDelimiter(text),
-              complete: (retryResults) => {
-                logger.info('Retry parse complete', LogCategory.FILE, {
-                  dataLength: retryResults.data.length,
-                  firstRow: retryResults.data[0]
-                });
-
-                if (retryResults.data.length > 0) {
-                  const firstRow = retryResults.data[0] as any[];
-                  const headers = firstRow.map(
-                    (_: any, i: number) => `Column_${i + 1}`
-                  );
-                  const dataRows = retryResults.data.slice(1) as any[][];
-                  const data = dataRows.map((row: any[]) => {
-                    const obj: any = {};
-                    headers.forEach((h: string, i: number) => {
-                      obj[h] = row[i];
-                    });
-                    return obj;
-                  });
-
-                  resolve({
-                    data: data,
-                    headers: headers,
-                    errors: retryResults.errors.map((e) => e.message),
-                    meta: retryResults.meta
-                  });
-                } else {
-                  resolve({
-                    data: results.data,
-                    headers: results.meta.fields || [],
-                    errors: results.errors.map((e) => e.message),
-                    meta: results.meta
-                  });
-                }
-              }
-            });
-          } else {
-            resolve({
-              data: results.data,
-              headers: results.meta.fields || [],
-              errors: results.errors.map((e) => e.message),
-              meta: results.meta
-            });
-          }
-        },
-        error: (_error: any) => {
-          logger.error('Parse error', LogCategory.FILE, _error);
-          reject(_error);
-        }
-      });
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
-    };
-
-    reader.readAsText(file, 'UTF-8');
-  });
-}
-
 export async function parseShapefile(
   files: Record<string, ArrayBuffer>,
   onProgress?: (progress: number) => void
@@ -321,7 +216,13 @@ export async function parseShapefile(
     const dbfBuffer = files['dbf'];
 
     if (!shpBuffer || !dbfBuffer) {
-      throw new Error('Missing required shapefile components');
+      const missingFiles = [];
+      if (!shpBuffer) missingFiles.push('.shp');
+      if (!dbfBuffer) missingFiles.push('.dbf');
+      throw new FileGroupError(
+        'Missing required shapefile components',
+        missingFiles
+      );
     }
 
     if (onProgress) onProgress(30);
@@ -352,23 +253,50 @@ export async function parseShapefile(
   }
 }
 
-export function detectDuplicateRows(data: any[]): {
+export async function detectDuplicateRows(data: any[]): Promise<{
   hasDuplicates: boolean;
   duplicateIndices: number[];
   duplicateCount: number;
-} {
+}> {
+  const startTime = performance.now();
+  console.log(
+    `[${new Date().toISOString()}] [file-import:detectDuplicateRows] START`,
+    {
+      rowCount: data.length
+    }
+  );
+
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
 
-  data.forEach((row, index) => {
-    const key = JSON.stringify(row);
-    if (seen.has(key)) {
-      seen.get(key)!.push(index);
-      duplicateIndices.push(index);
-    } else {
-      seen.set(key, [index]);
+  // Process rows in chunks to avoid blocking
+  const CHUNK_SIZE = 1000;
+  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const chunk = data.slice(i, i + CHUNK_SIZE);
+    chunk.forEach((row, chunkIndex) => {
+      const index = i + chunkIndex;
+      const key = JSON.stringify(row);
+      if (seen.has(key)) {
+        seen.get(key)!.push(index);
+        duplicateIndices.push(index);
+      } else {
+        seen.set(key, [index]);
+      }
+    });
+  }
+
+  const duration = performance.now() - startTime;
+  console.log(
+    `[${new Date().toISOString()}] [file-import:detectDuplicateRows] END`,
+    {
+      duration: `${duration.toFixed(2)}ms`,
+      hasDuplicates: duplicateIndices.length > 0,
+      duplicateCount: duplicateIndices.length
     }
-  });
+  );
 
   return {
     hasDuplicates: duplicateIndices.length > 0,
@@ -377,70 +305,126 @@ export function detectDuplicateRows(data: any[]): {
   };
 }
 
-export function detectDataTypes(
+export async function detectDataTypes(
   data: any[],
   headers: string[]
-): Record<string, string> {
+): Promise<Record<string, string>> {
+  const startTime = performance.now();
+  console.log(
+    `[${new Date().toISOString()}] [file-import:detectDataTypes] START`,
+    {
+      rowCount: data.length,
+      columnCount: headers.length
+    }
+  );
+
   const types: Record<string, string> = {};
 
-  headers.forEach((header) => {
-    const values = data.map((row) => row[header]).filter((v) => v != null);
+  // Process headers in chunks to avoid blocking
+  const HEADER_CHUNK_SIZE = 10;
+  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
-    if (values.length === 0) {
-      types[header] = 'empty';
-      return;
+    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
+    for (const header of headerChunk) {
+      const values = data.map((row) => row[header]).filter((v) => v != null);
+
+      if (values.length === 0) {
+        types[header] = 'empty';
+        continue;
+      }
+
+      const allNumbers = values.every(
+        (v) => typeof v === 'number' || !isNaN(Number(v))
+      );
+      const allBooleans = values.every(
+        (v) => typeof v === 'boolean' || v === 'true' || v === 'false'
+      );
+      const allDates = values.every((v) => !isNaN(Date.parse(String(v))));
+
+      if (allNumbers) {
+        types[header] = 'number';
+      } else if (allBooleans) {
+        types[header] = 'boolean';
+      } else if (allDates) {
+        types[header] = 'date';
+      } else {
+        types[header] = 'string';
+      }
     }
+  }
 
-    const allNumbers = values.every(
-      (v) => typeof v === 'number' || !isNaN(Number(v))
-    );
-    const allBooleans = values.every(
-      (v) => typeof v === 'boolean' || v === 'true' || v === 'false'
-    );
-    const allDates = values.every((v) => !isNaN(Date.parse(String(v))));
-
-    if (allNumbers) {
-      types[header] = 'number';
-    } else if (allBooleans) {
-      types[header] = 'boolean';
-    } else if (allDates) {
-      types[header] = 'date';
-    } else {
-      types[header] = 'string';
+  const duration = performance.now() - startTime;
+  console.log(
+    `[${new Date().toISOString()}] [file-import:detectDataTypes] END`,
+    {
+      duration: `${duration.toFixed(2)}ms`,
+      typeCount: Object.keys(types).length
     }
-  });
+  );
 
   return types;
 }
 
-export function getDataStatistics(
+export async function getDataStatistics(
   data: any[],
   headers: string[]
-): Record<string, any> {
+): Promise<Record<string, any>> {
+  const startTime = performance.now();
+  console.log(
+    `[${new Date().toISOString()}] [file-import:getDataStatistics] START`,
+    {
+      rowCount: data.length,
+      columnCount: headers.length
+    }
+  );
+
   const stats: Record<string, any> = {};
-  const dataTypes = detectDataTypes(data, headers);
 
-  headers.forEach((header) => {
-    const values = data.map((row) => row[header]).filter((v) => v != null);
-    const type = dataTypes[header];
+  console.log(
+    `[${new Date().toISOString()}] [file-import:getDataStatistics] Detecting data types...`
+  );
+  const dataTypes = await detectDataTypes(data, headers);
 
-    stats[header] = {
-      type,
-      count: values.length,
-      nullCount: data.length - values.length,
-      unique: new Set(values).size
-    };
+  // Process headers in chunks to avoid blocking
+  const HEADER_CHUNK_SIZE = 10;
+  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
-    if (type === 'number') {
-      const numbers = values.map(Number).filter((n) => !isNaN(n));
-      if (numbers.length > 0) {
-        stats[header].min = Math.min(...numbers);
-        stats[header].max = Math.max(...numbers);
-        stats[header].mean =
-          numbers.reduce((a, b) => a + b, 0) / numbers.length;
+    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
+    for (const header of headerChunk) {
+      const values = data.map((row) => row[header]).filter((v) => v != null);
+      const type = dataTypes[header];
+
+      stats[header] = {
+        type,
+        count: values.length,
+        nullCount: data.length - values.length,
+        unique: new Set(values).size
+      };
+
+      if (type === 'number') {
+        const numbers = values.map(Number).filter((n) => !isNaN(n));
+        if (numbers.length > 0) {
+          stats[header].min = Math.min(...numbers);
+          stats[header].max = Math.max(...numbers);
+          stats[header].mean =
+            numbers.reduce((a, b) => a + b, 0) / numbers.length;
+        }
       }
     }
-  });
+  }
+
+  const duration = performance.now() - startTime;
+  console.log(
+    `[${new Date().toISOString()}] [file-import:getDataStatistics] END`,
+    {
+      duration: `${duration.toFixed(2)}ms`,
+      statsCount: Object.keys(stats).length
+    }
+  );
 
   return stats;
 }
@@ -631,7 +615,10 @@ export async function parseGeoPackage(
     );
 
     if (!tables[0] || !tables[0].values.length) {
-      throw new Error('No feature tables found in GeoPackage');
+      throw new ParseError(
+        'No feature tables found in GeoPackage',
+        FileType.GEOPACKAGE
+      );
     }
 
     const featureTable = tables[0].values[0][0] as string;
@@ -643,7 +630,11 @@ export async function parseGeoPackage(
     );
 
     if (!features[0]) {
-      throw new Error('No features found in table');
+      throw new ParseError(
+        `No features found in table '${featureTable}'`,
+        FileType.GEOPACKAGE,
+        { table: featureTable }
+      );
     }
 
     const geojson = {
@@ -671,8 +662,14 @@ export async function parseGeoPackage(
 
     return geojson;
   } catch (error) {
-    throw new Error(
-      `Failed to parse GeoPackage: ${error instanceof Error ? error.message : 'Unknown error'}`
+    // Re-throw if already a typed error
+    if (error instanceof ParseError || error instanceof FileGroupError) {
+      throw error;
+    }
+    throw new ParseError(
+      `Failed to parse GeoPackage: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      FileType.GEOPACKAGE,
+      { originalError: error }
     );
   }
 }

@@ -4,13 +4,13 @@
 
 ## Visualization Types
 
-| Type | Use Case | Requirements |
-|------|----------|--------------|
-| **Choropleth** | Color-coded regions | Geometry + numeric variable |
-| **Proportional Symbols** | Sized markers | Geometry + numeric variable |
-| **Categorical** | Distinct categories | Geometry + categorical variable |
-| **Bivariate** | Two variables combined | Geometry + 2 numeric variables |
-| **Collections (Facets)** | Multi-map comparison | Geometry + grouping variable |
+| Type                     | Use Case               | Requirements                    |
+| ------------------------ | ---------------------- | ------------------------------- |
+| **Choropleth**           | Color-coded regions    | Geometry + numeric variable     |
+| **Proportional Symbols** | Sized markers          | Geometry + numeric variable     |
+| **Categorical**          | Distinct categories    | Geometry + categorical variable |
+| **Bivariate**            | Two variables combined | Geometry + 2 numeric variables  |
+| **Collections (Facets)** | Multi-map comparison   | Geometry + grouping variable    |
 
 ## Lifecycle
 
@@ -39,13 +39,13 @@ interface VisualizationConfig {
 
 ## Classification Methods
 
-| Method | Algorithm | Status | Notes |
-|--------|-----------|--------|-------|
-| **Equal Interval** | `(max - min) / k` uniform ranges | ✅ Full | Simple, consistent |
-| **Quantile** | Equal-count bins with tie handling | ✅ Full | Balanced distribution |
-| **Jenks** | Natural breaks optimization | ⚠️ Fallback | Falls back to Quantile |
-| **Std Deviation** | `mean ± n×σ` bands | ✅ Full | Statistical breaks |
-| **Manual** | User-specified breaks | ✅ Full | Full control |
+| Method             | Algorithm                          | Status      | Notes                  |
+| ------------------ | ---------------------------------- | ----------- | ---------------------- |
+| **Equal Interval** | `(max - min) / k` uniform ranges   | ✅ Full     | Simple, consistent     |
+| **Quantile**       | Equal-count bins with tie handling | ✅ Full     | Balanced distribution  |
+| **Jenks**          | Natural breaks optimization        | ⚠️ Fallback | Falls back to Quantile |
+| **Std Deviation**  | `mean ± n×σ` bands                 | ✅ Full     | Statistical breaks     |
+| **Manual**         | User-specified breaks              | ✅ Full     | Full control           |
 
 **Default**: 5 classes (recommended range: 3-9)
 
@@ -130,6 +130,7 @@ Top: Overlays (annotations, scale, north arrow)
 **Purpose**: Multi-map comparison by grouping variable
 
 **Features:**
+
 - **Common scale**: Same breaks/colors across all maps (comparison)
 - **Independent scale**: Per-map optimization (exploration)
 - **Grid layout**: Configurable columns
@@ -141,14 +142,15 @@ Top: Overlays (annotations, scale, north arrow)
 
 ### Strategy
 
-| Source | Approach |
-|--------|----------|
-| **Catalog basemaps** | Pre-simplified tiers (multiple LOD levels) |
-| **Imported geometry** | Adjustable tolerance with preview |
+| Source                | Approach                                   |
+| --------------------- | ------------------------------------------ |
+| **Catalog basemaps**  | Pre-simplified tiers (multiple LOD levels) |
+| **Imported geometry** | Adjustable tolerance with preview          |
 
 **Performance**: Simplify geometries >10k vertices
 
 **Workflow**:
+
 1. Preview uses simplified geometry (fast interaction)
 2. Final render uses full detail (or user-selected tolerance)
 3. Warning if excessive geometry loss
@@ -162,12 +164,12 @@ const simplified = simplifyGeometry(geometry, tolerance);
 
 ## Performance Optimization
 
-| Challenge | Solution |
-|-----------|----------|
-| **Rapid edits** | Throttle recompute + temporary simplified render |
-| **Large geometry** | LOD + partial redraw |
-| **Classification** | In-memory cache keyed by dataset + params |
-| **Picking overhead** | Compact binary attributes |
+| Challenge            | Solution                                         |
+| -------------------- | ------------------------------------------------ |
+| **Rapid edits**      | Throttle recompute + temporary simplified render |
+| **Large geometry**   | LOD + partial redraw                             |
+| **Classification**   | In-memory cache keyed by dataset + params        |
+| **Picking overhead** | Compact binary attributes                        |
 
 **Targets**: 60fps pan/zoom, <1s classification recompute
 
@@ -175,24 +177,24 @@ const simplified = simplifyGeometry(geometry, tolerance);
 
 ### Legend Types
 
-| Visualization | Legend Style |
-|---------------|-------------|
-| **Choropleth** | Color ramp with break values |
-| **Proportional** | Size samples (min, mid, max) |
-| **Categorical** | Category → color mapping |
-| **Bivariate** | 2D color matrix with axes labels |
+| Visualization    | Legend Style                     |
+| ---------------- | -------------------------------- |
+| **Choropleth**   | Color ramp with break values     |
+| **Proportional** | Size samples (min, mid, max)     |
+| **Categorical**  | Category → color mapping         |
+| **Bivariate**    | 2D color matrix with axes labels |
 
 **Auto-regeneration**: On classification, color, or data change
 
 ## Edge Case Handling
 
-| Issue | Handling |
-|-------|----------|
-| **All-null values** | Disable visualization suggestion |
-| **Single value** | Suggest categorical instead of numeric |
-| **Too many categories** | Collapse low-frequency into "Other" |
-| **Projection failure** | Fallback to Equirectangular (default) |
-| **Invalid breaks** | Revert to Equal Interval with warning |
+| Issue                   | Handling                               |
+| ----------------------- | -------------------------------------- |
+| **All-null values**     | Disable visualization suggestion       |
+| **Single value**        | Suggest categorical instead of numeric |
+| **Too many categories** | Collapse low-frequency into "Other"    |
+| **Projection failure**  | Fallback to Equirectangular (default)  |
+| **Invalid breaks**      | Revert to Equal Interval with warning  |
 
 ## Extension Points
 
@@ -205,7 +207,10 @@ interface MyVizConfig extends BaseVizConfig {
 }
 
 // 2. Create factory
-export function createMyViz(dataset: Dataset, config: MyVizConfig): Visualization {
+export function createMyViz(
+  dataset: Dataset,
+  config: MyVizConfig
+): Visualization {
   // Implementation
 }
 
@@ -251,26 +256,28 @@ PaletteRegistry.register(myPalette);
 
 ## Implementation Status
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **Choropleth** | ✅ Full | Complete implementation |
-| **Proportional** | ✅ Full | Symbol sizing working |
-| **Categorical** | ✅ Full | Category mapping complete |
-| **Bivariate** | ✅ Full | 2D classification working |
-| **Facets** | ✅ Full | Multi-map comparison ready |
-| **Jenks** | ⚠️ Partial | Fallback to Quantile |
-| **Worker offload** | ❌ Planned | Main thread currently |
-| **Advanced caching** | ❌ Planned | Basic reuse only |
+| Feature              | Status     | Notes                      |
+| -------------------- | ---------- | -------------------------- |
+| **Choropleth**       | ✅ Full    | Complete implementation    |
+| **Proportional**     | ✅ Full    | Symbol sizing working      |
+| **Categorical**      | ✅ Full    | Category mapping complete  |
+| **Bivariate**        | ✅ Full    | 2D classification working  |
+| **Facets**           | ✅ Full    | Multi-map comparison ready |
+| **Jenks**            | ⚠️ Partial | Fallback to Quantile       |
+| **Worker offload**   | ❌ Planned | Main thread currently      |
+| **Advanced caching** | ❌ Planned | Basic reuse only           |
 
 ## Quick Reference
 
 ### Default Settings
+
 - **Classes**: 5 (range 3-9 recommended)
 - **Projection**: Auto-selected by dataset bounds
 - **Color**: Sequential for numeric, qualitative for categorical
 - **Simplification**: Enabled for >10k vertices
 
 ### Performance Tips
+
 - Use simplification for complex geometry
 - Limit classes to 5-7 for readability
 - Enable DuckDB for large datasets (>5k rows)
@@ -279,6 +286,7 @@ PaletteRegistry.register(myPalette);
 ---
 
 **See also:**
+
 - [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data preparation
 - [ARCHITECTURE.md](ARCHITECTURE.md) - GPU rendering architecture
 - [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - Visualization store

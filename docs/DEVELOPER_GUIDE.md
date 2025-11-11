@@ -39,24 +39,31 @@ src/lib/
 
 ## ➕ Adding a Feature
 
-| Step | Action |
-|------|--------|
-| 1 | Create folder `src/lib/features/<name>` |
-| 2 | Add `<name>.store.svelte.ts` with `$state` model |
-| 3 | Add `<name>.svelte` entry component |
-| 4 | Create `<name>.types.ts` for public types |
-| 5 | Register in navigation/toolbar if needed |
-| 6 | Add i18n keys + tests |
+| Step | Action                                           |
+| ---- | ------------------------------------------------ |
+| 1    | Create folder `src/lib/features/<name>`          |
+| 2    | Add `<name>.store.svelte.ts` with `$state` model |
+| 3    | Add `<name>.svelte` entry component              |
+| 4    | Create `<name>.types.ts` for public types        |
+| 5    | Register in navigation/toolbar if needed         |
+| 6    | Add i18n keys + tests                            |
 
 **Minimal store pattern:**
+
 ```ts
 export class FeatureStore {
   protected _state = $state({ enabled: false });
 
-  get enabled() { return this._state.enabled; }
+  get enabled() {
+    return this._state.enabled;
+  }
 
-  enable() { this._state.enabled = true; }
-  disable() { this._state.enabled = false; }
+  enable() {
+    this._state.enabled = true;
+  }
+  disable() {
+    this._state.enabled = false;
+  }
 }
 ```
 
@@ -73,17 +80,20 @@ Tools live in `step-toolbar/tools/<tool-name>`:
 ## 🏗️ Core Architecture
 
 **Four Pillars:**
+
 - **Client-only**: Privacy-first, no server processing
 - **Feature-first**: Modular, self-contained features
 - **Runes reactive**: Svelte 5 `$state` and `$derived`
 - **GPU rendering**: Deck.gl + MapLibre for performance
 
 **Data Flow:**
+
 ```
 Import → Validate → Parse → Type Inference → Stats → Visualization → Export
 ```
 
 **Store Layering:**
+
 ```
 Component Local → Feature Store → Global Coordination → IndexedDB
 ```
@@ -95,6 +105,7 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 **Type inference order**: boolean → date → numeric → geometry → text
 
 **Storage limits**:
+
 - File: 50MB max
 - Project: 100MB max
 - Total projects: 50 max
@@ -114,13 +125,13 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 
 ## 🎨 Extension Points
 
-| What | How |
-|------|-----|
-| **New file format** | Parser + validator + signature detection |
-| **New visualization** | Registry + factory + layer builder |
-| **New classification** | Strategy interface `compute(values, k)` |
-| **New tool** | Store + component + toolbar registration |
-| **New export format** | `(project) => Blob` converter |
+| What                   | How                                      |
+| ---------------------- | ---------------------------------------- |
+| **New file format**    | Parser + validator + signature detection |
+| **New visualization**  | Registry + factory + layer builder       |
+| **New classification** | Strategy interface `compute(values, k)`  |
+| **New tool**           | Store + component + toolbar registration |
+| **New export format**  | `(project) => Blob` converter            |
 
 ## ⚡ Performance Strategies
 
@@ -150,13 +161,13 @@ Run tests: `npm test`
 
 ## 📚 Documentation Map
 
-| Need | Go To |
-|------|-------|
-| Architecture details | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Data processing | [DATA_PIPELINE.md](DATA_PIPELINE.md) |
-| Visualization system | [VISUALIZATION.md](VISUALIZATION.md) |
-| State & features | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) |
-| Type reference | [REFERENCE.md](REFERENCE.md) |
+| Need                 | Go To                                          |
+| -------------------- | ---------------------------------------------- |
+| Architecture details | [ARCHITECTURE.md](ARCHITECTURE.md)             |
+| Data processing      | [DATA_PIPELINE.md](DATA_PIPELINE.md)           |
+| Visualization system | [VISUALIZATION.md](VISUALIZATION.md)           |
+| State & features     | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) |
+| Type reference       | [REFERENCE.md](REFERENCE.md)                   |
 
 ## 🔍 Common Tasks
 

@@ -8,8 +8,8 @@ import {
 // Re-export pour compatibilité avec le code existant
 export { STORAGE_LIMITS, type ValidationResult, type StorageLimits };
 
-export class ProjectValidator {
-  static validateFileSize(file: File): ValidationResult {
+export const ProjectValidator = {
+  validateFileSize(file: File): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -30,9 +30,9 @@ export class ProjectValidator {
     }
 
     return result;
-  }
+  },
 
-  static validateProjectSize(projectData: any): ValidationResult {
+  validateProjectSize(projectData: any): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -55,9 +55,9 @@ export class ProjectValidator {
     }
 
     return result;
-  }
+  },
 
-  static validateProjectName(name: string): ValidationResult {
+  validateProjectName(name: string): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -84,11 +84,9 @@ export class ProjectValidator {
     }
 
     return result;
-  }
+  },
 
-  static validateStorageCapacity(
-    currentProjectCount: number
-  ): ValidationResult {
+  validateStorageCapacity(currentProjectCount: number): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -109,9 +107,9 @@ export class ProjectValidator {
     }
 
     return result;
-  }
+  },
 
-  static async checkStorageUsage(): Promise<ValidationResult> {
+  async checkStorageUsage(): Promise<ValidationResult> {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -151,18 +149,18 @@ export class ProjectValidator {
     }
 
     return result;
-  }
+  },
 
-  static sanitizeProjectName(name: string): string {
+  sanitizeProjectName(name: string): string {
     return name
       .trim()
       .replace(/[<>:"/\\|?*]/g, '_')
       .substring(0, 255);
   }
-}
+} as const;
 
-export class DataValidator {
-  static validateCSVData(data: any[]): ValidationResult {
+export const DataValidator = {
+  validateCSVData(data: any[]): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -201,9 +199,9 @@ export class DataValidator {
     }
 
     return result;
-  }
+  },
 
-  static validateGeoData(data: any): ValidationResult {
+  validateGeoData(data: any): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -237,4 +235,4 @@ export class DataValidator {
 
     return result;
   }
-}
+} as const;

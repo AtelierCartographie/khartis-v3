@@ -40,6 +40,12 @@ class GlobalStore {
   dataButtons = $derived.by(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
+    console.log('[GlobalStore] dataButtons $derived triggered', {
+      sourceFilesCount: sourceFiles.length,
+      sourceFileIds: sourceFiles.map(f => f.id),
+      selectedDataButtonId: this._selectedDataButtonId
+    });
+
     return sourceFiles.map((file) => ({
       id: file.id,
       label: file.name,
@@ -139,10 +145,22 @@ class GlobalStore {
   }
 
   selectDataButton(id: string): void {
+    console.log('[GlobalStore] selectDataButton called', {
+      newId: id,
+      currentId: this._selectedDataButtonId,
+      willUpdate: this._selectedDataButtonId !== id
+    });
+
     if (this._selectedDataButtonId === id) return;
     this._selectedDataButtonId = id;
 
     const dataset = datasetsStore.getDatasetBySourceFile(id);
+    console.log('[GlobalStore] Looking for dataset by sourceFileId', {
+      sourceFileId: id,
+      foundDataset: !!dataset,
+      datasetId: dataset?.id
+    });
+
     if (dataset) {
       datasetsStore.selectDataset(dataset.id);
     }

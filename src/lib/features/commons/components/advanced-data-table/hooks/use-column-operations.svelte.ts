@@ -3,10 +3,11 @@
  * Gère le renommage, la suppression, le masquage et le raffinement des colonnes
  */
 
+import { SvelteSet } from 'svelte/reactivity';
 import {
   duckDBOrchestrator,
   RefineOperation
-} from '../../../services/duckdb-orchestrator.service';
+} from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
 import { logger, LogCategory } from '../../../utils/logger';
 import type { ColumnInfo } from '../types';
 
@@ -93,7 +94,10 @@ export interface UseColumnOperationsReturn {
    * @param columnName Nom de la colonne
    * @param operation Opération à appliquer
    */
-  handleRefine: (columnName: string, operation: RefineOperation) => Promise<void>;
+  handleRefine: (
+    columnName: string,
+    operation: RefineOperation
+  ) => Promise<void>;
 }
 
 /**
@@ -126,7 +130,7 @@ function getValue<T>(prop: T | (() => T)): T {
 export function useColumnOperations(
   props: UseColumnOperationsProps
 ): UseColumnOperationsReturn {
-  let hiddenColumns = $state<Set<string>>(new Set());
+  let hiddenColumns = new SvelteSet<string>();
   let renameModalOpen = $state<boolean>(false);
   let columnToRename = $state<string | null>(null);
 
@@ -160,7 +164,10 @@ export function useColumnOperations(
     const tableName = getValue(props.tableName);
 
     if (!tableName) {
-      logger.warn('Cannot rename column: tableName not provided', LogCategory.UI);
+      logger.warn(
+        'Cannot rename column: tableName not provided',
+        LogCategory.UI
+      );
       return;
     }
 
@@ -180,7 +187,7 @@ export function useColumnOperations(
       if (hiddenColumns.has(oldName)) {
         hiddenColumns.delete(oldName);
         hiddenColumns.add(newName);
-        hiddenColumns = new Set(hiddenColumns); // Force reactivity
+        hiddenColumns = new SvelteSet(hiddenColumns); // Force reactivity
         logger.debug('Updated hidden columns after rename', LogCategory.UI, {
           oldName,
           newName
@@ -222,13 +229,15 @@ export function useColumnOperations(
       // Retirer des colonnes masquées si nécessaire
       if (hiddenColumns.has(columnName)) {
         hiddenColumns.delete(columnName);
-        hiddenColumns = new Set(hiddenColumns); // Force reactivity
+        hiddenColumns = new SvelteSet(hiddenColumns); // Force reactivity
       }
 
       // Recharger les données
       await props.onColumnsChange();
 
-      logger.debug('Column dropped successfully', LogCategory.UI, { columnName });
+      logger.debug('Column dropped successfully', LogCategory.UI, {
+        columnName
+      });
     } catch (err) {
       logger.error('Error dropping column', LogCategory.UI, err);
     }
@@ -251,7 +260,7 @@ export function useColumnOperations(
     }
 
     // Force reactivity
-    hiddenColumns = new Set(hiddenColumns);
+    hiddenColumns = new SvelteSet(hiddenColumns);
 
     logger.debug('Column visibility toggled', LogCategory.UI, {
       columnName,
@@ -297,7 +306,10 @@ export function useColumnOperations(
     const tableName = getValue(props.tableName);
 
     if (!tableName) {
-      logger.warn('Cannot refine column: tableName not provided', LogCategory.UI);
+      logger.warn(
+        'Cannot refine column: tableName not provided',
+        LogCategory.UI
+      );
       return;
     }
 

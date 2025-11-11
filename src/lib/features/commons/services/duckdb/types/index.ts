@@ -122,4 +122,6 @@ export interface BreaksRoundedResult {
 
 export interface BreakInsideResult {
   is_inside: boolean;
+  min?: number;
+  max?: number;
 }

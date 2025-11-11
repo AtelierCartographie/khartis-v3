@@ -4,6 +4,11 @@ import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
 import { logger, LogCategory } from '../../utils/logger';
+import {
+  DuckDBError,
+  DataValidationError,
+  TypeInferenceError
+} from '../../errors/pipeline.errors';
 
 const DUCK_CONST = {
   DEFAULT: {
@@ -246,7 +251,13 @@ function validate_and_cast_value(
 
     // fallthrough
     default:
-      throw new Error(`Unsupported column type: ${column_type}.`);
+      throw new TypeInferenceError(
+        `Unsupported column type: ${column_type}.`,
+        undefined,
+        {
+          columnType: column_type
+        }
+      );
   }
   return { isValid, value };
 }
@@ -401,6 +412,8 @@ class DuckDB {
     let filename: string;
     let fileid: string;
     try {
+      console.log('[DuckDB:read_tabular] Input type:', typeof input, 'is File?', input instanceof File);
+
       if (typeof input === 'string') {
         if (!tablename)
           tablename = generate_unique_table_name(
@@ -412,18 +425,35 @@ class DuckDB {
         await this.db!.registerFileText(filename, input);
       } else if (input instanceof File) {
         filename = input.name;
+        console.log('[DuckDB:read_tabular] File name:', filename, 'size:', input.size);
+
         if (!tablename)
           tablename = generate_unique_table_name(filename, this.loaded_files);
+
+        console.log('[DuckDB:read_tabular] Table name:', tablename);
+
         await this.register_files([input]);
         fileid = (input as FileWithId).id;
+
+        console.log('[DuckDB:read_tabular] File ID:', fileid);
       } else {
-        throw new Error('Invalid input type. Expected a string or a File.');
+        throw new DataValidationError(
+          'Invalid input type. Expected a string or a File.',
+          undefined,
+          { receivedType: typeof input }
+        );
       }
       if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
+        const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
+        console.log('[DuckDB:read_tabular] Executing query:', query);
+
         await this.query(
-          `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
+          query,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
+
+        console.log('[DuckDB:read_tabular] Query executed successfully');
+
         await this.add_row_id(tablename);
       }
       if (format === DUCK_CONST.TYPE.PARQUET) {
@@ -640,7 +670,11 @@ class DuckDB {
     const columns_info = await this.analyse(table);
     const column_info = columns_info.find((c) => c.name === column);
     if (!column_info) {
-      throw new Error(`Column "${column}" not found in table "${table}"`);
+      throw new DuckDBError(
+        `Column "${column}" not found in table "${table}"`,
+        undefined,
+        { table, column, availableColumns: columns_info.map((c) => c.name) }
+      );
     }
 
     const validationResult = validate_and_cast_value(
@@ -648,8 +682,14 @@ class DuckDB {
       column_info.type_js as string
     );
     if (!validationResult.isValid) {
-      throw new Error(
-        `Invalid value type for column "${column}". Expected type: ${column_info.type_js}, received: ${typeof new_value}`
+      throw new DataValidationError(
+        `Invalid value type for column "${column}". Expected type: ${column_info.type_js}, received: ${typeof new_value}`,
+        column,
+        {
+          expectedType: column_info.type_js,
+          receivedType: typeof new_value,
+          value: new_value
+        }
       );
     }
     new_value = validationResult.value;
@@ -800,6 +840,27 @@ class DuckDB {
     return buffer;
   }
 
+  /**
+   * Insert an Apache Arrow table directly into DuckDB
+   * This provides zero-copy insertion for maximum performance
+   *
+   * @param table - Apache Arrow table
+   * @param tablename - Name for the DuckDB table
+   */
+  async insert_arrow_table(
+    table: unknown, // apache-arrow Table type
+    tablename: string
+  ): Promise<void> {
+    if (!this.connection) {
+      throw new DuckDBError('Connection not established');
+    }
+
+    await this.connection.insertArrowTable(table as any, {
+      name: tablename,
+      create: true
+    });
+  }
+
   async calculate_class_breaks(
     table: string,
     column: string,
@@ -827,8 +888,14 @@ class DuckDB {
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreakInsideResult[];
       if (break_is_inside[0].is_inside === false)
-        throw new Error(
-          `break_value ${break_value.toLocaleString()} is outside the column extent`
+        throw new DataValidationError(
+          `break_value ${break_value.toLocaleString()} is outside the column extent`,
+          column,
+          {
+            breakValue: break_value,
+            min: break_is_inside[0].min,
+            max: break_is_inside[0].max
+          }
         );
       const breaks_below = (await this.query(
         `SELECT ${method}('FROM query_table(${table}) SELECT "${column}" WHERE "${column}" < ${break_value}', "${column}", nb := ${nclass}) as breaks`,
@@ -970,12 +1037,18 @@ class DuckDB {
       options;
 
     if (!basemaps_table && !basemap_table) {
-      throw new Error(
-        'Either basemaps_table or basemap_table must be provided in options.'
+      throw new DataValidationError(
+        'Either basemaps_table or basemap_table must be provided in options.',
+        undefined,
+        { options }
       );
     }
     if (basemap_table && !basemap_id) {
-      throw new Error('basemap_id must be provided when using basemap_table.');
+      throw new DataValidationError(
+        'basemap_id must be provided when using basemap_table.',
+        'basemap_id',
+        { basemap_table }
+      );
     }
     const table_name = `${table}_join_results`;
     let basemap_join_ref_name: string | null = null;
@@ -1003,7 +1076,11 @@ class DuckDB {
       join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
 			FROM apply_join_across_basemaps(${table}, ${table_id}, ${basemap_join_ref_name})`;
     } else {
-      throw new Error('Invalid options configuration');
+      throw new DataValidationError(
+        'Invalid options configuration',
+        undefined,
+        { options }
+      );
     }
 
     await this.query(join_across_query, {
@@ -1026,7 +1103,11 @@ class DuckDB {
   async apply_join_association(table: string, basemap: string): Promise<void> {
     const { join } = this.get_table_metadata(table);
     if (!join) {
-      throw new Error('No join association found for the specified table');
+      throw new DuckDBError(
+        'No join association found for the specified table',
+        undefined,
+        { table, basemap }
+      );
     }
     const { id, join_results_name } = join;
     await this.query(`CREATE OR REPLACE TABLE ${table} AS

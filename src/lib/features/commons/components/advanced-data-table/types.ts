@@ -2,8 +2,7 @@
  * Types partagés pour le composant Advanced Data Table et ses sous-composants
  */
 
-import type { AnalysisResult } from '../../services/duckdb/types';
-import type { ProcessedDataset } from '../../utils/data-pipeline.utils';
+import type { ProcessedDataset } from '$lib/features/data';
 
 /**
  * Information basique sur une colonne

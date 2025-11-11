@@ -4,16 +4,11 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import { duckDBOrchestrator } from '../../../services/duckdb-orchestrator.service';
-import type { ProcessedDataset } from '../../../utils/data-pipeline.utils';
+import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+import type { ProcessedDataset } from '$lib/features/data';
 import type { AnalysisResult } from '../../../services/duckdb/types';
 import { logger, LogCategory } from '../../../utils/logger';
-import type {
-  ColumnInfo,
-  TableRow,
-  SortOrder,
-  EXCLUDED_COLUMNS
-} from '../types';
+import type { ColumnInfo, TableRow, SortOrder } from '../types';
 
 export interface UseTableDataProps {
   /** Nom de la table DuckDB (optionnel) */
@@ -107,7 +102,7 @@ function getValue<T>(prop: T | (() => T)): T {
  */
 export function useTableData(props: UseTableDataProps): UseTableDataReturn {
   let columns = $state<ColumnInfo[]>([]);
-  let columnAnalysis = $state<Map<string, AnalysisResult>>(new Map());
+  let columnAnalysis = new SvelteMap<string, AnalysisResult>();
   let tableData = $state<TableRow[]>([]);
   let numRows = $state<number>(0);
   let isLoading = $state<boolean>(false);
@@ -254,7 +249,10 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     currentSortColumn: string | null,
     onReset: () => void
   ): void {
-    if (currentSortColumn && !columns.some((c) => c.name === currentSortColumn)) {
+    if (
+      currentSortColumn &&
+      !columns.some((c) => c.name === currentSortColumn)
+    ) {
       logger.debug('Reset sort - column not found', LogCategory.UI, {
         sortColumn: currentSortColumn,
         availableColumns: columns.map((c) => c.name)
