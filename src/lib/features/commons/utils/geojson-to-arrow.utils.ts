@@ -8,7 +8,7 @@ import {
   type DataType
 } from 'apache-arrow';
 import type { GeoJSONFeatureCollection, GeoJSONFeature } from '$lib/types/data';
-
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 interface SchemaInfo {
   fields: Map<string, DataType>;
   hasGeometry: boolean;
@@ -36,51 +36,25 @@ export function convertGeoJSONToArrow(
     );
   }
 
-  console.log(
-    `[${new Date().toISOString()}] [Arrow:convert] Starting conversion`,
-    {
-      featureCount: features.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 1: Infer schema from all features
   const schemaStart = performance.now();
   const schemaInfo = inferGeoJSONSchema(features);
-  console.log(`[${new Date().toISOString()}] [Arrow:convert] Schema inferred`, {
-    duration: `${(performance.now() - schemaStart).toFixed(2)}ms`,
-    columnCount: schemaInfo.fields.size,
-    hasGeometry: schemaInfo.hasGeometry
-  });
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 2: Extract columnar data
   const extractStart = performance.now();
   const columns = extractColumnarData(features, schemaInfo);
-  console.log(
-    `[${new Date().toISOString()}] [Arrow:convert] Columns extracted`,
-    {
-      duration: `${(performance.now() - extractStart).toFixed(2)}ms`,
-      columnCount: Object.keys(columns).length
-    }
-  );
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 3: Create Arrow table
   const tableStart = performance.now();
   const table = tableFromArrays(columns);
-  console.log(
-    `[${new Date().toISOString()}] [Arrow:convert] Arrow table created`,
-    {
-      duration: `${(performance.now() - tableStart).toFixed(2)}ms`,
-      numRows: table.numRows,
-      numColumns: table.schema.fields.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   const totalDuration = performance.now() - startTime;
-  console.log(`[${new Date().toISOString()}] [Arrow:convert] COMPLETE`, {
-    totalDuration: `${totalDuration.toFixed(2)}ms`,
-    rows: table.numRows,
-    columns: table.schema.fields.length
-  });
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   return table;
 }

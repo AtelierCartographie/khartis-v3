@@ -7,12 +7,14 @@ import {
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import type { UploadedFile } from '../store/create-project.types';
-import { showError } from '../utils/notification.utils.svelte';
+import { FileType } from '../store/create-project.types';
+import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
 import { logger, LogCategory } from '../utils/logger';
 import { getParsedDataLength } from '$lib/types/data';
-import { DataValidationError } from '../errors/pipeline.errors';
+import { DataValidationError, isFatalError, formatError } from '../errors/pipeline.errors';
 import { ColumnType } from '$lib/features/data/domain';
+import { importRollbackService } from './import-rollback.service';
 
 class DataOrchestratorService {
   private isInitialized = false;
@@ -41,13 +43,12 @@ class DataOrchestratorService {
       parsedDataLength: getParsedDataLength(file.parsedData)
     });
 
+    // Create snapshot BEFORE any changes for potential rollback
+    const snapshot = importRollbackService.createSnapshot(file);
+
     try {
       await datasetsStore.addFile(file);
       logger.info('File processed via datasetsStore', LogCategory.DATA);
-
-      // dataPipeline already created the DuckDB table, so we don't need to call
-      // duckDBOrchestrator.processFile() which would create a duplicate table.
-      // Instead, we need to register the table that dataPipeline created in duckDBOrchestrator.
 
       const dataset = datasetsStore.getDatasetBySourceFile(file.id);
       if (!dataset) {
@@ -57,11 +58,33 @@ class DataOrchestratorService {
         return;
       }
 
-      // Register the table created by dataPipeline in duckDBOrchestrator
-      if (dataset.tableName) {
-        console.log('[DataOrchestrator] About to register table from dataPipeline', {
+      const shouldRunGeoPipeline =
+        !!dataset.geometry ||
+        file.fileType === FileType.GEOJSON ||
+        file.fileType === FileType.SHAPEFILE ||
+        file.fileType === FileType.GEOPACKAGE ||
+        file.fileType === FileType.KML ||
+        file.fileType === FileType.KMZ;
+
+      if (shouldRunGeoPipeline) {
+        logger.info('Running DuckDB Geo pipeline for uploaded file', LogCategory.DUCKDB, {
+          fileName: file.name,
+          fileType: file.fileType,
+          hasParsedData: !!file.parsedData,
+          geometryDetected: !!dataset.geometry
+        });
+        try {
+          await duckDBOrchestrator.processFile(file);
+        } catch (geoError) {
+          logger.error('Failed to process Geo file via DuckDB orchestrator', LogCategory.DUCKDB, geoError);
+          throw geoError;
+        }
+      } else if (dataset.tableName) {
+        // Register the table created by dataPipeline in duckDBOrchestrator
+        logger.debug('Registering table from dataPipeline', LogCategory.DUCKDB, {
           tableName: dataset.tableName,
-          sourceFileId: file.id,
+          sourceFileId: dataset.sourceFileId,
+          fileId: file.id,
           fileName: file.name,
           datasetId: dataset.id,
           currentDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
@@ -70,32 +93,33 @@ class DataOrchestratorService {
         try {
           const duckDataset = await duckDBOrchestrator.registerExistingTable(
             dataset.tableName,
-            file.id,
+            dataset.sourceFileId || file.id, // Use dataset.sourceFileId to match
             file.name
           );
-          console.log('[DataOrchestrator] Table registered successfully', {
+          logger.success('Table registered successfully', LogCategory.DUCKDB, {
             tableName: dataset.tableName,
             duckDatasetId: duckDataset?.id,
-            totalDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length,
-            allDuckDBSourceFileIds: duckDBOrchestrator.getAllDatasets().map(d => d.sourceFileId)
-          });
-          logger.info('Table registered in duckDBOrchestrator', LogCategory.DUCKDB, {
-            tableName: dataset.tableName
+            totalDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
           });
         } catch (registerError) {
-          console.error('[DataOrchestrator] Failed to register table', registerError);
-          logger.warn(
-            'Failed to register table in duckDBOrchestrator',
-            LogCategory.DUCKDB,
-            registerError
-          );
+          logger.error('Failed to register table', LogCategory.DUCKDB, {
+            error: registerError instanceof Error ? registerError.message : 'Unknown error',
+            tableName: dataset.tableName
+          });
         }
       } else {
-        console.warn('[DataOrchestrator] No tableName in dataset!', {
+        logger.warn('No tableName in dataset', LogCategory.DUCKDB, {
           datasetId: dataset.id,
           datasetName: dataset.name
         });
       }
+
+      // Mark file as processed to prevent reprocessing
+      this.processedFileIds.add(file.id);
+      logger.debug('File marked as processed', LogCategory.DATA, {
+        fileId: file.id,
+        totalProcessedFiles: this.processedFileIds.size
+      });
 
       if (dataset.geometry) {
         this._geometryDatasetsVersion++;
@@ -119,10 +143,41 @@ class DataOrchestratorService {
 
       layersActions.syncWithVisualizations();
     } catch (error) {
-      showError(
-        'Erreur traitement fichier',
-        error instanceof Error ? error.message : 'Erreur inconnue'
-      );
+      // Log the error with full context
+      logger.error('File import failed', LogCategory.DATA, formatError(error));
+
+      // Check if error is fatal (requires rollback) or non-fatal (just show toast)
+      if (isFatalError(error)) {
+        logger.warn('Fatal error detected, initiating rollback', LogCategory.DATA, {
+          fileId: file.id,
+          fileName: file.name
+        });
+
+        // Rollback all changes
+        await importRollbackService.rollback(snapshot);
+
+        // Show error notification for fatal errors
+        showError(
+          'Erreur fatale lors de l\'import',
+          error instanceof Error ? error.message : 'Erreur inconnue'
+        );
+      } else {
+        // Non-fatal error: just show warning toast, keep changes
+        logger.info('Non-fatal error, keeping partial import', LogCategory.DATA, {
+          fileId: file.id,
+          fileName: file.name
+        });
+
+        showWarning(
+          'Avertissement',
+          error instanceof Error ? error.message : 'Avertissement lors de l\'import'
+        );
+      }
+
+      // Re-throw only fatal errors to stop further processing
+      if (isFatalError(error)) {
+        throw error;
+      }
     }
   }
 
@@ -131,10 +186,10 @@ class DataOrchestratorService {
   }
 
   async onFileRemoved(fileId: string): Promise<void> {
-    console.log('[DataOrchestrator] onFileRemoved called', { fileId });
+    logger.info('Removing file from project', LogCategory.DATA, { fileId });
 
     const dataset = datasetsStore.getDatasetBySourceFile(fileId);
-    console.log('[DataOrchestrator] Dataset found?', {
+    logger.debug('Dataset lookup result', LogCategory.DATA, {
       found: !!dataset,
       datasetId: dataset?.id,
       datasetName: dataset?.name
@@ -144,8 +199,9 @@ class DataOrchestratorService {
       const visualizations = visualizationStore.getVisualizationsByDataset(
         dataset.id
       );
-      console.log('[DataOrchestrator] Removing visualizations', {
-        count: visualizations.length
+      logger.info('Removing visualizations', LogCategory.DATA, {
+        count: visualizations.length,
+        datasetId: dataset.id
       });
       visualizations.forEach((viz) => {
         visualizationStore.removeVisualization(viz.id);
@@ -155,29 +211,102 @@ class DataOrchestratorService {
         .getAllDatasets()
         .find((d) => d.sourceFileId === fileId);
       if (duckDataset) {
-        console.log('[DataOrchestrator] Dropping DuckDB table', {
+        logger.info('Dropping DuckDB table', LogCategory.DUCKDB, {
           tableName: duckDataset.tableName
         });
         await duckDBOrchestrator.dropTable(duckDataset.tableName);
-        logger.info(
-          `Dropped DuckDB table: ${duckDataset.tableName}`,
-          LogCategory.DUCKDB
-        );
+
+        // Cleanup DuckDB cache and file handles to prevent memory leaks
+        await this.cleanupDuckDBResources(duckDataset.tableName);
+
+        logger.success('DuckDB table dropped', LogCategory.DUCKDB, {
+          tableName: duckDataset.tableName
+        });
         this._geometryDatasetsVersion++;
       }
 
-      console.log('[DataOrchestrator] About to call datasetsStore.removeDataset', {
+      logger.debug('Removing dataset from store', LogCategory.DATA, {
         datasetId: dataset.id
       });
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
-      console.log('[DataOrchestrator] onFileRemoved complete');
+      logger.success('File removal complete', LogCategory.DATA, { fileId });
     } else {
-      console.warn('[DataOrchestrator] No dataset found for fileId', { fileId });
+      logger.warn('No dataset found for fileId', LogCategory.DATA, { fileId });
     }
+
+    // Remove from processed files set
+    this.processedFileIds.delete(fileId);
+    logger.debug('File removed from tracking', LogCategory.DATA, {
+      fileId,
+      remainingProcessedFiles: this.processedFileIds.size
+    });
 
     // Clean up orphaned datasets (datasets whose sourceFileId no longer exists in project)
     this.cleanupOrphanedDatasets();
+  }
+
+  /**
+   * Cleanup DuckDB resources to prevent memory leaks
+   * Removes file handles, cache entries, and metadata
+   */
+  private async cleanupDuckDBResources(tableName: string): Promise<void> {
+    try {
+      const { Duck } = await import('./duckdb/duckdb');
+
+      if (!Duck) {
+        logger.warn('DuckDB not initialized, skipping cleanup', LogCategory.DUCKDB);
+        return;
+      }
+
+      // Remove from loaded files tracking
+      if (Duck.loaded_files.has(tableName)) {
+        Duck.loaded_files.delete(tableName);
+        logger.debug('Removed from loaded_files', LogCategory.DUCKDB, { tableName });
+      }
+
+      // Remove from registered files (find by table name)
+      const registeredFile = Array.from(Duck.registered_files).find((id) =>
+        id.includes(tableName)
+      );
+      if (registeredFile) {
+        Duck.registered_files.delete(registeredFile);
+        logger.debug('Removed from registered_files', LogCategory.DUCKDB, {
+          tableName,
+          fileId: registeredFile
+        });
+      }
+
+      // Remove from table metadata
+      if (Duck.table_metadata.has(tableName)) {
+        Duck.table_metadata.delete(tableName);
+        logger.debug('Removed from table_metadata', LogCategory.DUCKDB, { tableName });
+      }
+
+      // Remove from cache (will be handled by LRU but we can force it)
+      if (Duck.table_geoparquet_cache.has(tableName)) {
+        const buffer = Duck.table_geoparquet_cache.get(tableName);
+        Duck.table_geoparquet_cache.delete(tableName);
+
+        // Update LRU tracking
+        const cacheIndex = Duck['cacheAccessOrder']?.indexOf(tableName);
+        if (cacheIndex !== undefined && cacheIndex > -1) {
+          Duck['cacheAccessOrder'].splice(cacheIndex, 1);
+          if (buffer) {
+            Duck['cacheSize'] = (Duck['cacheSize'] || 0) - buffer.byteLength;
+          }
+        }
+
+        logger.debug('Removed from cache', LogCategory.DUCKDB, {
+          tableName,
+          size: buffer ? `${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB` : 'unknown'
+        });
+      }
+
+      logger.success('DuckDB resources cleaned up', LogCategory.DUCKDB, { tableName });
+    } catch (error) {
+      logger.warn('Failed to cleanup DuckDB resources', LogCategory.DUCKDB, error);
+    }
   }
 
   private cleanupOrphanedDatasets(): void {
@@ -193,142 +322,253 @@ class DataOrchestratorService {
       (d) => !validSourceFileIds.has(d.sourceFileId)
     );
 
-    console.log('[DataOrchestrator] Cleaning up orphaned datasets', {
-      totalDatasets: allDatasets.length,
-      validSourceFileIds: Array.from(validSourceFileIds),
-      orphanedCount: orphanedDatasets.length,
-      orphanedIds: orphanedDatasets.map((d) => ({
-        datasetId: d.id,
-        sourceFileId: d.sourceFileId,
-        name: d.name
-      }))
-    });
-
-    orphanedDatasets.forEach((dataset) => {
-      console.log('[DataOrchestrator] Removing orphaned dataset', {
-        datasetId: dataset.id,
-        sourceFileId: dataset.sourceFileId
+    if (orphanedDatasets.length > 0) {
+      logger.info('Cleaning up orphaned datasets', LogCategory.DATA, {
+        totalDatasets: allDatasets.length,
+        validSourceFileIds: Array.from(validSourceFileIds),
+        orphanedCount: orphanedDatasets.length,
+        orphanedIds: orphanedDatasets.map((d) => ({
+          datasetId: d.id,
+          sourceFileId: d.sourceFileId,
+          name: d.name
+        }))
       });
-      datasetsStore.removeDataset(dataset.id);
-    });
+
+      orphanedDatasets.forEach((dataset) => {
+        logger.debug('Removing orphaned dataset', LogCategory.DATA, {
+          datasetId: dataset.id,
+          sourceFileId: dataset.sourceFileId,
+          name: dataset.name
+        });
+        datasetsStore.removeDataset(dataset.id);
+      });
+
+      logger.success('Orphaned datasets cleaned', LogCategory.DATA, {
+        count: orphanedDatasets.length
+      });
+    }
   }
 
   async onProjectChanged(): Promise<void> {
-    const startTime = performance.now();
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:onProjectChanged] START`
-    );
+    const endTiming = logger.startTiming('Project changed', LogCategory.PROJECT);
+
+    logger.info('Project change initiated', LogCategory.PROJECT);
 
     visualizationStore.clear();
     datasetsStore.clear();
     layersActions.reset();
     projectionActions.reset();
 
+    // Clear processed file IDs when switching projects
+    this.processedFileIds.clear();
+    logger.debug('Cleared processed file tracking', LogCategory.PROJECT);
+
     const currentProject = projectStore.currentProject;
     if (currentProject?.data?.sourceFiles) {
-      console.log(
-        `[${new Date().toISOString()}] [DataOrchestrator:onProjectChanged] Processing project files...`,
-        {
-          fileCount: currentProject.data.sourceFiles.length
-        }
-      );
+      logger.info('Processing project files', LogCategory.PROJECT, {
+        fileCount: currentProject.data.sourceFiles.length
+      });
       await this.processProjectFiles(currentProject.data.sourceFiles);
     }
 
-    const duration = performance.now() - startTime;
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:onProjectChanged] END`,
-      {
-        duration: `${duration.toFixed(2)}ms`
-      }
-    );
+    endTiming();
+    logger.success('Project change complete', LogCategory.PROJECT);
+  }
+
+  private processedFileIds = new Set<string>();
+  private processingFiles = new Set<string>();
+
+  /**
+   * Process items with limited concurrency to prevent memory/CPU saturation
+   */
+  private async processWithLimit<T>(
+    items: T[],
+    limit: number,
+    processor: (item: T, index: number, total: number) => Promise<void>
+  ): Promise<void> {
+    const queue = [...items];
+    const workers: Promise<void>[] = [];
+    let processed = 0;
+    const total = items.length;
+
+    for (let i = 0; i < Math.min(limit, queue.length); i++) {
+      workers.push(
+        (async () => {
+          while (queue.length > 0) {
+            const item = queue.shift();
+            if (item) {
+              await processor(item, processed++, total);
+            }
+          }
+        })()
+      );
+    }
+
+    await Promise.all(workers);
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    const startTime = performance.now();
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] START`,
-      {
-        fileCount: files.length
-      }
-    );
+    const endTiming = logger.startTiming('Process project files', LogCategory.PROJECT);
 
-    // Yield to event loop to avoid blocking UI
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] Processing via datasetsStore...`
-    );
-    const datasetsStart = performance.now();
-    await datasetsStore.processFiles(files);
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] DatasetsStore processing completed`,
-      {
-        duration: `${(performance.now() - datasetsStart).toFixed(2)}ms`
-      }
-    );
-
-    // Process DuckDB files in parallel to avoid blocking
-    console.log(
-      `🔷 [${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] ===== DUCKDB START =====`
-    );
-    const duckStart = performance.now();
-    const validFiles = files.filter(
-      (file) => file.status === 'complete' && file.parsedData
-    );
-    console.log(
-      `📁 [${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] ${validFiles.length} files to process in DuckDB`
-    );
-
-    const duckDBPromises = validFiles.map(async (file, index) => {
-      const fileStart = performance.now();
-      console.log(
-        `🔷 [${new Date().toISOString()}] [DataOrchestrator] Processing file ${index + 1}/${validFiles.length}: ${file.name}`
-      );
-
-      // Yield to event loop between each file
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      try {
-        const processStart = performance.now();
-        await duckDBOrchestrator.processFile(file);
-        const processDuration = performance.now() - processStart;
-        console.log(
-          `✅ [${new Date().toISOString()}] [DataOrchestrator] File ${index + 1}/${validFiles.length} processed in ${processDuration.toFixed(2)}ms: ${file.name}`
-        );
-
-        logger.info(
-          'DuckDB file reloaded on project restore',
-          LogCategory.DUCKDB,
-          { name: file.name }
-        );
-      } catch (error) {
-        const errorDuration = performance.now() - fileStart;
-        console.error(
-          `❌ [${new Date().toISOString()}] [DataOrchestrator] File ${index + 1}/${validFiles.length} FAILED after ${errorDuration.toFixed(2)}ms: ${file.name}`,
-          error
-        );
-
-        logger.warn(
-          'Failed to reload file in DuckDB',
-          LogCategory.DUCKDB,
-          error
-        );
-      }
+    logger.info('Processing project files', LogCategory.PROJECT, {
+      fileCount: files.length,
+      processedFileIds: Array.from(this.processedFileIds),
+      processingFiles: Array.from(this.processingFiles)
     });
 
-    await Promise.all(duckDBPromises);
-    const duckDuration = performance.now() - duckStart;
-    console.log(
-      `🎉 [${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] ===== DUCKDB END ===== Total: ${duckDuration.toFixed(2)}ms`
+    // Filter out files that are already processed OR currently being processed
+    const unprocessedFiles = files.filter(
+      f => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
+
+    if (unprocessedFiles.length === 0) {
+      logger.info('All files already processed, skipping', LogCategory.PROJECT);
+      return;
+    }
+
+    // Mark files as processing BEFORE starting to prevent race conditions
+    unprocessedFiles.forEach(f => this.processingFiles.add(f.id));
+    logger.info('Marked files as processing', LogCategory.PROJECT, {
+      count: unprocessedFiles.length,
+      fileNames: unprocessedFiles.map(f => f.name),
+      processingFiles: Array.from(this.processingFiles)
+    });
+
+    try {
+      // Yield to event loop to avoid blocking UI
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      logger.info('Processing via datasetsStore', LogCategory.DATA);
+      const datasetsStart = performance.now();
+      await datasetsStore.processFiles(unprocessedFiles);
+      const datasetsDuration = performance.now() - datasetsStart;
+
+      logger.success('DatasetsStore processing complete', LogCategory.DATA, {
+        duration: `${datasetsDuration.toFixed(2)}ms`
+      });
+
+    // Process DuckDB files with limited concurrency (max 3 concurrent)
+    logger.info('Starting DuckDB processing', LogCategory.DUCKDB);
+    const duckStart = performance.now();
+    const validFiles = unprocessedFiles.filter(
+      (file) => file.status === 'complete' && file.parsedData
+    );
+    logger.info('Files ready for DuckDB', LogCategory.DUCKDB, {
+      count: validFiles.length,
+      maxConcurrent: 3
+    });
+
+    // Process with limited concurrency to prevent memory/CPU saturation
+    await this.processWithLimit(
+      validFiles,
+      3, // Max 3 concurrent files
+      async (file, index, total) => {
+        const fileStart = performance.now();
+        logger.info('Processing file in DuckDB', LogCategory.DUCKDB, {
+          progress: `${index + 1}/${total}`,
+          fileName: file.name
+        });
+
+        // Create snapshot for potential rollback
+        const snapshot = importRollbackService.createSnapshot(file);
+
+        // Yield to event loop between each file
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        try {
+          const processStart = performance.now();
+          await duckDBOrchestrator.processFile(file);
+          const processDuration = performance.now() - processStart;
+
+          logger.success('File processed in DuckDB', LogCategory.DUCKDB, {
+            progress: `${index + 1}/${total}`,
+            fileName: file.name,
+            duration: `${processDuration.toFixed(2)}ms`
+          });
+
+          if (processDuration > 3000) {
+            logger.warn('Slow DuckDB file processing', LogCategory.DUCKDB, {
+              fileName: file.name,
+              duration: `${processDuration.toFixed(2)}ms`
+            });
+          }
+
+          // Mark file as processed AND remove from processing
+          this.processedFileIds.add(file.id);
+          this.processingFiles.delete(file.id);
+        } catch (error) {
+          const errorDuration = performance.now() - fileStart;
+          logger.error('File processing failed in DuckDB', LogCategory.DUCKDB, {
+            progress: `${index + 1}/${total}`,
+            fileName: file.name,
+            duration: `${errorDuration.toFixed(2)}ms`,
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+
+          // Log error with context
+          logger.error('File processing failed during project load', LogCategory.DUCKDB, formatError(error));
+
+          // Remove from processing on error
+          this.processingFiles.delete(file.id);
+
+          // Check if error is fatal
+          if (isFatalError(error)) {
+            logger.warn('Fatal error during project file load, initiating rollback', LogCategory.DATA, {
+              fileId: file.id,
+              fileName: file.name
+            });
+
+            // Rollback this specific file
+            await importRollbackService.rollback(snapshot);
+
+            // Show error notification
+            showError(
+              `Erreur lors du chargement de ${file.name}`,
+              error instanceof Error ? error.message : 'Erreur inconnue'
+            );
+          } else {
+            // Non-fatal: log warning but continue
+            logger.info('Non-fatal error during project file load, continuing', LogCategory.DATA, {
+              fileId: file.id,
+              fileName: file.name
+            });
+
+            showWarning(
+              `Avertissement pour ${file.name}`,
+              error instanceof Error ? error.message : 'Le fichier a été chargé avec des avertissements'
+            );
+          }
+
+          // Note: We don't re-throw here to allow other files to continue processing
+          logger.warn(
+            'Failed to reload file in DuckDB',
+            LogCategory.DUCKDB,
+            error
+          );
+        }
+      }
+    );
+
+    const duckDuration = performance.now() - duckStart;
+    logger.success('DuckDB processing complete', LogCategory.DUCKDB, {
+      duration: `${duckDuration.toFixed(2)}ms`,
+      fileCount: validFiles.length
+    });
+
+    if (duckDuration > 10000) {
+      logger.warn('Slow DuckDB batch processing', LogCategory.DUCKDB, {
+        duration: `${duckDuration.toFixed(2)}ms`,
+        fileCount: validFiles.length,
+        recommendation: 'Consider processing fewer files concurrently'
+      });
+    }
 
     const geoDatasets = datasetsStore.getDatasetsByType(true);
 
     if (geoDatasets.length > 0) {
-      console.log(
-        `[${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] Creating default visualization...`
-      );
+      logger.info('Creating default visualization', LogCategory.DATA, {
+        geoDatasetCount: geoDatasets.length
+      });
       this._geometryDatasetsVersion++;
       projectionActions.suggestProjectionForCurrentData();
 
@@ -337,13 +577,18 @@ class DataOrchestratorService {
 
     layersActions.syncWithVisualizations();
 
-    const totalDuration = performance.now() - startTime;
-    console.log(
-      `[${new Date().toISOString()}] [DataOrchestrator:processProjectFiles] END`,
-      {
-        totalDuration: `${totalDuration.toFixed(2)}ms`
-      }
-    );
+    endTiming();
+    logger.success('Project files processing complete', LogCategory.PROJECT, {
+      remainingProcessingFiles: Array.from(this.processingFiles)
+    });
+    } catch (error) {
+      // Cleanup on error - remove all unprocessed files from processing
+      unprocessedFiles.forEach(f => this.processingFiles.delete(f.id));
+      logger.error('Project files processing failed', LogCategory.PROJECT, {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
   }
 
   private createDefaultVisualization(datasetId: string): void {

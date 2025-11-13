@@ -3,6 +3,7 @@ import type { IParser } from '../../domain/interfaces/parser.interface';
 import { ParserError } from '../../domain/interfaces/parser.interface';
 import type { RawDataset } from '../../domain/entities/raw-dataset.entity';
 import type { RawColumn } from '../../domain/entities/raw-column.entity';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 /**
  * CSV Parser - Parses CSV/TSV files using PapaParse
@@ -16,8 +17,8 @@ import type { RawColumn } from '../../domain/entities/raw-column.entity';
  * ```typescript
  * const parser = new CSVParser();
  * const dataset = await parser.parse(csvFile);
- * console.log(dataset.headers); // ['name', 'age', 'city']
- * console.log(dataset.rows[0]); // ['John', '25', 'Paris']
+ logger.debug('Operation', LogCategory.DATA);
+ logger.debug('Operation', LogCategory.DATA);
  * ```
  */
 export class CSVParser implements IParser {
@@ -37,7 +38,7 @@ export class CSVParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     return new Promise((resolve, reject) => {
-      console.log('[CSVParser] Parsing file:', file.name, 'size:', file.size, 'type:', file.type);
+      logger.debug('Operation', LogCategory.DATA);
 
       Papa.parse(file, {
         header: true,
@@ -47,10 +48,10 @@ export class CSVParser implements IParser {
         escapeChar: '"',
         complete: (results) => {
           try {
-            console.log('[CSVParser] Parse complete. Errors:', results.errors.length, 'Meta:', results.meta);
+            logger.debug('Operation', LogCategory.DATA);
 
             if (results.errors.length > 0) {
-              console.error('[CSVParser] Parse errors:', results.errors);
+              logger.error('Operation', LogCategory.DATA);
               const error = results.errors[0];
               throw new ParserError(
                 `CSV parsing error at row ${error.row}: ${error.message}`,
@@ -60,7 +61,7 @@ export class CSVParser implements IParser {
             }
 
             const headers = results.meta.fields || [];
-            console.log('[CSVParser] Headers found:', headers);
+            logger.debug('Operation', LogCategory.DATA);
 
             if (headers.length === 0) {
               throw new ParserError(

@@ -157,15 +157,38 @@
   }
 
   function createDeckLayers(jsTable: ArrowTable): any[] {
-    const geoMetadata = jsTable.schema.metadata.get('geo');
+    // CRITICAL: Check metadata exists before accessing
+    const geoMetadata = jsTable.schema.metadata?.get('geo');
+
     if (!geoMetadata) {
-      logger.warn('No geo metadata in table', LogCategory.MAP);
+      logger.error('No GeoArrow metadata in Arrow table', LogCategory.MAP, {
+        hasSchemaMetadata: !!jsTable.schema.metadata,
+        metadataKeys: jsTable.schema.metadata ? Array.from(jsTable.schema.metadata.keys()) : [],
+        schemaFields: jsTable.schema.fields.map(f => f.name),
+        numRows: jsTable.numRows
+      });
+
+      // Try to find geometry column manually as fallback diagnostic
+      const geomColumn = jsTable.schema.fields.find(f =>
+        f.name === 'geom' || f.name === 'geometry'
+      );
+
+      if (!geomColumn) {
+        logger.error('No geometry column found in table', LogCategory.MAP);
+      } else {
+        logger.warn('Geometry column exists but no GeoArrow metadata', LogCategory.MAP, {
+          geomColumnName: geomColumn.name,
+          suggestion: 'Table may have come from DuckDB query instead of GeoParquetReader'
+        });
+      }
+
       return [];
     }
 
-    const jsonMeta = JSON.parse(geoMetadata);
-    const geoColumn = jsonMeta.primary_column;
-    const geometryType = jsonMeta.columns[geoColumn].geometry_types[0];
+    try {
+      const jsonMeta = JSON.parse(geoMetadata);
+      const geoColumn = jsonMeta.primary_column;
+      const geometryType = jsonMeta.columns[geoColumn].geometry_types[0];
 
     logger.info('Creating deck layers', LogCategory.MAP, {
       geoColumn,
@@ -335,6 +358,10 @@
     }
 
     return [deckLayer];
+    } catch (error) {
+      logger.error('Failed to create Deck.gl layers', LogCategory.MAP, error);
+      return [];
+    }
   }
 
   function createGeoJsonLayers(geojson: any): any[] {

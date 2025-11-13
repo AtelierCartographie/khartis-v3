@@ -3,7 +3,7 @@ import { ParserError } from '../../domain/interfaces/parser.interface';
 import type { RawDataset } from '../../domain/entities/raw-dataset.entity';
 import type { RawColumn } from '../../domain/entities/raw-column.entity';
 import type { GeometryInfo } from '../../domain/value-objects/geometry-info.vo';
-
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 interface GeoJSONFeature {
   type: 'Feature';
   geometry: {
@@ -35,8 +35,8 @@ interface GeoJSONFeatureCollection {
  * ```typescript
  * const parser = new GeoJSONParser();
  * const dataset = await parser.parse(geojsonFile);
- * console.log(dataset.headers); // ['_id', 'geometry', 'name', 'population']
- * console.log(dataset.geometry); // { type: 'Polygon', bounds: [...], centroid: [...] }
+ logger.debug('Operation', LogCategory.FILE);
+ logger.debug('Operation', LogCategory.FILE);
  * ```
  */
 export class GeoJSONParser implements IParser {

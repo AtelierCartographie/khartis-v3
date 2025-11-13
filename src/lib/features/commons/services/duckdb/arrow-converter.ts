@@ -20,41 +20,24 @@ export async function insertArrowTableIntoDuckDB(
     throw new Error('DuckDB not initialized - cannot insert Arrow table');
   }
 
-  console.log(
-    `💾 [${new Date().toISOString()}] [Arrow:insert] Inserting Arrow table into DuckDB`,
-    {
-      tableName,
-      numRows: table.numRows,
-      numColumns: table.schema.fields.length,
-      columns: table.schema.fields.map((f) => ({
-        name: f.name,
-        type: f.type.toString()
-      }))
-    }
-  );
+  logger.debug('Operation', LogCategory.DUCKDB);
 
   try {
     // FIX: DuckDB-WASM's insertArrowTable doesn't persist data properly
     // We need to use IPC stream format instead
 
-    console.log(
-      `🔧 [${new Date().toISOString()}] [Arrow:insert] Converting Arrow table to IPC stream...`
-    );
+    logger.debug('Operation', LogCategory.DUCKDB);
     const ipcStart = performance.now();
 
     // Serialize Arrow table to IPC format (binary stream)
     const ipcStream = tableToIPC(table);
-    console.log(
-      `✅ [${new Date().toISOString()}] [Arrow:insert] IPC stream created in ${(performance.now() - ipcStart).toFixed(2)}ms`
-    );
+    logger.debug('Operation', LogCategory.DUCKDB);
 
     // Convert to Uint8Array if needed
     const ipcBuffer =
       ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
-    console.log(
-      `🔧 [${new Date().toISOString()}] [Arrow:insert] Inserting IPC stream into DuckDB...`
-    );
+    logger.debug('Operation', LogCategory.DUCKDB);
     const insertStart = performance.now();
 
     // Use insertArrowFromIPCStream which is more reliable for DuckDB-WASM
@@ -63,9 +46,7 @@ export async function insertArrowTableIntoDuckDB(
       schema: 'main'
     });
 
-    console.log(
-      `✅ [${new Date().toISOString()}] [Arrow:insert] IPC stream inserted in ${(performance.now() - insertStart).toFixed(2)}ms`
-    );
+    logger.debug('Operation', LogCategory.DUCKDB);
 
     const duration = performance.now() - startTime;
 
@@ -76,17 +57,10 @@ export async function insertArrowTableIntoDuckDB(
       durationMs: duration.toFixed(2)
     });
 
-    console.log(`🎉 [${new Date().toISOString()}] [Arrow:insert] COMPLETE`, {
-      tableName,
-      duration: `${duration.toFixed(2)}ms`,
-      rows: table.numRows
-    });
+    logger.debug('Operation', LogCategory.DUCKDB);
   } catch (error) {
     const errorDuration = performance.now() - startTime;
-    console.error(
-      `❌ [${new Date().toISOString()}] [Arrow:insert] FAILED after ${errorDuration.toFixed(2)}ms`,
-      error
-    );
+    logger.error('Operation', LogCategory.DUCKDB);
     logger.error(
       'Failed to insert Arrow table into DuckDB',
       LogCategory.DUCKDB,
