@@ -17,7 +17,7 @@ export interface ColumnStatistics {
   mean?: number;
   median?: number;
   standardDeviation?: number;
-  sampleValues: any[];
+  sampleValues: unknown[];
 }
 
 export interface DataQualityIssue {
@@ -57,13 +57,12 @@ const TYPE_DETECTION_SAMPLES = 100;
 export const DeepDataValidator = {
   async analyzeDataContent(
     headers: string[],
-    data: any[][],
+    data: unknown[][],
     options: {
       skipGeoDetection?: boolean;
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
-    const startTime = performance.now();
     logger.debug('Operation', LogCategory.DATA);
 
     const rowCount = data.length;
@@ -73,19 +72,16 @@ export const DeepDataValidator = {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     logger.debug('Operation', LogCategory.DATA);
-    const columnsStart = performance.now();
     const columns = await DeepDataValidator.analyzeColumns(headers, data);
     logger.debug('Operation', LogCategory.DATA);
 
     logger.debug('Operation', LogCategory.DATA);
-    const geoStart = performance.now();
     const geoDetection = options.skipGeoDetection
       ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
       : await GeoColumnDetector.detectGeoColumns(headers, data);
     logger.debug('Operation', LogCategory.DATA);
 
     logger.debug('Operation', LogCategory.DATA);
-    const qualityStart = performance.now();
     const qualityIssues = await DeepDataValidator.detectQualityIssues(
       columns,
       data
@@ -112,7 +108,6 @@ export const DeepDataValidator = {
       columnCount
     );
 
-    const totalDuration = performance.now() - startTime;
     logger.debug('Operation', LogCategory.DATA);
 
     return {
@@ -129,7 +124,7 @@ export const DeepDataValidator = {
 
   async analyzeColumns(
     headers: string[],
-    data: any[][]
+    data: unknown[][]
   ): Promise<ColumnStatistics[]> {
     logger.debug('Operation', LogCategory.DATA);
 
@@ -160,14 +155,17 @@ export const DeepDataValidator = {
     return columns;
   },
 
-  async analyzeColumn(name: string, values: any[]): Promise<ColumnStatistics> {
+  async analyzeColumn(
+    name: string,
+    values: unknown[]
+  ): Promise<ColumnStatistics> {
     // Single-pass algorithm for statistics computation with chunking
     // Uses Welford's algorithm for mean and variance
 
     let nullCount = 0;
-    const uniqueValues = new Set();
-    const valueOccurrences = new Map<any, number>();
-    const sampleValues: any[] = [];
+    const uniqueValues = new Set<unknown>();
+    const valueOccurrences = new Map<unknown, number>();
+    const sampleValues: unknown[] = [];
 
     // Process values in chunks to avoid blocking
     const CHUNK_SIZE = 1000;
@@ -236,7 +234,7 @@ export const DeepDataValidator = {
 
         const chunk = nonNullValues.slice(i, i + CHUNK_SIZE);
         for (const value of chunk) {
-          const numValue = parseFloat(value);
+          const numValue = parseFloat(String(value));
           if (!isNaN(numValue)) {
             numericValues.push(numValue);
             numericCount++;
@@ -293,7 +291,7 @@ export const DeepDataValidator = {
 
         const chunk = nonNullValues.slice(i, i + CHUNK_SIZE);
         for (const value of chunk) {
-          const dateValue = new Date(value);
+          const dateValue = new Date(value as string | number | Date);
           if (!isNaN(dateValue.getTime())) {
             const timestamp = dateValue.getTime();
             if (timestamp < dateMin) dateMin = timestamp;
@@ -311,7 +309,7 @@ export const DeepDataValidator = {
     return stats as ColumnStatistics;
   },
 
-  detectColumnType(values: any[]): ColumnStatistics['type'] {
+  detectColumnType(values: unknown[]): ColumnStatistics['type'] {
     if (values.length === 0) return 'string';
 
     const sample = values.slice(0, TYPE_DETECTION_SAMPLES);
@@ -378,7 +376,7 @@ export const DeepDataValidator = {
 
   async detectQualityIssues(
     columns: ColumnStatistics[],
-    data: any[][]
+    data: unknown[][]
   ): Promise<DataQualityIssue[]> {
     const issues: DataQualityIssue[] = [];
 

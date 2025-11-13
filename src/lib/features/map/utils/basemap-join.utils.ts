@@ -15,10 +15,13 @@ export async function analyzeJoinQuality(
   try {
     logger.info('Analyzing join quality', LogCategory.DATA);
 
-    const totalCountResult: any = await Duck.query(`
+    const totalCountResult = (await Duck.query(
+      `
       SELECT COUNT(*) as count
       FROM ${dataTableName}
-    `);
+    `,
+      { format: 'array' }
+    )) as Array<{ count: number }>;
 
     const totalEntities =
       totalCountResult &&
@@ -27,20 +30,24 @@ export async function analyzeJoinQuality(
         ? Number(totalCountResult[0].count)
         : 0;
 
-    const joinedResult: any = await Duck.query(`
+    const joinedResult = (await Duck.query(
+      `
       SELECT DISTINCT d.${dataColumnName} as data_value
       FROM ${dataTableName} d
       INNER JOIN ${basemapTableName} b
       ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
-    `);
+    `,
+      { format: 'array' }
+    )) as Array<{ data_value: string }>;
 
     const joinedValues = new Set(
       joinedResult && Array.isArray(joinedResult)
-        ? joinedResult.map((r: any) => String(r.data_value))
+        ? joinedResult.map((r) => String(r.data_value))
         : []
     );
 
-    const duplicatesResult: any = await Duck.query(`
+    const duplicatesResult = (await Duck.query(
+      `
       SELECT
         d.${dataColumnName} as data_value,
         COUNT(*) as match_count
@@ -49,27 +56,32 @@ export async function analyzeJoinQuality(
       ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
       GROUP BY d.${dataColumnName}
       HAVING COUNT(*) > 1
-    `);
+    `,
+      { format: 'array' }
+    )) as Array<{ data_value: string; match_count: number }>;
 
     const duplicates =
       duplicatesResult && Array.isArray(duplicatesResult)
-        ? duplicatesResult.map((r: any) => ({
+        ? duplicatesResult.map((r) => ({
             dataValue: String(r.data_value),
             matchCount: Number(r.match_count)
           }))
         : [];
 
-    const unrecognizedResult: any = await Duck.query(`
+    const unrecognizedResult = (await Duck.query(
+      `
       SELECT DISTINCT d.${dataColumnName} as data_value
       FROM ${dataTableName} d
       LEFT JOIN ${basemapTableName} b
       ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
       WHERE b.${basemapColumnName} IS NULL
-    `);
+    `,
+      { format: 'array' }
+    )) as Array<{ data_value: string }>;
 
     const unrecognized =
       unrecognizedResult && Array.isArray(unrecognizedResult)
-        ? unrecognizedResult.map((r: any) => String(r.data_value))
+        ? unrecognizedResult.map((r) => String(r.data_value))
         : [];
 
     const entities: JoinEntity[] = [];
@@ -143,16 +155,19 @@ async function findSimilarMatches(
   }
 
   try {
-    const result: any = await Duck.query(`
+    const result = (await Duck.query(
+      `
       SELECT ${basemapColumnName}
       FROM ${basemapTableName}
       WHERE LOWER(${basemapColumnName}) LIKE '%' || LOWER('${value}') || '%'
          OR LOWER('${value}') LIKE '%' || LOWER(${basemapColumnName}) || '%'
       LIMIT 3
-    `);
+    `,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
 
     return result && Array.isArray(result)
-      ? result.map((r: any) => String(r[basemapColumnName]))
+      ? result.map((r) => String(r[basemapColumnName] ?? ''))
       : [];
   } catch (error) {
     logger.warn('Failed to find similar matches', LogCategory.DATA, error);

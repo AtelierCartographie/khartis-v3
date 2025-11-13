@@ -39,7 +39,9 @@ export const ProjectSerializer = {
         updatedAt: new Date(data.manifest.updatedAt)
       } as KhartisProject['manifest'],
       data: data.data
-        ? (ProjectSerializer.deserializeProjectData(data.data) as KhartisProject['data'])
+        ? (ProjectSerializer.deserializeProjectData(
+            data.data
+          ) as KhartisProject['data'])
         : undefined
     } as KhartisProject;
 

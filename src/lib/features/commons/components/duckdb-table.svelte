@@ -1,6 +1,20 @@
 <script lang="ts" module>
-  function getColumnTypeTag(type: string): string {
-    const tagMap: Record<string, string> = {
+  type ColumnTagType =
+    | 'red'
+    | 'magenta'
+    | 'purple'
+    | 'blue'
+    | 'cyan'
+    | 'teal'
+    | 'green'
+    | 'gray'
+    | 'cool-gray'
+    | 'warm-gray'
+    | 'high-contrast'
+    | 'outline';
+
+  function getColumnTypeTag(type: string): ColumnTagType {
+    const tagMap: Record<string, ColumnTagType> = {
       numeric: 'blue',
       text: 'green',
       date: 'magenta',
@@ -12,9 +26,9 @@
 </script>
 
 <script lang="ts">
-  import { DataTable, DataTableSkeleton, Tag } from 'carbon-components-svelte';
+  import { DataTable, Tag } from 'carbon-components-svelte';
   import { onMount } from 'svelte';
-  import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
   import type { ArrowTableLike } from '../services/duckdb/types';
   import { logger, LogCategory } from '../utils/logger';
 
@@ -25,8 +39,19 @@
 
   let { tableName, maxRows = 100 }: Props = $props();
 
-  let columns = $state<any[]>([]);
-  let rows = $state<any[]>([]);
+  type ColumnSummary = {
+    name: string;
+    type_simple: string;
+    min?: number;
+    max?: number;
+    nulls?: number;
+    unique?: number;
+  };
+
+  type TableRow = Record<string, unknown> & { id: string };
+
+  let columns = $state<ColumnSummary[]>([]);
+  let rows = $state<TableRow[]>([]);
   let totalRows = $state(0);
   let isLoading = $state(true);
   let arrowTable = $state<ArrowTableLike | null>(null);
@@ -53,7 +78,7 @@
           }));
       }
 
-      const displayRows = [];
+      const displayRows: TableRow[] = [];
       const limit = Math.min(maxRows, totalRows);
 
       for (let i = 0; i < limit; i++) {
@@ -83,15 +108,17 @@
     return typeMap[type] || 'string';
   }
 
-  function formatValue(value: any, type: string): string {
+  function formatValue(value: unknown, type: string): string {
     if (value === null || value === undefined) return '';
 
     switch (type) {
       case 'date':
-        return new Date(value).toLocaleDateString();
+        return new Date(value as string | number | Date).toLocaleDateString();
 
       case 'numeric':
-        return typeof value === 'number' ? value.toLocaleString() : value;
+        return typeof value === 'number'
+          ? value.toLocaleString()
+          : String(value);
 
       default:
         return String(value);
@@ -100,7 +127,9 @@
 </script>
 
 {#if isLoading}
-  <DataTableSkeleton headers={['Column 1', 'Column 2', 'Column 3']} rows={10} />
+  <div class="duckdb-loading" aria-busy="true" aria-live="polite">
+    Chargement des données DuckDB…
+  </div>
 {:else}
   <div class="table-info">
     <p>Dataset: <strong>{tableName}</strong></p>
@@ -150,7 +179,7 @@
         <div class="column-card">
           <div class="column-header">
             <span class="column-name">{col.name}</span>
-            <Tag size="sm" type={getColumnTypeTag(col.type_simple) as any}>
+            <Tag size="sm" type={getColumnTypeTag(col.type_simple)}>
               {col.type_simple}
             </Tag>
           </div>
@@ -190,6 +219,12 @@
 {/if}
 
 <style>
+  .duckdb-loading {
+    padding: var(--cds-spacing-05);
+    text-align: center;
+    color: var(--cds-text-02);
+  }
+
   .table-info {
     padding: var(--cds-spacing-05) 0;
     display: flex;

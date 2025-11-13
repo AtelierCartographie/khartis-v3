@@ -1,4 +1,5 @@
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
+import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface ValidationResult {
@@ -45,24 +46,54 @@ export class CreateProjectValidationService {
     return result;
   }
 
-  static validateURL(url: string): ValidationResult {
-    const result = FileValidator.validateURL(url);
+  static validateURL(urlInput: string): ValidationResult {
+    const urls = extractUrlsFromInput(urlInput);
+    if (urls.length === 0) {
+      return {
+        isValid: false,
+        errors: ['Veuillez saisir au moins une URL HTTP ou HTTPS'],
+        warnings: []
+      };
+    }
 
-    if (!result.isValid) {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    urls.forEach((url) => {
+      const result = FileValidator.validateURL(url);
+
+      if (!result.isValid) {
+        result.errors.forEach((error) => {
+          errors.push(`${url} — ${error}`);
+        });
+      }
+
+      if (result.warnings.length > 0) {
+        result.warnings.forEach((warning) => {
+          warnings.push(`${url} — ${warning}`);
+        });
+      }
+    });
+
+    if (errors.length > 0) {
       logger.error('URL validation failed', LogCategory.FILE, {
-        url,
-        errors: result.errors
+        urls,
+        errors
       });
     }
 
-    if (result.warnings.length > 0) {
+    if (warnings.length > 0) {
       logger.warn('URL validation warnings', LogCategory.FILE, {
-        url,
-        warnings: result.warnings
+        urls,
+        warnings
       });
     }
 
-    return result;
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings
+    };
   }
 
   static validateProjectName(name: string): ValidationResult {

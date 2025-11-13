@@ -1,22 +1,23 @@
 import type { IParser } from '../../domain/interfaces/parser.interface';
 import { ParserError } from '../../domain/interfaces/parser.interface';
 import type { RawDataset } from '../../domain/entities/raw-dataset.entity';
+import type {
+  GeoJSONFeatureCollection,
+  GeoJSONFeature
+} from './geojson.parser';
+import { convertGeoJSONToRawDataset } from './geojson.parser';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import shp from 'shpjs';
+import type shpjs from 'shpjs';
+import type { Feature as GeoJSONLibFeature } from 'geojson';
 
 /**
- * Shapefile Parser - Parses Shapefiles (currently placeholder)
+ * Shapefile Parser
  *
- * Shapefiles require multiple files (.shp, .shx, .dbf, .prj).
- * For now, we delegate to DuckDB's native ST_Read which handles this.
- *
- * TODO: Implement proper shapefile parsing if needed
- *
- * @example
- * ```typescript
- * const parser = new ShapefileParser();
- * if (parser.canParse(file)) {
- *   const dataset = await parser.parse(file);
- * }
- * ```
+ * Accepts zipped shapefiles (recommended) and transforms them into the
+ * internal RawDataset structure by converting the geometry to GeoJSON.
+ * Bare .shp uploads without their companion files are rejected with an
+ * explicit error explaining how to proceed.
  */
 export class ShapefileParser implements IParser {
   readonly supportedExtensions = ['.shp', '.zip'];
@@ -28,20 +29,102 @@ export class ShapefileParser implements IParser {
     return this.supportedExtensions.includes(ext);
   }
 
-  async parse(_file: File): Promise<RawDataset> {
-    // For now, throw error - shapefiles should be handled by DuckDB ST_Read
+  async parse(file: File): Promise<RawDataset> {
+    try {
+      logger.debug('Parsing shapefile', LogCategory.DATA, {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+
+      const geojson = await this.toGeoJSON(file);
+      return convertGeoJSONToRawDataset(geojson);
+    } catch (error) {
+      if (error instanceof ParserError) {
+        throw error;
+      }
+
+      logger.error('Failed to parse shapefile', LogCategory.DATA, error);
+      throw new ParserError(
+        `Failed to parse shapefile: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error,
+        'shapefile'
+      );
+    }
+  }
+
+  private async toGeoJSON(file: File): Promise<GeoJSONFeatureCollection> {
+    const extension = file.name.split('.').pop()?.toLowerCase();
+
+    if (extension === 'zip') {
+      return this.parseZipShapefile(file);
+    }
+
+    if (extension === 'shp') {
+      return this.parseLooseComponents(file);
+    }
+
     throw new ParserError(
-      'Shapefile parsing not yet implemented. Use DuckDB ST_Read directly.',
+      `Unsupported shapefile extension ".${extension}"`,
       undefined,
       'shapefile'
     );
+  }
 
-    // TODO: Implement shapefile parsing using shapefile.js or similar
-    // This would involve:
-    // 1. Check if it's a .zip (extract .shp, .shx, .dbf, .prj)
-    // 2. Parse .shp for geometry
-    // 3. Parse .dbf for attributes
-    // 4. Parse .prj for CRS
-    // 5. Combine into RawDataset
+  private async parseZipShapefile(
+    file: File
+  ): Promise<GeoJSONFeatureCollection> {
+    const buffer = await file.arrayBuffer();
+    type ShpResult =
+      | shpjs.FeatureCollectionWithFilename
+      | shpjs.FeatureCollectionWithFilename[];
+    const result = (await shp(buffer)) as ShpResult;
+
+    if (Array.isArray(result)) {
+      if (result.length === 0) {
+        throw new ParserError(
+          'Shapefile archive does not contain any layers',
+          undefined,
+          'shapefile'
+        );
+      }
+      return this.normalizeFeatureCollection(result[0]);
+    }
+
+    return this.normalizeFeatureCollection(result);
+  }
+
+  private async parseLooseComponents(
+    _file: File
+  ): Promise<GeoJSONFeatureCollection> {
+    // When we only get the .shp file in isolation there is no way to parse it
+    // without the accompanying .dbf/.shx/.prj files. However, the file may have
+    // been pre-processed (e.g. by create-project) and injected as parsed GeoJSON
+    // via the UploadedFile machinery. In the direct parser, we surface a clear
+    // error message.
+    throw new ParserError(
+      'Incomplete shapefile provided. Upload the zipped bundle (.zip) that contains .shp/.dbf/.shx/.prj files.',
+      undefined,
+      'shapefile'
+    );
+  }
+
+  private normalizeFeatureCollection(
+    collection: shpjs.FeatureCollectionWithFilename
+  ): GeoJSONFeatureCollection {
+    return {
+      type: 'FeatureCollection',
+      features: collection.features.map((feature) =>
+        this.normalizeFeature(feature)
+      )
+    };
+  }
+
+  private normalizeFeature(feature: GeoJSONLibFeature): GeoJSONFeature {
+    return {
+      type: 'Feature',
+      geometry: feature.geometry ?? null,
+      properties: feature.properties ?? undefined
+    };
   }
 }

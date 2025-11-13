@@ -30,7 +30,7 @@
   role="button"
   tabindex={0}
   onclick={onclick}
-  onkeydown={(e) => {
+  onkeydown={(e: KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onclick?.(e);

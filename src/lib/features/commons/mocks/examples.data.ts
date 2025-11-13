@@ -240,7 +240,9 @@ export function getExampleById(id: string): ExampleProject | undefined {
   return EXAMPLE_PROJECTS.find((example) => example.id === id);
 }
 
-export async function loadExampleData(example: ExampleProject): Promise<any> {
+export async function loadExampleData(
+  example: ExampleProject
+): Promise<unknown> {
   try {
     if (!example.dataUrl) {
       throw new Error('Example data URL is missing');

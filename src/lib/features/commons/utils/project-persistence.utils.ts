@@ -7,6 +7,7 @@ import { ProjectStorageKey } from '../store/project.types';
 import { compressData, decompressData } from './compression.utils';
 import { logger, LogCategory } from './logger';
 import { ProjectSerializer } from './project-serialization.utils';
+import type { SerializedProject } from '$lib/types/serialization.types';
 
 const DB_NAME = 'KhartisDB';
 const DB_VERSION = 1;
@@ -251,20 +252,11 @@ export class ProjectPersistence {
     });
   }
 
-  private validateProjectStructure(data: any): boolean {
-    return (
-      data &&
-      typeof data === 'object' &&
-      data.manifest &&
-      typeof data.manifest === 'object' &&
-      data.manifest.version &&
-      data.manifest.name &&
-      data.data &&
-      typeof data.data === 'object'
-    );
+  private validateProjectStructure(data: unknown): data is SerializedProject {
+    return isSerializedProjectRecord(data);
   }
 
-  async saveToStorage(key: string, data: any): Promise<void> {
+  async saveToStorage(key: string, data: unknown): Promise<void> {
     try {
       await localforage.setItem(key, JSON.stringify(data));
     } catch (error) {
@@ -303,6 +295,33 @@ export class ProjectPersistence {
     const compressed = await compressData(json);
     return new Blob([compressed], { type: 'application/octet-stream' });
   }
+}
+
+function isSerializedProjectRecord(
+  data: unknown
+): data is SerializedProject {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+
+  const record = data as Record<string, unknown>;
+  const manifest = record.manifest;
+
+  if (typeof record.id !== 'string') {
+    return false;
+  }
+
+  if (typeof manifest !== 'object' || manifest === null) {
+    return false;
+  }
+
+  const manifestRecord = manifest as Record<string, unknown>;
+  return (
+    typeof manifestRecord.version === 'string' &&
+    typeof manifestRecord.name === 'string' &&
+    typeof manifestRecord.createdAt === 'string' &&
+    typeof manifestRecord.updatedAt === 'string'
+  );
 }
 
 export const projectPersistence = new ProjectPersistence();

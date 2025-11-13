@@ -23,6 +23,7 @@
   } from 'carbon-components-svelte';
   import { Grid as GridIcon, Upload } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
 
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
@@ -60,8 +61,9 @@
 
   async function loadSuggestions() {
     if (selectedDataset) {
+      const processedDataset = normalizeToProcessedDataset(selectedDataset);
       const suggestions = await basemapCatalogService.getSuggestions(
-        selectedDataset,
+        processedDataset,
         3
       );
       basemapSuggestions = suggestions;

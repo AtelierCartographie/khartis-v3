@@ -82,7 +82,7 @@ export async function readGeoJSONAsArrow(
 
   await Duck.register_files([geojsonFile]);
 
-  const fileWithId = geojsonFile as any;
+  const fileWithId = geojsonFile as File & { id?: string };
   const fileId =
     fileWithId.id || `${geojsonFile.lastModified}-${geojsonFile.name}`;
 
@@ -104,7 +104,7 @@ export async function readGeoJSONAsArrow(
   logger.info('GeoJSON successfully converted to Arrow', LogCategory.MAP, {
     rowCount: table.numRows,
     hasGeoMetadata: table.schema.metadata.has('geo'),
-    columns: table.schema.fields.map((f: any) => f.name)
+    columns: table.schema.fields.map((f) => f.name)
   });
 
   return table;

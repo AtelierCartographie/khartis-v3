@@ -15,7 +15,6 @@ import {
   showWarning
 } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
-import { dataPipeline } from '$lib/features/data';
 
 const ERROR_FILE_PROCESSING = 'Failed to process file';
 const ERROR_INVALID_JSON_FORMAT = 'Invalid JSON format';
@@ -88,20 +87,19 @@ export class FileProcessorService {
   }
 
   private getProcessor(fileType: FileType): FileProcessor {
-    switch (fileType) {
-      case FileType.CSV:
-      case FileType.TSV:
-        return new CsvProcessor(this.callbacks);
-
-      case FileType.GEOJSON:
-        return new GeoJsonProcessor(this.callbacks);
-
-      case FileType.GEOPACKAGE:
-        return new GeoPackageProcessor(this.callbacks);
-
-      default:
-        return new GenericProcessor(this.callbacks);
+    if (fileType === FileType.CSV || fileType === FileType.TSV) {
+      return new CsvProcessor(this.callbacks);
     }
+
+    if (fileType === FileType.GEOJSON) {
+      return new GeoJsonProcessor(this.callbacks);
+    }
+
+    if (fileType === FileType.GEOPACKAGE) {
+      return new GeoPackageProcessor(this.callbacks);
+    }
+
+    return new GenericProcessor(this.callbacks);
   }
 }
 
@@ -110,7 +108,7 @@ abstract class FileProcessor {
 
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
 
-  protected async stringifyInChunks(data: any[]): Promise<string> {
+  protected async stringifyInChunks(data: unknown[]): Promise<string> {
     // For small datasets, use regular JSON.stringify
     if (data.length < 1000) {
       return JSON.stringify(data);
@@ -195,7 +193,7 @@ class CsvProcessor extends FileProcessor {
     // Convert RawDataset to the format expected by the rest of the code
     const headers = rawDataset.columns.map((col) => col.name);
     const csvRows = rawDataset.columns[0].values.map((_, rowIndex) => {
-      const row: Record<string, any> = {};
+      const row: Record<string, unknown> = {};
       rawDataset.columns.forEach((col) => {
         row[col.name] = col.values[rowIndex];
       });
@@ -457,7 +455,7 @@ class GeoPackageProcessor extends FileProcessor {
     }
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: geojson,
+      parsedData: geojson as UploadedFile['parsedData'],
       content: JSON.stringify(geojson),
       validation: geoValidation
     });

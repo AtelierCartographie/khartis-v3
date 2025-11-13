@@ -463,7 +463,7 @@ describe('DeepDataValidator', () => {
   describe('Edge Cases', () => {
     it('should handle empty dataset', async () => {
       const headers = ['name', 'age'];
-      const data: any[][] = [];
+      const data: string[][] = [];
 
       const result = await DeepDataValidator.analyzeDataContent(headers, data, {
         skipGeoDetection: true

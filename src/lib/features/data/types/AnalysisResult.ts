@@ -20,7 +20,9 @@ export interface GeoColumnInfo {
     | 'iso3'
     | 'region'
     | 'city'
-    | 'coordinates';
+    | 'coordinates'
+    | 'location_name'
+    | 'unknown';
   confidence: number;
 }
 

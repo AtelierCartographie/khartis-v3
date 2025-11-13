@@ -10,7 +10,7 @@ export class PipelineError extends Error {
   constructor(
     message: string,
     public readonly code: string,
-    public readonly details?: Record<string, any>
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = this.constructor.name;
@@ -26,7 +26,7 @@ export class DataValidationError extends PipelineError {
   constructor(
     message: string,
     public readonly field?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'DATA_VALIDATION_ERROR', { field, ...details });
   }
@@ -39,7 +39,7 @@ export class FileGroupError extends PipelineError {
   constructor(
     message: string,
     public readonly missingFiles: string[],
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'FILE_GROUP_ERROR', { missingFiles, ...details });
   }
@@ -53,7 +53,7 @@ export class SizeLimitError extends PipelineError {
     message: string,
     public readonly actualSize: number,
     public readonly maxSize: number,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'SIZE_LIMIT_ERROR', { actualSize, maxSize, ...details });
   }
@@ -66,7 +66,7 @@ export class ExpressionError extends PipelineError {
   constructor(
     message: string,
     public readonly expression?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'EXPRESSION_ERROR', { expression, ...details });
   }
@@ -79,7 +79,7 @@ export class ParseError extends PipelineError {
   constructor(
     message: string,
     public readonly fileType?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'PARSE_ERROR', { fileType, ...details });
   }
@@ -92,7 +92,7 @@ export class DuckDBError extends PipelineError {
   constructor(
     message: string,
     public readonly query?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'DUCKDB_ERROR', { query, ...details });
   }
@@ -105,7 +105,7 @@ export class GeoMatchError extends PipelineError {
   constructor(
     message: string,
     public readonly matchRate?: number,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'GEO_MATCH_ERROR', { matchRate, ...details });
   }
@@ -118,7 +118,7 @@ export class TypeInferenceError extends PipelineError {
   constructor(
     message: string,
     public readonly column?: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'TYPE_INFERENCE_ERROR', { column, ...details });
   }
@@ -149,7 +149,7 @@ export class NonFatalError extends PipelineError {
   constructor(
     message: string,
     code: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, code, details);
   }
@@ -162,7 +162,7 @@ export class DuplicateFileError extends NonFatalError {
   constructor(
     message: string,
     public readonly fileName: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'DUPLICATE_FILE', { fileName, ...details });
   }
@@ -175,7 +175,7 @@ export class DataQualityWarning extends NonFatalError {
   constructor(
     message: string,
     public readonly warnings: string[],
-    details?: Record<string, any>
+    details?: Record<string, unknown>
   ) {
     super(message, 'DATA_QUALITY_WARNING', { warnings, ...details });
   }
@@ -202,7 +202,7 @@ export function isFatalError(error: unknown): boolean {
 /**
  * Helper function to format error for logging
  */
-export function formatError(error: unknown): Record<string, any> {
+export function formatError(error: unknown): Record<string, unknown> {
   if (isPipelineError(error)) {
     return {
       name: error.name,
