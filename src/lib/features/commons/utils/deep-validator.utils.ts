@@ -2,6 +2,7 @@ import {
   GeoColumnDetector,
   type GeoDetectionResult
 } from './geo-detector.utils';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export interface ColumnStatistics {
   name: string;
@@ -63,14 +64,7 @@ export const DeepDataValidator = {
     } = {}
   ): Promise<DataAnalysisResult> {
     const startTime = performance.now();
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] START`,
-      {
-        rowCount: data.length,
-        columnCount: headers.length,
-        skipGeoDetection: options.skipGeoDetection
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
     const rowCount = data.length;
     const columnCount = headers.length;
@@ -78,63 +72,34 @@ export const DeepDataValidator = {
     // Yield before heavy analysis
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Analyzing columns...`
-    );
+    logger.debug('Operation', LogCategory.DATA);
     const columnsStart = performance.now();
     const columns = await DeepDataValidator.analyzeColumns(headers, data);
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Columns analyzed`,
-      {
-        duration: `${(performance.now() - columnsStart).toFixed(2)}ms`,
-        columnCount: columns.length
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Detecting geographic columns...`
-    );
+    logger.debug('Operation', LogCategory.DATA);
     const geoStart = performance.now();
     const geoDetection = options.skipGeoDetection
       ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
       : await GeoColumnDetector.detectGeoColumns(headers, data);
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Geographic detection completed`,
-      {
-        duration: `${(performance.now() - geoStart).toFixed(2)}ms`,
-        hasGeoColumns: geoDetection.hasGeoColumns,
-        geoColumnsCount: geoDetection.geoColumns.length
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Detecting quality issues...`
-    );
+    logger.debug('Operation', LogCategory.DATA);
     const qualityStart = performance.now();
     const qualityIssues = await DeepDataValidator.detectQualityIssues(
       columns,
       data
     );
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Quality issues detected`,
-      {
-        duration: `${(performance.now() - qualityStart).toFixed(2)}ms`,
-        issueCount: qualityIssues.length
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Checking performance...`
-    );
+    logger.debug('Operation', LogCategory.DATA);
     const performanceWarnings = DeepDataValidator.checkPerformance(
       rowCount,
       columnCount,
       data
     );
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] Generating suggestions...`
-    );
+    logger.debug('Operation', LogCategory.DATA);
     const suggestions = DeepDataValidator.generateSuggestions(
       columns,
       geoDetection,
@@ -148,12 +113,7 @@ export const DeepDataValidator = {
     );
 
     const totalDuration = performance.now() - startTime;
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeDataContent] END`,
-      {
-        totalDuration: `${totalDuration.toFixed(2)}ms`
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
     return {
       rowCount,
@@ -171,13 +131,7 @@ export const DeepDataValidator = {
     headers: string[],
     data: any[][]
   ): Promise<ColumnStatistics[]> {
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] START`,
-      {
-        columnCount: headers.length,
-        rowCount: data.length
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
     const columns: ColumnStatistics[] = [];
     const COLUMN_CHUNK_SIZE = 10;
@@ -188,9 +142,7 @@ export const DeepDataValidator = {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
-      console.log(
-        `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] Processing chunk ${Math.floor(i / COLUMN_CHUNK_SIZE) + 1}/${Math.ceil(headers.length / COLUMN_CHUNK_SIZE)}`
-      );
+      logger.debug('Operation', LogCategory.DATA);
 
       for (let colIndex = i; colIndex < endIndex; colIndex++) {
         const header = headers[colIndex];
@@ -203,12 +155,7 @@ export const DeepDataValidator = {
       }
     }
 
-    console.log(
-      `[${new Date().toISOString()}] [DeepDataValidator:analyzeColumns] END`,
-      {
-        analyzedColumns: columns.length
-      }
-    );
+    logger.debug('Operation', LogCategory.DATA);
 
     return columns;
   },

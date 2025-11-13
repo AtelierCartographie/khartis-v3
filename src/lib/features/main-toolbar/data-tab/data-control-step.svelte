@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { logger, LogCategory } from "$lib/features/commons/utils/logger";
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
   import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -11,43 +12,19 @@
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
-  const selectedDataset = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    console.log('[DataControlStep] selectedDataset $derived triggered', {
-      hasDataset: !!dataset,
-      datasetId: dataset?.id,
-      datasetName: dataset?.name,
-      sourceFileId: dataset?.sourceFileId
-    });
-    return dataset;
+const selectedDataset = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;    return dataset;
   });
 
-  const currentDuckTable = $derived.by(() => {
+const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+
+const currentDuckTable = $derived.by(() => {
+    duckDBDatasetsVersion;
     const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
-
-    console.log('[DataControlStep] currentDuckTable $derived EVALUATING', {
-      hasSelectedDataset: !!selectedDataset,
-      selectedDatasetId: selectedDataset?.id,
-      selectedDatasetName: selectedDataset?.name,
-      selectedDatasetSourceFileId: selectedDataset?.sourceFileId,
-      duckDBDatasetsCount: allDuckDatasets.length,
-      allDuckDBSourceFileIds: allDuckDatasets.map(d => ({
-        sourceFileId: d.sourceFileId,
-        tableName: d.tableName
-      })),
-      timestamp: new Date().toISOString()
-    });
-
     const tableName = selectedDataset?.sourceFileId
       ? allDuckDatasets.find((d) => d.sourceFileId === selectedDataset.sourceFileId)
           ?.tableName || null
       : null;
-
-    console.log('[DataControlStep] currentDuckTable $derived RESULT', {
-      foundTableName: tableName,
-      searchedForSourceFileId: selectedDataset?.sourceFileId
-    });
-
     return tableName;
   });
 

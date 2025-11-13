@@ -137,7 +137,7 @@ class ProjectStore {
 
         // Force reactivity by reassigning currentProject with deep copy of data
         // Do everything in one assignment to avoid intermediate states
-        console.log('[projectStore] BEFORE adding file to currentProject', {
+        logger.debug('BEFORE adding file to currentProject', LogCategory.PROJECT, {
           currentSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
           fileToAdd: fileCopy.name
         });
@@ -153,7 +153,7 @@ class ProjectStore {
           }
         };
 
-        console.log('[projectStore] AFTER adding file to currentProject', {
+        logger.success('AFTER adding file to currentProject', LogCategory.PROJECT, {
           newSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
           allFileNames: this._state.currentProject.data.sourceFiles.map(f => f.name)
         });

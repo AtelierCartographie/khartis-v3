@@ -259,12 +259,7 @@ export async function detectDuplicateRows(data: any[]): Promise<{
   duplicateCount: number;
 }> {
   const startTime = performance.now();
-  console.log(
-    `[${new Date().toISOString()}] [file-import:detectDuplicateRows] START`,
-    {
-      rowCount: data.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
@@ -289,14 +284,7 @@ export async function detectDuplicateRows(data: any[]): Promise<{
   }
 
   const duration = performance.now() - startTime;
-  console.log(
-    `[${new Date().toISOString()}] [file-import:detectDuplicateRows] END`,
-    {
-      duration: `${duration.toFixed(2)}ms`,
-      hasDuplicates: duplicateIndices.length > 0,
-      duplicateCount: duplicateIndices.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   return {
     hasDuplicates: duplicateIndices.length > 0,
@@ -310,13 +298,7 @@ export async function detectDataTypes(
   headers: string[]
 ): Promise<Record<string, string>> {
   const startTime = performance.now();
-  console.log(
-    `[${new Date().toISOString()}] [file-import:detectDataTypes] START`,
-    {
-      rowCount: data.length,
-      columnCount: headers.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   const types: Record<string, string> = {};
 
@@ -356,13 +338,7 @@ export async function detectDataTypes(
   }
 
   const duration = performance.now() - startTime;
-  console.log(
-    `[${new Date().toISOString()}] [file-import:detectDataTypes] END`,
-    {
-      duration: `${duration.toFixed(2)}ms`,
-      typeCount: Object.keys(types).length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   return types;
 }
@@ -372,19 +348,11 @@ export async function getDataStatistics(
   headers: string[]
 ): Promise<Record<string, any>> {
   const startTime = performance.now();
-  console.log(
-    `[${new Date().toISOString()}] [file-import:getDataStatistics] START`,
-    {
-      rowCount: data.length,
-      columnCount: headers.length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   const stats: Record<string, any> = {};
 
-  console.log(
-    `[${new Date().toISOString()}] [file-import:getDataStatistics] Detecting data types...`
-  );
+  logger.debug('Operation', LogCategory.DATA);
   const dataTypes = await detectDataTypes(data, headers);
 
   // Process headers in chunks to avoid blocking
@@ -418,13 +386,7 @@ export async function getDataStatistics(
   }
 
   const duration = performance.now() - startTime;
-  console.log(
-    `[${new Date().toISOString()}] [file-import:getDataStatistics] END`,
-    {
-      duration: `${duration.toFixed(2)}ms`,
-      statsCount: Object.keys(stats).length
-    }
-  );
+  logger.debug('Operation', LogCategory.DATA);
 
   return stats;
 }

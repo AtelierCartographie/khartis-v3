@@ -10,6 +10,9 @@ import {
 } from '$lib/features/commons/types/global';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+
+const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -35,12 +38,139 @@ class GlobalStore {
     }
   });
 
-  private _selectedDataButtonId = $state<string | undefined>(undefined);
+  private _selectedDataButtonId = $state<string | undefined>(
+    // Restore selected tab from localStorage on initialization
+    typeof window !== 'undefined'
+      ? localStorage.getItem(SELECTED_TAB_STORAGE_KEY) || undefined
+      : undefined
+  );
+
+  private _isUpdatingSelection = false;
+  private _pendingDatasetSelections = new Set<string>();
+
+  constructor() {
+    if (typeof window !== 'undefined' && this._selectedDataButtonId) {
+      logger.debug('Restored selected tab from localStorage', LogCategory.STORE, {
+        tabId: this._selectedDataButtonId
+      });
+    }
+  }
+
+  private ensureDatasetSelectionForSourceFile(sourceFileId: string): void {
+    if (!sourceFileId) return;
+
+    const dataset = datasetsStore.getDatasetBySourceFile(sourceFileId);
+    if (dataset) {
+      datasetsStore.selectDataset(dataset.id);
+      return;
+    }
+
+    if (this._pendingDatasetSelections.has(sourceFileId)) {
+      logger.debug('Dataset selection already pending', LogCategory.STORE, {
+        sourceFileId
+      });
+      return;
+    }
+
+    this._pendingDatasetSelections.add(sourceFileId);
+    datasetsStore
+      .waitForDatasetBySourceFile(sourceFileId)
+      .then((datasetId) => {
+        if (this._selectedDataButtonId === sourceFileId) {
+          logger.info('Deferred dataset selection resolved', LogCategory.STORE, {
+            sourceFileId,
+            datasetId
+          });
+          datasetsStore.selectDataset(datasetId);
+        }
+      })
+      .catch((error) => {
+        logger.error('Failed to wait for dataset selection', LogCategory.STORE, {
+          sourceFileId,
+          error: error instanceof Error ? error.message : error
+        });
+      })
+      .finally(() => {
+        this._pendingDatasetSelections.delete(sourceFileId);
+      });
+  }
+
+  /**
+   * Ensures there's always a tab selected when files exist.
+   * This should be called from a component's $effect.
+   * Protected against re-entrancy with a guard flag.
+   */
+  ensureTabSelected(): void {
+    // Guard against re-entrancy to prevent infinite loops
+    if (this._isUpdatingSelection) {
+      logger.warn('ensureTabSelected - Already updating, skipping', LogCategory.STORE);
+      return;
+    }
+
+    this._isUpdatingSelection = true;
+    try {
+    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+
+    logger.debug('ensureTabSelected triggered', LogCategory.STORE, {
+      sourceFilesCount: sourceFiles.length,
+      selectedDataButtonId: this._selectedDataButtonId,
+      firstFileId: sourceFiles[0]?.id
+    });
+
+    // If we have files but no selection, or selected file no longer exists
+    if (sourceFiles.length > 0) {
+      const selectedFileExists = sourceFiles.some(
+        (f) => f.id === this._selectedDataButtonId
+      );
+
+      if (!this._selectedDataButtonId) {
+        // Nothing selected yet, auto-select first file
+        const firstFileId = sourceFiles[0].id;
+        logger.info('Auto-selecting first tab', LogCategory.STORE, {
+          firstFileId,
+          reason: 'no_selection'
+        });
+        this.selectDataButton(firstFileId);
+      } else if (!selectedFileExists) {
+        const isPending = this._pendingDatasetSelections.has(
+          this._selectedDataButtonId
+        );
+        if (isPending) {
+          logger.info('Selected file not yet registered, waiting', LogCategory.STORE, {
+            pendingFileId: this._selectedDataButtonId
+          });
+        } else {
+          const firstFileId = sourceFiles[0].id;
+          logger.info('Selected file removed, falling back to first', LogCategory.STORE, {
+            oldId: this._selectedDataButtonId,
+            fallbackId: firstFileId
+          });
+          this.selectDataButton(firstFileId);
+        }
+      }
+
+      if (this._selectedDataButtonId) {
+        this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+      }
+    } else {
+      // No files - clear selection
+      if (this._selectedDataButtonId) {
+        logger.debug('Clearing selection - no files', LogCategory.STORE);
+        this._selectedDataButtonId = undefined;
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
+        }
+      }
+    }
+    } finally {
+      this._isUpdatingSelection = false;
+    }
+  }
 
   dataButtons = $derived.by(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
-    console.log('[GlobalStore] dataButtons $derived triggered', {
+    logger.debug('dataButtons $derived triggered', LogCategory.STORE, {
       sourceFilesCount: sourceFiles.length,
       sourceFileIds: sourceFiles.map(f => f.id),
       selectedDataButtonId: this._selectedDataButtonId
@@ -145,7 +275,7 @@ class GlobalStore {
   }
 
   selectDataButton(id: string): void {
-    console.log('[GlobalStore] selectDataButton called', {
+    logger.debug('selectDataButton called', LogCategory.STORE, {
       newId: id,
       currentId: this._selectedDataButtonId,
       willUpdate: this._selectedDataButtonId !== id
@@ -154,16 +284,13 @@ class GlobalStore {
     if (this._selectedDataButtonId === id) return;
     this._selectedDataButtonId = id;
 
-    const dataset = datasetsStore.getDatasetBySourceFile(id);
-    console.log('[GlobalStore] Looking for dataset by sourceFileId', {
-      sourceFileId: id,
-      foundDataset: !!dataset,
-      datasetId: dataset?.id
-    });
-
-    if (dataset) {
-      datasetsStore.selectDataset(dataset.id);
+    // Persist to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
+      logger.debug('Persisted selected tab to localStorage', LogCategory.STORE, { tabId: id });
     }
+
+    this.ensureDatasetSelectionForSourceFile(id);
   }
 
   setProjectionFilter(id: ProjectionFilterId): void {
@@ -241,6 +368,7 @@ export const globalActions = {
   setNavigationState: globalState.setNavigationState.bind(globalState),
   setToolbarState: globalState.setToolbarState.bind(globalState),
   selectDataButton: globalState.selectDataButton.bind(globalState),
+  ensureTabSelected: globalState.ensureTabSelected.bind(globalState),
   setProjectionFilter: globalState.setProjectionFilter.bind(globalState),
   setProjectionViewMode: globalState.setProjectionViewMode.bind(globalState),
   setZoomMode: globalState.setZoomMode.bind(globalState),

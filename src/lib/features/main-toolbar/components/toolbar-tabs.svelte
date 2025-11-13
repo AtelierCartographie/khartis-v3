@@ -12,6 +12,19 @@
   import AddDataModal from './add-data-modal.svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
+  let lastSourceFilesCount = $state(0);
+
+  // Ensure a tab is always selected when files exist
+  // Guard against infinite loops by only running when file count changes
+  $effect(() => {
+    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+
+    // Only run if file count changed (not on every reactive update)
+    if (sourceFiles.length !== lastSourceFilesCount) {
+      lastSourceFilesCount = sourceFiles.length;
+      globalActions.ensureTabSelected();
+    }
+  });
 
   const onWheel = (e: WheelEvent) => {
     if (!tabsScroller) return;
