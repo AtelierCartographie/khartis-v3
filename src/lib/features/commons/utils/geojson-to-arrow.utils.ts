@@ -14,7 +14,7 @@ interface SchemaInfo {
   hasGeometry: boolean;
 }
 
-type ColumnData = Record<string, any[]>;
+type ColumnData = Record<string, unknown[]>;
 
 /**
  * Convert a GeoJSON FeatureCollection to an Apache Arrow Table
@@ -26,8 +26,6 @@ type ColumnData = Record<string, any[]>;
 export function convertGeoJSONToArrow(
   geojson: GeoJSONFeatureCollection
 ): Table {
-  const startTime = performance.now();
-
   const features = geojson.features;
 
   if (!features || features.length === 0) {
@@ -36,24 +34,20 @@ export function convertGeoJSONToArrow(
     );
   }
 
-  logger.debug('Operation', LogCategory.DUCKDB);
+  logger.debug('Converting GeoJSON to Arrow', LogCategory.DUCKDB);
 
   // Step 1: Infer schema from all features
-  const schemaStart = performance.now();
   const schemaInfo = inferGeoJSONSchema(features);
   logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 2: Extract columnar data
-  const extractStart = performance.now();
   const columns = extractColumnarData(features, schemaInfo);
   logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 3: Create Arrow table
-  const tableStart = performance.now();
   const table = tableFromArrays(columns);
   logger.debug('Operation', LogCategory.DUCKDB);
 
-  const totalDuration = performance.now() - startTime;
   logger.debug('Operation', LogCategory.DUCKDB);
 
   return table;

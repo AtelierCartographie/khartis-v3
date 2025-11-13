@@ -1,6 +1,7 @@
 import type { InferredColumn } from './inferred-column.entity';
 import type { ColumnStats } from '../value-objects/column-stats.vo';
 import type { GeometryInfo } from '../value-objects/geometry-info.vo';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 
 /**
  * Dataset result entity
@@ -126,7 +127,7 @@ export interface DatasetResult {
   analysis?: {
     columns: EnrichedColumn[];
     hasGeoData: boolean;
-    geoColumns?: any[];
+    geoColumns?: unknown[];
     suggestedGeoColumn?: string;
     rowCount: number;
     warnings: string[];
@@ -141,6 +142,11 @@ export interface DatasetResult {
    * Bounds (for backwards compatibility with GeoJSON)
    */
   bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+
+  /**
+   * Geo column detection metadata (from DeepDataValidator)
+   */
+  geoDetection?: GeoDetectionResult;
 }
 
 /**

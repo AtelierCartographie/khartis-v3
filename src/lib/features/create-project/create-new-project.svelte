@@ -3,6 +3,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { FileType } from '$lib/features/commons/store/create-project.types';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -29,7 +30,7 @@
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from './services/validation.service';
 
-interface Props {
+  interface Props {
     onClose?: () => void;
     isModal?: boolean;
     resetToken?: number;
@@ -99,6 +100,23 @@ interface Props {
     await createProjectActions.clearAllFiles(true);
     isDeletingAll = false;
   }
+
+  type TagColor = 'blue' | 'green' | 'purple' | 'teal' | 'magenta' | 'gray';
+
+  const FILE_TYPE_TAGS: Record<FileType, { label: string; color: TagColor }> = {
+    [FileType.CSV]: { label: 'CSV', color: 'blue' },
+    [FileType.TSV]: { label: 'TSV', color: 'blue' },
+    [FileType.GEOJSON]: { label: 'GeoJSON', color: 'green' },
+    [FileType.SHAPEFILE]: { label: 'Shapefile', color: 'purple' },
+    [FileType.GEOPACKAGE]: { label: 'GeoPackage', color: 'purple' },
+    [FileType.GEOPARQUET]: { label: 'GeoParquet', color: 'teal' },
+    [FileType.KML]: { label: 'KML', color: 'magenta' },
+    [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
+    [FileType.UNKNOWN]: { label: 'Type inconnu', color: 'gray' }
+  };
+
+  const getFileTypeTag = (fileType: FileType) =>
+    FILE_TYPE_TAGS[fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
 </script>
 
 <section
@@ -112,8 +130,9 @@ interface Props {
     {/if}
 
     <span class="text-grey">
-      Il peut s’agir d’un tableau de données au format csv ou d’un fichier
-      d’informations géographiques (shp, geojson, geopackage).
+      Il peut s’agir d’un tableau de données au format CSV ou d’un fichier
+      d’informations géographiques (Shapefile, GeoJSON, GeoPackage, GeoParquet,
+      KML/KMZ).
     </span>
   </header>
 
@@ -128,7 +147,9 @@ interface Props {
             ...SUPPORTED_FILE_TYPES.tabular.extensions,
             ...SUPPORTED_FILE_TYPES.geojson.extensions,
             ...SUPPORTED_FILE_TYPES.shapefile.extensions,
-            ...SUPPORTED_FILE_TYPES.geopackage.extensions
+            ...SUPPORTED_FILE_TYPES.geopackage.extensions,
+            ...SUPPORTED_FILE_TYPES.geoparquet.extensions,
+            ...SUPPORTED_FILE_TYPES.kml.extensions
           ]}
           validateFiles={(files) => {
             const validationResult =
@@ -173,7 +194,9 @@ interface Props {
       <div class:button-loading={createProjectState.newProject.isLoading}>
         <Button
           size="field"
-          icon={createProjectState.newProject.isLoading ? undefined : CloudDownload}
+          icon={createProjectState.newProject.isLoading
+            ? undefined
+            : CloudDownload}
           disabled={!onlineUrlValue.trim() ||
             createProjectState.newProject.isLoading}
           on:click={handleLoadOnlineFile}
@@ -296,6 +319,7 @@ interface Props {
               </Button>
             </div>
           {:else if file.status === 'complete'}
+            {@const fileTag = getFileTypeTag(file.fileType)}
             <Tile class="file-complete-tile">
               <div class="file-header">
                 <div class="file-info">
@@ -303,6 +327,11 @@ interface Props {
                   <div class="file-details">
                     <div class="file-name">{file.name}</div>
                     <div class="file-size">{formatFileSize(file.size)}</div>
+                    <div class="file-tags">
+                      <Tag size="sm" type={fileTag.color}>
+                        {fileTag.label}
+                      </Tag>
+                    </div>
                   </div>
                 </div>
                 <Button
@@ -451,6 +480,13 @@ interface Props {
     flex-direction: column;
     gap: var(--cds-spacing-01);
     min-width: 0;
+  }
+
+  .file-tags {
+    display: flex;
+    gap: var(--cds-spacing-02);
+    flex-wrap: wrap;
+    margin-top: var(--cds-spacing-02);
   }
 
   .file-name {

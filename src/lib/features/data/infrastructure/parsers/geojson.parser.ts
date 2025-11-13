@@ -3,25 +3,13 @@ import { ParserError } from '../../domain/interfaces/parser.interface';
 import type { RawDataset } from '../../domain/entities/raw-dataset.entity';
 import type { RawColumn } from '../../domain/entities/raw-column.entity';
 import type { GeometryInfo } from '../../domain/value-objects/geometry-info.vo';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-interface GeoJSONFeature {
-  type: 'Feature';
-  geometry: {
-    type: string;
-    coordinates: unknown;
-  } | null;
-  properties: Record<string, unknown> | null;
-}
+import type {
+  GeoJSONFeature as SharedGeoJSONFeature,
+  GeoJSONFeatureCollection as SharedGeoJSONFeatureCollection
+} from '$lib/types/data';
 
-interface GeoJSONFeatureCollection {
-  type: 'FeatureCollection';
-  features: GeoJSONFeature[];
-  crs?: {
-    properties?: {
-      name?: string;
-    };
-  };
-}
+export type GeoJSONFeature = SharedGeoJSONFeature;
+export type GeoJSONFeatureCollection = SharedGeoJSONFeatureCollection;
 
 /**
  * GeoJSON Parser - Parses GeoJSON FeatureCollections
@@ -35,8 +23,6 @@ interface GeoJSONFeatureCollection {
  * ```typescript
  * const parser = new GeoJSONParser();
  * const dataset = await parser.parse(geojsonFile);
- logger.debug('Operation', LogCategory.FILE);
- logger.debug('Operation', LogCategory.FILE);
  * ```
  */
 export class GeoJSONParser implements IParser {
@@ -71,56 +57,7 @@ export class GeoJSONParser implements IParser {
         );
       }
 
-      // Extract all property keys from all features
-      const propertyKeys = new Set<string>();
-      geojson.features.forEach((feature) => {
-        if (feature.properties) {
-          Object.keys(feature.properties).forEach((key) =>
-            propertyKeys.add(key)
-          );
-        }
-      });
-
-      // Headers: _id, geometry, then all properties
-      const headers = ['_id', 'geometry', ...Array.from(propertyKeys)];
-
-      // Convert features to rows
-      const rows: unknown[][] = geojson.features.map((feature, index) => {
-        const row: unknown[] = [
-          index, // _id
-          feature.geometry ? JSON.stringify(feature.geometry) : null // geometry as JSON string
-        ];
-
-        // Add property values in order
-        propertyKeys.forEach((key) => {
-          row.push(feature.properties?.[key] ?? null);
-        });
-
-        return row;
-      });
-
-      // Convert to column-oriented format
-      const columns: RawColumn[] = headers.map((name, colIndex) => ({
-        name,
-        values: rows.map((row) => row[colIndex])
-      }));
-
-      // Compute geometry info
-      const geometryInfo = this.computeGeometryInfo(geojson);
-
-      return {
-        headers,
-        rows,
-        columns,
-        geometry: geometryInfo,
-        metadata: {
-          featureCount: geojson.features.length,
-          crs: geojson.crs?.properties?.name || 'EPSG:4326',
-          fileType: 'geojson',
-          rowCount: rows.length,
-          columnCount: headers.length
-        }
-      };
+      return convertGeoJSONToRawDataset(geojson);
     } catch (error) {
       if (error instanceof ParserError) {
         throw error;
@@ -137,71 +74,148 @@ export class GeoJSONParser implements IParser {
       );
     }
   }
+}
 
-  private computeGeometryInfo(geojson: GeoJSONFeatureCollection): GeometryInfo {
-    // Detect geometry type(s)
-    const geometryTypes = new Set<string>();
-    geojson.features.forEach((feature) => {
-      if (feature.geometry) {
-        geometryTypes.add(feature.geometry.type);
-      }
-    });
+export function convertGeoJSONToRawDataset(
+  geojson: GeoJSONFeatureCollection
+): RawDataset {
+  const propertyKeys = new Set<string>();
+  geojson.features.forEach((feature) => {
+    if (feature.properties) {
+      Object.keys(feature.properties).forEach((key) => propertyKeys.add(key));
+    }
+  });
 
-    const type =
-      geometryTypes.size === 1 ? Array.from(geometryTypes)[0] : 'Mixed';
+  const headers = ['_id', 'geometry', ...Array.from(propertyKeys)];
 
-    // Compute bounds
-    const bounds = this.computeBounds(geojson);
-
-    // Compute centroid from bounds
-    const centroid: [number, number] = [
-      (bounds[0] + bounds[2]) / 2,
-      (bounds[1] + bounds[3]) / 2
+  const rows: unknown[][] = geojson.features.map((feature, index) => {
+    const row: unknown[] = [
+      index,
+      feature.geometry ? JSON.stringify(feature.geometry) : null
     ];
 
-    return {
-      type,
-      bounds,
-      centroid,
-      crs: geojson.crs?.properties?.name || 'EPSG:4326',
-      featureCount: geojson.features.length
-    };
-  }
-
-  private computeBounds(
-    geojson: GeoJSONFeatureCollection
-  ): [number, number, number, number] {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-
-    const processCoords = (coords: unknown): void => {
-      if (Array.isArray(coords)) {
-        if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
-          // This is a [lon, lat] pair
-          minX = Math.min(minX, coords[0]);
-          minY = Math.min(minY, coords[1]);
-          maxX = Math.max(maxX, coords[0]);
-          maxY = Math.max(maxY, coords[1]);
-        } else {
-          // This is a nested array - recurse
-          coords.forEach((c) => processCoords(c));
-        }
-      }
-    };
-
-    geojson.features.forEach((feature) => {
-      if (feature.geometry?.coordinates) {
-        processCoords(feature.geometry.coordinates);
-      }
+    propertyKeys.forEach((key) => {
+      row.push(feature.properties?.[key] ?? null);
     });
 
-    // If no valid coordinates found, return default bounds
-    if (!isFinite(minX)) {
-      return [-180, -90, 180, 90];
-    }
+    return row;
+  });
 
-    return [minX, minY, maxX, maxY];
+  const columns: RawColumn[] = headers.map((name, colIndex) => ({
+    name,
+    values: rows.map((row) => row[colIndex])
+  }));
+
+  const geometryInfo = computeGeometryInfo(geojson);
+
+  return {
+    headers,
+    rows,
+    columns,
+    geometry: geometryInfo,
+    metadata: {
+      featureCount: geojson.features.length,
+      crs: geojson.crs?.properties?.name || 'EPSG:4326',
+      fileType: 'geojson',
+      rowCount: rows.length,
+      columnCount: headers.length
+    }
+  };
+}
+
+function computeGeometryInfo(geojson: GeoJSONFeatureCollection): GeometryInfo {
+  const geometryTypes = new Set<string>();
+  geojson.features.forEach((feature) => {
+    const geometryType = extractGeometryType(feature.geometry);
+    if (geometryType) {
+      geometryTypes.add(geometryType);
+    }
+  });
+
+  const type =
+    geometryTypes.size === 1 ? Array.from(geometryTypes)[0] : 'Mixed';
+  const bounds = computeBounds(geojson);
+  const centroid: [number, number] = [
+    (bounds[0] + bounds[2]) / 2,
+    (bounds[1] + bounds[3]) / 2
+  ];
+
+  return {
+    type,
+    bounds,
+    centroid,
+    crs: geojson.crs?.properties?.name || 'EPSG:4326',
+    featureCount: geojson.features.length
+  };
+}
+
+function computeBounds(
+  geojson: GeoJSONFeatureCollection
+): [number, number, number, number] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  const processCoords = (coords: unknown): void => {
+    if (Array.isArray(coords)) {
+      if (typeof coords[0] === 'number' && typeof coords[1] === 'number') {
+        minX = Math.min(minX, coords[0]);
+        minY = Math.min(minY, coords[1]);
+        maxX = Math.max(maxX, coords[0]);
+        maxY = Math.max(maxY, coords[1]);
+      } else {
+        coords.forEach((c) => processCoords(c));
+      }
+    }
+  };
+
+  geojson.features.forEach((feature) => {
+    processGeometryCoordinates(feature.geometry, processCoords);
+  });
+
+  if (!isFinite(minX)) {
+    return [-180, -90, 180, 90];
+  }
+
+  return [minX, minY, maxX, maxY];
+}
+
+function extractGeometryType(geometry: unknown): string | null {
+  if (!geometry || typeof geometry !== 'object') {
+    return null;
+  }
+
+  const geometryRecord = geometry as Record<string, unknown>;
+  const typeValue = geometryRecord.type;
+  return typeof typeValue === 'string' ? typeValue : null;
+}
+
+function processGeometryCoordinates(
+  geometry: GeoJSONFeature['geometry'],
+  processCoords: (coords: unknown) => void
+): void {
+  if (!geometry || typeof geometry !== 'object') {
+    return;
+  }
+
+  if ('coordinates' in geometry) {
+    const coords = (geometry as { coordinates?: unknown }).coordinates;
+    if (coords !== undefined) {
+      processCoords(coords);
+    }
+    return;
+  }
+
+  if ('geometries' in geometry) {
+    const geometries = (geometry as { geometries?: unknown }).geometries;
+    if (Array.isArray(geometries)) {
+      geometries.forEach((geom) =>
+        processGeometryCoordinates(
+          geom as GeoJSONFeature['geometry'],
+          processCoords
+        )
+      );
+    }
   }
 }

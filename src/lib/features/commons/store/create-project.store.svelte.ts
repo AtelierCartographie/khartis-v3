@@ -1,3 +1,5 @@
+import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+import { SvelteMap } from 'svelte/reactivity';
 import {
   FileProcessorService,
   type ProcessingCallbacks
@@ -6,6 +8,7 @@ import { CreateProjectValidationService } from '../../create-project/services/va
 import {
   createUploadedFile,
   extractDataFromPaste,
+  extractUrlsFromInput,
   FileType,
   getFilenameFromUrl,
   groupShapefiles,
@@ -14,7 +17,6 @@ import {
   parseShapefile,
   readFileContent
 } from '../utils/file-import.utils';
-import { DataSourceType } from './create-project.types';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
@@ -25,11 +27,10 @@ import type {
   SavedProject,
   UploadedFile
 } from './create-project.types';
-import { projectStore } from './project.store.svelte';
+import { DataSourceType } from './create-project.types';
 import { datasetsStore } from './datasets.store.svelte';
+import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
-import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
-import { SvelteMap } from 'svelte/reactivity';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -87,7 +88,10 @@ export const createProjectActions = {
     return false;
   },
 
-  async processFiles(files: File[]): Promise<void> {
+  async processFiles(
+    files: File[],
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+  ): Promise<void> {
     const validationResult =
       CreateProjectValidationService.validateFiles(files);
 
@@ -148,7 +152,7 @@ export const createProjectActions = {
             fileType: mainFile.name.endsWith('.shp')
               ? FileType.SHAPEFILE
               : FileType.UNKNOWN,
-            sourceType: DataSourceType.FILE_UPLOAD,
+            sourceType,
             relatedFiles: groupFiles
               .filter((f) => f !== mainFile)
               .map((f) => f.name),
@@ -176,9 +180,9 @@ export const createProjectActions = {
         groupFiles.length === 1 &&
         !isShapefileComponent(groupFiles[0].name)
       ) {
-        await this.processSingleFile(groupFiles[0]);
+        await this.processSingleFile(groupFiles[0], sourceType);
       } else {
-        await this.processShapefileGroup(baseName, groupFiles);
+        await this.processShapefileGroup(baseName, groupFiles, sourceType);
       }
     }
   },
@@ -216,7 +220,11 @@ export const createProjectActions = {
     await processor.processFile(uploadedFile, file);
   },
 
-  async processShapefileGroup(baseName: string, files: File[]): Promise<void> {
+  async processShapefileGroup(
+    baseName: string,
+    files: File[],
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+  ): Promise<void> {
     const mainFile = files.find((f) => f.name.endsWith('.shp'));
     if (!mainFile) {
       const errorFile: UploadedFile = {
@@ -227,7 +235,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: 'Missing .shp file in shapefile set',
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType
       };
       this.addUploadedFile(errorFile);
       showError('Invalid shapefile', 'Missing .shp file in shapefile set');
@@ -251,7 +259,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType
       };
       this.addUploadedFile(errorFile);
       showError(
@@ -268,7 +276,7 @@ export const createProjectActions = {
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
       status: 'processing',
-      sourceType: DataSourceType.FILE_UPLOAD,
+      sourceType,
       relatedFiles: files.map((f) => f.name)
     };
 
@@ -289,20 +297,18 @@ export const createProjectActions = {
       });
 
       this.updateFileData(uploadedFile.id, {
-        parsedData: geojson,
+        parsedData: geojson as UploadedFile['parsedData'],
         content: JSON.stringify(geojson),
         status: 'complete'
       });
-    } catch (_error) {
+    } catch (error) {
       const message =
-        _error instanceof Error
-          ? _error.message
-          : 'Failed to process shapefile';
+        error instanceof Error ? error.message : 'Failed to process shapefile';
       this.updateFileData(uploadedFile.id, {
         status: 'error',
         errorMessage: message
       });
-      showError('Shapefile processing failed', message, _error);
+      showError('Shapefile processing failed', message, error);
     }
   },
 
@@ -412,9 +418,17 @@ export const createProjectActions = {
   },
 
   async loadOnlineFile(): Promise<void> {
-    const url = createProjectState.newProject.onlineFileUrl;
-    if (!url || !isValidUrl(url)) {
-      this.setNewProjectError('Please enter a valid HTTP or HTTPS URL');
+    const inputValue = createProjectState.newProject.onlineFileUrl;
+    const urls = extractUrlsFromInput(inputValue);
+
+    if (urls.length === 0) {
+      this.setNewProjectError('Please enter at least one HTTP or HTTPS URL');
+      return;
+    }
+
+    const invalidUrls = urls.filter((entry) => !isValidUrl(entry));
+    if (invalidUrls.length > 0) {
+      this.setNewProjectError(`Invalid URL(s): ${invalidUrls.join(', ')}`);
       return;
     }
 
@@ -422,25 +436,57 @@ export const createProjectActions = {
     this.setNewProjectError();
 
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const downloadedFiles: File[] = [];
+      for (let index = 0; index < urls.length; index++) {
+        const remoteUrl = urls[index];
+        const remoteFile = await this.downloadRemoteFile(remoteUrl, index);
+        downloadedFiles.push(remoteFile);
       }
 
-      const filename = getFilenameFromUrl(url);
-      const blob = await response.blob();
-      const file = new File([blob], filename, { type: blob.type });
+      if (downloadedFiles.length === 1) {
+        await this.processSingleFile(downloadedFiles[0], DataSourceType.URL);
+      } else {
+        await this.processFiles(downloadedFiles, DataSourceType.URL);
+      }
 
-      await this.processSingleFile(file, DataSourceType.URL);
       this.setOnlineFileUrl('');
-    } catch (_error) {
+    } catch (error) {
       const message =
-        _error instanceof Error ? _error.message : 'Failed to load online file';
+        error instanceof Error
+          ? error.message
+          : 'Failed to load online file(s)';
       this.setNewProjectError(message);
-      showError('Failed to load online file', message, _error);
+      showError('Failed to load online file(s)', message, error);
     } finally {
       this.setNewProjectLoading(false);
     }
+  },
+
+  async downloadRemoteFile(url: string, index: number): Promise<File> {
+    logger.info('Downloading remote file', LogCategory.FILE, {
+      url,
+      index
+    });
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${response.status} (${response.statusText}) for ${url}`
+      );
+    }
+
+    const blob = await response.blob();
+    const headerFilename = getFilenameFromContentDisposition(response.headers);
+    const urlFilename = getFilenameFromUrl(url);
+    const safeName = ensureFilenameHasExtension(
+      headerFilename || urlFilename,
+      blob.type,
+      index
+    );
+
+    return new File([blob], safeName, {
+      type: blob.type || 'application/octet-stream'
+    });
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
@@ -478,9 +524,13 @@ export const createProjectActions = {
    * Used when closing the add-data modal after successful import.
    */
   clearUploadState(): void {
-    logger.info('clearUploadState called - clearing UI only', LogCategory.FILE, {
-      uploadedFilesCount: createProjectState.newProject.uploadedFiles.length
-    });
+    logger.info(
+      'clearUploadState called - clearing UI only',
+      LogCategory.FILE,
+      {
+        uploadedFilesCount: createProjectState.newProject.uploadedFiles.length
+      }
+    );
 
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
@@ -589,3 +639,71 @@ export const createProjectActions = {
     Object.assign(createProjectState, DEFAULT_STATE);
   }
 };
+
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  'text/csv': '.csv',
+  'application/csv': '.csv',
+  'text/tab-separated-values': '.tsv',
+  'application/json': '.json',
+  'application/geo+json': '.geojson',
+  'application/vnd.geo+json': '.geojson',
+  'application/geopackage+sqlite3': '.gpkg',
+  'application/x-sqlite3': '.gpkg',
+  'application/geoparquet': '.geoparquet',
+  'application/x-parquet': '.parquet',
+  'application/parquet': '.parquet',
+  'application/vnd.google-earth.kml+xml': '.kml',
+  'application/vnd.google-earth.kmz': '.kmz',
+  'application/x-shapefile': '.shp',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip'
+};
+
+function getFilenameFromContentDisposition(
+  headers: Headers
+): string | undefined {
+  const disposition = headers.get('content-disposition');
+  if (!disposition) {
+    return undefined;
+  }
+
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+
+  if (!match || !match[1]) {
+    return undefined;
+  }
+
+  const value = match[1].replace(/(^"|"$)/g, '').trim();
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    logger.debug(
+      'Failed to decode filename from Content-Disposition',
+      LogCategory.FILE,
+      error
+    );
+    return value;
+  }
+}
+
+function ensureFilenameHasExtension(
+  rawName: string,
+  mimeType: string,
+  index: number
+): string {
+  const baseName =
+    rawName && rawName.length > 0 ? rawName : `remote-file-${index + 1}`;
+
+  if (baseName.includes('.')) {
+    return baseName;
+  }
+
+  const normalizedMime = (mimeType || '').split(';')[0].toLowerCase();
+  const extension = MIME_EXTENSION_MAP[normalizedMime];
+
+  if (extension) {
+    return `${baseName}${extension}`;
+  }
+
+  return `${baseName}.dat`;
+}

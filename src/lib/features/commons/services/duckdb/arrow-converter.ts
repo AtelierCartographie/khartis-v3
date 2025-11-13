@@ -27,8 +27,6 @@ export async function insertArrowTableIntoDuckDB(
     // We need to use IPC stream format instead
 
     logger.debug('Operation', LogCategory.DUCKDB);
-    const ipcStart = performance.now();
-
     // Serialize Arrow table to IPC format (binary stream)
     const ipcStream = tableToIPC(table);
     logger.debug('Operation', LogCategory.DUCKDB);
@@ -38,8 +36,6 @@ export async function insertArrowTableIntoDuckDB(
       ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
     logger.debug('Operation', LogCategory.DUCKDB);
-    const insertStart = performance.now();
-
     // Use insertArrowFromIPCStream which is more reliable for DuckDB-WASM
     await Duck.connection.insertArrowFromIPCStream(ipcBuffer, {
       name: tableName,
@@ -59,7 +55,6 @@ export async function insertArrowTableIntoDuckDB(
 
     logger.debug('Operation', LogCategory.DUCKDB);
   } catch (error) {
-    const errorDuration = performance.now() - startTime;
     logger.error('Operation', LogCategory.DUCKDB);
     logger.error(
       'Failed to insert Arrow table into DuckDB',

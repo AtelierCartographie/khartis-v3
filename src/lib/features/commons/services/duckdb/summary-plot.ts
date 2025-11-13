@@ -44,7 +44,7 @@ interface CategoricalData {
   uniques?: number;
 }
 
-type SummaryData = NumericData | CategoricalData;
+export type SummaryPlotData = NumericData | CategoricalData;
 
 type LabelFunction = (label: string | null) => string;
 type PercentRange = [number, number];
@@ -84,7 +84,7 @@ interface ObservablePlotStackOptions {
 }
 
 export function create_summary_plot(
-  data: SummaryData,
+  data: SummaryPlotData,
   options: SummaryPlotOptions = {}
 ) {
   const { type_simple } = data;

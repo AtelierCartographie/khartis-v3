@@ -10,9 +10,9 @@ if (typeof FileReader === 'undefined') {
 
     error: Error | null = null;
 
-    onload: ((this: FileReader, ev: ProgressEvent) => any) | null = null;
+    onload: ((this: FileReader, ev: ProgressEvent) => void) | null = null;
 
-    onerror: ((this: FileReader, ev: ProgressEvent) => any) | null = null;
+    onerror: ((this: FileReader, ev: ProgressEvent) => void) | null = null;
 
     readAsArrayBuffer(blob: Blob) {
       // Simulate async read
@@ -49,7 +49,7 @@ if (typeof FileReader === 'undefined') {
         }
       }, 0);
     }
-  } as any;
+  } as unknown as typeof globalThis.FileReader;
 }
 
 describe('FileValidator', () => {

@@ -3,10 +3,11 @@
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
   import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service.svelte';
-  import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ZoomMode } from '$lib/features/commons/types/global';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import Header from '$lib/features/header/header.svelte';
   import Logo from '$lib/features/header/logo.svelte';
@@ -31,7 +32,8 @@
     // Initialize DuckDB first
     try {
       await duckDBOrchestrator.initialize();
-    } catch (_error) {
+    } catch (error) {
+      logger.error('DuckDB initialization failed', LogCategory.DUCKDB, error);
       // Silent fail - DuckDB initialization is optional
     }
 

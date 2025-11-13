@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Map as MapLibreMap } from 'maplibre-gl';
+  import type { Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
   import { onMount } from 'svelte';
 
   interface MapCoordinatesProps {
@@ -11,7 +11,7 @@
   let coordinates = $state({ lng: 0, lat: 0 });
   let isMapReady = $state(false);
 
-  const handleMouseMove = (e: any): void => {
+  const handleMouseMove = (e: MapMouseEvent): void => {
     coordinates = {
       lng: parseFloat(e.lngLat.lng.toFixed(4)),
       lat: parseFloat(e.lngLat.lat.toFixed(4))

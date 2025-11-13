@@ -39,7 +39,9 @@ class ImportRollbackService {
     const currentProject = projectStore.currentProject;
     const existingDataset = datasetsStore.getDatasetBySourceFile(file.id);
     const existingVisualizationsIds = existingDataset
-      ? visualizationStore.getVisualizationsByDataset(existingDataset.id).map((v) => v.id)
+      ? visualizationStore
+          .getVisualizationsByDataset(existingDataset.id)
+          .map((v) => v.id)
       : [];
     const existingDuckDBDataset = duckDBOrchestrator
       .getAllDatasets()
@@ -49,7 +51,9 @@ class ImportRollbackService {
       fileId: file.id,
       fileName: file.name,
       timestamp: new Date(),
-      hadProjectFile: !!currentProject?.data?.sourceFiles?.some((f) => f.id === file.id),
+      hadProjectFile: !!currentProject?.data?.sourceFiles?.some(
+        (f) => f.id === file.id
+      ),
       hadDataset: !!existingDataset,
       datasetId: existingDataset?.id,
       hadDuckDBTable: !!existingDuckDBDataset,
@@ -110,7 +114,9 @@ class ImportRollbackService {
         const dataset = datasetsStore.getDatasetBySourceFile(snapshot.fileId);
         if (dataset) {
           // Remove visualizations created for this dataset
-          const visualizations = visualizationStore.getVisualizationsByDataset(dataset.id);
+          const visualizations = visualizationStore.getVisualizationsByDataset(
+            dataset.id
+          );
           visualizations.forEach((viz) => {
             visualizationStore.removeVisualization(viz.id);
             cleanupResults.visualizations++;
@@ -139,9 +145,13 @@ class ImportRollbackService {
           cleanupResults.duckDBTable = true;
           cleanupResults.duckDBCache = true;
 
-          logger.info('Rolled back DuckDB table and cache', LogCategory.DUCKDB, {
-            tableName: duckDataset.tableName
-          });
+          logger.info(
+            'Rolled back DuckDB table and cache',
+            LogCategory.DUCKDB,
+            {
+              tableName: duckDataset.tableName
+            }
+          );
         }
       }
 
@@ -172,7 +182,10 @@ class ImportRollbackService {
       const { Duck } = await import('./duckdb/duckdb');
 
       if (!Duck) {
-        logger.warn('DuckDB not initialized, skipping cleanup', LogCategory.DUCKDB);
+        logger.warn(
+          'DuckDB not initialized, skipping cleanup',
+          LogCategory.DUCKDB
+        );
         return;
       }
 
@@ -196,26 +209,25 @@ class ImportRollbackService {
 
       // Remove from cache with LRU update
       if (Duck.table_geoparquet_cache.has(tableName)) {
-        const buffer = Duck.table_geoparquet_cache.get(tableName);
         Duck.table_geoparquet_cache.delete(tableName);
-
-        const cacheIndex = Duck['cacheAccessOrder']?.indexOf(tableName);
-        if (cacheIndex !== undefined && cacheIndex > -1) {
-          Duck['cacheAccessOrder'].splice(cacheIndex, 1);
-          if (buffer) {
-            Duck['cacheSize'] = (Duck['cacheSize'] || 0) - buffer.byteLength;
-          }
-        }
       }
 
-      logger.info('DuckDB resources cleaned up during rollback', LogCategory.DUCKDB, {
-        tableName
-      });
+      logger.info(
+        'DuckDB resources cleaned up during rollback',
+        LogCategory.DUCKDB,
+        {
+          tableName
+        }
+      );
     } catch (error) {
-      logger.warn('Failed to cleanup DuckDB resources during rollback', LogCategory.DUCKDB, {
-        tableName,
-        error
-      });
+      logger.warn(
+        'Failed to cleanup DuckDB resources during rollback',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          error
+        }
+      );
     }
   }
 }

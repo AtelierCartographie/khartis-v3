@@ -107,7 +107,7 @@ const CITY_SAMPLES = [
 export const GeoColumnDetector = {
   async detectGeoColumns(
     headers: string[],
-    data: any[][],
+    data: unknown[][],
     options: { sampleSize?: number } = {}
   ): Promise<GeoDetectionResult> {
     const sampleSize = options.sampleSize || Math.min(100, data.length);
@@ -168,7 +168,7 @@ export const GeoColumnDetector = {
 
   detectColumnType(
     header: string,
-    values: any[]
+    values: unknown[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
     const headerLower = header.toLowerCase().trim();
     const sampleValues = values.slice(0, 5).map((v) => String(v));
@@ -227,7 +227,7 @@ export const GeoColumnDetector = {
   },
 
   detectByValues(
-    values: any[]
+    values: unknown[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
     const stringValues = values
       .filter((v) => v != null)
@@ -318,7 +318,7 @@ export const GeoColumnDetector = {
     return null;
   },
 
-  validateColumnValues(type: string, values: any[]): number {
+  validateColumnValues(type: string, values: unknown[]): number {
     const validator = VALUE_PATTERNS[type as keyof typeof VALUE_PATTERNS];
     if (!validator) return 0;
 

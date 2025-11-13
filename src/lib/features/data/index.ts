@@ -66,6 +66,9 @@ export {
 export { CSVParser } from './infrastructure/parsers/csv.parser';
 export { GeoJSONParser } from './infrastructure/parsers/geojson.parser';
 export { ShapefileParser } from './infrastructure/parsers/shapefile.parser';
+export { GeoPackageParser } from './infrastructure/parsers/geopackage.parser';
+export { KMLParser } from './infrastructure/parsers/kml.parser';
+export { GeoParquetParser } from './infrastructure/parsers/geoparquet.parser';
 export { ParserRegistry } from './infrastructure/parsers/parser.registry';
 
 // Validators - export for custom validator registration

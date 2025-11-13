@@ -1,12 +1,13 @@
 import localforage from 'localforage';
 import {
   STORAGE_LIMITS,
-  type ValidationResult,
-  type StorageLimits
+  type StorageLimits,
+  type ValidationResult
 } from '../configs/validation.config';
+import { logger, LogCategory } from './logger';
 
 // Re-export pour compatibilité avec le code existant
-export { STORAGE_LIMITS, type ValidationResult, type StorageLimits };
+export { STORAGE_LIMITS, type StorageLimits, type ValidationResult };
 
 export const ProjectValidator = {
   validateFileSize(file: File): ValidationResult {
@@ -32,7 +33,7 @@ export const ProjectValidator = {
     return result;
   },
 
-  validateProjectSize(projectData: any): ValidationResult {
+  validateProjectSize(projectData: unknown): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -144,7 +145,8 @@ export const ProjectValidator = {
           'Espace de stockage insuffisant. Veuillez nettoyer le cache du navigateur.'
         );
       }
-    } catch (_error) {
+    } catch (error) {
+      logger.error('Failed to check storage usage', LogCategory.STORE, error);
       result.warnings.push("Impossible de vérifier l'utilisation du stockage");
     }
 
@@ -160,7 +162,7 @@ export const ProjectValidator = {
 } as const;
 
 export const DataValidator = {
-  validateCSVData(data: any[]): ValidationResult {
+  validateCSVData(data: Record<string, unknown>[]): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
@@ -201,32 +203,34 @@ export const DataValidator = {
     return result;
   },
 
-  validateGeoData(data: any): ValidationResult {
+  validateGeoData(data: unknown): ValidationResult {
     const result: ValidationResult = {
       isValid: true,
       errors: [],
       warnings: []
     };
 
-    if (!data) {
+    if (!data || typeof data !== 'object') {
       result.isValid = false;
       result.errors.push('Données géographiques invalides');
       return result;
     }
 
-    if (data.type === 'FeatureCollection') {
-      if (!data.features || !Array.isArray(data.features)) {
+    const geo = data as { type?: string; features?: unknown[] };
+
+    if (geo.type === 'FeatureCollection') {
+      if (!Array.isArray(geo.features)) {
         result.isValid = false;
         result.errors.push('FeatureCollection invalide : features manquantes');
         return result;
       }
 
-      if (data.features.length === 0) {
+      if (geo.features.length === 0) {
         result.isValid = false;
         result.errors.push('Aucune entité géographique trouvée');
       }
 
-      if (data.features.length > 50000) {
+      if (geo.features.length > 50000) {
         result.warnings.push(
           'Plus de 50 000 entités géographiques. Les performances pourraient être affectées.'
         );

@@ -103,9 +103,6 @@ class ProjectStore {
       this._state.currentProject.data.sourceFiles = [];
     }
 
-    const _isFirstFile =
-      this._state.currentProject.data.sourceFiles.length === 0;
-
     for (const file of newFiles) {
       const exists = this._state.currentProject.data.sourceFiles.find(
         (f) => f.id === file.id || f.name === file.name
@@ -137,10 +134,15 @@ class ProjectStore {
 
         // Force reactivity by reassigning currentProject with deep copy of data
         // Do everything in one assignment to avoid intermediate states
-        logger.debug('BEFORE adding file to currentProject', LogCategory.PROJECT, {
-          currentSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
-          fileToAdd: fileCopy.name
-        });
+        logger.debug(
+          'BEFORE adding file to currentProject',
+          LogCategory.PROJECT,
+          {
+            currentSourceFilesCount:
+              this._state.currentProject.data.sourceFiles.length,
+            fileToAdd: fileCopy.name
+          }
+        );
 
         this._state.currentProject = {
           ...this._state.currentProject,
@@ -153,10 +155,17 @@ class ProjectStore {
           }
         };
 
-        logger.success('AFTER adding file to currentProject', LogCategory.PROJECT, {
-          newSourceFilesCount: this._state.currentProject.data.sourceFiles.length,
-          allFileNames: this._state.currentProject.data.sourceFiles.map(f => f.name)
-        });
+        logger.success(
+          'AFTER adding file to currentProject',
+          LogCategory.PROJECT,
+          {
+            newSourceFilesCount:
+              this._state.currentProject.data.sourceFiles.length,
+            allFileNames: this._state.currentProject.data.sourceFiles.map(
+              (f) => f.name
+            )
+          }
+        );
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
@@ -328,9 +337,10 @@ class ProjectStore {
         throw new Error(capacityCheck.errors.join(', '));
       }
 
-      const duplicationSuffix = (m as any).project_duplicate_suffix
-        ? (m as any).project_duplicate_suffix()
-        : '(copy)';
+      const duplicationSuffix =
+        typeof m.project_duplicate_suffix === 'function'
+          ? m.project_duplicate_suffix()
+          : '(copy)';
       const duplicatedName =
         newName || `${originalProject.manifest.name} ${duplicationSuffix}`;
       const nameValidation =

@@ -1,20 +1,153 @@
+import { Duck, initDuckDB } from '$lib/features/commons/services/duckdb/duckdb';
+import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  GeometryCollection
+} from 'geojson';
 import type {
   DatasetResult,
   EnrichedColumn
 } from '../../domain/entities/dataset-result.entity';
-import type { ValidationResult } from '../../domain/value-objects/validation-result.vo';
 import type { RawDataset } from '../../domain/entities/raw-dataset.entity';
-import { ParserRegistry } from '../../infrastructure/parsers/parser.registry';
-import { ValidationChain } from '../../infrastructure/validators/validation.chain';
-import { HeuristicTypeInferrer } from '../../infrastructure/type-inference/heuristic-inferrer';
-import { Duck, initDuckDB } from '$lib/features/commons/services/duckdb/duckdb';
 import { ParserError } from '../../domain/interfaces/parser.interface';
-import {
-  fromDuckDBType,
-  ColumnType
-} from '../../domain/value-objects/column-type.vo';
-import type { ColumnInfo } from '../../types/AnalysisResult';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { fromDuckDBType } from '../../domain/value-objects/column-type.vo';
+import type { ValidationResult } from '../../domain/value-objects/validation-result.vo';
+import { ParserRegistry } from '../../infrastructure/parsers/parser.registry';
+import { HeuristicTypeInferrer } from '../../infrastructure/type-inference/heuristic-inferrer';
+import { ValidationChain } from '../../infrastructure/validators/validation.chain';
+
+type LegacyDatasetFormat = {
+  data?: unknown[];
+  columns?: EnrichedColumn[];
+  analysis?: {
+    columns?: EnrichedColumn[];
+    geoColumns?: unknown[];
+    hasGeoData?: boolean;
+    rowCount?: number;
+    warnings?: string[];
+  };
+  [key: string]: unknown;
+};
+
+type GeoJSONLike =
+  | FeatureCollection
+  | Feature
+  | GeometryCollection
+  | Geometry
+  | Feature[];
+
+const GEOMETRY_TYPES: Geometry['type'][] = [
+  'Point',
+  'MultiPoint',
+  'LineString',
+  'MultiLineString',
+  'Polygon',
+  'MultiPolygon'
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isFeatureCollection(value: unknown): value is FeatureCollection {
+  return (
+    isRecord(value) &&
+    value.type === 'FeatureCollection' &&
+    Array.isArray(value.features)
+  );
+}
+
+function isFeature(value: unknown): value is Feature {
+  return isRecord(value) && value.type === 'Feature' && 'geometry' in value;
+}
+
+function isFeatureArray(value: unknown): value is Feature[] {
+  return Array.isArray(value) && value.every(isFeature);
+}
+
+function isGeometryCollection(value: unknown): value is GeometryCollection {
+  return (
+    isRecord(value) &&
+    value.type === 'GeometryCollection' &&
+    Array.isArray(value.geometries)
+  );
+}
+
+function isGeometry(value: unknown): value is Geometry {
+  if (!isRecord(value)) return false;
+  const type = value.type;
+  return (
+    typeof type === 'string' &&
+    GEOMETRY_TYPES.includes(type as Geometry['type']) &&
+    'coordinates' in value
+  );
+}
+
+function normalizeGeojsonInput(data: GeoJSONLike | unknown): FeatureCollection {
+  if (isFeatureCollection(data)) {
+    return data;
+  }
+
+  if (isFeatureArray(data)) {
+    return {
+      type: 'FeatureCollection',
+      features: data
+    };
+  }
+
+  if (isFeature(data)) {
+    return {
+      type: 'FeatureCollection',
+      features: [data]
+    };
+  }
+
+  if (isGeometryCollection(data)) {
+    return {
+      type: 'FeatureCollection',
+      features: data.geometries.map((geom) => ({
+        type: 'Feature',
+        properties: {},
+        geometry: geom
+      }))
+    };
+  }
+
+  if (isGeometry(data)) {
+    return {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: {},
+          geometry: data
+        }
+      ]
+    };
+  }
+
+  throw new Error('Invalid GeoJSON structure from shapefile');
+}
+
+function describeGeojsonStructure(data: unknown): {
+  type?: string;
+  hasFeatures: boolean;
+  isArray: boolean;
+  keys: string[];
+} {
+  const record = isRecord(data) ? data : {};
+  const typeValue = record.type;
+  return {
+    type: typeof typeValue === 'string' ? typeValue : undefined,
+    hasFeatures: Array.isArray((record as { features?: unknown }).features),
+    isArray: Array.isArray(data),
+    keys: Object.keys(record)
+  };
+}
 
 /**
  * Data Pipeline Service - SINGLE ENTRY POINT for data processing
@@ -77,8 +210,9 @@ export class DataPipelineService {
       size: number;
       type: string;
       content?: string | ArrayBuffer;
-      parsedData?: any;
+      parsedData?: unknown;
       fileType?: string;
+      deepAnalysis?: DataAnalysisResult;
     },
     originalFile?: File
   ): Promise<DatasetResult> {
@@ -94,77 +228,54 @@ export class DataPipelineService {
 
     // SPECIAL CASE: Shapefile already parsed to GeoJSON by processShapefileGroup
     if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
-      logger.info('Shapefile already parsed to GeoJSON, converting', LogCategory.FILE, {
-        parsedDataType: typeof uploadedFile.parsedData,
-        isString: typeof uploadedFile.parsedData === 'string'
-      });
+      logger.info(
+        'Shapefile already parsed to GeoJSON, converting',
+        LogCategory.FILE,
+        {
+          parsedDataType: typeof uploadedFile.parsedData,
+          isString: typeof uploadedFile.parsedData === 'string'
+        }
+      );
 
       // Parse GeoJSON if it's a string
-      let geojsonData = typeof uploadedFile.parsedData === 'string'
-        ? JSON.parse(uploadedFile.parsedData)
-        : uploadedFile.parsedData;
+      const parsedGeojson = (
+        typeof uploadedFile.parsedData === 'string'
+          ? JSON.parse(uploadedFile.parsedData)
+          : uploadedFile.parsedData
+      ) as GeoJSONLike | unknown;
 
-      logger.debug('GeoJSON structure validated', LogCategory.DATA, {
-        type: geojsonData?.type,
-        hasFeatures: !!geojsonData?.features,
-        isArray: Array.isArray(geojsonData),
-        keys: Object.keys(geojsonData || {})
-      });
+      const structureInfo = describeGeojsonStructure(parsedGeojson);
 
-      // Normalize GeoJSON structure - shpjs can return different formats
-      // Ensure it's a FeatureCollection
-      if (!geojsonData.type) {
-        // If no type, assume it's an array of features or a single feature
-        if (Array.isArray(geojsonData)) {
-          geojsonData = {
-            type: 'FeatureCollection',
-            features: geojsonData
-          };
-        } else if (geojsonData.geometry) {
-          // Single feature
-          geojsonData = {
-            type: 'FeatureCollection',
-            features: [geojsonData]
-          };
-        } else {
-          throw new Error('Invalid GeoJSON structure from shapefile');
-        }
-      } else if (geojsonData.type === 'Feature') {
-        // Wrap single feature in FeatureCollection
-        geojsonData = {
-          type: 'FeatureCollection',
-          features: [geojsonData]
-        };
-      } else if (geojsonData.type === 'GeometryCollection') {
-        // Convert GeometryCollection to FeatureCollection
-        geojsonData = {
-          type: 'FeatureCollection',
-          features: geojsonData.geometries.map((geom: any, idx: number) => ({
-            type: 'Feature',
-            properties: {},
-            geometry: geom
-          }))
-        };
-      }
+      logger.debug('GeoJSON structure validated', LogCategory.DATA, structureInfo);
+
+      const normalizedGeojson = normalizeGeojsonInput(parsedGeojson);
 
       logger.debug('GeoJSON normalized', LogCategory.DATA, {
-        type: geojsonData.type,
-        featureCount: geojsonData.features?.length
+        type: normalizedGeojson.type,
+        featureCount: normalizedGeojson.features.length
       });
 
-      const geojsonString = JSON.stringify(geojsonData);
-      const geojsonFile = new File([geojsonString], uploadedFile.name.replace(/\.shp$/i, '.geojson'), {
-        type: 'application/geo+json'
-      });
+      const geojsonString = JSON.stringify(normalizedGeojson);
+      const geojsonFile = new File(
+        [geojsonString],
+        uploadedFile.name.replace(/\.shp$/i, '.geojson'),
+        {
+          type: 'application/geo+json'
+        }
+      );
 
       const dataset = await this.processFile(geojsonFile);
       dataset.sourceFileId = uploadedFile.id;
       dataset.name = uploadedFile.name; // Keep original shapefile name
 
-      logger.success('Shapefile processed via GeoJSON parser', LogCategory.DATA, {
-        fileName: uploadedFile.name,
-        featureCount: geojsonData.features?.length
-      });
+      logger.success(
+        'Shapefile processed via GeoJSON parser',
+        LogCategory.DATA,
+        {
+          fileName: uploadedFile.name,
+          featureCount: normalizedGeojson.features.length
+        }
+      );
       return dataset;
     }
 
@@ -179,12 +290,14 @@ export class DataPipelineService {
         fileName: uploadedFile.name
       });
 
-      // SPECIAL CASE: If content is JSON (from old FileProcessor), skip dataPipeline
-      // This happens when loading saved projects that were processed by the old system
       if (typeof uploadedFile.content === 'string') {
         try {
-          const parsed = JSON.parse(uploadedFile.content);
-          const keys = Object.keys(parsed);
+          const parsedJson = JSON.parse(uploadedFile.content) as unknown;
+          const parsed =
+            parsedJson && typeof parsedJson === 'object'
+              ? (parsedJson as LegacyDatasetFormat)
+              : {};
+          const keys = Object.keys(parsed as Record<string, unknown>);
           logger.debug('Content structure analysis', LogCategory.DATA, {
             hasData: !!parsed.data,
             hasColumns: !!parsed.columns,
@@ -194,45 +307,46 @@ export class DataPipelineService {
             isArray: Array.isArray(parsed)
           });
 
-          // CASE 1: JSON with data and columns properties
-          if (parsed && typeof parsed === 'object' && parsed.data && parsed.columns) {
-            logger.warn('Legacy format detected - converting to DatasetResult', LogCategory.DATA, {
-              fileName: uploadedFile.name,
-              rowCount: parsed.data?.length,
-              columnCount: parsed.columns?.length
-            });
+          if (parsed.data && parsed.columns) {
+            logger.warn(
+              'Legacy format detected - converting to DatasetResult',
+              LogCategory.DATA,
+              {
+                fileName: uploadedFile.name,
+                rowCount: parsed.data?.length,
+                columnCount: parsed.columns?.length
+              }
+            );
 
-            // Normalize data to ensure flat structure (no nested objects)
-            const normalizedData = (parsed.data || []).map((row: any) => {
-              // If row is not an object, wrap it
+            const legacyRows = Array.isArray(parsed.data) ? parsed.data : [];
+            const normalizedData = legacyRows.map((row) => {
               if (!row || typeof row !== 'object') {
                 return { value: row };
               }
 
-              // Flatten nested objects to primitive values
               const flatRow: Record<string, unknown> = {};
-              Object.entries(row).forEach(([key, value]) => {
-                // Convert non-primitive values to strings
-                if (value !== null && value !== undefined) {
-                  if (typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-                    // Complex object: stringify it
-                    flatRow[key] = JSON.stringify(value);
-                  } else if (Array.isArray(value)) {
-                    // Array: join as string
-                    flatRow[key] = value.join(', ');
+              Object.entries(row as Record<string, unknown>).forEach(
+                ([key, value]) => {
+                  if (value !== null && value !== undefined) {
+                    if (
+                      typeof value === 'object' &&
+                      !Array.isArray(value) &&
+                      !(value instanceof Date)
+                    ) {
+                      flatRow[key] = JSON.stringify(value);
+                    } else if (Array.isArray(value)) {
+                      flatRow[key] = value.join(', ');
+                    } else {
+                      flatRow[key] = value;
+                    }
                   } else {
-                    // Primitive value: keep as-is
                     flatRow[key] = value;
                   }
-                } else {
-                  flatRow[key] = value;
                 }
-              });
+              );
               return flatRow;
             });
 
-            // Return a minimal DatasetResult using the old processed data
-            // This avoids re-parsing JSON as CSV which causes errors
             return {
               id: uploadedFile.id,
               name: uploadedFile.name,
@@ -260,71 +374,81 @@ export class DataPipelineService {
               fileSize: uploadedFile.size,
               originalData: {
                 columns: parsed.columns || [],
-                data: normalizedData
+                data: normalizedData,
+                rowCount: normalizedData.length
               }
-            } as any;
+            } as DatasetResult;
           }
 
-          // CASE 2: JSON with numeric keys (rows stored as "0": {...}, "1": {...})
-          // This happens when old FileProcessor stored rows as object properties
-          else if (
+          if (
             keys.length > 0 &&
             !isNaN(Number(keys[0])) &&
-            typeof parsed[keys[0]] === 'object'
+            typeof parsed[keys[0] as keyof LegacyDatasetFormat] === 'object'
           ) {
-            logger.warn('Legacy numeric keys detected - converting', LogCategory.DATA, {
-              fileName: uploadedFile.name,
-              keyCount: keys.length
-            });
+            logger.warn(
+              'Legacy numeric keys detected - converting',
+              LogCategory.DATA,
+              {
+                fileName: uploadedFile.name,
+                keyCount: keys.length
+              }
+            );
 
-            // Convert numeric-keyed object to array of row objects
             const data = keys
               .map(Number)
               .sort((a, b) => a - b)
-              .map((index) => parsed[String(index)]);
+              .map(
+                (index) => parsed[String(index) as keyof LegacyDatasetFormat]
+              );
 
-            // Extract column names from first row
-            const columns = data.length > 0 ? Object.keys(data[0]) : [];
+            const columns =
+              data.length > 0 && data[0] && typeof data[0] === 'object'
+                ? Object.keys(data[0] as Record<string, unknown>)
+                : [];
 
             logger.debug('Data conversion complete', LogCategory.DATA, {
               rowCount: data.length,
               columnCount: columns.length,
-              columnSample: columns.slice(0, 5)
+              columns
             });
 
-            // Convert to CSV and re-process through pipeline
-            const csvContent = this.convertJSONToCSV(data, columns);
-            logger.debug('Generated CSV from legacy data', LogCategory.DATA, {
-              size: csvContent.length,
-              preview: csvContent.substring(0, 100)
-            });
+            const csvContent = [
+              columns.join(','),
+              ...data.map((row) =>
+                columns
+                  .map((col) =>
+                    row && typeof row === 'object'
+                      ? JSON.stringify(
+                          (row as Record<string, unknown>)[col] ?? ''
+                        )
+                      : ''
+                  )
+                  .join(',')
+              )
+            ].join('\n');
 
-            file = new File([csvContent], uploadedFile.name, {
+            const legacyFile = new File([csvContent], uploadedFile.name, {
               type: 'text/csv'
             });
-
-            logger.info('Proceeding with pipeline for converted CSV', LogCategory.DATA, {
-              fileName: uploadedFile.name
-            });
+            return this.processFile(legacyFile);
           }
-        } catch (err) {
-          // Not JSON or invalid JSON - proceed with normal processing
-          logger.debug('Content is not JSON, proceeding with normal processing', LogCategory.DATA, {
-            fileName: uploadedFile.name
+        } catch (error) {
+          logger.debug('Legacy content parsing failed', LogCategory.DATA, {
+            error: error instanceof Error ? error.message : 'Unknown error'
           });
         }
       }
 
-      // Only convert to File if we haven't already created one from JSON
       if (!file) {
-        // Convert UploadedFile to File object
         let blob: Blob;
         if (uploadedFile.content instanceof ArrayBuffer) {
           blob = new Blob([uploadedFile.content], { type: uploadedFile.type });
         } else if (typeof uploadedFile.content === 'string') {
           blob = new Blob([uploadedFile.content], { type: uploadedFile.type });
         } else {
-          throw new Error('UploadedFile must have content property or originalFile must be provided');
+          throw new Error(
+            'UploadedFile must have content property or originalFile must be provided'
+          );
         }
 
         file = new File([blob], uploadedFile.name, {
@@ -350,6 +474,10 @@ export class DataPipelineService {
 
     // Add sourceFileId for backwards compatibility
     dataset.sourceFileId = uploadedFile.id;
+    this.applyGeoDetectionMetadata(
+      dataset,
+      uploadedFile.deepAnalysis?.geoDetection
+    );
 
     return dataset;
   }
@@ -363,7 +491,10 @@ export class DataPipelineService {
    * @throws Error if validation fails
    */
   async processFile(file: File): Promise<DatasetResult> {
-    const endTiming = logger.startTiming(`Process file: ${file.name}`, LogCategory.DATA);
+    const endTiming = logger.startTiming(
+      `Process file: ${file.name}`,
+      LogCategory.DATA
+    );
 
     if (!this.initialized) {
       await this.initialize();
@@ -454,7 +585,7 @@ export class DataPipelineService {
 
       logger.debug('Type inference complete', LogCategory.DATA, {
         fileName: file.name,
-        types: inferredColumns.map(c => ({ name: c.name, type: c.type })),
+        types: inferredColumns.map((c) => ({ name: c.name, type: c.type })),
         duration: `${inferDuration.toFixed(2)}ms`
       });
 
@@ -573,7 +704,7 @@ export class DataPipelineService {
           rowCount,
           warnings: validationResult.warnings
         },
-        geometry: rawDataset.geometry?.type as any,
+        geometry: rawDataset.geometry,
         bounds: rawDataset.geometry?.bounds
           ? {
               minLat: rawDataset.geometry.bounds[1],
@@ -602,7 +733,6 @@ export class DataPipelineService {
       });
 
       return result;
-
     } catch (error) {
       logger.error('File processing failed', LogCategory.DATA, {
         fileName: file.name,
@@ -611,6 +741,38 @@ export class DataPipelineService {
       });
       throw error;
     }
+  }
+
+  private applyGeoDetectionMetadata(
+    dataset: DatasetResult,
+    geoDetection?: GeoDetectionResult
+  ): void {
+    if (!geoDetection) {
+      return;
+    }
+
+    dataset.geoDetection = geoDetection;
+
+    const baseAnalysis =
+      dataset.analysis ??
+      ({
+        columns: dataset.columns,
+        geoColumns: [],
+        hasGeoData: false,
+        rowCount: dataset.rowCount,
+        warnings: []
+      } satisfies DatasetResult['analysis']);
+
+    dataset.analysis = {
+      ...baseAnalysis,
+      geoColumns: geoDetection.geoColumns,
+      hasGeoData:
+        geoDetection.hasGeoColumns || baseAnalysis?.hasGeoData || false,
+      suggestedGeoColumn:
+        geoDetection.suggestedPrimaryGeoColumn?.columnName ??
+        baseAnalysis?.suggestedGeoColumn,
+      warnings: [...(baseAnalysis?.warnings ?? []), ...geoDetection.warnings]
+    };
   }
 
   /**
@@ -673,32 +835,6 @@ export class DataPipelineService {
   }
 
   /**
-   * Map ColumnType enum to ColumnInfo type string
-   */
-  private mapColumnType(
-    type: ColumnType
-  ): 'number' | 'string' | 'date' | 'boolean' | 'geometry' {
-    switch (type) {
-      case ColumnType.NUMBER:
-        return 'number';
-
-      case ColumnType.DATE:
-        return 'date';
-
-      case ColumnType.BOOLEAN:
-        return 'boolean';
-
-      case ColumnType.GEOMETRY:
-        return 'geometry';
-
-      case ColumnType.TEXT:
-
-      default:
-        return 'string';
-    }
-  }
-
-  /**
    * Create a CSV File from RawDataset for DuckDB
    */
   private async createCSVFile(
@@ -741,7 +877,10 @@ export class DataPipelineService {
    * Convert JSON array to CSV string
    * Used for converting saved project data back to CSV format
    */
-  private convertJSONToCSV(data: Record<string, unknown>[], columns: string[]): string {
+  private convertJSONToCSV(
+    data: Record<string, unknown>[],
+    columns: string[]
+  ): string {
     const escapeCSVValue = (value: unknown): string => {
       if (value === null || value === undefined) return '';
       const str = String(value);

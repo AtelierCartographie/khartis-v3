@@ -136,14 +136,15 @@
 
     <Row padding>
       <Column>
-        <TextInput
-          class="full-width"
-          labelText={m.search_replace_by()}
-          id="replace-input"
-          bind:value={replaceValue}
-          placeholder={m.search_no_value()}
-          size="xl"
-        />
+        <div class="full-width-input">
+          <TextInput
+            labelText={m.search_replace_by()}
+            id="replace-input"
+            bind:value={replaceValue}
+            placeholder={m.search_no_value()}
+            size="xl"
+          />
+        </div>
 
         <div class="replace-buttons">
           <Button
@@ -177,6 +178,10 @@
   .results-text {
     color: var(--cds-text-secondary);
     font-size: 0.875rem;
+  }
+
+  .full-width-input :global(.bx--text-input) {
+    width: 100%;
   }
 
   #khartis-search-tool :global(.replace-button-container) {

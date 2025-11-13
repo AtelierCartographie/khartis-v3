@@ -29,12 +29,14 @@ class GlobalStore {
     projectionViewMode: 'list',
     zoom: {
       mode: ZoomMode.Map,
-      mapZoomLevel: typeof window !== 'undefined'
-        ? Number(localStorage.getItem(MAP_ZOOM_STORAGE_KEY)) || 100
-        : 100,
-      pageZoomLevel: typeof window !== 'undefined'
-        ? Number(localStorage.getItem(PAGE_ZOOM_STORAGE_KEY)) || 100
-        : 100,
+      mapZoomLevel:
+        typeof window !== 'undefined'
+          ? Number(localStorage.getItem(MAP_ZOOM_STORAGE_KEY)) || 100
+          : 100,
+      pageZoomLevel:
+        typeof window !== 'undefined'
+          ? Number(localStorage.getItem(PAGE_ZOOM_STORAGE_KEY)) || 100
+          : 100,
       minMapZoom: 10,
       maxMapZoom: 1000,
       minPageZoom: 10,
@@ -52,13 +54,18 @@ class GlobalStore {
   );
 
   private _isUpdatingSelection = false;
+
   private _pendingDatasetSelections = new Set<string>();
 
   constructor() {
     if (typeof window !== 'undefined' && this._selectedDataButtonId) {
-      logger.debug('Restored selected tab from localStorage', LogCategory.STORE, {
-        tabId: this._selectedDataButtonId
-      });
+      logger.debug(
+        'Restored selected tab from localStorage',
+        LogCategory.STORE,
+        {
+          tabId: this._selectedDataButtonId
+        }
+      );
     }
   }
 
@@ -83,18 +90,26 @@ class GlobalStore {
       .waitForDatasetBySourceFile(sourceFileId)
       .then((datasetId) => {
         if (this._selectedDataButtonId === sourceFileId) {
-          logger.info('Deferred dataset selection resolved', LogCategory.STORE, {
-            sourceFileId,
-            datasetId
-          });
+          logger.info(
+            'Deferred dataset selection resolved',
+            LogCategory.STORE,
+            {
+              sourceFileId,
+              datasetId
+            }
+          );
           datasetsStore.selectDataset(datasetId);
         }
       })
       .catch((error) => {
-        logger.error('Failed to wait for dataset selection', LogCategory.STORE, {
-          sourceFileId,
-          error: error instanceof Error ? error.message : error
-        });
+        logger.error(
+          'Failed to wait for dataset selection',
+          LogCategory.STORE,
+          {
+            sourceFileId,
+            error: error instanceof Error ? error.message : error
+          }
+        );
       })
       .finally(() => {
         this._pendingDatasetSelections.delete(sourceFileId);
@@ -109,65 +124,76 @@ class GlobalStore {
   ensureTabSelected(): void {
     // Guard against re-entrancy to prevent infinite loops
     if (this._isUpdatingSelection) {
-      logger.warn('ensureTabSelected - Already updating, skipping', LogCategory.STORE);
+      logger.warn(
+        'ensureTabSelected - Already updating, skipping',
+        LogCategory.STORE
+      );
       return;
     }
 
     this._isUpdatingSelection = true;
     try {
-    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+      const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
-    logger.debug('ensureTabSelected triggered', LogCategory.STORE, {
-      sourceFilesCount: sourceFiles.length,
-      selectedDataButtonId: this._selectedDataButtonId,
-      firstFileId: sourceFiles[0]?.id
-    });
+      logger.debug('ensureTabSelected triggered', LogCategory.STORE, {
+        sourceFilesCount: sourceFiles.length,
+        selectedDataButtonId: this._selectedDataButtonId,
+        firstFileId: sourceFiles[0]?.id
+      });
 
-    // If we have files but no selection, or selected file no longer exists
-    if (sourceFiles.length > 0) {
-      const selectedFileExists = sourceFiles.some(
-        (f) => f.id === this._selectedDataButtonId
-      );
-
-      if (!this._selectedDataButtonId) {
-        // Nothing selected yet, auto-select first file
-        const firstFileId = sourceFiles[0].id;
-        logger.info('Auto-selecting first tab', LogCategory.STORE, {
-          firstFileId,
-          reason: 'no_selection'
-        });
-        this.selectDataButton(firstFileId);
-      } else if (!selectedFileExists) {
-        const isPending = this._pendingDatasetSelections.has(
-          this._selectedDataButtonId
+      // If we have files but no selection, or selected file no longer exists
+      if (sourceFiles.length > 0) {
+        const selectedFileExists = sourceFiles.some(
+          (f) => f.id === this._selectedDataButtonId
         );
-        if (isPending) {
-          logger.info('Selected file not yet registered, waiting', LogCategory.STORE, {
-            pendingFileId: this._selectedDataButtonId
-          });
-        } else {
+
+        if (!this._selectedDataButtonId) {
+          // Nothing selected yet, auto-select first file
           const firstFileId = sourceFiles[0].id;
-          logger.info('Selected file removed, falling back to first', LogCategory.STORE, {
-            oldId: this._selectedDataButtonId,
-            fallbackId: firstFileId
+          logger.info('Auto-selecting first tab', LogCategory.STORE, {
+            firstFileId,
+            reason: 'no_selection'
           });
           this.selectDataButton(firstFileId);
+        } else if (!selectedFileExists) {
+          const isPending = this._pendingDatasetSelections.has(
+            this._selectedDataButtonId
+          );
+          if (isPending) {
+            logger.info(
+              'Selected file not yet registered, waiting',
+              LogCategory.STORE,
+              {
+                pendingFileId: this._selectedDataButtonId
+              }
+            );
+          } else {
+            const firstFileId = sourceFiles[0].id;
+            logger.info(
+              'Selected file removed, falling back to first',
+              LogCategory.STORE,
+              {
+                oldId: this._selectedDataButtonId,
+                fallbackId: firstFileId
+              }
+            );
+            this.selectDataButton(firstFileId);
+          }
         }
-      }
 
-      if (this._selectedDataButtonId) {
-        this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
-      }
-    } else {
-      // No files - clear selection
-      if (this._selectedDataButtonId) {
-        logger.debug('Clearing selection - no files', LogCategory.STORE);
-        this._selectedDataButtonId = undefined;
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
+        if (this._selectedDataButtonId) {
+          this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+        }
+      } else {
+        // No files - clear selection
+        if (this._selectedDataButtonId) {
+          logger.debug('Clearing selection - no files', LogCategory.STORE);
+          this._selectedDataButtonId = undefined;
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
+          }
         }
       }
-    }
     } finally {
       this._isUpdatingSelection = false;
     }
@@ -178,7 +204,7 @@ class GlobalStore {
 
     logger.debug('dataButtons $derived triggered', LogCategory.STORE, {
       sourceFilesCount: sourceFiles.length,
-      sourceFileIds: sourceFiles.map(f => f.id),
+      sourceFileIds: sourceFiles.map((f) => f.id),
       selectedDataButtonId: this._selectedDataButtonId
     });
 
@@ -293,7 +319,11 @@ class GlobalStore {
     // Persist to localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
-      logger.debug('Persisted selected tab to localStorage', LogCategory.STORE, { tabId: id });
+      logger.debug(
+        'Persisted selected tab to localStorage',
+        LogCategory.STORE,
+        { tabId: id }
+      );
     }
 
     this.ensureDatasetSelectionForSourceFile(id);
@@ -333,12 +363,18 @@ class GlobalStore {
     if (isMap) {
       this._state.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
       if (typeof window !== 'undefined') {
-        localStorage.setItem(MAP_ZOOM_STORAGE_KEY, String(this._state.zoom.mapZoomLevel));
+        localStorage.setItem(
+          MAP_ZOOM_STORAGE_KEY,
+          String(this._state.zoom.mapZoomLevel)
+        );
       }
     } else {
       this._state.zoom.pageZoomLevel = newZoomLevel;
       if (typeof window !== 'undefined') {
-        localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(this._state.zoom.pageZoomLevel));
+        localStorage.setItem(
+          PAGE_ZOOM_STORAGE_KEY,
+          String(this._state.zoom.pageZoomLevel)
+        );
       }
     }
   }
@@ -371,7 +407,10 @@ class GlobalStore {
       Math.min(level, this._state.zoom.maxMapZoom)
     );
     if (typeof window !== 'undefined') {
-      localStorage.setItem(MAP_ZOOM_STORAGE_KEY, String(this._state.zoom.mapZoomLevel));
+      localStorage.setItem(
+        MAP_ZOOM_STORAGE_KEY,
+        String(this._state.zoom.mapZoomLevel)
+      );
     }
   }
 
@@ -381,7 +420,10 @@ class GlobalStore {
       Math.min(level, this._state.zoom.maxPageZoom)
     );
     if (typeof window !== 'undefined') {
-      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(this._state.zoom.pageZoomLevel));
+      localStorage.setItem(
+        PAGE_ZOOM_STORAGE_KEY,
+        String(this._state.zoom.pageZoomLevel)
+      );
     }
   }
 }

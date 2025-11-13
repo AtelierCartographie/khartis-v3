@@ -1,7 +1,6 @@
 import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { Layer, LayersState } from './layers.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { SvelteSet } from 'svelte/reactivity';
 
 const FIXTURE_LAYERS = [
@@ -200,10 +199,6 @@ export const layersActions = {
 
     visualizations.forEach((viz) => {
       if (!existingIds.has(viz.id)) {
-        const _dataset = datasetsStore.datasets.find(
-          (d) => d.id === viz.datasetId
-        );
-
         this.addLayer({
           name: viz.name,
           visible: viz.enabled,

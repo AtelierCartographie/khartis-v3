@@ -259,7 +259,7 @@
                 <OverflowMenu
                   size="sm"
                   flipped
-                  onclick={(e) => e.stopPropagation()}
+                  on:click={(e: MouseEvent) => e.stopPropagation()}
                 >
                   <OverflowMenuItem
                     text={m.open_project_duplicate()}

@@ -2,24 +2,34 @@ import { projectStore } from '../store/project.store.svelte';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import {
   visualizationStore,
-  VisualizationType
+  VisualizationType,
+  type VisualizationConfig
 } from '../store/visualization.store.svelte';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import type { UploadedFile } from '../store/create-project.types';
 import { FileType } from '../store/create-project.types';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
-import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
 import { logger, LogCategory } from '../utils/logger';
-import { getParsedDataLength } from '$lib/types/data';
-import { DataValidationError, isFatalError, formatError, ParseError } from '../errors/pipeline.errors';
+import {
+  getParsedDataLength,
+  isGeoJSONFeatureCollection,
+  type GeoJSONFeatureCollection
+} from '$lib/types/data';
+import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data/infrastructure/parsers/geojson.parser';
+import {
+  DataValidationError,
+  isFatalError,
+  formatError,
+  ParseError
+} from '../errors/pipeline.errors';
 import { ColumnType } from '$lib/features/data/domain';
+import { convertKMLFileToGeoJSON } from '$lib/features/data/infrastructure/parsers/kml.parser';
 import { importRollbackService } from './import-rollback.service';
 import type { DatasetResult } from '$lib/features/data';
 
 class DataOrchestratorService {
-  private isInitialized = false;
-
   private _geometryDatasetsVersion = $state(0);
 
   async initialize(): Promise<void> {
@@ -30,8 +40,6 @@ class DataOrchestratorService {
     if (currentProject?.data?.sourceFiles) {
       await this.processProjectFiles(currentProject.data.sourceFiles);
     }
-
-    this.isInitialized = true;
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
@@ -103,29 +111,39 @@ class DataOrchestratorService {
 
       // Check if error is fatal (requires rollback) or non-fatal (just show toast)
       if (isFatalError(error)) {
-        logger.warn('Fatal error detected, initiating rollback', LogCategory.DATA, {
-          fileId: file.id,
-          fileName: file.name
-        });
+        logger.warn(
+          'Fatal error detected, initiating rollback',
+          LogCategory.DATA,
+          {
+            fileId: file.id,
+            fileName: file.name
+          }
+        );
 
         // Rollback all changes
         await importRollbackService.rollback(snapshot);
 
         // Show error notification for fatal errors
         showError(
-          'Erreur fatale lors de l\'import',
+          "Erreur fatale lors de l'import",
           error instanceof Error ? error.message : 'Erreur inconnue'
         );
       } else {
         // Non-fatal error: just show warning toast, keep changes
-        logger.info('Non-fatal error, keeping partial import', LogCategory.DATA, {
-          fileId: file.id,
-          fileName: file.name
-        });
+        logger.info(
+          'Non-fatal error, keeping partial import',
+          LogCategory.DATA,
+          {
+            fileId: file.id,
+            fileName: file.name
+          }
+        );
 
         showWarning(
           'Avertissement',
-          error instanceof Error ? error.message : 'Avertissement lors de l\'import'
+          error instanceof Error
+            ? error.message
+            : "Avertissement lors de l'import"
         );
       }
 
@@ -210,14 +228,19 @@ class DataOrchestratorService {
       const { Duck } = await import('./duckdb/duckdb');
 
       if (!Duck) {
-        logger.warn('DuckDB not initialized, skipping cleanup', LogCategory.DUCKDB);
+        logger.warn(
+          'DuckDB not initialized, skipping cleanup',
+          LogCategory.DUCKDB
+        );
         return;
       }
 
       // Remove from loaded files tracking
       if (Duck.loaded_files.has(tableName)) {
         Duck.loaded_files.delete(tableName);
-        logger.debug('Removed from loaded_files', LogCategory.DUCKDB, { tableName });
+        logger.debug('Removed from loaded_files', LogCategory.DUCKDB, {
+          tableName
+        });
       }
 
       // Remove from registered files (find by table name)
@@ -235,7 +258,9 @@ class DataOrchestratorService {
       // Remove from table metadata
       if (Duck.table_metadata.has(tableName)) {
         Duck.table_metadata.delete(tableName);
-        logger.debug('Removed from table_metadata', LogCategory.DUCKDB, { tableName });
+        logger.debug('Removed from table_metadata', LogCategory.DUCKDB, {
+          tableName
+        });
       }
 
       // Remove from cache (will be handled by LRU but we can force it)
@@ -243,24 +268,23 @@ class DataOrchestratorService {
         const buffer = Duck.table_geoparquet_cache.get(tableName);
         Duck.table_geoparquet_cache.delete(tableName);
 
-        // Update LRU tracking
-        const cacheIndex = Duck['cacheAccessOrder']?.indexOf(tableName);
-        if (cacheIndex !== undefined && cacheIndex > -1) {
-          Duck['cacheAccessOrder'].splice(cacheIndex, 1);
-          if (buffer) {
-            Duck['cacheSize'] = (Duck['cacheSize'] || 0) - buffer.byteLength;
-          }
-        }
-
         logger.debug('Removed from cache', LogCategory.DUCKDB, {
           tableName,
-          size: buffer ? `${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB` : 'unknown'
+          size: buffer
+            ? `${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB`
+            : 'unknown'
         });
       }
 
-      logger.success('DuckDB resources cleaned up', LogCategory.DUCKDB, { tableName });
+      logger.success('DuckDB resources cleaned up', LogCategory.DUCKDB, {
+        tableName
+      });
     } catch (error) {
-      logger.warn('Failed to cleanup DuckDB resources', LogCategory.DUCKDB, error);
+      logger.warn(
+        'Failed to cleanup DuckDB resources',
+        LogCategory.DUCKDB,
+        error
+      );
     }
   }
 
@@ -304,15 +328,16 @@ class DataOrchestratorService {
     }
   }
 
-  private prepareFileForDuckDB(
+  private async prepareFileForDuckDB(
     file: UploadedFile,
     dataset: DatasetResult | undefined
-  ): UploadedFile | null {
+  ): Promise<UploadedFile | null> {
     const requiresGeoProcessing =
       !!dataset?.geometry ||
       file.fileType === FileType.GEOJSON ||
       file.fileType === FileType.SHAPEFILE ||
       file.fileType === FileType.GEOPACKAGE ||
+      file.fileType === FileType.GEOPARQUET ||
       file.fileType === FileType.KML ||
       file.fileType === FileType.KMZ;
 
@@ -326,21 +351,31 @@ class DataOrchestratorService {
     });
 
     if (!requiresGeoProcessing) {
-      logger.debug('Skipping DuckDB geo processing for file', LogCategory.DUCKDB, {
-        fileId: file.id,
-        reason: 'no_geometry_detected'
-      });
+      logger.debug(
+        'Skipping DuckDB geo processing for file',
+        LogCategory.DUCKDB,
+        {
+          fileId: file.id,
+          reason: 'no_geometry_detected'
+        }
+      );
       return null;
     }
 
     if (file.fileType === FileType.SHAPEFILE) {
-      return this.convertShapefileForDuckDB(file);
+      return await this.convertShapefileForDuckDB(file);
+    }
+
+    if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
+      return await this.convertKMLForDuckDB(file);
     }
 
     return file;
   }
 
-  private convertShapefileForDuckDB(file: UploadedFile): UploadedFile {
+  private async convertShapefileForDuckDB(
+    file: UploadedFile
+  ): Promise<UploadedFile> {
     if (!file.parsedData) {
       throw new ParseError(
         'Missing parsed GeoJSON data for shapefile',
@@ -369,6 +404,16 @@ class DataOrchestratorService {
 
     const geojsonString = JSON.stringify(geojsonObject);
 
+    const hasFeatures = (
+      value: unknown
+    ): value is { features: { length: number }[] } => {
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        Array.isArray((value as { features?: unknown }).features)
+      );
+    };
+
     const geojsonName = file.name.endsWith('.shp')
       ? file.name.replace(/\.shp$/i, '.geojson')
       : `${file.name}.geojson`;
@@ -377,8 +422,8 @@ class DataOrchestratorService {
       originalName: file.name,
       normalizedName: geojsonName,
       originalSize: file.size,
-      featureCount: Array.isArray((geojsonObject as any)?.features)
-        ? (geojsonObject as any).features.length
+      featureCount: hasFeatures(geojsonObject)
+        ? geojsonObject.features.length
         : undefined
     });
 
@@ -392,6 +437,68 @@ class DataOrchestratorService {
     };
   }
 
+  private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
+    try {
+      let geojsonObject: ParserGeoJSONFeatureCollection;
+
+      if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
+        geojsonObject = file.parsedData as ParserGeoJSONFeatureCollection;
+      } else {
+        const sourceFile = await this.ensureFileObject(
+          file,
+          'application/vnd.google-earth.kml+xml'
+        );
+        geojsonObject = await convertKMLFileToGeoJSON(sourceFile);
+      }
+
+      const geojsonString = JSON.stringify(geojsonObject);
+      const normalizedName = file.name.replace(/\.(kml|kmz)$/i, '.geojson');
+      const parsedGeoJSON =
+        geojsonObject as unknown as GeoJSONFeatureCollection;
+
+      return {
+        ...file,
+        name: normalizedName,
+        type: 'application/geo+json',
+        fileType: FileType.GEOJSON,
+        content: geojsonString,
+        parsedData: parsedGeoJSON
+      };
+    } catch (error) {
+      throw new ParseError(
+        'Failed to convert KML/KMZ to GeoJSON',
+        file.fileType,
+        {
+          fileId: file.id,
+          fileName: file.name,
+          originalError: error instanceof Error ? error.message : String(error)
+        }
+      );
+    }
+  }
+
+  private async ensureFileObject(
+    file: UploadedFile,
+    fallbackMime: string
+  ): Promise<File> {
+    if (file.originalFile) {
+      return file.originalFile;
+    }
+
+    if (file.content instanceof ArrayBuffer) {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    if (typeof file.content === 'string') {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    throw new ParseError('Missing original file content', file.fileType, {
+      fileId: file.id,
+      fileName: file.name
+    });
+  }
+
   private async processFileInDuckDB(
     file: UploadedFile,
     datasetOverride?: DatasetResult
@@ -400,14 +507,18 @@ class DataOrchestratorService {
       datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
 
     if (!dataset) {
-      logger.warn('Cannot process file in DuckDB - dataset missing', LogCategory.DUCKDB, {
-        fileId: file.id,
-        fileName: file.name
-      });
+      logger.warn(
+        'Cannot process file in DuckDB - dataset missing',
+        LogCategory.DUCKDB,
+        {
+          fileId: file.id,
+          fileName: file.name
+        }
+      );
       return;
     }
 
-    const duckDBFile = this.prepareFileForDuckDB(file, dataset);
+    const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
 
     if (duckDBFile) {
       logger.info(
@@ -451,7 +562,10 @@ class DataOrchestratorService {
         const duckDataset = await duckDBOrchestrator.registerExistingTable(
           dataset.tableName,
           dataset.sourceFileId || file.id,
-          file.name
+          file.name,
+          {
+            geoDetection: dataset.geoDetection
+          }
         );
         logger.success('Table registered successfully', LogCategory.DUCKDB, {
           tableName: dataset.tableName,
@@ -476,7 +590,10 @@ class DataOrchestratorService {
   }
 
   async onProjectChanged(): Promise<void> {
-    const endTiming = logger.startTiming('Project changed', LogCategory.PROJECT);
+    const endTiming = logger.startTiming(
+      'Project changed',
+      LogCategory.PROJECT
+    );
 
     logger.info('Project change initiated', LogCategory.PROJECT);
 
@@ -502,6 +619,7 @@ class DataOrchestratorService {
   }
 
   private processedFileIds = new Set<string>();
+
   private processingFiles = new Set<string>();
 
   /**
@@ -534,7 +652,10 @@ class DataOrchestratorService {
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    const endTiming = logger.startTiming('Process project files', LogCategory.PROJECT);
+    const endTiming = logger.startTiming(
+      'Process project files',
+      LogCategory.PROJECT
+    );
 
     logger.info('Processing project files', LogCategory.PROJECT, {
       fileCount: files.length,
@@ -544,7 +665,7 @@ class DataOrchestratorService {
 
     // Filter out files that are already processed OR currently being processed
     const unprocessedFiles = files.filter(
-      f => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
+      (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
 
     if (unprocessedFiles.length === 0) {
@@ -553,10 +674,10 @@ class DataOrchestratorService {
     }
 
     // Mark files as processing BEFORE starting to prevent race conditions
-    unprocessedFiles.forEach(f => this.processingFiles.add(f.id));
+    unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
     logger.info('Marked files as processing', LogCategory.PROJECT, {
       count: unprocessedFiles.length,
-      fileNames: unprocessedFiles.map(f => f.name),
+      fileNames: unprocessedFiles.map((f) => f.name),
       processingFiles: Array.from(this.processingFiles)
     });
 
@@ -573,143 +694,161 @@ class DataOrchestratorService {
         duration: `${datasetsDuration.toFixed(2)}ms`
       });
 
-    // Process DuckDB files with limited concurrency (max 3 concurrent)
-    logger.info('Starting DuckDB processing', LogCategory.DUCKDB);
-    const duckStart = performance.now();
-    const validFiles = unprocessedFiles.filter(
-      (file) => file.status === 'complete' && file.parsedData
-    );
-    logger.info('Files ready for DuckDB', LogCategory.DUCKDB, {
-      count: validFiles.length,
-      maxConcurrent: 3
-    });
+      // Process DuckDB files with limited concurrency (max 3 concurrent)
+      logger.info('Starting DuckDB processing', LogCategory.DUCKDB);
+      const duckStart = performance.now();
+      const validFiles = unprocessedFiles.filter(
+        (file) => file.status === 'complete' && file.parsedData
+      );
+      logger.info('Files ready for DuckDB', LogCategory.DUCKDB, {
+        count: validFiles.length,
+        maxConcurrent: 3
+      });
 
-    // Process with limited concurrency to prevent memory/CPU saturation
-    await this.processWithLimit(
-      validFiles,
-      3, // Max 3 concurrent files
-      async (file, index, total) => {
-        const fileStart = performance.now();
-        logger.info('Processing file in DuckDB', LogCategory.DUCKDB, {
-          progress: `${index + 1}/${total}`,
-          fileName: file.name
-        });
-
-        // Create snapshot for potential rollback
-        const snapshot = importRollbackService.createSnapshot(file);
-
-        // Yield to event loop between each file
-        await new Promise((resolve) => setTimeout(resolve, 0));
-
-        try {
-          const processStart = performance.now();
-          await this.processFileInDuckDB(file);
-          const processDuration = performance.now() - processStart;
-
-          logger.success('File processed in DuckDB', LogCategory.DUCKDB, {
+      // Process with limited concurrency to prevent memory/CPU saturation
+      await this.processWithLimit(
+        validFiles,
+        3, // Max 3 concurrent files
+        async (file, index, total) => {
+          const fileStart = performance.now();
+          logger.info('Processing file in DuckDB', LogCategory.DUCKDB, {
             progress: `${index + 1}/${total}`,
-            fileName: file.name,
-            duration: `${processDuration.toFixed(2)}ms`
+            fileName: file.name
           });
 
-          if (processDuration > 3000) {
-            logger.warn('Slow DuckDB file processing', LogCategory.DUCKDB, {
+          // Create snapshot for potential rollback
+          const snapshot = importRollbackService.createSnapshot(file);
+
+          // Yield to event loop between each file
+          await new Promise((resolve) => setTimeout(resolve, 0));
+
+          try {
+            const processStart = performance.now();
+            await this.processFileInDuckDB(file);
+            const processDuration = performance.now() - processStart;
+
+            logger.success('File processed in DuckDB', LogCategory.DUCKDB, {
+              progress: `${index + 1}/${total}`,
               fileName: file.name,
               duration: `${processDuration.toFixed(2)}ms`
             });
-          }
 
-          // Mark file as processed AND remove from processing
-          this.processedFileIds.add(file.id);
-          this.processingFiles.delete(file.id);
-        } catch (error) {
-          const errorDuration = performance.now() - fileStart;
-          logger.error('File processing failed in DuckDB', LogCategory.DUCKDB, {
-            progress: `${index + 1}/${total}`,
-            fileName: file.name,
-            duration: `${errorDuration.toFixed(2)}ms`,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          });
+            if (processDuration > 3000) {
+              logger.warn('Slow DuckDB file processing', LogCategory.DUCKDB, {
+                fileName: file.name,
+                duration: `${processDuration.toFixed(2)}ms`
+              });
+            }
 
-          // Log error with context
-          logger.error('File processing failed during project load', LogCategory.DUCKDB, formatError(error));
-
-          // Remove from processing on error
-          this.processingFiles.delete(file.id);
-
-          // Check if error is fatal
-          if (isFatalError(error)) {
-            logger.warn('Fatal error during project file load, initiating rollback', LogCategory.DATA, {
-              fileId: file.id,
-              fileName: file.name
-            });
-
-            // Rollback this specific file
-            await importRollbackService.rollback(snapshot);
-
-            // Show error notification
-            showError(
-              `Erreur lors du chargement de ${file.name}`,
-              error instanceof Error ? error.message : 'Erreur inconnue'
+            // Mark file as processed AND remove from processing
+            this.processedFileIds.add(file.id);
+            this.processingFiles.delete(file.id);
+          } catch (error) {
+            const errorDuration = performance.now() - fileStart;
+            logger.error(
+              'File processing failed in DuckDB',
+              LogCategory.DUCKDB,
+              {
+                progress: `${index + 1}/${total}`,
+                fileName: file.name,
+                duration: `${errorDuration.toFixed(2)}ms`,
+                error: error instanceof Error ? error.message : 'Unknown error'
+              }
             );
-          } else {
-            // Non-fatal: log warning but continue
-            logger.info('Non-fatal error during project file load, continuing', LogCategory.DATA, {
-              fileId: file.id,
-              fileName: file.name
-            });
 
-            showWarning(
-              `Avertissement pour ${file.name}`,
-              error instanceof Error ? error.message : 'Le fichier a été chargé avec des avertissements'
+            // Log error with context
+            logger.error(
+              'File processing failed during project load',
+              LogCategory.DUCKDB,
+              formatError(error)
+            );
+
+            // Remove from processing on error
+            this.processingFiles.delete(file.id);
+
+            // Check if error is fatal
+            if (isFatalError(error)) {
+              logger.warn(
+                'Fatal error during project file load, initiating rollback',
+                LogCategory.DATA,
+                {
+                  fileId: file.id,
+                  fileName: file.name
+                }
+              );
+
+              // Rollback this specific file
+              await importRollbackService.rollback(snapshot);
+
+              // Show error notification
+              showError(
+                `Erreur lors du chargement de ${file.name}`,
+                error instanceof Error ? error.message : 'Erreur inconnue'
+              );
+            } else {
+              // Non-fatal: log warning but continue
+              logger.info(
+                'Non-fatal error during project file load, continuing',
+                LogCategory.DATA,
+                {
+                  fileId: file.id,
+                  fileName: file.name
+                }
+              );
+
+              showWarning(
+                `Avertissement pour ${file.name}`,
+                error instanceof Error
+                  ? error.message
+                  : 'Le fichier a été chargé avec des avertissements'
+              );
+            }
+
+            // Note: We don't re-throw here to allow other files to continue processing
+            logger.warn(
+              'Failed to reload file in DuckDB',
+              LogCategory.DUCKDB,
+              error
             );
           }
-
-          // Note: We don't re-throw here to allow other files to continue processing
-          logger.warn(
-            'Failed to reload file in DuckDB',
-            LogCategory.DUCKDB,
-            error
-          );
         }
-      }
-    );
+      );
 
-    const duckDuration = performance.now() - duckStart;
-    logger.success('DuckDB processing complete', LogCategory.DUCKDB, {
-      duration: `${duckDuration.toFixed(2)}ms`,
-      fileCount: validFiles.length
-    });
-
-    if (duckDuration > 10000) {
-      logger.warn('Slow DuckDB batch processing', LogCategory.DUCKDB, {
+      const duckDuration = performance.now() - duckStart;
+      logger.success('DuckDB processing complete', LogCategory.DUCKDB, {
         duration: `${duckDuration.toFixed(2)}ms`,
-        fileCount: validFiles.length,
-        recommendation: 'Consider processing fewer files concurrently'
+        fileCount: validFiles.length
       });
-    }
 
-    const geoDatasets = datasetsStore.getDatasetsByType(true);
+      if (duckDuration > 10000) {
+        logger.warn('Slow DuckDB batch processing', LogCategory.DUCKDB, {
+          duration: `${duckDuration.toFixed(2)}ms`,
+          fileCount: validFiles.length,
+          recommendation: 'Consider processing fewer files concurrently'
+        });
+      }
 
-    if (geoDatasets.length > 0) {
-      logger.info('Creating default visualization', LogCategory.DATA, {
-        geoDatasetCount: geoDatasets.length
+      const geoDatasets = datasetsStore.getDatasetsByType(true);
+
+      if (geoDatasets.length > 0) {
+        logger.info('Creating default visualization', LogCategory.DATA, {
+          geoDatasetCount: geoDatasets.length
+        });
+        this._geometryDatasetsVersion++;
+        projectionActions.suggestProjectionForCurrentData();
+
+        this.createDefaultVisualization(geoDatasets[0].id);
+      }
+
+      layersActions.syncWithVisualizations();
+
+      endTiming();
+      logger.success('Project files processing complete', LogCategory.PROJECT, {
+        remainingProcessingFiles: Array.from(this.processingFiles)
       });
-      this._geometryDatasetsVersion++;
-      projectionActions.suggestProjectionForCurrentData();
-
-      this.createDefaultVisualization(geoDatasets[0].id);
-    }
-
-    layersActions.syncWithVisualizations();
-
-    endTiming();
-    logger.success('Project files processing complete', LogCategory.PROJECT, {
-      remainingProcessingFiles: Array.from(this.processingFiles)
-    });
     } catch (error) {
       // Cleanup on error - remove all unprocessed files from processing
-      unprocessedFiles.forEach(f => this.processingFiles.delete(f.id));
+      unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
       logger.error('Project files processing failed', LogCategory.PROJECT, {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -753,7 +892,10 @@ class DataOrchestratorService {
     return exportProjectData(currentProject.data.sourceFiles, format);
   }
 
-  getVisualizationData(visualizationId: string): any {
+  getVisualizationData(visualizationId: string): {
+    visualization: VisualizationConfig;
+    dataset: DatasetResult;
+  } | null {
     const visualization = visualizationStore.visualizations.find(
       (v) => v.id === visualizationId
     );
@@ -766,12 +908,7 @@ class DataOrchestratorService {
 
     return {
       visualization,
-      dataset,
-      projection: projectionActions.applyProjectionToDataset(
-        dataset.id,
-        800,
-        600
-      )
+      dataset
     };
   }
 }

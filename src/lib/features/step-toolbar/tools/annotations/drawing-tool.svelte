@@ -23,6 +23,22 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
+  type StrokeColorDescriptor = {
+    hue?: number;
+    saturation?: number;
+    lightness?: number;
+  };
+
+  function isStrokeColorDescriptor(
+    value: unknown
+  ): value is StrokeColorDescriptor {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      ('hue' in value || 'saturation' in value || 'lightness' in value)
+    );
+  }
+
   let drawingType = $state<'line' | 'zone'>('line');
   let strokeColor = $state('#8d8d8d');
   let hue = $state(0);
@@ -38,8 +54,8 @@
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else {
-        const c = defaultStyle.strokeColor as any;
+      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
+        const c = defaultStyle.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -53,10 +69,11 @@
     annotationsActions.addAnnotation('drawing', drawingType);
   }
 
-  function handleDrawingTypeChange(type: string) {
-    drawingType = type as 'line' | 'zone';
+  function handleDrawingTypeChange(event: CustomEvent<string | number>) {
+    const type = String(event.detail) as 'line' | 'zone';
+    drawingType = type;
     annotationsActions.updateDefaultStyle({
-      drawingType: type as 'line' | 'zone'
+      drawingType: type
     });
   }
 
@@ -82,10 +99,7 @@
   <Row>
     <Column>
       <p class="field-label">Type</p>
-      <RadioButtonGroup
-        selected={drawingType}
-        on:change={(e) => handleDrawingTypeChange(String((e as any).detail))}
-      >
+      <RadioButtonGroup selected={drawingType} on:change={handleDrawingTypeChange}>
         <RadioButton labelText="Ligne" value="line" />
         <RadioButton labelText="Zone" value="zone" />
       </RadioButtonGroup>
@@ -146,12 +160,14 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent) =>
+            ontoggle={(e: CustomEvent<boolean>) => {
+              const nextStyle: 'dotted' | 'solid' = e.detail
+                ? 'dotted'
+                : 'solid';
               annotationsActions.updateDefaultStyle({
-                strokeStyle: ((e as any).detail ? 'dotted' : 'solid') as
-                  | 'dotted'
-                  | 'solid'
-              })}
+                strokeStyle: nextStyle
+              });
+            }}
           >
             <span slot="labelA">Oui</span>
             <span slot="labelB">Non</span>

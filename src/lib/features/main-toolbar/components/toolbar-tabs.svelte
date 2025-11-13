@@ -113,6 +113,15 @@
 
       // fallthrough
       case 'kml':
+
+      // fallthrough
+      case 'kmz':
+
+      // fallthrough
+      case 'geoparquet':
+
+      // fallthrough
+      case 'gpq':
         return 'purple';
 
       default:
@@ -156,7 +165,7 @@
           </div>
           <button
             class="tab-close-button"
-            onclick={(e) =>
+            onclick={(e: MouseEvent) =>
               openDeleteConfirm(dataButton.id, dataButton.label, e)}
             aria-label="Supprimer le fichier"
             title="Supprimer le fichier"

@@ -42,6 +42,7 @@ import { logger, LogCategory } from '../../../commons/utils/logger';
 export class GeoParquetReader implements IGeoArrowReader {
   private static WASM_URL =
     'https://cdn.jsdelivr.net/npm/@geoarrow/geoparquet-wasm@0.2.0-beta.5/esm/index_bg.wasm';
+
   private static wasmInitialized = false;
 
   /**
@@ -59,7 +60,11 @@ export class GeoParquetReader implements IGeoArrowReader {
       this.wasmInitialized = true;
       logger.success('GeoParquet WASM initialized', LogCategory.DATA);
     } catch (error) {
-      logger.error('Failed to initialize GeoParquet WASM', LogCategory.DATA, error);
+      logger.error(
+        'Failed to initialize GeoParquet WASM',
+        LogCategory.DATA,
+        error
+      );
       throw new Error('GeoParquet WASM initialization failed');
     }
   }
@@ -84,11 +89,16 @@ export class GeoParquetReader implements IGeoArrowReader {
 
     try {
       // Convert to Uint8Array if needed
-      const uint8Buffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      const uint8Buffer =
+        buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-      logger.debug('Reading GeoParquet with metadata preservation', LogCategory.DATA, {
-        bufferSize: uint8Buffer.byteLength
-      });
+      logger.debug(
+        'Reading GeoParquet with metadata preservation',
+        LogCategory.DATA,
+        {
+          bufferSize: uint8Buffer.byteLength
+        }
+      );
 
       // Step 1: Read GeoParquet with WASM - preserves metadata
       const data = await readGeoParquetWasm(uint8Buffer);
@@ -158,7 +168,11 @@ export class GeoParquetReader implements IGeoArrowReader {
 
       return parsed;
     } catch (error) {
-      logger.error('Failed to parse GeoArrow metadata', LogCategory.DATA, error);
+      logger.error(
+        'Failed to parse GeoArrow metadata',
+        LogCategory.DATA,
+        error
+      );
       return null;
     }
   }

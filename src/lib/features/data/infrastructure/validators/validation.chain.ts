@@ -5,7 +5,6 @@ import { mergeValidationResults } from '../../domain/value-objects/validation-re
 import { SizeValidator } from './size.validator';
 import { SchemaValidator } from './schema.validator';
 import { QualityValidator } from './quality.validator';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 /**
  * Validation Chain - Runs validators in sequence
  *

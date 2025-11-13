@@ -10,7 +10,7 @@
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
-  let selectedModel = $state.raw(formatState.model);
+  let selectedModel = $state('');
 
   const modelOptions = [
     { value: 'page-a4-landscape', text: m.format_model_a4_landscape() },
@@ -18,6 +18,12 @@
     { value: 'page-a3-landscape', text: m.format_model_a3_landscape() },
     { value: 'page-a3-portrait', text: m.format_model_a3_portrait() }
   ];
+
+  $effect(() => {
+    if (formatState.model && selectedModel !== formatState.model) {
+      selectedModel = formatState.model;
+    }
+  });
 
   $effect(() => {
     if (selectedModel && selectedModel !== formatState.model) {

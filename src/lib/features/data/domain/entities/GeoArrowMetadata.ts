@@ -38,15 +38,18 @@ export interface GeoArrowCRS {
 /**
  * Type guard to check if object is valid GeoArrowMetadata
  */
-export function isGeoArrowMetadata(obj: any): obj is GeoArrowMetadata {
-  return (
-    obj &&
-    typeof obj === 'object' &&
-    typeof obj.version === 'string' &&
-    typeof obj.primary_column === 'string' &&
-    obj.columns &&
-    typeof obj.columns === 'object'
-  );
+export function isGeoArrowMetadata(obj: unknown): obj is GeoArrowMetadata {
+  if (
+    typeof obj !== 'object' ||
+    obj === null ||
+    typeof (obj as Record<string, unknown>).version !== 'string' ||
+    typeof (obj as Record<string, unknown>).primary_column !== 'string'
+  ) {
+    return false;
+  }
+
+  const columns = (obj as Record<string, unknown>).columns;
+  return typeof columns === 'object' && columns !== null;
 }
 
 /**

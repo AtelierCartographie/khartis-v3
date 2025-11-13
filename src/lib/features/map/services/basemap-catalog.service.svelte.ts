@@ -71,7 +71,9 @@ class BasemapCatalogService {
     }
 
     const geoColumn = dataset.columns.find(
-      (c) => c.type === 'string' && (c as any).subtype === 'geographic'
+      (c) =>
+        c.type === 'string' &&
+        (c as { subtype?: string }).subtype === 'geographic'
     );
 
     if (!geoColumn) {
@@ -106,7 +108,7 @@ class BasemapCatalogService {
   }
 
   private calculateMatchScore(
-    dataset: ProcessedDataset,
+    _dataset: ProcessedDataset,
     geoColumnName: string,
     basemap: BasemapMetadata
   ): { score: number; reason: string } {

@@ -3935,6 +3935,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@tmcw/togeojson@npm:^5.5.0":
+  version: 5.8.1
+  resolution: "@tmcw/togeojson@npm:5.8.1"
+  peerDependencies:
+    "@types/geojson": "*"
+  checksum: 10c0/2ce102f9e905534f8e7fe42ba541fee13d385da30de64654881f500da2d61e93b82682b44bf1ebc3a519720d1aee3f8e929a5ca0532f30463dfb3f8e7d13dced
+  languageName: node
+  linkType: hard
+
 "@turf/along@npm:^7.2.0":
   version: 7.2.0
   resolution: "@turf/along@npm:7.2.0"
@@ -10056,7 +10065,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jszip@npm:^3.1.5":
+"jszip@npm:^3.1.5, jszip@npm:^3.10.1":
   version: 3.10.1
   resolution: "jszip@npm:3.10.1"
   dependencies:
@@ -10116,10 +10125,12 @@ __metadata:
     "@sveltejs/vite-plugin-svelte": "npm:^6.2.1"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/svelte": "npm:^5.2.8"
+    "@tmcw/togeojson": "npm:^5.5.0"
     "@turf/turf": "npm:^7.2.0"
     "@types/carbon__themes": "npm:^0.0.3"
     "@types/d3": "npm:^7.4.3"
     "@types/d3-geo": "npm:^3.1.0"
+    "@types/geojson": "npm:^7946.0.10"
     "@types/node": "npm:^24.10.1"
     "@types/papaparse": "npm:^5.5.0"
     "@types/shpjs": "npm:^3.4.7"
@@ -10145,6 +10156,7 @@ __metadata:
     hotkeys-js: "npm:^3.13.15"
     husky: "npm:^9.1.7"
     jsdom: "npm:^27.2.0"
+    jszip: "npm:^3.10.1"
     localforage: "npm:^1.10.0"
     mapbox-gl: "npm:^3.16.0"
     maplibre-gl: "npm:^5.12.0"

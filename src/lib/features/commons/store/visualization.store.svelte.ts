@@ -319,7 +319,7 @@ class VisualizationStore {
   ): number[] {
     const values = datasetsStore
       .getColumnValues(datasetId, columnName)
-      .filter((v) => typeof v === 'number' && !isNaN(v))
+      .filter((v): v is number => typeof v === 'number' && !isNaN(v))
       .sort((a, b) => a - b);
 
     if (values.length === 0) return [];
