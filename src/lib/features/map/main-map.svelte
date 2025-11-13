@@ -56,6 +56,11 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
             return arrowTable;
           }
         }
+      } else {
+        logger.warn('DuckDB dataset missing for selected dataset', LogCategory.MAP, {
+          datasetId: dataset.id,
+          sourceFileId: dataset.sourceFileId
+        });
       }
 
       logger.warn('No geographic column found in dataset', LogCategory.MAP, {
@@ -202,15 +207,17 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
 <style>
   .map-container {
     width: 100%;
-    height: 700px;
+    max-height: 500px;
+    height: 500px;
     background-color: white;
     position: relative;
+    overflow-y: auto;
   }
 
   .loading-state,
   .empty-state {
     width: 100%;
-    height: 700px;
+    height: 500px;
     display: flex;
     align-items: center;
     justify-content: center;
