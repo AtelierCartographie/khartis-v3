@@ -211,7 +211,7 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
     height: 500px;
     background-color: white;
     position: relative;
-    overflow-y: auto;
+    overflow: hidden;
   }
 
   .loading-state,
