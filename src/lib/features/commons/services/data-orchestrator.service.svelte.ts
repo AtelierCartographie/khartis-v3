@@ -12,9 +12,10 @@ import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
 import { logger, LogCategory } from '../utils/logger';
 import { getParsedDataLength } from '$lib/types/data';
-import { DataValidationError, isFatalError, formatError } from '../errors/pipeline.errors';
+import { DataValidationError, isFatalError, formatError, ParseError } from '../errors/pipeline.errors';
 import { ColumnType } from '$lib/features/data/domain';
 import { importRollbackService } from './import-rollback.service';
+import type { DatasetResult } from '$lib/features/data';
 
 class DataOrchestratorService {
   private isInitialized = false;
@@ -57,62 +58,16 @@ class DataOrchestratorService {
         });
         return;
       }
+      logger.info('Dataset retrieved after data pipeline', LogCategory.DATA, {
+        datasetId: dataset.id,
+        datasetName: dataset.name,
+        sourceFileId: dataset.sourceFileId,
+        tableName: dataset.tableName,
+        hasGeometryFlag: !!dataset.geometry,
+        columnCount: dataset.columns.length
+      });
 
-      const shouldRunGeoPipeline =
-        !!dataset.geometry ||
-        file.fileType === FileType.GEOJSON ||
-        file.fileType === FileType.SHAPEFILE ||
-        file.fileType === FileType.GEOPACKAGE ||
-        file.fileType === FileType.KML ||
-        file.fileType === FileType.KMZ;
-
-      if (shouldRunGeoPipeline) {
-        logger.info('Running DuckDB Geo pipeline for uploaded file', LogCategory.DUCKDB, {
-          fileName: file.name,
-          fileType: file.fileType,
-          hasParsedData: !!file.parsedData,
-          geometryDetected: !!dataset.geometry
-        });
-        try {
-          await duckDBOrchestrator.processFile(file);
-        } catch (geoError) {
-          logger.error('Failed to process Geo file via DuckDB orchestrator', LogCategory.DUCKDB, geoError);
-          throw geoError;
-        }
-      } else if (dataset.tableName) {
-        // Register the table created by dataPipeline in duckDBOrchestrator
-        logger.debug('Registering table from dataPipeline', LogCategory.DUCKDB, {
-          tableName: dataset.tableName,
-          sourceFileId: dataset.sourceFileId,
-          fileId: file.id,
-          fileName: file.name,
-          datasetId: dataset.id,
-          currentDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
-        });
-
-        try {
-          const duckDataset = await duckDBOrchestrator.registerExistingTable(
-            dataset.tableName,
-            dataset.sourceFileId || file.id, // Use dataset.sourceFileId to match
-            file.name
-          );
-          logger.success('Table registered successfully', LogCategory.DUCKDB, {
-            tableName: dataset.tableName,
-            duckDatasetId: duckDataset?.id,
-            totalDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
-          });
-        } catch (registerError) {
-          logger.error('Failed to register table', LogCategory.DUCKDB, {
-            error: registerError instanceof Error ? registerError.message : 'Unknown error',
-            tableName: dataset.tableName
-          });
-        }
-      } else {
-        logger.warn('No tableName in dataset', LogCategory.DUCKDB, {
-          datasetId: dataset.id,
-          datasetName: dataset.name
-        });
-      }
+      await this.processFileInDuckDB(file, dataset);
 
       // Mark file as processed to prevent reprocessing
       this.processedFileIds.add(file.id);
@@ -349,6 +304,177 @@ class DataOrchestratorService {
     }
   }
 
+  private prepareFileForDuckDB(
+    file: UploadedFile,
+    dataset: DatasetResult | undefined
+  ): UploadedFile | null {
+    const requiresGeoProcessing =
+      !!dataset?.geometry ||
+      file.fileType === FileType.GEOJSON ||
+      file.fileType === FileType.SHAPEFILE ||
+      file.fileType === FileType.GEOPACKAGE ||
+      file.fileType === FileType.KML ||
+      file.fileType === FileType.KMZ;
+
+    logger.debug('Evaluating DuckDB preparation need', LogCategory.DUCKDB, {
+      fileId: file.id,
+      fileName: file.name,
+      fileType: file.fileType,
+      datasetId: dataset?.id,
+      datasetGeometryDetected: !!dataset?.geometry,
+      requiresGeoProcessing
+    });
+
+    if (!requiresGeoProcessing) {
+      logger.debug('Skipping DuckDB geo processing for file', LogCategory.DUCKDB, {
+        fileId: file.id,
+        reason: 'no_geometry_detected'
+      });
+      return null;
+    }
+
+    if (file.fileType === FileType.SHAPEFILE) {
+      return this.convertShapefileForDuckDB(file);
+    }
+
+    return file;
+  }
+
+  private convertShapefileForDuckDB(file: UploadedFile): UploadedFile {
+    if (!file.parsedData) {
+      throw new ParseError(
+        'Missing parsed GeoJSON data for shapefile',
+        FileType.SHAPEFILE,
+        { fileId: file.id, fileName: file.name }
+      );
+    }
+
+    let geojsonObject: unknown;
+    try {
+      geojsonObject =
+        typeof file.parsedData === 'string'
+          ? JSON.parse(file.parsedData)
+          : file.parsedData;
+    } catch (error) {
+      throw new ParseError(
+        'Invalid GeoJSON data generated from shapefile',
+        FileType.SHAPEFILE,
+        {
+          fileId: file.id,
+          fileName: file.name,
+          originalError: error instanceof Error ? error.message : String(error)
+        }
+      );
+    }
+
+    const geojsonString = JSON.stringify(geojsonObject);
+
+    const geojsonName = file.name.endsWith('.shp')
+      ? file.name.replace(/\.shp$/i, '.geojson')
+      : `${file.name}.geojson`;
+
+    logger.info('Converted shapefile to GeoJSON for DuckDB', LogCategory.DATA, {
+      originalName: file.name,
+      normalizedName: geojsonName,
+      originalSize: file.size,
+      featureCount: Array.isArray((geojsonObject as any)?.features)
+        ? (geojsonObject as any).features.length
+        : undefined
+    });
+
+    return {
+      ...file,
+      name: geojsonName,
+      type: 'application/geo+json',
+      fileType: FileType.GEOJSON,
+      content: geojsonString,
+      parsedData: geojsonObject as UploadedFile['parsedData']
+    };
+  }
+
+  private async processFileInDuckDB(
+    file: UploadedFile,
+    datasetOverride?: DatasetResult
+  ): Promise<void> {
+    const dataset =
+      datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset) {
+      logger.warn('Cannot process file in DuckDB - dataset missing', LogCategory.DUCKDB, {
+        fileId: file.id,
+        fileName: file.name
+      });
+      return;
+    }
+
+    const duckDBFile = this.prepareFileForDuckDB(file, dataset);
+
+    if (duckDBFile) {
+      logger.info(
+        'Running DuckDB Geo pipeline for uploaded file',
+        LogCategory.DUCKDB,
+        {
+          originalFileName: file.name,
+          normalizedFileName: duckDBFile.name,
+          fileType: file.fileType,
+          normalizedType: duckDBFile.fileType,
+          hasParsedData: !!duckDBFile.parsedData,
+          geometryDetected: !!dataset.geometry,
+          datasetId: dataset.id,
+          datasetTableName: dataset.tableName
+        }
+      );
+      try {
+        await duckDBOrchestrator.processFile(duckDBFile);
+      } catch (error) {
+        logger.error(
+          'Failed to process Geo file via DuckDB orchestrator',
+          LogCategory.DUCKDB,
+          error
+        );
+        throw error;
+      }
+      return;
+    }
+
+    if (dataset.tableName) {
+      logger.debug('Registering table from dataPipeline', LogCategory.DUCKDB, {
+        tableName: dataset.tableName,
+        sourceFileId: dataset.sourceFileId,
+        fileId: file.id,
+        fileName: file.name,
+        datasetId: dataset.id,
+        currentDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
+      });
+
+      try {
+        const duckDataset = await duckDBOrchestrator.registerExistingTable(
+          dataset.tableName,
+          dataset.sourceFileId || file.id,
+          file.name
+        );
+        logger.success('Table registered successfully', LogCategory.DUCKDB, {
+          tableName: dataset.tableName,
+          duckDatasetId: duckDataset?.id,
+          totalDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
+        });
+      } catch (registerError) {
+        logger.error('Failed to register table', LogCategory.DUCKDB, {
+          error:
+            registerError instanceof Error
+              ? registerError.message
+              : 'Unknown error',
+          tableName: dataset.tableName
+        });
+      }
+    } else {
+      logger.warn('No tableName in dataset to register', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        datasetName: dataset.name
+      });
+    }
+  }
+
   async onProjectChanged(): Promise<void> {
     const endTiming = logger.startTiming('Project changed', LogCategory.PROJECT);
 
@@ -477,7 +603,7 @@ class DataOrchestratorService {
 
         try {
           const processStart = performance.now();
-          await duckDBOrchestrator.processFile(file);
+          await this.processFileInDuckDB(file);
           const processDuration = performance.now() - processStart;
 
           logger.success('File processed in DuckDB', LogCategory.DUCKDB, {

@@ -120,6 +120,12 @@ class DuckDBOrchestratorService {
       this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
+      logger.info('DuckDB dataset registered (Arrow pipeline)', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        tableName,
+        sourceFileId: dataset.sourceFileId,
+        hasArrowTable: !!dataset.arrowTableWithMetadata
+      });
 
       console.log('[duckDBOrchestrator:registerExistingTable] Table registered', {
         datasetId: dataset.id,
@@ -152,6 +158,13 @@ class DuckDBOrchestratorService {
         status: file.status
       }
     );
+    logger.info('DuckDB processFile received file', LogCategory.DUCKDB, {
+      fileName: file.name,
+      fileType: file.fileType,
+      fileSize: file.size,
+      status: file.status,
+      sourceFileId: file.id
+    });
 
     const { getParsedDataSample } = await import('$lib/types/data');
     logger.debug('Processing file', LogCategory.DUCKDB, {
@@ -220,6 +233,11 @@ class DuckDBOrchestratorService {
         console.log(
           `✅ [${new Date().toISOString()}] [DuckDB:processFile] GeoJSON processed in ${(performance.now() - geojsonStart).toFixed(2)}ms`
         );
+      } else {
+        logger.warn('DuckDB processFile received unsupported fileType', LogCategory.DUCKDB, {
+          fileName: file.name,
+          fileType: file.fileType
+        });
       }
 
       const totalDuration = performance.now() - startTime;
@@ -565,6 +583,12 @@ class DuckDBOrchestratorService {
       this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
+      logger.info('DuckDB dataset registered (ST_Read)', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        tableName: actualTableName,
+        sourceFileId: dataset.sourceFileId,
+        geometryMeta: dataset.geoArrowMetadata?.primary_column
+      });
 
       console.log('[duckDBOrchestrator:ST_Read] Dataset added to reactive state', {
         datasetId: dataset.id,
@@ -826,6 +850,12 @@ class DuckDBOrchestratorService {
     this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
+    logger.info('DuckDB dataset registered (legacy pipeline)', LogCategory.DUCKDB, {
+      datasetId: dataset.id,
+      tableName,
+      sourceFileId: dataset.sourceFileId,
+      columnCount: columns.length
+    });
 
     console.log('[duckDBOrchestrator:Legacy] Dataset added to reactive state', {
       datasetId: dataset.id,
@@ -1271,12 +1301,27 @@ class DuckDBOrchestratorService {
   }
 
   getDatasetBySourceFile(sourceFileId: string): DuckDBDataset | undefined {
+    logger.debug('DuckDB dataset lookup by sourceFileId', LogCategory.DUCKDB, {
+      sourceFileId,
+      datasetCount: this._state.datasets.size
+    });
     this._datasetsVersion;
     for (const dataset of this._state.datasets.values()) {
       if (dataset.sourceFileId === sourceFileId) {
+        logger.debug('DuckDB dataset found for sourceFileId', LogCategory.DUCKDB, {
+          sourceFileId,
+          datasetId: dataset.id,
+          tableName: dataset.tableName
+        });
         return dataset;
       }
     }
+    logger.warn('No DuckDB dataset found for sourceFileId', LogCategory.DUCKDB, {
+      sourceFileId,
+      knownSourceFileIds: Array.from(this._state.datasets.values()).map(
+        (d) => d.sourceFileId
+      )
+    });
     return undefined;
   }
 
