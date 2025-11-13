@@ -1,7 +1,6 @@
 import { dataPipeline } from '$lib/features/data';
 import type { DatasetResult } from '$lib/features/data';
 import type { UploadedFile } from './create-project.types';
-import { projectStore } from './project.store.svelte';
 import { logger, LogCategory } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import { DuplicateFileError } from '../errors/pipeline.errors';
@@ -83,7 +82,10 @@ class DatasetsStore {
   }
 
   async processFiles(files: UploadedFile[]): Promise<void> {
-    const endTiming = logger.startTiming('Process files in store', LogCategory.STORE);
+    const endTiming = logger.startTiming(
+      'Process files in store',
+      LogCategory.STORE
+    );
 
     logger.info('Processing files in store', LogCategory.STORE, {
       fileCount: files.length
@@ -104,7 +106,10 @@ class DatasetsStore {
       const newDatasets = await Promise.all(
         files.map(async (file) => {
           if (!file.content && !file.originalFile) {
-            logger.warn(`File ${file.name} has no content or originalFile`, LogCategory.DATA);
+            logger.warn(
+              `File ${file.name} has no content or originalFile`,
+              LogCategory.DATA
+            );
             throw new Error(`File ${file.name} has no content or originalFile`);
           }
           // Pass originalFile to avoid re-parsing already processed content
@@ -159,7 +164,10 @@ class DatasetsStore {
         `[${new Date().toISOString()}] [datasetsStore:addFile] Processing with new dataPipeline...`
       );
       const processStart = performance.now();
-      const dataset = await dataPipeline.processUploadedFile(file, file.originalFile);
+      const dataset = await dataPipeline.processUploadedFile(
+        file,
+        file.originalFile
+      );
       console.log(
         `[${new Date().toISOString()}] [datasetsStore:addFile] File processed`,
         {
@@ -175,11 +183,14 @@ class DatasetsStore {
         );
 
         if (existingDataset) {
-          console.warn(`[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`, {
-            existingDatasetId: existingDataset.id,
-            newDatasetId: dataset.id,
-            sourceFileId: dataset.sourceFileId
-          });
+          console.warn(
+            `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`,
+            {
+              existingDatasetId: existingDataset.id,
+              newDatasetId: dataset.id,
+              sourceFileId: dataset.sourceFileId
+            }
+          );
 
           // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
@@ -208,14 +219,17 @@ class DatasetsStore {
           this._state.selectedDatasetId = dataset.id;
         }
 
-        console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`, {
-          datasetId: dataset.id,
-          datasetName: dataset.name,
-          sourceFileId: dataset.sourceFileId,
-          totalDatasets: this._state.datasets.length,
-          selectedDatasetId: this._state.selectedDatasetId,
-          wasReplacement: !!existingDataset
-        });
+        console.log(
+          `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`,
+          {
+            datasetId: dataset.id,
+            datasetName: dataset.name,
+            sourceFileId: dataset.sourceFileId,
+            totalDatasets: this._state.datasets.length,
+            selectedDatasetId: this._state.selectedDatasetId,
+            wasReplacement: !!existingDataset
+          }
+        );
 
         const pendingResolvers = this.pendingDatasetResolvers.get(
           dataset.sourceFileId
@@ -232,12 +246,10 @@ class DatasetsStore {
       });
     } catch (error) {
       const duration = performance.now() - startTime;
-      console.error(
-        `[${new Date().toISOString()}] [datasetsStore:addFile] ERROR`,
-        {
-          duration: `${duration.toFixed(2)}ms`,
-          error
-        }
+      logger.error(
+        `Failed to add file to datasets store (duration: ${duration.toFixed(2)}ms)`,
+        LogCategory.DATA,
+        error
       );
 
       this._state.error =
@@ -283,7 +295,7 @@ class DatasetsStore {
 
     console.log('[datasetsStore] Filtered datasets', {
       totalDatasetsAfter: filteredDatasets.length,
-      remainingIds: filteredDatasets.map(d => d.id)
+      remainingIds: filteredDatasets.map((d) => d.id)
     });
 
     if (this._state.selectedDatasetId === datasetId) {
@@ -311,10 +323,12 @@ class DatasetsStore {
     console.log('[datasetsStore] getDatasetBySourceFile called', {
       sourceFileId,
       totalDatasets: this._state.datasets.length,
-      allSourceFileIds: this._state.datasets.map(d => d.sourceFileId)
+      allSourceFileIds: this._state.datasets.map((d) => d.sourceFileId)
     });
 
-    const dataset = this._state.datasets.find((d) => d.sourceFileId === sourceFileId);
+    const dataset = this._state.datasets.find(
+      (d) => d.sourceFileId === sourceFileId
+    );
     console.log('[datasetsStore] getDatasetBySourceFile result', {
       found: !!dataset,
       datasetId: dataset?.id,
@@ -343,14 +357,14 @@ class DatasetsStore {
     );
   }
 
-  getColumnValues(datasetId: string, columnName: string): any[] {
+  getColumnValues(datasetId: string, columnName: string): unknown[] {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     if (!dataset || !dataset.data) return [];
 
     return dataset.data.map((row) => row[columnName]);
   }
 
-  getUniqueValues(datasetId: string, columnName: string): any[] {
+  getUniqueValues(datasetId: string, columnName: string): unknown[] {
     const values = this.getColumnValues(datasetId, columnName);
     return Array.from(new Set(values));
   }
@@ -390,33 +404,6 @@ class DatasetsStore {
     return sorted.length % 2
       ? sorted[mid]
       : (sorted[mid - 1] + sorted[mid]) / 2;
-  }
-
-  private async syncWithProject(): Promise<void> {
-    const currentProject = projectStore.currentProject;
-    if (!currentProject?.data?.sourceFiles) {
-      this.clear();
-      return;
-    }
-
-    const currentFileIds = new Set(
-      currentProject.data.sourceFiles.map((f) => f.id)
-    );
-    const existingFileIds = new Set(
-      this._state.datasets.map((d) => d.sourceFileId)
-    );
-
-    const toRemove = this._state.datasets.filter(
-      (d) => !currentFileIds.has(d.sourceFileId)
-    );
-    toRemove.forEach((d) => this.removeDataset(d.id));
-
-    const toAdd = currentProject.data.sourceFiles.filter(
-      (f) => !existingFileIds.has(f.id)
-    );
-    for (const file of toAdd) {
-      await this.addFile(file);
-    }
   }
 
   resetDataset(datasetId: string): boolean {
@@ -470,6 +457,49 @@ class DatasetsStore {
     return dataset
       ? (dataset.metadata.transformations?.length ?? 0) > 0
       : false;
+  }
+
+  recordTransformation(datasetId: string, description: string): void {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      logger.warn(
+        `Cannot record transformation, dataset ${datasetId} not found`,
+        LogCategory.DATA
+      );
+      return;
+    }
+
+    const entry = `${new Date().toISOString()} - ${description}`;
+    const updatedTransformations = [
+      ...(dataset.metadata.transformations ?? []),
+      entry
+    ];
+
+    this._state.datasets = this._state.datasets.map((d) =>
+      d.id === datasetId
+        ? {
+            ...d,
+            metadata: {
+              ...d.metadata,
+              transformations: updatedTransformations
+            }
+          }
+        : d
+    );
+  }
+
+  updateDatasetRowCount(datasetId: string, rowCount: number): void {
+    this._state.datasets = this._state.datasets.map((d) =>
+      d.id === datasetId
+        ? {
+            ...d,
+            rowCount,
+            metadata: {
+              ...d.metadata
+            }
+          }
+        : d
+    );
   }
 
   renameDataset(datasetId: string, newName: string): boolean {

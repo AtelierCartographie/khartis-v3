@@ -1,14 +1,14 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { tableFromIPC, type Table } from '@uwdata/flechette';
+import {
+  DataValidationError,
+  DuckDBError,
+  TypeInferenceError
+} from '../../errors/pipeline.errors';
+import { LogCategory, logger } from '../../utils/logger';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
-import { logger, LogCategory } from '../../utils/logger';
-import {
-  DuckDBError,
-  DataValidationError,
-  TypeInferenceError
-} from '../../errors/pipeline.errors';
 
 const DUCK_CONST = {
   DEFAULT: {
@@ -52,6 +52,10 @@ interface QueryOptions {
   format?: QueryFormat;
   useProxy?: boolean;
 }
+
+type DuckDBUnsafeBindings = {
+  runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
+};
 
 import type {
   AnalysisResult,
@@ -277,8 +281,14 @@ class DuckDB {
 
   // LRU cache management
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
-  private cacheSize = 0;
-  private cacheAccessOrder: string[] = [];
+
+  private cacheState: {
+    size: number;
+    accessOrder: string[];
+  } = {
+    size: 0,
+    accessOrder: []
+  };
 
   constructor() {}
 
@@ -345,8 +355,8 @@ class DuckDB {
       options;
 
     const buffer = await this.connection!.useUnsafe(
-      async (bindings: unknown, conn: unknown) => {
-        return await (bindings as any).runQuery(conn, query);
+      async (bindings: DuckDBUnsafeBindings, conn: unknown) => {
+        return await bindings.runQuery(conn, query);
       }
     );
     if (format === DUCK_CONST.QUERY_FORMAT.ARROW_IPC) return buffer;
@@ -457,10 +467,7 @@ class DuckDB {
         const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
         logger.debug('Operation', LogCategory.DUCKDB);
 
-        await this.query(
-          query,
-          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-        );
+        await this.query(query, { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC });
 
         logger.debug('Operation', LogCategory.DUCKDB);
 
@@ -493,11 +500,11 @@ class DuckDB {
       if (meta) {
         const result = await this
           .query(`FROM ST_Read_Meta('${geofileWithId.id}')
-					SELECT 
-						file_name AS name, 
-						driver_short_name AS format, 
-						layers[1].feature_count AS nb_entities, 
-						layers[1].geometry_fields[1].type AS geometry, 
+					SELECT
+						file_name AS name,
+						driver_short_name AS format,
+						layers[1].feature_count AS nb_entities,
+						layers[1].geometry_fields[1].type AS geometry,
 						layers[1].geometry_fields[1].crs.name AS crs`);
         return result as DuckDBMetadata;
       }
@@ -517,14 +524,16 @@ class DuckDB {
       if (this.table_geoparquet_cache.has(tablename)) {
         const oldBuffer = this.table_geoparquet_cache.get(tablename);
         if (oldBuffer) {
-          this.cacheSize -= oldBuffer.byteLength;
+          this.cacheState.size -= oldBuffer.byteLength;
         }
         this.table_geoparquet_cache.delete(tablename);
-        const index = this.cacheAccessOrder.indexOf(tablename);
+        const index = this.cacheState.accessOrder.indexOf(tablename);
         if (index > -1) {
-          this.cacheAccessOrder.splice(index, 1);
+          this.cacheState.accessOrder.splice(index, 1);
         }
-        logger.debug('Invalidated stale GeoParquet cache', LogCategory.DUCKDB, { tablename });
+        logger.debug('Invalidated stale GeoParquet cache', LogCategory.DUCKDB, {
+          tablename
+        });
       }
 
       logger.info('Table created', LogCategory.DUCKDB, { tablename });
@@ -829,25 +838,33 @@ class DuckDB {
   clearGeoParquetCache(): void {
     const count = this.table_geoparquet_cache.size;
     this.table_geoparquet_cache.clear();
-    this.cacheAccessOrder = [];
-    this.cacheSize = 0;
-    logger.info('GeoParquet cache cleared', LogCategory.DUCKDB, { entriesCleared: count });
+    this.cacheState.accessOrder = [];
+    this.cacheState.size = 0;
+    logger.info('GeoParquet cache cleared', LogCategory.DUCKDB, {
+      entriesCleared: count
+    });
   }
 
   async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
     // Check cache and update access order (LRU)
     if (this.table_geoparquet_cache.has(table)) {
       // Move to end (most recently used)
-      const index = this.cacheAccessOrder.indexOf(table);
+      const index = this.cacheState.accessOrder.indexOf(table);
       if (index > -1) {
-        this.cacheAccessOrder.splice(index, 1);
-        this.cacheAccessOrder.push(table);
+        this.cacheState.accessOrder.splice(index, 1);
+        this.cacheState.accessOrder.push(table);
       }
-      logger.debug('GeoParquet buffer retrieved from cache', LogCategory.DUCKDB, { table });
+      logger.debug(
+        'GeoParquet buffer retrieved from cache',
+        LogCategory.DUCKDB,
+        { table }
+      );
       return this.table_geoparquet_cache.get(table)!;
     }
 
-    logger.debug('Converting DuckDB table to GeoParquet', LogCategory.DUCKDB, { table });
+    logger.debug('Converting DuckDB table to GeoParquet', LogCategory.DUCKDB, {
+      table
+    });
 
     // CRITICAL: Do NOT specify FORMAT 'parquet' - let DuckDB auto-detect GeoParquet
     // when GEOMETRY columns are present. Specifying FORMAT forces generic Parquet.
@@ -867,36 +884,42 @@ class DuckDB {
       logger.debug('Deleted temporary Parquet file', LogCategory.DUCKDB, {
         filename: `${table}.parquet`
       });
-    } catch (error) {
+    } catch (_error) {
       // Non-fatal - file might not exist
-      logger.debug('Could not delete Parquet file (may not exist)', LogCategory.DUCKDB, {
-        filename: `${table}.parquet`
-      });
+      logger.debug(
+        'Could not delete Parquet file (may not exist)',
+        LogCategory.DUCKDB,
+        {
+          filename: `${table}.parquet`
+        }
+      );
     }
 
     // Evict oldest entries if cache would exceed limit
     while (
-      this.cacheSize + buffer.byteLength > this.MAX_CACHE_SIZE &&
-      this.cacheAccessOrder.length > 0
+      this.cacheState.size + buffer.byteLength > this.MAX_CACHE_SIZE &&
+      this.cacheState.accessOrder.length > 0
     ) {
-      const oldest = this.cacheAccessOrder.shift()!;
+      const oldest = this.cacheState.accessOrder.shift()!;
       const oldBuffer = this.table_geoparquet_cache.get(oldest);
       if (oldBuffer) {
-        this.cacheSize -= oldBuffer.byteLength;
+        this.cacheState.size -= oldBuffer.byteLength;
         this.table_geoparquet_cache.delete(oldest);
-        logger.debug('Evicted from GeoParquet cache', LogCategory.DUCKDB, { table: oldest });
+        logger.debug('Evicted from GeoParquet cache', LogCategory.DUCKDB, {
+          table: oldest
+        });
       }
     }
 
     // Add to cache
     this.table_geoparquet_cache.set(table, buffer);
-    this.cacheAccessOrder.push(table);
-    this.cacheSize += buffer.byteLength;
+    this.cacheState.accessOrder.push(table);
+    this.cacheState.size += buffer.byteLength;
 
     logger.success('GeoParquet buffer created and cached', LogCategory.DUCKDB, {
       table,
       sizeKB: (buffer.byteLength / 1024).toFixed(2),
-      cacheSize: this.cacheAccessOrder.length
+      cacheSize: this.cacheState.accessOrder.length
     });
 
     return buffer;
@@ -958,15 +981,12 @@ class DuckDB {
    * @param table - Apache Arrow table
    * @param tablename - Name for the DuckDB table
    */
-  async insert_arrow_table(
-    table: unknown, // apache-arrow Table type
-    tablename: string
-  ): Promise<void> {
+  async insert_arrow_table(table: unknown, tablename: string): Promise<void> {
     if (!this.connection) {
       throw new DuckDBError('Connection not established');
     }
 
-    await this.connection.insertArrowTable(table as any, {
+    await this.connection.insertArrowTable(table as never, {
       name: tablename,
       create: true
     });

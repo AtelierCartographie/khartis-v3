@@ -2,6 +2,9 @@ import type { IParser } from '../../domain/interfaces/parser.interface';
 import { CSVParser } from './csv.parser';
 import { GeoJSONParser } from './geojson.parser';
 import { ShapefileParser } from './shapefile.parser';
+import { GeoPackageParser } from './geopackage.parser';
+import { KMLParser } from './kml.parser';
+import { GeoParquetParser } from './geoparquet.parser';
 
 /**
  * Parser Registry - Finds the right parser for a file
@@ -37,6 +40,9 @@ export class ParserRegistry {
     this.register(new CSVParser());
     this.register(new GeoJSONParser());
     this.register(new ShapefileParser());
+    this.register(new GeoPackageParser());
+    this.register(new KMLParser());
+    this.register(new GeoParquetParser());
   }
 
   /**

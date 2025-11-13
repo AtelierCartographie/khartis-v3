@@ -49,18 +49,24 @@ interface RecentLog {
 
 class Logger {
   private config: LoggerConfig;
+
   private recentLogs: RecentLog[] = [];
+
   private readonly LOOP_DETECTION_WINDOW = 100; // ms
+
   private readonly LOOP_DETECTION_THRESHOLD = 10; // occurrences
 
   constructor() {
     const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
-    const debugEnabled = import.meta.env.VITE_DEBUG === 'true' || import.meta.env.VITE_DEBUG_AUTH === 'true';
+    const debugEnabled =
+      import.meta.env.VITE_DEBUG === 'true' ||
+      import.meta.env.VITE_DEBUG_AUTH === 'true';
 
     this.config = {
       enabled: isDev || debugEnabled,
       categories: this.parseCategories(import.meta.env.VITE_LOG_CATEGORIES),
-      minLevel: this.parseLogLevel(import.meta.env.VITE_LOG_LEVEL) || LogLevel.DEBUG,
+      minLevel:
+        this.parseLogLevel(import.meta.env.VITE_LOG_LEVEL) || LogLevel.DEBUG,
       includeStack: import.meta.env.VITE_LOG_STACK === 'true'
     };
   }
@@ -70,9 +76,10 @@ class Logger {
       return new Set(Object.values(LogCategory));
     }
     return new Set(
-      value.split(',')
-        .map(c => c.trim().toUpperCase() as LogCategory)
-        .filter(c => Object.values(LogCategory).includes(c))
+      value
+        .split(',')
+        .map((c) => c.trim().toUpperCase() as LogCategory)
+        .filter((c) => Object.values(LogCategory).includes(c))
     );
   }
 
@@ -86,7 +93,13 @@ class Logger {
     if (!this.config.enabled) return false;
     if (!this.config.categories.has(category)) return false;
 
-    const levels = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR, LogLevel.SUCCESS];
+    const levels = [
+      LogLevel.DEBUG,
+      LogLevel.INFO,
+      LogLevel.WARN,
+      LogLevel.ERROR,
+      LogLevel.SUCCESS
+    ];
     const minIndex = levels.indexOf(this.config.minLevel);
     const currentIndex = levels.indexOf(level);
     return currentIndex >= minIndex;
@@ -97,10 +110,14 @@ class Logger {
     const now = Date.now();
 
     // Clean logs older than detection window
-    this.recentLogs = this.recentLogs.filter(log => now - log.time < this.LOOP_DETECTION_WINDOW);
+    this.recentLogs = this.recentLogs.filter(
+      (log) => now - log.time < this.LOOP_DETECTION_WINDOW
+    );
 
     // Count occurrences of same log
-    const sameLogCount = this.recentLogs.filter(log => log.key === key).length;
+    const sameLogCount = this.recentLogs.filter(
+      (log) => log.key === key
+    ).length;
 
     if (sameLogCount >= this.LOOP_DETECTION_THRESHOLD) {
       console.error('🚨 INFINITE LOOP DETECTED:', {
@@ -180,7 +197,11 @@ class Logger {
 
     // Add stack trace for errors if configured
     let data = options.data;
-    if (this.config.includeStack && level === LogLevel.ERROR && data instanceof Error) {
+    if (
+      this.config.includeStack &&
+      level === LogLevel.ERROR &&
+      data instanceof Error
+    ) {
       data = {
         ...data,
         stack: data.stack

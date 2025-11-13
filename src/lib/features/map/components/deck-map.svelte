@@ -1,12 +1,13 @@
 <script lang="ts">
   import { MapboxOverlay } from '@deck.gl/mapbox';
-  import type { DeckProps } from '@deck.gl/core';
+  import type { DeckProps, Layer } from '@deck.gl/core';
   import { GeoJsonLayer } from '@deck.gl/layers';
   import * as geodecklayers from '@geoarrow/deck.gl-layers';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+  import type { FeatureCollection } from 'geojson';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-import { onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import { visualizationStore } from '../../commons/store/visualization.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import {
@@ -35,9 +36,21 @@ import { onMount } from 'svelte';
   import { logger, LogCategory } from '../../commons/utils/logger';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
 
+  const MAP_CENTER_STORAGE_KEY = 'khartis_map_center';
+  const MAP_ZOOM_STORAGE_KEY = 'khartis_maplibre_zoom';
+
+  type DeckDataRow = Record<string, unknown>;
+
+  interface TooltipEvent {
+    object?: DeckDataRow | null;
+    x: number;
+    y: number;
+    coordinate?: [number, number];
+  }
+
   interface DeckMapProps {
     jsTable: ArrowTable | null;
-    userGeoJSON: any | null;
+    userGeoJSON: FeatureCollection | null;
   }
 
   let { jsTable, userGeoJSON }: DeckMapProps = $props();
@@ -74,7 +87,7 @@ import { onMount } from 'svelte';
     return variables;
   });
 
-  function formatValue(value: any): string {
+  function formatValue(value: unknown): string {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'object') return '';
     if (typeof value === 'number') {
@@ -94,14 +107,18 @@ import { onMount } from 'svelte';
     }
   }
 
-  function updateTooltip({ object, x, y, coordinate }: any) {
+  function updateTooltip({ object, x, y, coordinate }: TooltipEvent) {
     if (!tooltip) return;
 
     if (object) {
-      const { geom: _geom, geometry: _geometry, ...attributes } = object;
+      const {
+        geom: _geom,
+        geometry: _geometry,
+        ...attributes
+      } = object as DeckDataRow;
 
-      const primaryData: [string, any][] = [];
-      const secondaryData: [string, any][] = [];
+      const primaryData: Array<[string, unknown]> = [];
+      const secondaryData: Array<[string, unknown]> = [];
 
       Object.entries(attributes).forEach(([key, value]) => {
         if (typeof value === 'object') return;
@@ -181,30 +198,65 @@ import { onMount } from 'svelte';
     }
   }
 
-  function createDeckLayers(jsTable: ArrowTable): any[] {
+  function normalizeTooltipCoordinate(
+    coordinate?: number[] | null
+  ): [number, number] | undefined {
+    if (
+      Array.isArray(coordinate) &&
+      coordinate.length >= 2 &&
+      typeof coordinate[0] === 'number' &&
+      typeof coordinate[1] === 'number'
+    ) {
+      return [coordinate[0], coordinate[1]];
+    }
+    return undefined;
+  }
+
+  function handleDeckHover(pickingInfo: {
+    object?: unknown;
+    coordinate?: number[] | null;
+    x?: number;
+    y?: number;
+  }): void {
+    updateTooltip({
+      object: (pickingInfo.object as DeckDataRow) ?? null,
+      x: pickingInfo.x ?? 0,
+      y: pickingInfo.y ?? 0,
+      coordinate: normalizeTooltipCoordinate(pickingInfo.coordinate)
+    });
+  }
+
+  function createDeckLayers(jsTable: ArrowTable): Layer<DeckDataRow>[] {
     // CRITICAL: Check metadata exists before accessing
     const geoMetadata = jsTable.schema.metadata?.get('geo');
 
     if (!geoMetadata) {
       logger.error('No GeoArrow metadata in Arrow table', LogCategory.MAP, {
         hasSchemaMetadata: !!jsTable.schema.metadata,
-        metadataKeys: jsTable.schema.metadata ? Array.from(jsTable.schema.metadata.keys()) : [],
-        schemaFields: jsTable.schema.fields.map(f => f.name),
+        metadataKeys: jsTable.schema.metadata
+          ? Array.from(jsTable.schema.metadata.keys())
+          : [],
+        schemaFields: jsTable.schema.fields.map((f) => f.name),
         numRows: jsTable.numRows
       });
 
       // Try to find geometry column manually as fallback diagnostic
-      const geomColumn = jsTable.schema.fields.find(f =>
-        f.name === 'geom' || f.name === 'geometry'
+      const geomColumn = jsTable.schema.fields.find(
+        (f) => f.name === 'geom' || f.name === 'geometry'
       );
 
       if (!geomColumn) {
         logger.error('No geometry column found in table', LogCategory.MAP);
       } else {
-        logger.warn('Geometry column exists but no GeoArrow metadata', LogCategory.MAP, {
-          geomColumnName: geomColumn.name,
-          suggestion: 'Table may have come from DuckDB query instead of GeoParquetReader'
-        });
+        logger.warn(
+          'Geometry column exists but no GeoArrow metadata',
+          LogCategory.MAP,
+          {
+            geomColumnName: geomColumn.name,
+            suggestion:
+              'Table may have come from DuckDB query instead of GeoParquetReader'
+          }
+        );
       }
 
       return [];
@@ -215,181 +267,189 @@ import { onMount } from 'svelte';
       const geoColumn = jsonMeta.primary_column;
       const geometryType = jsonMeta.columns[geoColumn].geometry_types[0];
 
-    logger.info('Creating deck layers', LogCategory.MAP, {
-      geoColumn,
-      geometryType,
-      rowCount: jsTable.numRows,
-      hasVisualization: !!defaultVisualization
-    });
+      logger.info('Creating deck layers', LogCategory.MAP, {
+        geoColumn,
+        geometryType,
+        rowCount: jsTable.numRows,
+        hasVisualization: !!defaultVisualization
+      });
 
-    const viz = defaultVisualization;
-    const fillColor: [number, number, number] = viz?.style.fillColor
-      ? hexToRgb(viz.style.fillColor as string)
-      : [220, 220, 220];
-    const strokeColor: [number, number, number] = viz?.style.strokeColor
-      ? hexToRgb(viz.style.strokeColor)
-      : [255, 255, 255];
-    const fillOpacity: number = viz?.style.fillOpacity ?? 0.6;
-    const strokeWidth: number = viz?.style.strokeWidth ?? 1;
-    const strokeOpacity: number = viz?.style.strokeOpacity ?? 1;
+      const viz = defaultVisualization;
+      const fillColor: [number, number, number] = viz?.style.fillColor
+        ? hexToRgb(viz.style.fillColor as string)
+        : [220, 220, 220];
+      const strokeColor: [number, number, number] = viz?.style.strokeColor
+        ? hexToRgb(viz.style.strokeColor)
+        : [255, 255, 255];
+      const fillOpacity: number = viz?.style.fillOpacity ?? 0.6;
+      const strokeWidth: number = viz?.style.strokeWidth ?? 1;
+      const strokeOpacity: number = viz?.style.strokeOpacity ?? 1;
 
-    let deckLayer;
-    switch (geometryType.toUpperCase()) {
-      case 'POINT':
+      let deckLayer: Layer<DeckDataRow>;
+      switch (geometryType.toUpperCase()) {
+        case 'POINT':
 
-      // fallthrough
-      case 'MULTIPOINT': {
-        const pointChild = jsTable.getChild(geoColumn);
-        if (!pointChild) return [];
+        // fallthrough
+        case 'MULTIPOINT': {
+          const pointChild = jsTable.getChild(geoColumn);
+          if (!pointChild) return [];
 
-        const useProportionalSymbols =
-          viz && shouldApplyProportionalSymbols(viz);
-        const useCategoricalColor = viz && shouldApplyCategorical(viz);
+          const useProportionalSymbols =
+            viz && shouldApplyProportionalSymbols(viz);
+          const useCategoricalColor = viz && shouldApplyCategorical(viz);
 
-        let minValue = 0;
-        let maxValue = 100;
-        let categoryColorMap: Map<string, [number, number, number]> | null =
-          null;
+          let minValue = 0;
+          let maxValue = 100;
+          let categoryColorMap: Map<string, [number, number, number]> | null =
+            null;
 
-        if (useProportionalSymbols && viz.mapping.sizeColumn && datasetId) {
-          const stats = datasetsStore.getColumnStatistics(
-            datasetId,
-            viz.mapping.sizeColumn
-          );
-          if (
-            stats &&
-            'min' in stats &&
-            'max' in stats &&
-            typeof stats.min === 'number' &&
-            typeof stats.max === 'number'
-          ) {
-            minValue = stats.min;
-            maxValue = stats.max;
+          if (useProportionalSymbols && viz.mapping.sizeColumn && datasetId) {
+            const stats = datasetsStore.getColumnStatistics(
+              datasetId,
+              viz.mapping.sizeColumn
+            );
+            if (
+              stats &&
+              'min' in stats &&
+              'max' in stats &&
+              typeof stats.min === 'number' &&
+              typeof stats.max === 'number'
+            ) {
+              minValue = stats.min;
+              maxValue = stats.max;
+            }
           }
-        }
 
-        if (useCategoricalColor && viz.mapping.categoryColumn && datasetId) {
-          const categories = datasetsStore.getUniqueValues(
-            datasetId,
-            viz.mapping.categoryColumn
-          );
-          categoryColorMap = getCategoricalColorMap(
-            categories,
-            viz.classification!.colors!
-          );
-        }
+          if (useCategoricalColor && viz.mapping.categoryColumn && datasetId) {
+            const categories = datasetsStore
+              .getUniqueValues(datasetId, viz.mapping.categoryColumn)
+              .map(String);
+            categoryColorMap = getCategoricalColorMap(
+              categories,
+              viz.classification!.colors!
+            );
+          }
 
-        deckLayer = new geodecklayers.GeoArrowScatterplotLayer({
-          id: 'point-layer',
-          data: jsTable,
-          getPosition: pointChild,
-          stroked: true,
-          getFillColor: useCategoricalColor
-            ? (object: any) => {
-                const category = object[viz.mapping.categoryColumn!];
-                return (
-                  categoryColorMap?.get(String(category)) || [128, 128, 128]
-                );
-              }
-            : fillColor,
-          getLineColor: strokeColor,
-          opacity: fillOpacity,
-          lineOpacity: strokeOpacity,
-          getRadius: useProportionalSymbols
-            ? (object: any) => {
-                const value = object[viz.mapping.sizeColumn!];
-                if (value === null || value === undefined || isNaN(value))
-                  return viz.symbols!.minSize;
-                return getSizeForValue(
-                  value,
-                  minValue,
-                  maxValue,
-                  viz.symbols!.minSize,
-                  viz.symbols!.maxSize,
-                  viz.symbols!.sizeScale
-                );
-              }
-            : 1,
-          radiusScale: useProportionalSymbols ? 1 : 5,
-          radiusUnits: 'pixels',
-          lineWidthUnits: 'pixels',
-          lineWidthScale: strokeWidth / 3,
-          lineCapRounded: true,
-          pickable: true,
-          autoHighlight: true
-        });
-        break;
-      }
-
-      case 'LINESTRING':
-
-      // fallthrough
-      case 'MULTILINESTRING':
-        deckLayer = new geodecklayers.GeoArrowPathLayer({
-          id: 'line-layer',
-          data: jsTable,
-          getColor: fillColor,
-          opacity: fillOpacity,
-          getWidth: strokeWidth,
-          lineWidthUnits: 'pixels',
-          lineWidthScale: 1 / 4,
-          lineCapRounded: true,
-          pickable: true,
-          autoHighlight: true
-        });
-        break;
-
-      case 'POLYGON':
-
-      // fallthrough
-      case 'MULTIPOLYGON': {
-        const polygonChild = jsTable.getChild(geoColumn);
-        if (!polygonChild) return [];
-
-        const useChoropleth = viz && shouldApplyChoropleth(viz);
-
-        deckLayer = new geodecklayers.GeoArrowPolygonLayer({
-          id: 'polygon-layer',
-          data: jsTable,
-          getPolygon: polygonChild,
-          getFillColor: useChoropleth
-            ? (object: any) => {
-                const value = object[viz.mapping.valueColumn!];
-                if (value === null || value === undefined || isNaN(value)) {
-                  return [200, 200, 200];
+          deckLayer = new geodecklayers.GeoArrowScatterplotLayer({
+            id: 'point-layer',
+            data: jsTable,
+            getPosition: pointChild,
+            stroked: true,
+            getFillColor: useCategoricalColor
+              ? (object: DeckDataRow) => {
+                  const category = object[viz.mapping.categoryColumn!];
+                  return (
+                    categoryColorMap?.get(String(category)) ?? [128, 128, 128]
+                  );
                 }
-                return getColorForValue(
-                  value,
-                  viz.classification!.breaks!,
-                  viz.classification!.colors!
-                );
-              }
-            : fillColor,
-          getLineColor: strokeColor,
-          opacity: fillOpacity,
-          lineOpacity: strokeOpacity,
-          lineWidthUnits: 'pixels',
-          lineWidthScale: strokeWidth / 4,
-          lineCapRounded: true,
-          pickable: true,
-          autoHighlight: true,
-          onHover: updateTooltip
-        });
-        break;
+              : fillColor,
+            getLineColor: strokeColor,
+            opacity: fillOpacity,
+            lineOpacity: strokeOpacity,
+            getRadius: useProportionalSymbols
+              ? (object: DeckDataRow) => {
+                  const rawValue = object[viz.mapping.sizeColumn!];
+                  const numericValue =
+                    typeof rawValue === 'number' ? rawValue : Number(rawValue);
+                  if (!Number.isFinite(numericValue)) {
+                    return viz.symbols!.minSize;
+                  }
+                  return getSizeForValue(
+                    numericValue,
+                    minValue,
+                    maxValue,
+                    viz.symbols!.minSize,
+                    viz.symbols!.maxSize,
+                    viz.symbols!.sizeScale
+                  );
+                }
+              : 1,
+            radiusScale: useProportionalSymbols ? 1 : 5,
+            radiusUnits: 'pixels',
+            lineWidthUnits: 'pixels',
+            lineWidthScale: strokeWidth / 3,
+            lineCapRounded: true,
+            pickable: true,
+            autoHighlight: true
+          });
+          break;
+        }
+
+        case 'LINESTRING':
+
+        // fallthrough
+        case 'MULTILINESTRING':
+          deckLayer = new geodecklayers.GeoArrowPathLayer({
+            id: 'line-layer',
+            data: jsTable,
+            getColor: fillColor,
+            opacity: fillOpacity,
+            getWidth: strokeWidth,
+            lineWidthUnits: 'pixels',
+            lineWidthScale: 1 / 4,
+            lineCapRounded: true,
+            pickable: true,
+            autoHighlight: true
+          });
+          break;
+
+        case 'POLYGON':
+
+        // fallthrough
+        case 'MULTIPOLYGON': {
+          const polygonChild = jsTable.getChild(geoColumn);
+          if (!polygonChild) return [];
+
+          const useChoropleth = viz && shouldApplyChoropleth(viz);
+
+          deckLayer = new geodecklayers.GeoArrowPolygonLayer({
+            id: 'polygon-layer',
+            data: jsTable,
+            getPolygon: polygonChild,
+            getFillColor: useChoropleth
+              ? (object: DeckDataRow) => {
+                  const rawValue = object[viz.mapping.valueColumn!];
+                  const numericValue =
+                    typeof rawValue === 'number' ? rawValue : Number(rawValue);
+                  if (!Number.isFinite(numericValue)) {
+                    return [200, 200, 200];
+                  }
+                  return getColorForValue(
+                    numericValue,
+                    viz.classification!.breaks!,
+                    viz.classification!.colors!
+                  );
+                }
+              : fillColor,
+            getLineColor: strokeColor,
+            opacity: fillOpacity,
+            lineOpacity: strokeOpacity,
+            lineWidthUnits: 'pixels',
+            lineWidthScale: strokeWidth / 4,
+            lineCapRounded: true,
+            pickable: true,
+            autoHighlight: true,
+            onHover: (pickingInfo, _event) => {
+              handleDeckHover(pickingInfo);
+            }
+          });
+          break;
+        }
+
+        default:
+          return [];
       }
 
-      default:
-        return [];
-    }
-
-    return [deckLayer];
+      return [deckLayer];
     } catch (error) {
       logger.error('Failed to create Deck.gl layers', LogCategory.MAP, error);
       return [];
     }
   }
 
-  function createGeoJsonLayers(geojson: any): any[] {
+  function createGeoJsonLayers(
+    geojson: FeatureCollection
+  ): Layer<DeckDataRow>[] {
     const viz = defaultVisualization;
     const fillColor: [number, number, number] = viz?.style.fillColor
       ? hexToRgb(viz.style.fillColor as string)
@@ -415,7 +475,9 @@ import { onMount } from 'svelte';
       lineWidthMinPixels: strokeWidth,
       pickable: true,
       autoHighlight: true,
-      onHover: updateTooltip
+      onHover: (pickingInfo, _event) => {
+        handleDeckHover(pickingInfo);
+      }
     });
 
     return [layer];
@@ -423,7 +485,7 @@ import { onMount } from 'svelte';
 
   function updateMapLayers(
     jsTable: ArrowTable | null,
-    geojson: any | null
+    geojson: FeatureCollection | null
   ): void {
     if (!deckOverlay || !isMapLoaded) {
       logger.warn(
@@ -437,7 +499,7 @@ import { onMount } from 'svelte';
       return;
     }
 
-    let layers: any[];
+    let layers: Layer<DeckDataRow>[];
     if (geojson) {
       layers = createGeoJsonLayers(geojson);
       logger.info('Updating map with GeoJSON layers', LogCategory.MAP, {
@@ -459,6 +521,53 @@ import { onMount } from 'svelte';
 
   let isZoomSyncing = false;
   let baseZoomLevel = $state(1.5);
+  let shouldRestorePosition = $state(true);
+
+  function saveMapPosition(): void {
+    if (!map || !isMapLoaded) return;
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        MAP_CENTER_STORAGE_KEY,
+        JSON.stringify({ lng: center.lng, lat: center.lat })
+      );
+      localStorage.setItem(MAP_ZOOM_STORAGE_KEY, String(zoom));
+    }
+  }
+
+  function restoreMapPosition(): void {
+    if (!map || !isMapLoaded || typeof window === 'undefined') return;
+
+    const savedCenter = localStorage.getItem(MAP_CENTER_STORAGE_KEY);
+    const savedZoom = localStorage.getItem(MAP_ZOOM_STORAGE_KEY);
+
+    if (savedCenter && savedZoom) {
+      try {
+        const center = JSON.parse(savedCenter);
+        const zoom = parseFloat(savedZoom);
+
+        if (center.lng && center.lat && !isNaN(zoom)) {
+          map.setCenter([center.lng, center.lat]);
+          map.setZoom(zoom);
+          baseZoomLevel = zoom;
+          globalActions.setMapZoom(100);
+
+          logger.info(
+            'Restored map position from localStorage',
+            LogCategory.MAP,
+            {
+              center,
+              zoom
+            }
+          );
+        }
+      } catch (error) {
+        logger.warn('Failed to restore map position', LogCategory.MAP, error);
+      }
+    }
+  }
 
   function syncZoomToMap(): void {
     if (!map || !isMapLoaded || isZoomSyncing) return;
@@ -490,6 +599,7 @@ import { onMount } from 'svelte';
   let lastFitTable = $state<ArrowTable | null>(null);
   $effect(() => {
     if (jsTable && isMapLoaded && map && lastFitTable !== jsTable) {
+      shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoArrow(jsTable);
       if (bounds) {
         map.fitBounds(bounds, { padding: 50, duration: 1000 });
@@ -498,6 +608,7 @@ import { onMount } from 'svelte';
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
+            saveMapPosition();
           }
         }, 1100);
 
@@ -506,9 +617,10 @@ import { onMount } from 'svelte';
     }
   });
 
-  let lastFitGeoJSON = $state<any | null>(null);
+  let lastFitGeoJSON = $state<FeatureCollection | null>(null);
   $effect(() => {
     if (userGeoJSON && isMapLoaded && map && lastFitGeoJSON !== userGeoJSON) {
+      shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
       if (bounds) {
         logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
@@ -522,6 +634,7 @@ import { onMount } from 'svelte';
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
+            saveMapPosition();
           }
         }, 1100);
 
@@ -582,7 +695,7 @@ import { onMount } from 'svelte';
       } as DeckProps);
 
       if (map) {
-        map.addControl(deckOverlay as any);
+        map.addControl(deckOverlay as maplibregl.IControl);
         map.addControl(
           new maplibregl.ScaleControl({
             maxWidth: 100,
@@ -599,6 +712,8 @@ import { onMount } from 'svelte';
 
       if (jsTable || userGeoJSON) {
         updateMapLayers(jsTable, userGeoJSON);
+      } else if (shouldRestorePosition) {
+        setTimeout(() => restoreMapPosition(), 100);
       }
     });
 
@@ -609,6 +724,14 @@ import { onMount } from 'svelte';
           100 * Math.pow(2, (mapLibreZoom - baseZoomLevel) / 2);
         globalActions.setMapZoom(Math.round(zoomPercent));
       }
+    });
+
+    map.on('moveend', () => {
+      saveMapPosition();
+    });
+
+    map.on('zoomend', () => {
+      saveMapPosition();
     });
 
     return () => {

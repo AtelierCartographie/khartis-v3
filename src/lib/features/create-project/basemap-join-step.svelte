@@ -12,6 +12,7 @@
     BasemapMetadata,
     BasemapMatchResult
   } from './types/basemap.types';
+  import type { BasemapSuggestion } from '$lib/features/map/types/basemap.types';
   import { BasemapCatalogService } from './services/basemap-catalog.service';
   import { m } from '$lib/paraglide/messages';
   import { onMount } from 'svelte';
@@ -29,6 +30,14 @@
   let suggestions = $state<BasemapMatchResult[]>([]);
   let selectedBasemap = $state<BasemapMetadata | null>(null);
   let isLoadingSuggestions = $state(false);
+
+  const catalogSuggestions = $derived((): BasemapSuggestion[] =>
+    suggestions.map((suggestion) => ({
+      ...suggestion.basemap,
+      matchScore: suggestion.matchScore,
+      matchReason: 'auto'
+    }))
+  );
 
   onMount(async () => {
     await loadSuggestions();
@@ -191,7 +200,7 @@
 <BasemapCatalogModal
   bind:open={catalogModalOpen}
   selectedBasemapId={selectedBasemap?.file}
-  suggestions={suggestions as any}
+  suggestions={catalogSuggestions()}
   onClose={handleCloseCatalog}
   onSelect={handleSelectBasemap}
 />
@@ -240,16 +249,16 @@
     gap: var(--cds-spacing-04);
   }
 
-  .basemap-suggestion-card {
+  :global(.basemap-suggestion-card) {
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
-  .basemap-suggestion-card:hover {
+  :global(.basemap-suggestion-card:hover) {
     background: var(--cds-layer-hover);
   }
 
-  .basemap-suggestion-card.selected {
+  :global(.basemap-suggestion-card.selected) {
     border: 2px solid var(--cds-interactive);
   }
 
@@ -306,7 +315,7 @@
     margin-top: var(--cds-spacing-04);
   }
 
-  .selected-basemap-preview {
+  :global(.selected-basemap-preview) {
     background: var(--cds-layer-accent);
   }
 

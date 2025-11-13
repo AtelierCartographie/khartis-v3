@@ -1,9 +1,9 @@
-import { FileType } from '../store/create-project.types';
-import { LogCategory, logger } from './logger';
 import {
   STORAGE_LIMITS,
   type ValidationResult
 } from '../configs/validation.config';
+import { FileType } from '../store/create-project.types';
+import { LogCategory, logger } from './logger';
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -39,6 +39,9 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'txt',
     'geojson',
     'json',
+    'geoparquet',
+    'gpq',
+    'parquet',
     'shp',
     'shx',
     'dbf',
@@ -58,6 +61,9 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'application/json',
     'application/geo+json',
     'application/vnd.geo+json',
+    'application/geoparquet',
+    'application/x-parquet',
+    'application/parquet',
     'application/x-shapefile',
     'application/x-dbf',
     'application/octet-stream',
@@ -127,8 +133,8 @@ export const FileValidator = {
           await FileValidator.validateGeoPackageContent(file, buffer, result);
           break;
       }
-    } catch (_error) {
-      logger.error('Async validation failed', LogCategory.FILE, _error);
+    } catch (error) {
+      logger.error('Async validation failed', LogCategory.FILE, error);
       result.errors.push('Impossible de valider le contenu du fichier');
       result.isValid = false;
     }
@@ -260,6 +266,15 @@ export const FileValidator = {
       return FileType.GEOPACKAGE;
     }
 
+    if (
+      extension === 'geoparquet' ||
+      extension === 'gpq' ||
+      extension === 'parquet' ||
+      mimeType.includes('parquet')
+    ) {
+      return FileType.GEOPARQUET;
+    }
+
     if (extension === 'kml' || mimeType.includes('kml')) {
       return FileType.KML;
     }
@@ -297,6 +312,12 @@ export const FileValidator = {
         }
         break;
 
+      case FileType.GEOPARQUET:
+        if (file.size < 1024) {
+          result.errors.push('Fichier GeoParquet trop petit pour être valide');
+        }
+        break;
+
       case FileType.GEOJSON:
         if (file.size > 20 * 1024 * 1024) {
           result.warnings.push(
@@ -312,7 +333,7 @@ export const FileValidator = {
   },
 
   async validateCSVContent(
-    file: File,
+    _file: File,
     buffer: ArrayBuffer,
     result: DetailedValidationResult
   ): Promise<void> {
@@ -411,7 +432,12 @@ export const FileValidator = {
           result.errors.push('FeatureCollection sans propriété "features"');
         }
       }
-    } catch (_error) {
+    } catch (error) {
+      logger.error(
+        'GeoJSON content validation failed',
+        LogCategory.FILE,
+        error
+      );
       if (file.size < 1024 * 1024) {
         result.errors.push('JSON invalide');
       } else {
@@ -502,7 +528,8 @@ export const FileValidator = {
       FileType.TSV,
       FileType.GEOJSON,
       FileType.SHAPEFILE,
-      FileType.GEOPACKAGE
+      FileType.GEOPACKAGE,
+      FileType.GEOPARQUET
     ].includes(fileType);
   },
 
@@ -567,7 +594,8 @@ export const FileValidator = {
       if (parsed.protocol === 'http:') {
         result.warnings.push('Utilisation de HTTP non sécurisé');
       }
-    } catch (_error) {
+    } catch (error) {
+      logger.error('URL validation failed', LogCategory.FILE, error);
       result.errors.push('URL invalide');
     }
 
@@ -596,5 +624,22 @@ export const SUPPORTED_FILE_TYPES = {
     extensions: ['.gpkg'],
     mimeTypes: ['application/geopackage+sqlite3'],
     description: 'GeoPackage'
+  },
+  geoparquet: {
+    extensions: ['.geoparquet', '.gpq', '.parquet'],
+    mimeTypes: [
+      'application/geoparquet',
+      'application/x-parquet',
+      'application/parquet'
+    ],
+    description: 'GeoParquet'
+  },
+  kml: {
+    extensions: ['.kml', '.kmz'],
+    mimeTypes: [
+      'application/vnd.google-earth.kml+xml',
+      'application/vnd.google-earth.kmz'
+    ],
+    description: 'KML / KMZ'
   }
 };

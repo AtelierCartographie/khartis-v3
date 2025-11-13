@@ -1,5 +1,7 @@
-import type { LngLatBoundsLike } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type { FeatureCollection, Geometry } from 'geojson';
+import type { LngLatBoundsLike } from 'maplibre-gl';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export function calculateBoundsFromGeoArrow(
   jsTable: ArrowTable
@@ -56,12 +58,17 @@ export function calculateBoundsFromGeoArrow(
       [minLng, minLat],
       [maxLng, maxLat]
     ];
-  } catch (_error) {
+  } catch (error) {
+    logger.error(
+      'Failed to calculate bounds from GeoArrow',
+      LogCategory.MAP,
+      error
+    );
     return null;
   }
 }
 
-function extractCoordsFromGeometry(geometry: any): number[][] {
+function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
   if (!geometry) return [];
 
   switch (geometry.type) {
@@ -92,7 +99,7 @@ function extractCoordsFromGeometry(geometry: any): number[][] {
 }
 
 export function calculateBoundsFromGeoJSON(
-  geojson: any
+  geojson: FeatureCollection
 ): LngLatBoundsLike | null {
   try {
     if (!geojson || !geojson.features || geojson.features.length === 0) {
@@ -147,7 +154,12 @@ export function calculateBoundsFromGeoJSON(
       [minLng, minLat],
       [maxLng, maxLat]
     ];
-  } catch (_error) {
+  } catch (error) {
+    logger.error(
+      'Failed to calculate bounds from GeoJSON',
+      LogCategory.MAP,
+      error
+    );
     return null;
   }
 }

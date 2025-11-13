@@ -1,3 +1,4 @@
+import type { Geometry, Position } from 'geojson';
 import type { ProcessedDataset } from '$lib/features/data';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { hexToRgb } from './color-utils';
@@ -6,6 +7,7 @@ import {
   getSizeForValue,
   getCategoricalColorMap
 } from '../../map/utils/data-styling.utils';
+import { logger, LogCategory } from './logger';
 
 interface ExportOptions {
   width: number;
@@ -28,6 +30,32 @@ interface GeometryBounds {
   maxY: number;
 }
 
+interface FeatureStyle {
+  fillColor: string;
+  fillOpacity: number;
+  strokeColor: string;
+  strokeWidth: number;
+  strokeOpacity: number;
+}
+
+type LonLat = [number, number];
+
+function toLonLat(position: Position): LonLat {
+  const lon = position[0];
+  const lat = position[1];
+  if (typeof lon !== 'number' || typeof lat !== 'number') {
+    throw new Error('Invalid coordinate position');
+  }
+  return [lon, lat];
+}
+
+function resolveFillColor(color?: string | string[]): string | undefined {
+  if (Array.isArray(color)) {
+    return color[0];
+  }
+  return color;
+}
+
 function calculateDatasetBounds(
   dataset: ProcessedDataset
 ): GeometryBounds | null {
@@ -45,15 +73,20 @@ function calculateDatasetBounds(
       | undefined;
     if (!geometry || !geometry.coordinates) return;
 
-    const processCoords = (coords: any) => {
-      if (typeof coords[0] === 'number') {
-        const [x, y] = coords;
+    const processCoords = (coords: unknown): void => {
+      if (
+        Array.isArray(coords) &&
+        coords.length >= 2 &&
+        typeof coords[0] === 'number' &&
+        typeof coords[1] === 'number'
+      ) {
+        const [x, y] = coords as [number, number];
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x);
         minY = Math.min(minY, y);
         maxY = Math.max(maxY, y);
-      } else {
-        coords.forEach((c: any) => processCoords(c));
+      } else if (Array.isArray(coords)) {
+        coords.forEach((c) => processCoords(c));
       }
     };
 
@@ -70,7 +103,7 @@ function createProjection(
   width: number,
   height: number,
   padding: number = 50
-): (coords: [number, number]) => [number, number] {
+): (coords: LonLat) => LonLat {
   const dataWidth = bounds.maxX - bounds.minX;
   const dataHeight = bounds.maxY - bounds.minY;
 
@@ -84,7 +117,7 @@ function createProjection(
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
 
-  return ([lon, lat]: [number, number]): [number, number] => {
+  return ([lon, lat]: LonLat): LonLat => {
     const x = (lon - centerX) * scale + width / 2;
     const y = (centerY - lat) * scale + height / 2;
     return [x, y];
@@ -92,18 +125,12 @@ function createProjection(
 }
 
 function renderPointToSvg(
-  coordinates: [number, number],
-  project: (coords: [number, number]) => [number, number],
-  style: {
-    fillColor: string;
-    fillOpacity: number;
-    strokeColor: string;
-    strokeWidth: number;
-    strokeOpacity: number;
-  },
+  coordinates: Position,
+  project: (coords: LonLat) => LonLat,
+  style: FeatureStyle,
   radius: number = 5
 ): string {
-  const [x, y] = project(coordinates);
+  const [x, y] = project(toLonLat(coordinates));
   const [r, g, b] = hexToRgb(style.fillColor);
   const [sr, sg, sb] = hexToRgb(style.strokeColor);
 
@@ -111,17 +138,13 @@ function renderPointToSvg(
 }
 
 function renderLineToSvg(
-  coordinates: [number, number][],
-  project: (coords: [number, number]) => [number, number],
-  style: {
-    strokeColor: string;
-    strokeWidth: number;
-    strokeOpacity: number;
-  }
+  coordinates: Position[],
+  project: (coords: LonLat) => LonLat,
+  style: FeatureStyle
 ): string {
   if (coordinates.length === 0) return '';
 
-  const points = coordinates.map((coord) => project(coord));
+  const points = coordinates.map((coord) => project(toLonLat(coord)));
   const pathData = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`)
     .join(' ');
@@ -131,22 +154,16 @@ function renderLineToSvg(
 }
 
 function renderPolygonToSvg(
-  coordinates: [number, number][][],
-  project: (coords: [number, number]) => [number, number],
-  style: {
-    fillColor: string;
-    fillOpacity: number;
-    strokeColor: string;
-    strokeWidth: number;
-    strokeOpacity: number;
-  }
+  coordinates: Position[][],
+  project: (coords: LonLat) => LonLat,
+  style: FeatureStyle
 ): string {
   if (coordinates.length === 0) return '';
 
   const paths = coordinates
     .map((ring) => {
       if (ring.length === 0) return '';
-      const points = ring.map((coord) => project(coord));
+      const points = ring.map((coord) => project(toLonLat(coord)));
       return (
         points
           .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`)
@@ -163,9 +180,9 @@ function renderPolygonToSvg(
 }
 
 function renderGeometryToSvg(
-  geometry: any,
-  project: (coords: [number, number]) => [number, number],
-  style: any,
+  geometry: Geometry | null | undefined,
+  project: (coords: LonLat) => LonLat,
+  style: FeatureStyle,
   radius: number = 5
 ): string {
   if (!geometry || !geometry.type) return '';
@@ -176,9 +193,7 @@ function renderGeometryToSvg(
 
     case 'MultiPoint':
       return geometry.coordinates
-        .map((coord: [number, number]) =>
-          renderPointToSvg(coord, project, style, radius)
-        )
+        .map((coord) => renderPointToSvg(coord, project, style, radius))
         .join('\n');
 
     case 'LineString':
@@ -186,9 +201,7 @@ function renderGeometryToSvg(
 
     case 'MultiLineString':
       return geometry.coordinates
-        .map((line: [number, number][]) =>
-          renderLineToSvg(line, project, style)
-        )
+        .map((line) => renderLineToSvg(line, project, style))
         .join('\n');
 
     case 'Polygon':
@@ -196,9 +209,7 @@ function renderGeometryToSvg(
 
     case 'MultiPolygon':
       return geometry.coordinates
-        .map((polygon: [number, number][][]) =>
-          renderPolygonToSvg(polygon, project, style)
-        )
+        .map((polygon) => renderPolygonToSvg(polygon, project, style))
         .join('\n');
 
     default:
@@ -208,11 +219,12 @@ function renderGeometryToSvg(
 
 function getFeatureStyle(
   visualization: VisualizationConfig,
-  row: any,
+  row: Record<string, unknown>,
   dataset: ProcessedDataset
-): { style: any; radius?: number } {
-  const baseStyle = {
-    fillColor: visualization.style.fillColor || '#3b82f6',
+): { style: FeatureStyle; radius?: number } {
+  const initialFillColor = resolveFillColor(visualization.style.fillColor);
+  const baseStyle: FeatureStyle = {
+    fillColor: initialFillColor || '#3b82f6',
     fillOpacity: visualization.style.fillOpacity ?? 0.8,
     strokeColor: visualization.style.strokeColor || '#1e40af',
     strokeWidth: visualization.style.strokeWidth ?? 1,
@@ -227,8 +239,7 @@ function getFeatureStyle(
   ) {
     const value = row[visualization.mapping.valueColumn];
     if (
-      value !== null &&
-      value !== undefined &&
+      typeof value === 'number' &&
       visualization.classification?.breaks &&
       visualization.classification?.colors
     ) {
@@ -273,7 +284,7 @@ function getFeatureStyle(
     visualization.mapping.sizeColumn
   ) {
     const value = row[visualization.mapping.sizeColumn];
-    if (value !== null && value !== undefined && visualization.symbols) {
+    if (typeof value === 'number' && visualization.symbols) {
       const values = dataset.data
         .map((r) => r[visualization.mapping.sizeColumn!])
         .filter(
@@ -348,7 +359,7 @@ export function exportMapToSvg(
     svgContent += `    <g id="${visualization.id}" class="visualization-layer">\n`;
 
     for (const row of dataset.data) {
-      const geometry = row[geometryColumn.name] as any;
+      const geometry = row[geometryColumn.name] as Geometry | null | undefined;
       if (!geometry) continue;
 
       const { style, radius } = getFeatureStyle(visualization, row, dataset);
@@ -424,6 +435,11 @@ export function exportMapToJpg(
 
       reader.readAsDataURL(svgBlob);
     } catch (error) {
+      logger.error(
+        'Failed to convert SVG to data URL',
+        LogCategory.EXPORT,
+        error
+      );
       reject(error);
     }
   });

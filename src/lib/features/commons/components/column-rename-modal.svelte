@@ -45,6 +45,6 @@
     labelText="Nouveau nom"
     bind:value={newName}
     placeholder="Entrez le nouveau nom de la colonne"
-    onkeydown={handleKeyPress}
+    on:keydown={handleKeyPress}
   />
 </Modal>

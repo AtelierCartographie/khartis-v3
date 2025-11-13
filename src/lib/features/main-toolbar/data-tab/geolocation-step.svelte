@@ -11,6 +11,7 @@
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
 
   interface GeoComboBoxItem {
     id: number;
@@ -21,6 +22,9 @@
   }
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const processedDataset = $derived.by(() =>
+    selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
+  );
   const geoDetection = $derived(selectedDataset?.geoDetection);
 
   const hasTypeDetection = $derived(
@@ -28,8 +32,8 @@
   );
 
   const hasMissingValues = $derived(
-    selectedDataset
-      ? selectedDataset.columns.some((col) => col.nullable === true)
+    processedDataset
+      ? processedDataset.columns.some((col) => col.nullable === true)
       : false
   );
 
@@ -175,9 +179,9 @@
   });
 
   async function autoSelectBasemap() {
-    if (selectedDataset && !dataTabState.basemapJoin.selectedBasemap) {
+    if (processedDataset && !dataTabState.basemapJoin.selectedBasemap) {
       const suggestions = await basemapCatalogService.getSuggestions(
-        selectedDataset,
+        processedDataset,
         1
       );
 

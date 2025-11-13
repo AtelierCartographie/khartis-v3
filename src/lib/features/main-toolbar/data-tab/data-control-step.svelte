@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { logger, LogCategory } from "$lib/features/commons/utils/logger";
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
-  import { duckDBOrchestrator } from "$lib/features/commons/services/duckdb-orchestrator.service.svelte";
+  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     InlineNotification,
@@ -11,19 +10,25 @@
   import { Reset, Edit, Checkmark, Close } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
+  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
 
-const selectedDataset = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;    return dataset;
+  const selectedDataset = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    return dataset;
   });
+  const processedDataset = $derived.by(() =>
+    selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
+  );
 
-const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
 
-const currentDuckTable = $derived.by(() => {
-    duckDBDatasetsVersion;
+  const currentDuckTable = $derived.by(() => {
+    const _version = duckDBDatasetsVersion;
     const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
     const tableName = selectedDataset?.sourceFileId
-      ? allDuckDatasets.find((d) => d.sourceFileId === selectedDataset.sourceFileId)
-          ?.tableName || null
+      ? allDuckDatasets.find(
+          (d) => d.sourceFileId === selectedDataset.sourceFileId
+        )?.tableName || null
       : null;
     return tableName;
   });
@@ -73,7 +78,7 @@ const currentDuckTable = $derived.by(() => {
             <TextInput
               size="sm"
               bind:value={editedName}
-              onkeydown={handleKeyPress}
+              on:keydown={handleKeyPress}
               placeholder="Nom du jeu de données"
             />
             <Button
@@ -130,11 +135,13 @@ const currentDuckTable = $derived.by(() => {
       />
     {/if}
 
-    <AdvancedDataTable
-      dataset={selectedDataset}
-      tableName={currentDuckTable || undefined}
-      showSummaryPlots={true}
-    />
+    {#if processedDataset}
+      <AdvancedDataTable
+        dataset={processedDataset}
+        tableName={currentDuckTable || undefined}
+        showSummaryPlots={true}
+      />
+    {/if}
 
     <InlineNotification
       title="Types des variables"
@@ -144,7 +151,7 @@ const currentDuckTable = $derived.by(() => {
       hideCloseButton={false}
     />
 
-    {#if selectedDataset.columns.some((col) => col.nullable)}
+    {#if processedDataset && processedDataset.columns.some((col) => col.nullable)}
       <InlineNotification
         title="Valeurs manquantes"
         subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."

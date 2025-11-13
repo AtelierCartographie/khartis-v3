@@ -4,7 +4,7 @@
   interface TooltipProps {
     x: number;
     y: number;
-    data: Record<string, any> | null;
+    data: Record<string, unknown> | null;
     visualizationVariables?: string[];
   }
 
@@ -28,7 +28,7 @@
     );
   });
 
-  function formatValue(value: any): string {
+  function formatValue(value: unknown): string {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'number') {
       return value.toLocaleString('fr-FR', {

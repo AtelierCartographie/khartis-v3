@@ -6,15 +6,19 @@
   import { LogCategory, logger } from '../commons/utils/logger';
   import DeckMap from './components/deck-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
+  import type { FeatureCollection } from 'geojson';
+  import type { DatasetResult } from '$lib/features/data';
 
   let isInitializing = $state(true);
   let displayTable = $state<ArrowTable | null>(null);
-  let displayGeoJSON = $state<any | null>(null);
+  let displayGeoJSON = $state<FeatureCollection | null>(null);
 
-const selectedDataset = $derived(datasetsStore.selectedDataset);
-const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+  const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
 
-  async function convertDatasetToGeoJSON(dataset: any): Promise<any | null> {
+  async function convertDatasetToGeoJSON(
+    dataset: DatasetResult
+  ): Promise<ArrowTable | FeatureCollection | null> {
     try {
       logger.info('Processing dataset for geometry', LogCategory.MAP, {
         name: dataset.name,
@@ -26,13 +30,15 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
 
       if (dataset.geometry && dataset.sourceFileId) {
         // Get the DuckDB dataset (with GeoArrow metadata) by sourceFileId
-        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId);
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
 
         logger.info('DuckDB dataset lookup', LogCategory.MAP, {
           sourceFileId: dataset.sourceFileId,
           found: !!duckDBDataset,
           duckDBTableName: duckDBDataset?.tableName,
-          allDuckDBDatasets: duckDBOrchestrator.getAllDatasets().map(d => ({
+          allDuckDBDatasets: duckDBOrchestrator.getAllDatasets().map((d) => ({
             id: d.id,
             sourceFileId: d.sourceFileId,
             tableName: d.tableName
@@ -40,14 +46,20 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
         });
 
         if (duckDBDataset?.tableName) {
-          logger.info('Getting Arrow table from DuckDB orchestrator', LogCategory.MAP, {
-            name: dataset.name,
-            duckDBTableName: duckDBDataset.tableName,
-            datasetTableName: dataset.tableName
-          });
+          logger.info(
+            'Getting Arrow table from DuckDB orchestrator',
+            LogCategory.MAP,
+            {
+              name: dataset.name,
+              duckDBTableName: duckDBDataset.tableName,
+              datasetTableName: dataset.tableName
+            }
+          );
 
           // Use Arrow table directly from DuckDB orchestrator (has GeoArrow metadata)
-          const arrowTable = await duckDBOrchestrator.getArrowTable(duckDBDataset.tableName);
+          const arrowTable = await duckDBOrchestrator.getArrowTable(
+            duckDBDataset.tableName
+          );
           if (arrowTable) {
             logger.success('Arrow table loaded for display', LogCategory.MAP, {
               rowCount: arrowTable.numRows,
@@ -57,10 +69,14 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
           }
         }
       } else {
-        logger.warn('DuckDB dataset missing for selected dataset', LogCategory.MAP, {
-          datasetId: dataset.id,
-          sourceFileId: dataset.sourceFileId
-        });
+        logger.warn(
+          'DuckDB dataset missing for selected dataset',
+          LogCategory.MAP,
+          {
+            datasetId: dataset.id,
+            sourceFileId: dataset.sourceFileId
+          }
+        );
       }
 
       logger.warn('No geographic column found in dataset', LogCategory.MAP, {
@@ -92,7 +108,7 @@ const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   }
 
   $effect(() => {
-    duckDBDatasetsVersion;
+    const _version = duckDBDatasetsVersion;
     if (isInitializing) {
       logger.info('Skipping effect during initialization', LogCategory.MAP);
       return;

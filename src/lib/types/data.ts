@@ -1,3 +1,4 @@
+import type { Geometry } from 'geojson';
 import type { JsonValue } from './utility';
 
 export type { JsonValue };
@@ -6,16 +7,18 @@ export type TabularData = Record<string, JsonValue>[];
 
 export interface GeoJSONFeature {
   type: 'Feature';
-  geometry?: {
-    type: string;
-    coordinates: unknown;
-  };
+  geometry?: Geometry | Record<string, unknown> | null;
   properties?: Record<string, JsonValue>;
 }
 
 export interface GeoJSONFeatureCollection {
   type: 'FeatureCollection';
   features: GeoJSONFeature[];
+  crs?: {
+    properties?: {
+      name?: string;
+    };
+  };
 }
 
 export type GeoJSONData = GeoJSONFeature | GeoJSONFeatureCollection;

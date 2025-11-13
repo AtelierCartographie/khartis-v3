@@ -1,13 +1,36 @@
+import type { FeatureCollection } from 'geojson';
 import shp from 'shpjs';
+import { FileGroupError, ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
   type UploadedFile,
   DataSourceType,
   FileType
 } from '../store/create-project.types';
+import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
-import { logger, LogCategory } from './logger';
-import { ParseError, FileGroupError } from '../errors/pipeline.errors';
+
+type DataRow = Record<string, unknown>;
+type ColumnStatSummary = {
+  type: string;
+  count: number;
+  nullCount: number;
+  unique: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+};
+
+type ShapefileGeoJSON = FeatureCollection | FeatureCollection[];
+
+type ShapefileComponentInput = {
+  shp: ArrayBuffer;
+  dbf: ArrayBuffer;
+  shx?: ArrayBuffer;
+  prj?: string;
+  cpg?: string;
+  [key: string]: string | ArrayBuffer | undefined;
+};
 
 export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
@@ -24,7 +47,9 @@ export const SUPPORTED_EXTENSIONS = {
     '.dbf',
     '.prj',
     '.cpg',
-    '.gpkg'
+    '.gpkg',
+    '.geoparquet',
+    '.gpq'
   ]
 };
 
@@ -32,7 +57,12 @@ export const MIME_TYPES = {
   csv: ['text/csv', 'application/csv', 'text/plain'],
   geojson: ['application/geo+json', 'application/json'],
   shapefile: ['application/octet-stream', 'application/x-shapefile'],
-  geopackage: ['application/geopackage+sqlite3', 'application/octet-stream']
+  geopackage: ['application/geopackage+sqlite3', 'application/octet-stream'],
+  geoparquet: [
+    'application/geoparquet',
+    'application/octet-stream',
+    'application/x-parquet'
+  ]
 };
 
 export function detectFileType(file: File): FileType {
@@ -53,6 +83,22 @@ export function detectFileType(file: File): FileType {
 
   if (extension === 'gpkg') {
     return FileType.GEOPACKAGE;
+  }
+
+  if (
+    extension === 'geoparquet' ||
+    extension === 'gpq' ||
+    mimeType.includes('parquet')
+  ) {
+    return FileType.GEOPARQUET;
+  }
+
+  if (extension === 'kml') {
+    return FileType.KML;
+  }
+
+  if (extension === 'kmz') {
+    return FileType.KMZ;
   }
 
   return FileType.UNKNOWN;
@@ -208,7 +254,7 @@ export function parseCsvHeaders(csvContent: string): string[] {
 export async function parseShapefile(
   files: Record<string, ArrayBuffer>,
   onProgress?: (progress: number) => void
-): Promise<any> {
+): Promise<ShapefileGeoJSON> {
   try {
     if (onProgress) onProgress(10);
 
@@ -227,7 +273,7 @@ export async function parseShapefile(
 
     if (onProgress) onProgress(30);
 
-    const shapefileData: any = {
+    const shapefileData: ShapefileComponentInput = {
       shp: shpBuffer,
       dbf: dbfBuffer
     };
@@ -240,7 +286,9 @@ export async function parseShapefile(
       shapefileData.cpg = new TextDecoder().decode(files['cpg']).trim();
     }
 
-    const geojson: any = await shp(shapefileData);
+    const shapefileInput =
+      shapefileData as unknown as Parameters<typeof shp>[0];
+    const geojson = (await shp(shapefileInput)) as ShapefileGeoJSON;
 
     if (onProgress) onProgress(80);
 
@@ -253,13 +301,14 @@ export async function parseShapefile(
   }
 }
 
-export async function detectDuplicateRows(data: any[]): Promise<{
+export async function detectDuplicateRows<T extends DataRow>(
+  data: T[]
+): Promise<{
   hasDuplicates: boolean;
   duplicateIndices: number[];
   duplicateCount: number;
 }> {
-  const startTime = performance.now();
-  logger.debug('Operation', LogCategory.DATA);
+  logger.debug('Detecting duplicates', LogCategory.DATA);
 
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
@@ -283,7 +332,6 @@ export async function detectDuplicateRows(data: any[]): Promise<{
     });
   }
 
-  const duration = performance.now() - startTime;
   logger.debug('Operation', LogCategory.DATA);
 
   return {
@@ -294,11 +342,10 @@ export async function detectDuplicateRows(data: any[]): Promise<{
 }
 
 export async function detectDataTypes(
-  data: any[],
+  data: DataRow[],
   headers: string[]
 ): Promise<Record<string, string>> {
-  const startTime = performance.now();
-  logger.debug('Operation', LogCategory.DATA);
+  logger.debug('Inferring column types', LogCategory.DATA);
 
   const types: Record<string, string> = {};
 
@@ -337,22 +384,18 @@ export async function detectDataTypes(
     }
   }
 
-  const duration = performance.now() - startTime;
   logger.debug('Operation', LogCategory.DATA);
 
   return types;
 }
 
 export async function getDataStatistics(
-  data: any[],
+  data: DataRow[],
   headers: string[]
-): Promise<Record<string, any>> {
-  const startTime = performance.now();
-  logger.debug('Operation', LogCategory.DATA);
+): Promise<Record<string, ColumnStatSummary>> {
+  logger.debug('Calculating statistics', LogCategory.DATA);
 
-  const stats: Record<string, any> = {};
-
-  logger.debug('Operation', LogCategory.DATA);
+  const stats: Record<string, ColumnStatSummary> = {};
   const dataTypes = await detectDataTypes(data, headers);
 
   // Process headers in chunks to avoid blocking
@@ -385,7 +428,6 @@ export async function getDataStatistics(
     }
   }
 
-  const duration = performance.now() - startTime;
   logger.debug('Operation', LogCategory.DATA);
 
   return stats;
@@ -464,9 +506,12 @@ export function validateGeospatialFile(
       }
 
       if (geojson.features) {
-        const invalidFeatures = geojson.features.filter(
-          (f: any) => !f.geometry || !f.properties
-        );
+        const invalidFeatures = (
+          geojson.features as Array<{
+            geometry?: unknown;
+            properties?: unknown;
+          }>
+        ).filter((feature) => !feature.geometry || !feature.properties);
         if (invalidFeatures.length > 0) {
           warnings.push(
             `${invalidFeatures.length} features have invalid structure`
@@ -474,7 +519,12 @@ export function validateGeospatialFile(
         }
       }
     }
-  } catch (_error) {
+  } catch (error) {
+    logger.error(
+      'Failed to validate GeoJSON structure',
+      LogCategory.FILE,
+      error
+    );
     errors.push('Invalid JSON structure');
   }
 
@@ -543,6 +593,13 @@ export function isValidUrl(url: string): boolean {
   }
 }
 
+export function extractUrlsFromInput(input: string): string[] {
+  return input
+    .split(/\s+/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 export function getFilenameFromUrl(url: string): string {
   try {
     const parsedUrl = new URL(url);
@@ -557,7 +614,7 @@ export function getFilenameFromUrl(url: string): string {
 export async function parseGeoPackage(
   buffer: ArrayBuffer,
   onProgress?: (progress: number) => void
-): Promise<any> {
+): Promise<FeatureCollection> {
   try {
     onProgress?.(10);
 
@@ -600,10 +657,10 @@ export async function parseGeoPackage(
     }
 
     const geojson = {
-      type: 'FeatureCollection',
+      type: 'FeatureCollection' as const,
       features: features[0].values.map((row) => {
         const geom = JSON.parse(row[0] as string);
-        const properties: Record<string, any> = {};
+        const properties: Record<string, unknown> = {};
 
         features[0].columns.forEach((col, idx) => {
           if (col !== 'AsGeoJSON(geom)' && col !== 'geom') {
@@ -612,7 +669,7 @@ export async function parseGeoPackage(
         });
 
         return {
-          type: 'Feature',
+          type: 'Feature' as const,
           geometry: geom,
           properties
         };
@@ -628,6 +685,7 @@ export async function parseGeoPackage(
     if (error instanceof ParseError || error instanceof FileGroupError) {
       throw error;
     }
+    logger.error('Failed to parse GeoPackage', LogCategory.FILE, error);
     throw new ParseError(
       `Failed to parse GeoPackage: ${error instanceof Error ? error.message : 'Unknown error'}`,
       FileType.GEOPACKAGE,

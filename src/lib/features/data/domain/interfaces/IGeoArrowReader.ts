@@ -48,11 +48,20 @@ export interface IGeoArrowReader {
 /**
  * Type guard to check if a class implements IGeoArrowReader
  */
-export function isGeoArrowReader(obj: any): obj is IGeoArrowReader {
+export function isGeoArrowReader(obj: unknown): obj is IGeoArrowReader {
+  if (typeof obj !== 'object' || obj === null) {
+    return false;
+  }
+
+  const candidate = obj as {
+    readGeoParquet?: unknown;
+    extractMetadata?: unknown;
+    hasMetadata?: unknown;
+  };
+
   return (
-    obj &&
-    typeof obj.readGeoParquet === 'function' &&
-    typeof obj.extractMetadata === 'function' &&
-    typeof obj.hasMetadata === 'function'
+    typeof candidate.readGeoParquet === 'function' &&
+    typeof candidate.extractMetadata === 'function' &&
+    typeof candidate.hasMetadata === 'function'
   );
 }

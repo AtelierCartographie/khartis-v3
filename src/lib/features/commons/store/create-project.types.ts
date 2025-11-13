@@ -9,6 +9,7 @@ export enum FileType {
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
+  GEOPARQUET = 'geoparquet',
   KML = 'kml',
   KMZ = 'kmz',
   UNKNOWN = 'unknown'

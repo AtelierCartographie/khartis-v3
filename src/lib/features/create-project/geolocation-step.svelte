@@ -148,7 +148,7 @@
     color: var(--cds-text-secondary);
   }
 
-  .detection-result {
+  :global(.detection-result) {
     padding: var(--cds-spacing-05);
   }
 

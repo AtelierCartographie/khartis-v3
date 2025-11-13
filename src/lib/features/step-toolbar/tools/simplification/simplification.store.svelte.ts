@@ -61,11 +61,6 @@ export const simplificationActions = {
 
     simplificationState.isProcessing = true;
 
-    const _sourceType =
-      simplificationState.source === SimplificationSource.Basemap
-        ? 'basemap'
-        : 'geodata';
-
     try {
       const result = await this.performSimplification(geometryData);
 

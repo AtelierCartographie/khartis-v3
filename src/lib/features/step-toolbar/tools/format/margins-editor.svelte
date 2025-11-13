@@ -66,15 +66,16 @@
     <Row>
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="margin-top"
-            label={m.format_margin_top()}
-            value={top}
-            on:change={(e) => updateMargin(Position.Top, e.detail ?? 0)}
-            min={0}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="margin-top"
+              label={m.format_margin_top()}
+              value={top}
+              on:change={(e) => updateMargin(Position.Top, e.detail ?? 0)}
+              min={0}
+              hideSteppers
+            />
+          </div>
 
           <div class="margin-buttons">
             <Button
@@ -96,15 +97,16 @@
 
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="margin-bottom"
-            label={m.format_margin_bottom()}
-            value={bottom}
-            on:change={(e) => updateMargin(Position.Bottom, e.detail ?? 0)}
-            min={0}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="margin-bottom"
+              label={m.format_margin_bottom()}
+              value={bottom}
+              on:change={(e) => updateMargin(Position.Bottom, e.detail ?? 0)}
+              min={0}
+              hideSteppers
+            />
+          </div>
 
           <div class="margin-buttons">
             <Button
@@ -128,15 +130,16 @@
     <Row>
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="margin-left"
-            label={m.format_margin_left()}
-            value={left}
-            on:change={(e) => updateMargin(Position.Left, e.detail ?? 0)}
-            min={0}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="margin-left"
+              label={m.format_margin_left()}
+              value={left}
+              on:change={(e) => updateMargin(Position.Left, e.detail ?? 0)}
+              min={0}
+              hideSteppers
+            />
+          </div>
           <div class="margin-buttons">
             <Button
               kind="ghost"
@@ -156,15 +159,16 @@
 
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="margin-right"
-            label={m.format_margin_right()}
-            value={right}
-            on:change={(e) => updateMargin(Position.Right, e.detail ?? 0)}
-            min={0}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="margin-right"
+              label={m.format_margin_right()}
+              value={right}
+              on:change={(e) => updateMargin(Position.Right, e.detail ?? 0)}
+              min={0}
+              hideSteppers
+            />
+          </div>
 
           <div class="margin-buttons">
             <Button
@@ -193,9 +197,12 @@
     margin-top: var(--cds-spacing-03);
   }
 
-  #khartis-margins-editor-tool :global(.margin-input) {
+  .margin-input {
     flex: 1;
-    font-weight: 600;
+  }
+
+  .margin-input :global(.bx--number) {
+    width: 100%;
   }
 
   .margin-buttons {

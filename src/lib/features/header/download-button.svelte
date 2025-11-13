@@ -15,6 +15,7 @@
   } from '$lib/features/commons/utils/map-export.utils';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+  import { normalizeDatasets } from '$lib/features/data/utils/processed-dataset.utils';
   import {
     Button,
     Column,
@@ -86,10 +87,11 @@
 
           try {
             let blob: Blob;
+            const processedDatasets = normalizeDatasets(datasetsStore.datasets);
 
             if (selectedMapFormat === 'svg') {
               blob = exportMapToSvg(
-                datasetsStore.datasets,
+                processedDatasets,
                 visualizationStore.activeVisualizations
               );
               const filename = generateExportFilename(exportFileName, 'svg');
@@ -103,7 +105,7 @@
               );
             } else if (selectedMapFormat === 'jpg') {
               blob = await exportMapToJpg(
-                datasetsStore.datasets,
+                processedDatasets,
                 visualizationStore.activeVisualizations
               );
               const filename = generateExportFilename(exportFileName, 'jpg');
@@ -165,7 +167,7 @@
             });
 
             const blob = exportProcessedDatasets(
-              datasetsStore.datasets,
+              normalizeDatasets(datasetsStore.datasets),
               format
             );
             const filename = generateExportFilename(exportFileName, extension);

@@ -1,15 +1,23 @@
 import * as d3geo from 'd3-geo';
+import type { GeoProjection } from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
+import type { Feature, FeatureCollection } from 'geojson';
 
 export interface ProjectionInfo {
   id: string;
   name: string;
   category: 'standard' | 'cylindrical' | 'conic' | 'azimuthal' | 'other';
   description?: string;
-  projection: () => any;
+  projection: () => GeoProjection;
   recommended?: boolean;
   bounds?: [[number, number], [number, number]];
 }
+
+type FeatureWithPath = Feature & { svgPath?: string };
+type FeatureCollectionWithPath = FeatureCollection & {
+  features: FeatureWithPath[];
+};
+type ProjectableGeoJSON = FeatureWithPath | FeatureCollectionWithPath;
 
 export const PROJECTIONS: ProjectionInfo[] = [
   {
@@ -150,7 +158,7 @@ export function suggestProjection(
 }
 
 export function projectGeoJSON(
-  geojson: any,
+  geojson: ProjectableGeoJSON,
   projectionId: string,
   options?: {
     scale?: number;
@@ -159,7 +167,7 @@ export function projectGeoJSON(
     center?: [number, number];
     clipExtent?: [[number, number], [number, number]];
   }
-): any {
+): ProjectableGeoJSON {
   const projectionInfo = getProjectionById(projectionId);
   if (!projectionInfo) {
     throw new Error(`Unknown projection: ${projectionId}`);
@@ -176,17 +184,21 @@ export function projectGeoJSON(
   const path = d3geo.geoPath(projection);
 
   if (geojson.type === 'FeatureCollection') {
+    const featuresWithPaths: FeatureWithPath[] = geojson.features.map(
+      (feature) => ({
+        ...feature,
+        svgPath: path(feature) ?? undefined
+      })
+    );
+
     return {
       ...geojson,
-      features: geojson.features.map((feature: any) => ({
-        ...feature,
-        svgPath: path(feature)
-      }))
+      features: featuresWithPaths
     };
   } else if (geojson.type === 'Feature') {
     return {
       ...geojson,
-      svgPath: path(geojson)
+      svgPath: path(geojson) ?? undefined
     };
   }
 
@@ -194,12 +206,12 @@ export function projectGeoJSON(
 }
 
 export function fitProjectionToGeoJSON(
-  geojson: any,
+  geojson: FeatureCollection,
   projectionId: string,
   width: number,
   height: number,
   padding: number = 20
-): any {
+): GeoProjection {
   const projectionInfo = getProjectionById(projectionId);
   if (!projectionInfo) {
     throw new Error(`Unknown projection: ${projectionId}`);
@@ -218,16 +230,18 @@ export function fitProjectionToGeoJSON(
 }
 
 export function getBoundsFromGeoJSON(
-  geojson: any
+  geojson: ProjectableGeoJSON
 ): [[number, number], [number, number]] {
   const bounds = d3geo.geoBounds(geojson);
   return bounds as [[number, number], [number, number]];
 }
 
-export function getCentroidFromGeoJSON(geojson: any): [number, number] {
+export function getCentroidFromGeoJSON(
+  geojson: ProjectableGeoJSON
+): [number, number] {
   return d3geo.geoCentroid(geojson);
 }
 
-export function getAreaFromGeoJSON(geojson: any): number {
+export function getAreaFromGeoJSON(geojson: ProjectableGeoJSON): number {
   return d3geo.geoArea(geojson);
 }

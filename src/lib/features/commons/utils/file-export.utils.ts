@@ -8,12 +8,14 @@ import {
   isGeoJSONFeatureCollection,
   isGeoJSONFeature
 } from '$lib/types/data';
-import type { CsvData, GeoJsonExportData } from '$lib/types/export.types';
-import type { GeoJsonFeature } from '$lib/types/geometry.types';
+import type { GeoJSONFeature } from '$lib/types/data';
 
 export const generateExportFilename = generateFilename;
 
-export function exportToCsv(data: Record<string, unknown>[], headers?: string[]): Blob {
+export function exportToCsv(
+  data: Record<string, unknown>[],
+  headers?: string[]
+): Blob {
   const csv = Papa.unparse({
     fields: headers || (data.length > 0 ? Object.keys(data[0]) : []),
     data
@@ -231,7 +233,7 @@ export async function exportProjectData(
           const flatData = file.parsedData.features.map((f) => ({
             ...f.properties,
             geometry_type: f.geometry?.type,
-            coordinates: JSON.stringify(f.geometry?.coordinates)
+            coordinates: serializeGeometryCoordinates(f.geometry)
           }));
           allData.push(...flatData);
         }
@@ -276,6 +278,24 @@ export async function exportProjectData(
   };
 
   return exportToJson(exportData);
+}
+
+function serializeGeometryCoordinates(
+  geometry: GeoJSONFeature['geometry']
+): string | undefined {
+  if (!geometry || typeof geometry !== 'object') {
+    return undefined;
+  }
+
+  if ('coordinates' in geometry) {
+    return JSON.stringify((geometry as { coordinates?: unknown }).coordinates);
+  }
+
+  if ('geometries' in geometry) {
+    return JSON.stringify((geometry as { geometries?: unknown }).geometries);
+  }
+
+  return JSON.stringify(geometry);
 }
 
 export function downloadFile(blob: Blob, filename: string): void {

@@ -219,7 +219,7 @@
               id="cp-hex"
               class="hex"
               bind:value={hex}
-              oninput={(e) => {
+              oninput={(e: InputEvent) => {
                 const target = e.target as HTMLInputElement;
                 hex = target.value;
               }}
