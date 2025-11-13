@@ -16,7 +16,8 @@
     TextArea,
     TextInput,
     Tile,
-    Tag
+    Tag,
+    Loading
   } from 'carbon-components-svelte';
   import {
     CloudDownload,
@@ -28,12 +29,13 @@
   import ProjectName from './project-name.svelte';
   import { CreateProjectValidationService } from './services/validation.service';
 
-  interface Props {
+interface Props {
     onClose?: () => void;
     isModal?: boolean;
+    resetToken?: number;
   }
 
-  const { onClose, isModal = false }: Props = $props();
+  const { onClose, isModal = false, resetToken = 0 }: Props = $props();
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
@@ -82,13 +84,20 @@
     }
   }
 
-  function handleRemoveFile(fileId: string) {
-    createProjectActions.removeUploadedFile(fileId);
+  let deletingFileIds = $state(new Set<string>());
+  let isDeletingAll = $state(false);
+
+  async function handleRemoveFile(fileId: string) {
+    deletingFileIds.add(fileId);
+    await createProjectActions.removeUploadedFile(fileId);
+    deletingFileIds.delete(fileId);
   }
 
   async function handleClearAllFiles() {
     logger.info('Clearing all files', LogCategory.FILE);
+    isDeletingAll = true;
     await createProjectActions.clearAllFiles(true);
+    isDeletingAll = false;
   }
 </script>
 
@@ -110,24 +119,25 @@
 
   <div class="grid grid-cols-2 gap-5">
     <div>
-      <FileUploaderDropContainer
-        data-testid="file-upload-container"
-        labelText={m.create_project_drag_drop_file()}
-        multiple
-        accept={[
-          ...SUPPORTED_FILE_TYPES.tabular.extensions,
-          ...SUPPORTED_FILE_TYPES.geojson.extensions,
-          ...SUPPORTED_FILE_TYPES.shapefile.extensions,
-          ...SUPPORTED_FILE_TYPES.geopackage.extensions
-        ]}
-        validateFiles={(files) => {
-          const validationResult = CreateProjectValidationService.validateFiles(
-            Array.from(files)
-          );
-          return validationResult.isValid ? files : [];
-        }}
-        on:change={handleFileDrop}
-      />
+      {#key resetToken}
+        <FileUploaderDropContainer
+          data-testid="file-upload-container"
+          labelText={m.create_project_drag_drop_file()}
+          multiple
+          accept={[
+            ...SUPPORTED_FILE_TYPES.tabular.extensions,
+            ...SUPPORTED_FILE_TYPES.geojson.extensions,
+            ...SUPPORTED_FILE_TYPES.shapefile.extensions,
+            ...SUPPORTED_FILE_TYPES.geopackage.extensions
+          ]}
+          validateFiles={(files) => {
+            const validationResult =
+              CreateProjectValidationService.validateFiles(Array.from(files));
+            return validationResult.isValid ? files : [];
+          }}
+          on:change={handleFileDrop}
+        />
+      {/key}
     </div>
 
     <div class="paste-container">
@@ -160,17 +170,24 @@
         disabled={createProjectState.newProject.isLoading}
       />
 
-      <div>
+      <div class:button-loading={createProjectState.newProject.isLoading}>
         <Button
           size="field"
-          icon={CloudDownload}
+          icon={createProjectState.newProject.isLoading ? undefined : CloudDownload}
           disabled={!onlineUrlValue.trim() ||
             createProjectState.newProject.isLoading}
           on:click={handleLoadOnlineFile}
         >
-          {createProjectState.newProject.isLoading
-            ? 'Loading...'
-            : m.create_project_load()}
+          <div class="button-with-loader">
+            {#if createProjectState.newProject.isLoading}
+              <Loading small withOverlay={false} />
+            {/if}
+            <span>
+              {createProjectState.newProject.isLoading
+                ? 'Loading...'
+                : m.create_project_load()}
+            </span>
+          </div>
         </Button>
       </div>
     </div>
@@ -206,10 +223,18 @@
             <Button
               size="field"
               kind="ghost"
-              icon={TrashCan}
+              icon={isDeletingAll ? undefined : TrashCan}
+              disabled={isDeletingAll}
               on:click={handleClearAllFiles}
             >
-              Clear all
+              {#if isDeletingAll}
+                <div class="button-with-loader">
+                  <Loading small withOverlay={false} />
+                  <span>Deleting...</span>
+                </div>
+              {:else}
+                Clear all
+              {/if}
             </Button>
           {/if}
         </div>
@@ -238,9 +263,14 @@
                 size="field"
                 kind="ghost"
                 iconDescription="Cancel"
-                icon={TrashCan}
+                icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
-              />
+              >
+                {#if deletingFileIds.has(file.id)}
+                  <Loading small withOverlay={false} />
+                {/if}
+              </Button>
             </div>
           {:else if file.status === 'error'}
             <div class="file-error-row">
@@ -256,9 +286,14 @@
                 size="field"
                 kind="ghost"
                 iconDescription="Remove file"
-                icon={TrashCan}
+                icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
-              />
+              >
+                {#if deletingFileIds.has(file.id)}
+                  <Loading small withOverlay={false} />
+                {/if}
+              </Button>
             </div>
           {:else if file.status === 'complete'}
             <Tile class="file-complete-tile">
@@ -274,9 +309,14 @@
                   size="small"
                   kind="ghost"
                   iconDescription="Remove file"
-                  icon={TrashCan}
+                  icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                  disabled={deletingFileIds.has(file.id)}
                   on:click={() => handleRemoveFile(file.id)}
-                />
+                >
+                  {#if deletingFileIds.has(file.id)}
+                    <Loading small withOverlay={false} />
+                  {/if}
+                </Button>
               </div>
 
               {#if file.relatedFiles && file.relatedFiles.length > 0}
@@ -471,5 +511,25 @@
   .file-error-row :global(.bx--btn) {
     flex-shrink: 0;
     min-width: auto;
+  }
+
+  .button-with-loader {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .button-with-loader :global(.bx--loading) {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .button-with-loader :global(.bx--loading__svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .button-loading :global(.bx--btn) {
+    pointer-events: none;
   }
 </style>
