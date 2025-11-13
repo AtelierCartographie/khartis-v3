@@ -3,11 +3,11 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-  import { globalActions } from '$lib/features/commons/store/global.svelte';
 
   interface Props {
     open: boolean;
@@ -16,16 +16,29 @@
 
   let { open = $bindable(), addDataButton: _addDataButton }: Props = $props();
 
+  let uploaderResetKey = $state(0);
+  let previousOpen = false;
+  $effect(() => {
+    if (open && !previousOpen) {
+      uploaderResetKey++;
+    }
+    previousOpen = open;
+  });
+
+  let isImporting = $state(false);
+
   const closeModal = () => {
     logger.info('Closing add data modal', LogCategory.FILE, {
       filesCount: createProjectState.newProject.uploadedFiles.length
     });
     open = false;
-    // Clear only the upload UI state, don't touch DuckDB tables or project data
     createProjectActions.clearUploadState();
+    uploaderResetKey++;
   };
 
-  const handleImport = async () => {
+  const handleImport = async (e: CustomEvent) => {
+    e.preventDefault();
+
     const validFiles = createProjectState.newProject.uploadedFiles.filter(
       (f) =>
         f.status === 'complete' &&
@@ -37,8 +50,13 @@
       return;
     }
 
+    if (isLoading) {
+      return;
+    }
+
     if (projectStore.currentProject) {
       try {
+        isImporting = true;
         logger.info('Adding files to project', LogCategory.FILE, {
           count: validFiles.length,
           files: validFiles.map((f) => f.name)
@@ -52,6 +70,8 @@
         closeModal();
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);
+      } finally {
+        isImporting = false;
       }
     } else {
       logger.error('No current project', LogCategory.PROJECT);
@@ -79,18 +99,47 @@
   );
 
   const canImport = $derived(hasValidFiles && !hasErrors && !isProcessing);
+
+  const isLoading = $derived(isProcessing || isImporting);
 </script>
 
-<Modal
-  primaryButtonText="Ajouter au projet"
-  primaryButtonDisabled={!canImport || isProcessing}
-  secondaryButtonText="Annuler"
-  open={open}
-  modalHeading="Ajouter des données au projet"
-  size="sm"
-  on:click:button--secondary={closeModal}
-  on:click:button--primary={handleImport}
-  on:close={closeModal}
->
-  <CreateNewProject isModal />
-</Modal>
+<div class:modal-loading={isImporting}>
+  <Modal
+    primaryButtonText={isImporting ? '' : 'Ajouter au projet'}
+    primaryButtonDisabled={!canImport || isLoading}
+    secondaryButtonText="Annuler"
+    secondaryButtonDisabled={isLoading}
+    open={open}
+    modalHeading="Ajouter des données au projet"
+    size="sm"
+    on:click:button--secondary={closeModal}
+    on:click:button--primary={handleImport}
+    on:close={closeModal}
+  >
+    <CreateNewProject isModal resetToken={uploaderResetKey} />
+  </Modal>
+</div>
+
+<style>
+  .modal-loading :global(.bx--btn--primary)::before {
+    content: '';
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.5rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .modal-loading :global(.bx--btn--primary)::after {
+    content: 'Ajout en cours...';
+  }
+</style>

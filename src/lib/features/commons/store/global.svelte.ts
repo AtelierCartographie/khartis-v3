@@ -13,6 +13,8 @@ import { projectStore } from './project.store.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
+const MAP_ZOOM_STORAGE_KEY = 'khartis_map_zoom_level';
+const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -27,8 +29,12 @@ class GlobalStore {
     projectionViewMode: 'list',
     zoom: {
       mode: ZoomMode.Map,
-      mapZoomLevel: 100,
-      pageZoomLevel: 100,
+      mapZoomLevel: typeof window !== 'undefined'
+        ? Number(localStorage.getItem(MAP_ZOOM_STORAGE_KEY)) || 100
+        : 100,
+      pageZoomLevel: typeof window !== 'undefined'
+        ? Number(localStorage.getItem(PAGE_ZOOM_STORAGE_KEY)) || 100
+        : 100,
       minMapZoom: 10,
       maxMapZoom: 1000,
       minPageZoom: 10,
@@ -326,8 +332,14 @@ class GlobalStore {
 
     if (isMap) {
       this._state.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(MAP_ZOOM_STORAGE_KEY, String(this._state.zoom.mapZoomLevel));
+      }
     } else {
       this._state.zoom.pageZoomLevel = newZoomLevel;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(this._state.zoom.pageZoomLevel));
+      }
     }
   }
 
@@ -342,8 +354,14 @@ class GlobalStore {
   resetZoom(): void {
     if (this._state.zoom.mode === ZoomMode.Map) {
       this._state.zoom.mapZoomLevel = 100;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(MAP_ZOOM_STORAGE_KEY, '100');
+      }
     } else {
       this._state.zoom.pageZoomLevel = 100;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
+      }
     }
   }
 
@@ -352,6 +370,9 @@ class GlobalStore {
       this._state.zoom.minMapZoom,
       Math.min(level, this._state.zoom.maxMapZoom)
     );
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(MAP_ZOOM_STORAGE_KEY, String(this._state.zoom.mapZoomLevel));
+    }
   }
 
   setPageZoom(level: number): void {
@@ -359,6 +380,9 @@ class GlobalStore {
       this._state.zoom.minPageZoom,
       Math.min(level, this._state.zoom.maxPageZoom)
     );
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(this._state.zoom.pageZoomLevel));
+    }
   }
 }
 
