@@ -6,7 +6,7 @@
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { onMount } from 'svelte';
+import { onMount } from 'svelte';
   import { visualizationStore } from '../../commons/store/visualization.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import {
@@ -85,6 +85,15 @@
     return String(value);
   }
 
+  const MAX_SECONDARY_FIELDS = 3;
+  const SECONDARY_PRIORITY_KEYWORDS = ['name', 'nom', 'label', 'iso', 'code'];
+
+  function hideTooltip(): void {
+    if (tooltip) {
+      tooltip.style.display = 'none';
+    }
+  }
+
   function updateTooltip({ object, x, y, coordinate }: any) {
     if (!tooltip) return;
 
@@ -122,7 +131,23 @@
       }
 
       if (secondaryData.length > 0) {
-        secondaryData.forEach(([key, value]) => {
+        const prioritized = secondaryData.filter(([key]) =>
+          SECONDARY_PRIORITY_KEYWORDS.some((kw) =>
+            key.toLowerCase().includes(kw)
+          )
+        );
+        const remaining = secondaryData.filter(
+          ([key]) => !prioritized.some(([pk]) => pk === key)
+        );
+        const limitedSecondary = [
+          ...prioritized.slice(0, MAX_SECONDARY_FIELDS),
+          ...remaining.slice(
+            0,
+            Math.max(0, MAX_SECONDARY_FIELDS - prioritized.length)
+          )
+        ];
+
+        limitedSecondary.forEach(([key, value]) => {
           html += `
             <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 4px;">
               <span style="color: #525252; font-weight: 600; font-size: 12px;">${key}:</span>
@@ -152,7 +177,7 @@
       tooltip.style.left = `${x}px`;
       tooltip.style.top = `${y}px`;
     } else {
-      tooltip.style.display = 'none';
+      hideTooltip();
     }
   }
 
@@ -525,11 +550,13 @@
     tooltip.style.border = '1px solid #161616';
     tooltip.style.borderRadius = '4px';
     tooltip.style.padding = '12px';
-    tooltip.style.maxWidth = '320px';
     tooltip.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.25)';
     tooltip.style.fontSize = '13px';
     tooltip.style.lineHeight = '1.4';
+    tooltip.classList.add('deck-tooltip');
     document.body.appendChild(tooltip);
+    const handleMouseLeave = () => hideTooltip();
+    mapContainer?.addEventListener('mouseleave', handleMouseLeave);
 
     map = new maplibregl.Map({
       container: mapContainer,
@@ -585,6 +612,7 @@
     });
 
     return () => {
+      mapContainer?.removeEventListener('mouseleave', handleMouseLeave);
       if (tooltip && document.body.contains(tooltip)) {
         document.body.removeChild(tooltip);
       }
@@ -617,5 +645,12 @@
 
   :global(.maplibregl-ctrl-attrib) {
     display: none;
+  }
+
+  :global(.deck-tooltip) {
+    width: 280px;
+    max-width: 280px;
+    max-height: 220px;
+    overflow-y: auto;
   }
 </style>
