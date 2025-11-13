@@ -5,7 +5,7 @@ import { mergeValidationResults } from '../../domain/value-objects/validation-re
 import { SizeValidator } from './size.validator';
 import { SchemaValidator } from './schema.validator';
 import { QualityValidator } from './quality.validator';
-
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 /**
  * Validation Chain - Runs validators in sequence
  *
@@ -18,11 +18,11 @@ import { QualityValidator } from './quality.validator';
  * const result = chain.validate(dataset);
  *
  * if (!result.isValid) {
- *   console.error('Validation failed:', result.errors);
+ logger.error('Operation', LogCategory.DATA);
  * }
  *
  * if (result.warnings.length > 0) {
- *   console.warn('Warnings:', result.warnings);
+ logger.warn('Operation', LogCategory.DATA);
  * }
  * ```
  */

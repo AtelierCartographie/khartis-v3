@@ -142,6 +142,64 @@ export function getErrorCode(error: unknown): string {
 }
 
 /**
+ * Non-fatal error that should show a toast but NOT trigger rollback
+ * Examples: duplicate files, validation warnings, data quality issues
+ */
+export class NonFatalError extends PipelineError {
+  constructor(
+    message: string,
+    code: string,
+    details?: Record<string, any>
+  ) {
+    super(message, code, details);
+  }
+}
+
+/**
+ * Duplicate file error (non-fatal)
+ */
+export class DuplicateFileError extends NonFatalError {
+  constructor(
+    message: string,
+    public readonly fileName: string,
+    details?: Record<string, any>
+  ) {
+    super(message, 'DUPLICATE_FILE', { fileName, ...details });
+  }
+}
+
+/**
+ * Data quality warning (non-fatal)
+ */
+export class DataQualityWarning extends NonFatalError {
+  constructor(
+    message: string,
+    public readonly warnings: string[],
+    details?: Record<string, any>
+  ) {
+    super(message, 'DATA_QUALITY_WARNING', { warnings, ...details });
+  }
+}
+
+/**
+ * Check if error is fatal (requires rollback)
+ */
+export function isFatalError(error: unknown): boolean {
+  if (!isPipelineError(error)) {
+    // Unknown errors are considered fatal
+    return true;
+  }
+
+  // NonFatalError and its subclasses are not fatal
+  if (error instanceof NonFatalError) {
+    return false;
+  }
+
+  // All other PipelineErrors are fatal
+  return true;
+}
+
+/**
  * Helper function to format error for logging
  */
 export function formatError(error: unknown): Record<string, any> {
@@ -151,7 +209,8 @@ export function formatError(error: unknown): Record<string, any> {
       code: error.code,
       message: error.message,
       details: error.details,
-      stack: error.stack
+      stack: error.stack,
+      isFatal: isFatalError(error)
     };
   }
 
@@ -159,11 +218,13 @@ export function formatError(error: unknown): Record<string, any> {
     return {
       name: error.name,
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      isFatal: true
     };
   }
 
   return {
-    error: String(error)
+    error: String(error),
+    isFatal: true
   };
 }

@@ -7,6 +7,7 @@
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+  import { globalActions } from '$lib/features/commons/store/global.svelte';
 
   interface Props {
     open: boolean;
@@ -44,6 +45,10 @@
         });
 
         await projectStore.addFilesToProject(validFiles);
+        const lastFile = validFiles[validFiles.length - 1];
+        if (lastFile?.id) {
+          globalActions.selectDataButton(lastFile.id);
+        }
         closeModal();
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);

@@ -416,18 +416,8 @@
   function getPlotForColumn(columnName: string) {
     const analysis = columnAnalysis.get(columnName);
     if (!analysis) {
-      logger.debug('No analysis for column', LogCategory.UI, {
-        columnName,
-        analysisSize: columnAnalysis.size
-      });
       return null;
     }
-
-    logger.debug('Creating plot for column', LogCategory.UI, {
-      columnName,
-      typeSimple: analysis.type_simple,
-      hasHistogram: !!analysis.histogram
-    });
 
     try {
       const plot = create_summary_plot(analysis as any, {
@@ -436,7 +426,6 @@
         main_color: '#a56eff',
         nulls_color: '#ffd666'
       });
-      logger.debug('Plot created successfully', LogCategory.UI, { columnName });
       return plot;
     } catch (err) {
       logger.error('Error creating histogram', LogCategory.UI, err);

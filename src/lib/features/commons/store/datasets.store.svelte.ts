@@ -4,6 +4,7 @@ import type { UploadedFile } from './create-project.types';
 import { projectStore } from './project.store.svelte';
 import { logger, LogCategory } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
+import { DuplicateFileError } from '../errors/pipeline.errors';
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -17,6 +18,11 @@ class DatasetsStore {
     datasets: [],
     isProcessing: false
   });
+
+  private pendingDatasetResolvers = new Map<
+    string,
+    Array<(datasetId: string) => void>
+  >();
 
   constructor() {
     // DISABLED: Reactive sync causes triple processing
@@ -44,14 +50,13 @@ class DatasetsStore {
       (d) => d.id === this._state.selectedDatasetId
     );
 
-    console.log('[datasetsStore] selectedDataset getter accessed', {
+    logger.debug('Selected dataset accessed', LogCategory.STORE, {
       selectedDatasetId: this._state.selectedDatasetId,
       found: !!dataset,
       datasetName: dataset?.name,
       datasetSourceFileId: dataset?.sourceFileId,
       datasetTableName: dataset?.tableName,
-      totalDatasets: this._state.datasets.length,
-      timestamp: new Date().toISOString()
+      totalDatasets: this._state.datasets.length
     });
 
     return dataset;
@@ -78,26 +83,21 @@ class DatasetsStore {
   }
 
   async processFiles(files: UploadedFile[]): Promise<void> {
-    const startTime = performance.now();
-    console.log(
-      `[${new Date().toISOString()}] [datasetsStore:processFiles] START`,
-      {
-        fileCount: files.length
-      }
-    );
+    const endTiming = logger.startTiming('Process files in store', LogCategory.STORE);
+
+    logger.info('Processing files in store', LogCategory.STORE, {
+      fileCount: files.length
+    });
 
     this._state.isProcessing = true;
     this._state.error = undefined;
 
     try {
-      logger.info('Processing files', LogCategory.DATA, {
+      logger.info('Processing files via dataPipeline', LogCategory.DATA, {
         count: files.length,
         files: files.map((f) => ({ name: f.name, hasData: !!f.parsedData }))
       });
 
-      console.log(
-        `[${new Date().toISOString()}] [datasetsStore:processFiles] Processing with new dataPipeline...`
-      );
       const pipelineStart = performance.now();
 
       // Process files in parallel using new unified dataPipeline
@@ -112,13 +112,11 @@ class DatasetsStore {
         })
       );
 
-      console.log(
-        `[${new Date().toISOString()}] [datasetsStore:processFiles] Pipeline completed`,
-        {
-          duration: `${(performance.now() - pipelineStart).toFixed(2)}ms`,
-          newDatasetsCount: newDatasets.length
-        }
-      );
+      const pipelineDuration = performance.now() - pipelineStart;
+      logger.success('Pipeline processing complete', LogCategory.DATA, {
+        duration: `${pipelineDuration.toFixed(2)}ms`,
+        newDatasetsCount: newDatasets.length
+      });
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
 
@@ -126,22 +124,12 @@ class DatasetsStore {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
 
-      const totalDuration = performance.now() - startTime;
-      console.log(
-        `[${new Date().toISOString()}] [datasetsStore:processFiles] END`,
-        {
-          totalDuration: `${totalDuration.toFixed(2)}ms`
-        }
-      );
+      endTiming();
+      logger.success('Files processing complete in store', LogCategory.STORE);
     } catch (error) {
-      const duration = performance.now() - startTime;
-      console.error(
-        `[${new Date().toISOString()}] [datasetsStore:processFiles] ERROR`,
-        {
-          duration: `${duration.toFixed(2)}ms`,
-          error
-        }
-      );
+      logger.error('Files processing failed', LogCategory.STORE, {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
 
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
@@ -192,6 +180,7 @@ class DatasetsStore {
             newDatasetId: dataset.id,
             sourceFileId: dataset.sourceFileId
           });
+
           // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
             d.sourceFileId === dataset.sourceFileId ? dataset : d
@@ -200,6 +189,16 @@ class DatasetsStore {
           if (this._state.selectedDatasetId === existingDataset.id) {
             this._state.selectedDatasetId = dataset.id;
           }
+
+          // Throw non-fatal error to show warning toast (won't trigger rollback)
+          throw new DuplicateFileError(
+            `Le fichier "${file.name}" existe déjà et a été remplacé`,
+            file.name,
+            {
+              existingDatasetId: existingDataset.id,
+              newDatasetId: dataset.id
+            }
+          );
         } else {
           // Force reactivity by creating a new array
           this._state.datasets = [...this._state.datasets, dataset];
@@ -217,6 +216,14 @@ class DatasetsStore {
           selectedDatasetId: this._state.selectedDatasetId,
           wasReplacement: !!existingDataset
         });
+
+        const pendingResolvers = this.pendingDatasetResolvers.get(
+          dataset.sourceFileId
+        );
+        if (pendingResolvers?.length) {
+          pendingResolvers.forEach((resolve) => resolve(dataset.id));
+          this.pendingDatasetResolvers.delete(dataset.sourceFileId);
+        }
       }
 
       const totalDuration = performance.now() - startTime;
@@ -315,6 +322,19 @@ class DatasetsStore {
     });
 
     return dataset;
+  }
+
+  waitForDatasetBySourceFile(sourceFileId: string): Promise<string> {
+    const existing = this.getDatasetBySourceFile(sourceFileId);
+    if (existing) {
+      return Promise.resolve(existing.id);
+    }
+
+    return new Promise((resolve) => {
+      const resolvers = this.pendingDatasetResolvers.get(sourceFileId) ?? [];
+      resolvers.push(resolve);
+      this.pendingDatasetResolvers.set(sourceFileId, resolvers);
+    });
   }
 
   getDatasetsByType(hasGeometry: boolean): DatasetResult[] {

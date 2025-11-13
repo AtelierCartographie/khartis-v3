@@ -275,6 +275,11 @@ class DuckDB {
 
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
 
+  // LRU cache management
+  private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024; // 100MB
+  private cacheSize = 0;
+  private cacheAccessOrder: string[] = [];
+
   constructor() {}
 
   async init(): Promise<void> {
@@ -302,6 +307,11 @@ class DuckDB {
       await this.query(breaks + analyse + join_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
+
+      // CRITICAL FIX (2025-11-13): Clear GeoParquet cache on init
+      // This ensures any stale cache from before the FORMAT parameter fix is cleared
+      // See docs/GEOARROW_METADATA_FIX.md for details
+      this.clearGeoParquetCache();
     } catch (error) {
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
       throw error;
@@ -412,7 +422,7 @@ class DuckDB {
     let filename: string;
     let fileid: string;
     try {
-      console.log('[DuckDB:read_tabular] Input type:', typeof input, 'is File?', input instanceof File);
+      logger.debug('Operation', LogCategory.DUCKDB);
 
       if (typeof input === 'string') {
         if (!tablename)
@@ -425,17 +435,17 @@ class DuckDB {
         await this.db!.registerFileText(filename, input);
       } else if (input instanceof File) {
         filename = input.name;
-        console.log('[DuckDB:read_tabular] File name:', filename, 'size:', input.size);
+        logger.debug('Operation', LogCategory.DUCKDB);
 
         if (!tablename)
           tablename = generate_unique_table_name(filename, this.loaded_files);
 
-        console.log('[DuckDB:read_tabular] Table name:', tablename);
+        logger.debug('Operation', LogCategory.DUCKDB);
 
         await this.register_files([input]);
         fileid = (input as FileWithId).id;
 
-        console.log('[DuckDB:read_tabular] File ID:', fileid);
+        logger.debug('Operation', LogCategory.DUCKDB);
       } else {
         throw new DataValidationError(
           'Invalid input type. Expected a string or a File.',
@@ -445,14 +455,14 @@ class DuckDB {
       }
       if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
         const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
-        console.log('[DuckDB:read_tabular] Executing query:', query);
+        logger.debug('Operation', LogCategory.DUCKDB);
 
         await this.query(
           query,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
 
-        console.log('[DuckDB:read_tabular] Query executed successfully');
+        logger.debug('Operation', LogCategory.DUCKDB);
 
         await this.add_row_id(tablename);
       }
@@ -501,6 +511,22 @@ class DuckDB {
       );
       await this.add_row_id(tablename);
       this.loaded_files.set(tablename, geofile.name);
+
+      // CRITICAL: Invalidate GeoParquet cache for this table
+      // When a new table is created, any cached Parquet is now stale
+      if (this.table_geoparquet_cache.has(tablename)) {
+        const oldBuffer = this.table_geoparquet_cache.get(tablename);
+        if (oldBuffer) {
+          this.cacheSize -= oldBuffer.byteLength;
+        }
+        this.table_geoparquet_cache.delete(tablename);
+        const index = this.cacheAccessOrder.indexOf(tablename);
+        if (index > -1) {
+          this.cacheAccessOrder.splice(index, 1);
+        }
+        logger.debug('Invalidated stale GeoParquet cache', LogCategory.DUCKDB, { tablename });
+      }
+
       logger.info('Table created', LogCategory.DUCKDB, { tablename });
       return tablename;
     } catch (error) {
@@ -774,19 +800,104 @@ class DuckDB {
     );
   }
 
-  async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
-    if (this.table_geoparquet_cache.has(table))
-      return this.table_geoparquet_cache.get(table)!;
+  /**
+   * Export DuckDB table to GeoParquet buffer
+   *
+   * CRITICAL: This preserves GeoArrow metadata when converting back to Arrow
+   * Based on khartis-pipeline-old implementation with LRU cache
+   *
+   * WHY THIS WORKS:
+   * - DuckDB auto-detects GeoParquet format when GEOMETRY columns are present
+   * - Must NOT specify FORMAT 'parquet' - that forces generic Parquet
+   * - Only specify COMPRESSION option (ZSTD for smaller files)
+   * - The exported .parquet file contains GeoArrow metadata in schema
+   * - @geoarrow/geoparquet-wasm can then read it back with metadata preserved
+   *
+   * THE BUG THAT WAS FIXED:
+   * - Previously: `COPY table TO 'file.parquet' (FORMAT 'parquet', COMPRESSION 'zstd')`
+   * - Problem: Explicit FORMAT 'parquet' forced generic Parquet (no GeoArrow metadata)
+   * - Error: "Parquet error: Could not parse metadata: bad data"
+   * - Fix: Remove FORMAT parameter → `COPY table TO 'file.parquet' (COMPRESSION ZSTD)`
+   * - Result: DuckDB creates valid GeoParquet with GeoArrow metadata
+   *
+   * This matches khartis-pipeline-old line 815 which works correctly.
+   */
+  /**
+   * Clear all GeoParquet cache entries
+   * Useful after fixing bugs or when cache becomes corrupted
+   */
+  clearGeoParquetCache(): void {
+    const count = this.table_geoparquet_cache.size;
+    this.table_geoparquet_cache.clear();
+    this.cacheAccessOrder = [];
+    this.cacheSize = 0;
+    logger.info('GeoParquet cache cleared', LogCategory.DUCKDB, { entriesCleared: count });
+  }
 
+  async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
+    // Check cache and update access order (LRU)
+    if (this.table_geoparquet_cache.has(table)) {
+      // Move to end (most recently used)
+      const index = this.cacheAccessOrder.indexOf(table);
+      if (index > -1) {
+        this.cacheAccessOrder.splice(index, 1);
+        this.cacheAccessOrder.push(table);
+      }
+      logger.debug('GeoParquet buffer retrieved from cache', LogCategory.DUCKDB, { table });
+      return this.table_geoparquet_cache.get(table)!;
+    }
+
+    logger.debug('Converting DuckDB table to GeoParquet', LogCategory.DUCKDB, { table });
+
+    // CRITICAL: Do NOT specify FORMAT 'parquet' - let DuckDB auto-detect GeoParquet
+    // when GEOMETRY columns are present. Specifying FORMAT forces generic Parquet.
+    // This matches pipeline-old which works correctly.
     await this.query(
-      `COPY ${table} TO '${table}.parquet' (FORMAT 'parquet', COMPRESSION 'zstd');`,
+      `COPY ${table} TO '${table}.parquet' (COMPRESSION ZSTD);`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
     const buffer = await this.db!.copyFileToBuffer(`${table}.parquet`);
 
+    // CRITICAL: Delete the .parquet file from DuckDB virtual filesystem
+    // Otherwise it persists and the broken file keeps being used
+    try {
+      await this.db!.dropFile(`${table}.parquet`);
+      logger.debug('Deleted temporary Parquet file', LogCategory.DUCKDB, {
+        filename: `${table}.parquet`
+      });
+    } catch (error) {
+      // Non-fatal - file might not exist
+      logger.debug('Could not delete Parquet file (may not exist)', LogCategory.DUCKDB, {
+        filename: `${table}.parquet`
+      });
+    }
+
+    // Evict oldest entries if cache would exceed limit
+    while (
+      this.cacheSize + buffer.byteLength > this.MAX_CACHE_SIZE &&
+      this.cacheAccessOrder.length > 0
+    ) {
+      const oldest = this.cacheAccessOrder.shift()!;
+      const oldBuffer = this.table_geoparquet_cache.get(oldest);
+      if (oldBuffer) {
+        this.cacheSize -= oldBuffer.byteLength;
+        this.table_geoparquet_cache.delete(oldest);
+        logger.debug('Evicted from GeoParquet cache', LogCategory.DUCKDB, { table: oldest });
+      }
+    }
+
+    // Add to cache
     this.table_geoparquet_cache.set(table, buffer);
+    this.cacheAccessOrder.push(table);
+    this.cacheSize += buffer.byteLength;
+
+    logger.success('GeoParquet buffer created and cached', LogCategory.DUCKDB, {
+      table,
+      sizeKB: (buffer.byteLength / 1024).toFixed(2),
+      cacheSize: this.cacheAccessOrder.length
+    });
 
     return buffer;
   }

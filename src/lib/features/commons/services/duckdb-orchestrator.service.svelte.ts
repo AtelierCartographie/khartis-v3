@@ -9,6 +9,9 @@ import { DuckDBError, ParseError } from '../errors/pipeline.errors';
 import { convertGeoJSONToArrow } from '../utils/geojson-to-arrow.utils';
 import { insertArrowTableIntoDuckDB } from './duckdb/arrow-converter';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
+import { geoParquetReader } from '$lib/features/data/infrastructure/readers/GeoParquetReader';
+import type { GeoArrowMetadata } from '$lib/features/data/domain/entities/GeoArrowMetadata';
+import type { Table } from 'apache-arrow/Arrow';
 
 export enum RefineOperation {
   UPPERCASE = 'uppercase',
@@ -29,6 +32,12 @@ export interface DuckDBDataset {
     processedAt: Date;
     fileType: FileType;
   };
+  // CRITICAL: Store Arrow table WITH GeoArrow metadata
+  // This table comes from GeoParquetReader and has schema.metadata.get('geo')
+  // DO NOT store tables from Duck.query() - they lose metadata!
+  arrowTableWithMetadata?: Table;
+  // Parsed GeoArrow metadata for quick access
+  geoArrowMetadata?: GeoArrowMetadata;
 }
 
 class DuckDBOrchestratorService {
@@ -41,6 +50,16 @@ class DuckDBOrchestratorService {
     datasets: new Map(),
     currentTableName: null
   });
+
+  private _datasetsVersion = $state(0);
+
+  get datasetsVersion(): number {
+    return this._datasetsVersion;
+  }
+
+  private bumpDatasetsVersion(): void {
+    this._datasetsVersion++;
+  }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
@@ -99,6 +118,7 @@ class DuckDBOrchestratorService {
 
       // Force reactivity by creating new Map reference
       this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
+      this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
       console.log('[duckDBOrchestrator:registerExistingTable] Table registered', {
@@ -292,6 +312,7 @@ class DuckDBOrchestratorService {
 
     // Force reactivity by creating new Map reference
     this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
+    this.bumpDatasetsVersion();
     this._state.currentTableName = finalTableName;
 
     console.log('[duckDBOrchestrator] Dataset added to reactive state', {
@@ -465,6 +486,40 @@ class DuckDBOrchestratorService {
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] Row count: ${rowCount} (${(performance.now() - rowCountStart).toFixed(2)}ms)`
       );
 
+      // STEP 6: Convert table to GeoParquet → Apache Arrow (preserves GeoArrow metadata)
+      console.log(
+        `🔄 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 6: Converting to GeoParquet + Arrow...`
+      );
+      const geoParquetStart = performance.now();
+      const {
+        arrowTableWithMetadata,
+        geoArrowMetadata
+      } = await this.createArrowTableWithMetadata(actualTableName);
+      const geoParquetDuration = performance.now() - geoParquetStart;
+
+      console.log(
+        `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] GeoParquet → Arrow completed in ${geoParquetDuration.toFixed(2)}ms`,
+        {
+          numRows: arrowTableWithMetadata.numRows,
+          hasMetadata: !!geoArrowMetadata,
+          metadataKeys: arrowTableWithMetadata.schema?.metadata
+            ? Array.from(arrowTableWithMetadata.schema.metadata.keys())
+            : []
+        }
+      );
+
+      if (!geoArrowMetadata) {
+        logger.warn('GeoArrow metadata missing after GeoParquet round-trip', LogCategory.DUCKDB, {
+          tableName: actualTableName
+        });
+      } else {
+        logger.success('GeoArrow metadata preserved', LogCategory.DUCKDB, {
+          tableName: actualTableName,
+          primaryColumn: geoArrowMetadata.primary_column,
+          geometryTypes: geoArrowMetadata.columns[geoArrowMetadata.primary_column]?.geometry_types
+        });
+      }
+
       const totalTime = performance.now() - startTime;
       const oldTime = 25700; // Baseline from logs
       const speedup = (oldTime / totalTime).toFixed(1);
@@ -501,11 +556,14 @@ class DuckDBOrchestratorService {
         metadata: {
           processedAt: new Date(),
           fileType: file.fileType
-        }
+        },
+        arrowTableWithMetadata, // Store ArrowTable WITH GeoArrow metadata
+        geoArrowMetadata: geoArrowMetadata ?? undefined          // Store parsed metadata for quick access
       };
 
       // Force reactivity by creating new Map reference
       this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
+      this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
 
       console.log('[duckDBOrchestrator:ST_Read] Dataset added to reactive state', {
@@ -640,6 +698,17 @@ class DuckDBOrchestratorService {
         `✅ [${new Date().toISOString()}] [DuckDB:Arrow] Row count: ${rowCount} (${rowCountTime.toFixed(2)}ms)`
       );
 
+      const arrowMaterializationStart = performance.now();
+      const {
+        arrowTableWithMetadata,
+        geoArrowMetadata
+      } = await this.createArrowTableWithMetadata(tableName);
+      logger.debug('GeoParquet materialization complete (Arrow pipeline)', LogCategory.DUCKDB, {
+        tableName,
+        durationMs: (performance.now() - arrowMaterializationStart).toFixed(2),
+        hasMetadata: !!geoArrowMetadata
+      });
+
       const totalTime = performance.now() - startTime;
       const oldTime = 25700; // Baseline from logs
       const speedup = (oldTime / totalTime).toFixed(1);
@@ -669,11 +738,14 @@ class DuckDBOrchestratorService {
         metadata: {
           processedAt: new Date(),
           fileType: file.fileType
-        }
+        },
+        arrowTableWithMetadata,
+        geoArrowMetadata: geoArrowMetadata ?? undefined
       };
 
       // Force reactivity by creating new Map reference
       this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
+      this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
       console.log('[duckDBOrchestrator:Arrow] Dataset added to reactive state', {
@@ -718,6 +790,17 @@ class DuckDBOrchestratorService {
     const columns = await Duck.analyse(tableName);
     const rowCount = await this.getRowCount(tableName);
 
+    const legacyArrowStart = performance.now();
+    const {
+      arrowTableWithMetadata,
+      geoArrowMetadata
+    } = await this.createArrowTableWithMetadata(tableName);
+    logger.debug('GeoParquet materialization complete (legacy pipeline)', LogCategory.DUCKDB, {
+      tableName,
+      durationMs: (performance.now() - legacyArrowStart).toFixed(2),
+      hasMetadata: !!geoArrowMetadata
+    });
+
     logger.info('GeoJSON columns after read_geofile', LogCategory.DUCKDB, {
       tableName,
       columns: columns.map((c) => c.name),
@@ -734,11 +817,14 @@ class DuckDBOrchestratorService {
       metadata: {
         processedAt: new Date(),
         fileType: file.fileType
-      }
+      },
+      arrowTableWithMetadata,
+      geoArrowMetadata: geoArrowMetadata ?? undefined
     };
 
     // Force reactivity by creating new Map reference
     this._state.datasets = new Map(this._state.datasets).set(dataset.id, dataset);
+    this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
     console.log('[duckDBOrchestrator:Legacy] Dataset added to reactive state', {
@@ -1076,11 +1162,106 @@ class DuckDBOrchestratorService {
     return Duck.query(query) as Promise<ArrowTableLike>;
   }
 
+  /**
+   * Convert a DuckDB table into an Arrow table that preserves GeoArrow metadata.
+   * Uses the GeoParquet export + @geoarrow/geoparquet-wasm round-trip.
+   */
+  private async createArrowTableWithMetadata(
+    tableName: string
+  ): Promise<{ arrowTableWithMetadata: Table; geoArrowMetadata: GeoArrowMetadata | null }> {
+    if (!Duck) {
+      throw new DuckDBError('DuckDB not initialized');
+    }
+
+    const exportStart = performance.now();
+    const geoparquetBuffer = await Duck.copy_to_geoparquet_as_buffer(tableName);
+    logger.debug('GeoParquet buffer ready', LogCategory.DUCKDB, {
+      tableName,
+      bufferSize: geoparquetBuffer.byteLength
+    });
+
+    const arrowTableWithMetadata = await geoParquetReader.readGeoParquet(geoparquetBuffer);
+    const geoArrowMetadata = geoParquetReader.extractMetadata(arrowTableWithMetadata);
+
+    logger.debug('GeoParquet converted to Arrow with metadata', LogCategory.DUCKDB, {
+      tableName,
+      durationMs: (performance.now() - exportStart).toFixed(2),
+      hasMetadata: !!geoArrowMetadata,
+      metadataKeys: arrowTableWithMetadata.schema?.metadata
+        ? Array.from(arrowTableWithMetadata.schema.metadata.keys())
+        : []
+    });
+
+    return { arrowTableWithMetadata, geoArrowMetadata };
+  }
+
+  /**
+   * Get Arrow table with GeoArrow metadata
+   * CRITICAL: Returns cached table WITH metadata, not DuckDB query result
+   */
+  async getArrowTable(tableName: string): Promise<Table> {
+    logger.debug('Getting Arrow table with metadata', LogCategory.DUCKDB, { tableName });
+
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    try {
+      // CRITICAL: Return cached ArrowTable WITH metadata
+      for (const dataset of this._state.datasets.values()) {
+        if (dataset.tableName === tableName && dataset.arrowTableWithMetadata) {
+          logger.debug('Arrow table WITH metadata retrieved from cache', LogCategory.DUCKDB, {
+            tableName,
+            numRows: dataset.arrowTableWithMetadata.numRows,
+            hasMetadata: !!dataset.geoArrowMetadata,
+            primaryColumn: dataset.geoArrowMetadata?.primary_column,
+            metadataKeys: dataset.arrowTableWithMetadata.schema?.metadata
+              ? Array.from(dataset.arrowTableWithMetadata.schema.metadata.keys())
+              : []
+          });
+          return dataset.arrowTableWithMetadata;
+        }
+      }
+
+      // Fallback: If not in cache, query table directly
+      logger.warn('ArrowTable not in cache, materializing via GeoParquet...', LogCategory.DUCKDB, {
+        tableName
+      });
+
+      const {
+        arrowTableWithMetadata,
+        geoArrowMetadata
+      } = await this.createArrowTableWithMetadata(tableName);
+
+      // Update cache with metadata-preserving table
+      for (const dataset of this._state.datasets.values()) {
+        if (dataset.tableName === tableName) {
+          dataset.arrowTableWithMetadata = arrowTableWithMetadata;
+          dataset.geoArrowMetadata = geoArrowMetadata || undefined;
+          logger.success('Cache updated with metadata-preserving Arrow table', LogCategory.DUCKDB, {
+            tableName,
+            hasMetadata: !!geoArrowMetadata
+          });
+          break;
+        }
+      }
+
+      return arrowTableWithMetadata;
+    } catch (error) {
+      logger.error('Error getting Arrow table', LogCategory.DUCKDB, error);
+      throw new DuckDBError(`Failed to get Arrow table for ${tableName}`);
+    }
+  }
+
   getDataset(id: string): DuckDBDataset | undefined {
+    this._datasetsVersion;
     return this._state.datasets.get(id);
   }
 
   getDatasetByTable(tableName: string): DuckDBDataset | undefined {
+    this._datasetsVersion;
     for (const dataset of this._state.datasets.values()) {
       if (dataset.tableName === tableName) {
         return dataset;
@@ -1089,7 +1270,18 @@ class DuckDBOrchestratorService {
     return undefined;
   }
 
+  getDatasetBySourceFile(sourceFileId: string): DuckDBDataset | undefined {
+    this._datasetsVersion;
+    for (const dataset of this._state.datasets.values()) {
+      if (dataset.sourceFileId === sourceFileId) {
+        return dataset;
+      }
+    }
+    return undefined;
+  }
+
   getAllDatasets(): DuckDBDataset[] {
+    this._datasetsVersion;
     return Array.from(this._state.datasets.values());
   }
 
@@ -1145,6 +1337,7 @@ class DuckDBOrchestratorService {
         const newMap = new Map(this._state.datasets);
         newMap.delete(idToDelete);
         this._state.datasets = newMap;
+        this.bumpDatasetsVersion();
 
         console.log('[duckDBOrchestrator:dropTable] Dataset removed from reactive state', {
           datasetId: idToDelete,
@@ -1182,6 +1375,7 @@ class DuckDBOrchestratorService {
 
     // Force reactivity by creating new Map
     this._state.datasets = new Map();
+    this.bumpDatasetsVersion();
     this._state.currentTableName = null;
 
     console.log('[duckDBOrchestrator] All datasets cleared from reactive state');
