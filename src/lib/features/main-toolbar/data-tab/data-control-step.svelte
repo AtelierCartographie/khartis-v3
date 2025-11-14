@@ -11,6 +11,7 @@
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
+  import * as m from '$lib/paraglide/messages';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -68,7 +69,7 @@
 </script>
 
 <section id="data-control-step">
-  <MainToolBarHeader title="1. Contrôler les données" />
+  <MainToolBarHeader title={m.data_control_step_title()} />
 
   {#if selectedDataset}
     <div class="dataset-info">

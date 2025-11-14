@@ -72,6 +72,11 @@
       `);
       const bounds = bboxQuery[0];
 
+      // Validate bounds
+      if (!bounds || bounds.minX === null || bounds.minY === null || bounds.maxX === null || bounds.maxY === null) {
+        throw new Error(m.basemap_import_modal_error_invalid_geometry());
+      }
+
       // Detect geometry type
       const geomTypeQuery = await Duck.query(`
         SELECT DISTINCT ST_GeometryType(geom) as geom_type

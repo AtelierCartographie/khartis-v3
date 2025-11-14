@@ -1,9 +1,8 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { ToastNotification } from 'carbon-components-svelte';
+  import { InlineNotification, Button } from 'carbon-components-svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
-  const UPDATE_TIMEOUT = 0;
   const OFFLINE_READY_TIMEOUT = 5000;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
@@ -34,27 +33,31 @@
 
 {#if $needRefresh}
   <div class="pwa-notification-container">
-    <ToastNotification
+    <InlineNotification
       kind="info"
       title={m.pwa_update_title()}
       subtitle={m.pwa_update_subtitle()}
-      timeout={UPDATE_TIMEOUT}
+      hideCloseButton={false}
+      lowContrast={false}
       on:close={closeUpdateNotification}
     >
-      <button class="update-button" on:click={handleUpdate}>
-        {m.pwa_update_action()}
-      </button>
-    </ToastNotification>
+      <div slot="actions" class="notification-actions">
+        <button class="update-btn" on:click={handleUpdate}>
+          {m.pwa_update_action()}
+        </button>
+      </div>
+    </InlineNotification>
   </div>
 {/if}
 
 {#if $offlineReady}
   <div class="pwa-notification-container">
-    <ToastNotification
+    <InlineNotification
       kind="success"
       title={m.pwa_offline_ready_title()}
       subtitle={m.pwa_offline_ready_subtitle()}
-      caption=""
+      hideCloseButton={false}
+      lowContrast={false}
       timeout={OFFLINE_READY_TIMEOUT}
       on:close={closeOfflineNotification}
     />
@@ -64,30 +67,35 @@
 <style>
   .pwa-notification-container {
     position: fixed;
-    bottom: 16px;
-    right: 16px;
+    bottom: 1rem;
+    right: 1rem;
     z-index: 9999;
     max-width: 400px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 
-  .update-button {
-    margin-top: 8px;
-    padding: 8px 16px;
-    background-color: var(--cds-interactive-01);
-    color: var(--cds-text-04);
+  .notification-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .update-btn {
+    background: transparent;
     border: none;
-    border-radius: 4px;
+    color: white;
     cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    transition: background-color 0.2s ease;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    text-decoration: underline;
+    transition: opacity 0.2s ease;
   }
 
-  .update-button:hover {
-    background-color: var(--cds-hover-primary);
+  .update-btn:hover {
+    opacity: 0.8;
   }
 
-  .update-button:active {
-    background-color: var(--cds-active-primary);
+  .update-btn:active {
+    opacity: 0.6;
   }
 </style>
