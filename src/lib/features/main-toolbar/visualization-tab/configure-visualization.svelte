@@ -133,13 +133,13 @@
               selectedId={selectedFieldId}
               on:select={(e) => (selectedFieldId = e.detail.selectedId)}
               placeholder="Taille selon"
-              titleText=""
+              labelText=""
             />
           </Column>
           <Column sm={4} md={8} lg={3}>
             <NumberInput
               id="max-size"
-              label=""
+              labelText=""
               bind:value={symbolMaxSize}
               min={1}
               max={200}
@@ -213,13 +213,13 @@
             selectedId={selectedColorFieldId}
             on:select={(e) => (selectedColorFieldId = e.detail.selectedId)}
             placeholder="Couleur selon"
-            titleText=""
+            labelText=""
           />
         </Column>
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="symbol-opacity"
-            label=""
+            labelText=""
             bind:value={symbolOpacity}
             min={0}
             max={100}
@@ -270,7 +270,7 @@
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="stroke-width-value"
-            label=""
+            labelText=""
             bind:value={strokeWidth}
             min={0}
             max={20}
@@ -346,7 +346,7 @@
             selectedId={feedDiscretizationId}
             on:select={(e) => (feedDiscretizationId = e.detail.selectedId)}
             placeholder="Discrétisation"
-            titleText=""
+            labelText=""
           />
         </Column>
       </Row>
@@ -367,13 +367,13 @@
             selectedId={feedColorFieldId}
             on:select={(e) => (feedColorFieldId = e.detail.selectedId)}
             placeholder="Couleur selon"
-            titleText=""
+            labelText=""
           />
         </Column>
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="feed-opacity"
-            label=""
+            labelText=""
             bind:value={feedOpacity}
             min={0}
             max={100}
@@ -424,7 +424,7 @@
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="feed-stroke-width"
-            label=""
+            labelText=""
             bind:value={feedStrokeWidth}
             min={0}
             max={20}
@@ -499,7 +499,7 @@
             selectedId={polyDiscretizationId}
             on:select={(e) => (polyDiscretizationId = e.detail.selectedId)}
             placeholder="Discrétisation"
-            titleText=""
+            labelText=""
           />
         </Column>
       </Row>
@@ -520,13 +520,13 @@
             selectedId={polyColorFieldId}
             on:select={(e) => (polyColorFieldId = e.detail.selectedId)}
             placeholder="Couleur selon"
-            titleText=""
+            labelText=""
           />
         </Column>
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="poly-opacity"
-            label=""
+            labelText=""
             bind:value={polyOpacity}
             min={0}
             max={100}
@@ -577,7 +577,7 @@
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="poly-stroke-width"
-            label=""
+            labelText=""
             bind:value={polyStrokeWidth}
             min={0}
             max={20}
@@ -638,7 +638,7 @@
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="line-width"
-            label=""
+            labelText=""
             bind:value={lineWidth}
             min={0}
             max={20}
@@ -696,7 +696,7 @@
             selectedId={textFieldId}
             on:select={(e) => (textFieldId = e.detail.selectedId)}
             placeholder="Texte selon"
-            titleText=""
+            labelText=""
           />
         </Column>
         <Column sm={4} md={4} lg={4}>
@@ -723,7 +723,7 @@
             selectedId={textSecondaryFieldId}
             on:select={(e) => (textSecondaryFieldId = e.detail.selectedId)}
             placeholder="Texte secondaire selon"
-            titleText=""
+            labelText=""
           />
         </Column>
       </Row>
@@ -770,7 +770,7 @@
         <Column sm={4} md={8} lg={3}>
           <NumberInput
             id="text-size"
-            label=""
+            labelText=""
             bind:value={textSize}
             min={8}
             max={32}

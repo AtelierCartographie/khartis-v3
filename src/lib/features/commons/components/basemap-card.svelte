@@ -107,7 +107,7 @@
       </div>
 
       {#if showInfo}
-        <button class="info-btn" aria-label={m.info()}>
+        <button class="info-btn" aria-labelText={m.info()}>
           <Information size={20} />
         </button>
       {/if}

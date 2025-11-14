@@ -32,11 +32,38 @@
   } from 'carbon-components-svelte';
   import { Download } from 'carbon-icons-svelte';
 
+  type MapExportFormat = 'svg' | 'jpg';
+  type DataExportFormat = 'csv' | 'geojson' | 'csv-geo';
+
+  const ExportTab = {
+    PROJECT: 0,
+    MAP: 1,
+    DATA: 2
+  } as const;
+
+  const EXPORT_TAB_TYPES = {
+    [ExportTab.PROJECT]: 'project',
+    [ExportTab.MAP]: 'map',
+    [ExportTab.DATA]: 'data'
+  } as const;
+
+  const MAP_FORMAT = {
+    SVG: 'svg',
+    JPG: 'jpg'
+  } as const;
+
+  const DATA_FORMAT = {
+    CSV: 'csv',
+    GEOJSON: 'geojson',
+    CSV_GEO: 'csv-geo'
+  } as const;
+
   let open = $state(false);
-  let selectedTabIndex = $state(0);
-  let exportFileName = $state.raw(projectStore.projectName || 'untitled');
-  let selectedMapFormat = $state('svg');
-  let selectedDataFormat = $state('csv');
+  let selectedTabIndex = $state<number>(ExportTab.PROJECT);
+  let exportFileName = $state(projectStore.projectName || 'untitled');
+  let selectedMapFormat = $state<MapExportFormat>(MAP_FORMAT.SVG);
+  let selectedDataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
+  let isExporting = $state(false);
 
   async function handleDownload() {
     if (exportFileName !== projectStore.projectName) {
@@ -47,15 +74,15 @@
       projectStore.updateProjectName(exportFileName);
     }
 
-    const tabTypes = ['project', 'map', 'data'];
     logger.info('Starting export', LogCategory.EXPORT, {
-      type: tabTypes[selectedTabIndex],
+      type: EXPORT_TAB_TYPES[selectedTabIndex as keyof typeof EXPORT_TAB_TYPES],
       fileName: exportFileName
     });
 
+    isExporting = true;
     try {
       switch (selectedTabIndex) {
-        case 0:
+        case ExportTab.PROJECT:
           if (projectStore.currentProject) {
             logger.info('Exporting project', LogCategory.EXPORT, {
               fileName: exportFileName
@@ -65,7 +92,7 @@
           }
           break;
 
-        case 1:
+        case ExportTab.MAP:
           if (!mapInstanceStore.isMapLoaded) {
             logger.error('Map not loaded for export', LogCategory.EXPORT);
             showError(m.export_map_error(), m.export_map_not_loaded());
@@ -89,12 +116,15 @@
             let blob: Blob;
             const processedDatasets = normalizeDatasets(datasetsStore.datasets);
 
-            if (selectedMapFormat === 'svg') {
+            if (selectedMapFormat === MAP_FORMAT.SVG) {
               blob = exportMapToSvg(
                 processedDatasets,
                 visualizationStore.activeVisualizations
               );
-              const filename = generateExportFilename(exportFileName, 'svg');
+              const filename = generateExportFilename(
+                exportFileName,
+                MAP_FORMAT.SVG
+              );
               downloadFile(blob, filename);
               logger.success(
                 'SVG map exported successfully',
@@ -103,12 +133,15 @@
                   filename
                 }
               );
-            } else if (selectedMapFormat === 'jpg') {
+            } else if (selectedMapFormat === MAP_FORMAT.JPG) {
               blob = await exportMapToJpg(
                 processedDatasets,
                 visualizationStore.activeVisualizations
               );
-              const filename = generateExportFilename(exportFileName, 'jpg');
+              const filename = generateExportFilename(
+                exportFileName,
+                MAP_FORMAT.JPG
+              );
               downloadFile(blob, filename);
               logger.success(
                 'JPG map exported successfully',
@@ -134,23 +167,23 @@
           }
           break;
 
-        case 2:
+        case ExportTab.DATA:
           if (datasetsStore.datasets.length > 0) {
             let format: 'csv' | 'geojson' | 'json';
             let extension: string;
 
             switch (selectedDataFormat) {
-              case 'csv':
+              case DATA_FORMAT.CSV:
                 format = 'csv';
                 extension = 'csv';
                 break;
 
-              case 'geojson':
+              case DATA_FORMAT.GEOJSON:
                 format = 'geojson';
                 extension = 'geojson';
                 break;
 
-              case 'csv-geo':
+              case DATA_FORMAT.CSV_GEO:
                 format = 'json';
                 extension = 'json';
                 break;
@@ -189,6 +222,8 @@
         m.export_error(),
         error instanceof Error ? error.message : m.export_unknown_error()
       );
+    } finally {
+      isExporting = false;
     }
   }
 </script>
@@ -209,9 +244,11 @@
 </div>
 
 <Modal
-  primaryButtonText={m.download_button()}
+  primaryButtonDisabled={isExporting}
+  secondaryButtonDisabled={isExporting}
   bind:open={open}
   modalHeading={m.download_modal_title()}
+  primaryButtonText={isExporting ? m.download_exporting() : m.download_button()}
   on:click:button--secondary={() => (open = false)}
   on:submit={handleDownload}
   on:open
@@ -220,9 +257,9 @@
 >
   <div class="content-wrapper">
     <Tabs autoWidth bind:selected={selectedTabIndex}>
-      <Tab label={m.download_tab_project()} />
-      <Tab label={m.download_tab_map()} />
-      <Tab label={m.download_tab_data()} />
+      <Tab labelText={m.download_tab_project()} />
+      <Tab labelText={m.download_tab_map()} />
+      <Tab labelText={m.download_tab_data()} />
 
       <svelte:fragment slot="content">
         <TabContent>
@@ -257,10 +294,12 @@
                 </header>
 
                 <TileGroup bind:selected={selectedMapFormat}>
-                  <RadioTile light value="svg">{m.download_map_svg()}</RadioTile
+                  <RadioTile light value={MAP_FORMAT.SVG}
+                    >{m.download_map_svg()}</RadioTile
                   >
 
-                  <RadioTile light value="jpg">{m.download_map_jpg()}</RadioTile
+                  <RadioTile light value={MAP_FORMAT.JPG}
+                    >{m.download_map_jpg()}</RadioTile
                   >
                 </TileGroup>
               </Column>
@@ -282,13 +321,13 @@
                   name="plan-disabled"
                   bind:selected={selectedDataFormat}
                 >
-                  <RadioTile light value="csv"
+                  <RadioTile light value={DATA_FORMAT.CSV}
                     >{m.download_data_csv()}</RadioTile
                   >
-                  <RadioTile light value="csv-geo"
+                  <RadioTile light value={DATA_FORMAT.CSV_GEO}
                     >{m.download_data_csv_geo()}</RadioTile
                   >
-                  <RadioTile light value="geojson"
+                  <RadioTile light value={DATA_FORMAT.GEOJSON}
                     >{m.download_data_geojson()}</RadioTile
                   >
                 </TileGroup>

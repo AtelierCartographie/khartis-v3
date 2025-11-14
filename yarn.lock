@@ -3917,9 +3917,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@testing-library/svelte@npm:^5.2.8":
-  version: 5.2.8
-  resolution: "@testing-library/svelte@npm:5.2.8"
+"@testing-library/svelte@npm:^5.2.9":
+  version: 5.2.9
+  resolution: "@testing-library/svelte@npm:5.2.9"
   dependencies:
     "@testing-library/dom": "npm:9.x.x || 10.x.x"
   peerDependencies:
@@ -3931,16 +3931,14 @@ __metadata:
       optional: true
     vitest:
       optional: true
-  checksum: 10c0/6bff73bf3fed3a4bde5fd74db689013213470054d044d50e65d409fd567b2e16050c33031361e733a67af489eaad2bdfc71968ef4180c271c67f59e047e7d0c8
+  checksum: 10c0/0d14faa69cd7d7a3ac4ee3dced6684cab2cdfe7ae7b298213b63a14822c266fcaedc1ebfc0a66ac3015c9e160c7be4faddeedb14b39aece983f4fe4b0607d25d
   languageName: node
   linkType: hard
 
-"@tmcw/togeojson@npm:^5.5.0":
-  version: 5.8.1
-  resolution: "@tmcw/togeojson@npm:5.8.1"
-  peerDependencies:
-    "@types/geojson": "*"
-  checksum: 10c0/2ce102f9e905534f8e7fe42ba541fee13d385da30de64654881f500da2d61e93b82682b44bf1ebc3a519720d1aee3f8e929a5ca0532f30463dfb3f8e7d13dced
+"@tmcw/togeojson@npm:^7.1.2":
+  version: 7.1.2
+  resolution: "@tmcw/togeojson@npm:7.1.2"
+  checksum: 10c0/f8d39de30e9ec023c88a24c9b85c4b09c46118c6cc60f05203878c2ea75467efb050faee0df67bff90b3c43fee8db2bc517e66c8ee64380e16db244af6bddb59
   languageName: node
   linkType: hard
 
@@ -6978,13 +6976,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"carbon-components-svelte@npm:^0.91.0":
-  version: 0.91.0
-  resolution: "carbon-components-svelte@npm:0.91.0"
+"carbon-components-svelte@npm:^0.92.0":
+  version: 0.92.0
+  resolution: "carbon-components-svelte@npm:0.92.0"
   dependencies:
     "@ibm/telemetry-js": "npm:^1.5.0"
     flatpickr: "npm:4.6.9"
-  checksum: 10c0/65ecdfefa5c433167df1a372bc6f99f44ed9c6882a120afd5dae31920185a1799bcb53d8451a3c71efe3cceac02df413549a34f6a83afc0440fdaff15c75f603
+  checksum: 10c0/2a331811f5445c1cd40e20e72f0d3c303d501f85b5cdab7ac9f19a9c66989c69436580ccab0da9ccd60ac17d04339d52c2d5be69b51cc42f3e42faa2e9c4c2d5
   languageName: node
   linkType: hard
 
@@ -10124,13 +10122,13 @@ __metadata:
     "@sveltejs/kit": "npm:^2.48.4"
     "@sveltejs/vite-plugin-svelte": "npm:^6.2.1"
     "@testing-library/jest-dom": "npm:^6.9.1"
-    "@testing-library/svelte": "npm:^5.2.8"
-    "@tmcw/togeojson": "npm:^5.5.0"
+    "@testing-library/svelte": "npm:^5.2.9"
+    "@tmcw/togeojson": "npm:^7.1.2"
     "@turf/turf": "npm:^7.2.0"
     "@types/carbon__themes": "npm:^0.0.3"
     "@types/d3": "npm:^7.4.3"
     "@types/d3-geo": "npm:^3.1.0"
-    "@types/geojson": "npm:^7946.0.10"
+    "@types/geojson": "npm:^7946.0.16"
     "@types/node": "npm:^24.10.1"
     "@types/papaparse": "npm:^5.5.0"
     "@types/shpjs": "npm:^3.4.7"
@@ -10138,7 +10136,7 @@ __metadata:
     "@uwdata/flechette": "npm:^2.2.6"
     "@vite-pwa/assets-generator": "npm:^1.0.2"
     apache-arrow: "npm:^21.1.0"
-    carbon-components-svelte: "npm:^0.91.0"
+    carbon-components-svelte: "npm:^0.92.0"
     carbon-icons-svelte: "npm:^13.6.0"
     carbon-preprocess-svelte: "npm:^0.11.13"
     clsx: "npm:^2.1.1"

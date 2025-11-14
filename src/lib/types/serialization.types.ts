@@ -5,8 +5,10 @@
  * replacing 'any' types throughout the codebase.
  */
 
-import type { KhartisProject } from '$lib/features/commons/store/project.types';
+import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { DatasetResult } from '$lib/features/data';
+import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
 /**
  * Serialized project data structure (JSON-safe)
@@ -28,11 +30,38 @@ export interface SerializedProject {
 }
 
 /**
+ * Custom basemap attribute for serialization
+ */
+export interface SerializedBasemapAttribute {
+  raw: string;
+  id: string;
+  variant: string;
+  normalized: string;
+  basemap: string;
+  basemap_count: number;
+}
+
+/**
  * Serialized project data (files and datasets)
  */
 export interface SerializedProjectData {
   sourceFiles?: SerializedUploadedFile[];
+  customBasemaps?: {
+    metadata: BasemapMetadata[];
+    attributes: SerializedBasemapAttribute[];
+  };
   [key: string]: unknown;
+}
+
+/**
+ * DatasetResult serialized for storage (Dates converted to ISO strings)
+ */
+export interface SerializedDatasetResult
+  extends Omit<DatasetResult, 'metadata' | 'createdAt'> {
+  metadata: Omit<DatasetResult['metadata'], 'processedAt'> & {
+    processedAt: string;
+  };
+  createdAt?: string;
 }
 
 /**
@@ -53,6 +82,12 @@ export interface SerializedUploadedFile {
   uploadProgress?: number;
   parsedData?: unknown;
   statistics?: unknown;
+  preparedGeoJSON?: string;
+  duplicates?: UploadedFile['duplicates'];
+  deepAnalysis?: UploadedFile['deepAnalysis'];
+  geoMatchResult?: UploadedFile['geoMatchResult'];
+  cachedDataset?: SerializedDatasetResult;
+  cachedGeoParquet?: string;
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
 }

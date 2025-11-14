@@ -5,7 +5,7 @@ import {
   Schema,
   Field
 } from 'apache-arrow/Arrow';
-import { Duck } from '../../commons/services/duckdb/duckdb';
+import { Duck } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../commons/utils/logger';
 
 function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
@@ -20,15 +20,45 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
 
   const geoColumnName = geomColumn.name;
 
-  const columnBounds = [-180, -90, 180, 90];
+  // Try to detect existing encoding from Arrow extension metadata
+  const extensionName = geomColumn.metadata?.get('ARROW:extension:name');
+  let encoding = 'WKB'; // Default fallback
+  let geometryTypes = ['Polygon', 'MultiPolygon']; // Default
+
+  if (extensionName) {
+    if (extensionName.includes('geoarrow')) {
+      // GeoArrow encoding detected
+      encoding = extensionName; // e.g., 'geoarrow.polygon', 'geoarrow.point'
+
+      // Infer geometry types from encoding
+      if (extensionName.includes('point')) {
+        geometryTypes = ['Point', 'MultiPoint'];
+      } else if (extensionName.includes('line')) {
+        geometryTypes = ['LineString', 'MultiLineString'];
+      } else if (extensionName.includes('polygon')) {
+        geometryTypes = ['Polygon', 'MultiPolygon'];
+      }
+
+      logger.info(`Detected GeoArrow encoding: ${encoding}`, LogCategory.MAP);
+    } else if (extensionName === 'ogc.wkb') {
+      encoding = 'WKB';
+      logger.info('Detected WKB encoding from OGC extension', LogCategory.MAP);
+    }
+  }
+
+  // Try to calculate bbox from actual data (only for first batch to avoid performance hit)
+  let columnBounds = [-180, -90, 180, 90]; // Default world bounds
+
+  // Note: Actual bbox calculation would require parsing geometry data
+  // For now, use default bounds. Proper implementation would need DuckDB query.
 
   const geoMetadata = {
     version: '1.0.0',
     primary_column: geoColumnName,
     columns: {
       [geoColumnName]: {
-        encoding: 'WKB',
-        geometry_types: ['Polygon', 'MultiPolygon'],
+        encoding,
+        geometry_types: geometryTypes,
         crs: {
           type: 'name',
           properties: {
@@ -52,6 +82,8 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
 
   logger.info('Added GeoArrow metadata to table', LogCategory.MAP, {
     geoColumn: geoColumnName,
+    encoding,
+    geometryTypes,
     bbox: columnBounds
   });
 

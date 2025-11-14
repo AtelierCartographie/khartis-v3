@@ -3,6 +3,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
@@ -24,8 +25,14 @@
 
   const { open = false, onClose }: Props = $props();
 
+  // Check if a current project exists - only allow dismissal if there is one
+  const canDismiss = $derived(!!projectStore.currentProject);
+
   function handleClose() {
-    onClose?.();
+    // Only allow closing if there's a current project
+    if (canDismiss) {
+      onClose?.();
+    }
   }
 
   function selectTile(index: number) {
@@ -39,8 +46,15 @@
 </script>
 
 <div id="khartis-create-project" data-testid="create-project-modal">
-  <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
-    <ModalHeader title={m.create_project_welcome()}>
+  <ComposedModal
+    preventCloseOnClickOutside
+    open={open}
+    on:close={handleClose}
+  >
+    <ModalHeader
+      title={m.create_project_welcome()}
+      class={canDismiss ? '' : 'no-close-button'}
+    >
       <div class="mb-3"></div>
       <span class="text-grey">
         {m.create_project_welcome_description()}
@@ -118,6 +132,10 @@
     height: calc(85vh - 120px);
     overflow: hidden;
     padding: var(--cds-spacing-05);
+  }
+
+  #khartis-create-project :global(.no-close-button .bx--modal-close) {
+    display: none;
   }
 
   .project-selector-wrapper {

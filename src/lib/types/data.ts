@@ -8,7 +8,7 @@ export type TabularData = Record<string, JsonValue>[];
 export interface GeoJSONFeature {
   type: 'Feature';
   geometry?: Geometry | Record<string, unknown> | null;
-  properties?: Record<string, JsonValue>;
+  properties?: Record<string, JsonValue> | null;
 }
 
 export interface GeoJSONFeatureCollection {

@@ -4,10 +4,7 @@
  */
 
 import { SvelteSet } from 'svelte/reactivity';
-import {
-  duckDBOrchestrator,
-  RefineOperation
-} from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../../utils/logger';
 import type { ColumnInfo } from '../types';
 

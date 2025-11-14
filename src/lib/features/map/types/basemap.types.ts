@@ -1,7 +1,9 @@
 export interface BasemapLayer {
-  title: string;
-  type: 'centroid' | 'limit';
-  file: string;
+  title?: string;
+  name: string;
+  type: 'centroid' | 'limit' | 'polygon' | 'line' | 'point';
+  file?: string;
+  count?: number;
 }
 
 export interface BasemapMetadata {
@@ -13,6 +15,7 @@ export interface BasemapMetadata {
   bbox: [number, number, number, number];
   projection: string;
   layers: BasemapLayer[];
+  isCustom?: boolean;
 }
 
 export interface BasemapAttribute {

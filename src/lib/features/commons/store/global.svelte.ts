@@ -1,16 +1,15 @@
 import {
+  StylingTools,
   ToolbarState,
   ToolbarStep,
-  ZoomMode,
-  StylingTools,
   VisualizationTools,
   type GlobalState,
   type ProjectionFilterId,
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const MAP_ZOOM_STORAGE_KEY = 'khartis_map_zoom_level';
@@ -28,7 +27,6 @@ class GlobalStore {
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
-      mode: ZoomMode.Map,
       mapZoomLevel:
         typeof window !== 'undefined'
           ? Number(localStorage.getItem(MAP_ZOOM_STORAGE_KEY)) || 100
@@ -337,67 +335,71 @@ class GlobalStore {
     this.projectionViewMode = mode;
   }
 
-  setZoomMode(mode: ZoomMode): void {
-    this._state.zoom.mode = mode;
-  }
-
-  private adjustZoom(direction: 1 | -1): void {
-    const isMap = this._state.zoom.mode === ZoomMode.Map;
-    const currentLevel = isMap
-      ? this._state.zoom.mapZoomLevel
-      : this._state.zoom.pageZoomLevel;
-    const step = isMap
-      ? this._state.zoom.zoomStep
-      : this._state.zoom.pageZoomStep;
-    const minZoom = isMap
-      ? this._state.zoom.minMapZoom
-      : this._state.zoom.minPageZoom;
-    const maxZoom = isMap
-      ? this._state.zoom.maxMapZoom
-      : this._state.zoom.maxPageZoom;
+  private adjustMapZoom(direction: 1 | -1): void {
+    const currentLevel = this._state.zoom.mapZoomLevel;
+    const step = this._state.zoom.zoomStep;
+    const minZoom = this._state.zoom.minMapZoom;
+    const maxZoom = this._state.zoom.maxMapZoom;
 
     const clamp = direction === 1 ? Math.min : Math.max;
     const limit = direction === 1 ? maxZoom : minZoom;
     const newZoomLevel = clamp(currentLevel + direction * step, limit);
 
-    if (isMap) {
-      this._state.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          MAP_ZOOM_STORAGE_KEY,
-          String(this._state.zoom.mapZoomLevel)
-        );
-      }
-    } else {
-      this._state.zoom.pageZoomLevel = newZoomLevel;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          PAGE_ZOOM_STORAGE_KEY,
-          String(this._state.zoom.pageZoomLevel)
-        );
-      }
+    this._state.zoom.mapZoomLevel = Math.round(newZoomLevel * 10) / 10;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        MAP_ZOOM_STORAGE_KEY,
+        String(this._state.zoom.mapZoomLevel)
+      );
     }
   }
 
-  zoomIn(): void {
-    this.adjustZoom(1);
+  private adjustPageZoom(direction: 1 | -1): void {
+    const currentLevel = this._state.zoom.pageZoomLevel;
+    const step = this._state.zoom.pageZoomStep;
+    const minZoom = this._state.zoom.minPageZoom;
+    const maxZoom = this._state.zoom.maxPageZoom;
+
+    const clamp = direction === 1 ? Math.min : Math.max;
+    const limit = direction === 1 ? maxZoom : minZoom;
+    const newZoomLevel = clamp(currentLevel + direction * step, limit);
+
+    this._state.zoom.pageZoomLevel = newZoomLevel;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        PAGE_ZOOM_STORAGE_KEY,
+        String(this._state.zoom.pageZoomLevel)
+      );
+    }
   }
 
-  zoomOut(): void {
-    this.adjustZoom(-1);
+  zoomInMap(): void {
+    this.adjustMapZoom(1);
   }
 
-  resetZoom(): void {
-    if (this._state.zoom.mode === ZoomMode.Map) {
-      this._state.zoom.mapZoomLevel = 100;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(MAP_ZOOM_STORAGE_KEY, '100');
-      }
-    } else {
-      this._state.zoom.pageZoomLevel = 100;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
-      }
+  zoomOutMap(): void {
+    this.adjustMapZoom(-1);
+  }
+
+  zoomInPage(): void {
+    this.adjustPageZoom(1);
+  }
+
+  zoomOutPage(): void {
+    this.adjustPageZoom(-1);
+  }
+
+  resetMapZoom(): void {
+    this._state.zoom.mapZoomLevel = 100;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(MAP_ZOOM_STORAGE_KEY, '100');
+    }
+  }
+
+  resetPageZoom(): void {
+    this._state.zoom.pageZoomLevel = 100;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
     }
   }
 
@@ -437,10 +439,12 @@ export const globalActions = {
   ensureTabSelected: globalState.ensureTabSelected.bind(globalState),
   setProjectionFilter: globalState.setProjectionFilter.bind(globalState),
   setProjectionViewMode: globalState.setProjectionViewMode.bind(globalState),
-  setZoomMode: globalState.setZoomMode.bind(globalState),
-  zoomIn: globalState.zoomIn.bind(globalState),
-  zoomOut: globalState.zoomOut.bind(globalState),
-  resetZoom: globalState.resetZoom.bind(globalState),
+  zoomInMap: globalState.zoomInMap.bind(globalState),
+  zoomOutMap: globalState.zoomOutMap.bind(globalState),
+  zoomInPage: globalState.zoomInPage.bind(globalState),
+  zoomOutPage: globalState.zoomOutPage.bind(globalState),
+  resetMapZoom: globalState.resetMapZoom.bind(globalState),
+  resetPageZoom: globalState.resetPageZoom.bind(globalState),
   setMapZoom: globalState.setMapZoom.bind(globalState),
   setPageZoom: globalState.setPageZoom.bind(globalState)
 };

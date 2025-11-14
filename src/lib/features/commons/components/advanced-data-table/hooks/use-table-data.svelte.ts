@@ -4,9 +4,8 @@
  */
 
 import { SvelteMap } from 'svelte/reactivity';
-import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
 import type { ProcessedDataset } from '$lib/features/data';
-import type { AnalysisResult } from '../../../services/duckdb/types';
 import { logger, LogCategory } from '../../../utils/logger';
 import type { ColumnInfo, TableRow, SortOrder } from '../types';
 

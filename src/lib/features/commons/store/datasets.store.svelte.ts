@@ -18,6 +18,8 @@ class DatasetsStore {
     isProcessing: false
   });
 
+  private activeOperations = 0;
+
   private pendingDatasetResolvers = new Map<
     string,
     Array<(datasetId: string) => void>
@@ -69,6 +71,18 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
+  private startProcessing(): void {
+    this.activeOperations++;
+    this._state.isProcessing = true;
+  }
+
+  private endProcessing(): void {
+    this.activeOperations = Math.max(0, this.activeOperations - 1);
+    if (this.activeOperations === 0) {
+      this._state.isProcessing = false;
+    }
+  }
+
   addProcessedDataset(dataset: DatasetResult): void {
     // Force reactivity by creating a new array
     this._state.datasets = [...this._state.datasets, dataset];
@@ -91,7 +105,7 @@ class DatasetsStore {
       fileCount: files.length
     });
 
-    this._state.isProcessing = true;
+    this.startProcessing();
     this._state.error = undefined;
 
     try {
@@ -101,8 +115,6 @@ class DatasetsStore {
       });
 
       const pipelineStart = performance.now();
-
-      // Process files in parallel using new unified dataPipeline
       const newDatasets = await Promise.all(
         files.map(async (file) => {
           if (!file.content && !file.originalFile) {
@@ -112,7 +124,6 @@ class DatasetsStore {
             );
             throw new Error(`File ${file.name} has no content or originalFile`);
           }
-          // Pass originalFile to avoid re-parsing already processed content
           return dataPipeline.processUploadedFile(file, file.originalFile);
         })
       );
@@ -140,19 +151,20 @@ class DatasetsStore {
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
     } finally {
-      this._state.isProcessing = false;
+      this.endProcessing();
     }
   }
 
-  async addFile(file: UploadedFile): Promise<void> {
+  async addFile(file: UploadedFile): Promise<DatasetResult | null> {
     const startTime = performance.now();
-    console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] START`, {
+    logger.debug(`[${new Date().toISOString()}] [datasetsStore:addFile] START`, {
       fileName: file.name,
       fileId: file.id
     });
 
-    this._state.isProcessing = true;
+    this.startProcessing();
     this._state.error = undefined;
+    let addedDataset: DatasetResult | null = null;
 
     try {
       if (!file.content) {
@@ -160,7 +172,7 @@ class DatasetsStore {
         throw new Error(`File ${file.name} has no content`);
       }
 
-      console.log(
+      logger.debug(
         `[${new Date().toISOString()}] [datasetsStore:addFile] Processing with new dataPipeline...`
       );
       const processStart = performance.now();
@@ -168,7 +180,7 @@ class DatasetsStore {
         file,
         file.originalFile
       );
-      console.log(
+      logger.debug(
         `[${new Date().toISOString()}] [datasetsStore:addFile] File processed`,
         {
           duration: `${(performance.now() - processStart).toFixed(2)}ms`,
@@ -183,7 +195,7 @@ class DatasetsStore {
         );
 
         if (existingDataset) {
-          console.warn(
+          logger.warn(
             `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`,
             {
               existingDatasetId: existingDataset.id,
@@ -201,6 +213,7 @@ class DatasetsStore {
             this._state.selectedDatasetId = dataset.id;
           }
 
+          addedDataset = dataset;
           // Throw non-fatal error to show warning toast (won't trigger rollback)
           throw new DuplicateFileError(
             `Le fichier "${file.name}" existe déjà et a été remplacé`,
@@ -219,7 +232,9 @@ class DatasetsStore {
           this._state.selectedDatasetId = dataset.id;
         }
 
-        console.log(
+        addedDataset = dataset;
+
+        logger.debug(
           `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`,
           {
             datasetId: dataset.id,
@@ -241,9 +256,11 @@ class DatasetsStore {
       }
 
       const totalDuration = performance.now() - startTime;
-      console.log(`[${new Date().toISOString()}] [datasetsStore:addFile] END`, {
+      logger.debug(`[${new Date().toISOString()}] [datasetsStore:addFile] END`, {
         totalDuration: `${totalDuration.toFixed(2)}ms`
       });
+
+      return addedDataset;
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error(
@@ -256,33 +273,33 @@ class DatasetsStore {
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
     } finally {
-      this._state.isProcessing = false;
+      this.endProcessing();
     }
   }
 
   selectDataset(datasetId: string): void {
-    console.log('[datasetsStore] selectDataset called', {
+    logger.debug('[datasetsStore] selectDataset called', {
       datasetId,
       currentSelectedId: this._state.selectedDatasetId,
       totalDatasets: this._state.datasets.length
     });
 
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    console.log('[datasetsStore] Dataset found?', {
+    logger.debug('[datasetsStore] Dataset found?', {
       found: !!dataset,
       datasetName: dataset?.name
     });
 
     if (dataset) {
       this._state.selectedDatasetId = datasetId;
-      console.log('[datasetsStore] Selected dataset updated', {
+      logger.debug('[datasetsStore] Selected dataset updated', {
         newSelectedId: this._state.selectedDatasetId
       });
     }
   }
 
   removeDataset(datasetId: string): void {
-    console.log('[datasetsStore] removeDataset called', {
+    logger.debug('[datasetsStore] removeDataset called', {
       datasetId,
       currentSelectedId: this._state.selectedDatasetId,
       totalDatasetsBefore: this._state.datasets.length,
@@ -293,14 +310,14 @@ class DatasetsStore {
       (d) => d.id !== datasetId
     );
 
-    console.log('[datasetsStore] Filtered datasets', {
+    logger.debug('[datasetsStore] Filtered datasets', {
       totalDatasetsAfter: filteredDatasets.length,
       remainingIds: filteredDatasets.map((d) => d.id)
     });
 
     if (this._state.selectedDatasetId === datasetId) {
       const newSelectedId = filteredDatasets[0]?.id;
-      console.log('[datasetsStore] Updating selected dataset', {
+      logger.debug('[datasetsStore] Updating selected dataset', {
         oldId: this._state.selectedDatasetId,
         newId: newSelectedId
       });
@@ -309,7 +326,7 @@ class DatasetsStore {
 
     this._state.datasets = filteredDatasets;
 
-    console.log('[datasetsStore] removeDataset complete', {
+    logger.debug('[datasetsStore] removeDataset complete', {
       finalSelectedId: this._state.selectedDatasetId,
       finalDatasetCount: this._state.datasets.length
     });
@@ -320,7 +337,7 @@ class DatasetsStore {
   }
 
   getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
-    console.log('[datasetsStore] getDatasetBySourceFile called', {
+    logger.debug('[datasetsStore] getDatasetBySourceFile called', {
       sourceFileId,
       totalDatasets: this._state.datasets.length,
       allSourceFileIds: this._state.datasets.map((d) => d.sourceFileId)
@@ -329,7 +346,7 @@ class DatasetsStore {
     const dataset = this._state.datasets.find(
       (d) => d.sourceFileId === sourceFileId
     );
-    console.log('[datasetsStore] getDatasetBySourceFile result', {
+    logger.debug('[datasetsStore] getDatasetBySourceFile result', {
       found: !!dataset,
       datasetId: dataset?.id,
       datasetName: dataset?.name
@@ -518,6 +535,12 @@ class DatasetsStore {
     dataset.name = sanitizedName;
     logger.info(`Dataset renamed to ${sanitizedName}`, LogCategory.DATA);
     return true;
+  }
+
+  updateDatasetTableName(datasetId: string, tableName: string): void {
+    this._state.datasets = this._state.datasets.map((dataset) =>
+      dataset.id === datasetId ? { ...dataset, tableName } : dataset
+    );
   }
 
   clear(): void {

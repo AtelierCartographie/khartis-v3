@@ -1,5 +1,5 @@
 import type { GeoColumnDetection } from '../types/basemap.types';
-import type { ColumnInfo } from '$lib/features/commons/services/duckdb/types';
+import type { ColumnInfo } from '$lib/features/duckdb';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export class GeolocationService {

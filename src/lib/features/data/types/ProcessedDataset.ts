@@ -15,15 +15,12 @@ export interface ProcessedDataset {
     | 'kmz'
     | 'unknown';
 
-  // Data
   data: Record<string, unknown>[];
   rowCount: number;
 
-  // Analysis
   columns: ColumnInfo[];
   analysis: AnalysisResult;
 
-  // Geometry (if applicable)
   geometry?:
     | 'Point'
     | 'LineString'
@@ -38,10 +35,8 @@ export interface ProcessedDataset {
     maxLon: number;
   };
 
-  // DuckDB
   duckdbTableName?: string;
 
-  // Metadata
   createdAt: Date;
   fileSize: number;
   metadata: {

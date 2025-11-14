@@ -207,6 +207,16 @@ interface SavedProjectMetadata {
 
 Sorted by `updatedAt` descending on load.
 
+## Project Management Services
+
+| Service                                                                                       | Responsibility                                                                       | Notes                                                                                                                                                          |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProjectRepository` (`src/lib/features/project-management/services/project-repository.ts`)    | Owns the IndexedDB connection and read/write lifecycle for `KhartisProject` records. | Runs `ProjectSerializer.prepareForIndexedDB` before `put`, updates `SavedProjectMetadata` via `projectStorage`, and lazily creates the object store + indices. |
+| `projectStorage` (`src/lib/features/project-management/services/project-storage.ts`)          | Thin localforage wrapper for metadata and preferences.                               | Serializes payloads to JSON strings so quotas/errors can be surfaced with meaningful messages.                                                                 |
+| `ProjectSerializer` (`src/lib/features/project-management/utils/project-serializer.ts`)       | Converts between runtime and persisted representations.                              | Normalizes dates, uploaded files, and deep-clones projects so IndexedDB never sees prototypes or `ArrayBuffer` references.                                     |
+| `ProjectFileService` (`src/lib/features/project-management/services/project-file.service.ts`) | Handles import/export flows.                                                         | Exports pretty JSON or `.kh` archives, compresses/ decompresses payloads, validates manifests, and persists imports through the repository.                    |
+| `AutoSaveController` (`src/lib/features/project-management/services/auto-save.controller.ts`) | Debounces persistence after state mutations.                                         | Runs only in the browser, resets timers on each mutation, and surfaces failures via `console.error` for upstream handling.                                     |
+
 ## Feature Pattern
 
 ### Directory Structure

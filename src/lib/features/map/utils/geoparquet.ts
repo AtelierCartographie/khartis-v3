@@ -1,16 +1,14 @@
 import wasmInit, {
   readGeoParquet as readGeoParquetWasm
 } from '@geoarrow/geoparquet-wasm/esm/index.js';
+import geoParquetWasmUrl from '@geoarrow/geoparquet-wasm/esm/index_bg.wasm?url';
 import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
-
-const WASM_URL =
-  'https://cdn.jsdelivr.net/npm/@geoarrow/geoparquet-wasm@0.2.0-beta.5/esm/index_bg.wasm';
 
 let wasmInitialized = false;
 
 async function ensureWasmInitialized(): Promise<void> {
   if (!wasmInitialized) {
-    await wasmInit(WASM_URL);
+    await wasmInit({ module_or_path: geoParquetWasmUrl });
     wasmInitialized = true;
   }
 }

@@ -1,5 +1,5 @@
 import type { JoinQuality, JoinEntity } from '../types/basemap.types';
-import { Duck } from '../../commons/services/duckdb/duckdb';
+import { Duck } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../commons/utils/logger';
 
 export async function analyzeJoinQuality(

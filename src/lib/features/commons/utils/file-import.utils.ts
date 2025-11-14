@@ -1,4 +1,5 @@
 import type { FeatureCollection } from 'geojson';
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import shp from 'shpjs';
 import { FileGroupError, ParseError } from '../errors/pipeline.errors';
 import {
@@ -286,8 +287,9 @@ export async function parseShapefile(
       shapefileData.cpg = new TextDecoder().decode(files['cpg']).trim();
     }
 
-    const shapefileInput =
-      shapefileData as unknown as Parameters<typeof shp>[0];
+    const shapefileInput = shapefileData as unknown as Parameters<
+      typeof shp
+    >[0];
     const geojson = (await shp(shapefileInput)) as ShapefileGeoJSON;
 
     if (onProgress) onProgress(80);
@@ -618,9 +620,9 @@ export async function parseGeoPackage(
   try {
     onProgress?.(10);
 
-    const SQL = await import('sql.js');
+    const SQL = await import('sql.js/dist/sql-wasm.js');
     const sqlJs = await SQL.default({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`
+      locateFile: () => sqlWasmUrl
     });
 
     onProgress?.(30);

@@ -3,7 +3,6 @@ import { dataOrchestrator } from '../services/data-orchestrator.service.svelte';
 import { downloadFile } from '../utils/file-export.utils';
 import { logger, LogCategory } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
-import { projectPersistence } from '../utils/project-persistence.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import type { UploadedFile } from './create-project.types';
@@ -15,8 +14,15 @@ import type {
   ProjectState,
   SavedProjectMetadata,
   VisualizationConfig
-} from './project.types';
-import { ProjectStorageKey } from './project.types';
+} from '$lib/features/project-management';
+import {
+  ProjectStorageKey,
+  projectRepository,
+  projectFiles,
+  projectStorage,
+  duplicateProject as duplicateProjectEntity,
+  AutoSaveController
+} from '$lib/features/project-management';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -32,7 +38,7 @@ class ProjectStore {
     isLoading: false
   });
 
-  private autoSaveTimer?: number;
+  private autoSave = new AutoSaveController(() => this.saveCurrentProject());
 
   private initPromise?: Promise<void>;
 
@@ -120,9 +126,14 @@ class ProjectStore {
           validation: file.validation,
           parsedData: file.parsedData,
           content: file.content,
+          preparedGeoJSON: file.preparedGeoJSON,
           duplicates: file.duplicates,
           statistics: file.statistics,
-          sourceType: file.sourceType
+          sourceType: file.sourceType,
+          cachedDataset: file.cachedDataset,
+          cachedGeoParquet: file.cachedGeoParquet,
+          deepAnalysis: file.deepAnalysis,
+          geoMatchResult: file.geoMatchResult
         };
 
         logger.debug('Adding file to sourceFiles', LogCategory.PROJECT, {
@@ -246,28 +257,36 @@ class ProjectStore {
 
     await this.saveCurrentProject();
 
-    await projectPersistence.saveToStorage(
-      ProjectStorageKey.CURRENT,
-      project.id
-    );
+    await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
     await dataOrchestrator.onProjectChanged();
   }
 
   async loadProject(id: string): Promise<void> {
-    const project = await projectPersistence.loadProject(id);
+    logger.info('📂 loadProject() called', LogCategory.PROJECT, {
+      projectId: id,
+      currentProjectId: this._state.currentProject?.id
+    });
+
+    const project = await projectRepository.load(id);
 
     if (project) {
+      const filesWithCache = project.data?.sourceFiles?.filter(f => f.cachedGeoParquet) || [];
+      logger.info('📂 Project loaded from IndexedDB', LogCategory.PROJECT, {
+        projectId: project.id,
+        projectName: project.manifest.name,
+        filesCount: project.data?.sourceFiles?.length || 0,
+        filesWithCacheCount: filesWithCache.length,
+        filesWithCacheNames: filesWithCache.map(f => f.name)
+      });
+
       this._state.currentProject = project;
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
       this._state.history = [];
       this._state.historyIndex = -1;
 
-      await projectPersistence.saveToStorage(
-        ProjectStorageKey.CURRENT,
-        project.id
-      );
+      await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
       await dataOrchestrator.onProjectChanged();
     }
@@ -277,6 +296,16 @@ class ProjectStore {
     if (!this._state.currentProject) {
       return;
     }
+
+    const filesWithCache = this._state.currentProject.data?.sourceFiles?.filter(f => f.cachedGeoParquet) || [];
+    logger.info('💾 saveCurrentProject() called', LogCategory.PROJECT, {
+      projectId: this._state.currentProject.id,
+      projectName: this._state.currentProject.manifest.name,
+      isDirty: this._state.isDirty,
+      filesCount: this._state.currentProject.data?.sourceFiles?.length || 0,
+      filesWithCacheCount: filesWithCache.length,
+      filesWithCacheNames: filesWithCache.map(f => f.name)
+    });
 
     try {
       const projectValidation = ProjectValidator.validateProjectSize(
@@ -293,13 +322,19 @@ class ProjectStore {
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
-      await projectPersistence.saveProject(this._state.currentProject);
+      await projectRepository.save(this._state.currentProject);
+
+      logger.success('✅ Project saved to IndexedDB', LogCategory.PROJECT, {
+        projectId: this._state.currentProject.id,
+        filesWithCacheSaved: filesWithCache.length
+      });
 
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to save project';
+      logger.error('Failed to save project to IndexedDB', LogCategory.PROJECT, error);
       showError('Failed to save project', message, error);
       throw error;
     }
@@ -307,11 +342,11 @@ class ProjectStore {
 
   async deleteProject(id: string): Promise<void> {
     try {
-      await projectPersistence.deleteProject(id);
+      await projectRepository.remove(id);
 
       if (this._state.currentProject?.id === id) {
         this._state.currentProject = undefined;
-        await projectPersistence.clearStorage(ProjectStorageKey.CURRENT);
+        await projectStorage.remove(ProjectStorageKey.CURRENT);
       }
     } catch (error) {
       const message =
@@ -323,7 +358,7 @@ class ProjectStore {
 
   async duplicateProject(id: string, newName?: string): Promise<string> {
     try {
-      const originalProject = await projectPersistence.loadProject(id);
+      const originalProject = await projectRepository.load(id);
 
       if (!originalProject) {
         throw new Error('Project not found');
@@ -349,18 +384,12 @@ class ProjectStore {
         throw new Error(nameValidation.errors.join(', '));
       }
 
-      const duplicatedProject: KhartisProject = {
-        ...structuredClone(originalProject),
-        id: crypto.randomUUID(),
-        manifest: {
-          ...originalProject.manifest,
-          name: ProjectValidator.sanitizeProjectName(duplicatedName),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        }
-      };
+      const duplicatedProject = duplicateProjectEntity(
+        originalProject,
+        ProjectValidator.sanitizeProjectName(duplicatedName)
+      );
 
-      await projectPersistence.saveProject(duplicatedProject);
+      await projectRepository.save(duplicatedProject);
 
       return duplicatedProject.id;
     } catch (error) {
@@ -372,7 +401,7 @@ class ProjectStore {
   }
 
   async listProjects(): Promise<SavedProjectMetadata[]> {
-    const projects = await projectPersistence.listProjects();
+    const projects = await projectRepository.listMetadata();
 
     const storageCheck = ProjectValidator.validateStorageCapacity(
       projects.length
@@ -392,9 +421,7 @@ class ProjectStore {
     }
 
     try {
-      const blob = await projectPersistence.createProjectArchive(
-        this._state.currentProject
-      );
+      const blob = await projectFiles.createArchive(this._state.currentProject);
 
       const projectName =
         customName || this._state.currentProject.manifest.name;
@@ -411,7 +438,7 @@ class ProjectStore {
 
   async importProject(file: File): Promise<void> {
     try {
-      const project = await projectPersistence.importProject(file);
+      const project = await projectFiles.importProject(file);
 
       this._state.currentProject = project;
       this._state.isDirty = false;
@@ -419,10 +446,7 @@ class ProjectStore {
       this._state.history = [];
       this._state.historyIndex = -1;
 
-      await projectPersistence.saveToStorage(
-        ProjectStorageKey.CURRENT,
-        project.id
-      );
+      await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to import project';
@@ -535,7 +559,7 @@ class ProjectStore {
     this._state.history = [];
     this._state.historyIndex = -1;
 
-    await projectPersistence.clearStorage(ProjectStorageKey.CURRENT);
+    await projectStorage.remove(ProjectStorageKey.CURRENT);
   }
 
   private addToHistory(action: string, snapshot?: KhartisProject): void {
@@ -563,25 +587,19 @@ class ProjectStore {
 
   private markDirty(): void {
     this._state.isDirty = true;
-    if (this._state.autoSaveEnabled) {
-      this.scheduleAutoSave();
-    }
+    this.scheduleAutoSave();
   }
 
   private scheduleAutoSave(): void {
-    if (this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
-    }
-
-    if (this._state.autoSaveEnabled && this._state.isDirty) {
-      this.autoSaveTimer = window.setTimeout(() => {
-        this.saveCurrentProject();
-      }, this._state.autoSaveInterval);
-    }
+    this.autoSave.updateConfig({
+      enabled: this._state.autoSaveEnabled,
+      interval: this._state.autoSaveInterval
+    });
+    this.autoSave.schedule(this._state.isDirty);
   }
 
   private async loadLastProject(): Promise<void> {
-    const lastProjectId = await projectPersistence.loadFromStorage<string>(
+    const lastProjectId = await projectStorage.load<string>(
       ProjectStorageKey.CURRENT
     );
 
@@ -601,10 +619,15 @@ class ProjectStore {
       this._state.autoSaveInterval = interval;
     }
 
+    this.autoSave.updateConfig({
+      enabled: this._state.autoSaveEnabled,
+      interval: this._state.autoSaveInterval
+    });
+
     if (enabled && this._state.isDirty) {
       this.scheduleAutoSave();
-    } else if (!enabled && this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
+    } else if (!enabled) {
+      this.autoSave.cancel();
     }
   }
 }

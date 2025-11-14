@@ -5,6 +5,7 @@ import {
   type ValidationResult
 } from '../configs/validation.config';
 import { logger, LogCategory } from './logger';
+import * as m from '$lib/paraglide/messages';
 
 // Re-export pour compatibilité avec le code existant
 export { STORAGE_LIMITS, type StorageLimits, type ValidationResult };
@@ -20,13 +21,16 @@ export const ProjectValidator = {
     if (file.size > STORAGE_LIMITS.maxFileSize) {
       result.isValid = false;
       result.errors.push(
-        `Le fichier ${file.name} dépasse la limite de ${STORAGE_LIMITS.maxFileSize / (1024 * 1024)} MB`
+        m.validation_file_exceeds_limit({
+          name: file.name,
+          limit: String(STORAGE_LIMITS.maxFileSize / (1024 * 1024))
+        })
       );
     }
 
     if (file.size > STORAGE_LIMITS.maxFileSize * 0.8) {
       result.warnings.push(
-        `Le fichier ${file.name} est volumineux et pourrait affecter les performances`
+        m.validation_file_large_performance({ name: file.name })
       );
     }
 
@@ -45,14 +49,14 @@ export const ProjectValidator = {
     if (projectSize > STORAGE_LIMITS.maxProjectSize) {
       result.isValid = false;
       result.errors.push(
-        `Le projet dépasse la limite de ${STORAGE_LIMITS.maxProjectSize / (1024 * 1024)} MB`
+        m.validation_project_exceeds_size({
+          limit: String(STORAGE_LIMITS.maxProjectSize / (1024 * 1024))
+        })
       );
     }
 
     if (projectSize > STORAGE_LIMITS.maxProjectSize * 0.8) {
-      result.warnings.push(
-        'Le projet est volumineux et pourrait affecter les performances'
-      );
+      result.warnings.push(m.validation_project_size_performance());
     }
 
     return result;
@@ -67,21 +71,19 @@ export const ProjectValidator = {
 
     if (!name || name.trim().length === 0) {
       result.isValid = false;
-      result.errors.push('Le nom du projet est requis');
+      result.errors.push(m.validation_project_name_required());
       return result;
     }
 
     if (name.length > 255) {
       result.isValid = false;
-      result.errors.push(
-        'Le nom du projet ne peut pas dépasser 255 caractères'
-      );
+      result.errors.push(m.validation_project_name_max_chars());
     }
 
     const invalidChars = /[<>:"/\\|?*]/g;
     if (invalidChars.test(name)) {
       result.isValid = false;
-      result.errors.push('Le nom du projet contient des caractères invalides');
+      result.errors.push(m.validation_project_name_invalid_chars());
     }
 
     return result;
@@ -97,13 +99,17 @@ export const ProjectValidator = {
     if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount) {
       result.isValid = false;
       result.errors.push(
-        `Limite de ${STORAGE_LIMITS.maxProjectCount} projets atteinte. Veuillez supprimer des projets existants.`
+        m.validation_project_count_limit({
+          limit: String(STORAGE_LIMITS.maxProjectCount)
+        })
       );
     }
 
     if (currentProjectCount >= STORAGE_LIMITS.maxProjectCount * 0.8) {
       result.warnings.push(
-        `Vous approchez de la limite de ${STORAGE_LIMITS.maxProjectCount} projets`
+        m.validation_project_count_approaching({
+          limit: String(STORAGE_LIMITS.maxProjectCount)
+        })
       );
     }
 
@@ -134,20 +140,16 @@ export const ProjectValidator = {
       const sizeInBytes = totalSize * 2;
 
       if (sizeInBytes > STORAGE_LIMITS.maxStorageSize) {
-        result.warnings.push(
-          'Le stockage approche de sa limite. Certaines fonctionnalités pourraient être affectées.'
-        );
+        result.warnings.push(m.validation_storage_approaching_limit());
       }
 
       if (sizeInBytes > STORAGE_LIMITS.maxStorageSize * 0.9) {
         result.isValid = false;
-        result.errors.push(
-          'Espace de stockage insuffisant. Veuillez nettoyer le cache du navigateur.'
-        );
+        result.errors.push(m.validation_storage_insufficient());
       }
     } catch (error) {
       logger.error('Failed to check storage usage', LogCategory.STORE, error);
-      result.warnings.push("Impossible de vérifier l'utilisation du stockage");
+      result.warnings.push(m.validation_storage_check_failed());
     }
 
     return result;
@@ -171,33 +173,29 @@ export const DataValidator = {
 
     if (!Array.isArray(data)) {
       result.isValid = false;
-      result.errors.push('Les données doivent être un tableau');
+      result.errors.push(m.validation_csv_must_be_array());
       return result;
     }
 
     if (data.length === 0) {
       result.isValid = false;
-      result.errors.push('Le fichier est vide');
+      result.errors.push(m.validation_csv_empty());
       return result;
     }
 
     if (data.length > 100000) {
-      result.warnings.push(
-        'Le fichier contient plus de 100 000 lignes. Les performances pourraient être affectées.'
-      );
+      result.warnings.push(m.validation_csv_too_many_rows());
     }
 
     const firstRow = data[0];
     if (!firstRow || Object.keys(firstRow).length === 0) {
       result.isValid = false;
-      result.errors.push('Aucune colonne détectée dans le fichier');
+      result.errors.push(m.validation_csv_no_columns());
       return result;
     }
 
     if (Object.keys(firstRow).length > 1000) {
-      result.warnings.push(
-        'Le fichier contient plus de 1000 colonnes. Cela pourrait affecter les performances.'
-      );
+      result.warnings.push(m.validation_csv_too_many_columns());
     }
 
     return result;
@@ -212,7 +210,7 @@ export const DataValidator = {
 
     if (!data || typeof data !== 'object') {
       result.isValid = false;
-      result.errors.push('Données géographiques invalides');
+      result.errors.push(m.validation_geo_invalid());
       return result;
     }
 
@@ -221,19 +219,17 @@ export const DataValidator = {
     if (geo.type === 'FeatureCollection') {
       if (!Array.isArray(geo.features)) {
         result.isValid = false;
-        result.errors.push('FeatureCollection invalide : features manquantes');
+        result.errors.push(m.validation_geo_feature_collection_invalid());
         return result;
       }
 
       if (geo.features.length === 0) {
         result.isValid = false;
-        result.errors.push('Aucune entité géographique trouvée');
+        result.errors.push(m.validation_geo_no_features());
       }
 
       if (geo.features.length > 50000) {
-        result.warnings.push(
-          'Plus de 50 000 entités géographiques. Les performances pourraient être affectées.'
-        );
+        result.warnings.push(m.validation_geo_too_many_features());
       }
     }
 

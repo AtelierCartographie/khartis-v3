@@ -3,12 +3,11 @@
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
   import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service.svelte';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { ZoomMode } from '$lib/features/commons/types/global';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import Header from '$lib/features/header/header.svelte';
   import Logo from '$lib/features/header/logo.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
@@ -29,21 +28,39 @@
   let isLoading = $state(true);
 
   onMount(async () => {
-    // Initialize DuckDB first
+    const startTime = performance.now();
+    logger.info('🚀 Application startup', LogCategory.SYSTEM);
+
+    const duckdbInitStart = performance.now();
     try {
       await duckDBOrchestrator.initialize();
+      logger.info('🦆 DuckDB initialized', LogCategory.SYSTEM, {
+        duration: `${(performance.now() - duckdbInitStart).toFixed(2)}ms`
+      });
     } catch (error) {
       logger.error('DuckDB initialization failed', LogCategory.DUCKDB, error);
-      // Silent fail - DuckDB initialization is optional
+      // Continue even if DuckDB fails - it will retry on first file import
     }
 
     // Wait for project store to initialize from IndexedDB
+    const projectInitStart = performance.now();
     await projectStore.waitForInit();
+    logger.info('📦 Project store initialized', LogCategory.SYSTEM, {
+      duration: `${(performance.now() - projectInitStart).toFixed(2)}ms`
+    });
 
     // Initialize data orchestrator to process any existing files
+    const dataInitStart = performance.now();
     await dataOrchestrator.initialize();
+    logger.info('📊 Data orchestrator initialized', LogCategory.SYSTEM, {
+      duration: `${(performance.now() - dataInitStart).toFixed(2)}ms`
+    });
 
     isLoading = false;
+
+    logger.success('✅ Application ready', LogCategory.SYSTEM, {
+      totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
+    });
 
     // Show modal only if no project exists
     if (!projectStore.currentProject) {
@@ -57,9 +74,7 @@
 
   // Reactive transform style for page zoom
   const pageTransformStyle = $derived(
-    globalState.zoom.mode === ZoomMode.Page
-      ? `transform: scale(${globalState.zoom.pageZoomLevel / 100}); transform-origin: center center;`
-      : ''
+    `transform: scale(${globalState.zoom.pageZoomLevel / 100}); transform-origin: center center;`
   );
 </script>
 
