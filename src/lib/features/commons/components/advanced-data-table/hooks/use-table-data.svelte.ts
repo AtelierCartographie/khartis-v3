@@ -3,11 +3,11 @@
  * Gère à la fois les données DuckDB (tableName) et les datasets traités
  */
 
-import { SvelteMap } from 'svelte/reactivity';
 import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
-import type { ProcessedDataset } from '$lib/features/data';
-import { logger, LogCategory } from '../../../utils/logger';
-import type { ColumnInfo, TableRow, SortOrder } from '../types';
+import type { ProcessedDataset } from '$lib/features/pipeline';
+import { SvelteMap } from 'svelte/reactivity';
+import { LogCategory, logger } from '../../../utils/logger';
+import type { ColumnInfo, SortOrder, TableRow } from '../types';
 
 export interface UseTableDataProps {
   /** Nom de la table DuckDB (optionnel) */

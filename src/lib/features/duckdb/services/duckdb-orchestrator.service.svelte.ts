@@ -11,10 +11,10 @@ import type {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import type { ProcessedDataset } from '$lib/features/data';
-import { geoParquetReader } from '$lib/features/data/adapters/readers/GeoParquetReader';
-import type { GeoArrowMetadata } from '$lib/features/data/models/geo-arrow-metadata';
-import type { GeoColumnInfo } from '$lib/features/data/types/AnalysisResult';
+import type { ProcessedDataset } from '$lib/features/pipeline';
+import { geoParquetReader } from '$lib/features/pipeline/adapters/readers/GeoParquetReader';
+import type { GeoArrowMetadata } from '$lib/features/pipeline/models/geo-arrow-metadata';
+import type { GeoColumnInfo } from '$lib/features/pipeline/types/AnalysisResult';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import type { Table } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';

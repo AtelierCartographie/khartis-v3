@@ -1,5 +1,5 @@
+import type { DatasetResult } from '$lib/features/pipeline';
 import type { ParsedData } from '$lib/types/data';
-import type { DatasetResult } from '$lib/features/data';
 import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
 export type ProjectTab = 1 | 2 | 3;

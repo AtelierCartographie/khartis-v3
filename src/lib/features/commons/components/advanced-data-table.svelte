@@ -26,7 +26,7 @@
     type FilterStats,
     type AnalysisResult
   } from '$lib/features/duckdb';
-  import type { ProcessedDataset } from '$lib/features/data';
+  import type { ProcessedDataset } from '$lib/features/pipeline';
   import { logger, LogCategory } from '../utils/logger';
   import {
     create_summary_plot,
