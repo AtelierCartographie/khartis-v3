@@ -1,6 +1,9 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { InlineNotification, Button } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    NotificationActionButton
+  } from 'carbon-components-svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
   const OFFLINE_READY_TIMEOUT = 5000;
@@ -41,11 +44,11 @@
       lowContrast={false}
       on:close={closeUpdateNotification}
     >
-      <div slot="actions" class="notification-actions">
-        <button class="update-btn" on:click={handleUpdate}>
+      <svelte:fragment slot="actions">
+        <NotificationActionButton on:click={handleUpdate}>
           {m.pwa_update_action()}
-        </button>
-      </div>
+        </NotificationActionButton>
+      </svelte:fragment>
     </InlineNotification>
   </div>
 {/if}
@@ -72,30 +75,5 @@
     z-index: 9999;
     max-width: 400px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-  }
-
-  .notification-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-
-  .update-btn {
-    background: transparent;
-    border: none;
-    color: white;
-    cursor: pointer;
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    text-decoration: underline;
-    transition: opacity 0.2s ease;
-  }
-
-  .update-btn:hover {
-    opacity: 0.8;
-  }
-
-  .update-btn:active {
-    opacity: 0.6;
   }
 </style>

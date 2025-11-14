@@ -53,11 +53,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
-function cloneDataset<T>(value: T): T {
+function cloneDataset(value: DatasetResult): DatasetResult {
   if (typeof structuredClone === 'function') {
-    return structuredClone(value);
+    try {
+      return structuredClone(value);
+    } catch (error) {
+      logger.warn(
+        'structuredClone failed for cached dataset, using snapshot fallback',
+        LogCategory.DATA,
+        error
+      );
+    }
   }
-  return JSON.parse(JSON.stringify(value)) as T;
+
+  return createDatasetCacheSnapshot(value);
 }
 
 class DataOrchestratorService {
