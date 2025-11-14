@@ -1,9 +1,9 @@
-import { dataPipeline } from '$lib/features/data';
-import type { DatasetResult } from '$lib/features/data';
-import type { UploadedFile } from './create-project.types';
-import { logger, LogCategory } from '../utils/logger';
-import { sanitizeTextInput } from '../utils/sanitize.utils';
+import type { DatasetResult } from '$lib/features/pipeline';
+import { dataPipeline } from '$lib/features/pipeline';
 import { DuplicateFileError } from '../errors/pipeline.errors';
+import { LogCategory, logger } from '../utils/logger';
+import { sanitizeTextInput } from '../utils/sanitize.utils';
+import type { UploadedFile } from './create-project.types';
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -157,10 +157,13 @@ class DatasetsStore {
 
   async addFile(file: UploadedFile): Promise<DatasetResult | null> {
     const startTime = performance.now();
-    logger.debug(`[${new Date().toISOString()}] [datasetsStore:addFile] START`, {
-      fileName: file.name,
-      fileId: file.id
-    });
+    logger.debug(
+      `[${new Date().toISOString()}] [datasetsStore:addFile] START`,
+      {
+        fileName: file.name,
+        fileId: file.id
+      }
+    );
 
     this.startProcessing();
     this._state.error = undefined;
@@ -256,9 +259,12 @@ class DatasetsStore {
       }
 
       const totalDuration = performance.now() - startTime;
-      logger.debug(`[${new Date().toISOString()}] [datasetsStore:addFile] END`, {
-        totalDuration: `${totalDuration.toFixed(2)}ms`
-      });
+      logger.debug(
+        `[${new Date().toISOString()}] [datasetsStore:addFile] END`,
+        {
+          totalDuration: `${totalDuration.toFixed(2)}ms`
+        }
+      );
 
       return addedDataset;
     } catch (error) {
