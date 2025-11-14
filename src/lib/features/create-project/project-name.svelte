@@ -11,7 +11,7 @@
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
   import { m } from '$lib/paraglide/messages';
-  import { Button, TextInput } from 'carbon-components-svelte';
+  import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
   import { CreateProjectValidationService } from './services/validation.service';
 
@@ -55,16 +55,11 @@
 
   async function handleCreate() {
     const startTime = performance.now();
-    console.log(
-      `[${new Date().toISOString()}] [project-name:handleCreate] START`
-    );
+    logger.debug('Project creation started', LogCategory.PROJECT);
 
     hasTriedSubmit = true;
 
     if (!hasValidName) {
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Aborted - invalid project name`
-      );
       logger.warn(
         'Project creation attempted without name',
         LogCategory.PROJECT
@@ -73,93 +68,64 @@
     }
 
     if (!hasValidFiles) {
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Aborted - no valid files`
-      );
       logger.warn(
         'Project creation attempted without valid files',
         LogCategory.PROJECT
       );
-      showError('No files', 'Please add at least one valid file');
+      showError(m.validation_no_files_title(), m.validation_no_files_message());
       return;
     }
 
     isCreating = true;
-    creationStep = 'Processing files...';
-    console.log(
-      `[${new Date().toISOString()}] [project-name:handleCreate] Creating project...`,
-      {
-        projectName: projectName.trim(),
-        validFilesCount: validFiles.length
-      }
-    );
-
+    creationStep = m.create_project_processing_status();
     logger.info('Creating new project', LogCategory.PROJECT, {
       name: projectName.trim(),
       filesCount: validFiles.length
     });
 
     try {
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Sanitizing project name...`
-      );
+      logger.debug('Sanitizing project name', LogCategory.PROJECT);
       const safeName = sanitizeProjectName(projectName.trim());
 
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Calling projectStore.createProject...`
-      );
-      creationStep = 'Analyzing data...';
+      logger.debug('Calling projectStore.createProject', LogCategory.PROJECT);
+      creationStep = m.create_project_processing_status();
       const createStart = performance.now();
       await projectStore.createProject(safeName, validFiles);
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Project created`,
-        {
-          duration: `${(performance.now() - createStart).toFixed(2)}ms`
-        }
-      );
+      logger.debug('Project created', LogCategory.PROJECT, {
+        duration: `${(performance.now() - createStart).toFixed(2)}ms`
+      });
 
-      creationStep = 'Finalizing...';
+      creationStep = m.create_project_processing_status();
 
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Refreshing projects store...`
-      );
+      logger.debug('Refreshing projects store', LogCategory.PROJECT);
       await projectsStore.refresh();
 
       logger.success('Project created successfully', LogCategory.PROJECT, {
         name: safeName
       });
 
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] Resetting tabs and navigating...`
-      );
+      logger.debug('Resetting tabs and navigating', LogCategory.PROJECT);
       createProjectActions.resetAllTabs();
       await goto('/', { replaceState: true });
 
       const totalDuration = performance.now() - startTime;
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] END`,
-        {
-          totalDuration: `${totalDuration.toFixed(2)}ms`
-        }
-      );
+      logger.debug('Project creation completed', LogCategory.PROJECT, {
+        totalDuration: `${totalDuration.toFixed(2)}ms`
+      });
     } catch (error) {
       const duration = performance.now() - startTime;
-      console.error(
-        `[${new Date().toISOString()}] [project-name:handleCreate] ERROR`,
-        {
-          duration: `${duration.toFixed(2)}ms`,
-          error
-        }
-      );
+      logger.error('Failed to create project', LogCategory.PROJECT, {
+        duration: `${duration.toFixed(2)}ms`,
+        error
+      });
 
-      logger.error('Failed to create project', LogCategory.PROJECT, error);
       const errorMessage =
-        error instanceof Error ? error.message : 'Failed to create project';
-      showError('Failed to create project', errorMessage);
+        error instanceof Error
+          ? error.message
+          : m.error_project_creation_failed();
+      showError(m.error_project_creation_failed(), errorMessage);
     } finally {
-      console.log(
-        `[${new Date().toISOString()}] [project-name:handleCreate] FINALLY - closing modal`
-      );
+      logger.debug('Closing modal and resetting state', LogCategory.PROJECT);
       // Always close modal and reset state, even on error
       isCreating = false;
       creationStep = '';
@@ -211,12 +177,19 @@
 
     <Button
       size="field"
-      icon={Add}
+      icon={isCreating ? undefined : Add}
       disabled={!canCreateProject}
       on:click={handleCreate}
       kind="primary"
     >
-      {isCreating ? creationStep || 'Creating...' : m.project_name_create()}
+      {#if isCreating}
+        <div class="button-with-loader">
+          <Loading small withOverlay={false} />
+          <span>{creationStep || m.create_project_creating_status()}</span>
+        </div>
+      {:else}
+        {m.project_name_create()}
+      {/if}
     </Button>
   </div>
 </div>
@@ -243,5 +216,21 @@
 
   .relative {
     position: relative;
+  }
+
+  .button-with-loader {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .button-with-loader :global(.bx--loading) {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .button-with-loader :global(.bx--loading__svg) {
+    width: 1rem;
+    height: 1rem;
   }
 </style>

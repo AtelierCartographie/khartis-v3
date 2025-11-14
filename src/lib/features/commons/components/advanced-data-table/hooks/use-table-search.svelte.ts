@@ -3,8 +3,9 @@
  * Permet de rechercher dans toutes les colonnes et de remplacer des valeurs
  */
 
-import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../../utils/logger';
+import { debounce } from '../../../utils/debounce.utils';
 import type { TableRow } from '../types';
 
 export interface UseTableSearchProps {
@@ -116,10 +117,18 @@ export function useTableSearch(
   let currentSearchIndex = $state<number>(0);
 
   /**
-   * Définit la requête de recherche
+   * Effectue la recherche (debounced pour performance)
+   */
+  const debouncedSearch = debounce(() => {
+    performSearch();
+  }, 300);
+
+  /**
+   * Définit la requête de recherche et lance la recherche debounced
    */
   function setSearchQuery(query: string): void {
     searchQuery = query;
+    debouncedSearch();
   }
 
   /**

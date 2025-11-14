@@ -1,6 +1,7 @@
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -51,7 +52,7 @@ export class CreateProjectValidationService {
     if (urls.length === 0) {
       return {
         isValid: false,
-        errors: ['Veuillez saisir au moins une URL HTTP ou HTTPS'],
+        errors: [m.validation_url_required()],
         warnings: []
       };
     }
@@ -101,20 +102,20 @@ export class CreateProjectValidationService {
     const warnings: string[] = [];
 
     if (!name || name.trim().length === 0) {
-      errors.push('Le nom du projet est requis');
+      errors.push(m.validation_project_name_required());
     }
 
     if (name.trim().length > 100) {
-      errors.push('Le nom du projet est trop long (max 100 caractères)');
+      errors.push(m.validation_project_name_too_long());
     }
 
     const invalidChars = /[<>:"/\\|?*]/g;
     if (invalidChars.test(name)) {
-      errors.push('Le nom contient des caractères non autorisés');
+      errors.push(m.validation_project_name_invalid_chars());
     }
 
     if (name.trim().length < 3) {
-      warnings.push('Le nom du projet est très court');
+      warnings.push(m.validation_project_name_too_short());
     }
 
     return {
@@ -160,17 +161,17 @@ export class CreateProjectValidationService {
     const warnings: string[] = [];
 
     if (!text || text.trim().length === 0) {
-      errors.push('Aucune donnée collée');
+      errors.push(m.validation_pasted_data_empty());
       return { isValid: false, errors, warnings };
     }
 
     if (text.length > 10 * 1024 * 1024) {
-      errors.push('Les données collées sont trop volumineuses');
+      errors.push(m.validation_pasted_data_too_large());
     }
 
     const lines = text.split('\n').filter((line) => line.trim().length > 0);
     if (lines.length < 2) {
-      warnings.push('Peu de lignes détectées');
+      warnings.push(m.validation_pasted_data_few_lines());
     }
 
     const firstLine = lines[0];
@@ -178,7 +179,7 @@ export class CreateProjectValidationService {
     const detectedSeparator = separators.find((sep) => firstLine.includes(sep));
 
     if (!detectedSeparator) {
-      warnings.push('Aucun séparateur détecté');
+      warnings.push(m.validation_pasted_data_no_separator());
     }
 
     return {

@@ -1,4 +1,5 @@
 import type { ParsedData } from '$lib/types/data';
+import type { DatasetResult } from '$lib/features/data';
 import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
 export type ProjectTab = 1 | 2 | 3;
@@ -36,6 +37,11 @@ export interface UploadedFile {
   content?: string | ArrayBuffer;
   originalFile?: File; // Keep reference to original File object to avoid re-parsing
   parsedData?: ParsedData;
+  /**
+   * Optional normalized GeoJSON content generated during preprocessing
+   * so downstream services (DuckDB) can reuse it without re-stringifying.
+   */
+  preparedGeoJSON?: string;
   status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
   errorMessage?: string;
   validation?: FileValidation;
@@ -49,6 +55,8 @@ export interface UploadedFile {
   };
   deepAnalysis?: DataAnalysisResult;
   geoMatchResult?: Record<string, unknown>;
+  cachedDataset?: DatasetResult;
+  cachedGeoParquet?: string;
 }
 
 export interface ExampleProject {

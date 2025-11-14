@@ -77,7 +77,7 @@
       <Column>
         <Dropdown
           id="source-dropdown"
-          titleText={m.search_sources()}
+          labelText={m.search_sources()}
           bind:selectedId={selectedSource}
           items={sourceOptions}
           size="lg"

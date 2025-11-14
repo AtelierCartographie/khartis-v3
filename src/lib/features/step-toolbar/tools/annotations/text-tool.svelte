@@ -22,11 +22,11 @@
     TextUnderline,
     TrashCan
   } from 'carbon-icons-svelte';
-import {
-  annotationsActions,
-  getAnnotationsState
-} from './annotations.store.svelte';
-import { TextAlign } from '$lib/features/commons/types/enums';
+  import {
+    annotationsActions,
+    getAnnotationsState
+  } from './annotations.store.svelte';
+  import { TextAlign } from '$lib/features/commons/types/enums';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -135,7 +135,7 @@ import { TextAlign } from '$lib/features/commons/types/enums';
     <Column>
       <div class="section">
         <NumberInput
-          label={m.annotations_size()}
+          labelText={m.annotations_size()}
           value={defaultStyle.fontSize || 16}
           min={8}
           max={72}

@@ -1,8 +1,8 @@
-import { projectPersistence } from '../utils/project-persistence.utils';
 import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import { projectStore } from './project.store.svelte';
-import type { SavedProjectMetadata } from './project.types';
+import { projectRepository } from '$lib/features/project-management';
+import type { SavedProjectMetadata } from '$lib/features/project-management';
 
 interface ProjectsState {
   projects: SavedProjectMetadata[];
@@ -46,7 +46,7 @@ class ProjectsStore {
     this._state.error = undefined;
 
     try {
-      const metadata = await projectPersistence.listProjects();
+      const metadata = await projectRepository.listMetadata();
       const normalized = metadata.map((entry) => ({
         ...entry,
         createdAt: new Date(entry.createdAt),
@@ -84,7 +84,7 @@ class ProjectsStore {
     id: string,
     updates: Partial<Pick<SavedProjectMetadata, 'name' | 'description'>>
   ): Promise<SavedProjectMetadata | undefined> {
-    const project = await projectPersistence.loadProject(id);
+    const project = await projectRepository.load(id);
 
     if (!project) {
       throw new Error('Project not found');
@@ -106,7 +106,7 @@ class ProjectsStore {
     }
 
     project.manifest.updatedAt = new Date();
-    await projectPersistence.saveProject(project);
+    await projectRepository.save(project);
     await this.refresh();
 
     return this.getProjectById(id);

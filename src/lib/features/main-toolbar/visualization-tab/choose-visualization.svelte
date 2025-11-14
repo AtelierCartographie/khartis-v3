@@ -77,7 +77,7 @@
               selectedId={selectedFieldId}
               on:select={(e) => (selectedFieldId = e.detail.selectedId)}
               placeholder={m.choose_data_field_placeholder()}
-              titleText=""
+              labelText=""
               size="xl"
             />
           </div>

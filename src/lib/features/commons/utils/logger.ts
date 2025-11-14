@@ -26,7 +26,8 @@ export enum LogCategory {
   IMPORT = 'IMPORT',
   GEOLOCATION = 'GEOLOCATION',
   JOIN = 'JOIN',
-  ERROR_HANDLER = 'ERROR'
+  ERROR_HANDLER = 'ERROR',
+  SYSTEM = 'SYSTEM'
 }
 
 interface LogOptions {

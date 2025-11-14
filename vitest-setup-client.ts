@@ -14,7 +14,7 @@ Object.defineProperty(window, 'matchMedia', {
   }))
 });
 
-vi.mock('$lib/features/commons/services/duckdb-orchestrator.service', () => ({
+vi.mock('$lib/features/duckdb', () => ({
   duckDBOrchestrator: {
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),

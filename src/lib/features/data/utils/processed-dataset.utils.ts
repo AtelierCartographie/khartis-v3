@@ -1,15 +1,12 @@
-import type { DatasetResult, EnrichedColumn } from '../domain';
+import type { DatasetResult, EnrichedColumn } from '../models';
 import type { ProcessedDataset } from '../types/ProcessedDataset';
 import type {
   AnalysisResult,
   ColumnInfo,
   GeoColumnInfo
 } from '../types/AnalysisResult';
-import {
-  ColumnType,
-  isNumericType
-} from '../domain/value-objects/column-type.vo';
-import type { ColumnStats } from '../domain/value-objects/column-stats.vo';
+import { ColumnType, isNumericType } from '../models/column-type';
+import type { ColumnStats } from '../models/column-stats';
 import type {
   GeoColumnResult,
   GeoDetectionResult

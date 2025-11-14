@@ -4,13 +4,7 @@ export enum ToolbarState {
   Compact = 'compact'
 }
 
-export enum ZoomMode {
-  Map = 'map',
-  Page = 'page'
-}
-
 export interface ZoomState {
-  mode: ZoomMode;
   mapZoomLevel: number;
   pageZoomLevel: number;
   minMapZoom: number;

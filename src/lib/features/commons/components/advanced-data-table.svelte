@@ -22,17 +22,17 @@
     duckDBOrchestrator,
     RefineOperation,
     type DataTableFilter,
-    type FilterOperator
-  } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
-  import type { FilterStats } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+    type FilterOperator,
+    type FilterStats,
+    type AnalysisResult
+  } from '$lib/features/duckdb';
   import type { ProcessedDataset } from '$lib/features/data';
   import { logger, LogCategory } from '../utils/logger';
   import {
     create_summary_plot,
     type SummaryPlotData
-  } from '../services/duckdb/summary-plot';
-  import SummaryPlot from '../services/duckdb/SummaryPlot.svelte';
-  import type { AnalysisResult } from '../services/duckdb/types';
+  } from '$lib/features/duckdb/services/duckdb/summary-plot';
+  import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
   import ColumnRenameModal from './column-rename-modal.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
@@ -748,14 +748,14 @@
 
   async function loadColumnsInfo() {
     if (tableName) {
-      logger.debug('Loading columns with analysis', LogCategory.UI, {
+      logger.debug('Loading basic column info (fast)', LogCategory.UI, {
         tableName
       });
-      const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
-      logger.debug('Analysis loaded', LogCategory.UI, {
-        count: analysis.length,
-        sample: analysis[0]
+      const analysis = await duckDBOrchestrator.getBasicColumnInfo(tableName);
+      logger.debug('Basic column info loaded', LogCategory.UI, {
+        count: analysis.length
       });
+
       columns = analysis.map((a: AnalysisResult) => ({
         name: a.name,
         type: a.type_simple
@@ -821,8 +821,25 @@
       return null;
     }
 
+    const histogram = analysis.histogram as {
+      toArray?: () => unknown[];
+      numRows?: number;
+    };
+
+    if (
+      !histogram ||
+      typeof histogram.toArray !== 'function' ||
+      typeof histogram.numRows !== 'number'
+    ) {
+      return null;
+    }
+
     try {
-      const plot = create_summary_plot(analysis as SummaryPlotData, {
+      const summaryData: SummaryPlotData = {
+        ...(analysis as SummaryPlotData),
+        histogram
+      };
+      const plot = create_summary_plot(summaryData, {
         width: 150,
         height: 48,
         main_color: '#a56eff',
@@ -867,7 +884,7 @@
   });
 
   $effect(() => {
-    console.log('[AdvancedDataTable] $effect TRIGGERED', {
+    logger.debug('[AdvancedDataTable] $effect TRIGGERED', {
       hasDataset: !!dataset,
       hasTableName: !!tableName,
       datasetId: dataset?.id,
@@ -893,24 +910,24 @@
     selectAllVisible = false;
 
     if (dataset || tableName) {
-      console.log('[AdvancedDataTable] Has data source - LOADING', {
+      logger.debug('[AdvancedDataTable] Has data source - LOADING', {
         willLoadFromTable: !!tableName,
         willLoadFromDataset: !!dataset && !tableName
       });
 
       untrack(async () => {
-        console.log('[AdvancedDataTable] Starting data load...');
+        logger.debug('[AdvancedDataTable] Starting data load...');
         await loadColumnsInfo();
 
         if (tableName) {
-          console.log(
+          logger.debug(
             '[AdvancedDataTable] Getting row count from DuckDB table:',
             tableName
           );
           await refreshFiltersState();
-          console.log('[AdvancedDataTable] Row count received:', numRows);
+          logger.debug('[AdvancedDataTable] Row count received:', numRows);
         } else if (dataset) {
-          console.log(
+          logger.debug(
             '[AdvancedDataTable] Using dataset row count:',
             dataset.rowCount
           );
@@ -921,15 +938,15 @@
           };
         }
 
-        console.log(
+        logger.debug(
           '[AdvancedDataTable] Initializing rows with numRows:',
           numRows
         );
         await initializeRows(0);
-        console.log('[AdvancedDataTable] Data load complete');
+        logger.debug('[AdvancedDataTable] Data load complete');
       });
     } else {
-      console.log('[AdvancedDataTable] No data source - CLEARING DATA');
+      logger.debug('[AdvancedDataTable] No data source - CLEARING DATA');
       logger.debug(
         '[AdvancedDataTable] No data source - CLEARING DATA',
         LogCategory.UI

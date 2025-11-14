@@ -2,7 +2,7 @@
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { onMount } from 'svelte';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
-  import { duckDBOrchestrator } from '../commons/services/duckdb-orchestrator.service.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { LogCategory, logger } from '../commons/utils/logger';
   import DeckMap from './components/deck-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';

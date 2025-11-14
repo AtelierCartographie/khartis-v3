@@ -1,6 +1,6 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     InlineNotification,
@@ -134,15 +134,25 @@
         datasetId={selectedDataset.id}
       />
     {/if}
+  {/if}
 
-    {#if processedDataset}
-      <AdvancedDataTable
-        dataset={processedDataset}
-        tableName={currentDuckTable || undefined}
-        showSummaryPlots={true}
-      />
-    {/if}
+  {#if processedDataset}
+    <AdvancedDataTable
+      dataset={processedDataset}
+      tableName={currentDuckTable || undefined}
+      showSummaryPlots={true}
+    />
+  {:else}
+    <div class="empty-state">
+      <p class="empty-message">Aucune donnée chargée</p>
+      <p class="empty-help">
+        Les outils de contrôle (tableau, filtres, calculatrice) apparaîtront ici
+        après l'import de vos données.
+      </p>
+    </div>
+  {/if}
 
+  {#if selectedDataset}
     <InlineNotification
       title="Types des variables"
       subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
@@ -160,13 +170,6 @@
         hideCloseButton={false}
       />
     {/if}
-  {:else}
-    <div class="empty-state">
-      <p>
-        Aucune donnée chargée. Veuillez importer un fichier depuis l'onglet
-        précédent.
-      </p>
-    </div>
   {/if}
 </section>
 
@@ -238,7 +241,16 @@
     margin-top: var(--cds-spacing-05);
   }
 
-  .empty-state p {
+  .empty-message {
+    margin: 0 0 var(--cds-spacing-03) 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--cds-text-01);
+  }
+
+  .empty-help {
     margin: 0;
+    font-size: 0.875rem;
+    color: var(--cds-text-02);
   }
 </style>

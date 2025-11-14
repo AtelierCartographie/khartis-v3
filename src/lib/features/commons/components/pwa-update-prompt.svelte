@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { useRegisterSW } from 'virtual:pwa-register/svelte';
-  import { ToastNotification } from 'carbon-components-svelte';
   import { m } from '$lib/paraglide/messages';
+  import { ToastNotification } from 'carbon-components-svelte';
+  import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
   const UPDATE_TIMEOUT = 0;
   const OFFLINE_READY_TIMEOUT = 5000;
@@ -38,7 +38,6 @@
       kind="info"
       title={m.pwa_update_title()}
       subtitle={m.pwa_update_subtitle()}
-      caption=""
       timeout={UPDATE_TIMEOUT}
       on:close={closeUpdateNotification}
     >
