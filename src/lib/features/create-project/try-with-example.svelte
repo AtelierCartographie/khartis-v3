@@ -114,7 +114,7 @@
     <InlineNotification
       lowContrast
       kind="error"
-      title="Error:"
+      title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
     />
@@ -159,7 +159,7 @@
       {/each}
     {:else if filteredExamples.length === 0}
       <div class="no-examples">
-        <p class="text-grey">No examples available in this category</p>
+        <p class="text-grey">{m.create_project_no_examples_category()}</p>
       </div>
     {:else}
       {#each filteredExamples as example (example.id)}

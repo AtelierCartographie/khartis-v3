@@ -7,11 +7,8 @@
     globalActions,
     globalState
   } from '../../commons/store/global.svelte';
-  import { ZoomMode } from '../../commons/types/global';
 
-  let activeTabIndex: number = $derived(
-    globalState.zoom.mode === ZoomMode.Map ? 0 : 1
-  );
+  let activeTabIndex: number = $state(0);
 
   const zoomItems = [
     {
@@ -27,20 +24,31 @@
   ];
 
   function handleZoomModeChange(index: number): void {
-    const newMode = index === 0 ? ZoomMode.Map : ZoomMode.Page;
-    globalActions.setZoomMode(newMode);
+    activeTabIndex = index;
   }
 
   function handleZoomIn(): void {
-    globalActions.zoomIn();
+    if (activeTabIndex === 0) {
+      globalActions.zoomInMap();
+    } else {
+      globalActions.zoomInPage();
+    }
   }
 
   function handleZoomOut(): void {
-    globalActions.zoomOut();
+    if (activeTabIndex === 0) {
+      globalActions.zoomOutMap();
+    } else {
+      globalActions.zoomOutPage();
+    }
   }
 
   function handleResetZoom(): void {
-    globalActions.resetZoom();
+    if (activeTabIndex === 0) {
+      globalActions.resetMapZoom();
+    } else {
+      globalActions.resetPageZoom();
+    }
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
@@ -51,7 +59,7 @@
   }
 
   const displayValue = $derived(
-    globalState.zoom.mode === ZoomMode.Map
+    activeTabIndex === 0
       ? `${Math.round(globalState.zoom.mapZoomLevel)} %`
       : `${globalState.zoom.pageZoomLevel} %`
   );

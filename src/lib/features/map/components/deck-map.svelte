@@ -1,43 +1,90 @@
 <script lang="ts">
-  import { MapboxOverlay } from '@deck.gl/mapbox';
-  import type { DeckProps, Layer } from '@deck.gl/core';
+  import type { Color, DeckProps, Layer } from '@deck.gl/core';
   import { GeoJsonLayer } from '@deck.gl/layers';
+  import { MapboxOverlay } from '@deck.gl/mapbox';
   import * as geodecklayers from '@geoarrow/deck.gl-layers';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import type { FeatureCollection } from 'geojson';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { onMount } from 'svelte';
-  import { visualizationStore } from '../../commons/store/visualization.store.svelte';
+  import { onMount, onDestroy } from 'svelte';
+  import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import {
-    globalState,
-    globalActions
+    globalActions,
+    globalState
   } from '../../commons/store/global.svelte';
-  import { ZoomMode } from '../../commons/types/global';
+  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { visualizationStore } from '../../commons/store/visualization.store.svelte';
   import { hexToRgb } from '../../commons/utils/color-utils';
-  import {
-    getColorForValue,
-    getSizeForValue,
-    getCategoricalColorMap,
-    shouldApplyChoropleth,
-    shouldApplyProportionalSymbols,
-    shouldApplyCategorical
-  } from '../utils/data-styling.utils';
+  import { LogCategory, logger } from '../../commons/utils/logger';
   import {
     BASEMAP_STYLES,
     DEFAULT_BASEMAP_STYLE
   } from '../configs/basemap-styles';
   import {
+    getCategoricalColorMap,
+    getColorForValue,
+    getSizeForValue,
+    shouldApplyCategorical,
+    shouldApplyChoropleth,
+    shouldApplyProportionalSymbols
+  } from '../utils/data-styling.utils';
+  import {
     calculateBoundsFromGeoArrow,
     calculateBoundsFromGeoJSON
   } from '../utils/map-controls.utils';
-  import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
-  import { logger, LogCategory } from '../../commons/utils/logger';
-  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+  import {
+    createOSMRasterSource,
+    createOSMRasterLayer
+  } from '../services/osm-tile.service';
 
   const MAP_CENTER_STORAGE_KEY = 'khartis_map_center';
   const MAP_ZOOM_STORAGE_KEY = 'khartis_maplibre_zoom';
+
+  function withOpacity(color: number[], opacity = 1): Color {
+    const normalized = Math.min(Math.max(opacity, 0), 1);
+    const alpha = Math.round(normalized * 255);
+    const base = color.slice(0, 3);
+    if (color.length === 4) {
+      return [...base, alpha] as Color;
+    }
+    return [...base, alpha] as Color;
+  }
+
+  const GEO_TYPE_TO_EXTENSION: Record<string, string> = {
+    POINT: 'geoarrow.point',
+    MULTIPOINT: 'geoarrow.multipoint',
+    LINESTRING: 'geoarrow.linestring',
+    MULTILINESTRING: 'geoarrow.multilinestring',
+    POLYGON: 'geoarrow.polygon',
+    MULTIPOLYGON: 'geoarrow.multipolygon'
+  };
+  const GEO_EXTENSION_TO_TYPE: Record<string, string> = Object.fromEntries(
+    Object.entries(GEO_TYPE_TO_EXTENSION).map(([type, extension]) => [
+      extension,
+      type
+    ])
+  );
+
+  function areGeometryTypesCompatible(
+    metadataType: string,
+    extensionType: string
+  ): boolean {
+    if (metadataType === extensionType) return true;
+
+    const compatibilityMap: Record<string, string[]> = {
+      POINT: ['MULTIPOINT'],
+      MULTIPOINT: ['POINT'],
+      LINESTRING: ['MULTILINESTRING'],
+      MULTILINESTRING: ['LINESTRING'],
+      POLYGON: ['MULTIPOLYGON'],
+      MULTIPOLYGON: ['POLYGON']
+    };
+
+    return compatibilityMap[metadataType]?.includes(extensionType) ?? false;
+  }
 
   type DeckDataRow = Record<string, unknown>;
 
@@ -60,6 +107,7 @@
   let deckOverlay: MapboxOverlay;
   let isMapLoaded = $state(false);
   let tooltip: HTMLDivElement;
+  let lastPendingGeoTable = $state<string | null>(null);
 
   const activeVisualizations = $derived(
     visualizationStore.activeVisualizations
@@ -87,6 +135,85 @@
     return variables;
   });
 
+  // OPTIMIZATION: Memoize color conversions to avoid repeated hexToRgb calls
+  const memoizedColors = $derived.by(() => {
+    const viz = defaultVisualization;
+    if (!viz) {
+      return {
+        fill: [220, 220, 220] as [number, number, number],
+        stroke: [255, 255, 255] as [number, number, number]
+      };
+    }
+
+    return {
+      fill: viz.style.fillColor
+        ? hexToRgb(viz.style.fillColor as string)
+        : ([220, 220, 220] as [number, number, number]),
+      stroke: viz.style.strokeColor
+        ? hexToRgb(viz.style.strokeColor)
+        : ([255, 255, 255] as [number, number, number])
+    };
+  });
+
+  // OPTIMIZATION: Cache statistics to avoid repeated store queries
+  const memoizedStatistics = $derived.by(() => {
+    const viz = defaultVisualization;
+    if (!viz || !viz.mapping.sizeColumn || !datasetId) {
+      return { min: 0, max: 100 };
+    }
+
+    const stats = datasetsStore.getColumnStatistics(
+      datasetId,
+      viz.mapping.sizeColumn
+    );
+
+    if (
+      stats &&
+      'min' in stats &&
+      'max' in stats &&
+      typeof stats.min === 'number' &&
+      typeof stats.max === 'number'
+    ) {
+      return { min: stats.min, max: stats.max };
+    }
+
+    return { min: 0, max: 100 };
+  });
+
+  // OPTIMIZATION: Cache category color map to avoid recreation on every render
+  const memoizedCategoryColorMap = $derived.by(() => {
+    const viz = defaultVisualization;
+    if (!viz || !viz.mapping.categoryColumn || !datasetId) {
+      return null;
+    }
+
+    const useCategoricalColor = shouldApplyCategorical(viz);
+    if (!useCategoricalColor || !viz.classification?.colors) {
+      return null;
+    }
+
+    const categories = datasetsStore
+      .getUniqueValues(datasetId, viz.mapping.categoryColumn)
+      .map(String);
+
+    return getCategoricalColorMap(categories, viz.classification.colors);
+  });
+
+  // OPTIMIZATION: Memoize visualization config to prevent re-renders on object reference changes
+  const visualizationConfig = $derived.by(() => {
+    const viz = defaultVisualization;
+    if (!viz) return null;
+
+    return {
+      id: viz.id,
+      datasetId: viz.datasetId,
+      mapping: viz.mapping,
+      style: viz.style,
+      classification: viz.classification,
+      symbols: viz.symbols
+    };
+  });
+
   function formatValue(value: unknown): string {
     if (value === null || value === undefined) return 'N/A';
     if (typeof value === 'object') return '';
@@ -105,6 +232,59 @@
     if (tooltip) {
       tooltip.style.display = 'none';
     }
+  }
+
+  // OPTIMIZATION: Extract accessor functions to avoid closure creation on every render
+  function createCategoricalColorAccessor(
+    categoryColumn: string,
+    colorMap: Map<string, [number, number, number]> | null
+  ) {
+    return (object: DeckDataRow): [number, number, number] => {
+      const category = object[categoryColumn];
+      return colorMap?.get(String(category)) ?? [128, 128, 128];
+    };
+  }
+
+  function createProportionalSizeAccessor(
+    sizeColumn: string,
+    minValue: number,
+    maxValue: number,
+    minSize: number,
+    maxSize: number,
+    sizeScale: 'linear' | 'sqrt' | 'log'
+  ) {
+    return (object: DeckDataRow): number => {
+      const rawValue = object[sizeColumn];
+      const numericValue =
+        typeof rawValue === 'number' ? rawValue : Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return minSize;
+      }
+      return getSizeForValue(
+        numericValue,
+        minValue,
+        maxValue,
+        minSize,
+        maxSize,
+        sizeScale
+      );
+    };
+  }
+
+  function createChoroplethColorAccessor(
+    valueColumn: string,
+    breaks: number[],
+    colors: string[]
+  ) {
+    return (object: DeckDataRow): [number, number, number] => {
+      const rawValue = object[valueColumn];
+      const numericValue =
+        typeof rawValue === 'number' ? rawValue : Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return [200, 200, 200];
+      }
+      return getColorForValue(numericValue, breaks, colors);
+    };
   }
 
   function updateTooltip({ object, x, y, coordinate }: TooltipEvent) {
@@ -230,15 +410,31 @@
     // CRITICAL: Check metadata exists before accessing
     const geoMetadata = jsTable.schema.metadata?.get('geo');
 
+    const hasUserDataset = Boolean(datasetId);
+
     if (!geoMetadata) {
-      logger.error('No GeoArrow metadata in Arrow table', LogCategory.MAP, {
-        hasSchemaMetadata: !!jsTable.schema.metadata,
-        metadataKeys: jsTable.schema.metadata
-          ? Array.from(jsTable.schema.metadata.keys())
-          : [],
+      const schemaMetadata = jsTable.schema.metadata;
+      const metadataDetails = {
+        hasSchemaMetadata: !!schemaMetadata,
+        metadataKeys: schemaMetadata ? Array.from(schemaMetadata.keys()) : [],
         schemaFields: jsTable.schema.fields.map((f) => f.name),
-        numRows: jsTable.numRows
-      });
+        numRows: jsTable.numRows,
+        datasetId
+      };
+
+      if (hasUserDataset) {
+        logger.error(
+          'No GeoArrow metadata in Arrow table',
+          LogCategory.MAP,
+          metadataDetails
+        );
+      } else {
+        logger.info(
+          'No GeoArrow metadata in Arrow table',
+          LogCategory.MAP,
+          metadataDetails
+        );
+      }
 
       // Try to find geometry column manually as fallback diagnostic
       const geomColumn = jsTable.schema.fields.find(
@@ -246,9 +442,23 @@
       );
 
       if (!geomColumn) {
-        logger.error('No geometry column found in table', LogCategory.MAP);
-      } else {
+        if (hasUserDataset) {
+          logger.error('No geometry column found in table', LogCategory.MAP);
+        } else {
+          logger.debug('No geometry column found in table', LogCategory.MAP);
+        }
+      } else if (hasUserDataset) {
         logger.warn(
+          'Geometry column exists but no GeoArrow metadata',
+          LogCategory.MAP,
+          {
+            geomColumnName: geomColumn.name,
+            suggestion:
+              'Table may have come from DuckDB query instead of GeoParquetReader'
+          }
+        );
+      } else {
+        logger.info(
           'Geometry column exists but no GeoArrow metadata',
           LogCategory.MAP,
           {
@@ -266,173 +476,276 @@
       const jsonMeta = JSON.parse(geoMetadata);
       const geoColumn = jsonMeta.primary_column;
       const geometryType = jsonMeta.columns[geoColumn].geometry_types[0];
+      const normalizedGeometryType = geometryType.toUpperCase();
+      const geometryField = jsTable.schema.fields.find(
+        (field) => field.name === geoColumn
+      );
+      const arrowExtensionRaw =
+        geometryField?.metadata?.get('ARROW:extension:name') ?? null;
+      const arrowExtension = arrowExtensionRaw
+        ? arrowExtensionRaw.toLowerCase()
+        : null;
+      const expectedExtension =
+        GEO_TYPE_TO_EXTENSION[normalizedGeometryType] ?? null;
+      const extensionGeometryType = arrowExtension
+        ? GEO_EXTENSION_TO_TYPE[arrowExtension]
+        : null;
+      const hasMatchingGeoExtension =
+        arrowExtension && expectedExtension
+          ? arrowExtension === expectedExtension ||
+            (extensionGeometryType
+              ? areGeometryTypesCompatible(
+                  normalizedGeometryType,
+                  extensionGeometryType
+                )
+              : false)
+          : false;
+      const resolvedGeometryType =
+        extensionGeometryType ?? normalizedGeometryType;
+
+      if (!hasMatchingGeoExtension) {
+        if (hasUserDataset) {
+          logger.warn(
+            'GeoArrow extension metadata missing or mismatched, falling back to manual accessor',
+            LogCategory.MAP,
+            {
+              geoColumn,
+              geometryType: resolvedGeometryType,
+              arrowExtension,
+              expectedExtension
+            }
+          );
+        } else {
+          logger.info(
+            'GeoArrow extension metadata missing or mismatched, falling back to manual accessor',
+            LogCategory.MAP,
+            {
+              geoColumn,
+              geometryType: resolvedGeometryType,
+              arrowExtension,
+              expectedExtension
+            }
+          );
+        }
+      }
 
       logger.info('Creating deck layers', LogCategory.MAP, {
         geoColumn,
-        geometryType,
+        geometryType: resolvedGeometryType,
         rowCount: jsTable.numRows,
         hasVisualization: !!defaultVisualization
       });
 
       const viz = defaultVisualization;
-      const fillColor: [number, number, number] = viz?.style.fillColor
-        ? hexToRgb(viz.style.fillColor as string)
-        : [220, 220, 220];
-      const strokeColor: [number, number, number] = viz?.style.strokeColor
-        ? hexToRgb(viz.style.strokeColor)
-        : [255, 255, 255];
+      // OPTIMIZATION: Use memoized colors instead of converting on every call
+      const fillColor = memoizedColors.fill;
+      const strokeColor = memoizedColors.stroke;
       const fillOpacity: number = viz?.style.fillOpacity ?? 0.6;
       const strokeWidth: number = viz?.style.strokeWidth ?? 1;
       const strokeOpacity: number = viz?.style.strokeOpacity ?? 1;
 
       let deckLayer: Layer<DeckDataRow>;
-      switch (geometryType.toUpperCase()) {
+      switch (resolvedGeometryType) {
         case 'POINT':
 
         // fallthrough
         case 'MULTIPOINT': {
-          const pointChild = jsTable.getChild(geoColumn);
-          if (!pointChild) return [];
+          const pointVector = hasMatchingGeoExtension
+            ? null
+            : jsTable.getChild(geoColumn);
+          if (!hasMatchingGeoExtension && !pointVector) {
+            logger.error(
+              'Geometry column vector missing for point layer',
+              LogCategory.MAP,
+              { geoColumn }
+            );
+            return [];
+          }
 
           const useProportionalSymbols =
             viz && shouldApplyProportionalSymbols(viz);
           const useCategoricalColor = viz && shouldApplyCategorical(viz);
 
-          let minValue = 0;
-          let maxValue = 100;
-          let categoryColorMap: Map<string, [number, number, number]> | null =
-            null;
+          // OPTIMIZATION: Use memoized statistics instead of querying store
+          const minValue = memoizedStatistics.min;
+          const maxValue = memoizedStatistics.max;
 
-          if (useProportionalSymbols && viz.mapping.sizeColumn && datasetId) {
-            const stats = datasetsStore.getColumnStatistics(
-              datasetId,
-              viz.mapping.sizeColumn
-            );
-            if (
-              stats &&
-              'min' in stats &&
-              'max' in stats &&
-              typeof stats.min === 'number' &&
-              typeof stats.max === 'number'
-            ) {
-              minValue = stats.min;
-              maxValue = stats.max;
-            }
-          }
+          // OPTIMIZATION: Use memoized category color map
+          const categoryColorMap = memoizedCategoryColorMap;
 
-          if (useCategoricalColor && viz.mapping.categoryColumn && datasetId) {
-            const categories = datasetsStore
-              .getUniqueValues(datasetId, viz.mapping.categoryColumn)
-              .map(String);
-            categoryColorMap = getCategoricalColorMap(
-              categories,
-              viz.classification!.colors!
-            );
-          }
+          // OPTIMIZATION: Use stable, deterministic layer ID for proper updates
+          const layerId = `point-layer-${datasetId ?? 'default'}`;
 
-          deckLayer = new geodecklayers.GeoArrowScatterplotLayer({
-            id: 'point-layer',
+          const scatterplotProps: ConstructorParameters<
+            typeof geodecklayers.GeoArrowScatterplotLayer
+          >[0] = {
+            id: layerId,
             data: jsTable,
-            getPosition: pointChild,
             stroked: true,
+            // OPTIMIZATION: Use extracted accessor functions
             getFillColor: useCategoricalColor
-              ? (object: DeckDataRow) => {
-                  const category = object[viz.mapping.categoryColumn!];
-                  return (
-                    categoryColorMap?.get(String(category)) ?? [128, 128, 128]
-                  );
-                }
+              ? createCategoricalColorAccessor(
+                  viz.mapping.categoryColumn!,
+                  categoryColorMap
+                )
               : fillColor,
-            getLineColor: strokeColor,
+            getLineColor: withOpacity(strokeColor, strokeOpacity),
             opacity: fillOpacity,
-            lineOpacity: strokeOpacity,
             getRadius: useProportionalSymbols
-              ? (object: DeckDataRow) => {
-                  const rawValue = object[viz.mapping.sizeColumn!];
-                  const numericValue =
-                    typeof rawValue === 'number' ? rawValue : Number(rawValue);
-                  if (!Number.isFinite(numericValue)) {
-                    return viz.symbols!.minSize;
-                  }
-                  return getSizeForValue(
-                    numericValue,
-                    minValue,
-                    maxValue,
-                    viz.symbols!.minSize,
-                    viz.symbols!.maxSize,
-                    viz.symbols!.sizeScale
-                  );
-                }
+              ? createProportionalSizeAccessor(
+                  viz.mapping.sizeColumn!,
+                  minValue,
+                  maxValue,
+                  viz.symbols!.minSize,
+                  viz.symbols!.maxSize,
+                  viz.symbols!.sizeScale
+                )
               : 1,
             radiusScale: useProportionalSymbols ? 1 : 5,
             radiusUnits: 'pixels',
             lineWidthUnits: 'pixels',
             lineWidthScale: strokeWidth / 3,
-            lineCapRounded: true,
             pickable: true,
-            autoHighlight: true
-          });
+            autoHighlight: true,
+            // OPTIMIZATION: Add updateTriggers to tell Deck.gl when to recompute accessors
+            updateTriggers: {
+              getFillColor: [
+                useCategoricalColor,
+                viz?.mapping.categoryColumn,
+                categoryColorMap,
+                fillColor
+              ],
+              getRadius: [
+                useProportionalSymbols,
+                viz?.mapping.sizeColumn,
+                minValue,
+                maxValue,
+                viz?.symbols?.minSize,
+                viz?.symbols?.maxSize,
+                viz?.symbols?.sizeScale
+              ],
+              getLineColor: [strokeColor, strokeOpacity]
+            }
+          };
+
+          if (pointVector) {
+            scatterplotProps.getPosition = pointVector;
+          }
+
+          deckLayer = new geodecklayers.GeoArrowScatterplotLayer(
+            scatterplotProps
+          );
           break;
         }
 
         case 'LINESTRING':
 
         // fallthrough
-        case 'MULTILINESTRING':
-          deckLayer = new geodecklayers.GeoArrowPathLayer({
-            id: 'line-layer',
+        case 'MULTILINESTRING': {
+          const pathVector = hasMatchingGeoExtension
+            ? null
+            : jsTable.getChild(geoColumn);
+          if (!hasMatchingGeoExtension && !pathVector) {
+            logger.error(
+              'Geometry column vector missing for path layer',
+              LogCategory.MAP,
+              { geoColumn }
+            );
+            return [];
+          }
+
+          // OPTIMIZATION: Use stable, deterministic layer ID
+          const layerId = `line-layer-${datasetId ?? 'default'}`;
+
+          const pathProps: ConstructorParameters<
+            typeof geodecklayers.GeoArrowPathLayer
+          >[0] = {
+            id: layerId,
             data: jsTable,
             getColor: fillColor,
             opacity: fillOpacity,
             getWidth: strokeWidth,
-            lineWidthUnits: 'pixels',
-            lineWidthScale: 1 / 4,
-            lineCapRounded: true,
+            widthUnits: 'pixels',
+            widthScale: 1 / 4,
+            capRounded: true,
             pickable: true,
-            autoHighlight: true
-          });
+            autoHighlight: true,
+            // OPTIMIZATION: Add updateTriggers
+            updateTriggers: {
+              getColor: [fillColor],
+              getWidth: [strokeWidth]
+            }
+          };
+
+          if (pathVector) {
+            pathProps.getPath = pathVector;
+          }
+
+          deckLayer = new geodecklayers.GeoArrowPathLayer(pathProps);
           break;
+        }
 
         case 'POLYGON':
 
         // fallthrough
         case 'MULTIPOLYGON': {
-          const polygonChild = jsTable.getChild(geoColumn);
-          if (!polygonChild) return [];
+          const polygonVector = hasMatchingGeoExtension
+            ? null
+            : jsTable.getChild(geoColumn);
+          if (!hasMatchingGeoExtension && !polygonVector) {
+            logger.error(
+              'Geometry column vector missing for polygon layer',
+              LogCategory.MAP,
+              { geoColumn }
+            );
+            return [];
+          }
 
           const useChoropleth = viz && shouldApplyChoropleth(viz);
 
-          deckLayer = new geodecklayers.GeoArrowPolygonLayer({
-            id: 'polygon-layer',
+          // OPTIMIZATION: Use stable, deterministic layer ID
+          const layerId = `polygon-layer-${datasetId ?? 'default'}`;
+
+          const polygonProps: ConstructorParameters<
+            typeof geodecklayers.GeoArrowPolygonLayer
+          >[0] = {
+            id: layerId,
             data: jsTable,
-            getPolygon: polygonChild,
+            // OPTIMIZATION: Use extracted accessor function
             getFillColor: useChoropleth
-              ? (object: DeckDataRow) => {
-                  const rawValue = object[viz.mapping.valueColumn!];
-                  const numericValue =
-                    typeof rawValue === 'number' ? rawValue : Number(rawValue);
-                  if (!Number.isFinite(numericValue)) {
-                    return [200, 200, 200];
-                  }
-                  return getColorForValue(
-                    numericValue,
-                    viz.classification!.breaks!,
-                    viz.classification!.colors!
-                  );
-                }
+              ? createChoroplethColorAccessor(
+                  viz.mapping.valueColumn!,
+                  viz.classification!.breaks!,
+                  viz.classification!.colors!
+                )
               : fillColor,
-            getLineColor: strokeColor,
+            getLineColor: withOpacity(strokeColor, strokeOpacity),
             opacity: fillOpacity,
-            lineOpacity: strokeOpacity,
             lineWidthUnits: 'pixels',
             lineWidthScale: strokeWidth / 4,
-            lineCapRounded: true,
             pickable: true,
             autoHighlight: true,
+            // OPTIMIZATION: Add updateTriggers
+            updateTriggers: {
+              getFillColor: [
+                useChoropleth,
+                viz?.mapping.valueColumn,
+                viz?.classification?.breaks,
+                viz?.classification?.colors,
+                fillColor
+              ],
+              getLineColor: [strokeColor, strokeOpacity]
+            },
             onHover: (pickingInfo, _event) => {
               handleDeckHover(pickingInfo);
             }
-          });
+          };
+
+          if (polygonVector) {
+            polygonProps.getPolygon = polygonVector;
+          }
+
+          deckLayer = new geodecklayers.GeoArrowPolygonLayer(polygonProps);
           break;
         }
 
@@ -451,12 +764,9 @@
     geojson: FeatureCollection
   ): Layer<DeckDataRow>[] {
     const viz = defaultVisualization;
-    const fillColor: [number, number, number] = viz?.style.fillColor
-      ? hexToRgb(viz.style.fillColor as string)
-      : [220, 220, 220];
-    const strokeColor: [number, number, number] = viz?.style.strokeColor
-      ? hexToRgb(viz.style.strokeColor)
-      : [255, 255, 255];
+    // OPTIMIZATION: Use memoized colors instead of converting on every call
+    const fillColor = memoizedColors.fill;
+    const strokeColor = memoizedColors.stroke;
     const fillOpacity: number = (viz?.style.fillOpacity ?? 0.6) * 255;
     const strokeWidth: number = viz?.style.strokeWidth ?? 1;
 
@@ -475,6 +785,12 @@
       lineWidthMinPixels: strokeWidth,
       pickable: true,
       autoHighlight: true,
+      // OPTIMIZATION: Add updateTriggers
+      updateTriggers: {
+        getFillColor: [fillColor, fillOpacity],
+        getLineColor: [strokeColor],
+        getLineWidth: [strokeWidth]
+      },
       onHover: (pickingInfo, _event) => {
         handleDeckHover(pickingInfo);
       }
@@ -488,7 +804,7 @@
     geojson: FeatureCollection | null
   ): void {
     if (!deckOverlay || !isMapLoaded) {
-      logger.warn(
+      logger.debug(
         'Cannot update layers: deckOverlay or map not ready',
         LogCategory.MAP,
         {
@@ -507,6 +823,22 @@
         featureCount: geojson.features.length
       });
     } else if (jsTable) {
+      const hasGeoMetadata = !!jsTable.schema.metadata?.get('geo');
+      if (!hasGeoMetadata) {
+        if (lastPendingGeoTable !== datasetId) {
+          logger.info(
+            'Waiting for GeoArrow metadata before rendering dataset',
+            LogCategory.MAP,
+            {
+              datasetId
+            }
+          );
+          lastPendingGeoTable = datasetId ?? null;
+        }
+        return;
+      }
+      lastPendingGeoTable = null;
+
       layers = createDeckLayers(jsTable);
       logger.info('Updating map with Arrow layers', LogCategory.MAP, {
         layerCount: layers.length,
@@ -571,15 +903,13 @@
 
   function syncZoomToMap(): void {
     if (!map || !isMapLoaded || isZoomSyncing) return;
-    if (globalState.zoom.mode === ZoomMode.Map) {
-      isZoomSyncing = true;
-      const zoomPercent = globalState.zoom.mapZoomLevel;
-      const mapLibreZoom = baseZoomLevel + Math.log2(zoomPercent / 100) * 2;
-      map.setZoom(mapLibreZoom);
-      setTimeout(() => {
-        isZoomSyncing = false;
-      }, 100);
-    }
+    isZoomSyncing = true;
+    const zoomPercent = globalState.zoom.mapZoomLevel;
+    const mapLibreZoom = baseZoomLevel + Math.log2(zoomPercent / 100) * 2;
+    map.setZoom(mapLibreZoom);
+    setTimeout(() => {
+      isZoomSyncing = false;
+    }, 100);
   }
 
   function syncBasemapStyle(): void {
@@ -598,7 +928,13 @@
 
   let lastFitTable = $state<ArrowTable | null>(null);
   $effect(() => {
-    if (jsTable && isMapLoaded && map && lastFitTable !== jsTable) {
+    if (
+      jsTable &&
+      jsTable.schema.metadata?.get('geo') &&
+      isMapLoaded &&
+      map &&
+      lastFitTable !== jsTable
+    ) {
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoArrow(jsTable);
       if (bounds) {
@@ -653,6 +989,43 @@
     syncBasemapStyle();
   });
 
+  // OSM raster layer effect
+  $effect(() => {
+    const osmBasemap = osmBasemapStore.activeOSMBasemap;
+    const tileConfig = osmBasemapStore.tileConfig;
+
+    if (isMapLoaded && map) {
+      const OSM_SOURCE_ID = 'osm-raster-source';
+      const OSM_LAYER_ID = 'osm-raster-layer';
+
+      // Remove existing OSM layer and source if present
+      if (map.getLayer(OSM_LAYER_ID)) {
+        map.removeLayer(OSM_LAYER_ID);
+        logger.info('Removed existing OSM layer', LogCategory.MAP);
+      }
+      if (map.getSource(OSM_SOURCE_ID)) {
+        map.removeSource(OSM_SOURCE_ID);
+        logger.info('Removed existing OSM source', LogCategory.MAP);
+      }
+
+      // Add new OSM raster layer if active
+      if (osmBasemap && tileConfig) {
+        logger.info('Adding OSM raster layer', LogCategory.MAP, {
+          basemap: osmBasemap.title,
+          urlTemplate: tileConfig.urlTemplate
+        });
+
+        const rasterSource = createOSMRasterSource(tileConfig);
+        const rasterLayer = createOSMRasterLayer(OSM_SOURCE_ID);
+
+        map.addSource(OSM_SOURCE_ID, rasterSource);
+        map.addLayer(rasterLayer);
+
+        logger.success('OSM raster layer added successfully', LogCategory.MAP);
+      }
+    }
+  });
+
   onMount(() => {
     tooltip = document.createElement('div');
     tooltip.style.position = 'absolute';
@@ -681,7 +1054,7 @@
       pitch: 0,
       bearing: 0,
       interactive: true,
-      scrollZoom: true,
+      scrollZoom: false,
       dragPan: true,
       dragRotate: false,
       doubleClickZoom: true,
@@ -718,7 +1091,7 @@
     });
 
     map.on('zoom', () => {
-      if (map && globalState.zoom.mode === ZoomMode.Map && !isZoomSyncing) {
+      if (map && !isZoomSyncing) {
         const mapLibreZoom = map.getZoom();
         const zoomPercent =
           100 * Math.pow(2, (mapLibreZoom - baseZoomLevel) / 2);

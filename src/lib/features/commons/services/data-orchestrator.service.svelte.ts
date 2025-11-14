@@ -1,36 +1,69 @@
-import { projectStore } from '../store/project.store.svelte';
-import { datasetsStore } from '../store/datasets.store.svelte';
+import type { DatasetResult } from '$lib/features/data';
+import { ColumnType } from '$lib/features/data';
+import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data/adapters/parsers/geojson.parser';
+import { convertKMLFileToGeoJSON } from '$lib/features/data/adapters/parsers/kml.parser';
+import { geoParquetReader } from '$lib/features/data/adapters/readers/GeoParquetReader';
 import {
-  visualizationStore,
-  VisualizationType,
-  type VisualizationConfig
-} from '../store/visualization.store.svelte';
-import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
-import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
-import type { UploadedFile } from '../store/create-project.types';
-import { FileType } from '../store/create-project.types';
-import { showError, showWarning } from '../utils/notification.utils.svelte';
-import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
-import { logger, LogCategory } from '../utils/logger';
+  duckDBOrchestrator,
+  insertArrowTableIntoDuckDB
+} from '$lib/features/duckdb';
 import {
   getParsedDataLength,
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
-import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data/infrastructure/parsers/geojson.parser';
+import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
+import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
   DataValidationError,
-  isFatalError,
   formatError,
+  isFatalError,
   ParseError
 } from '../errors/pipeline.errors';
-import { ColumnType } from '$lib/features/data/domain';
-import { convertKMLFileToGeoJSON } from '$lib/features/data/infrastructure/parsers/kml.parser';
+import type { UploadedFile } from '../store/create-project.types';
+import { FileType } from '../store/create-project.types';
+import { datasetsStore } from '../store/datasets.store.svelte';
+import { projectStore } from '../store/project.store.svelte';
+import {
+  visualizationStore,
+  VisualizationType,
+  type VisualizationConfig
+} from '../store/visualization.store.svelte';
+import { createDatasetCacheSnapshot } from '../utils/dataset-cache.utils';
+import { LogCategory, logger } from '../utils/logger';
+import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { importRollbackService } from './import-rollback.service';
-import type { DatasetResult } from '$lib/features/data';
+
+function bufferToBase64(buffer: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < buffer.byteLength; i += chunkSize) {
+    const chunk = buffer.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function cloneDataset<T>(value: T): T {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
 
 class DataOrchestratorService {
   private _geometryDatasetsVersion = $state(0);
+
+  private pendingRestores = new Set<string>();
 
   async initialize(): Promise<void> {
     await projectStore.waitForInit();
@@ -43,6 +76,11 @@ class DataOrchestratorService {
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
+    const endTiming = logger.startTiming(
+      `onFileAdded:${file.name}`,
+      LogCategory.DATA
+    );
+    const start = performance.now();
     logger.info('Processing file', LogCategory.DATA, {
       name: file.name,
       id: file.id,
@@ -54,14 +92,18 @@ class DataOrchestratorService {
 
     // Create snapshot BEFORE any changes for potential rollback
     const snapshot = importRollbackService.createSnapshot(file);
+    const pipelineStart = performance.now();
 
     try {
-      await datasetsStore.addFile(file);
+      const dataset = await datasetsStore.addFile(file);
+      logger.debug('datasetsStore.addFile resolved', LogCategory.DATA, {
+        fileId: file.id,
+        durationMs: (performance.now() - pipelineStart).toFixed(2)
+      });
       logger.info('File processed via datasetsStore', LogCategory.DATA);
 
-      const dataset = datasetsStore.getDatasetBySourceFile(file.id);
       if (!dataset) {
-        logger.warn('Dataset not found after processing', LogCategory.DATA, {
+        logger.error('Dataset not found after processing', LogCategory.DATA, {
           fileId: file.id
         });
         return;
@@ -75,10 +117,16 @@ class DataOrchestratorService {
         columnCount: dataset.columns.length
       });
 
+      const duckStart = performance.now();
       await this.processFileInDuckDB(file, dataset);
+      logger.debug('processFileInDuckDB finished', LogCategory.DATA, {
+        fileId: file.id,
+        durationMs: (performance.now() - duckStart).toFixed(2)
+      });
 
       // Mark file as processed to prevent reprocessing
       this.processedFileIds.add(file.id);
+      await this.cacheDatasetArtifacts(file, dataset);
       logger.debug('File marked as processed', LogCategory.DATA, {
         fileId: file.id,
         totalProcessedFiles: this.processedFileIds.size
@@ -149,8 +197,15 @@ class DataOrchestratorService {
 
       // Re-throw only fatal errors to stop further processing
       if (isFatalError(error)) {
+        endTiming();
         throw error;
       }
+    } finally {
+      logger.debug('onFileAdded duration', LogCategory.DATA, {
+        fileId: file.id,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+      endTiming();
     }
   }
 
@@ -225,7 +280,7 @@ class DataOrchestratorService {
    */
   private async cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
-      const { Duck } = await import('./duckdb/duckdb');
+      const { Duck } = await import('$lib/features/duckdb');
 
       if (!Duck) {
         logger.warn(
@@ -362,6 +417,19 @@ class DataOrchestratorService {
       return null;
     }
 
+    if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) {
+      logger.info(
+        'Dataset already includes DuckDB geo table, skipping conversion',
+        LogCategory.DUCKDB,
+        {
+          fileId: file.id,
+          datasetId: dataset.id,
+          tableName: dataset.tableName
+        }
+      );
+      return null;
+    }
+
     if (file.fileType === FileType.SHAPEFILE) {
       return await this.convertShapefileForDuckDB(file);
     }
@@ -371,6 +439,123 @@ class DataOrchestratorService {
     }
 
     return file;
+  }
+
+  private canRestoreFromCache(file: UploadedFile): boolean {
+    return !!file.cachedDataset && !!file.cachedGeoParquet;
+  }
+
+  private async cacheDatasetArtifacts(
+    file: UploadedFile,
+    dataset: DatasetResult
+  ): Promise<void> {
+    if (!dataset.tableName) {
+      return;
+    }
+    const start = performance.now();
+    const hadCacheBefore = !!file.cachedGeoParquet;
+
+    logger.info('📦 Starting cache creation', LogCategory.DATA, {
+      fileId: file.id,
+      fileName: file.name,
+      datasetId: dataset.id,
+      tableName: dataset.tableName,
+      hadCacheBefore
+    });
+
+    try {
+      const buffer = await duckDBOrchestrator.exportTableToGeoParquet(
+        dataset.tableName
+      );
+      file.cachedGeoParquet = bufferToBase64(buffer);
+      file.cachedDataset = createDatasetCacheSnapshot(dataset);
+
+      logger.success(
+        '✅ Cache created successfully',
+        LogCategory.DATA,
+        {
+          fileId: file.id,
+          fileName: file.name,
+          datasetId: dataset.id,
+          tableName: dataset.tableName,
+          cacheSize: file.cachedGeoParquet.length,
+          hasCacheNow: !!file.cachedGeoParquet,
+          hasCachedDataset: !!file.cachedDataset,
+          canRestoreNow: this.canRestoreFromCache(file)
+        }
+      );
+    } catch (error) {
+      logger.warn('Failed to cache dataset artifacts', LogCategory.DATA, error);
+    } finally {
+      logger.debug('cacheDatasetArtifacts duration', LogCategory.DATA, {
+        fileId: file.id,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    }
+  }
+
+  private async restoreDatasetFromCache(file: UploadedFile): Promise<void> {
+    if (!this.canRestoreFromCache(file) || this.pendingRestores.has(file.id)) {
+      return;
+    }
+
+    this.pendingRestores.add(file.id);
+    const start = performance.now();
+
+    try {
+      const cachedDataset = cloneDataset(file.cachedDataset!);
+      const parquetBytes = base64ToUint8Array(file.cachedGeoParquet!);
+      const arrowTable = await geoParquetReader.readGeoParquet(parquetBytes);
+
+      const tableName =
+        cachedDataset.tableName ??
+        `cached_${file.name.replace(/[^a-z0-9_]/gi, '_')}_${crypto.randomUUID()}`;
+
+      await insertArrowTableIntoDuckDB(arrowTable, tableName);
+
+      await duckDBOrchestrator.registerExistingTable(
+        tableName,
+        file.id,
+        file.name,
+        {
+          geoDetection: file.deepAnalysis?.geoDetection
+        }
+      );
+
+      cachedDataset.tableName = tableName;
+      cachedDataset.sourceFileId = file.id;
+
+      datasetsStore.addProcessedDataset(cachedDataset);
+      this.processedFileIds.add(file.id);
+
+      if (cachedDataset.geometry) {
+        this._geometryDatasetsVersion++;
+        projectionActions.suggestProjectionForCurrentData();
+      }
+
+      const existingVisualizations =
+        visualizationStore.getVisualizationsByDataset(cachedDataset.id);
+      if (existingVisualizations.length === 0) {
+        this.createDefaultVisualization(cachedDataset.id);
+      }
+
+      layersActions.syncWithVisualizations();
+      logger.info('Dataset restored from cached GeoParquet', LogCategory.DATA, {
+        datasetId: cachedDataset.id,
+        tableName,
+        rowCount: cachedDataset.rowCount,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      logger.error(
+        'Failed to restore dataset from cache',
+        LogCategory.DATA,
+        error
+      );
+      throw error;
+    } finally {
+      this.pendingRestores.delete(file.id);
+    }
   }
 
   private async convertShapefileForDuckDB(
@@ -402,7 +587,8 @@ class DataOrchestratorService {
       );
     }
 
-    const geojsonString = JSON.stringify(geojsonObject);
+    const geojsonString = file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
+    file.preparedGeoJSON = geojsonString;
 
     const hasFeatures = (
       value: unknown
@@ -433,6 +619,7 @@ class DataOrchestratorService {
       type: 'application/geo+json',
       fileType: FileType.GEOJSON,
       content: geojsonString,
+      preparedGeoJSON: geojsonString,
       parsedData: geojsonObject as UploadedFile['parsedData']
     };
   }
@@ -451,7 +638,9 @@ class DataOrchestratorService {
         geojsonObject = await convertKMLFileToGeoJSON(sourceFile);
       }
 
-      const geojsonString = JSON.stringify(geojsonObject);
+      const geojsonString =
+        file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
+      file.preparedGeoJSON = geojsonString;
       const normalizedName = file.name.replace(/\.(kml|kmz)$/i, '.geojson');
       const parsedGeoJSON =
         geojsonObject as unknown as GeoJSONFeatureCollection;
@@ -462,6 +651,7 @@ class DataOrchestratorService {
         type: 'application/geo+json',
         fileType: FileType.GEOJSON,
         content: geojsonString,
+        preparedGeoJSON: geojsonString,
         parsedData: parsedGeoJSON
       };
     } catch (error) {
@@ -503,6 +693,7 @@ class DataOrchestratorService {
     file: UploadedFile,
     datasetOverride?: DatasetResult
   ): Promise<void> {
+    const start = performance.now();
     const dataset =
       datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
 
@@ -517,6 +708,11 @@ class DataOrchestratorService {
       );
       return;
     }
+    logger.debug('processFileInDuckDB start', LogCategory.DUCKDB, {
+      fileId: file.id,
+      datasetId: dataset.id,
+      tableName: dataset.tableName
+    });
 
     const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
 
@@ -536,7 +732,13 @@ class DataOrchestratorService {
         }
       );
       try {
-        await duckDBOrchestrator.processFile(duckDBFile);
+        const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
+        if (duckResult && dataset) {
+          datasetsStore.updateDatasetTableName(
+            dataset.id,
+            duckResult.tableName
+          );
+        }
       } catch (error) {
         logger.error(
           'Failed to process Geo file via DuckDB orchestrator',
@@ -587,6 +789,11 @@ class DataOrchestratorService {
         datasetName: dataset.name
       });
     }
+
+    logger.debug('processFileInDuckDB complete', LogCategory.DUCKDB, {
+      fileId: file.id,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async onProjectChanged(): Promise<void> {
@@ -594,6 +801,7 @@ class DataOrchestratorService {
       'Project changed',
       LogCategory.PROJECT
     );
+    const start = performance.now();
 
     logger.info('Project change initiated', LogCategory.PROJECT);
 
@@ -615,7 +823,9 @@ class DataOrchestratorService {
     }
 
     endTiming();
-    logger.success('Project change complete', LogCategory.PROJECT);
+    logger.success('Project change complete', LogCategory.PROJECT, {
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   private processedFileIds = new Set<string>();
@@ -656,11 +866,14 @@ class DataOrchestratorService {
       'Process project files',
       LogCategory.PROJECT
     );
+    const start = performance.now();
 
     logger.info('Processing project files', LogCategory.PROJECT, {
       fileCount: files.length,
       processedFileIds: Array.from(this.processedFileIds),
-      processingFiles: Array.from(this.processingFiles)
+      processingFiles: Array.from(this.processingFiles),
+      filesWithCache: files.filter(f => f.cachedGeoParquet).length,
+      filesWithCacheIds: files.filter(f => f.cachedGeoParquet).map(f => ({ id: f.id, name: f.name }))
     });
 
     // Filter out files that are already processed OR currently being processed
@@ -668,8 +881,25 @@ class DataOrchestratorService {
       (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
 
+    logger.info('📊 Unprocessed files analysis', LogCategory.PROJECT, {
+      totalFiles: files.length,
+      unprocessedCount: unprocessedFiles.length,
+      unprocessedIds: unprocessedFiles.map(f => f.id),
+      unprocessedWithCache: unprocessedFiles.filter(f => f.cachedGeoParquet).length,
+      unprocessedNames: unprocessedFiles.map(f => f.name),
+      canRestoreFromCache: unprocessedFiles.map(f => ({
+        name: f.name,
+        hasCache: this.canRestoreFromCache(f),
+        hasCachedGeoParquet: !!f.cachedGeoParquet,
+        hasCachedDataset: !!f.cachedDataset
+      }))
+    });
+
     if (unprocessedFiles.length === 0) {
-      logger.info('All files already processed, skipping', LogCategory.PROJECT);
+      logger.info('All files already processed, skipping', LogCategory.PROJECT, {
+        allFilesHaveCache: files.every(f => f.cachedGeoParquet),
+        anyFileHasCache: files.some(f => f.cachedGeoParquet)
+      });
       return;
     }
 
@@ -682,169 +912,120 @@ class DataOrchestratorService {
     });
 
     try {
-      // Yield to event loop to avoid blocking UI
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const streamingStart = performance.now();
+      const concurrency = this.determineProjectConcurrency();
 
-      logger.info('Processing via datasetsStore', LogCategory.DATA);
-      const datasetsStart = performance.now();
-      await datasetsStore.processFiles(unprocessedFiles);
-      const datasetsDuration = performance.now() - datasetsStart;
-
-      logger.success('DatasetsStore processing complete', LogCategory.DATA, {
-        duration: `${datasetsDuration.toFixed(2)}ms`
-      });
-
-      // Process DuckDB files with limited concurrency (max 3 concurrent)
-      logger.info('Starting DuckDB processing', LogCategory.DUCKDB);
-      const duckStart = performance.now();
-      const validFiles = unprocessedFiles.filter(
-        (file) => file.status === 'complete' && file.parsedData
+      logger.info(
+        'Processing project files with streaming pipeline',
+        LogCategory.PROJECT,
+        {
+          fileCount: unprocessedFiles.length,
+          maxConcurrent: concurrency
+        }
       );
-      logger.info('Files ready for DuckDB', LogCategory.DUCKDB, {
-        count: validFiles.length,
-        maxConcurrent: 3
-      });
 
-      // Process with limited concurrency to prevent memory/CPU saturation
       await this.processWithLimit(
-        validFiles,
-        3, // Max 3 concurrent files
+        unprocessedFiles,
+        concurrency,
         async (file, index, total) => {
-          const fileStart = performance.now();
-          logger.info('Processing file in DuckDB', LogCategory.DUCKDB, {
-            progress: `${index + 1}/${total}`,
+          const progress = `${index + 1}/${total}`;
+          logger.info('Processing project file', LogCategory.PROJECT, {
+            progress,
             fileName: file.name
           });
 
-          // Create snapshot for potential rollback
-          const snapshot = importRollbackService.createSnapshot(file);
-
-          // Yield to event loop between each file
-          await new Promise((resolve) => setTimeout(resolve, 0));
-
+          let processedSuccessfully = false;
+          const fileStart = performance.now();
           try {
-            const processStart = performance.now();
-            await this.processFileInDuckDB(file);
-            const processDuration = performance.now() - processStart;
-
-            logger.success('File processed in DuckDB', LogCategory.DUCKDB, {
-              progress: `${index + 1}/${total}`,
-              fileName: file.name,
-              duration: `${processDuration.toFixed(2)}ms`
-            });
-
-            if (processDuration > 3000) {
-              logger.warn('Slow DuckDB file processing', LogCategory.DUCKDB, {
-                fileName: file.name,
-                duration: `${processDuration.toFixed(2)}ms`
-              });
-            }
-
-            // Mark file as processed AND remove from processing
-            this.processedFileIds.add(file.id);
-            this.processingFiles.delete(file.id);
-          } catch (error) {
-            const errorDuration = performance.now() - fileStart;
-            logger.error(
-              'File processing failed in DuckDB',
-              LogCategory.DUCKDB,
-              {
-                progress: `${index + 1}/${total}`,
-                fileName: file.name,
-                duration: `${errorDuration.toFixed(2)}ms`,
-                error: error instanceof Error ? error.message : 'Unknown error'
-              }
-            );
-
-            // Log error with context
-            logger.error(
-              'File processing failed during project load',
-              LogCategory.DUCKDB,
-              formatError(error)
-            );
-
-            // Remove from processing on error
-            this.processingFiles.delete(file.id);
-
-            // Check if error is fatal
-            if (isFatalError(error)) {
-              logger.warn(
-                'Fatal error during project file load, initiating rollback',
-                LogCategory.DATA,
-                {
-                  fileId: file.id,
-                  fileName: file.name
-                }
-              );
-
-              // Rollback this specific file
-              await importRollbackService.rollback(snapshot);
-
-              // Show error notification
-              showError(
-                `Erreur lors du chargement de ${file.name}`,
-                error instanceof Error ? error.message : 'Erreur inconnue'
-              );
-            } else {
-              // Non-fatal: log warning but continue
+            if (this.canRestoreFromCache(file)) {
               logger.info(
-                'Non-fatal error during project file load, continuing',
-                LogCategory.DATA,
+                'Restoring dataset from cached artifacts',
+                LogCategory.PROJECT,
+                { fileId: file.id, fileName: file.name }
+              );
+              await this.restoreDatasetFromCache(file);
+            } else {
+              await this.onFileAdded(file);
+            }
+            processedSuccessfully = true;
+          } catch (error) {
+            if (this.canRestoreFromCache(file)) {
+              logger.warn(
+                'Cached restore failed, falling back to full import',
+                LogCategory.PROJECT,
+                { fileId: file.id, error }
+              );
+              await this.onFileAdded(file);
+              processedSuccessfully = true;
+            } else {
+              logger.error(
+                'Project file processing failed',
+                LogCategory.PROJECT,
                 {
-                  fileId: file.id,
-                  fileName: file.name
+                  progress,
+                  fileName: file.name,
+                  error:
+                    error instanceof Error ? error.message : 'Unknown error'
                 }
               );
-
-              showWarning(
-                `Avertissement pour ${file.name}`,
-                error instanceof Error
-                  ? error.message
-                  : 'Le fichier a été chargé avec des avertissements'
+              logger.error(
+                'Detailed project processing error',
+                LogCategory.PROJECT,
+                formatError(error)
               );
             }
-
-            // Note: We don't re-throw here to allow other files to continue processing
-            logger.warn(
-              'Failed to reload file in DuckDB',
-              LogCategory.DUCKDB,
-              error
-            );
+          } finally {
+            this.processingFiles.delete(file.id);
+            if (processedSuccessfully) {
+              logger.success(
+                'Project file fully processed',
+                LogCategory.PROJECT,
+                {
+                  progress,
+                  fileName: file.name,
+                  durationMs: (performance.now() - fileStart).toFixed(2)
+                }
+              );
+            }
           }
         }
       );
 
-      const duckDuration = performance.now() - duckStart;
-      logger.success('DuckDB processing complete', LogCategory.DUCKDB, {
-        duration: `${duckDuration.toFixed(2)}ms`,
-        fileCount: validFiles.length
-      });
-
-      if (duckDuration > 10000) {
-        logger.warn('Slow DuckDB batch processing', LogCategory.DUCKDB, {
-          duration: `${duckDuration.toFixed(2)}ms`,
-          fileCount: validFiles.length,
-          recommendation: 'Consider processing fewer files concurrently'
-        });
-      }
-
-      const geoDatasets = datasetsStore.getDatasetsByType(true);
-
-      if (geoDatasets.length > 0) {
-        logger.info('Creating default visualization', LogCategory.DATA, {
-          geoDatasetCount: geoDatasets.length
-        });
-        this._geometryDatasetsVersion++;
-        projectionActions.suggestProjectionForCurrentData();
-
-        this.createDefaultVisualization(geoDatasets[0].id);
-      }
+      const streamingDuration = performance.now() - streamingStart;
+      logger.success(
+        'Streaming project processing complete',
+        LogCategory.PROJECT,
+        {
+          duration: `${streamingDuration.toFixed(2)}ms`,
+          processedFiles: unprocessedFiles.length
+        }
+      );
 
       layersActions.syncWithVisualizations();
 
+      // Save project immediately if caches were created to persist them for next reload
+      const filesWithNewlyCreatedCache = unprocessedFiles.filter(f => f.cachedGeoParquet);
+      if (filesWithNewlyCreatedCache.length > 0) {
+        logger.info('💾 Triggering immediate save to persist caches', LogCategory.PROJECT, {
+          filesWithCache: filesWithNewlyCreatedCache.length,
+          fileNames: filesWithNewlyCreatedCache.map(f => f.name)
+        });
+
+        // Use setTimeout to avoid blocking and let other effects settle
+        setTimeout(async () => {
+          try {
+            await projectStore.saveCurrentProject();
+            logger.success('✅ Project saved with caches persisted', LogCategory.PROJECT);
+          } catch (error) {
+            logger.error('Failed to save project after caching', LogCategory.PROJECT, error);
+          }
+        }, 100);
+      }
+
       endTiming();
       logger.success('Project files processing complete', LogCategory.PROJECT, {
-        remainingProcessingFiles: Array.from(this.processingFiles)
+        remainingProcessingFiles: Array.from(this.processingFiles),
+        totalDurationMs: (performance.now() - start).toFixed(2)
       });
     } catch (error) {
       // Cleanup on error - remove all unprocessed files from processing
@@ -853,7 +1034,19 @@ class DataOrchestratorService {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
+    } finally {
+      endTiming();
     }
+  }
+
+  private determineProjectConcurrency(): number {
+    if (typeof navigator === 'undefined' || !navigator.hardwareConcurrency) {
+      return 1;
+    }
+    const cores = navigator.hardwareConcurrency;
+    if (cores <= 2) return 1;
+    if (cores <= 4) return 2;
+    return 3;
   }
 
   private createDefaultVisualization(datasetId: string): void {

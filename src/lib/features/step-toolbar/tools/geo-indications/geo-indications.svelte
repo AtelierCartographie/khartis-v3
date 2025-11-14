@@ -90,7 +90,7 @@
             <div class="distance-controls">
               <NumberInput
                 id="distance-input"
-                label={m.geo_distance()}
+                labelText={m.geo_distance()}
                 value={state.scale.distance}
                 on:change={(e) =>
                   store.setScaleDistance((e as CustomEvent).detail || 0)}

@@ -1,4 +1,4 @@
-import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service.svelte';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { SvelteMap } from 'svelte/reactivity';
 import {
   FileProcessorService,

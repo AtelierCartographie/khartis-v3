@@ -1,7 +1,7 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
 import { logger, LogCategory } from '../../commons/utils/logger';
-import { Duck } from '../../commons/services/duckdb/duckdb';
+import { Duck } from '$lib/features/duckdb';
 import { readGeoArrowParquet } from '../utils/read-geoarrow-parquet';
 import { readGeoJSONAsArrow } from '../utils/read-geojson-arrow';
 import { SvelteMap } from 'svelte/reactivity';

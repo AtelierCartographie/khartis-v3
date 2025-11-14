@@ -66,16 +66,10 @@
   }
 
   async function handleLoadOnlineFile() {
-    if (onlineUrlValue.trim()) {
+    if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
       logger.info('Loading online file', LogCategory.FILE, {
         url: onlineUrlValue
       });
-      const urlValidation =
-        CreateProjectValidationService.validateURL(onlineUrlValue);
-
-      if (!urlValidation.isValid) {
-        return;
-      }
 
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
       await createProjectActions.loadOnlineFile();
@@ -112,8 +106,24 @@
     [FileType.GEOPARQUET]: { label: 'GeoParquet', color: 'teal' },
     [FileType.KML]: { label: 'KML', color: 'magenta' },
     [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
-    [FileType.UNKNOWN]: { label: 'Type inconnu', color: 'gray' }
+    [FileType.UNKNOWN]: {
+      label: m.create_project_file_type_unknown(),
+      color: 'gray'
+    }
   };
+
+  // Reactive validation states
+  const urlValidation = $derived(
+    onlineUrlValue.trim()
+      ? CreateProjectValidationService.validateURL(onlineUrlValue)
+      : null
+  );
+
+  const pastedDataValidation = $derived(
+    pastedDataValue.trim()
+      ? CreateProjectValidationService.validatePastedData(pastedDataValue)
+      : null
+  );
 
   const getFileTypeTag = (fileType: FileType) =>
     FILE_TYPE_TAGS[fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
@@ -126,13 +136,11 @@
 >
   <header class="mb-4">
     {#if !isModal}
-      <h6 class="mb-3">Importer des données</h6>
+      <h6 class="mb-3">{m.create_project_import_data()}</h6>
     {/if}
 
     <span class="text-grey">
-      Il peut s’agir d’un tableau de données au format CSV ou d’un fichier
-      d’informations géographiques (Shapefile, GeoJSON, GeoPackage, GeoParquet,
-      KML/KMZ).
+      {m.create_project_import_data_description()}
     </span>
   </header>
 
@@ -166,6 +174,12 @@
         bind:value={pastedDataValue}
         placeholder={m.create_project_paste_data()}
         rows={4}
+        invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+        invalidText={pastedDataValidation?.errors[0] || ''}
+        warn={!!(
+          pastedDataValidation && pastedDataValidation.warnings.length > 0
+        )}
+        warnText={pastedDataValidation?.warnings[0] || ''}
       />
       {#if pastedDataValue.trim()}
         <div class="paste-actions">
@@ -174,9 +188,15 @@
             kind="secondary"
             on:click={() => (pastedDataValue = '')}
           >
-            Clear
+            {m.create_project_clear_button()}
           </Button>
-          <Button size="field" on:click={handlePasteData}>Process</Button>
+          <Button
+            size="field"
+            disabled={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+            on:click={handlePasteData}
+          >
+            {m.create_project_process_button()}
+          </Button>
         </div>
       {/if}
     </div>
@@ -189,6 +209,10 @@
         labelText={m.create_project_online_file_link()}
         placeholder="https://example.com/data.csv"
         disabled={createProjectState.newProject.isLoading}
+        invalid={!!(urlValidation && !urlValidation.isValid)}
+        invalidText={urlValidation?.errors[0] || ''}
+        warn={!!(urlValidation && urlValidation.warnings.length > 0)}
+        warnText={urlValidation?.warnings[0] || ''}
       />
 
       <div class:button-loading={createProjectState.newProject.isLoading}>
@@ -198,6 +222,7 @@
             ? undefined
             : CloudDownload}
           disabled={!onlineUrlValue.trim() ||
+            (urlValidation && !urlValidation.isValid) ||
             createProjectState.newProject.isLoading}
           on:click={handleLoadOnlineFile}
         >
@@ -207,7 +232,7 @@
             {/if}
             <span>
               {createProjectState.newProject.isLoading
-                ? 'Loading...'
+                ? m.create_project_loading_status()
                 : m.create_project_load()}
             </span>
           </div>
@@ -219,7 +244,7 @@
       <InlineNotification
         lowContrast
         kind="error"
-        title="Error:"
+        title={m.create_project_error_label()}
         subtitle={createProjectState.newProject.error}
         on:close={() => createProjectActions.setNewProjectError()}
       />
@@ -229,7 +254,7 @@
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
-          title="Validation errors"
+          title={m.create_project_validation_errors()}
           subtitle={globalValidationErrors.join(', ')}
           lowContrast
           hideCloseButton
@@ -239,7 +264,8 @@
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
           <span class="files-count">
-            {createProjectState.newProject.uploadedFiles.length} file(s) -
+            {createProjectState.newProject.uploadedFiles.length}
+            {m.create_project_files_label()} -
             {formatFileSize(createProjectActions.getTotalFileSize())}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
@@ -253,10 +279,10 @@
               {#if isDeletingAll}
                 <div class="button-with-loader">
                   <Loading small withOverlay={false} />
-                  <span>Deleting...</span>
+                  <span>{m.create_project_processing_status()}</span>
                 </div>
               {:else}
-                Clear all
+                {m.create_project_clear_all_button()}
               {/if}
             </Button>
           {/if}
@@ -278,8 +304,8 @@
                   value={file.uploadProgress || 0}
                   max={100}
                   helperText={file.status === 'processing'
-                    ? 'Processing...'
-                    : 'Uploading...'}
+                    ? m.create_project_processing_status()
+                    : m.create_project_uploading_status()}
                 />
               </div>
               <Button
@@ -301,8 +327,8 @@
                 invalid
                 class="w-full"
                 name={file.name}
-                errorSubject="Error"
-                errorBody={file.errorMessage || 'File processing failed'}
+                errorSubject={m.create_project_error_status()}
+                errorBody={file.errorMessage || m.create_project_error_label()}
                 status="edit"
               />
               <Button
@@ -363,7 +389,7 @@
                 <InlineNotification
                   lowContrast
                   kind="error"
-                  title="Errors"
+                  title={m.create_project_error_status()}
                   subtitle={file.validation.errors.join(', ')}
                   hideCloseButton
                 />
@@ -373,7 +399,7 @@
                 <InlineNotification
                   lowContrast
                   kind="warning"
-                  title="Warnings"
+                  title={m.create_project_validation_errors()}
                   subtitle={file.validation.warnings.join(', ')}
                   hideCloseButton
                 />

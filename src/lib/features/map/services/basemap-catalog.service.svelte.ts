@@ -221,6 +221,31 @@ class BasemapCatalogService {
       return year >= minYear;
     });
   }
+
+  addCustomBasemap(basemap: BasemapMetadata): void {
+    if (!this._state.catalog) {
+      logger.warn(
+        'Cannot add custom basemap: catalog not loaded',
+        LogCategory.MAP
+      );
+      return;
+    }
+
+    // Check if basemap already exists
+    const existingIndex = this._state.catalog.basemaps.findIndex(
+      (b) => b.file === basemap.file
+    );
+
+    if (existingIndex !== -1) {
+      // Replace existing
+      this._state.catalog.basemaps[existingIndex] = basemap;
+      logger.info(`Updated custom basemap: ${basemap.title}`, LogCategory.MAP);
+    } else {
+      // Add new
+      this._state.catalog.basemaps.push(basemap);
+      logger.success(`Added custom basemap: ${basemap.title}`, LogCategory.MAP);
+    }
+  }
 }
 
 export const basemapCatalogService = new BasemapCatalogService();

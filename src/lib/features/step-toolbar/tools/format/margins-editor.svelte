@@ -69,7 +69,7 @@
           <div class="margin-input">
             <NumberInput
               id="margin-top"
-              label={m.format_margin_top()}
+              labelText={m.format_margin_top()}
               value={top}
               on:change={(e) => updateMargin(Position.Top, e.detail ?? 0)}
               min={0}
@@ -100,7 +100,7 @@
           <div class="margin-input">
             <NumberInput
               id="margin-bottom"
-              label={m.format_margin_bottom()}
+              labelText={m.format_margin_bottom()}
               value={bottom}
               on:change={(e) => updateMargin(Position.Bottom, e.detail ?? 0)}
               min={0}
@@ -133,7 +133,7 @@
           <div class="margin-input">
             <NumberInput
               id="margin-left"
-              label={m.format_margin_left()}
+              labelText={m.format_margin_left()}
               value={left}
               on:change={(e) => updateMargin(Position.Left, e.detail ?? 0)}
               min={0}
@@ -162,7 +162,7 @@
           <div class="margin-input">
             <NumberInput
               id="margin-right"
-              label={m.format_margin_right()}
+              labelText={m.format_margin_right()}
               value={right}
               on:change={(e) => updateMargin(Position.Right, e.detail ?? 0)}
               min={0}

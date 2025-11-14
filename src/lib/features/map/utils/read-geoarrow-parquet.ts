@@ -1,22 +1,15 @@
 import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
+import initParquetWasm, {
+  readParquet as wasmReadParquet
+} from 'parquet-wasm/esm/parquet_wasm.js';
+import parquetWasmUrl from 'parquet-wasm/esm/parquet_wasm_bg.wasm?url';
 
-const PARQUET_WASM_URL =
-  'https://cdn.jsdelivr.net/npm/parquet-wasm@0.6.1/esm/parquet_wasm.js';
-
-type ParquetWasmExports = {
-  default: () => Promise<void>;
-  readParquet(buffer: Uint8Array): {
-    intoIPCStream(): Uint8Array;
-  };
-};
-
-let parquetWasm: ParquetWasmExports | null = null;
+let parquetInitialized = false;
 
 async function ensureWasmInitialized(): Promise<void> {
-  if (!parquetWasm) {
-    const module = await import(/* @vite-ignore */ PARQUET_WASM_URL);
-    await module.default();
-    parquetWasm = module;
+  if (!parquetInitialized) {
+    await initParquetWasm({ module_or_path: parquetWasmUrl });
+    parquetInitialized = true;
   }
 }
 
@@ -25,11 +18,7 @@ export async function readGeoArrowParquet(
 ): Promise<ArrowTable> {
   await ensureWasmInitialized();
 
-  if (!parquetWasm) {
-    throw new Error('Parquet WASM module is not initialized');
-  }
-
-  const wasmTable = parquetWasm.readParquet(new Uint8Array(arrayBuffer));
+  const wasmTable = wasmReadParquet(new Uint8Array(arrayBuffer));
   const arrowIPC = wasmTable.intoIPCStream();
   const jsTable = tableFromIPC(arrowIPC);
 

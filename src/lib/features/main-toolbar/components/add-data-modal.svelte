@@ -103,43 +103,17 @@
   const isLoading = $derived(isProcessing || isImporting);
 </script>
 
-<div class:modal-loading={isImporting}>
-  <Modal
-    primaryButtonText={isImporting ? '' : 'Ajouter au projet'}
-    primaryButtonDisabled={!canImport || isLoading}
-    secondaryButtonText="Annuler"
-    secondaryButtonDisabled={isLoading}
-    open={open}
-    modalHeading="Ajouter des données au projet"
-    size="sm"
-    on:click:button--secondary={closeModal}
-    on:click:button--primary={handleImport}
-    on:close={closeModal}
-  >
-    <CreateNewProject isModal resetToken={uploaderResetKey} />
-  </Modal>
-</div>
-
-<style>
-  .modal-loading :global(.bx--btn--primary)::before {
-    content: '';
-    display: inline-block;
-    width: 1rem;
-    height: 1rem;
-    margin-right: 0.5rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .modal-loading :global(.bx--btn--primary)::after {
-    content: 'Ajout en cours...';
-  }
-</style>
+<Modal
+  primaryButtonDisabled={!canImport || isLoading}
+  secondaryButtonText="Annuler"
+  secondaryButtonDisabled={isLoading}
+  open={open}
+  modalHeading="Ajouter des données au projet"
+  primaryButtonText={isLoading ? 'Ajout en cours...' : 'Ajouter au projet'}
+  size="sm"
+  on:click:button--secondary={closeModal}
+  on:click:button--primary={handleImport}
+  on:close={closeModal}
+>
+  <CreateNewProject isModal resetToken={uploaderResetKey} />
+</Modal>

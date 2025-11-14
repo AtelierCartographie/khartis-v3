@@ -1,399 +1,232 @@
 # Data Pipeline
 
-> **Architecture moderne de traitement des données avec DuckDB**
+> **Modern DuckDB-based ingestion architecture**
 
-## Vue d'Ensemble
+## Overview
 
-La nouvelle architecture data pipeline suit les principes **SOLID**, **KISS** et **DRY** avec une séparation claire en trois couches : **Domain**, **Application** et **Infrastructure**.
+The feature `src/lib/features/data` still embraces **SOLID**, **KISS**, and **DRY**, but is now organized as a feature module: models, contracts, adapters, and the pipeline live together, and everything is wired via `createDataPipeline`. Dependencies are injected, which keeps testing straightforward.
 
-## Architecture
-
-### Structure des Couches
+### Folder map
 
 ```
 src/lib/features/data/
-├── domain/              # Logique métier pure (interfaces + entités + value objects)
-│   ├── interfaces/      # Contrats abstraits (IParser, IValidator, ITypeInferrer)
-│   ├── entities/        # Objets métier (RawDataset, DatasetResult)
-│   └── value-objects/   # Valeurs immuables (ColumnType, ValidationResult)
-├── application/         # Use cases et services (orchestration)
-│   └── services/        # DataPipelineService (Facade)
-└── infrastructure/      # Implémentations concrètes
-    ├── parsers/         # CSVParser, GeoJSONParser, ShapefileParser
-    ├── validators/      # SizeValidator, SchemaValidator, QualityValidator
-    └── type-inference/  # HeuristicTypeInferrer
+├── index.ts               # Public entry (pipeline, adapters, models, contracts)
+├── pipeline/              # createDataPipeline + orchestration helpers
+├── adapters/              # Parsers, validators, type inferrer
+├── models/                # DatasetResult, ColumnType, GeometryInfo, GeoArrow metadata…
+├── contracts/             # Interfaces IParser, IValidator, ITypeInferrer…
+├── types/                 # Legacy DTOs (ProcessedDataset, AnalysisResult…)
+└── utils/                 # Processed-dataset helpers, etc.
 ```
 
-## État de Migration
+The default pipeline assembles the built-in adapters but you can supply custom lists (parsers, validators, type inferrers) when calling the factory. This replaces the former Domain/Application/Infrastructure split without losing responsibilities.
 
-### Composants Migrés ✅
+## Migration snapshot
 
-- **datasetsStore** - Utilise `dataPipeline.processUploadedFile()`
-- **FileProcessorService (CsvProcessor)** - Utilise `CSVParser` directement (fix worker error)
+### Components already on the new pipeline
 
-### Avantages de la Migration
+- `datasetsStore` – uses `dataPipeline.processUploadedFile`
+- `FileProcessorService` (CSV path) – calls the CSV parser directly to avoid worker errors
 
-1. **Performance** - Plus de triple processing, pipeline unifié en un seul passage
-2. **Fiabilité** - Suppression des erreurs Web Worker (`Cannot read properties of undefined`)
-3. **Maintenabilité** - Architecture SOLID facilite l'extension et les tests
-4. **Type Safety** - 100% TypeScript typé, zéro `any`
+### Migration benefits
 
-### Note sur Web Workers
+1. **Performance** – one pass instead of triple parsing
+2. **Reliability** – no more worker `postMessage` issues
+3. **Maintainability** – DI-friendly architecture
+4. **Type safety** – full TypeScript typings
 
-La version précédente utilisait un Web Worker pour le parsing CSV (`csv-parser.worker.ts`). Cette approche causait des erreurs de message passing dans certains navigateurs. La nouvelle architecture utilise PapaParse directement dans le thread principal, ce qui :
+### Web worker note
 
-- Élimine les erreurs de worker message structure
-- Réduit la complexité du code
-- Maintient de bonnes performances (PapaParse est très optimisé)
-- Pour les très gros fichiers (>10MB), l'inférence de types échantillonne seulement 100 lignes
+The legacy CSV path relied on a worker (`csv-parser.worker.ts`). Browser quirks around `postMessage` made error handling brittle. PapaParse now runs on the main thread:
 
-## Formats Supportés
+- Zero worker serialization errors
+- Simpler code
+- Still very fast (PapaParse is heavily optimized)
+- For huge files, type inference samples the first 100 rows
 
-| Format        | Extensions             | Parseur         | Caractéristiques                                               |
-| ------------- | ---------------------- | --------------- | -------------------------------------------------------------- |
-| **CSV/TSV**   | `.csv`, `.tsv`, `.txt` | CSVParser       | Données tabulaires, inférence automatique des types, PapaParse |
-| **GeoJSON**   | `.geojson`, `.json`    | GeoJSONParser   | Données spatiales, support géométrie, calcul bounds            |
-| **Shapefile** | `.shp` + compléments   | ShapefileParser | Multi-fichiers géométrie + attributs                           |
+## Supported formats
 
-## Flux de Traitement
+| Format        | Extensions             | Parser            | Notes                                              |
+| ------------- | ---------------------- | ----------------- | -------------------------------------------------- |
+| **CSV/TSV**   | `.csv`, `.tsv`, `.txt` | `CSVParser`       | Tabular data, sampled type inference via PapaParse |
+| **GeoJSON**   | `.geojson`, `.json`    | `GeoJSONParser`   | Spatial datasets, bounds + centroid extracted      |
+| **Shapefile** | `.shp` + companions    | `ShapefileParser` | Expects zipped bundle, converts to GeoJSON first   |
 
-### Pipeline Unifiée (Single Pass)
+## Processing flow
 
 ```
-1. Upload Fichier
+1. File upload
         ↓
-2. ParserRegistry → Trouve le bon parser
+2. findParser() → pick matching parser
         ↓
-3. Parser.parse() → Crée RawDataset
+3. parser.parse() → returns RawDataset
         ↓
-4. ValidationChain → Valide données (taille, schéma, qualité)
+4. runValidators() → size, schema, quality
         ↓
-5. HeuristicTypeInferrer → Infère types colonnes
+5. HeuristicTypeInferrer → column types
         ↓
-6. DuckDB → Crée table + analyse statistiques
+6. DuckDB → tables + stats
         ↓
-7. DatasetResult → Dataset enrichi avec stats
+7. DatasetResult → final enriched payload
 ```
 
-**Avantage** : Traitement **une seule fois** au lieu de 3 fois (ancienne architecture)
+## Public API
 
-## API Publique
+### Default usage
 
-### Utilisation Simple
-
-```typescript
+```ts
 import { dataPipeline } from '$lib/features/data';
 
-// 1. Initialiser (une fois au démarrage)
-await dataPipeline.initialize();
-
-// 2. Traiter un fichier
+await dataPipeline.initialize(); // once at startup
 const result = await dataPipeline.processFile(file);
 
-// 3. Utiliser le résultat
-console.log(result.tableName); // Nom de la table DuckDB
-console.log(result.columns); // Colonnes enrichies avec statistiques
-console.log(result.rowCount); // Nombre de lignes
-console.log(result.geometry); // Info géométrie (si spatial)
+console.log(result.tableName); // DuckDB table name
+console.log(result.columns); // Enriched columns with stats
+console.log(result.geometry); // Geometry info if spatial
 ```
 
-### Format du Résultat
+### Advanced configuration
 
-```typescript
-interface ProcessedDataset {
-  id: string;                       // ID unique
-  name: string;                     // Nom du fichier
-  sourceFileId: string;             // ID fichier source
-  format: 'csv' | 'geojson' | 'shapefile';
+```ts
+import {
+  createDataPipeline,
+  createParserList,
+  createValidatorList,
+  HeuristicTypeInferrer
+} from '$lib/features/data';
 
-  // Données
-  data: Record<string, unknown>[];  // Lignes
-  rowCount: number;                 // Nombre total
+const parsers = createParserList();
+parsers.unshift(new ExcelParser()); // custom parser first
 
-  // Colonnes enrichies
-  columns: ColumnInfo[];            // Avec types + stats
+const validators = createValidatorList();
+validators.push(new CustomValidator());
 
-  // Analyse
-  analysis: {
-    columns: ColumnInfo[];
-    hasGeoData: boolean;
-    geoColumns: GeoColumnInfo[];
-    rowCount: number;
-    warnings: string[];
-  };
-
-  // Géométrie (si applicable)
-  geometry?: 'Point' | 'Polygon' | ...;
-  bounds?: { minLat, maxLat, minLon, maxLon };
-
-  // DuckDB
-  duckdbTableName: string;          // Table pour requêtes SQL
-
-  // Métadonnées
-  metadata: {
-    processedAt: Date;
-    transformations: string[];
-  };
-}
+const pipeline = createDataPipeline({
+  parsers,
+  validators,
+  typeInferrer: new HeuristicTypeInferrer(),
+  stopOnFirstValidationError: true
+});
 ```
 
-## Design Patterns Appliqués
+The factory mirrors the old khartis-pipeline-old flow but keeps extensions easy.
 
-### 1. Facade Pattern
+## DuckDB feature tie-in (`src/lib/features/duckdb`)
 
-**DataPipelineService** simplifie l'accès à tout le système :
+- `duckdb-orchestrator.service.svelte.ts`: manages registered datasets, chooses the GeoJSON path (ST_Read → Arrow → Legacy) based on `VITE_USE_ST_READ` and `VITE_USE_ARROW_GEOJSON`, and exposes tables to the UI.
+- `duckdb/duckdb.ts`: wraps DuckDB-WASM, installs macros (`analyse`, `breaks`, `join`), maintains the GeoParquet LRU cache, and offers helpers (`read_geofile`, `copy_to_geoparquet_as_buffer`, `insertArrowFromIPCStream`).
+- `duckdb-validator.service.ts`: leverages the macros to produce describe/summary/histogram diagnostics and suggest geocatalog matches.
 
-```typescript
-export class DataPipelineService {
-  async processFile(file: File): Promise<ProcessedDataset> {
-    // Orchestre : parsing → validation → inference → DuckDB
-  }
-}
+Key reminders:
+
+1. Always call `duckDBOrchestrator.initialize()` before running queries; it loads extensions and macros.
+2. `processGeoJSON` tries ST_Read, then Arrow ingestion, then the legacy JSON fallback based on the env flags.
+3. DuckDB queries drop GeoArrow metadata, so export to GeoParquet (`copy_to_geoparquet_as_buffer`) and re-read via `geoParquetReader` when metadata matters.
+4. The GeoParquet cache lives in memory (LRU ~100 MB). Clear it (`clearGeoParquetCache`) when dropping/recreating tables.
+
+## Core interfaces
+
+```ts
+export type DataPipelineOptions = {
+  parsers?: ParserList;
+  validators?: ValidatorList;
+  typeInferrer?: ITypeInferrer;
+  stopOnFirstValidationError?: boolean;
+};
+
+export type DataPipeline = {
+  initialize(): Promise<void>;
+  processFile(file: File): Promise<DatasetResult>;
+  processUploadedFile(
+    uploadedFile: UploadedFilePayload,
+    originalFile?: File
+  ): Promise<DatasetResult>;
+  validateFile(file: File): Promise<ValidationResult>;
+  destroy(): Promise<void>;
+  getParsers(): IParser[];
+  getValidators(): IValidator[];
+};
 ```
 
-### 2. Strategy Pattern
+`createDataPipeline(options?: DataPipelineOptions)` returns an object implementing `DataPipeline`. Apps typically re-export the singleton `dataPipeline` from `index.ts`. During tests you can instantiate a fresh pipeline with mocks.
 
-Parsers interchangeables via `IParser` :
+## Design patterns
 
-```typescript
-interface IParser {
-  canParse(file: File): boolean;
-  parse(file: File): Promise<RawDataset>;
-}
+### Facade
+
+The pipeline object is the facade: `initialize`, `processFile`, `processUploadedFile`, `validateFile`, `destroy`. Internals (validations, inference, DuckDB) stay hidden.
+
+### Strategy / Selector
+
+- Parsers implement `IParser` and are plugged via `createParserList` + `findParser`.
+- Validators implement `IValidator` and are executed via `runValidators`.
+
+```ts
+const parsers = createParserList();
+parsers.unshift(new ExcelParser());
+const parser = findParser(file, parsers);
+if (!parser) throw new Error('Unsupported format');
 ```
 
-### 3. Chain of Responsibility
+### Chain of Responsibility
 
-Validation en chaîne :
+`runValidators(rawDataset, validators, stopOnFirstError)` chains the validators in order; set `stopOnFirstError` to short-circuit.
 
-```typescript
-const chain = new ValidationChain([
-  new SizeValidator(), // Vérifie tailles
-  new SchemaValidator(), // Vérifie schéma
-  new QualityValidator() // Vérifie qualité
-]);
+```ts
+const validators = createValidatorList();
+validators.push(new CustomValidator());
+const result = runValidators(dataset, validators, true);
+if (!result.isValid) throw new Error(result.errors.join(', '));
 ```
 
-### 4. Registry Pattern
+## Type inference heuristics
 
-Sélection automatique du parser :
+- 80 % of the sampled values must match to promote a type.
+- Only the first 100 non-null values are sampled.
+- Priority: boolean → date → number → geometry → text.
 
-```typescript
-const parser = parserRegistry.findParser(file);
-const dataset = await parser.parse(file);
+## Performance checklist
+
+| Challenge            | Solution                                    |
+| -------------------- | ------------------------------------------- |
+| Large imports        | Streaming PapaParse + sampled inference     |
+| Multiple conversions | Single-pass pipeline                        |
+| DuckDB metadata loss | GeoParquet export + GeoArrow-aware reader   |
+| Worker errors        | Main-thread parsing to avoid browser quirks |
+
+Target: <3 s load for “standard” datasets, smooth pan/zoom (~60 fps).
+
+## Backward compatibility
+
+Legacy entry points remain available:
+
+```ts
+const result = await dataPipeline.processUploadedFile(uploadedFile);
 ```
 
-## Inférence de Types
+Legacy DTOs (`ProcessedDataset`, `ColumnInfo`, `AnalysisResult`) still live in `src/lib/features/data/types` until all consumers migrate.
 
-### Priorité de Détection
+## Public exports
 
-```
-1. Boolean    → true/false, 0/1, yes/no
-2. Date       → ISO 8601, formats courants
-3. Number     → Entiers, décimaux
-4. Geometry   → WKT, coordonnées
-5. Text       → Par défaut
-```
+```ts
+// Types
+export type {
+  ProcessedDataset,
+  ColumnInfo,
+  AnalysisResult
+} from '$lib/features/data';
 
-### Seuil de Confiance
+// Facade + factory
+export { dataPipeline, createDataPipeline } from '$lib/features/data';
 
-- **80%** des valeurs doivent matcher pour inférer un type
-- Échantillonnage des **100 premières lignes**
-
-## Validation
-
-### Validateurs
-
-1. **SizeValidator**
-   - Warning : > 5,000 lignes ou > 50 colonnes
-   - Error : > 10,000 lignes ou > 100 colonnes
-
-2. **SchemaValidator**
-   - Noms de colonnes uniques
-   - Pas de colonnes vides
-   - Longueur de lignes cohérente
-
-3. **QualityValidator**
-   - Warning : > 50% valeurs nulles
-   - Warning : Cardinalité très faible (< 1%)
-
-## Intégration DuckDB
-
-### Avantages
-
-- **Performances** : Analyse SQL optimisée
-- **Statistiques** : min, max, mean, median, stddev, count, nulls, uniques
-- **Requêtes** : Calculs de breaks, agrégations, jointures
-- **Mémoire** : Gestion efficace des gros datasets
-
-### Utilisation
-
-```typescript
-// Table automatiquement créée par dataPipeline
-const result = await dataPipeline.processFile(file);
-
-// Utiliser DuckDB directement si besoin
-import { Duck } from '$lib/features/commons/services/duckdb/duckdb';
-
-const rows = await Duck.query(`
-  SELECT * FROM ${result.duckdbTableName}
-  WHERE column > 100
-  ORDER BY column DESC
-`);
-```
-
-## Extension
-
-### Ajouter un Nouveau Parser
-
-```typescript
-// 1. Implémenter l'interface
-export class ExcelParser implements IParser {
-  readonly supportedExtensions = ['.xlsx', '.xls'];
-  readonly mimeTypes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-
-  canParse(file: File): boolean {
-    const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
-    return this.supportedExtensions.includes(ext);
-  }
-
-  async parse(file: File): Promise<RawDataset> {
-    // Logique de parsing Excel
-    return {
-      headers: [...],
-      rows: [...],
-      columns: [...]
-    };
-  }
-}
-
-// 2. Enregistrer dans le registry
-const registry = new ParserRegistry();
-registry.register(new ExcelParser());
-```
-
-### Ajouter un Validateur
-
-```typescript
-// 1. Implémenter l'interface
-export class CustomValidator implements IValidator {
-  validate(data: RawDataset): ValidationResult {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // Logique de validation
-
-    return { isValid: errors.length === 0, errors, warnings };
-  }
-}
-
-// 2. Ajouter à la chaîne
-const chain = new ValidationChain();
-chain.register(new CustomValidator());
-```
-
-## Performance
-
-### Optimisations Implémentées
-
-- ✅ **Single Pass** : Traitement unique au lieu de 3 fois
-- ✅ **Type Inference Optimisée** : Échantillonnage limité
-- ✅ **DuckDB Direct** : Pas de stringify JSON
-- ✅ **Validation Lazy** : Stop on first error optionnel
-
-### Métriques Attendues
-
-| Métrique             | Avant  | Après     | Amélioration        |
-| -------------------- | ------ | --------- | ------------------- |
-| Fichier 1000 lignes  | ~25s   | ~1.5s     | **16x plus rapide** |
-| Mémoire utilisée     | Élevée | Optimisée | **~50% moins**      |
-| Passes de traitement | 3      | 1         | **3x moins**        |
-
-## Exports Publics
-
-```typescript
-// Types principaux
-export type { ProcessedDataset } from './types/ProcessedDataset';
-export type { ColumnInfo, AnalysisResult } from './types/AnalysisResult';
-
-// Service principal
+// Extension helpers
 export {
-  dataPipeline,
-  DataPipelineService
-} from './application/services/data-pipeline.service';
-
-// Pour extensions
-export {
+  createParserList,
+  createValidatorList,
+  runValidators,
   CSVParser,
   GeoJSONParser,
-  ShapefileParser
-} from './infrastructure/parsers/';
-export { ParserRegistry } from './infrastructure/parsers/parser.registry';
-export { ValidationChain } from './infrastructure/validators/validation.chain';
-export { HeuristicTypeInferrer } from './infrastructure/type-inference/heuristic-inferrer';
+  ShapefileParser,
+  HeuristicTypeInferrer
+} from '$lib/features/data';
 ```
-
-## Principes SOLID Respectés
-
-### Single Responsibility ✅
-
-Chaque classe a **une seule responsabilité** :
-
-- CSVParser : Parse CSV uniquement
-- SizeValidator : Valide tailles uniquement
-
-### Open/Closed ✅
-
-**Extensible** sans modifier le code existant :
-
-- Nouveau parser → Implémenter `IParser` + register
-- Nouveau validateur → Implémenter `IValidator` + add to chain
-
-### Liskov Substitution ✅
-
-Toutes les implémentations d'une interface sont **interchangeables**
-
-### Interface Segregation ✅
-
-Interfaces **petites et focalisées** (2-3 méthodes max)
-
-### Dependency Inversion ✅
-
-Dépend d'**abstractions** (interfaces), pas de concrétions
-
-## Compatibilité
-
-### Backwards Compatibility
-
-L'ancienne API est toujours supportée :
-
-```typescript
-// Ancienne méthode (toujours fonctionnelle)
-const result = await dataPipeline.processUploadedFile(uploadedFile);
-
-// Nouvelle méthode (recommandée)
-const result = await dataPipeline.processFile(file);
-```
-
-### Migration Progressive
-
-Les composants existants continuent de fonctionner sans modification. La migration peut se faire progressivement.
-
-## État Actuel
-
-### ✅ Phases Complétées
-
-- **Phase 1-5** : Architecture implémentée
-- **Phase 6** : Migration datasetsStore
-- **Phase 6.5** : Nettoyage code mort (~1,578 lignes supprimées)
-
-### ⏭️ Phases À Venir
-
-- **Phase 7** : Optimisations (streaming, workers)
-- **Phase 8** : Documentation développeur complète
-
-## Voir Aussi
-
-- [Architecture Générale](./ARCHITECTURE.md)
-- [Guide Développeur](./DEVELOPER_GUIDE.md)
-- [Référence API](./REFERENCE.md)

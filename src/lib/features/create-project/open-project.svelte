@@ -4,7 +4,7 @@
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import type { SavedProjectMetadata } from '$lib/features/commons/store/project.types';
+  import type { SavedProjectMetadata } from '$lib/features/project-management';
   import {
     formatDate,
     formatFileSize
@@ -98,7 +98,7 @@
       logger.error('No valid Khartis file found', LogCategory.PROJECT, {
         fileNames: files.map((f) => f.name)
       });
-      error = 'Please select a valid .kh or .khartis file';
+      error = m.validation_invalid_khartis_file();
       return;
     }
 
@@ -218,7 +218,7 @@
     <InlineNotification
       lowContrast
       kind="error"
-      title="Error:"
+      title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
     />
@@ -233,7 +233,7 @@
       {/each}
     {:else if savedProjects.length === 0}
       <div class="no-projects">
-        <p class="text-grey">No saved projects yet</p>
+        <p class="text-grey">{m.create_project_no_saved_projects()}</p>
       </div>
     {:else}
       {#each savedProjects as project (project.id)}

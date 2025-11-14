@@ -13,6 +13,7 @@
     BasemapMatchResult
   } from './types/basemap.types';
   import type { BasemapSuggestion } from '$lib/features/map/types/basemap.types';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { BasemapCatalogService } from './services/basemap-catalog.service';
   import { m } from '$lib/paraglide/messages';
   import { onMount } from 'svelte';
@@ -51,7 +52,11 @@
     try {
       suggestions = await BasemapCatalogService.suggestBasemaps(geoCodePattern);
     } catch (error) {
-      console.error('Failed to load basemap suggestions', error);
+      logger.error(
+        'Failed to load basemap suggestions',
+        LogCategory.DATA,
+        error
+      );
     } finally {
       isLoadingSuggestions = false;
     }

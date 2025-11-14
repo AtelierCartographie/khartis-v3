@@ -51,12 +51,18 @@ File Upload → ParserRegistry → Parse → ValidationChain → TypeInferrer �
 
 ```
 src/lib/
-├── features/           # Feature-based architecture (DDD principles)
+├── features/           # Feature-based architecture
 │   ├── commons/        # Shared: components, stores, services, utils, types
-│   ├── data/           # Data pipeline (Domain-Driven Design)
-│   │   ├── domain/         # Interfaces (IParser, IValidator, ITypeInferrer)
-│   │   ├── application/    # Use cases (DataPipelineService facade)
-│   │   └── infrastructure/ # Implementations (parsers, validators, type inference)
+│   ├── data/           # Data pipeline (modular functional design)
+│   │   ├── adapters/       # Concrete implementations (parsers, validators, type inference)
+│   │   ├── contracts/      # TypeScript interfaces (IParser, IValidator, ITypeInferrer)
+│   │   ├── models/         # Domain entities (RawDataset, DatasetResult, ColumnType)
+│   │   ├── pipeline/       # Pipeline factory & orchestration
+│   │   └── types/          # TypeScript type definitions
+│   ├── duckdb/         # DuckDB WASM integration (analytics engine)
+│   │   ├── db/             # Database client & state management
+│   │   ├── services/       # DuckDB services (analyse, breaks, joins, etc.)
+│   │   └── components/     # DuckDB UI components
 │   ├── create-project/ # Project creation modal
 │   ├── header/         # Top navigation
 │   ├── main-toolbar/   # Left sidebar (data/viz/styling tabs)
@@ -126,22 +132,36 @@ export const annotationsStore = new AnnotationsStore();
 
 ## Critical Project-Specific Conventions
 
-### 1. Data Pipeline (SOLID/DDD Architecture)
+### 1. Data Pipeline (Modern Functional Architecture)
 
-The data pipeline uses **Domain-Driven Design** with strict SOLID principles:
+The data pipeline uses **modular functional design** with dependency injection:
 
 ```typescript
-// Usage (facade pattern hides complexity)
+// Usage (factory function creates configured pipeline)
 import { dataPipeline } from '$lib/features/data';
 
-await dataPipeline.initialize(); // Initialize once at startup
-const result = await dataPipeline.processFile(file); // Returns ProcessedDataset
+await dataPipeline.initialize(); // Initialize DuckDB once at startup
+const result = await dataPipeline.processFile(file); // Returns DatasetResult
+```
+
+**Architecture structure**:
+
+```
+src/lib/features/data/
+├── adapters/          # Concrete implementations
+│   ├── parsers/       # File format parsers (CSV, GeoJSON, Shapefile, etc.)
+│   ├── validators/    # Data validators (size, schema, quality)
+│   └── type-inference/# Type detection (heuristic-based)
+├── contracts/         # TypeScript interfaces (IParser, IValidator, ITypeInferrer)
+├── models/            # Domain entities (RawDataset, DatasetResult, ColumnType)
+├── pipeline/          # Pipeline factory & orchestration
+└── types/             # TypeScript type definitions
 ```
 
 **To add a new file parser**:
 
 ```typescript
-// 1. Implement IParser interface in src/lib/features/data/infrastructure/parsers/
+// 1. Implement IParser interface in src/lib/features/data/adapters/parsers/
 export class ExcelParser implements IParser {
   readonly supportedExtensions = ['.xlsx'];
 
@@ -151,11 +171,21 @@ export class ExcelParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     // Parse logic
+    return { headers, rows, columns };
   }
 }
 
-// 2. Register in ParserRegistry (auto-discovery pattern)
-registry.register(new ExcelParser());
+// 2. Add to parser list in src/lib/features/data/adapters/parsers/index.ts
+export function createParserList(override?: ParserList): IParser[] {
+  return (
+    override ?? [
+      new CSVParser(),
+      new GeoJSONParser(),
+      new ExcelParser() // ← Add here
+      // ...
+    ]
+  );
+}
 ```
 
 **Type Inference**: Priority order is Boolean → Date → Number → Geometry → Text (80% threshold on 100-row sample)
@@ -165,20 +195,61 @@ registry.register(new ExcelParser());
 All data analysis uses **DuckDB WASM** (runs in main thread):
 
 ```typescript
-import { Duck } from '$lib/features/commons/services/duckdb/duckdb';
+import { Duck } from '$lib/features/duckdb';
 
 // Query data (tables auto-created by dataPipeline)
 const rows = await Duck.query(`SELECT * FROM ${tableName} WHERE value > 100`);
 
-// Calculate statistics
-const analysis = await Duck.analyse(tableName, columnName);
-// Returns: { min, max, mean, median, stddev, count, nulls, uniques }
+// Get row count
+const count = await Duck.get_row_count(tableName);
 
-// Calculate breaks for classification
-const breaks = await Duck.calculateBreaks(tableName, columnName, 'quantile', 5);
+// Analyze all columns (returns stats for each column)
+const columns = await Duck.analyse(tableName);
+// Returns: ColumnInfo[] with { name, type_simple, count, nulls, uniques, min, max, mean, median, stddev }
+
+// Register files for DuckDB access
+await Duck.register_files([file]);
+
+// Read tabular data (CSV, etc.)
+await Duck.read_tabular(file, { tablename: 'my_table' });
+
+// Read geospatial files (GeoJSON, GeoParquet, etc.)
+const tableName = await Duck.read_geofile(file, { tablename: 'geo_table' });
 ```
 
+**DuckDB Service Location**: `src/lib/features/duckdb/` (separate feature, not in commons)
+
 **Key Insight**: No Web Workers for CSV parsing (caused message passing errors). PapaParse in main thread is fast enough, and type inference only samples 100 rows for large files.
+
+#### DuckDB Orchestrator (Advanced)
+
+**DuckDB Orchestrator** provides reactive state management for advanced data operations:
+
+```typescript
+import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
+
+// Add dataset
+duckDBOrchestrator.addDataset({
+  id: dataset.id,
+  tableName: dataset.tableName,
+  columns: dataset.columns,
+  rowCount: dataset.rowCount
+});
+
+// Add filter
+duckDBOrchestrator.addFilter({
+  column: 'population',
+  operator: 'gte', // gte, lte, contains, equals, between, top_asc, top_desc, empty, not_empty
+  value: 10000
+});
+
+// Apply column refinement
+await duckDBOrchestrator.refineColumn('city', RefineOperation.UPPERCASE);
+// Available: UPPERCASE, LOWERCASE, TITLECASE, TRIM, TRIM_ALL
+
+// Access reactive filtered data
+const filtered = duckDBOrchestrator.filteredData;
+```
 
 ### 3. Basemaps (GeoArrow/GeoParquet)
 

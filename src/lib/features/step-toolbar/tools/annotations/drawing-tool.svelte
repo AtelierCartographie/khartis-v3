@@ -99,7 +99,10 @@
   <Row>
     <Column>
       <p class="field-label">Type</p>
-      <RadioButtonGroup selected={drawingType} on:change={handleDrawingTypeChange}>
+      <RadioButtonGroup
+        selected={drawingType}
+        on:change={handleDrawingTypeChange}
+      >
         <RadioButton labelText="Ligne" value="line" />
         <RadioButton labelText="Zone" value="zone" />
       </RadioButtonGroup>

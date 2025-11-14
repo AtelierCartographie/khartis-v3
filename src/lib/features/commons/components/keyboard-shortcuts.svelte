@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { globalActions, globalState } from '../store/global.svelte';
-  import { ToolbarState, ToolbarStep, ZoomMode } from '../types/global';
+  import { ToolbarState, ToolbarStep } from '../types/global';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
     '1': ToolbarStep.Data,
     '2': ToolbarStep.Visualizations,
     '3': ToolbarStep.Styling
   };
+
+  let isMapZoomActive = $state(true);
 
   onMount(() => {
     function isInputField(target: HTMLElement): boolean {
@@ -53,15 +55,27 @@
 
         // fallthrough
         case '=':
-          globalActions.zoomIn();
+          if (isMapZoomActive) {
+            globalActions.zoomInMap();
+          } else {
+            globalActions.zoomInPage();
+          }
           return true;
 
         case '-':
-          globalActions.zoomOut();
+          if (isMapZoomActive) {
+            globalActions.zoomOutMap();
+          } else {
+            globalActions.zoomOutPage();
+          }
           return true;
 
         case '0':
-          globalActions.resetZoom();
+          if (isMapZoomActive) {
+            globalActions.resetMapZoom();
+          } else {
+            globalActions.resetPageZoom();
+          }
           return true;
 
         default:
@@ -70,9 +84,7 @@
     }
 
     function handleZoomModeToggle(): void {
-      const newMode =
-        globalState.zoom.mode === ZoomMode.Map ? ZoomMode.Page : ZoomMode.Map;
-      globalActions.setZoomMode(newMode);
+      isMapZoomActive = !isMapZoomActive;
     }
 
     function handleKeyDown(event: KeyboardEvent): void {
@@ -117,9 +129,17 @@
       event.preventDefault();
 
       if (event.deltaY < 0) {
-        globalActions.zoomIn();
+        if (isMapZoomActive) {
+          globalActions.zoomInMap();
+        } else {
+          globalActions.zoomInPage();
+        }
       } else {
-        globalActions.zoomOut();
+        if (isMapZoomActive) {
+          globalActions.zoomOutMap();
+        } else {
+          globalActions.zoomOutPage();
+        }
       }
     }
 

@@ -93,9 +93,7 @@ export const projectionActions = {
         };
       })
       .filter(
-        (
-          feature
-        ): feature is Feature<Geometry, Record<string, unknown>> =>
+        (feature): feature is Feature<Geometry, Record<string, unknown>> =>
           feature !== null
       );
 

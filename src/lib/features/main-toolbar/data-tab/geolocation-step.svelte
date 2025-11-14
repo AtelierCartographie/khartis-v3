@@ -232,7 +232,6 @@
                 (e.detail.selectedItem as GeoComboBoxItem)?.columnName || ''
             })}
           placeholder={m.geo_select_variable()}
-          titleText=""
         />
       </div>
 
@@ -286,7 +285,7 @@
               });
             }}
             placeholder={m.geo_select_longitude()}
-            titleText=""
+            labelText=""
           />
         </div>
 
@@ -305,7 +304,7 @@
               });
             }}
             placeholder={m.geo_select_latitude()}
-            titleText=""
+            labelText=""
           />
         </div>
       </div>
