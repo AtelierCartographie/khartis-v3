@@ -1533,7 +1533,21 @@ class DuckDBOrchestratorService {
       `CREATE OR REPLACE TABLE ${tableName} AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM ${tableName}`
     );
 
-    await Duck.analyse(tableName, { force: true });
+    // Force refresh of column metadata
+    const updatedColumns = await Duck.analyse(tableName, { force: true });
+
+    // Update the dataset with new column metadata
+    const dataset = Array.from(this._state.datasets.values()).find(
+      (d) => d.tableName === tableName
+    );
+    if (dataset) {
+      dataset.columns = updatedColumns;
+      logger.debug('Dataset columns updated', LogCategory.DUCKDB, {
+        tableName,
+        columnCount: updatedColumns.length
+      });
+    }
+
     this.bumpDatasetsVersion();
 
     logger.success('Calculated column added', LogCategory.DUCKDB, {

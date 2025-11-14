@@ -5,9 +5,6 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => ({
-  worker: {
-    format: 'es'
-  },
   plugins: [
     sveltekit(),
     paraglideVitePlugin({
@@ -16,12 +13,32 @@ export default defineConfig(() => ({
     }),
     VitePWA({
       registerType: 'prompt',
+      devOptions: {
+        enabled: true,
+        type: 'module'
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       workbox: {
         sourcemap: false,
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,woff2,woff,ttf,eot,otf,splinecode}'],
-        maximumFileSizeToCacheInBytes: 1147483648
+        maximumFileSizeToCacheInBytes: 1147483648,
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'duckdb-extensions',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 30
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
       },
       manifest: {
         name: 'Khartis',
