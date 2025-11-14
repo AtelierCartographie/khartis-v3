@@ -5,10 +5,10 @@
  * replacing 'any' types throughout the codebase.
  */
 
-import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import type { DatasetResult } from '$lib/features/data';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type { DatasetResult } from '$lib/features/pipeline';
+import type { KhartisProject } from '$lib/features/project-management/models/project';
 
 /**
  * Serialized project data structure (JSON-safe)

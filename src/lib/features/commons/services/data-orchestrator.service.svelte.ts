@@ -1,12 +1,12 @@
-import type { DatasetResult } from '$lib/features/data';
-import { ColumnType } from '$lib/features/data';
-import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data/adapters/parsers/geojson.parser';
-import { convertKMLFileToGeoJSON } from '$lib/features/data/adapters/parsers/kml.parser';
-import { geoParquetReader } from '$lib/features/data/adapters/readers/GeoParquetReader';
 import {
   duckDBOrchestrator,
   insertArrowTableIntoDuckDB
 } from '$lib/features/duckdb';
+import type { DatasetResult } from '$lib/features/pipeline';
+import { ColumnType } from '$lib/features/pipeline';
+import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/pipeline/adapters/parsers/geojson.parser';
+import { convertKMLFileToGeoJSON } from '$lib/features/pipeline/adapters/parsers/kml.parser';
+import { geoParquetReader } from '$lib/features/pipeline/adapters/readers/GeoParquetReader';
 import {
   getParsedDataLength,
   isGeoJSONFeatureCollection,
@@ -479,20 +479,16 @@ class DataOrchestratorService {
       file.cachedGeoParquet = bufferToBase64(buffer);
       file.cachedDataset = createDatasetCacheSnapshot(dataset);
 
-      logger.success(
-        '✅ Cache created successfully',
-        LogCategory.DATA,
-        {
-          fileId: file.id,
-          fileName: file.name,
-          datasetId: dataset.id,
-          tableName: dataset.tableName,
-          cacheSize: file.cachedGeoParquet.length,
-          hasCacheNow: !!file.cachedGeoParquet,
-          hasCachedDataset: !!file.cachedDataset,
-          canRestoreNow: this.canRestoreFromCache(file)
-        }
-      );
+      logger.success('✅ Cache created successfully', LogCategory.DATA, {
+        fileId: file.id,
+        fileName: file.name,
+        datasetId: dataset.id,
+        tableName: dataset.tableName,
+        cacheSize: file.cachedGeoParquet.length,
+        hasCacheNow: !!file.cachedGeoParquet,
+        hasCachedDataset: !!file.cachedDataset,
+        canRestoreNow: this.canRestoreFromCache(file)
+      });
     } catch (error) {
       logger.warn('Failed to cache dataset artifacts', LogCategory.DATA, error);
     } finally {
@@ -881,8 +877,10 @@ class DataOrchestratorService {
       fileCount: files.length,
       processedFileIds: Array.from(this.processedFileIds),
       processingFiles: Array.from(this.processingFiles),
-      filesWithCache: files.filter(f => f.cachedGeoParquet).length,
-      filesWithCacheIds: files.filter(f => f.cachedGeoParquet).map(f => ({ id: f.id, name: f.name }))
+      filesWithCache: files.filter((f) => f.cachedGeoParquet).length,
+      filesWithCacheIds: files
+        .filter((f) => f.cachedGeoParquet)
+        .map((f) => ({ id: f.id, name: f.name }))
     });
 
     // Filter out files that are already processed OR currently being processed
@@ -893,10 +891,11 @@ class DataOrchestratorService {
     logger.info('📊 Unprocessed files analysis', LogCategory.PROJECT, {
       totalFiles: files.length,
       unprocessedCount: unprocessedFiles.length,
-      unprocessedIds: unprocessedFiles.map(f => f.id),
-      unprocessedWithCache: unprocessedFiles.filter(f => f.cachedGeoParquet).length,
-      unprocessedNames: unprocessedFiles.map(f => f.name),
-      canRestoreFromCache: unprocessedFiles.map(f => ({
+      unprocessedIds: unprocessedFiles.map((f) => f.id),
+      unprocessedWithCache: unprocessedFiles.filter((f) => f.cachedGeoParquet)
+        .length,
+      unprocessedNames: unprocessedFiles.map((f) => f.name),
+      canRestoreFromCache: unprocessedFiles.map((f) => ({
         name: f.name,
         hasCache: this.canRestoreFromCache(f),
         hasCachedGeoParquet: !!f.cachedGeoParquet,
@@ -905,10 +904,14 @@ class DataOrchestratorService {
     });
 
     if (unprocessedFiles.length === 0) {
-      logger.info('All files already processed, skipping', LogCategory.PROJECT, {
-        allFilesHaveCache: files.every(f => f.cachedGeoParquet),
-        anyFileHasCache: files.some(f => f.cachedGeoParquet)
-      });
+      logger.info(
+        'All files already processed, skipping',
+        LogCategory.PROJECT,
+        {
+          allFilesHaveCache: files.every((f) => f.cachedGeoParquet),
+          anyFileHasCache: files.some((f) => f.cachedGeoParquet)
+        }
+      );
       return;
     }
 
@@ -1013,20 +1016,33 @@ class DataOrchestratorService {
       layersActions.syncWithVisualizations();
 
       // Save project immediately if caches were created to persist them for next reload
-      const filesWithNewlyCreatedCache = unprocessedFiles.filter(f => f.cachedGeoParquet);
+      const filesWithNewlyCreatedCache = unprocessedFiles.filter(
+        (f) => f.cachedGeoParquet
+      );
       if (filesWithNewlyCreatedCache.length > 0) {
-        logger.info('💾 Triggering immediate save to persist caches', LogCategory.PROJECT, {
-          filesWithCache: filesWithNewlyCreatedCache.length,
-          fileNames: filesWithNewlyCreatedCache.map(f => f.name)
-        });
+        logger.info(
+          '💾 Triggering immediate save to persist caches',
+          LogCategory.PROJECT,
+          {
+            filesWithCache: filesWithNewlyCreatedCache.length,
+            fileNames: filesWithNewlyCreatedCache.map((f) => f.name)
+          }
+        );
 
         // Use setTimeout to avoid blocking and let other effects settle
         setTimeout(async () => {
           try {
             await projectStore.saveCurrentProject();
-            logger.success('✅ Project saved with caches persisted', LogCategory.PROJECT);
+            logger.success(
+              '✅ Project saved with caches persisted',
+              LogCategory.PROJECT
+            );
           } catch (error) {
-            logger.error('Failed to save project after caching', LogCategory.PROJECT, error);
+            logger.error(
+              'Failed to save project after caching',
+              LogCategory.PROJECT,
+              error
+            );
           }
         }, 100);
       }

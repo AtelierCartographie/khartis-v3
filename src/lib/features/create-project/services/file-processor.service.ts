@@ -24,7 +24,7 @@ const ERROR_NO_GEO_COLUMN_MESSAGE = () => m.error_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
-import type { TabularData, JsonValue } from '$lib/types/data';
+import type { JsonValue, TabularData } from '$lib/types/data';
 
 type CsvPrimitive = string | number | boolean | null | Date;
 type CsvRow = Record<string, CsvPrimitive>;
@@ -172,7 +172,7 @@ class CsvProcessor extends FileProcessor {
     const parseStart = performance.now();
 
     // Import CSV parser from new architecture
-    const { CSVParser } = await import('$lib/features/data');
+    const { CSVParser } = await import('$lib/features/pipeline');
     const csvParser = new CSVParser();
     const rawDataset = await csvParser.parse(file);
 

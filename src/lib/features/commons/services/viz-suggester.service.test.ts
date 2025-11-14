@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import type { ColumnAnalysis } from '$lib/features/pipeline/models/column-analysis';
+import { describe, expect, it } from 'vitest';
 import {
   VizSuggesterService,
   type EnrichedColumn
 } from './viz-suggester.service';
-import type { ColumnAnalysis } from '$lib/features/data/models/column-analysis';
 
 describe('VizSuggesterService', () => {
   const service = new VizSuggesterService();

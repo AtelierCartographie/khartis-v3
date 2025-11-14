@@ -1,18 +1,18 @@
-import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import type { DatasetResult } from '$lib/features/data';
-import type {
-  SerializedProject,
-  SerializedProjectData,
-  SerializedUploadedFile,
-  SerializedBasemapAttribute,
-  SerializedDatasetResult
-} from '$lib/types/serialization.types';
-import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import { createDatasetCacheSnapshot } from '$lib/features/commons/utils/dataset-cache.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import { createDatasetCacheSnapshot } from '$lib/features/commons/utils/dataset-cache.utils';
+import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type { DatasetResult } from '$lib/features/pipeline';
+import type { KhartisProject } from '$lib/features/project-management/models/project';
+import type {
+  SerializedBasemapAttribute,
+  SerializedDatasetResult,
+  SerializedProject,
+  SerializedProjectData,
+  SerializedUploadedFile
+} from '$lib/types/serialization.types';
 
 export const ProjectSerializer = {
   async serialize(project: KhartisProject): Promise<SerializedProject> {
@@ -234,8 +234,7 @@ export const ProjectSerializer = {
     }
 
     if (file.cachedDataset) {
-      const sanitizedDataset =
-        createDatasetCacheSnapshot(file.cachedDataset);
+      const sanitizedDataset = createDatasetCacheSnapshot(file.cachedDataset);
       serialized.cachedDataset =
         ProjectSerializer.serializeDatasetResult(sanitizedDataset);
     }
@@ -297,8 +296,9 @@ export const ProjectSerializer = {
     }
 
     if (data.cachedDataset) {
-      const deserializedDataset =
-        ProjectSerializer.deserializeDatasetResult(data.cachedDataset);
+      const deserializedDataset = ProjectSerializer.deserializeDatasetResult(
+        data.cachedDataset
+      );
       file.cachedDataset = createDatasetCacheSnapshot(deserializedDataset);
     }
 
@@ -327,9 +327,7 @@ export const ProjectSerializer = {
         ...dataset.metadata,
         processedAt: dataset.metadata.processedAt.toISOString()
       },
-      createdAt: dataset.createdAt
-        ? dataset.createdAt.toISOString()
-        : undefined
+      createdAt: dataset.createdAt ? dataset.createdAt.toISOString() : undefined
     };
   },
 

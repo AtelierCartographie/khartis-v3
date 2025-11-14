@@ -1,13 +1,13 @@
+import type { ProcessedDataset } from '$lib/features/pipeline';
 import type { Geometry, Position } from 'geojson';
-import type { ProcessedDataset } from '$lib/features/data';
+import {
+  getCategoricalColorMap,
+  getColorForValue,
+  getSizeForValue
+} from '../../map/utils/data-styling.utils';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { hexToRgb } from './color-utils';
-import {
-  getColorForValue,
-  getSizeForValue,
-  getCategoricalColorMap
-} from '../../map/utils/data-styling.utils';
-import { logger, LogCategory } from './logger';
+import { LogCategory, logger } from './logger';
 
 interface ExportOptions {
   width: number;

@@ -1,14 +1,14 @@
+import type { ProcessedDataset } from '$lib/features/pipeline';
+import type { GeoJSONFeature } from '$lib/types/data';
+import {
+  isGeoJSONFeature,
+  isGeoJSONFeatureCollection,
+  isTabularData
+} from '$lib/types/data';
 import Papa from 'papaparse';
 import type { UploadedFile } from '../store/create-project.types';
+import { LogCategory, logger } from './logger';
 import { generateFilename } from './string.utils';
-import { logger, LogCategory } from './logger';
-import type { ProcessedDataset } from '$lib/features/data';
-import {
-  isTabularData,
-  isGeoJSONFeatureCollection,
-  isGeoJSONFeature
-} from '$lib/types/data';
-import type { GeoJSONFeature } from '$lib/types/data';
 
 export const generateExportFilename = generateFilename;
 

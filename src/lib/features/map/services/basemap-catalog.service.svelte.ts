@@ -1,10 +1,10 @@
+import type { ProcessedDataset } from '$lib/features/pipeline';
+import { LogCategory, logger } from '../../commons/utils/logger';
 import type {
+  BasemapCatalog,
   BasemapMetadata,
-  BasemapSuggestion,
-  BasemapCatalog
+  BasemapSuggestion
 } from '../types/basemap.types';
-import type { ProcessedDataset } from '$lib/features/data';
-import { logger, LogCategory } from '../../commons/utils/logger';
 
 const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
 
