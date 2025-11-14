@@ -1,23 +1,23 @@
-import type {
-  GeoColumnResult,
-  GeoDetectionResult
-} from '$lib/features/commons/utils/geo-detector.utils';
-import type { ProcessedDataset } from '$lib/features/data';
-import type { GeoArrowMetadata } from '$lib/features/data/models/geo-arrow-metadata';
-import { geoParquetReader } from '$lib/features/data/adapters/readers/GeoParquetReader';
-import type { GeoColumnInfo } from '$lib/features/data/types/AnalysisResult';
-import { isGeoJSONFeatureCollection } from '$lib/types/data';
-import type { Table } from 'apache-arrow/Arrow';
-import { SvelteMap } from 'svelte/reactivity';
 import {
   DuckDBError,
   ParseError
 } from '$lib/features/commons/errors/pipeline.errors';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
+import type {
+  GeoColumnResult,
+  GeoDetectionResult
+} from '$lib/features/commons/utils/geo-detector.utils';
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import type { ProcessedDataset } from '$lib/features/data';
+import { geoParquetReader } from '$lib/features/data/adapters/readers/GeoParquetReader';
+import type { GeoArrowMetadata } from '$lib/features/data/models/geo-arrow-metadata';
+import type { GeoColumnInfo } from '$lib/features/data/types/AnalysisResult';
+import { isGeoJSONFeatureCollection } from '$lib/types/data';
+import type { Table } from 'apache-arrow/Arrow';
+import { SvelteMap } from 'svelte/reactivity';
 import { insertArrowTableIntoDuckDB } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
 import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
@@ -94,6 +94,7 @@ class DuckDBOrchestratorService {
   );
 
   private filterIdCounter = 0;
+
   private metadataPrefetches = new Map<string, Promise<void>>();
 
   private _datasetsVersion = $state(0);
@@ -187,15 +188,19 @@ class DuckDBOrchestratorService {
         datasets.set(dataset.id, dataset);
       });
 
-      logger.info('[PERFORMANCE] Triggering Arrow metadata prefetch', LogCategory.DUCKDB, {
-        tableName,
-        datasetId: dataset.id,
-        rowCount: dataset.rowCount,
-        hasGeometryColumn: dataset.columns.some((col) => {
-          const name = col.name.toLowerCase();
-          return name === 'geom' || name === 'geometry';
-        })
-      });
+      logger.info(
+        '[PERFORMANCE] Triggering Arrow metadata prefetch',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          datasetId: dataset.id,
+          rowCount: dataset.rowCount,
+          hasGeometryColumn: dataset.columns.some((col) => {
+            const name = col.name.toLowerCase();
+            return name === 'geom' || name === 'geometry';
+          })
+        }
+      );
 
       void this.prefetchArrowMetadata(dataset);
 
@@ -1103,12 +1108,15 @@ class DuckDBOrchestratorService {
       }
     );
 
-    logger.debug('[duckDBOrchestrator:Legacy] Dataset added to reactive state', {
-      datasetId: dataset.id,
-      tableName,
-      sourceFileId: dataset.sourceFileId,
-      totalDatasetsCount: this._state.datasets.size
-    });
+    logger.debug(
+      '[duckDBOrchestrator:Legacy] Dataset added to reactive state',
+      {
+        datasetId: dataset.id,
+        tableName,
+        sourceFileId: dataset.sourceFileId,
+        totalDatasetsCount: this._state.datasets.size
+      }
+    );
 
     logger.info('GeoJSON dataset created', LogCategory.DUCKDB, {
       tableName,
@@ -1682,21 +1690,29 @@ class DuckDBOrchestratorService {
 
     const overallStart = performance.now();
 
-    logger.info('[PERFORMANCE] Starting GeoParquet conversion', LogCategory.DUCKDB, {
-      tableName,
-      operation: 'createArrowTableWithMetadata'
-    });
+    logger.info(
+      '[PERFORMANCE] Starting GeoParquet conversion',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        operation: 'createArrowTableWithMetadata'
+      }
+    );
 
     const exportStart = performance.now();
     const geoparquetBuffer = await Duck.copy_to_geoparquet_as_buffer(tableName);
     const exportDuration = performance.now() - exportStart;
 
-    logger.info('[PERFORMANCE] DuckDB → GeoParquet serialization', LogCategory.DUCKDB, {
-      tableName,
-      bufferSize: geoparquetBuffer.byteLength,
-      durationMs: exportDuration.toFixed(2),
-      durationSec: (exportDuration / 1000).toFixed(2)
-    });
+    logger.info(
+      '[PERFORMANCE] DuckDB → GeoParquet serialization',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        bufferSize: geoparquetBuffer.byteLength,
+        durationMs: exportDuration.toFixed(2),
+        durationSec: (exportDuration / 1000).toFixed(2)
+      }
+    );
 
     const readStart = performance.now();
     const arrowTableWithMetadata =
@@ -1709,25 +1725,33 @@ class DuckDBOrchestratorService {
 
     const totalDuration = performance.now() - overallStart;
 
-    logger.info('[PERFORMANCE] GeoParquet → Arrow deserialization', LogCategory.DUCKDB, {
-      tableName,
-      durationMs: readDuration.toFixed(2),
-      durationSec: (readDuration / 1000).toFixed(2),
-      hasMetadata: !!geoArrowMetadata
-    });
+    logger.info(
+      '[PERFORMANCE] GeoParquet → Arrow deserialization',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        durationMs: readDuration.toFixed(2),
+        durationSec: (readDuration / 1000).toFixed(2),
+        hasMetadata: !!geoArrowMetadata
+      }
+    );
 
-    logger.info('[PERFORMANCE] Total GeoParquet round-trip', LogCategory.DUCKDB, {
-      tableName,
-      totalDurationMs: totalDuration.toFixed(2),
-      totalDurationSec: (totalDuration / 1000).toFixed(2),
-      serializationMs: exportDuration.toFixed(2),
-      deserializationMs: readDuration.toFixed(2),
-      bufferSizeMB: (geoparquetBuffer.byteLength / 1024 / 1024).toFixed(2),
-      rowCount: arrowTableWithMetadata.numRows,
-      metadataKeys: arrowTableWithMetadata.schema?.metadata
-        ? Array.from(arrowTableWithMetadata.schema.metadata.keys())
-        : []
-    });
+    logger.info(
+      '[PERFORMANCE] Total GeoParquet round-trip',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        totalDurationMs: totalDuration.toFixed(2),
+        totalDurationSec: (totalDuration / 1000).toFixed(2),
+        serializationMs: exportDuration.toFixed(2),
+        deserializationMs: readDuration.toFixed(2),
+        bufferSizeMB: (geoparquetBuffer.byteLength / 1024 / 1024).toFixed(2),
+        rowCount: arrowTableWithMetadata.numRows,
+        metadataKeys: arrowTableWithMetadata.schema?.metadata
+          ? Array.from(arrowTableWithMetadata.schema.metadata.keys())
+          : []
+      }
+    );
 
     return { arrowTableWithMetadata, geoArrowMetadata };
   }
@@ -1781,22 +1805,30 @@ class DuckDBOrchestratorService {
       for (const dataset of this._state.datasets.values()) {
         if (dataset.tableName === tableName && dataset.arrowTableWithMetadata) {
           const cacheDuration = performance.now() - getArrowStart;
-          logger.info('[PERFORMANCE] Arrow table from CACHE (fast path)', LogCategory.DUCKDB, {
-            tableName,
-            numRows: dataset.arrowTableWithMetadata.numRows,
-            hasMetadata: !!dataset.geoArrowMetadata,
-            primaryColumn: dataset.geoArrowMetadata?.primary_column,
-            durationMs: cacheDuration.toFixed(2)
-          });
+          logger.info(
+            '[PERFORMANCE] Arrow table from CACHE (fast path)',
+            LogCategory.DUCKDB,
+            {
+              tableName,
+              numRows: dataset.arrowTableWithMetadata.numRows,
+              hasMetadata: !!dataset.geoArrowMetadata,
+              primaryColumn: dataset.geoArrowMetadata?.primary_column,
+              durationMs: cacheDuration.toFixed(2)
+            }
+          );
           return dataset.arrowTableWithMetadata;
         }
       }
 
       // Slow path: Materialize Arrow table with GeoParquet round-trip
-      logger.warn('[PERFORMANCE] Cache miss - triggering GeoParquet conversion', LogCategory.DUCKDB, {
-        tableName,
-        warning: 'This is slow (~60-90 seconds for large datasets)'
-      });
+      logger.warn(
+        '[PERFORMANCE] Cache miss - triggering GeoParquet conversion',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          warning: 'This is slow (~60-90 seconds for large datasets)'
+        }
+      );
 
       const { arrowTableWithMetadata, geoArrowMetadata } =
         await this.createArrowTableWithMetadata(tableName);
@@ -1807,12 +1839,16 @@ class DuckDBOrchestratorService {
           dataset.arrowTableWithMetadata = arrowTableWithMetadata;
           dataset.geoArrowMetadata = geoArrowMetadata || undefined;
           const totalDuration = performance.now() - getArrowStart;
-          logger.info('[PERFORMANCE] Cache updated after materialization', LogCategory.DUCKDB, {
-            tableName,
-            hasMetadata: !!geoArrowMetadata,
-            totalDurationMs: totalDuration.toFixed(2),
-            totalDurationSec: (totalDuration / 1000).toFixed(2)
-          });
+          logger.info(
+            '[PERFORMANCE] Cache updated after materialization',
+            LogCategory.DUCKDB,
+            {
+              tableName,
+              hasMetadata: !!geoArrowMetadata,
+              totalDurationMs: totalDuration.toFixed(2),
+              totalDurationSec: (totalDuration / 1000).toFixed(2)
+            }
+          );
           break;
         }
       }
@@ -1828,9 +1864,13 @@ class DuckDBOrchestratorService {
     dataset: DuckDBDataset
   ): Promise<void> | undefined {
     if (dataset.arrowTableWithMetadata) {
-      logger.debug('[PERFORMANCE] Prefetch skipped - already cached', LogCategory.DUCKDB, {
-        tableName: dataset.tableName
-      });
+      logger.debug(
+        '[PERFORMANCE] Prefetch skipped - already cached',
+        LogCategory.DUCKDB,
+        {
+          tableName: dataset.tableName
+        }
+      );
       return Promise.resolve();
     }
 
@@ -1840,26 +1880,38 @@ class DuckDBOrchestratorService {
     });
 
     if (!hasGeometryColumn) {
-      logger.debug('[PERFORMANCE] Prefetch skipped - no geometry', LogCategory.DUCKDB, {
-        tableName: dataset.tableName
-      });
+      logger.debug(
+        '[PERFORMANCE] Prefetch skipped - no geometry',
+        LogCategory.DUCKDB,
+        {
+          tableName: dataset.tableName
+        }
+      );
       return Promise.resolve();
     }
 
     const existing = this.metadataPrefetches.get(dataset.tableName);
     if (existing) {
-      logger.debug('[PERFORMANCE] Prefetch already in progress', LogCategory.DUCKDB, {
-        tableName: dataset.tableName
-      });
+      logger.debug(
+        '[PERFORMANCE] Prefetch already in progress',
+        LogCategory.DUCKDB,
+        {
+          tableName: dataset.tableName
+        }
+      );
       return existing;
     }
 
-    logger.info('[PERFORMANCE] SKIPPING Arrow metadata prefetch (deferred until map needs it)', LogCategory.DUCKDB, {
-      tableName: dataset.tableName,
-      sourceFileId: dataset.sourceFileId,
-      rowCount: dataset.rowCount,
-      reason: 'Lazy loading optimization - will materialize on-demand'
-    });
+    logger.info(
+      '[PERFORMANCE] SKIPPING Arrow metadata prefetch (deferred until map needs it)',
+      LogCategory.DUCKDB,
+      {
+        tableName: dataset.tableName,
+        sourceFileId: dataset.sourceFileId,
+        rowCount: dataset.rowCount,
+        reason: 'Lazy loading optimization - will materialize on-demand'
+      }
+    );
 
     return Promise.resolve();
   }
