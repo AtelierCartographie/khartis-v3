@@ -26,15 +26,52 @@
     type FilterStats,
     type AnalysisResult
   } from '$lib/features/duckdb';
-  import type { ProcessedDataset } from '$lib/features/pipeline';
+  import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import { logger, LogCategory } from '../utils/logger';
   import {
     create_summary_plot,
-    type SummaryPlotData
+    type SummaryPlotData,
+    type NumericHistogram,
+    type CategoricalHistogram
   } from '$lib/features/duckdb/services/duckdb/summary-plot';
   import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
   import ColumnRenameModal from './column-rename-modal.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+
+  const tableLogger = {
+    debug: (message: string, data?: unknown) =>
+      logger.debug(message, LogCategory.UI, data),
+    info: (message: string, data?: unknown) =>
+      logger.info(message, LogCategory.UI, data),
+    warn: (message: string, data?: unknown) =>
+      logger.warn(message, LogCategory.UI, data),
+    error: (message: string, data?: unknown) =>
+      logger.error(message, LogCategory.UI, data)
+  };
+
+  type HistogramLike = NumericHistogram | CategoricalHistogram;
+
+  function isHistogram(value: unknown): value is HistogramLike {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      typeof (value as HistogramLike).toArray === 'function'
+    );
+  }
+
+  function isNumericHistogram(value: unknown): value is NumericHistogram {
+    if (!isHistogram(value)) return false;
+    const sample = value.toArray()[0];
+    return sample === undefined || 'bin' in sample;
+  }
+
+  function isCategoricalHistogram(
+    value: unknown
+  ): value is CategoricalHistogram {
+    if (!isHistogram(value)) return false;
+    const sample = value.toArray()[0];
+    return sample === undefined || 'category' in sample;
+  }
 
   interface Props {
     dataset?: ProcessedDataset;
@@ -821,35 +858,48 @@
       return null;
     }
 
-    const histogram = analysis.histogram as {
-      toArray?: () => unknown[];
-      numRows?: number;
+    const histogramValue = analysis.histogram;
+
+    const renderPlot = (summaryData: SummaryPlotData) => {
+      try {
+        const plot = create_summary_plot(summaryData, {
+          width: 150,
+          height: 48,
+          main_color: '#a56eff',
+          nulls_color: '#ffd666'
+        });
+        return plot;
+      } catch (err) {
+        logger.error('Error creating histogram', LogCategory.UI, err);
+        return null;
+      }
     };
 
-    if (
-      !histogram ||
-      typeof histogram.toArray !== 'function' ||
-      typeof histogram.numRows !== 'number'
-    ) {
-      return null;
+    if (analysis.type_simple === 'string') {
+      if (!isCategoricalHistogram(histogramValue)) {
+        return null;
+      }
+      const summaryData: SummaryPlotData = {
+        ...(analysis as SummaryPlotData & { type_simple: 'string' }),
+        histogram: histogramValue
+      };
+      return renderPlot(summaryData);
     }
 
-    try {
+    if (analysis.type_simple === 'numeric' || analysis.type_simple === 'date') {
+      if (!isNumericHistogram(histogramValue)) {
+        return null;
+      }
       const summaryData: SummaryPlotData = {
-        ...(analysis as SummaryPlotData),
-        histogram
+        ...(analysis as SummaryPlotData & {
+          type_simple: 'numeric' | 'date';
+        }),
+        histogram: histogramValue
       };
-      const plot = create_summary_plot(summaryData, {
-        width: 150,
-        height: 48,
-        main_color: '#a56eff',
-        nulls_color: '#ffd666'
-      });
-      return plot;
-    } catch (err) {
-      logger.error('Error creating histogram', LogCategory.UI, err);
-      return null;
+      return renderPlot(summaryData);
     }
+
+    return null;
   }
 
   onMount(async () => {
@@ -884,7 +934,7 @@
   });
 
   $effect(() => {
-    logger.debug('[AdvancedDataTable] $effect TRIGGERED', {
+    tableLogger.debug('[AdvancedDataTable] $effect TRIGGERED', {
       hasDataset: !!dataset,
       hasTableName: !!tableName,
       datasetId: dataset?.id,
@@ -894,43 +944,40 @@
       timestamp: new Date().toISOString()
     });
 
-    logger.debug(
-      '[AdvancedDataTable] Data source $effect triggered',
-      LogCategory.UI,
-      {
-        hasDataset: !!dataset,
-        hasTableName: !!tableName,
-        datasetId: dataset?.id,
-        datasetName: dataset?.name,
-        tableName
-      }
-    );
+    tableLogger.debug('[AdvancedDataTable] Data source $effect triggered', {
+      hasDataset: !!dataset,
+      hasTableName: !!tableName,
+      datasetId: dataset?.id,
+      datasetName: dataset?.name,
+      tableName
+    });
 
     selectedRowIds = new SvelteSet();
     selectAllVisible = false;
 
     if (dataset || tableName) {
-      logger.debug('[AdvancedDataTable] Has data source - LOADING', {
+      tableLogger.debug('[AdvancedDataTable] Has data source - LOADING', {
         willLoadFromTable: !!tableName,
         willLoadFromDataset: !!dataset && !tableName
       });
 
       untrack(async () => {
-        logger.debug('[AdvancedDataTable] Starting data load...');
+        tableLogger.debug('[AdvancedDataTable] Starting data load...');
         await loadColumnsInfo();
 
         if (tableName) {
-          logger.debug(
-            '[AdvancedDataTable] Getting row count from DuckDB table:',
-            tableName
+          tableLogger.debug(
+            '[AdvancedDataTable] Getting row count from DuckDB table',
+            { tableName }
           );
           await refreshFiltersState();
-          logger.debug('[AdvancedDataTable] Row count received:', numRows);
+          tableLogger.debug('[AdvancedDataTable] Row count received', {
+            numRows
+          });
         } else if (dataset) {
-          logger.debug(
-            '[AdvancedDataTable] Using dataset row count:',
-            dataset.rowCount
-          );
+          tableLogger.debug('[AdvancedDataTable] Using dataset row count', {
+            rowCount: dataset.rowCount
+          });
           numRows = dataset.rowCount;
           filterStats = {
             total: dataset.rowCount,
@@ -938,19 +985,21 @@
           };
         }
 
-        logger.debug(
-          '[AdvancedDataTable] Initializing rows with numRows:',
-          numRows
+        tableLogger.debug(
+          '[AdvancedDataTable] Initializing rows with numRows',
+          {
+            numRows
+          }
         );
         await initializeRows(0);
-        logger.debug('[AdvancedDataTable] Data load complete');
+        tableLogger.debug('[AdvancedDataTable] Data load complete');
       });
     } else {
-      logger.debug('[AdvancedDataTable] No data source - CLEARING DATA');
-      logger.debug(
-        '[AdvancedDataTable] No data source - CLEARING DATA',
-        LogCategory.UI
-      );
+      tableLogger.debug('[AdvancedDataTable] No data source - CLEARING DATA');
+      tableLogger.debug('[AdvancedDataTable] No data source - CLEARING DATA', {
+        hasDataset: !!dataset,
+        hasTableName: !!tableName
+      });
       columns = [];
       numRows = 0;
       tableData = [];

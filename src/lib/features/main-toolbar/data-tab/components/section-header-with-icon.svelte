@@ -27,15 +27,16 @@
   }
 </script>
 
-<div
+<button
   class="section-header-with-icon"
   class:collapsible={collapsible}
-  role={collapsible ? 'button' : undefined}
-  tabindex={collapsible ? 0 : undefined}
-  onclick={toggleExpanded}
-  onkeydown={(e: KeyboardEvent) => {
-    if (collapsible && (e.key === 'Enter' || e.key === ' ')) {
-      e.preventDefault();
+  type="button"
+  disabled={!collapsible}
+  aria-expanded={collapsible ? expanded : undefined}
+  onclick={collapsible ? toggleExpanded : undefined}
+  onkeydown={(event: KeyboardEvent) => {
+    if (collapsible && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
       toggleExpanded();
     }
   }}
@@ -58,7 +59,7 @@
   {#if subtitle && expanded}
     <p class="header-subtitle">{subtitle}</p>
   {/if}
-</div>
+</button>
 
 <style>
   .section-header-with-icon {

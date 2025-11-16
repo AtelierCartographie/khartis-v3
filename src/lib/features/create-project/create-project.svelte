@@ -46,11 +46,7 @@
 </script>
 
 <div id="khartis-create-project" data-testid="create-project-modal">
-  <ComposedModal
-    preventCloseOnClickOutside
-    open={open}
-    on:close={handleClose}
-  >
+  <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader
       title={m.create_project_welcome()}
       class={canDismiss ? '' : 'no-close-button'}

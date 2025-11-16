@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Tag, Tooltip } from 'carbon-components-svelte';
+  import { Tooltip } from 'carbon-components-svelte';
   import { WarningAlt, WarningAltFilled } from 'carbon-icons-svelte';
   import { m } from '$lib/paraglide/messages';
 

@@ -1,19 +1,10 @@
-export interface BasemapLayer {
-  title: string;
-  type: 'centroid' | 'limit';
-  file: string;
-}
+import type {
+  BasemapLayer as MapBasemapLayer,
+  BasemapMetadata as MapBasemapMetadata
+} from '$lib/features/map/types/basemap.types';
 
-export interface BasemapMetadata {
-  file: string;
-  title: string;
-  description: string;
-  source: string;
-  date: string;
-  bbox: [number, number, number, number];
-  projection: string;
-  layers: BasemapLayer[];
-}
+export type BasemapLayer = MapBasemapLayer;
+export type BasemapMetadata = MapBasemapMetadata;
 
 export interface BasemapMatchResult {
   basemap: BasemapMetadata;

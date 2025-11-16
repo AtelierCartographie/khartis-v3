@@ -30,17 +30,19 @@
     '.kml',
     '.parquet'
   ];
-  const acceptedTypes = [
-    'application/json',
-    'application/geo+json',
-    'application/geopackage+sqlite3',
-    'application/vnd.google-earth.kml+xml',
-    'application/x-parquet'
-  ];
-
   async function handleImport() {
     if (files.length === 0) {
       error = m.basemap_import_modal_error_select_file();
+      return;
+    }
+
+    const duck = Duck;
+    if (!duck) {
+      error = m.basemap_custom_error();
+      logger.error(
+        'DuckDB not initialized for custom basemap import',
+        LogCategory.MAP
+      );
       return;
     }
 
@@ -51,39 +53,61 @@
       const file = files[0];
 
       // Register file with DuckDB
-      await Duck.register_files([file]);
+      await duck.register_files([file]);
 
       // Read as geofile to get table name
-      const tableName = await Duck.read_geofile(file, {
+      const tableNameResult = await duck.read_geofile(file, {
         tablename: `custom_basemap_${Date.now()}`
       });
+      const tableName =
+        typeof tableNameResult === 'string'
+          ? tableNameResult
+          : (tableNameResult?.name ??
+            `custom_basemap_${Date.now().toString(36)}`);
 
       // Analyze the geometry
-      const analysis = await Duck.analyse(tableName);
+      const analysis = await duck.analyse(tableName);
 
       // Calculate bounding box from geometry
-      const bboxQuery = await Duck.query(`
+      const bboxQuery = (await duck.query(
+        `
         SELECT
           ST_XMin(ST_Extent(geom)) as minX,
           ST_YMin(ST_Extent(geom)) as minY,
           ST_XMax(ST_Extent(geom)) as maxX,
           ST_YMax(ST_Extent(geom)) as maxY
         FROM ${tableName}
-      `);
+      `,
+        { format: 'array', useProxy: false }
+      )) as Array<{
+        minX: number | null;
+        minY: number | null;
+        maxX: number | null;
+        maxY: number | null;
+      }>;
       const bounds = bboxQuery[0];
 
       // Validate bounds
-      if (!bounds || bounds.minX === null || bounds.minY === null || bounds.maxX === null || bounds.maxY === null) {
+      if (
+        !bounds ||
+        bounds.minX === null ||
+        bounds.minY === null ||
+        bounds.maxX === null ||
+        bounds.maxY === null
+      ) {
         throw new Error(m.basemap_import_modal_error_invalid_geometry());
       }
 
       // Detect geometry type
-      const geomTypeQuery = await Duck.query(`
+      const geomTypeQuery = (await duck.query(
+        `
         SELECT DISTINCT ST_GeometryType(geom) as geom_type
         FROM ${tableName}
         LIMIT 1
-      `);
-      const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() || 'polygon';
+      `,
+        { format: 'array', useProxy: false }
+      )) as Array<{ geom_type?: string }>;
+      const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
 
       // Map geometry type to layer type
       const layerType = geomType.includes('point')
@@ -105,7 +129,8 @@
           {
             name: 'geom',
             type: layerType,
-            count: analysis.find((col) => col.name === 'geom')?.count || 0
+            count:
+              Number(analysis.find((col) => col.name === 'geom')?.count) || 0
           }
         ],
         isCustom: true

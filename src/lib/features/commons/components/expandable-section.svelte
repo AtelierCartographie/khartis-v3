@@ -50,7 +50,7 @@
     role="button"
     tabindex="0"
     aria-expanded={expanded}
-    aria-labelText={m.section_toggle()}
+    aria-label={m.section_toggle()}
     onclick={toggle}
     onkeydown={(e: KeyboardEvent) =>
       (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle())}

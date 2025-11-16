@@ -21,6 +21,7 @@ report.*.json
 /.svelte-kit
 /build
 dist
+dev-dist/
 
 # OS
 .DS_Store

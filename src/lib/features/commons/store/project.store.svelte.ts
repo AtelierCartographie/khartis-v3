@@ -130,8 +130,6 @@ class ProjectStore {
           duplicates: file.duplicates,
           statistics: file.statistics,
           sourceType: file.sourceType,
-          cachedDataset: file.cachedDataset,
-          cachedGeoParquet: file.cachedGeoParquet,
           deepAnalysis: file.deepAnalysis,
           geoMatchResult: file.geoMatchResult
         };
@@ -271,13 +269,10 @@ class ProjectStore {
     const project = await projectRepository.load(id);
 
     if (project) {
-      const filesWithCache = project.data?.sourceFiles?.filter(f => f.cachedGeoParquet) || [];
       logger.info('📂 Project loaded from IndexedDB', LogCategory.PROJECT, {
         projectId: project.id,
         projectName: project.manifest.name,
-        filesCount: project.data?.sourceFiles?.length || 0,
-        filesWithCacheCount: filesWithCache.length,
-        filesWithCacheNames: filesWithCache.map(f => f.name)
+        filesCount: project.data?.sourceFiles?.length || 0
       });
 
       this._state.currentProject = project;
@@ -297,14 +292,11 @@ class ProjectStore {
       return;
     }
 
-    const filesWithCache = this._state.currentProject.data?.sourceFiles?.filter(f => f.cachedGeoParquet) || [];
     logger.info('💾 saveCurrentProject() called', LogCategory.PROJECT, {
       projectId: this._state.currentProject.id,
       projectName: this._state.currentProject.manifest.name,
       isDirty: this._state.isDirty,
-      filesCount: this._state.currentProject.data?.sourceFiles?.length || 0,
-      filesWithCacheCount: filesWithCache.length,
-      filesWithCacheNames: filesWithCache.map(f => f.name)
+      filesCount: this._state.currentProject.data?.sourceFiles?.length || 0
     });
 
     try {
@@ -323,10 +315,11 @@ class ProjectStore {
       this._state.currentProject.manifest.updatedAt = new Date();
 
       await projectRepository.save(this._state.currentProject);
+      const cachedFiles = this._state.currentProject.data?.sourceFiles ?? [];
 
       logger.success('✅ Project saved to IndexedDB', LogCategory.PROJECT, {
         projectId: this._state.currentProject.id,
-        filesWithCacheSaved: filesWithCache.length
+        filesWithCacheSaved: cachedFiles.length
       });
 
       this._state.isDirty = false;
@@ -334,7 +327,11 @@ class ProjectStore {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to save project';
-      logger.error('Failed to save project to IndexedDB', LogCategory.PROJECT, error);
+      logger.error(
+        'Failed to save project to IndexedDB',
+        LogCategory.PROJECT,
+        error
+      );
       showError('Failed to save project', message, error);
       throw error;
     }

@@ -15,7 +15,7 @@
   } from '$lib/features/commons/utils/map-export.utils';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-  import { normalizeDatasets } from '$lib/features/data/utils/processed-dataset.utils';
+  import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import {
     Button,
     Column,
@@ -257,9 +257,9 @@
 >
   <div class="content-wrapper">
     <Tabs autoWidth bind:selected={selectedTabIndex}>
-      <Tab labelText={m.download_tab_project()} />
-      <Tab labelText={m.download_tab_map()} />
-      <Tab labelText={m.download_tab_data()} />
+      <Tab label={m.download_tab_project()} />
+      <Tab label={m.download_tab_map()} />
+      <Tab label={m.download_tab_data()} />
 
       <svelte:fragment slot="content">
         <TabContent>

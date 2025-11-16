@@ -71,6 +71,7 @@ import type {
   BreaksRoundedResult,
   DuckDBMetadata,
   DuckDBValue,
+  TableDescribeResult,
   ValidationResult
 } from './types/index.js';
 
@@ -128,6 +129,11 @@ interface JoinByIdOptions {
 interface RegisterFilesOptions {
   shapefile?: boolean;
 }
+
+type DescribeResult = {
+  name: string[];
+  type: string[];
+};
 
 function normalize_name(str: string): string {
   let normalized = str
@@ -286,6 +292,10 @@ class DuckDB {
 
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024;
 
+  private describeCache = new Map<string, DescribeResult>();
+
+  private rowCountCache = new Map<string, number>();
+
   private cacheState: {
     size: number;
     accessOrder: string[];
@@ -294,7 +304,151 @@ class DuckDB {
     accessOrder: []
   };
 
+  private preparedStatements: {
+    describe: duckdb.AsyncPreparedStatement | null;
+    rowCount: duckdb.AsyncPreparedStatement | null;
+  } = {
+    describe: null,
+    rowCount: null
+  };
+
+  private threadsSupported = false;
+
   constructor() {}
+
+  private async closePreparedStatements(): Promise<void> {
+    const statements = Object.values(this.preparedStatements).filter(
+      (statement): statement is duckdb.AsyncPreparedStatement =>
+        Boolean(statement)
+    );
+
+    await Promise.allSettled(statements.map((statement) => statement.close()));
+    this.preparedStatements.describe = null;
+    this.preparedStatements.rowCount = null;
+  }
+
+  private async getDescribeStatement(): Promise<duckdb.AsyncPreparedStatement> {
+    if (!this.connection) {
+      throw new DuckDBError('Connection not established');
+    }
+
+    if (!this.preparedStatements.describe) {
+      this.preparedStatements.describe = await this.connection.prepare(
+        `SELECT column_name, data_type AS column_type
+         FROM information_schema.columns
+         WHERE table_name = ? COLLATE NOCASE
+         ORDER BY ordinal_position`
+      );
+    }
+
+    return this.preparedStatements.describe;
+  }
+
+  private async getRowCountStatement(): Promise<duckdb.AsyncPreparedStatement> {
+    if (!this.connection) {
+      throw new DuckDBError('Connection not established');
+    }
+
+    if (!this.preparedStatements.rowCount) {
+      this.preparedStatements.rowCount = await this.connection.prepare(
+        `SELECT COUNT(*) as num_rows FROM query_table(?)`
+      );
+    }
+
+    return this.preparedStatements.rowCount;
+  }
+
+  private evictGeoParquetEntry(table: string): void {
+    if (!this.table_geoparquet_cache.has(table)) {
+      return;
+    }
+
+    const cachedBuffer = this.table_geoparquet_cache.get(table);
+    if (cachedBuffer) {
+      this.cacheState.size -= cachedBuffer.byteLength;
+    }
+
+    this.table_geoparquet_cache.delete(table);
+    const index = this.cacheState.accessOrder.indexOf(table);
+    if (index > -1) {
+      this.cacheState.accessOrder.splice(index, 1);
+    }
+
+    logger.debug('Invalidated GeoParquet cache entry', LogCategory.DUCKDB, {
+      table
+    });
+  }
+
+  private markTableMutated(table: string): void {
+    this.invalidateTableCache(table);
+    this.evictGeoParquetEntry(table);
+  }
+
+  private async configureRuntimeSettings(): Promise<void> {
+    const pragmas: string[] = [
+      `PRAGMA memory_limit='1024MB';`,
+      `PRAGMA enable_progress_bar=false;`
+    ];
+
+    if (this.threadsSupported) {
+      const desiredThreads =
+        typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+          ? Math.max(1, Math.min(navigator.hardwareConcurrency, 8))
+          : 4;
+      pragmas.unshift(`PRAGMA threads=${desiredThreads};`);
+    }
+
+    for (const pragma of pragmas) {
+      await this.query(pragma, { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC });
+    }
+
+    try {
+      await this.query('INSTALL httpfs; LOAD httpfs;', {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+    } catch (error) {
+      logger.warn(
+        'Failed to load httpfs extension (optional)',
+        LogCategory.DUCKDB,
+        error
+      );
+    }
+  }
+
+  private async runInTransaction(callback: () => Promise<void>): Promise<void> {
+    if (!this.connection) {
+      throw new DuckDBError('Connection not established');
+    }
+    await this.connection.query('BEGIN TRANSACTION;');
+    try {
+      await callback();
+      await this.connection.query('COMMIT;');
+    } catch (error) {
+      await this.connection.query('ROLLBACK;');
+      throw error;
+    }
+  }
+
+  private async dropRegisteredFile(fileId: string | undefined): Promise<void> {
+    if (!fileId || !this.db) {
+      return;
+    }
+    try {
+      await this.db.dropFile(fileId);
+    } catch (error) {
+      logger.warn('Failed to drop registered file', LogCategory.DUCKDB, {
+        fileId,
+        error
+      });
+    } finally {
+      this.registered_files.delete(fileId);
+    }
+  }
+
+  invalidateTableCache(table: string): void {
+    this.describeCache.delete(table);
+    this.rowCountCache.delete(table);
+  }
 
   async init(): Promise<void> {
     const startTime = performance.now();
@@ -313,6 +467,7 @@ class DuckDB {
         }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
+      this.threadsSupported = Boolean(bundle.pthreadWorker);
       logger.info('📦 Bundle selected (local)', LogCategory.DUCKDB, {
         duration: `${(performance.now() - bundleStart).toFixed(2)}ms`
       });
@@ -367,6 +522,8 @@ class DuckDB {
         duration: `${(performance.now() - macrosStart).toFixed(2)}ms`
       });
 
+      await this.configureRuntimeSettings();
+
       this.clearGeoParquetCache();
 
       logger.success('✅ DuckDB initialization complete', LogCategory.DUCKDB, {
@@ -382,6 +539,7 @@ class DuckDB {
   }
 
   async close(): Promise<void> {
+    await this.closePreparedStatements();
     await this.connection?.close();
   }
 
@@ -390,15 +548,22 @@ class DuckDB {
     this.registered_files.clear();
     this.table_metadata.clear();
     this.table_geoparquet_cache.clear();
+    this.describeCache.clear();
+    this.rowCountCache.clear();
+    this.cacheState.accessOrder = [];
+    this.cacheState.size = 0;
+    await this.closePreparedStatements();
     await this.connection?.close();
     await this.db?.dropFiles();
-    await this.db?.reset;
+    await this.db?.reset();
   }
 
   private async add_row_id(table: string): Promise<void> {
+    await this.query(`CREATE OR REPLACE SEQUENCE id_${table} START 1;`, {
+      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+    });
     await this.query(
-      `CREATE OR REPLACE SEQUENCE id_${table} START 1;
-		ALTER TABLE ${table} ADD COLUMN __id INTEGER DEFAULT nextval('id_${table}');`,
+      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${table}');`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
   }
@@ -484,9 +649,9 @@ class DuckDB {
     const format = options.format ?? DUCK_CONST.DEFAULT.FORMAT_TABULAR;
     let filename: string;
     let fileid: string;
-    try {
-      logger.debug('Operation', LogCategory.DUCKDB);
+    let cleanupFileId: string | undefined;
 
+    try {
       if (typeof input === 'string') {
         if (!tablename)
           tablename = generate_unique_table_name(
@@ -495,20 +660,17 @@ class DuckDB {
           );
         filename = tablename;
         fileid = tablename;
-        await this.db!.registerFileText(filename, input);
+        await this.db!.registerFileText(fileid, input);
+        this.registered_files.add(fileid);
+        cleanupFileId = fileid;
       } else if (input instanceof File) {
         filename = input.name;
-        logger.debug('Operation', LogCategory.DUCKDB);
 
         if (!tablename)
           tablename = generate_unique_table_name(filename, this.loaded_files);
 
-        logger.debug('Operation', LogCategory.DUCKDB);
-
         await this.register_files([input]);
         fileid = (input as FileWithId).id;
-
-        logger.debug('Operation', LogCategory.DUCKDB);
       } else {
         throw new DataValidationError(
           'Invalid input type. Expected a string or a File.',
@@ -516,28 +678,40 @@ class DuckDB {
           { receivedType: typeof input }
         );
       }
-      if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
-        const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
-        logger.debug('Operation', LogCategory.DUCKDB);
 
-        await this.query(query, { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC });
+      await this.runInTransaction(async () => {
+        if (!tablename) {
+          throw new DuckDBError('Unable to determine target table name');
+        }
+        if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
+          const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
+          await this.query(query, {
+            format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+          });
+        }
+        if (format === DUCK_CONST.TYPE.PARQUET) {
+          await this.query(
+            `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${fileid}');`,
+            { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+          );
+        }
+        await this.add_row_id(tablename!);
+      });
 
-        logger.debug('Operation', LogCategory.DUCKDB);
-
-        await this.add_row_id(tablename);
+      if (!tablename) {
+        throw new DuckDBError('Unable to determine target table name');
       }
-      if (format === DUCK_CONST.TYPE.PARQUET) {
-        await this.query(
-          `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${fileid}');`,
-          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-        );
-        await this.add_row_id(tablename);
-      }
+
       this.loaded_files.set(tablename, filename);
+      this.markTableMutated(tablename);
       return tablename;
     } catch (error) {
       logger.error('Failed to read tabular data', LogCategory.DUCKDB, error);
       throw error;
+    } finally {
+      if (cleanupFileId) {
+        await this.dropRegisteredFile(cleanupFileId);
+      }
     }
   }
 
@@ -561,31 +735,26 @@ class DuckDB {
 						layers[1].geometry_fields[1].crs.name AS crs`);
         return result as DuckDBMetadata;
       }
-      if (!tablename)
+      if (!tablename) {
         tablename = generate_unique_table_name(geofile.name, this.loaded_files);
-      await this.query(
-        `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
-        {
-          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-        }
-      );
-      await this.add_row_id(tablename);
-      this.loaded_files.set(tablename, geofile.name);
-
-      if (this.table_geoparquet_cache.has(tablename)) {
-        const oldBuffer = this.table_geoparquet_cache.get(tablename);
-        if (oldBuffer) {
-          this.cacheState.size -= oldBuffer.byteLength;
-        }
-        this.table_geoparquet_cache.delete(tablename);
-        const index = this.cacheState.accessOrder.indexOf(tablename);
-        if (index > -1) {
-          this.cacheState.accessOrder.splice(index, 1);
-        }
-        logger.debug('Invalidated stale GeoParquet cache', LogCategory.DUCKDB, {
-          tablename
-        });
       }
+
+      await this.runInTransaction(async () => {
+        await this.query(
+          `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
+          {
+            format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+          }
+        );
+        await this.add_row_id(tablename!);
+      });
+
+      if (!tablename) {
+        throw new DuckDBError('Unable to determine target table name');
+      }
+
+      this.loaded_files.set(tablename, geofile.name);
+      this.markTableMutated(tablename);
 
       logger.info('Table created', LogCategory.DUCKDB, { tablename });
       return tablename;
@@ -613,34 +782,42 @@ class DuckDB {
     );
 
     try {
-      switch (file_type) {
-        case DUCK_CONST.TYPE.TABULAR:
-          await this.query(
-            `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${filename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
-            { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-          );
-          await this.add_row_id(tablename);
-          break;
+      await this.runInTransaction(async () => {
+        if (!tablename) {
+          throw new DuckDBError('Unable to determine target table name');
+        }
+        switch (file_type) {
+          case DUCK_CONST.TYPE.TABULAR:
+            await this.query(
+              `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${filename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
+              { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+            );
+            break;
 
-        case DUCK_CONST.TYPE.PARQUET:
-          await this.query(
-            `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${filename}');`,
-            { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-          );
-          await this.add_row_id(tablename);
-          break;
+          case DUCK_CONST.TYPE.PARQUET:
+            await this.query(
+              `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${filename}');`,
+              { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+            );
+            break;
 
-        case DUCK_CONST.TYPE.GEOFILE:
-          await this.query(
-            `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${filename}');`,
-            {
-              format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-            }
-          );
-          await this.add_row_id(tablename);
-          break;
+          case DUCK_CONST.TYPE.GEOFILE:
+            await this.query(
+              `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${filename}');`,
+              {
+                format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+              }
+            );
+            break;
+        }
+        await this.add_row_id(tablename);
+      });
+      if (!tablename) {
+        throw new DuckDBError('Unable to determine target table name');
       }
+
       this.loaded_files.set(tablename, filename);
+      this.markTableMutated(tablename);
       return tablename;
     } catch (error) {
       logger.error('Failed to read file url', LogCategory.DUCKDB, error);
@@ -651,29 +828,61 @@ class DuckDB {
   async describe_table(
     table: string
   ): Promise<{ name: string[]; type: string[] }> {
-    const result = (await this.query(`DESCRIBE ${table}`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY
-    })) as { column_name: string[]; column_type: string[] };
-    return { name: result.column_name, type: result.column_type };
+    const cached = this.describeCache.get(table);
+    if (cached) {
+      return cached;
+    }
+    try {
+      const statement = await this.getDescribeStatement();
+      const resultTable = await statement.query(table);
+      const records = resultTable.toArray() as unknown as TableDescribeResult[];
+      const names = records.map((row) => row.column_name);
+      const types = records.map((row) => row.column_type);
+
+      const describe = { name: names, type: types };
+      this.describeCache.set(table, describe);
+      return describe;
+    } catch (error) {
+      logger.error('Failed to describe table', LogCategory.DUCKDB, {
+        table,
+        error
+      });
+      throw error;
+    }
   }
 
   async get_row_count(table: string): Promise<number> {
-    const result = (await this.query(
-      `SELECT COUNT(*) as num_rows FROM ${table}`,
-      {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE
-      }
-    )) as Table;
-    return Number(result.get(0)?.num_rows) || 0;
+    const cached = this.rowCountCache.get(table);
+    if (cached !== undefined) {
+      return cached;
+    }
+    try {
+      const statement = await this.getRowCountStatement();
+      const result = await statement.query(table);
+      const rows = result.toArray() as unknown as Array<{ num_rows: number }>;
+      const count = Number(rows[0]?.num_rows ?? 0);
+      this.rowCountCache.set(table, count);
+      return count;
+    } catch (error) {
+      logger.error('Failed to get row count', LogCategory.DUCKDB, {
+        table,
+        error
+      });
+      throw error;
+    }
   }
 
-  async get_data(table: string, options: GetDataOptions = {}): Promise<Table> {
+  async get_data(
+    table: string,
+    options: GetDataOptions = {}
+  ): Promise<Uint8Array> {
     const { geometry = false } = options;
-    const query_end = geometry
-      ? 'SELECT *'
-      : `SELECT COLUMNS(c -> c NOT ILIKE '%geom%')`;
-    const result = await this.query(`FROM ${table} ${query_end}`);
-    return result as Table;
+    const selection = geometry ? '*' : `COLUMNS(c -> c NOT ILIKE '%geom%')`;
+    const query = `SELECT ${selection} FROM ${table}`;
+    const result = (await this.query(query, {
+      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+    })) as ArrayBuffer | Uint8Array;
+    return result instanceof Uint8Array ? result : new Uint8Array(result);
   }
 
   async sort_table(
@@ -699,6 +908,7 @@ class DuckDB {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
+    this.markTableMutated(table);
   }
 
   async change_column_type(
@@ -710,6 +920,7 @@ class DuckDB {
       `ALTER TABLE ${table} ALTER "${column}" SET DATA TYPE ${new_type} USING try_cast("${column}" AS ${new_type})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
+    this.markTableMutated(table);
   }
 
   async change_column_case(
@@ -723,18 +934,21 @@ class DuckDB {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
+    this.markTableMutated(table);
   }
 
   async trim_column(table: string, column: string): Promise<void> {
     await this.query(`UPDATE ${table} set "${column}" = trim("${column}")`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
+    this.markTableMutated(table);
   }
 
   async drop_column(table: string, column: string): Promise<void> {
     await this.query(`ALTER TABLE ${table} DROP "${column}"`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
+    this.markTableMutated(table);
   }
 
   async drop_rows(table: string, rows_id: number[]): Promise<void> {
@@ -744,6 +958,7 @@ class DuckDB {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
+    this.markTableMutated(table);
   }
 
   async update_cell(
@@ -858,6 +1073,7 @@ class DuckDB {
 				ST_Point("${lon_column}", "${lat_column}") as geom;`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
+    this.markTableMutated(table);
   }
 
   clearGeoParquetCache(): void {
@@ -882,21 +1098,22 @@ class DuckDB {
         LogCategory.DUCKDB,
         { table }
       );
-      return this.table_geoparquet_cache.get(table)!;
+      const cachedBuffer = this.table_geoparquet_cache.get(table)!;
+      return cachedBuffer.slice();
     }
 
     logger.debug('Converting DuckDB table to GeoParquet', LogCategory.DUCKDB, {
       table
     });
 
-    // Skip FORMAT 'parquet' so DuckDB writes GeoParquet metadata correctly.
     await this.query(
-      `COPY ${table} TO '${table}.parquet' (COMPRESSION ZSTD);`,
+      `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'uncompressed');`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
     const buffer = await this.db!.copyFileToBuffer(`${table}.parquet`);
+    const stableBuffer = new Uint8Array(buffer); // copy out of WASM memory
 
     try {
       await this.db!.dropFile(`${table}.parquet`);
@@ -914,7 +1131,7 @@ class DuckDB {
     }
 
     while (
-      this.cacheState.size + buffer.byteLength > this.MAX_CACHE_SIZE &&
+      this.cacheState.size + stableBuffer.byteLength > this.MAX_CACHE_SIZE &&
       this.cacheState.accessOrder.length > 0
     ) {
       const oldest = this.cacheState.accessOrder.shift()!;
@@ -928,17 +1145,17 @@ class DuckDB {
       }
     }
 
-    this.table_geoparquet_cache.set(table, buffer);
+    this.table_geoparquet_cache.set(table, stableBuffer);
     this.cacheState.accessOrder.push(table);
-    this.cacheState.size += buffer.byteLength;
+    this.cacheState.size += stableBuffer.byteLength;
 
     logger.success('GeoParquet buffer created and cached', LogCategory.DUCKDB, {
       table,
-      sizeKB: (buffer.byteLength / 1024).toFixed(2),
+      sizeKB: (stableBuffer.byteLength / 1024).toFixed(2),
       cacheSize: this.cacheState.accessOrder.length
     });
 
-    return buffer;
+    return stableBuffer.slice();
   }
 
   async filter_datasets_with_geometry(): Promise<
@@ -999,6 +1216,7 @@ class DuckDB {
       name: tablename,
       create: true
     });
+    this.markTableMutated(tablename);
   }
 
   async calculate_class_breaks(
@@ -1079,6 +1297,7 @@ class DuckDB {
       `CREATE OR REPLACE TABLE ${table} AS
 			 SELECT *, add_class("${column}", [${breaks}]) as ${class_column_name} FROM ${table}`
     );
+    this.markTableMutated(table);
     return class_column_name;
   }
 
@@ -1210,11 +1429,12 @@ class DuckDB {
       // Check if custom_basemap_attributes table exists and has data
       let hasCustomAttributes = false;
       try {
-        const customCheck = await this.query(
+        const customCheck = (await this.query(
           `SELECT COUNT(*) as count FROM custom_basemap_attributes`,
-          { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-        );
-        hasCustomAttributes = customCheck && customCheck[0]?.count > 0;
+          { format: DUCK_CONST.QUERY_FORMAT.ARRAY, useProxy: false }
+        )) as Array<{ count: number }>;
+        const count = customCheck?.[0]?.count ?? 0;
+        hasCustomAttributes = count > 0;
       } catch {
         // Table doesn't exist, that's fine
         hasCustomAttributes = false;
@@ -1229,6 +1449,7 @@ class DuckDB {
           SELECT * FROM custom_basemap_attributes`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
+        this.markTableMutated(unified_table);
 
         join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
 			FROM apply_join_across_basemaps(${table}, ${table_id}, ${unified_table})`;
@@ -1245,12 +1466,14 @@ class DuckDB {
 					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id}, ${basemap_others_id});`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
+        this.markTableMutated(basemap_join_ref_name);
       } else {
         await this.query(
           `CREATE OR REPLACE TABLE ${basemap_join_ref_name} AS
 					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id})`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
+        this.markTableMutated(basemap_join_ref_name);
       }
 
       join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
@@ -1266,6 +1489,7 @@ class DuckDB {
     await this.query(join_across_query, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
+    this.markTableMutated(table_name);
     const synthesis = await this.query(`FROM join_synthesis(${table_name})`, {
       format: DUCK_CONST.QUERY_FORMAT.ARRAY
     });
@@ -1299,6 +1523,7 @@ class DuckDB {
 				LEFT JOIN ${join_results_name} as j
 				ON t.${id} = j.geoname
 				WHERE j.basemap = '${basemap}'`);
+    this.markTableMutated(table);
   }
 }
 

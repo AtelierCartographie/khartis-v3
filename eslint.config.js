@@ -9,7 +9,18 @@ import svelteConfig from './svelte.config.js';
 
 const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
+const ignoredPaths = [
+  'node_modules',
+  'build',
+  'dist',
+  'dev-dist',
+  '.svelte-kit'
+];
+
 export default ts.config(
+  {
+    ignores: ignoredPaths
+  },
   includeIgnoreFile(gitignorePath),
   js.configs.recommended,
   ...ts.configs.recommended,

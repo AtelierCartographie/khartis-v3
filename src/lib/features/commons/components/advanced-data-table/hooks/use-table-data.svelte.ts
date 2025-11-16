@@ -4,7 +4,7 @@
  */
 
 import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
-import type { ProcessedDataset } from '$lib/features/pipeline';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';

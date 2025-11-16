@@ -10,7 +10,7 @@
   import { Reset, Edit, Checkmark, Close } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import * as m from '$lib/paraglide/messages';
 
   const selectedDataset = $derived.by(() => {

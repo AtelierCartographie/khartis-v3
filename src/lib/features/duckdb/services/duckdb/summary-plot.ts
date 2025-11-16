@@ -16,8 +16,9 @@ interface ArrayWithToArrayMethod<T> {
   numRows: number;
 }
 
-type NumericHistogram = ArrayWithToArrayMethod<HistogramBin>;
-type CategoricalHistogram = ArrayWithToArrayMethod<CategoryHistogramItem>;
+export type NumericHistogram = ArrayWithToArrayMethod<HistogramBin>;
+export type CategoricalHistogram =
+  ArrayWithToArrayMethod<CategoryHistogramItem>;
 
 interface SummaryPlotOptions {
   width?: number;
