@@ -12,27 +12,38 @@ export async function insertArrowTableIntoDuckDB(
 ): Promise<void> {
   const startTime = performance.now();
 
-  if (!Duck || !Duck.connection) {
-    throw new Error('DuckDB not initialized - cannot insert Arrow table');
+  if (!Duck) {
+    throw new Error('DuckDB not initialized - Duck instance is null');
   }
 
-  logger.debug('Operation', LogCategory.DUCKDB);
+  if (!Duck.connection) {
+    throw new Error('DuckDB connection not established - connection is null');
+  }
+
+  logger.debug('Inserting Arrow table into DuckDB', LogCategory.DUCKDB, {
+    tableName,
+    rowCount: table.numRows,
+    columnCount: table.schema.fields.length
+  });
 
   try {
     // insertArrowTable is unreliable in DuckDB-WASM, so stream the IPC payload manually.
-    logger.debug('Operation', LogCategory.DUCKDB);
     const ipcStream = tableToIPC(table);
-    logger.debug('Operation', LogCategory.DUCKDB);
     const ipcBuffer =
       ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
-    logger.debug('Operation', LogCategory.DUCKDB);
+    logger.debug(
+      'IPC stream created, inserting into DuckDB',
+      LogCategory.DUCKDB,
+      {
+        bufferSizeKB: (ipcBuffer.byteLength / 1024).toFixed(2)
+      }
+    );
+
     await Duck.connection.insertArrowFromIPCStream(ipcBuffer, {
       name: tableName,
       schema: 'main'
     });
-
-    logger.debug('Operation', LogCategory.DUCKDB);
 
     const duration = performance.now() - startTime;
 
@@ -42,10 +53,7 @@ export async function insertArrowTableIntoDuckDB(
       columnCount: table.schema.fields.length,
       durationMs: duration.toFixed(2)
     });
-
-    logger.debug('Operation', LogCategory.DUCKDB);
   } catch (error) {
-    logger.error('Operation', LogCategory.DUCKDB);
     logger.error(
       'Failed to insert Arrow table into DuckDB',
       LogCategory.DUCKDB,

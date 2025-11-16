@@ -47,7 +47,7 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   }
 
   // Try to calculate bbox from actual data (only for first batch to avoid performance hit)
-  let columnBounds = [-180, -90, 180, 90]; // Default world bounds
+  const columnBounds: [number, number, number, number] = [-180, -90, 180, 90]; // Default world bounds
 
   // Note: Actual bbox calculation would require parsing geometry data
   // For now, use default bounds. Proper implementation would need DuckDB query.

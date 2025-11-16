@@ -10,7 +10,8 @@
  * Basé sur l'algorithme original de khartis-pipeline-old/src/lib/viz_suggestions.ts
  */
 
-import type { ColumnAnalysis } from '$lib/features/pipeline/models/column-analysis';
+import type { ColumnAnalysis } from '$lib/features/data-pipeline/models/column-analysis';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 // ===========================
 // TYPES
@@ -254,7 +255,11 @@ export class VizSuggesterService {
       .filter((col) => this.getUniqueCount(col) > 1); // Exclure colonnes avec 1 seule valeur
 
     if (debug) {
-      logger.debug('[VizSuggester] Colonnes enrichies:', enrichedColumns);
+      logger.debug(
+        '[VizSuggester] Colonnes enrichies:',
+        LogCategory.VISUALIZATION,
+        enrichedColumns
+      );
     }
 
     // Générer suggestions

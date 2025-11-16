@@ -124,6 +124,18 @@ Key reminders:
 3. DuckDB queries drop GeoArrow metadata, so export to GeoParquet (`copy_to_geoparquet_as_buffer`) and re-read via `geoParquetReader` when metadata matters.
 4. The GeoParquet cache lives in memory (LRU ~100 MB). Clear it (`clearGeoParquetCache`) when dropping/recreating tables.
 
+### DuckDB runtime optimizations
+
+`src/lib/features/duckdb/services/duckdb/duckdb.ts` now squeezes more out of DuckDB-WASM:
+
+- **Pragma bootstrap** – `configureRuntimeSettings()` pins thread count, memory limit, disables the progress bar, and attempts to load `httpfs` so remote basemaps can be streamed without temporary files.
+- **Transactional ingestion** – `read_tabular`, `read_geofile`, and `read_link` wrap `CREATE TABLE` + `ST_Read` + `add_row_id` inside `runInTransaction`, so partially-created tables cannot leak when a conversion fails midway.
+- **Prepared statements** – frequently executed queries (`describe_table`, `get_row_count`) now rely on cached `AsyncPreparedStatement`s with parameter binding (`query_table(?)`). This avoids re-parsing SQL and makes metadata lookups immune to identifier injection.
+- **Targeted cache invalidation** – every mutation funnels through `markTableMutated()`, which clears the describe/row-count caches and evicts any GeoParquet buffer for the affected table. Joins, column edits, and even Arrow inserts automatically invalidate their caches.
+- **Ephemeral file cleanup** – inline uploads registered via `registerFileText` are dropped via `dropRegisteredFile` once the table exists, preventing the WASM FS from holding on to large pasted datasets.
+
+Thanks to these tweaks DuckDB stays the single source of truth (CDC §3.A) but avoids the previous round-trips through GeoParquet for metadata, and deck.gl pulls Arrow IPC directly from DuckDB.
+
 ## Core interfaces
 
 ```ts

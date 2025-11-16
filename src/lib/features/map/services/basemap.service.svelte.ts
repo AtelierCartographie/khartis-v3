@@ -155,10 +155,20 @@ class BasemapService {
     const layerTables = new SvelteMap<string, ArrowTable>();
 
     for (const layer of layers) {
+      if (!layer.file) {
+        logger.warn('Skipping layer without associated file', LogCategory.MAP, {
+          layerName: layer.name,
+          layerTitle: layer.title
+        });
+        continue;
+      }
       try {
         const table = await this.loadGeometryFromParquet(layer.file);
         layerTables.set(layer.file, table);
-        logger.info(`Loaded layer: ${layer.title}`, LogCategory.MAP);
+        logger.info(
+          `Loaded layer: ${layer.title ?? layer.name}`,
+          LogCategory.MAP
+        );
       } catch (error) {
         logger.warn(
           `Failed to load layer ${layer.title}`,

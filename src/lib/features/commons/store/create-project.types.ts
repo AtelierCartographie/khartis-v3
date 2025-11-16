@@ -1,4 +1,3 @@
-import type { DatasetResult } from '$lib/features/pipeline';
 import type { ParsedData } from '$lib/types/data';
 import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
@@ -55,8 +54,7 @@ export interface UploadedFile {
   };
   deepAnalysis?: DataAnalysisResult;
   geoMatchResult?: Record<string, unknown>;
-  cachedDataset?: DatasetResult;
-  cachedGeoParquet?: string;
+  // Cached dataset snapshots are no longer persisted – the pipeline reloads from DuckDB
 }
 
 export interface ExampleProject {

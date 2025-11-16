@@ -53,7 +53,7 @@ File Upload → ParserRegistry → Parse → ValidationChain → TypeInferrer �
 src/lib/
 ├── features/           # Feature-based architecture
 │   ├── commons/        # Shared: components, stores, services, utils, types
-│   ├── data/           # Data pipeline (modular functional design)
+│   ├── pipeline/           # Data pipeline (modular functional design)
 │   │   ├── adapters/       # Concrete implementations (parsers, validators, type inference)
 │   │   ├── contracts/      # TypeScript interfaces (IParser, IValidator, ITypeInferrer)
 │   │   ├── models/         # Domain entities (RawDataset, DatasetResult, ColumnType)

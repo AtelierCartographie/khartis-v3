@@ -1,12 +1,18 @@
-import type { ColumnAnalysis } from '$lib/features/pipeline/models/column-analysis';
+import type { ColumnAnalysis } from '$lib/features/data-pipeline/models/column-analysis';
 import { describe, expect, it } from 'vitest';
 import {
   VizSuggesterService,
-  type EnrichedColumn
+  type EnrichedColumn,
+  type SimplifiedGeometryType
 } from './viz-suggester.service';
 
 describe('VizSuggesterService', () => {
   const service = new VizSuggesterService();
+  type VizSuggesterPrivateAPI = {
+    getColumnSemioType(column: ColumnAnalysis): EnrichedColumn;
+    simplifyGeometryType(geometry: string): SimplifiedGeometryType;
+  };
+  const serviceInternals = service as unknown as VizSuggesterPrivateAPI;
 
   describe('suggestVisualizations', () => {
     it('should return empty array when no geometry', () => {
@@ -334,9 +340,7 @@ describe('VizSuggesterService', () => {
         }
       };
 
-      const enriched = (service as any).getColumnSemioType(
-        column
-      ) as EnrichedColumn;
+      const enriched = serviceInternals.getColumnSemioType(column);
 
       expect(enriched.semioType).toBe('QTR');
       expect(enriched.score).toBeGreaterThan(0);
@@ -353,9 +357,7 @@ describe('VizSuggesterService', () => {
         }
       };
 
-      const enriched = (service as any).getColumnSemioType(
-        column
-      ) as EnrichedColumn;
+      const enriched = serviceInternals.getColumnSemioType(column);
 
       expect(enriched.semioType).toBe('QLO');
     });
@@ -363,19 +365,18 @@ describe('VizSuggesterService', () => {
 
   describe('Geometry type simplification', () => {
     it('should simplify MultiPolygon to polygon', () => {
-      const simplified = (service as any).simplifyGeometryType('MultiPolygon');
+      const simplified = serviceInternals.simplifyGeometryType('MultiPolygon');
       expect(simplified).toBe('polygon');
     });
 
     it('should simplify MultiLineString to line', () => {
-      const simplified = (service as any).simplifyGeometryType(
-        'MultiLineString'
-      );
+      const simplified =
+        serviceInternals.simplifyGeometryType('MultiLineString');
       expect(simplified).toBe('line');
     });
 
     it('should simplify MultiPoint to point', () => {
-      const simplified = (service as any).simplifyGeometryType('MultiPoint');
+      const simplified = serviceInternals.simplifyGeometryType('MultiPoint');
       expect(simplified).toBe('point');
     });
   });

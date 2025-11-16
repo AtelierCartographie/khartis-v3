@@ -7,7 +7,7 @@
   import DeckMap from './components/deck-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import type { FeatureCollection } from 'geojson';
-  import type { DatasetResult } from '$lib/features/data';
+  import type { DatasetResult } from '$lib/features/data-pipeline';
 
   let isInitializing = $state(true);
   let displayTable = $state<ArrowTable | null>(null);
@@ -57,10 +57,26 @@
           );
 
           // Use Arrow table directly from DuckDB orchestrator (has GeoArrow metadata)
-          const arrowTable = await duckDBOrchestrator.getArrowTable(
+          const arrowTable = await duckDBOrchestrator.getArrowTableDirect(
             duckDBDataset.tableName
           );
           if (arrowTable) {
+            const schemaMetadata = arrowTable.schema?.metadata;
+            logger.info('Arrow table metadata snapshot', LogCategory.MAP, {
+              rowCount: arrowTable.numRows,
+              schemaMetadataKeys: schemaMetadata
+                ? Array.from(schemaMetadata.keys())
+                : [],
+              geometryFieldNames: arrowTable.schema.fields
+                .filter((field) =>
+                  ['geom', 'geometry'].includes(field.name.toLowerCase())
+                )
+                .map((field) => ({
+                  name: field.name,
+                  extension: field.metadata?.get('ARROW:extension:name') ?? ''
+                })),
+              datasetId: dataset.id
+            });
             logger.success('Arrow table loaded for display', LogCategory.MAP, {
               rowCount: arrowTable.numRows,
               hasMetadata: !!arrowTable.schema?.metadata

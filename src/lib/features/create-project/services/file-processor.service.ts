@@ -172,7 +172,7 @@ class CsvProcessor extends FileProcessor {
     const parseStart = performance.now();
 
     // Import CSV parser from new architecture
-    const { CSVParser } = await import('$lib/features/pipeline');
+    const { CSVParser } = await import('$lib/features/data-pipeline');
     const csvParser = new CSVParser();
     const rawDataset = await csvParser.parse(file);
 

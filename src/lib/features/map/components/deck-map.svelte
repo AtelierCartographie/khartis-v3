@@ -7,7 +7,7 @@
   import type { FeatureCollection } from 'geojson';
   import maplibregl from 'maplibre-gl';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import {
@@ -197,21 +197,6 @@
       .map(String);
 
     return getCategoricalColorMap(categories, viz.classification.colors);
-  });
-
-  // OPTIMIZATION: Memoize visualization config to prevent re-renders on object reference changes
-  const visualizationConfig = $derived.by(() => {
-    const viz = defaultVisualization;
-    if (!viz) return null;
-
-    return {
-      id: viz.id,
-      datasetId: viz.datasetId,
-      mapping: viz.mapping,
-      style: viz.style,
-      classification: viz.classification,
-      symbols: viz.symbols
-    };
   });
 
   function formatValue(value: unknown): string {
@@ -480,6 +465,13 @@
       const geometryField = jsTable.schema.fields.find(
         (field) => field.name === geoColumn
       );
+      logger.info('Geometry field inspection', LogCategory.MAP, {
+        geoColumn,
+        fieldType: geometryField?.type?.toString() ?? 'unknown',
+        fieldMetadataKeys: geometryField?.metadata
+          ? Array.from(geometryField.metadata.keys())
+          : []
+      });
       const arrowExtensionRaw =
         geometryField?.metadata?.get('ARROW:extension:name') ?? null;
       const arrowExtension = arrowExtensionRaw
@@ -502,6 +494,16 @@
           : false;
       const resolvedGeometryType =
         extensionGeometryType ?? normalizedGeometryType;
+
+      logger.debug('GeoArrow metadata parsed', LogCategory.MAP, {
+        geoColumn,
+        geometryType,
+        normalizedGeometryType,
+        arrowExtension,
+        expectedExtension,
+        extensionGeometryType,
+        hasMatchingGeoExtension
+      });
 
       if (!hasMatchingGeoExtension) {
         if (hasUserDataset) {
@@ -527,6 +529,13 @@
             }
           );
         }
+      }
+      if (hasMatchingGeoExtension) {
+        logger.info('GeoArrow extension validated', LogCategory.MAP, {
+          geoColumn,
+          geometryType: resolvedGeometryType,
+          arrowExtension
+        });
       }
 
       logger.info('Creating deck layers', LogCategory.MAP, {
@@ -743,6 +752,14 @@
 
           if (polygonVector) {
             polygonProps.getPolygon = polygonVector;
+            logger.debug(
+              'Polygon vector (manual accessor) detected',
+              LogCategory.MAP,
+              {
+                geoColumn,
+                vectorConstructor: polygonVector.constructor?.name ?? 'unknown'
+              }
+            );
           }
 
           deckLayer = new geodecklayers.GeoArrowPolygonLayer(polygonProps);
@@ -750,9 +767,22 @@
         }
 
         default:
+          logger.error(
+            'Unsupported geometry type for Deck layer',
+            LogCategory.MAP,
+            {
+              geometryType: resolvedGeometryType,
+              datasetId
+            }
+          );
           return [];
       }
 
+      logger.info('Deck layer constructed', LogCategory.MAP, {
+        layerId: deckLayer?.props?.id ?? 'unknown',
+        geometryType: resolvedGeometryType,
+        datasetId
+      });
       return [deckLayer];
     } catch (error) {
       logger.error('Failed to create Deck.gl layers', LogCategory.MAP, error);
@@ -803,6 +833,13 @@
     jsTable: ArrowTable | null,
     geojson: FeatureCollection | null
   ): void {
+    logger.info('updateMapLayers invoked', LogCategory.MAP, {
+      hasJsTable: !!jsTable,
+      hasGeoJSON: !!geojson,
+      isMapLoaded,
+      deckOverlayAvailable: !!deckOverlay,
+      datasetId
+    });
     if (!deckOverlay || !isMapLoaded) {
       logger.debug(
         'Cannot update layers: deckOverlay or map not ready',
@@ -846,9 +883,18 @@
       });
     } else {
       layers = [];
+      logger.warn('No data available to build map layers', LogCategory.MAP, {
+        hasArrowData: !!jsTable,
+        hasGeoJsonData: !!geojson
+      });
     }
 
     deckOverlay.setProps({ layers });
+    logger.info('Deck overlay props updated', LogCategory.MAP, {
+      layerCount: layers.length,
+      hasArrowData: !!jsTable,
+      hasGeoJsonData: !!geojson
+    });
   }
 
   let isZoomSyncing = false;

@@ -1,9 +1,22 @@
-import type { DatasetResult } from '$lib/features/pipeline';
-import { dataPipeline } from '$lib/features/pipeline';
+import type { DatasetResult } from '$lib/features/data-pipeline';
+import { dataPipeline } from '$lib/features/data-pipeline';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
+
+const storeLogger = {
+  debug: (message: string, data?: unknown) =>
+    logger.debug(message, LogCategory.STORE, data),
+  info: (message: string, data?: unknown) =>
+    logger.info(message, LogCategory.STORE, data),
+  warn: (message: string, data?: unknown) =>
+    logger.warn(message, LogCategory.STORE, data),
+  error: (message: string, data?: unknown) =>
+    logger.error(message, LogCategory.STORE, data),
+  success: (message: string, data?: unknown) =>
+    logger.success(message, LogCategory.STORE, data)
+};
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -157,7 +170,7 @@ class DatasetsStore {
 
   async addFile(file: UploadedFile): Promise<DatasetResult | null> {
     const startTime = performance.now();
-    logger.debug(
+    storeLogger.debug(
       `[${new Date().toISOString()}] [datasetsStore:addFile] START`,
       {
         fileName: file.name,
@@ -175,7 +188,7 @@ class DatasetsStore {
         throw new Error(`File ${file.name} has no content`);
       }
 
-      logger.debug(
+      storeLogger.debug(
         `[${new Date().toISOString()}] [datasetsStore:addFile] Processing with new dataPipeline...`
       );
       const processStart = performance.now();
@@ -183,7 +196,7 @@ class DatasetsStore {
         file,
         file.originalFile
       );
-      logger.debug(
+      storeLogger.debug(
         `[${new Date().toISOString()}] [datasetsStore:addFile] File processed`,
         {
           duration: `${(performance.now() - processStart).toFixed(2)}ms`,
@@ -198,7 +211,7 @@ class DatasetsStore {
         );
 
         if (existingDataset) {
-          logger.warn(
+          storeLogger.warn(
             `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`,
             {
               existingDatasetId: existingDataset.id,
@@ -237,7 +250,7 @@ class DatasetsStore {
 
         addedDataset = dataset;
 
-        logger.debug(
+        storeLogger.debug(
           `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`,
           {
             datasetId: dataset.id,
@@ -259,7 +272,7 @@ class DatasetsStore {
       }
 
       const totalDuration = performance.now() - startTime;
-      logger.debug(
+      storeLogger.debug(
         `[${new Date().toISOString()}] [datasetsStore:addFile] END`,
         {
           totalDuration: `${totalDuration.toFixed(2)}ms`
@@ -284,28 +297,28 @@ class DatasetsStore {
   }
 
   selectDataset(datasetId: string): void {
-    logger.debug('[datasetsStore] selectDataset called', {
+    storeLogger.debug('[datasetsStore] selectDataset called', {
       datasetId,
       currentSelectedId: this._state.selectedDatasetId,
       totalDatasets: this._state.datasets.length
     });
 
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    logger.debug('[datasetsStore] Dataset found?', {
+    storeLogger.debug('[datasetsStore] Dataset found?', {
       found: !!dataset,
       datasetName: dataset?.name
     });
 
     if (dataset) {
       this._state.selectedDatasetId = datasetId;
-      logger.debug('[datasetsStore] Selected dataset updated', {
+      storeLogger.debug('[datasetsStore] Selected dataset updated', {
         newSelectedId: this._state.selectedDatasetId
       });
     }
   }
 
   removeDataset(datasetId: string): void {
-    logger.debug('[datasetsStore] removeDataset called', {
+    storeLogger.debug('[datasetsStore] removeDataset called', {
       datasetId,
       currentSelectedId: this._state.selectedDatasetId,
       totalDatasetsBefore: this._state.datasets.length,
@@ -316,14 +329,14 @@ class DatasetsStore {
       (d) => d.id !== datasetId
     );
 
-    logger.debug('[datasetsStore] Filtered datasets', {
+    storeLogger.debug('[datasetsStore] Filtered datasets', {
       totalDatasetsAfter: filteredDatasets.length,
       remainingIds: filteredDatasets.map((d) => d.id)
     });
 
     if (this._state.selectedDatasetId === datasetId) {
       const newSelectedId = filteredDatasets[0]?.id;
-      logger.debug('[datasetsStore] Updating selected dataset', {
+      storeLogger.debug('[datasetsStore] Updating selected dataset', {
         oldId: this._state.selectedDatasetId,
         newId: newSelectedId
       });
@@ -332,7 +345,7 @@ class DatasetsStore {
 
     this._state.datasets = filteredDatasets;
 
-    logger.debug('[datasetsStore] removeDataset complete', {
+    storeLogger.debug('[datasetsStore] removeDataset complete', {
       finalSelectedId: this._state.selectedDatasetId,
       finalDatasetCount: this._state.datasets.length
     });
@@ -343,7 +356,7 @@ class DatasetsStore {
   }
 
   getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
-    logger.debug('[datasetsStore] getDatasetBySourceFile called', {
+    storeLogger.debug('[datasetsStore] getDatasetBySourceFile called', {
       sourceFileId,
       totalDatasets: this._state.datasets.length,
       allSourceFileIds: this._state.datasets.map((d) => d.sourceFileId)
@@ -352,7 +365,7 @@ class DatasetsStore {
     const dataset = this._state.datasets.find(
       (d) => d.sourceFileId === sourceFileId
     );
-    logger.debug('[datasetsStore] getDatasetBySourceFile result', {
+    storeLogger.debug('[datasetsStore] getDatasetBySourceFile result', {
       found: !!dataset,
       datasetId: dataset?.id,
       datasetName: dataset?.name

@@ -38,8 +38,14 @@
         duration: `${(performance.now() - duckdbInitStart).toFixed(2)}ms`
       });
     } catch (error) {
-      logger.error('DuckDB initialization failed', LogCategory.DUCKDB, error);
-      // Continue even if DuckDB fails - it will retry on first file import
+      logger.error(
+        'DuckDB initialization failed - application cannot continue',
+        LogCategory.DUCKDB,
+        error
+      );
+      isLoading = false;
+      globalState.isCreateProjectModalOpen = true;
+      return;
     }
 
     // Wait for project store to initialize from IndexedDB

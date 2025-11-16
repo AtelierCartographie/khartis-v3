@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import BasemapCard from '$lib/features/commons/components/basemap-card.svelte';
   import BasemapCatalogModal from '$lib/features/commons/components/basemap-catalog-modal.svelte';
   import CustomBasemapImportModal from './components/custom-basemap-import-modal.svelte';
   import OsmBasemapModal from './components/osm-basemap-modal.svelte';
@@ -29,7 +28,7 @@
   } from 'carbon-components-svelte';
   import { Grid as GridIcon, Upload, MagicWand } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
@@ -123,7 +122,11 @@
       );
       basemapSuggestions = suggestions;
     } catch (error) {
-      logger.error('Failed to load basemap suggestions', LogCategory.MAP, error);
+      logger.error(
+        'Failed to load basemap suggestions',
+        LogCategory.MAP,
+        error
+      );
       basemapSuggestions = [];
     }
   }
@@ -133,7 +136,11 @@
       await basemapCatalogService.loadCatalog();
       await loadSuggestions();
     } catch (error) {
-      logger.error('Failed to initialize basemap catalog', LogCategory.MAP, error);
+      logger.error(
+        'Failed to initialize basemap catalog',
+        LogCategory.MAP,
+        error
+      );
     }
   });
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { RadioButton, ProgressBar, Tag } from 'carbon-components-svelte';
+  import { RadioButton, ProgressBar } from 'carbon-components-svelte';
   import { Map, Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -42,11 +42,6 @@
 
   const matchPercentage = $derived(
     matchScore !== undefined ? Math.round(matchScore) : 75 // Default for demo
-  );
-
-  // Color coding for match score
-  const matchColor = $derived(
-    matchPercentage >= 70 ? 'green' : matchPercentage >= 40 ? 'yellow' : 'gray'
   );
 
   const matchHelperText = $derived(`${matchPercentage}%`);

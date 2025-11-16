@@ -11,16 +11,38 @@ import type {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
-import type { ProcessedDataset } from '$lib/features/pipeline';
-import { geoParquetReader } from '$lib/features/pipeline/adapters/readers/GeoParquetReader';
-import type { GeoArrowMetadata } from '$lib/features/pipeline/models/geo-arrow-metadata';
-import type { GeoColumnInfo } from '$lib/features/pipeline/types/AnalysisResult';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { geoParquetReader } from '$lib/features/data-pipeline/adapters/readers/GeoParquetReader';
+import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
+import type { GeoColumnInfo } from '$lib/features/data-pipeline/types/AnalysisResult';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
-import type { Table } from 'apache-arrow/Arrow';
+import {
+  Field,
+  FixedSizeList,
+  Float64,
+  List,
+  Table,
+  Type,
+  makeBuilder,
+  tableFromIPC
+} from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { insertArrowTableIntoDuckDB } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
 import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
+
+const duckLogger = {
+  debug: (message: string, data?: unknown) =>
+    logger.debug(message, LogCategory.DUCKDB, data),
+  info: (message: string, data?: unknown) =>
+    logger.info(message, LogCategory.DUCKDB, data),
+  warn: (message: string, data?: unknown) =>
+    logger.warn(message, LogCategory.DUCKDB, data),
+  error: (message: string, data?: unknown) =>
+    logger.error(message, LogCategory.DUCKDB, data),
+  success: (message: string, data?: unknown) =>
+    logger.success(message, LogCategory.DUCKDB, data)
+};
 
 export enum RefineOperation {
   UPPERCASE = 'uppercase',
@@ -95,7 +117,7 @@ class DuckDBOrchestratorService {
 
   private filterIdCounter = 0;
 
-  private metadataPrefetches = new Map<string, Promise<void>>();
+  private metadataPrefetches = new SvelteMap<string, Promise<void>>();
 
   private _datasetsVersion = $state(0);
 
@@ -141,6 +163,13 @@ class DuckDBOrchestratorService {
     }
   }
 
+  async waitForInitialization(): Promise<void> {
+    if (this.initialized) return;
+
+    // Wait for initialization to complete
+    await this.initialize();
+  }
+
   async registerExistingTable(
     tableName: string,
     sourceFileId: string,
@@ -158,13 +187,9 @@ class DuckDBOrchestratorService {
     }
 
     try {
-      logger.debug(
+      duckLogger.debug(
         '[duckDBOrchestrator:registerExistingTable] Registering table',
-        {
-          tableName,
-          sourceFileId,
-          fileName
-        }
+        { tableName, sourceFileId, fileName }
       );
 
       const columns = await Duck.analyse(tableName);
@@ -217,7 +242,7 @@ class DuckDBOrchestratorService {
         }
       );
 
-      logger.debug(
+      duckLogger.debug(
         '[duckDBOrchestrator:registerExistingTable] Table registered',
         {
           datasetId: dataset.id,
@@ -246,7 +271,7 @@ class DuckDBOrchestratorService {
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
     const startTime = performance.now();
-    logger.debug(
+    duckLogger.debug(
       `🔵 [${new Date().toISOString()}] [DuckDB:processFile] ===== START =====`,
       {
         fileName: file.name,
@@ -272,7 +297,7 @@ class DuckDBOrchestratorService {
     });
 
     if (!this.initialized) {
-      logger.debug(
+      duckLogger.debug(
         `⚙️  [${new Date().toISOString()}] [DuckDB:processFile] Initializing DuckDB...`
       );
       const initStart = performance.now();
@@ -281,13 +306,13 @@ class DuckDBOrchestratorService {
         LogCategory.DUCKDB
       );
       await this.initialize();
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:processFile] DuckDB initialized in ${(performance.now() - initStart).toFixed(2)}ms`
       );
     }
 
     if (!file.parsedData || file.status !== 'complete') {
-      logger.debug(
+      duckLogger.debug(
         `⚠️  [${new Date().toISOString()}] [DuckDB:processFile] File not ready - returning null`,
         {
           hasParsedData: !!file.parsedData,
@@ -302,50 +327,50 @@ class DuckDBOrchestratorService {
     }
 
     try {
-      logger.debug(
+      duckLogger.debug(
         `📝 [${new Date().toISOString()}] [DuckDB:processFile] Generating table name...`
       );
       const tableName = this.generateTableName(file.name);
-      logger.debug(
+      duckLogger.debug(
         `📝 [${new Date().toISOString()}] [DuckDB:processFile] Table name generated: "${tableName}"`
       );
 
       let result: DuckDBDataset | null = null;
 
       if (file.fileType === FileType.CSV) {
-        logger.debug(
+        duckLogger.debug(
           `📊 [${new Date().toISOString()}] [DuckDB:processFile] Processing CSV file...`
         );
         const csvStart = performance.now();
         result = await this.processCSV(file, tableName);
-        logger.debug(
+        duckLogger.debug(
           `✅ [${new Date().toISOString()}] [DuckDB:processFile] CSV processed in ${(performance.now() - csvStart).toFixed(2)}ms`
         );
       } else if (file.fileType === FileType.GEOJSON) {
-        logger.debug(
+        duckLogger.debug(
           `🗺️  [${new Date().toISOString()}] [DuckDB:processFile] Processing GeoJSON file...`
         );
         const geojsonStart = performance.now();
         result = await this.processGeoJSON(file, tableName);
-        logger.debug(
+        duckLogger.debug(
           `✅ [${new Date().toISOString()}] [DuckDB:processFile] GeoJSON processed in ${(performance.now() - geojsonStart).toFixed(2)}ms`
         );
       } else if (file.fileType === FileType.GEOPACKAGE) {
-        logger.debug(
+        duckLogger.debug(
           `🗂️  [${new Date().toISOString()}] [DuckDB:processFile] Processing GeoPackage file...`
         );
         const gpkgStart = performance.now();
         result = await this.processGeoPackage(file, tableName);
-        logger.debug(
+        duckLogger.debug(
           `✅ [${new Date().toISOString()}] [DuckDB:processFile] GeoPackage processed in ${(performance.now() - gpkgStart).toFixed(2)}ms`
         );
       } else if (file.fileType === FileType.GEOPARQUET) {
-        logger.debug(
+        duckLogger.debug(
           `🟪 [${new Date().toISOString()}] [DuckDB:processFile] Processing GeoParquet file...`
         );
         const gpqStart = performance.now();
         result = await this.processGeoParquet(file, tableName);
-        logger.debug(
+        duckLogger.debug(
           `✅ [${new Date().toISOString()}] [DuckDB:processFile] GeoParquet processed in ${(performance.now() - gpqStart).toFixed(2)}ms`
         );
       } else {
@@ -360,14 +385,14 @@ class DuckDBOrchestratorService {
       }
 
       const totalDuration = performance.now() - startTime;
-      logger.debug(
+      duckLogger.debug(
         `🎉 [${new Date().toISOString()}] [DuckDB:processFile] ===== END ===== Total: ${totalDuration.toFixed(2)}ms`
       );
 
       return result;
     } catch (error) {
       const errorDuration = performance.now() - startTime;
-      logger.error(
+      duckLogger.error(
         `❌ [${new Date().toISOString()}] [DuckDB:processFile] ===== ERROR ===== After ${errorDuration.toFixed(2)}ms`,
         error
       );
@@ -455,7 +480,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = finalTableName;
 
-    logger.debug('[duckDBOrchestrator] Dataset added to reactive state', {
+    duckLogger.debug('[duckDBOrchestrator] Dataset added to reactive state', {
       datasetId: dataset.id,
       tableName: finalTableName,
       sourceFileId: dataset.sourceFileId,
@@ -486,12 +511,12 @@ class DuckDBOrchestratorService {
 
     if (USE_ST_READ) {
       try {
-        logger.debug(
+        duckLogger.debug(
           `🚀 [${new Date().toISOString()}] [DuckDB:processGeoJSON] Trying ST_Read approach...`
         );
         return await this.processGeoJSONWithSTRead(file, tableName);
       } catch (error) {
-        logger.error(
+        duckLogger.error(
           `⚠️  [${new Date().toISOString()}] [DuckDB:processGeoJSON] ST_Read failed:`,
           error
         );
@@ -505,12 +530,12 @@ class DuckDBOrchestratorService {
 
     if (USE_ARROW_PIPELINE) {
       try {
-        logger.debug(
+        duckLogger.debug(
           `🔷 [${new Date().toISOString()}] [DuckDB:processGeoJSON] Trying Arrow approach...`
         );
         return await this.processGeoJSONWithArrow(file, tableName);
       } catch (error) {
-        logger.error(
+        duckLogger.error(
           `⚠️  [${new Date().toISOString()}] [DuckDB:processGeoJSON] Arrow failed:`,
           error
         );
@@ -522,7 +547,7 @@ class DuckDBOrchestratorService {
       }
     }
 
-    logger.debug(
+    duckLogger.debug(
       `🐌 [${new Date().toISOString()}] [DuckDB:processGeoJSON] Using legacy approach...`
     );
     return await this.processGeoJSONLegacy(file, tableName);
@@ -533,7 +558,7 @@ class DuckDBOrchestratorService {
     tableName: string
   ): Promise<DuckDBDataset> {
     const startTime = performance.now();
-    logger.debug(
+    duckLogger.debug(
       `🚀 [${new Date().toISOString()}] [DuckDB:ST_Read] ===== START =====`
     );
 
@@ -549,7 +574,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      logger.debug(
+      duckLogger.debug(
         `📄 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 1: Creating File object...`
       );
       const fileStart = performance.now();
@@ -563,52 +588,52 @@ class DuckDBOrchestratorService {
         const blob = new Blob([geoJsonData], { type: 'application/json' });
         geoFile = new File([blob], file.name, { type: 'application/json' });
       }
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] File object created in ${(performance.now() - fileStart).toFixed(2)}ms`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `📝 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 2: Registering file...`
       );
       const registerStart = performance.now();
       await Duck.register_files([geoFile]);
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] File registered in ${(performance.now() - registerStart).toFixed(2)}ms`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `🔍 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 3: Calling read_geofile...`
       );
       const readStart = performance.now();
       const resultTableName = await Duck.read_geofile(geoFile, {
         tablename: tableName
       });
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] Table created in ${(performance.now() - readStart).toFixed(2)}ms`
       );
 
       const actualTableName =
         typeof resultTableName === 'string' ? resultTableName : tableName;
 
-      logger.debug(
+      duckLogger.debug(
         `📊 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 4: Analyzing table...`
       );
       const analyzeStart = performance.now();
       const columns = await Duck.analyse(actualTableName);
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] Analyzed in ${(performance.now() - analyzeStart).toFixed(2)}ms - ${columns.length} columns`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `🔢 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 5: Getting row count...`
       );
       const rowCountStart = performance.now();
       const rowCount = await this.getRowCount(actualTableName);
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] Row count: ${rowCount} (${(performance.now() - rowCountStart).toFixed(2)}ms)`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `🔄 [${new Date().toISOString()}] [DuckDB:ST_Read] STEP 6: Converting to GeoParquet + Arrow...`
       );
       const geoParquetStart = performance.now();
@@ -616,7 +641,7 @@ class DuckDBOrchestratorService {
         await this.createArrowTableWithMetadata(actualTableName);
       const geoParquetDuration = performance.now() - geoParquetStart;
 
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:ST_Read] GeoParquet → Arrow completed in ${geoParquetDuration.toFixed(2)}ms`,
         {
           numRows: arrowTableWithMetadata.numRows,
@@ -649,7 +674,7 @@ class DuckDBOrchestratorService {
       const oldTime = 25700;
       const speedup = (oldTime / totalTime).toFixed(1);
 
-      logger.debug(
+      duckLogger.debug(
         `🎉 [${new Date().toISOString()}] [DuckDB:ST_Read] ===== COMPLETE =====`,
         {
           totalTime: `${totalTime.toFixed(2)}ms`,
@@ -700,7 +725,7 @@ class DuckDBOrchestratorService {
         geometryMeta: dataset.geoArrowMetadata?.primary_column
       });
 
-      logger.debug(
+      duckLogger.debug(
         '[duckDBOrchestrator:ST_Read] Dataset added to reactive state',
         {
           datasetId: dataset.id,
@@ -713,7 +738,7 @@ class DuckDBOrchestratorService {
       return dataset;
     } catch (error) {
       const errorDuration = performance.now() - startTime;
-      logger.error(
+      duckLogger.error(
         `❌ [${new Date().toISOString()}] [DuckDB:ST_Read] FAILED after ${errorDuration.toFixed(2)}ms`,
         error
       );
@@ -877,7 +902,7 @@ class DuckDBOrchestratorService {
     }
 
     try {
-      logger.debug(
+      duckLogger.debug(
         `[${new Date().toISOString()}] [DuckDB:processGeoJSON] Converting to Arrow...`
       );
       const conversionStart = performance.now();
@@ -889,7 +914,7 @@ class DuckDBOrchestratorService {
         columns: arrowTable.schema.fields.length
       });
 
-      logger.debug(
+      duckLogger.debug(
         `[${new Date().toISOString()}] [DuckDB:processGeoJSON] Inserting Arrow table...`
       );
       const insertStart = performance.now();
@@ -899,13 +924,13 @@ class DuckDBOrchestratorService {
         durationMs: insertTime.toFixed(2)
       });
 
-      logger.debug(
+      duckLogger.debug(
         `🗺️  [${new Date().toISOString()}] [DuckDB:Arrow] STEP 3: Converting geometry column...`
       );
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
       const geomStart = performance.now();
-      logger.debug(
+      duckLogger.debug(
         `🔍 [${new Date().toISOString()}] [DuckDB:Arrow] Executing: CREATE OR REPLACE TABLE with ST_GeomFromGeoJSON...`
       );
       await Duck.query(`
@@ -916,18 +941,18 @@ class DuckDBOrchestratorService {
         FROM ${tableName}
       `);
       const geomTime = performance.now() - geomStart;
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:Arrow] Geometry converted in ${geomTime.toFixed(2)}ms`
       );
       logger.debug('Geometry conversion complete', LogCategory.DUCKDB, {
         durationMs: geomTime.toFixed(2)
       });
 
-      logger.debug(
+      duckLogger.debug(
         `🔢 [${new Date().toISOString()}] [DuckDB:Arrow] STEP 4: Adding row IDs...`
       );
       const rowIdStart = performance.now();
-      logger.debug(
+      duckLogger.debug(
         `🔍 [${new Date().toISOString()}] [DuckDB:Arrow] Executing: CREATE SEQUENCE + ALTER TABLE...`
       );
       await Duck.query(`
@@ -935,27 +960,27 @@ class DuckDBOrchestratorService {
         ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
       `);
       const rowIdTime = performance.now() - rowIdStart;
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:Arrow] Row IDs added in ${rowIdTime.toFixed(2)}ms`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `📊 [${new Date().toISOString()}] [DuckDB:Arrow] STEP 5: Analyzing table...`
       );
       const analyzeStart = performance.now();
       const columns = await Duck.analyse(tableName);
       const analyzeTime = performance.now() - analyzeStart;
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:Arrow] Analyzed in ${analyzeTime.toFixed(2)}ms - ${columns.length} columns`
       );
 
-      logger.debug(
+      duckLogger.debug(
         `🔢 [${new Date().toISOString()}] [DuckDB:Arrow] Getting row count...`
       );
       const rowCountStart = performance.now();
       const rowCount = await this.getRowCount(tableName);
       const rowCountTime = performance.now() - rowCountStart;
-      logger.debug(
+      duckLogger.debug(
         `✅ [${new Date().toISOString()}] [DuckDB:Arrow] Row count: ${rowCount} (${rowCountTime.toFixed(2)}ms)`
       );
 
@@ -1015,7 +1040,7 @@ class DuckDBOrchestratorService {
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
-      logger.debug(
+      duckLogger.debug(
         '[duckDBOrchestrator:Arrow] Dataset added to reactive state',
         {
           datasetId: dataset.id,
@@ -1108,7 +1133,7 @@ class DuckDBOrchestratorService {
       }
     );
 
-    logger.debug(
+    duckLogger.debug(
       '[duckDBOrchestrator:Legacy] Dataset added to reactive state',
       {
         datasetId: dataset.id,
@@ -1680,6 +1705,165 @@ class DuckDBOrchestratorService {
    * Re-materialize a DuckDB table as GeoParquet and read it back to keep GeoArrow metadata intact.
    * DuckDB drops metadata when querying directly, hence the GeoParquet round trip.
    */
+  private async addGeoArrowMetadataFromDuckDB(
+    table: Table,
+    tableName: string
+  ): Promise<Table> {
+    if (!Duck) {
+      return table;
+    }
+
+    try {
+      // Query DuckDB for geometry column info
+      const tableInfo = await Duck.describe_table(tableName);
+      const columns = tableInfo.name.map((name, index) => ({
+        column_name: name,
+        column_type: tableInfo.type[index]
+      }));
+
+      const geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+
+      if (!geomColumn) {
+        logger.warn(
+          'No geometry column found in DuckDB table',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+        return table;
+      }
+
+      // Get geometry type from first row
+      const geomTypeResult = (await Duck.query(
+        `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
+        { format: 'array' as never }
+      )) as Array<{ geom_type: string }>;
+
+      const geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
+      const normalizedGeometry = geometryType
+        .replace(/^ST_/i, '')
+        .toLowerCase();
+      const geoarrowExtension = `geoarrow.${normalizedGeometry || 'geometry'}`;
+
+      // Create GeoArrow metadata
+      const geoMetadata = {
+        version: '1.0.0',
+        primary_column: geomColumn.column_name,
+        columns: {
+          [geomColumn.column_name]: {
+            encoding: geoarrowExtension,
+            geometry_types: [geometryType.replace('ST_', '')],
+            crs: {
+              type: 'name',
+              properties: {
+                name: 'EPSG:4326'
+              }
+            },
+            bbox: [-180, -90, 180, 90] // Default world bounds
+          }
+        }
+      };
+
+      const tableWithWkb = await this.ensureGeometryColumnIsWkb(
+        table,
+        tableName,
+        geomColumn.column_name
+      );
+
+      const conversionResult = convertGeometryColumnToGeoArrow(
+        tableWithWkb,
+        geomColumn.column_name,
+        geometryType
+      );
+      if (conversionResult.converted) {
+        logger.debug('GeoArrow geometry conversion completed', LogCategory.DUCKDB, {
+          tableName,
+          geoColumn: geomColumn.column_name,
+          geometryType,
+          geoArrowType:
+            conversionResult.geometryDataType?.toString() ?? 'unknown',
+          rowCount: table.numRows
+        });
+      } else {
+        logger.warn(
+          'GeoArrow conversion skipped for geometry column',
+          LogCategory.DUCKDB,
+          {
+            tableName,
+            geoColumn: geomColumn.column_name,
+            geometryType,
+            reason: 'Column is not binary or builder unavailable'
+          }
+        );
+      }
+      const normalizedTable = conversionResult.table;
+      const schema = normalizedTable.schema;
+      const convertedField = schema.fields.find(
+        (schemaField) => schemaField.name === geomColumn.column_name
+      );
+      if (!schema) {
+        logger.warn(
+          'Arrow table missing schema, cannot add GeoArrow metadata',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+        return normalizedTable;
+      }
+
+      const newMetadata = schema.metadata
+        ? new SvelteMap(schema.metadata)
+        : new SvelteMap<string, string>();
+      newMetadata.set('geo', JSON.stringify(geoMetadata));
+
+      const updatedFields = (schema.fields ?? []).map((field) => {
+        if (field.name !== geomColumn.column_name) {
+          return field;
+        }
+        const updatedMetadata = field.metadata
+          ? new SvelteMap(field.metadata)
+          : new SvelteMap<string, string>();
+        updatedMetadata.set('ARROW:extension:name', geoarrowExtension);
+        updatedMetadata.set(
+          'ARROW:extension:metadata',
+          JSON.stringify({
+            geometry_type: geometryType.replace('ST_', ''),
+            crs: 'EPSG:4326'
+          })
+        );
+        return new Field(
+          field.name,
+          conversionResult.geometryDataType ?? field.type,
+          field.nullable,
+          updatedMetadata
+        );
+      });
+
+      const metadataMap = new Map<string, string>(newMetadata);
+      (schema as unknown as { metadata: Map<string, string> }).metadata =
+        metadataMap;
+      (schema as unknown as { fields: Field[] }).fields = updatedFields;
+
+      logger.info('Added GeoArrow metadata from DuckDB', LogCategory.DUCKDB, {
+        tableName,
+        geoColumn: geomColumn.column_name,
+        geometryType,
+        geoarrowExtension,
+        convertedToGeoArrow: conversionResult.converted,
+        geoArrowType:
+          conversionResult.geometryDataType?.toString() ??
+          convertedField?.type?.toString()
+      });
+
+      return normalizedTable;
+    } catch (error) {
+      logger.error(
+        'Failed to add GeoArrow metadata from DuckDB',
+        LogCategory.DUCKDB,
+        error
+      );
+      return table;
+    }
+  }
+
   private async createArrowTableWithMetadata(tableName: string): Promise<{
     arrowTableWithMetadata: Table;
     geoArrowMetadata: GeoArrowMetadata | null;
@@ -1688,72 +1872,197 @@ class DuckDBOrchestratorService {
       throw new DuckDBError('DuckDB not initialized');
     }
 
-    const overallStart = performance.now();
+    try {
+      logger.info(
+        '[GeoArrow] Attempting GeoParquet round-trip for table',
+        LogCategory.DUCKDB,
+        { tableName }
+      );
+      const exportStart = performance.now();
+      logger.info(
+        '[PERFORMANCE] Exporting DuckDB table to GeoParquet buffer',
+        LogCategory.DUCKDB,
+        { tableName }
+      );
+      const buffer = await Duck.copy_to_geoparquet_as_buffer(tableName);
+      const exportDuration = performance.now() - exportStart;
+      logger.info(
+        '[PERFORMANCE] DuckDB → GeoParquet export complete',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          durationMs: exportDuration.toFixed(2),
+          bufferKB: (buffer.byteLength / 1024).toFixed(2)
+        }
+      );
 
-    logger.info(
-      '[PERFORMANCE] Starting GeoParquet conversion',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        operation: 'createArrowTableWithMetadata'
+      const arrowTableFromParquet =
+        await geoParquetReader.readGeoParquet(buffer);
+      const geoArrowMetadata = geoParquetReader.extractMetadata(
+        arrowTableFromParquet
+      );
+
+      if (!geoArrowMetadata) {
+        logger.warn(
+          'GeoArrow metadata missing after GeoParquet round-trip',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+      } else {
+        logger.info(
+          'GeoArrow metadata restored from GeoParquet',
+          LogCategory.DUCKDB,
+          {
+            tableName,
+            primaryColumn: geoArrowMetadata.primary_column,
+            geometryTypes:
+              geoArrowMetadata.columns?.[geoArrowMetadata.primary_column]
+                ?.geometry_types ?? []
+          }
+        );
       }
-    );
 
-    const exportStart = performance.now();
-    const geoparquetBuffer = await Duck.copy_to_geoparquet_as_buffer(tableName);
-    const exportDuration = performance.now() - exportStart;
+      return {
+        arrowTableWithMetadata: arrowTableFromParquet,
+        geoArrowMetadata
+      };
+    } catch (error) {
+      logger.error(
+        'GeoParquet round-trip failed, falling back to direct Arrow fetch',
+        LogCategory.DUCKDB,
+        error
+      );
 
-    logger.info(
-      '[PERFORMANCE] DuckDB → GeoParquet serialization',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        bufferSize: geoparquetBuffer.byteLength,
-        durationMs: exportDuration.toFixed(2),
-        durationSec: (exportDuration / 1000).toFixed(2)
+      const fetchStart = performance.now();
+      logger.info(
+        '[PERFORMANCE] Fetching Arrow data directly from DuckDB (fallback)',
+        LogCategory.DUCKDB,
+        { tableName }
+      );
+
+      const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
+      const fetchDuration = performance.now() - fetchStart;
+      logger.info(
+        '[PERFORMANCE] DuckDB → Arrow fallback complete',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          durationMs: fetchDuration.toFixed(2),
+          rowCount: arrowTable.numRows,
+          columnCount: arrowTable.schema.fields.length
+        }
+      );
+
+      const arrowTableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
+        arrowTable,
+        tableName
+      );
+      const geoArrowMetadata = geoParquetReader.extractMetadata(
+        arrowTableWithMetadata
+      );
+
+      if (!geoArrowMetadata) {
+        logger.warn(
+          'GeoArrow metadata still missing after fallback',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+      } else {
+        logger.info(
+          'GeoArrow metadata attached via fallback path',
+          LogCategory.DUCKDB,
+          {
+            tableName,
+            primaryColumn: geoArrowMetadata.primary_column,
+            geometryTypes:
+              geoArrowMetadata.columns?.[geoArrowMetadata.primary_column]
+                ?.geometry_types ?? []
+          }
+        );
       }
+
+      return { arrowTableWithMetadata, geoArrowMetadata };
+    }
+  }
+
+  private async ensureGeometryColumnIsWkb(
+    table: Table,
+    tableName: string,
+    geometryColumn: string
+  ): Promise<Table> {
+    const columnIndex = table.schema.fields.findIndex(
+      (field) => field.name === geometryColumn
     );
+    if (columnIndex === -1) {
+      return table;
+    }
 
-    const readStart = performance.now();
-    const arrowTableWithMetadata =
-      await geoParquetReader.readGeoParquet(geoparquetBuffer);
-    const readDuration = performance.now() - readStart;
-
-    const geoArrowMetadata = geoParquetReader.extractMetadata(
-      arrowTableWithMetadata
-    );
-
-    const totalDuration = performance.now() - overallStart;
-
-    logger.info(
-      '[PERFORMANCE] GeoParquet → Arrow deserialization',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        durationMs: readDuration.toFixed(2),
-        durationSec: (readDuration / 1000).toFixed(2),
-        hasMetadata: !!geoArrowMetadata
+    const vector = table.getChildAt(columnIndex);
+    const sampleCount = Math.min(table.numRows, 5);
+    for (let i = 0; i < sampleCount; i++) {
+      const value = (vector?.get(i) as Uint8Array | null) ?? null;
+      if (!value || value.length === 0) {
+        continue;
       }
-    );
-
-    logger.info(
-      '[PERFORMANCE] Total GeoParquet round-trip',
-      LogCategory.DUCKDB,
-      {
-        tableName,
-        totalDurationMs: totalDuration.toFixed(2),
-        totalDurationSec: (totalDuration / 1000).toFixed(2),
-        serializationMs: exportDuration.toFixed(2),
-        deserializationMs: readDuration.toFixed(2),
-        bufferSizeMB: (geoparquetBuffer.byteLength / 1024 / 1024).toFixed(2),
-        rowCount: arrowTableWithMetadata.numRows,
-        metadataKeys: arrowTableWithMetadata.schema?.metadata
-          ? Array.from(arrowTableWithMetadata.schema.metadata.keys())
-          : []
+      const firstByte = value[0];
+      if (firstByte === 0 || firstByte === 1) {
+        return table;
       }
-    );
+      logger.debug('Non-standard geometry encoding detected, forcing WKB conversion', LogCategory.DUCKDB, {
+        tableName,
+        geometryColumn,
+        sampleRow: i,
+        byteLength: value.length,
+        firstByte
+      });
+      break;
+    }
 
-    return { arrowTableWithMetadata, geoArrowMetadata };
+    logger.debug('Converting DuckDB geometry column to WKB', LogCategory.DUCKDB, {
+      tableName,
+      geometryColumn
+    });
+    return this.fetchTableWithGeometryAsWkb(tableName, geometryColumn);
+  }
+
+  private async fetchTableWithGeometryAsWkb(
+    tableName: string,
+    geometryColumn: string
+  ): Promise<Table> {
+    if (!Duck) {
+      throw new DuckDBError('DuckDB not initialized');
+    }
+
+    try {
+      const buffer = (await Duck.query(
+        `SELECT * REPLACE (
+          ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
+        )
+        FROM ${tableName}`,
+        { format: 'arrow-ipc' as never }
+      )) as ArrayBuffer | Uint8Array;
+
+      const ipcBuffer =
+        buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+      const wkbTable = tableFromIPC(ipcBuffer);
+      logger.debug('Geometry column successfully converted to WKB', LogCategory.DUCKDB, {
+        tableName,
+        geometryColumn,
+        rowCount: wkbTable.numRows
+      });
+      return wkbTable;
+    } catch (error) {
+      logger.error(
+        'Failed to convert geometry column to WKB',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          geometryColumn,
+          error
+        }
+      );
+      throw error;
+    }
   }
 
   async exportTableToGeoParquet(tableName: string): Promise<Uint8Array> {
@@ -1788,6 +2097,40 @@ class DuckDBOrchestratorService {
     );
   }
 
+  private async fetchArrowTableWithGeometry(tableName: string): Promise<Table> {
+    if (!Duck) {
+      throw new DuckDBError('DuckDB not initialized');
+    }
+
+    const buffer = await Duck.get_data(tableName, { geometry: true });
+    const ipcBuffer =
+      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+
+    return tableFromIPC(ipcBuffer);
+  }
+
+  async getArrowTableDirect(tableName: string): Promise<Table> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    logger.info(
+      'Fetching Arrow table directly from DuckDB',
+      LogCategory.DUCKDB,
+      {
+        tableName
+      }
+    );
+
+    const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
+    const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
+      arrowTable,
+      tableName
+    );
+
+    return tableWithMetadata;
+  }
+
   async getArrowTable(tableName: string): Promise<Table> {
     const getArrowStart = performance.now();
     logger.info('[PERFORMANCE] getArrowTable called', LogCategory.DUCKDB, {
@@ -1820,13 +2163,12 @@ class DuckDBOrchestratorService {
         }
       }
 
-      // Slow path: Materialize Arrow table with GeoParquet round-trip
+      // Slow path: Fetch Arrow data directly from DuckDB
       logger.warn(
-        '[PERFORMANCE] Cache miss - triggering GeoParquet conversion',
+        '[PERFORMANCE] Cache miss - fetching Arrow data from DuckDB',
         LogCategory.DUCKDB,
         {
-          tableName,
-          warning: 'This is slow (~60-90 seconds for large datasets)'
+          tableName
         }
       );
 
@@ -1978,7 +2320,7 @@ class DuckDBOrchestratorService {
   }
 
   async dropTable(tableName: string): Promise<void> {
-    logger.debug('[duckDBOrchestrator:dropTable] START', {
+    duckLogger.debug('[duckDBOrchestrator:dropTable] START', {
       tableName,
       initialized: this.initialized,
       currentDatasetsCount: this._state.datasets.size,
@@ -1988,7 +2330,7 @@ class DuckDBOrchestratorService {
     });
 
     if (!this.initialized) {
-      logger.debug(
+      duckLogger.debug(
         '[duckDBOrchestrator:dropTable] Not initialized - EARLY RETURN'
       );
       return;
@@ -1997,13 +2339,17 @@ class DuckDBOrchestratorService {
     try {
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-      logger.debug('[duckDBOrchestrator:dropTable] Executing DROP TABLE query');
+      duckLogger.debug(
+        '[duckDBOrchestrator:dropTable] Executing DROP TABLE query'
+      );
       await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
-      logger.debug('[duckDBOrchestrator:dropTable] DROP TABLE query complete');
+      duckLogger.debug(
+        '[duckDBOrchestrator:dropTable] DROP TABLE query complete'
+      );
 
       let idToDelete: string | undefined;
       for (const [id, dataset] of this._state.datasets.entries()) {
-        logger.debug('[duckDBOrchestrator:dropTable] Checking dataset', {
+        duckLogger.debug('[duckDBOrchestrator:dropTable] Checking dataset', {
           id,
           datasetTableName: dataset.tableName,
           searchingFor: tableName,
@@ -2015,7 +2361,7 @@ class DuckDBOrchestratorService {
         }
       }
 
-      logger.debug('[duckDBOrchestrator:dropTable] Search complete', {
+      duckLogger.debug('[duckDBOrchestrator:dropTable] Search complete', {
         foundId: idToDelete,
         willDelete: !!idToDelete
       });
@@ -2026,7 +2372,7 @@ class DuckDBOrchestratorService {
         });
         this.bumpDatasetsVersion();
 
-        logger.debug(
+        duckLogger.debug(
           '[duckDBOrchestrator:dropTable] Dataset removed from reactive state',
           {
             datasetId: idToDelete,
@@ -2035,7 +2381,7 @@ class DuckDBOrchestratorService {
           }
         );
       } else {
-        logger.warn(
+        duckLogger.warn(
           '[duckDBOrchestrator:dropTable] No dataset found with tableName!',
           {
             tableName,
@@ -2052,7 +2398,7 @@ class DuckDBOrchestratorService {
         this._state.currentTableName = null;
       }
     } catch (error) {
-      logger.error('[duckDBOrchestrator:dropTable] ERROR', error);
+      duckLogger.error('[duckDBOrchestrator:dropTable] ERROR', error);
       logger.debug(
         `Failed to drop table ${tableName}`,
         LogCategory.DATA,
@@ -2070,7 +2416,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = null;
 
-    logger.debug(
+    duckLogger.debug(
       '[duckDBOrchestrator] All datasets cleared from reactive state'
     );
   }
@@ -2533,3 +2879,420 @@ class DuckDBOrchestratorService {
 }
 
 export const duckDBOrchestrator = new DuckDBOrchestratorService();
+
+type NestedPoint = [number, number];
+type LineStringCoords = NestedPoint[];
+type PolygonCoords = LineStringCoords[];
+type MultiPolygonCoords = PolygonCoords[];
+
+type GeoArrowConversionResult = {
+  table: Table;
+  geometryDataType?: List | FixedSizeList;
+  converted: boolean;
+};
+
+function convertGeometryColumnToGeoArrow(
+  table: Table,
+  columnName: string,
+  geometryType: string
+): GeoArrowConversionResult {
+  const geometryIndex = table.schema.fields.findIndex(
+    (field) => field.name === columnName
+  );
+  if (geometryIndex === -1) {
+    return { table, converted: false };
+  }
+
+  const geometryColumn = table.getChildAt(geometryIndex);
+  if (!geometryColumn) {
+    return { table, converted: false };
+  }
+
+  const field = table.schema.fields[geometryIndex];
+  const isBinaryColumn =
+    field.typeId === Type.Binary || field.typeId === Type.FixedSizeBinary;
+
+  if (!isBinaryColumn) {
+    return {
+      table,
+      geometryDataType: field.type as List | FixedSizeList,
+      converted: false
+    };
+  }
+
+  const builderInfo = createGeoArrowBuilderForType(geometryType);
+  if (!builderInfo) {
+    logger.warn(
+      'Unsupported geometry type for GeoArrow conversion',
+      LogCategory.DUCKDB,
+      {
+        geometryType
+      }
+    );
+    return { table, converted: false };
+  }
+
+  const { builder, dataType } = builderInfo;
+  const rowCount = table.numRows;
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+    const value = geometryColumn.get(rowIndex) as Uint8Array | null;
+    if (!value) {
+      builder.append(null);
+      continue;
+    }
+    try {
+      const parsedGeometry = parseWkbGeometry(value, geometryType);
+      builder.append(parsedGeometry);
+    } catch (error) {
+      logger.error(
+        'Failed to parse WKB geometry; inserting null',
+        LogCategory.DUCKDB,
+        {
+          rowIndex,
+          geometryType,
+          error
+        }
+      );
+      builder.append(null);
+    }
+  }
+
+  const geoVector = builder.finish().toVector();
+  const updatedTable = table.setChildAt(geometryIndex, geoVector);
+
+  return {
+    table: updatedTable,
+    geometryDataType: geoVector.type as List | FixedSizeList,
+    converted: true
+  };
+}
+
+function createGeoArrowBuilderForType(geometryType: string): {
+  dataType: List | FixedSizeList;
+  builder: ReturnType<typeof makeBuilder>;
+} | null {
+  const upper = geometryType.replace(/^ST_/i, '').toUpperCase();
+  const coordinateField = new Field('coords', new Float64(), false);
+  const pointType = new FixedSizeList(2, coordinateField);
+
+  const listOf = (name: string, child: List | FixedSizeList) =>
+    new List(new Field(name, child, false));
+
+  switch (upper) {
+    case 'POINT': {
+      const builder = makeBuilder({ type: pointType });
+      return { dataType: pointType, builder };
+    }
+    case 'MULTIPOINT':
+    case 'LINESTRING': {
+      const lineType = listOf('points', pointType);
+      const builder = makeBuilder({ type: lineType });
+      return { dataType: lineType, builder };
+    }
+    case 'POLYGON':
+    case 'MULTILINESTRING': {
+      const structureType = listOf('parts', listOf('points', pointType));
+      const builder = makeBuilder({ type: structureType });
+      return { dataType: structureType, builder };
+    }
+    case 'MULTIPOLYGON': {
+      const polygonType = listOf(
+        'polygons',
+        listOf('rings', listOf('points', pointType))
+      );
+      const builder = makeBuilder({ type: polygonType });
+      return { dataType: polygonType, builder };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseWkbGeometry(binary: Uint8Array, geometryType: string): unknown {
+  const upper = geometryType.replace(/^ST_/i, '').toUpperCase();
+  const view = new DataView(
+    binary.buffer,
+    binary.byteOffset,
+    binary.byteLength
+  );
+
+  const header = readHeader(view, 0);
+  const actualType = header.type;
+  const actualTypeName =
+    Object.entries(WKB_TYPE_IDS).find(([, id]) => id === actualType)?.[0] ??
+    `TYPE_${actualType}`;
+  const expectedTypeId = WKB_TYPE_IDS[upper] ?? actualType;
+
+  if (actualType !== expectedTypeId) {
+    const mismatchKey = `${upper}->${actualTypeName}`;
+    if (!loggedGeometryTypeMismatches.has(mismatchKey)) {
+      logger.warn(
+        'Geometry type mismatch between metadata and WKB payload',
+        LogCategory.DUCKDB,
+        {
+          expected: upper,
+          actual: actualTypeName
+        }
+      );
+      loggedGeometryTypeMismatches.add(mismatchKey);
+    }
+  }
+
+  const parsedGeometry = parseGeometryByType(view, actualType);
+
+  if (upper === 'MULTIPOLYGON' && actualType === WKB_TYPE_IDS.POLYGON) {
+    return [parsedGeometry];
+  }
+  if (upper === 'MULTILINESTRING' && actualType === WKB_TYPE_IDS.LINESTRING) {
+    return [parsedGeometry];
+  }
+  if (upper === 'MULTIPOINT' && actualType === WKB_TYPE_IDS.POINT) {
+    return [parsedGeometry];
+  }
+
+  return parsedGeometry;
+}
+
+type ParseResult<T> = { geometry: T; offset: number };
+
+function readCoordinatePair(
+  view: DataView,
+  offset: number,
+  littleEndian: boolean,
+  coordinateSize: number
+): { point: NestedPoint; offset: number } {
+  let cursor = offset;
+  const x = view.getFloat64(cursor, littleEndian);
+  cursor += 8;
+  const y = view.getFloat64(cursor, littleEndian);
+  cursor += 8;
+  const extraDimensions = Math.max(0, coordinateSize - 2);
+  if (extraDimensions > 0) {
+    cursor += extraDimensions * 8;
+  }
+  return { point: [x, y], offset: cursor };
+}
+
+const EWKB_Z_FLAG = 0x80000000;
+const EWKB_M_FLAG = 0x40000000;
+const EWKB_SRID_FLAG = 0x20000000;
+const EWKB_RESERVED_FLAG = 0x10000000;
+
+const WKB_TYPE_IDS: Record<string, number> = {
+  POINT: 1,
+  LINESTRING: 2,
+  POLYGON: 3,
+  MULTIPOINT: 4,
+  MULTILINESTRING: 5,
+  MULTIPOLYGON: 6
+};
+
+const loggedGeometryTypeMismatches = new Set<string>();
+
+function readHeader(
+  view: DataView,
+  offset: number
+): {
+  littleEndian: boolean;
+  type: number;
+  offset: number;
+  coordinateSize: number;
+} {
+  const byteOrder = view.getUint8(offset);
+  const littleEndian = byteOrder === 1;
+  let typeWithFlags = view.getUint32(offset + 1, littleEndian) >>> 0;
+  let cursor = offset + 5;
+
+  let coordinateSize = 2;
+  const hasZ = (typeWithFlags & EWKB_Z_FLAG) !== 0;
+  const hasM = (typeWithFlags & EWKB_M_FLAG) !== 0;
+  const hasSrid = (typeWithFlags & EWKB_SRID_FLAG) !== 0;
+
+  if (hasZ || hasM) {
+    coordinateSize = 2 + (hasZ ? 1 : 0) + (hasM ? 1 : 0);
+  }
+
+  typeWithFlags &=
+    ~EWKB_Z_FLAG & ~EWKB_M_FLAG & ~EWKB_SRID_FLAG & ~EWKB_RESERVED_FLAG;
+
+  if (typeWithFlags >= 3000) {
+    coordinateSize = Math.max(coordinateSize, 4);
+    typeWithFlags -= 3000;
+  } else if (typeWithFlags >= 2000) {
+    coordinateSize = Math.max(coordinateSize, 3);
+    typeWithFlags -= 2000;
+  } else if (typeWithFlags >= 1000) {
+    coordinateSize = Math.max(coordinateSize, 3);
+    typeWithFlags -= 1000;
+  }
+
+  if (hasSrid) {
+    cursor += 4;
+  }
+
+  return {
+    littleEndian,
+    type: typeWithFlags,
+    offset: cursor,
+    coordinateSize
+  };
+}
+
+function parsePoint(view: DataView, offset: number): ParseResult<NestedPoint> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 1) {
+    throw new Error(`Expected WKB Point but found type ${type}`);
+  }
+  const { point, offset: nextOffset } = readCoordinatePair(
+    view,
+    cursor,
+    littleEndian,
+    coordinateSize
+  );
+  return { geometry: point, offset: nextOffset };
+}
+
+function parseLineString(
+  view: DataView,
+  offset: number
+): ParseResult<LineStringCoords> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 2) {
+    throw new Error(`Expected WKB LineString but found type ${type}`);
+  }
+  let current = cursor;
+  const numPoints = view.getUint32(current, littleEndian);
+  current += 4;
+  const points: LineStringCoords = [];
+  for (let i = 0; i < numPoints; i++) {
+    const { point, offset: nextOffset } = readCoordinatePair(
+      view,
+      current,
+      littleEndian,
+      coordinateSize
+    );
+    points.push(point);
+    current = nextOffset;
+  }
+  return { geometry: points, offset: current };
+}
+
+function parsePolygon(
+  view: DataView,
+  offset: number
+): ParseResult<PolygonCoords> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 3) {
+    throw new Error(`Expected WKB Polygon but found type ${type}`);
+  }
+  let current = cursor;
+  const numRings = view.getUint32(current, littleEndian);
+  current += 4;
+  const rings: PolygonCoords = [];
+  for (let i = 0; i < numRings; i++) {
+    const numPoints = view.getUint32(current, littleEndian);
+    current += 4;
+    const ring: LineStringCoords = [];
+    for (let j = 0; j < numPoints; j++) {
+      const { point, offset: nextOffset } = readCoordinatePair(
+        view,
+        current,
+        littleEndian,
+        coordinateSize
+      );
+      ring.push(point);
+      current = nextOffset;
+    }
+    rings.push(ring);
+  }
+  return { geometry: rings, offset: current };
+}
+
+function parseMultiPoint(
+  view: DataView,
+  offset: number
+): ParseResult<NestedPoint[]> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 4) {
+    throw new Error(`Expected WKB MultiPoint but found type ${type}`);
+  }
+  let current = cursor;
+  const numPoints = view.getUint32(current, littleEndian);
+  current += 4;
+  const points: NestedPoint[] = [];
+  for (let i = 0; i < numPoints; i++) {
+    const result = parsePoint(view, current);
+    points.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: points, offset: current };
+}
+
+function parseMultiLineString(
+  view: DataView,
+  offset: number
+): ParseResult<LineStringCoords[]> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 5) {
+    throw new Error(`Expected WKB MultiLineString but found type ${type}`);
+  }
+  let current = cursor;
+  const numLines = view.getUint32(current, littleEndian);
+  current += 4;
+  const lines: LineStringCoords[] = [];
+  for (let i = 0; i < numLines; i++) {
+    const result = parseLineString(view, current);
+    lines.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: lines, offset: current };
+}
+
+function parseMultiPolygon(
+  view: DataView,
+  offset: number
+): ParseResult<MultiPolygonCoords> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 6) {
+    throw new Error(`Expected WKB MultiPolygon but found type ${type}`);
+  }
+  let current = cursor;
+  const numPolygons = view.getUint32(current, littleEndian);
+  current += 4;
+  const polygons: MultiPolygonCoords = [];
+  for (let i = 0; i < numPolygons; i++) {
+    const result = parsePolygon(view, current);
+    polygons.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: polygons, offset: current };
+}
+
+function parseGeometryByType(view: DataView, type: number): unknown {
+  switch (type) {
+    case 1:
+      return parsePoint(view, 0).geometry;
+    case 2:
+      return parseLineString(view, 0).geometry;
+    case 3:
+      return parsePolygon(view, 0).geometry;
+    case 4:
+      return parseMultiPoint(view, 0).geometry;
+    case 5:
+      return parseMultiLineString(view, 0).geometry;
+    case 6:
+      return parseMultiPolygon(view, 0).geometry;
+    default:
+      throw new Error(`Unsupported WKB geometry type ${type}`);
+  }
+}

@@ -1,4 +1,7 @@
-import type { DatasetResult, EnrichedColumn } from '$lib/features/pipeline';
+import type {
+  DatasetResult,
+  EnrichedColumn
+} from '$lib/features/data-pipeline';
 import type { GeoColumnResult } from './geo-detector.utils';
 
 const CACHE_COLUMN_SAMPLE_SIZE = 25;

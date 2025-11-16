@@ -1,4 +1,7 @@
-import type { DatasetResult, ProcessedDataset } from '$lib/features/pipeline';
+import type {
+  DatasetResult,
+  ProcessedDataset
+} from '$lib/features/data-pipeline';
 import { datasetsStore } from './datasets.store.svelte';
 
 export enum VisualizationType {

@@ -1,5 +1,7 @@
 import { Duck } from '$lib/features/duckdb';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import type { BasemapAttribute } from '../types/basemap.types';
 
 /**
  * Escape SQL identifier (table/column names) by doubling quotes
@@ -23,6 +25,11 @@ export async function generateCustomBasemapAttributes(
   tableName: string,
   basemapId: string
 ): Promise<void> {
+  const duck = Duck;
+  if (!duck) {
+    throw new DuckDBError('DuckDB not initialized');
+  }
+
   try {
     logger.info(
       `Generating attributes for custom basemap: ${basemapId}`,
@@ -30,7 +37,7 @@ export async function generateCustomBasemapAttributes(
     );
 
     // Create custom attributes table if it doesn't exist
-    await Duck.query(`
+    await duck.query(`
       CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
         raw VARCHAR,
         id VARCHAR,
@@ -46,7 +53,7 @@ export async function generateCustomBasemapAttributes(
     const safeBasemapId = escapeLiteral(basemapId);
 
     // Analyze columns to find candidates for attribute extraction
-    const columns = await Duck.analyse(tableName);
+    const columns = await duck.analyse(tableName);
 
     // Filter candidate columns (common geographic identifiers)
     const candidateColumns = columns.filter((col) => {
@@ -66,7 +73,7 @@ export async function generateCustomBasemapAttributes(
       );
 
       // Fallback: use first text column
-      const textColumn = columns.find((col) => col.type_simple === 'text');
+      const textColumn = columns.find((col) => col.type_simple === 'string');
       if (textColumn) {
         candidateColumns.push(textColumn);
       }
@@ -78,14 +85,17 @@ export async function generateCustomBasemapAttributes(
     );
 
     // Get total count for basemap_count field
-    const countQuery = await Duck.query(
-      `SELECT COUNT(*) as total FROM "${safeTableName}"`
-    );
-    const totalCount = countQuery[0].total;
+    const countQuery = (await duck.query(
+      `SELECT COUNT(*) as total FROM "${safeTableName}"`,
+      { format: 'array', useProxy: false }
+    )) as Array<{ total: number }>;
+    const totalCount = Number(countQuery?.[0]?.total ?? 0);
 
     // Filter columns with too many nulls
     const validColumns = candidateColumns.filter((col) => {
-      if (col.nulls && col.nulls > col.count * 0.5) {
+      const nullCount = Number(col.nulls ?? 0);
+      const recordCount = Number(col.count ?? 0);
+      if (recordCount > 0 && nullCount > recordCount * 0.5) {
         logger.warn(
           `Skipping column ${col.name} (${col.nulls} nulls out of ${col.count})`,
           LogCategory.MAP
@@ -130,7 +140,7 @@ export async function generateCustomBasemapAttributes(
     });
 
     // Execute single batched INSERT with UNION ALL
-    await Duck.query(`
+    await duck.query(`
       INSERT INTO custom_basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
     `);
@@ -141,14 +151,18 @@ export async function generateCustomBasemapAttributes(
     );
 
     // Verify attributes were created
-    const verifyQuery = await Duck.query(`
+    const verifyQuery = (await duck.query(
+      `
       SELECT COUNT(*) as count
       FROM custom_basemap_attributes
       WHERE basemap = '${safeBasemapId}'
-    `);
+    `,
+      { format: 'array', useProxy: false }
+    )) as Array<{ count: number }>;
 
+    const generatedCount = Number(verifyQuery?.[0]?.count ?? 0);
     logger.success(
-      `Generated ${verifyQuery[0].count} attribute entries for basemap ${basemapId}`,
+      `Generated ${generatedCount} attribute entries for basemap ${basemapId}`,
       LogCategory.MAP
     );
   } catch (error) {
@@ -167,10 +181,14 @@ export async function generateCustomBasemapAttributes(
 export async function clearCustomBasemapAttributes(
   basemapId?: string
 ): Promise<void> {
+  const duck = Duck;
+  if (!duck) {
+    throw new DuckDBError('DuckDB not initialized');
+  }
   try {
     if (basemapId) {
       const safeBasemapId = escapeLiteral(basemapId);
-      await Duck.query(`
+      await duck.query(`
         DELETE FROM custom_basemap_attributes
         WHERE basemap = '${safeBasemapId}'
       `);
@@ -179,7 +197,7 @@ export async function clearCustomBasemapAttributes(
         LogCategory.MAP
       );
     } else {
-      await Duck.query(`DROP TABLE IF EXISTS custom_basemap_attributes`);
+      await duck.query(`DROP TABLE IF EXISTS custom_basemap_attributes`);
       logger.info('Cleared all custom basemap attributes', LogCategory.MAP);
     }
   } catch (error) {
@@ -194,14 +212,24 @@ export async function clearCustomBasemapAttributes(
 /**
  * Get all attributes for a basemap (for debugging)
  */
-export async function getBasemapAttributes(basemapId: string): Promise<any[]> {
+export async function getBasemapAttributes(
+  basemapId: string
+): Promise<BasemapAttribute[]> {
+  const duck = Duck;
+  if (!duck) {
+    throw new DuckDBError('DuckDB not initialized');
+  }
   try {
     const safeBasemapId = escapeLiteral(basemapId);
-    return await Duck.query(`
+    const rows = (await duck.query(
+      `
       SELECT *
       FROM custom_basemap_attributes
       WHERE basemap = '${safeBasemapId}'
-    `);
+    `,
+      { format: 'array', useProxy: false }
+    )) as BasemapAttribute[];
+    return rows;
   } catch (error) {
     logger.error(
       `Failed to get attributes for basemap ${basemapId}`,
