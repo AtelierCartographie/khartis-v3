@@ -70,15 +70,13 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
 
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastCallTime = 0;
-  let lastArgs: Parameters<T> | null = null;
-  let lastThis: unknown = null;
+  let pendingCall: { args: Parameters<T>; context: unknown } | null = null;
 
   const invokeFunc = () => {
-    if (lastArgs !== null) {
-      func.apply(lastThis, lastArgs);
+    if (pendingCall) {
+      func.apply(pendingCall.context, pendingCall.args);
       lastCallTime = Date.now();
-      lastArgs = null;
-      lastThis = null;
+      pendingCall = null;
     }
   };
 
@@ -86,8 +84,7 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
     const now = Date.now();
     const timeSinceLastCall = now - lastCallTime;
 
-    lastArgs = args;
-    lastThis = this;
+    pendingCall = { args, context: this };
 
     if (timeSinceLastCall >= wait) {
       // Enough time has passed, call immediately
@@ -123,8 +120,7 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
       clearTimeout(timeoutId);
       timeoutId = null;
     }
-    lastArgs = null;
-    lastThis = null;
+    pendingCall = null;
   };
 
   return throttled;

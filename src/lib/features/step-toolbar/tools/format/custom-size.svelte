@@ -54,7 +54,7 @@
           <div class="margin-input">
             <NumberInput
               id="width-input"
-              label={widthLabel}
+              labelText={widthLabel}
               value={width}
               on:change={(e) => updateSize(e.detail ?? width, height)}
               min={1}
@@ -83,7 +83,7 @@
           <div class="margin-input">
             <NumberInput
               id="height-input"
-              label={heightLabel}
+              labelText={heightLabel}
               value={height}
               on:change={(e) => updateSize(width, e.detail ?? height)}
               min={1}

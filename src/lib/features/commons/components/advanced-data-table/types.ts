@@ -2,7 +2,7 @@
  * Types partagés pour le composant Advanced Data Table et ses sous-composants
  */
 
-import type { ProcessedDataset } from '$lib/features/pipeline';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 
 /**
  * Information basique sur une colonne

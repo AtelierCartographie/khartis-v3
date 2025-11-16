@@ -163,7 +163,7 @@
       >
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[0]}
-          labelText={m.data_tab_control()}
+          label={m.data_tab_control()}
           description={dataTabStore.hasCompletedStep[0]
             ? 'Données contrôlées'
             : 'Vérifiez et nettoyez vos données'}
@@ -171,7 +171,7 @@
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[1]}
           disabled={!dataTabStore.canNavigateToStep[1]}
-          labelText={m.data_tab_geolocate()}
+          label={m.data_tab_geolocate()}
           description={dataTabStore.hasCompletedStep[1]
             ? 'Géolocalisation effectuée'
             : 'Sélectionnez les colonnes géographiques'}
@@ -179,7 +179,7 @@
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[2]}
           disabled={!dataTabStore.canNavigateToStep[2]}
-          labelText={m.data_tab_join()}
+          label={m.data_tab_join()}
           description={dataTabStore.hasCompletedStep[2]
             ? 'Jointure réalisée'
             : 'Associez vos données au fond de carte'}

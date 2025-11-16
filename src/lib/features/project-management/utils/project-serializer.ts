@@ -1,10 +1,9 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import { createDatasetCacheSnapshot } from '$lib/features/commons/utils/dataset-cache.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { DatasetResult } from '$lib/features/pipeline';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type {
   SerializedBasemapAttribute,
@@ -233,15 +232,7 @@ export const ProjectSerializer = {
       serialized.geoMatchResult = file.geoMatchResult;
     }
 
-    if (file.cachedDataset) {
-      const sanitizedDataset = createDatasetCacheSnapshot(file.cachedDataset);
-      serialized.cachedDataset =
-        ProjectSerializer.serializeDatasetResult(sanitizedDataset);
-    }
-
-    if (file.cachedGeoParquet) {
-      serialized.cachedGeoParquet = file.cachedGeoParquet;
-    }
+    // Cached dataset metadata no longer persisted – pipeline reloads from DuckDB
 
     if (file.content) {
       if (typeof file.content === 'string') {
@@ -295,16 +286,7 @@ export const ProjectSerializer = {
       file.geoMatchResult = data.geoMatchResult;
     }
 
-    if (data.cachedDataset) {
-      const deserializedDataset = ProjectSerializer.deserializeDatasetResult(
-        data.cachedDataset
-      );
-      file.cachedDataset = createDatasetCacheSnapshot(deserializedDataset);
-    }
-
-    if (data.cachedGeoParquet) {
-      file.cachedGeoParquet = data.cachedGeoParquet;
-    }
+    // Cached dataset metadata no longer persisted – pipeline reloads from DuckDB
 
     if (data.content) {
       if (data.contentType === 'string' && typeof data.content === 'string') {

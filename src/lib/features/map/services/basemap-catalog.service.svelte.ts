@@ -1,4 +1,4 @@
-import type { ProcessedDataset } from '$lib/features/pipeline';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import type {
   BasemapCatalog,

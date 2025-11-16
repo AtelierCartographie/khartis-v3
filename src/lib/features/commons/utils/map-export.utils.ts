@@ -1,4 +1,4 @@
-import type { ProcessedDataset } from '$lib/features/pipeline';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { Geometry, Position } from 'geojson';
 import {
   getCategoricalColorMap,

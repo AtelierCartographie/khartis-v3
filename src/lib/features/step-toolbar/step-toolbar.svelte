@@ -53,7 +53,7 @@
   id="khartis-step-toolbar"
   class="app-shadow"
   data-outline
-  aria-labelText={m.toolbar_nav_aria()}
+  aria-label={m.toolbar_nav_aria()}
 >
   <header class="step-header">
     <span class="step-title">{m.step_toolbar_steps()}</span>
@@ -62,7 +62,7 @@
   <div
     class="step-container"
     role="group"
-    aria-labelText={m.toolbar_step_selection_aria()}
+    aria-label={m.toolbar_step_selection_aria()}
   >
     <button
       data-testid="step-data"
@@ -71,7 +71,7 @@
       })}
       onclick={() => selectStep(ToolbarStep.Data)}
       aria-pressed={isStepSelected(ToolbarStep.Data)}
-      aria-labelText={m.step_data_aria()}
+      aria-label={m.step_data_aria()}
     >
       <DataBase size={32} />
       <span>{stepLabels[ToolbarStep.Data]}</span>
@@ -84,7 +84,7 @@
       })}
       onclick={() => selectStep(ToolbarStep.Visualizations)}
       aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
-      aria-labelText={m.step_visualizations_aria()}
+      aria-label={m.step_visualizations_aria()}
     >
       <ColorPalette size={32} />
       <span>{stepLabels[ToolbarStep.Visualizations]}</span>
@@ -97,7 +97,7 @@
       })}
       onclick={() => selectStep(ToolbarStep.Styling)}
       aria-pressed={isStepSelected(ToolbarStep.Styling)}
-      aria-labelText={m.step_styling_aria()}
+      aria-label={m.step_styling_aria()}
     >
       <RulerAlt size={32} />
       <span>{stepLabels[ToolbarStep.Styling]}</span>

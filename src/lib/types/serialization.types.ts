@@ -7,7 +7,7 @@
 
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { DatasetResult } from '$lib/features/pipeline';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
 
 /**
@@ -86,8 +86,7 @@ export interface SerializedUploadedFile {
   duplicates?: UploadedFile['duplicates'];
   deepAnalysis?: UploadedFile['deepAnalysis'];
   geoMatchResult?: UploadedFile['geoMatchResult'];
-  cachedDataset?: SerializedDatasetResult;
-  cachedGeoParquet?: string;
+  // Cached dataset metadata removed – pipeline reloads from DuckDB
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
 }

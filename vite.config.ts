@@ -17,12 +17,16 @@ export default defineConfig(() => ({
         enabled: true,
         type: 'module'
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
       workbox: {
         sourcemap: false,
+        globPatterns:
+          process.env.NODE_ENV === 'production'
+            ? ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}']
+            : [],
+        globIgnores: ['**/node_modules/**/*', '**/*.wasm'],
+        navigateFallback: '/index.html',
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         cleanupOutdatedCaches: true,
-        globPatterns: ['**/*.{js,css,html,woff2,woff,ttf,eot,otf,splinecode}'],
-        maximumFileSizeToCacheInBytes: 1147483648,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/,
@@ -32,6 +36,77 @@ export default defineConfig(() => ({
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 30
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/basemaps\/.*\.(parquet|geojson|json)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'basemaps-data',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 365
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /.*\.(wasm|worker\.js)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'wasm-workers',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 90
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern:
+              /^https:\/\/(tile\.openstreetmap\.org|tile-[abc]\.openstreetmap\.fr|tile\.thunderforest\.com)\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'osm-tiles',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 90
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/basemaps\.cartocdn\.com\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'carto-tiles',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 90
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/tiles\.openfreemap\.org\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'openfreemap-tiles',
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 90
               },
               cacheableResponse: {
                 statuses: [0, 200]

@@ -15,6 +15,7 @@ This documentation is organized into focused guides covering different aspects o
 | **[STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)** | State management, persistence, and feature patterns       |
 | **[REFERENCE.md](REFERENCE.md)**                   | Types, utilities, performance, and cross-cutting concerns |
 | **[BASEMAPS.md](BASEMAPS.md)**                     | Basemap preparation, formats, and catalog management      |
+| **[PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)**   | Progressive Web App setup, offline support, and caching   |
 
 ## 🚀 Quick Start
 
@@ -66,6 +67,8 @@ Start here:
 | **Add classification**    | [VISUALIZATION.md](VISUALIZATION.md#add-new-classification-method) |
 | **Understand state**      | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)                     |
 | **Find type definitions** | [REFERENCE.md](REFERENCE.md#core-type-definitions)                 |
+| **Configure PWA**         | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)                       |
+| **Debug offline issues**  | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md#troubleshooting)       |
 
 ## 🏗️ Project Structure
 

@@ -17,10 +17,7 @@ export {
   dataPipeline,
   createDataPipeline
 } from './pipeline/create-data-pipeline';
-export type {
-  DataPipeline,
-  DataPipelineOptions
-} from './pipeline/create-data-pipeline';
+export type { DataPipeline } from './pipeline/create-data-pipeline';
 
 export * from './models';
 export * from './contracts';

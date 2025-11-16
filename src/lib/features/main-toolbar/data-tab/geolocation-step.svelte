@@ -11,7 +11,7 @@
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data/utils/processed-dataset.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
   interface GeoComboBoxItem {
     id: number;
