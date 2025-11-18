@@ -70,14 +70,6 @@ export class ProjectFileService {
       // .kh archives use gzip compression; decompress first before checking for plain JSON
       return await decompressData(buffer);
     } catch (error) {
-      logger.debug(
-        'Project import: fallback to plain JSON',
-        LogCategory.PERSISTENCE,
-        {
-          fileName: file.name,
-          error
-        }
-      );
       const decoder = new TextDecoder();
       return decoder.decode(buffer);
     }

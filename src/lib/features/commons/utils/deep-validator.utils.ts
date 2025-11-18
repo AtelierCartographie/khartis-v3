@@ -63,7 +63,6 @@ export const DeepDataValidator = {
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
-    logger.debug('Operation', LogCategory.DATA);
 
     const rowCount = data.length;
     const columnCount = headers.length;
@@ -71,31 +70,23 @@ export const DeepDataValidator = {
     // Yield before heavy analysis
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    logger.debug('Operation', LogCategory.DATA);
     const columns = await DeepDataValidator.analyzeColumns(headers, data);
-    logger.debug('Operation', LogCategory.DATA);
 
-    logger.debug('Operation', LogCategory.DATA);
     const geoDetection = options.skipGeoDetection
       ? { hasGeoColumns: false, geoColumns: [], warnings: [] }
       : await GeoColumnDetector.detectGeoColumns(headers, data);
-    logger.debug('Operation', LogCategory.DATA);
 
-    logger.debug('Operation', LogCategory.DATA);
     const qualityIssues = await DeepDataValidator.detectQualityIssues(
       columns,
       data
     );
-    logger.debug('Operation', LogCategory.DATA);
 
-    logger.debug('Operation', LogCategory.DATA);
     const performanceWarnings = DeepDataValidator.checkPerformance(
       rowCount,
       columnCount,
       data
     );
 
-    logger.debug('Operation', LogCategory.DATA);
     const suggestions = DeepDataValidator.generateSuggestions(
       columns,
       geoDetection,
@@ -108,7 +99,6 @@ export const DeepDataValidator = {
       columnCount
     );
 
-    logger.debug('Operation', LogCategory.DATA);
 
     return {
       rowCount,
@@ -126,7 +116,6 @@ export const DeepDataValidator = {
     headers: string[],
     data: unknown[][]
   ): Promise<ColumnStatistics[]> {
-    logger.debug('Operation', LogCategory.DATA);
 
     const columns: ColumnStatistics[] = [];
     const COLUMN_CHUNK_SIZE = 10;
@@ -137,7 +126,6 @@ export const DeepDataValidator = {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
       const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
-      logger.debug('Operation', LogCategory.DATA);
 
       for (let colIndex = i; colIndex < endIndex; colIndex++) {
         const header = headers[colIndex];
@@ -150,7 +138,6 @@ export const DeepDataValidator = {
       }
     }
 
-    logger.debug('Operation', LogCategory.DATA);
 
     return columns;
   },

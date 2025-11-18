@@ -13,7 +13,6 @@ export async function analyzeJoinQuality(
   }
 
   try {
-    logger.info('Analyzing join quality', LogCategory.DATA);
 
     const totalCountResult = (await Duck.query(
       `
@@ -133,10 +132,6 @@ export async function analyzeJoinQuality(
       totalEntities
     };
 
-    logger.success(
-      `Join analysis complete: ${quality.joinedCount}/${totalEntities} joined`,
-      LogCategory.DATA
-    );
 
     return quality;
   } catch (error) {
@@ -170,7 +165,6 @@ async function findSimilarMatches(
       ? result.map((r) => String(r[basemapColumnName] ?? ''))
       : [];
   } catch (error) {
-    logger.warn('Failed to find similar matches', LogCategory.DATA, error);
     return [];
   }
 }

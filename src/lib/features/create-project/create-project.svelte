@@ -37,10 +37,6 @@
 
   function selectTile(index: number) {
     const tabNames = ['', 'new project', 'open project', 'try example'];
-    logger.info('Selecting tab', LogCategory.UI, {
-      tab: tabNames[index] || 'unknown',
-      index
-    });
     createProjectActions.selectTab(index as 1 | 2 | 3);
   }
 </script>

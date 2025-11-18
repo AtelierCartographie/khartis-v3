@@ -35,7 +35,6 @@ class BasemapCatalogService {
     }
 
     try {
-      logger.info('Loading basemap catalog', LogCategory.MAP);
       const response = await fetch(BASEMAP_METADATA_URL);
 
       if (!response.ok) {
@@ -51,10 +50,6 @@ class BasemapCatalogService {
 
       this._state.isLoaded = true;
 
-      logger.success(
-        `Loaded catalog with ${basemaps.length} basemaps`,
-        LogCategory.MAP
-      );
     } catch (error) {
       logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
       throw error;
@@ -66,7 +61,6 @@ class BasemapCatalogService {
     limit: number = 3
   ): BasemapSuggestion[] {
     if (!this._state.catalog) {
-      logger.warn('Catalog not loaded', LogCategory.MAP);
       return [];
     }
 
@@ -77,7 +71,6 @@ class BasemapCatalogService {
     );
 
     if (!geoColumn) {
-      logger.warn('No geographic column found in dataset', LogCategory.MAP);
       return [];
     }
 
@@ -99,10 +92,6 @@ class BasemapCatalogService {
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, limit);
 
-    logger.info(
-      `Generated ${suggestions.length} suggestions for dataset`,
-      LogCategory.MAP
-    );
 
     return suggestions;
   }
@@ -224,10 +213,6 @@ class BasemapCatalogService {
 
   addCustomBasemap(basemap: BasemapMetadata): void {
     if (!this._state.catalog) {
-      logger.warn(
-        'Cannot add custom basemap: catalog not loaded',
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -239,11 +224,9 @@ class BasemapCatalogService {
     if (existingIndex !== -1) {
       // Replace existing
       this._state.catalog.basemaps[existingIndex] = basemap;
-      logger.info(`Updated custom basemap: ${basemap.title}`, LogCategory.MAP);
     } else {
       // Add new
       this._state.catalog.basemaps.push(basemap);
-      logger.success(`Added custom basemap: ${basemap.title}`, LogCategory.MAP);
     }
   }
 }

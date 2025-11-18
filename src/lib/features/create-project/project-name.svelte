@@ -55,63 +55,37 @@
 
   async function handleCreate() {
     const startTime = performance.now();
-    logger.debug('Project creation started', LogCategory.PROJECT);
 
     hasTriedSubmit = true;
 
     if (!hasValidName) {
-      logger.warn(
-        'Project creation attempted without name',
-        LogCategory.PROJECT
-      );
       return;
     }
 
     if (!hasValidFiles) {
-      logger.warn(
-        'Project creation attempted without valid files',
-        LogCategory.PROJECT
-      );
       showError(m.validation_no_files_title(), m.validation_no_files_message());
       return;
     }
 
     isCreating = true;
     creationStep = m.create_project_processing_status();
-    logger.info('Creating new project', LogCategory.PROJECT, {
-      name: projectName.trim(),
-      filesCount: validFiles.length
-    });
 
     try {
-      logger.debug('Sanitizing project name', LogCategory.PROJECT);
       const safeName = sanitizeProjectName(projectName.trim());
 
-      logger.debug('Calling projectStore.createProject', LogCategory.PROJECT);
       creationStep = m.create_project_processing_status();
       const createStart = performance.now();
       await projectStore.createProject(safeName, validFiles);
-      logger.debug('Project created', LogCategory.PROJECT, {
-        duration: `${(performance.now() - createStart).toFixed(2)}ms`
-      });
 
       creationStep = m.create_project_processing_status();
 
-      logger.debug('Refreshing projects store', LogCategory.PROJECT);
       await projectsStore.refresh();
 
-      logger.success('Project created successfully', LogCategory.PROJECT, {
-        name: safeName
-      });
 
-      logger.debug('Resetting tabs and navigating', LogCategory.PROJECT);
       createProjectActions.resetAllTabs();
       await goto('/', { replaceState: true });
 
       const totalDuration = performance.now() - startTime;
-      logger.debug('Project creation completed', LogCategory.PROJECT, {
-        totalDuration: `${totalDuration.toFixed(2)}ms`
-      });
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error('Failed to create project', LogCategory.PROJECT, {
@@ -125,7 +99,6 @@
           : m.error_project_creation_failed();
       showError(m.error_project_creation_failed(), errorMessage);
     } finally {
-      logger.debug('Closing modal and resetting state', LogCategory.PROJECT);
       // Always close modal and reset state, even on error
       isCreating = false;
       creationStep = '';

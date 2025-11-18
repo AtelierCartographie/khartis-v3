@@ -310,7 +310,6 @@ export async function detectDuplicateRows<T extends DataRow>(
   duplicateIndices: number[];
   duplicateCount: number;
 }> {
-  logger.debug('Detecting duplicates', LogCategory.DATA);
 
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
@@ -334,7 +333,6 @@ export async function detectDuplicateRows<T extends DataRow>(
     });
   }
 
-  logger.debug('Operation', LogCategory.DATA);
 
   return {
     hasDuplicates: duplicateIndices.length > 0,
@@ -347,7 +345,6 @@ export async function detectDataTypes(
   data: DataRow[],
   headers: string[]
 ): Promise<Record<string, string>> {
-  logger.debug('Inferring column types', LogCategory.DATA);
 
   const types: Record<string, string> = {};
 
@@ -386,7 +383,6 @@ export async function detectDataTypes(
     }
   }
 
-  logger.debug('Operation', LogCategory.DATA);
 
   return types;
 }
@@ -395,7 +391,6 @@ export async function getDataStatistics(
   data: DataRow[],
   headers: string[]
 ): Promise<Record<string, ColumnStatSummary>> {
-  logger.debug('Calculating statistics', LogCategory.DATA);
 
   const stats: Record<string, ColumnStatSummary> = {};
   const dataTypes = await detectDataTypes(data, headers);
@@ -430,7 +425,6 @@ export async function getDataStatistics(
     }
   }
 
-  logger.debug('Operation', LogCategory.DATA);
 
   return stats;
 }

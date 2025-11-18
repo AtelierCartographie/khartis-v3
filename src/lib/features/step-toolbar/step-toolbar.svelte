@@ -35,10 +35,6 @@
   );
 
   const selectStep = (step: ToolbarStep): void => {
-    logger.info('Selecting toolbar step', LogCategory.UI, {
-      step,
-      previousStep: globalState.selectedStep
-    });
     globalActions.setNavigationState(step);
 
     globalState.selectedTool = undefined;

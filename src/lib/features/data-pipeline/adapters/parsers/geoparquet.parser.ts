@@ -29,10 +29,6 @@ export class GeoParquetParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
-      logger.debug('Parsing GeoParquet file', LogCategory.DATA, {
-        name: file.name,
-        size: file.size
-      });
 
       const buffer = await file.arrayBuffer();
       const arrowTable = await geoParquetReader.readGeoParquet(buffer);

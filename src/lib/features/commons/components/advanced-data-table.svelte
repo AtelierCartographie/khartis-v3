@@ -26,8 +26,8 @@
     type FilterStats,
     type AnalysisResult
   } from '$lib/features/duckdb';
-  import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import { logger, LogCategory } from '../utils/logger';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { logger, LogCategory } from '../utils/logger';
   import {
     create_summary_plot,
     type SummaryPlotData,
@@ -35,19 +35,8 @@
     type CategoricalHistogram
   } from '$lib/features/duckdb/services/duckdb/summary-plot';
   import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
-  import ColumnRenameModal from './column-rename-modal.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-
-  const tableLogger = {
-    debug: (message: string, data?: unknown) =>
-      logger.debug(message, LogCategory.UI, data),
-    info: (message: string, data?: unknown) =>
-      logger.info(message, LogCategory.UI, data),
-    warn: (message: string, data?: unknown) =>
-      logger.warn(message, LogCategory.UI, data),
-    error: (message: string, data?: unknown) =>
-      logger.error(message, LogCategory.UI, data)
-  };
+import ColumnRenameModal from './column-rename-modal.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
   type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -298,41 +287,22 @@
 
   async function renameColumn(oldName: string, newName: string) {
     if (tableName) {
-      logger.debug('Renaming column', LogCategory.UI, {
-        oldName,
-        newName,
-        currentSortColumn: sortColumn
-      });
 
       await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
 
       if (sortColumn === oldName) {
         sortColumn = newName;
-        logger.debug('Updated sort column after rename', LogCategory.UI, {
-          oldName,
-          newName,
-          newSortColumn: sortColumn
-        });
       }
 
       if (hiddenColumns.has(oldName)) {
         hiddenColumns.delete(oldName);
         hiddenColumns.add(newName);
         hiddenColumns = hiddenColumns;
-        logger.debug('Updated hidden columns after rename', LogCategory.UI, {
-          oldName,
-          newName
-        });
       }
 
       await loadColumnsInfo();
       await initializeRows(startIndex);
 
-      logger.debug('Rename complete', LogCategory.UI, {
-        columns: columns.map((c) => c.name),
-        sortColumn,
-        sortOrder
-      });
 
       recordDatasetTransformation(`Renommage de ${oldName} en ${newName}`);
     }
@@ -345,9 +315,6 @@
       if (sortColumn === columnName) {
         sortColumn = null;
         sortOrder = null;
-        logger.debug('Reset sort after column deletion', LogCategory.UI, {
-          columnName
-        });
       }
 
       if (hiddenColumns.has(columnName)) {
@@ -369,10 +336,6 @@
   async function handleRename(newName: string) {
     if (columnToRename) {
       const oldName = columnToRename;
-      logger.debug('handleRename called', LogCategory.UI, {
-        oldName,
-        newName
-      });
 
       await renameColumn(oldName, newName);
 
@@ -382,24 +345,13 @@
   }
 
   function toggleColumnVisibility(columnName: string) {
-    logger.debug('Toggle column visibility', LogCategory.UI, {
-      columnName,
-      wasHidden: hiddenColumns.has(columnName),
-      currentHiddenColumns: Array.from(hiddenColumns)
-    });
 
     if (hiddenColumns.has(columnName)) {
       hiddenColumns.delete(columnName);
-      logger.debug('Column shown', LogCategory.UI, { columnName });
     } else {
       hiddenColumns.add(columnName);
-      logger.debug('Column hidden', LogCategory.UI, { columnName });
     }
 
-    logger.debug('Hidden columns after toggle', LogCategory.UI, {
-      hiddenColumns: Array.from(hiddenColumns),
-      visibleColumnsCount: visibleColumns.length
-    });
   }
 
   function performSearch() {
@@ -737,26 +689,17 @@
     await loadColumnsInfo();
     await initializeRows(startIndex);
 
-    logger.success(`${total} valeurs remplacées`, LogCategory.UI);
   }
 
   async function handleRefine(columnName: string, operation: RefineOperation) {
     if (!tableName) return;
 
-    logger.debug('Refining column', LogCategory.UI, {
-      columnName,
-      operation
-    });
 
     await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
 
     await loadColumnsInfo();
     await initializeRows(startIndex);
 
-    logger.success('Colonne affinée avec succès', LogCategory.UI, {
-      columnName,
-      operation
-    });
 
     recordDatasetTransformation(`Affinage (${operation}) sur ${columnName}`);
   }
@@ -764,10 +707,6 @@
   async function changeColumnType(columnName: string, duckType: string) {
     if (!tableName) return;
 
-    logger.info('Changing column type', LogCategory.UI, {
-      columnName,
-      duckType
-    });
 
     await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
     await loadColumnsInfo();
@@ -785,13 +724,7 @@
 
   async function loadColumnsInfo() {
     if (tableName) {
-      logger.debug('Loading basic column info (fast)', LogCategory.UI, {
-        tableName
-      });
       const analysis = await duckDBOrchestrator.getBasicColumnInfo(tableName);
-      logger.debug('Basic column info loaded', LogCategory.UI, {
-        count: analysis.length
-      });
 
       columns = analysis.map((a: AnalysisResult) => ({
         name: a.name,
@@ -814,23 +747,12 @@
         }
       });
       columnAnalysis = analysisMap;
-      logger.debug('Column analysis map created', LogCategory.UI, {
-        size: columnAnalysis.size
-      });
 
       if (sortColumn && !columns.some((c) => c.name === sortColumn)) {
-        logger.debug('Reset sort - column not found', LogCategory.UI, {
-          sortColumn,
-          availableColumns: columns.map((c) => c.name)
-        });
         sortColumn = null;
         sortOrder = null;
       }
     } else if (dataset) {
-      logger.debug(
-        'Loading columns from dataset (no analysis)',
-        LogCategory.UI
-      );
       columns = dataset.columns.filter((c) => c.name !== 'geometry');
       const columnNames = columns.map((c) => c.name);
       if (selectedSearchColumns.length === 0) {
@@ -842,10 +764,6 @@
       }
 
       if (sortColumn && !columns.some((c) => c.name === sortColumn)) {
-        logger.debug(
-          'Reset sort - column not found in dataset',
-          LogCategory.UI
-        );
         sortColumn = null;
         sortOrder = null;
       }
@@ -934,50 +852,19 @@
   });
 
   $effect(() => {
-    tableLogger.debug('[AdvancedDataTable] $effect TRIGGERED', {
-      hasDataset: !!dataset,
-      hasTableName: !!tableName,
-      datasetId: dataset?.id,
-      datasetName: dataset?.name,
-      datasetSourceFileId: dataset?.sourceFileId,
-      tableName,
-      timestamp: new Date().toISOString()
-    });
 
-    tableLogger.debug('[AdvancedDataTable] Data source $effect triggered', {
-      hasDataset: !!dataset,
-      hasTableName: !!tableName,
-      datasetId: dataset?.id,
-      datasetName: dataset?.name,
-      tableName
-    });
 
     selectedRowIds = new SvelteSet();
     selectAllVisible = false;
 
     if (dataset || tableName) {
-      tableLogger.debug('[AdvancedDataTable] Has data source - LOADING', {
-        willLoadFromTable: !!tableName,
-        willLoadFromDataset: !!dataset && !tableName
-      });
 
       untrack(async () => {
-        tableLogger.debug('[AdvancedDataTable] Starting data load...');
         await loadColumnsInfo();
 
         if (tableName) {
-          tableLogger.debug(
-            '[AdvancedDataTable] Getting row count from DuckDB table',
-            { tableName }
-          );
           await refreshFiltersState();
-          tableLogger.debug('[AdvancedDataTable] Row count received', {
-            numRows
-          });
         } else if (dataset) {
-          tableLogger.debug('[AdvancedDataTable] Using dataset row count', {
-            rowCount: dataset.rowCount
-          });
           numRows = dataset.rowCount;
           filterStats = {
             total: dataset.rowCount,
@@ -985,21 +872,9 @@
           };
         }
 
-        tableLogger.debug(
-          '[AdvancedDataTable] Initializing rows with numRows',
-          {
-            numRows
-          }
-        );
         await initializeRows(0);
-        tableLogger.debug('[AdvancedDataTable] Data load complete');
       });
     } else {
-      tableLogger.debug('[AdvancedDataTable] No data source - CLEARING DATA');
-      tableLogger.debug('[AdvancedDataTable] No data source - CLEARING DATA', {
-        hasDataset: !!dataset,
-        hasTableName: !!tableName
-      });
       columns = [];
       numRows = 0;
       tableData = [];

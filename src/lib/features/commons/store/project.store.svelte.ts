@@ -134,24 +134,9 @@ class ProjectStore {
           geoMatchResult: file.geoMatchResult
         };
 
-        logger.debug('Adding file to sourceFiles', LogCategory.PROJECT, {
-          name: fileCopy.name,
-          parsedDataLength: Array.isArray(fileCopy.parsedData)
-            ? fileCopy.parsedData.length
-            : 0
-        });
 
         // Force reactivity by reassigning currentProject with deep copy of data
         // Do everything in one assignment to avoid intermediate states
-        logger.debug(
-          'BEFORE adding file to currentProject',
-          LogCategory.PROJECT,
-          {
-            currentSourceFilesCount:
-              this._state.currentProject.data.sourceFiles.length,
-            fileToAdd: fileCopy.name
-          }
-        );
 
         this._state.currentProject = {
           ...this._state.currentProject,
@@ -164,17 +149,6 @@ class ProjectStore {
           }
         };
 
-        logger.success(
-          'AFTER adding file to currentProject',
-          LogCategory.PROJECT,
-          {
-            newSourceFilesCount:
-              this._state.currentProject.data.sourceFiles.length,
-            allFileNames: this._state.currentProject.data.sourceFiles.map(
-              (f) => f.name
-            )
-          }
-        );
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
@@ -261,19 +235,10 @@ class ProjectStore {
   }
 
   async loadProject(id: string): Promise<void> {
-    logger.info('📂 loadProject() called', LogCategory.PROJECT, {
-      projectId: id,
-      currentProjectId: this._state.currentProject?.id
-    });
 
     const project = await projectRepository.load(id);
 
     if (project) {
-      logger.info('📂 Project loaded from IndexedDB', LogCategory.PROJECT, {
-        projectId: project.id,
-        projectName: project.manifest.name,
-        filesCount: project.data?.sourceFiles?.length || 0
-      });
 
       this._state.currentProject = project;
       this._state.isDirty = false;
@@ -292,12 +257,6 @@ class ProjectStore {
       return;
     }
 
-    logger.info('💾 saveCurrentProject() called', LogCategory.PROJECT, {
-      projectId: this._state.currentProject.id,
-      projectName: this._state.currentProject.manifest.name,
-      isDirty: this._state.isDirty,
-      filesCount: this._state.currentProject.data?.sourceFiles?.length || 0
-    });
 
     try {
       const projectValidation = ProjectValidator.validateProjectSize(
@@ -309,18 +268,12 @@ class ProjectStore {
 
       if (projectValidation.warnings.length > 0) {
         projectValidation.warnings.forEach((warning) =>
-          logger.warn(warning, LogCategory.PROJECT)
-        );
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
       await projectRepository.save(this._state.currentProject);
       const cachedFiles = this._state.currentProject.data?.sourceFiles ?? [];
 
-      logger.success('✅ Project saved to IndexedDB', LogCategory.PROJECT, {
-        projectId: this._state.currentProject.id,
-        filesWithCacheSaved: cachedFiles.length
-      });
 
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
@@ -405,8 +358,6 @@ class ProjectStore {
     );
     if (storageCheck.warnings.length > 0) {
       storageCheck.warnings.forEach((warning) =>
-        logger.warn(warning, LogCategory.PERSISTENCE)
-      );
     }
 
     return projects;

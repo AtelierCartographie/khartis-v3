@@ -47,19 +47,12 @@
 
   async function handleFileDrop(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
-    logger.info('Files dropped', LogCategory.FILE, {
-      count: files.length,
-      names: files.map((f) => f.name)
-    });
 
     await createProjectActions.processFiles(files);
   }
 
   async function handlePasteData() {
     if (pastedDataValue.trim()) {
-      logger.info('Processing pasted data', LogCategory.FILE, {
-        length: pastedDataValue.length
-      });
       await createProjectActions.processPastedData(pastedDataValue);
       pastedDataValue = '';
     }
@@ -67,9 +60,6 @@
 
   async function handleLoadOnlineFile() {
     if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
-      logger.info('Loading online file', LogCategory.FILE, {
-        url: onlineUrlValue
-      });
 
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
       await createProjectActions.loadOnlineFile();
@@ -89,7 +79,6 @@
   }
 
   async function handleClearAllFiles() {
-    logger.info('Clearing all files', LogCategory.FILE);
     isDeletingAll = true;
     await createProjectActions.clearAllFiles(true);
     isDeletingAll = false;

@@ -34,21 +34,16 @@ export function convertGeoJSONToArrow(
     );
   }
 
-  logger.debug('Converting GeoJSON to Arrow', LogCategory.DUCKDB);
 
   // Step 1: Infer schema from all features
   const schemaInfo = inferGeoJSONSchema(features);
-  logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 2: Extract columnar data
   const columns = extractColumnarData(features, schemaInfo);
-  logger.debug('Operation', LogCategory.DUCKDB);
 
   // Step 3: Create Arrow table
   const table = tableFromArrays(columns);
-  logger.debug('Operation', LogCategory.DUCKDB);
 
-  logger.debug('Operation', LogCategory.DUCKDB);
 
   return table;
 }

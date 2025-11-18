@@ -463,10 +463,6 @@ export const createProjectActions = {
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
-    logger.info('Downloading remote file', LogCategory.FILE, {
-      url,
-      index
-    });
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -490,12 +486,6 @@ export const createProjectActions = {
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
-    logger.info('clearAllFiles called', LogCategory.FILE, {
-      uploadedFilesCount: createProjectState.newProject.uploadedFiles.length,
-      hasCurrentProject: !!projectStore.currentProject,
-      projectId: projectStore.currentProject?.id,
-      saveProject
-    });
 
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
@@ -509,9 +499,6 @@ export const createProjectActions = {
       projectStore.currentProject?.id &&
       projectStore.currentProject.data
     ) {
-      logger.info('Clearing and saving project sourceFiles', LogCategory.FILE, {
-        projectId: projectStore.currentProject.id
-      });
 
       projectStore.currentProject.data.sourceFiles = [];
       projectStore.markAsDirty();
@@ -524,13 +511,6 @@ export const createProjectActions = {
    * Used when closing the add-data modal after successful import.
    */
   clearUploadState(): void {
-    logger.info(
-      'clearUploadState called - clearing UI only',
-      LogCategory.FILE,
-      {
-        uploadedFilesCount: createProjectState.newProject.uploadedFiles.length
-      }
-    );
 
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
@@ -677,11 +657,6 @@ function getFilenameFromContentDisposition(
   try {
     return decodeURIComponent(value);
   } catch (error) {
-    logger.debug(
-      'Failed to decode filename from Content-Disposition',
-      LogCategory.FILE,
-      error
-    );
     return value;
   }
 }

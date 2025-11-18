@@ -103,17 +103,8 @@ export const ProjectSerializer = {
             attributes: attributes || []
           };
 
-          logger.info(
-            `Serialized ${customBasemaps.length} custom basemaps with ${attributes?.length || 0} attributes`,
-            LogCategory.DATA
-          );
         }
       } catch (error) {
-        logger.warn(
-          'Failed to serialize custom basemap attributes',
-          LogCategory.DATA,
-          error
-        );
       }
     }
 
@@ -166,10 +157,6 @@ export const ProjectSerializer = {
             VALUES ${insertValues}
           `);
 
-          logger.info(
-            `Restored ${attributes.length} custom basemap attributes`,
-            LogCategory.DATA
-          );
         }
 
         // Re-register custom basemaps in catalog
@@ -177,10 +164,6 @@ export const ProjectSerializer = {
           basemapCatalogService.addCustomBasemap(basemap);
         });
 
-        logger.success(
-          `Restored ${metadata.length} custom basemaps`,
-          LogCategory.DATA
-        );
       } catch (error) {
         logger.error(
           'Failed to restore custom basemaps',

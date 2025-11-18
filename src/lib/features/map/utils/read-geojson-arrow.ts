@@ -14,7 +14,6 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   );
 
   if (!geomColumn) {
-    logger.warn('No geometry column found in table', LogCategory.MAP);
     return table;
   }
 
@@ -39,10 +38,8 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
         geometryTypes = ['Polygon', 'MultiPolygon'];
       }
 
-      logger.info(`Detected GeoArrow encoding: ${encoding}`, LogCategory.MAP);
     } else if (extensionName === 'ogc.wkb') {
       encoding = 'WKB';
-      logger.info('Detected WKB encoding from OGC extension', LogCategory.MAP);
     }
   }
 
@@ -80,12 +77,6 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const newSchema = new Schema(newFields, newMetadata);
   const newTable = new Table(newSchema, table.batches);
 
-  logger.info('Added GeoArrow metadata to table', LogCategory.MAP, {
-    geoColumn: geoColumnName,
-    encoding,
-    geometryTypes,
-    bbox: columnBounds
-  });
 
   return newTable;
 }
@@ -103,10 +94,6 @@ export async function readGeoJSONAsArrow(
     .replace(/-/g, '_')
     .replace('.geojson', '');
 
-  logger.info('Reading GeoJSON with ST_Read', LogCategory.MAP, {
-    originalTableName: tableName,
-    sanitizedName
-  });
 
   const geojsonFile = new File([geojsonText], `${sanitizedName}.geojson`, {
     type: 'application/geo+json'
@@ -124,20 +111,11 @@ export async function readGeoJSONAsArrow(
 
   let table = tableFromIPC(result as Uint8Array);
 
-  logger.info('GeoJSON loaded, adding GeoArrow metadata', LogCategory.MAP, {
-    rowCount: table.numRows,
-    hasGeoMetadata: table.schema.metadata.has('geo')
-  });
 
   if (!table.schema.metadata.has('geo')) {
     table = addGeoArrowMetadata(table);
   }
 
-  logger.info('GeoJSON successfully converted to Arrow', LogCategory.MAP, {
-    rowCount: table.numRows,
-    hasGeoMetadata: table.schema.metadata.has('geo'),
-    columns: table.schema.fields.map((f) => f.name)
-  });
 
   return table;
 }

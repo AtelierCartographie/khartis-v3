@@ -31,16 +31,8 @@ class BasemapService {
       if (Duck) {
         await this.loadAttributesIntoDuckDB();
       } else {
-        logger.warn(
-          'DuckDB not ready, skipping attributes loading',
-          LogCategory.MAP
-        );
       }
 
-      logger.info(
-        'Basemap service initialized without loading default basemap',
-        LogCategory.MAP
-      );
     } catch (error) {
       logger.error(
         'Failed to initialize basemap service',
@@ -52,7 +44,6 @@ class BasemapService {
 
   private async loadMetadata(): Promise<void> {
     try {
-      logger.info('Loading basemap metadata', LogCategory.MAP);
       const response = await fetch(BASEMAP_METADATA_URL);
 
       if (!response.ok) {
@@ -60,10 +51,6 @@ class BasemapService {
       }
 
       this._availableBasemaps = await response.json();
-      logger.success(
-        `Loaded metadata for ${this._availableBasemaps.length} basemaps`,
-        LogCategory.MAP
-      );
     } catch (error) {
       logger.error('Failed to load basemap metadata', LogCategory.MAP, error);
       throw error;
@@ -74,7 +61,6 @@ class BasemapService {
     if (!Duck || this._attributesLoaded) return;
 
     try {
-      logger.info('Loading basemap attributes into DuckDB', LogCategory.MAP);
       const response = await fetch(BASEMAP_ATTRIBUTES_URL);
 
       if (!response.ok) {
@@ -107,7 +93,6 @@ class BasemapService {
       }
 
       this._attributesLoaded = true;
-      logger.success('Basemap attributes loaded into DuckDB', LogCategory.MAP);
     } catch (error) {
       logger.error('Failed to load basemap attributes', LogCategory.MAP, error);
       throw error;
@@ -116,14 +101,12 @@ class BasemapService {
 
   private async loadGeometryFromParquet(filename: string): Promise<ArrowTable> {
     let url = `${GEOMETRY_BASE_PATH}${filename}.parquet`;
-    logger.info(`Loading geometry from ${url}`, LogCategory.MAP);
 
     let response = await fetch(url);
     let isGeoJSON = false;
 
     if (!response.ok) {
       url = `${GEOMETRY_BASE_PATH}${filename}.geojson`;
-      logger.info(`Parquet not found, trying GeoJSON: ${url}`, LogCategory.MAP);
       response = await fetch(url);
       isGeoJSON = true;
 
@@ -142,10 +125,6 @@ class BasemapService {
       jsTable = await readGeoArrowParquet(arrayBuffer);
     }
 
-    logger.info(
-      `Loaded ${jsTable.numRows} features from ${filename}`,
-      LogCategory.MAP
-    );
     return jsTable;
   }
 
@@ -156,25 +135,12 @@ class BasemapService {
 
     for (const layer of layers) {
       if (!layer.file) {
-        logger.warn('Skipping layer without associated file', LogCategory.MAP, {
-          layerName: layer.name,
-          layerTitle: layer.title
-        });
         continue;
       }
       try {
         const table = await this.loadGeometryFromParquet(layer.file);
         layerTables.set(layer.file, table);
-        logger.info(
-          `Loaded layer: ${layer.title ?? layer.name}`,
-          LogCategory.MAP
-        );
       } catch (error) {
-        logger.warn(
-          `Failed to load layer ${layer.title}`,
-          LogCategory.MAP,
-          error
-        );
       }
     }
 
@@ -192,7 +158,6 @@ class BasemapService {
     }
 
     try {
-      logger.info(`Loading basemap: ${metadata.title}`, LogCategory.MAP);
 
       const geometryTable = await this.loadGeometryFromParquet(metadata.file);
       const layerTables = await this.loadBasemapLayers(metadata.layers);
@@ -203,7 +168,6 @@ class BasemapService {
         layerTables
       };
 
-      logger.success(`Basemap loaded: ${metadata.title}`, LogCategory.MAP);
       return this._currentBasemap;
     } catch (error) {
       logger.error(

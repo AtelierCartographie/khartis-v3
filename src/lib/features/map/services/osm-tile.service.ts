@@ -72,25 +72,15 @@ export function getOSMTileConfig(
   const style = extractOSMStyle(basemap.file);
 
   if (!style) {
-    logger.warn(
-      `Could not extract OSM style from basemap: ${basemap.file}`,
-      LogCategory.MAP
-    );
     return null;
   }
 
   const config = OSM_TILE_SERVERS[style as keyof typeof OSM_TILE_SERVERS];
 
   if (!config) {
-    logger.warn(`Unknown OSM style: ${style}`, LogCategory.MAP);
     return null;
   }
 
-  logger.info(
-    `Using OSM tile config for style: ${style}`,
-    LogCategory.MAP,
-    config
-  );
   return config;
 }
 

@@ -5,19 +5,6 @@ import { LogCategory, logger } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
 
-const storeLogger = {
-  debug: (message: string, data?: unknown) =>
-    logger.debug(message, LogCategory.STORE, data),
-  info: (message: string, data?: unknown) =>
-    logger.info(message, LogCategory.STORE, data),
-  warn: (message: string, data?: unknown) =>
-    logger.warn(message, LogCategory.STORE, data),
-  error: (message: string, data?: unknown) =>
-    logger.error(message, LogCategory.STORE, data),
-  success: (message: string, data?: unknown) =>
-    logger.success(message, LogCategory.STORE, data)
-};
-
 interface DatasetsState {
   datasets: DatasetResult[];
   selectedDatasetId?: string;
@@ -64,14 +51,6 @@ class DatasetsStore {
       (d) => d.id === this._state.selectedDatasetId
     );
 
-    logger.debug('Selected dataset accessed', LogCategory.STORE, {
-      selectedDatasetId: this._state.selectedDatasetId,
-      found: !!dataset,
-      datasetName: dataset?.name,
-      datasetSourceFileId: dataset?.sourceFileId,
-      datasetTableName: dataset?.tableName,
-      totalDatasets: this._state.datasets.length
-    });
 
     return dataset;
   }
@@ -109,52 +88,24 @@ class DatasetsStore {
   }
 
   async processFiles(files: UploadedFile[]): Promise<void> {
-    const endTiming = logger.startTiming(
-      'Process files in store',
-      LogCategory.STORE
-    );
-
-    logger.info('Processing files in store', LogCategory.STORE, {
-      fileCount: files.length
-    });
-
     this.startProcessing();
     this._state.error = undefined;
 
     try {
-      logger.info('Processing files via dataPipeline', LogCategory.DATA, {
-        count: files.length,
-        files: files.map((f) => ({ name: f.name, hasData: !!f.parsedData }))
-      });
-
-      const pipelineStart = performance.now();
       const newDatasets = await Promise.all(
         files.map(async (file) => {
           if (!file.content && !file.originalFile) {
-            logger.warn(
-              `File ${file.name} has no content or originalFile`,
-              LogCategory.DATA
-            );
             throw new Error(`File ${file.name} has no content or originalFile`);
           }
           return dataPipeline.processUploadedFile(file, file.originalFile);
         })
       );
 
-      const pipelineDuration = performance.now() - pipelineStart;
-      logger.success('Pipeline processing complete', LogCategory.DATA, {
-        duration: `${pipelineDuration.toFixed(2)}ms`,
-        newDatasetsCount: newDatasets.length
-      });
-
       this._state.datasets = [...this._state.datasets, ...newDatasets];
 
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
-
-      endTiming();
-      logger.success('Files processing complete in store', LogCategory.STORE);
     } catch (error) {
       logger.error('Files processing failed', LogCategory.STORE, {
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -170,13 +121,6 @@ class DatasetsStore {
 
   async addFile(file: UploadedFile): Promise<DatasetResult | null> {
     const startTime = performance.now();
-    storeLogger.debug(
-      `[${new Date().toISOString()}] [datasetsStore:addFile] START`,
-      {
-        fileName: file.name,
-        fileId: file.id
-      }
-    );
 
     this.startProcessing();
     this._state.error = undefined;
@@ -184,24 +128,13 @@ class DatasetsStore {
 
     try {
       if (!file.content) {
-        logger.warn(`File ${file.name} has no content`, LogCategory.DATA);
         throw new Error(`File ${file.name} has no content`);
       }
 
-      storeLogger.debug(
-        `[${new Date().toISOString()}] [datasetsStore:addFile] Processing with new dataPipeline...`
-      );
       const processStart = performance.now();
       const dataset = await dataPipeline.processUploadedFile(
         file,
         file.originalFile
-      );
-      storeLogger.debug(
-        `[${new Date().toISOString()}] [datasetsStore:addFile] File processed`,
-        {
-          duration: `${(performance.now() - processStart).toFixed(2)}ms`,
-          hasDataset: !!dataset
-        }
       );
 
       if (dataset) {
@@ -211,14 +144,6 @@ class DatasetsStore {
         );
 
         if (existingDataset) {
-          storeLogger.warn(
-            `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset with sourceFileId already exists, replacing it`,
-            {
-              existingDatasetId: existingDataset.id,
-              newDatasetId: dataset.id,
-              sourceFileId: dataset.sourceFileId
-            }
-          );
 
           // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
@@ -250,17 +175,6 @@ class DatasetsStore {
 
         addedDataset = dataset;
 
-        storeLogger.debug(
-          `[${new Date().toISOString()}] [datasetsStore:addFile] Dataset added to store`,
-          {
-            datasetId: dataset.id,
-            datasetName: dataset.name,
-            sourceFileId: dataset.sourceFileId,
-            totalDatasets: this._state.datasets.length,
-            selectedDatasetId: this._state.selectedDatasetId,
-            wasReplacement: !!existingDataset
-          }
-        );
 
         const pendingResolvers = this.pendingDatasetResolvers.get(
           dataset.sourceFileId
@@ -272,12 +186,6 @@ class DatasetsStore {
       }
 
       const totalDuration = performance.now() - startTime;
-      storeLogger.debug(
-        `[${new Date().toISOString()}] [datasetsStore:addFile] END`,
-        {
-          totalDuration: `${totalDuration.toFixed(2)}ms`
-        }
-      );
 
       return addedDataset;
     } catch (error) {
@@ -297,58 +205,28 @@ class DatasetsStore {
   }
 
   selectDataset(datasetId: string): void {
-    storeLogger.debug('[datasetsStore] selectDataset called', {
-      datasetId,
-      currentSelectedId: this._state.selectedDatasetId,
-      totalDatasets: this._state.datasets.length
-    });
 
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    storeLogger.debug('[datasetsStore] Dataset found?', {
-      found: !!dataset,
-      datasetName: dataset?.name
-    });
 
     if (dataset) {
       this._state.selectedDatasetId = datasetId;
-      storeLogger.debug('[datasetsStore] Selected dataset updated', {
-        newSelectedId: this._state.selectedDatasetId
-      });
     }
   }
 
   removeDataset(datasetId: string): void {
-    storeLogger.debug('[datasetsStore] removeDataset called', {
-      datasetId,
-      currentSelectedId: this._state.selectedDatasetId,
-      totalDatasetsBefore: this._state.datasets.length,
-      willUpdateSelection: this._state.selectedDatasetId === datasetId
-    });
 
     const filteredDatasets = this._state.datasets.filter(
       (d) => d.id !== datasetId
     );
 
-    storeLogger.debug('[datasetsStore] Filtered datasets', {
-      totalDatasetsAfter: filteredDatasets.length,
-      remainingIds: filteredDatasets.map((d) => d.id)
-    });
 
     if (this._state.selectedDatasetId === datasetId) {
       const newSelectedId = filteredDatasets[0]?.id;
-      storeLogger.debug('[datasetsStore] Updating selected dataset', {
-        oldId: this._state.selectedDatasetId,
-        newId: newSelectedId
-      });
       this._state.selectedDatasetId = newSelectedId;
     }
 
     this._state.datasets = filteredDatasets;
 
-    storeLogger.debug('[datasetsStore] removeDataset complete', {
-      finalSelectedId: this._state.selectedDatasetId,
-      finalDatasetCount: this._state.datasets.length
-    });
   }
 
   getAllDatasets(): DatasetResult[] {
@@ -356,20 +234,10 @@ class DatasetsStore {
   }
 
   getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
-    storeLogger.debug('[datasetsStore] getDatasetBySourceFile called', {
-      sourceFileId,
-      totalDatasets: this._state.datasets.length,
-      allSourceFileIds: this._state.datasets.map((d) => d.sourceFileId)
-    });
 
     const dataset = this._state.datasets.find(
       (d) => d.sourceFileId === sourceFileId
     );
-    storeLogger.debug('[datasetsStore] getDatasetBySourceFile result', {
-      found: !!dataset,
-      datasetId: dataset?.id,
-      datasetName: dataset?.name
-    });
 
     return dataset;
   }
@@ -448,21 +316,15 @@ class DatasetsStore {
     );
 
     if (datasetIndex === -1) {
-      logger.warn(`Dataset ${datasetId} not found`, LogCategory.DATA);
       return false;
     }
 
     const dataset = this._state.datasets[datasetIndex];
 
     if (!dataset.originalData) {
-      logger.warn(
-        `Dataset ${datasetId} has no original data to reset`,
-        LogCategory.DATA
-      );
       return false;
     }
 
-    logger.info(`Resetting dataset ${dataset.name}`, LogCategory.DATA);
 
     const resetDataset = {
       ...dataset,
@@ -481,10 +343,6 @@ class DatasetsStore {
       ...this._state.datasets.slice(datasetIndex + 1)
     ];
 
-    logger.success(
-      `Dataset ${dataset.name} reset to original state`,
-      LogCategory.DATA
-    );
     return true;
   }
 
@@ -498,10 +356,6 @@ class DatasetsStore {
   recordTransformation(datasetId: string, description: string): void {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     if (!dataset) {
-      logger.warn(
-        `Cannot record transformation, dataset ${datasetId} not found`,
-        LogCategory.DATA
-      );
       return;
     }
 
@@ -541,18 +395,15 @@ class DatasetsStore {
   renameDataset(datasetId: string, newName: string): boolean {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     if (!dataset) {
-      logger.warn(`Dataset ${datasetId} not found`, LogCategory.DATA);
       return false;
     }
 
     const sanitizedName = sanitizeTextInput(newName);
     if (!sanitizedName) {
-      logger.warn('Cannot rename dataset with empty name', LogCategory.DATA);
       return false;
     }
 
     dataset.name = sanitizedName;
-    logger.info(`Dataset renamed to ${sanitizedName}`, LogCategory.DATA);
     return true;
   }
 

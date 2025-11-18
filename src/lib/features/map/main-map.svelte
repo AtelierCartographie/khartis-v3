@@ -20,13 +20,6 @@
     dataset: DatasetResult
   ): Promise<ArrowTable | FeatureCollection | null> {
     try {
-      logger.info('Processing dataset for geometry', LogCategory.MAP, {
-        name: dataset.name,
-        hasGeometry: !!dataset.geometry,
-        tableName: dataset.tableName,
-        sourceFileId: dataset.sourceFileId,
-        dataLength: dataset.data?.length
-      });
 
       if (dataset.geometry && dataset.sourceFileId) {
         // Get the DuckDB dataset (with GeoArrow metadata) by sourceFileId
@@ -34,27 +27,8 @@
           dataset.sourceFileId
         );
 
-        logger.info('DuckDB dataset lookup', LogCategory.MAP, {
-          sourceFileId: dataset.sourceFileId,
-          found: !!duckDBDataset,
-          duckDBTableName: duckDBDataset?.tableName,
-          allDuckDBDatasets: duckDBOrchestrator.getAllDatasets().map((d) => ({
-            id: d.id,
-            sourceFileId: d.sourceFileId,
-            tableName: d.tableName
-          }))
-        });
 
         if (duckDBDataset?.tableName) {
-          logger.info(
-            'Getting Arrow table from DuckDB orchestrator',
-            LogCategory.MAP,
-            {
-              name: dataset.name,
-              duckDBTableName: duckDBDataset.tableName,
-              datasetTableName: dataset.tableName
-            }
-          );
 
           // Use Arrow table directly from DuckDB orchestrator (has GeoArrow metadata)
           const arrowTable = await duckDBOrchestrator.getArrowTableDirect(
@@ -62,43 +36,12 @@
           );
           if (arrowTable) {
             const schemaMetadata = arrowTable.schema?.metadata;
-            logger.info('Arrow table metadata snapshot', LogCategory.MAP, {
-              rowCount: arrowTable.numRows,
-              schemaMetadataKeys: schemaMetadata
-                ? Array.from(schemaMetadata.keys())
-                : [],
-              geometryFieldNames: arrowTable.schema.fields
-                .filter((field) =>
-                  ['geom', 'geometry'].includes(field.name.toLowerCase())
-                )
-                .map((field) => ({
-                  name: field.name,
-                  extension: field.metadata?.get('ARROW:extension:name') ?? ''
-                })),
-              datasetId: dataset.id
-            });
-            logger.success('Arrow table loaded for display', LogCategory.MAP, {
-              rowCount: arrowTable.numRows,
-              hasMetadata: !!arrowTable.schema?.metadata
-            });
             return arrowTable;
           }
         }
       } else {
-        logger.warn(
-          'DuckDB dataset missing for selected dataset',
-          LogCategory.MAP,
-          {
-            datasetId: dataset.id,
-            sourceFileId: dataset.sourceFileId
-          }
-        );
       }
 
-      logger.warn('No geographic column found in dataset', LogCategory.MAP, {
-        hasGeometry: !!dataset.geometry,
-        hasSourceFileId: !!dataset.sourceFileId
-      });
       return null;
     } catch (error) {
       logger.error(
@@ -111,13 +54,11 @@
   }
 
   async function loadFallbackBasemap(): Promise<void> {
-    logger.info('Loading fallback basemap', LogCategory.MAP);
 
     const basemap = await basemapService.loadDefaultBasemap();
 
     if (basemap?.geometryTable) {
       displayTable = basemap.geometryTable;
-      logger.success('Fallback basemap loaded', LogCategory.MAP);
     } else {
       logger.error('Failed to load fallback basemap', LogCategory.MAP);
     }
@@ -126,15 +67,10 @@
   $effect(() => {
     const _version = duckDBDatasetsVersion;
     if (isInitializing) {
-      logger.info('Skipping effect during initialization', LogCategory.MAP);
       return;
     }
 
     if (selectedDataset) {
-      logger.info('Dataset selected, processing...', LogCategory.MAP, {
-        name: selectedDataset.name,
-        hasGeometry: !!selectedDataset.geometry
-      });
 
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
@@ -144,56 +80,28 @@
               // ArrowTable
               displayTable = result;
               displayGeoJSON = null;
-              logger.success(
-                'Dataset Arrow table ready for display',
-                LogCategory.MAP,
-                {
-                  rowCount: result.numRows
-                }
-              );
             } else if ('features' in result) {
               // GeoJSON
               displayTable = null;
               displayGeoJSON = result;
-              logger.success(
-                'Dataset GeoJSON ready for display',
-                LogCategory.MAP,
-                {
-                  featureCount: result.features.length
-                }
-              );
             }
           } else {
-            logger.warn(
-              'Dataset conversion failed, loading basemap',
-              LogCategory.MAP
-            );
             loadFallbackBasemap();
           }
         });
       } else {
-        logger.info(
-          'Dataset has no geometry, loading basemap',
-          LogCategory.MAP
-        );
         loadFallbackBasemap();
       }
     } else {
-      logger.info('No dataset selected, loading basemap', LogCategory.MAP);
       loadFallbackBasemap();
     }
   });
 
   onMount(async () => {
-    logger.info('Initializing map component', LogCategory.MAP);
 
     await basemapService.initialize();
 
     if (selectedDataset?.geometry) {
-      logger.info(
-        'Initial dataset has geometry, converting...',
-        LogCategory.MAP
-      );
       const result = await convertDatasetToGeoJSON(selectedDataset);
       if (result) {
         // Check if result is ArrowTable or GeoJSON
@@ -201,26 +109,19 @@
           // ArrowTable
           displayTable = result;
           displayGeoJSON = null;
-          logger.success('Initial dataset Arrow table loaded', LogCategory.MAP);
         } else if ('features' in result) {
           // GeoJSON
           displayTable = null;
           displayGeoJSON = result;
-          logger.success('Initial dataset GeoJSON loaded', LogCategory.MAP);
         }
       } else {
         await loadFallbackBasemap();
       }
     } else {
-      logger.info(
-        'No initial dataset geometry, loading basemap',
-        LogCategory.MAP
-      );
       await loadFallbackBasemap();
     }
 
     isInitializing = false;
-    logger.success('Map component initialized', LogCategory.MAP);
   });
 </script>
 

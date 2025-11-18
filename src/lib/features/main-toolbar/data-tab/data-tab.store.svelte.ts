@@ -48,23 +48,13 @@ export class DataTabStore {
    */
   setActiveStep(index: number) {
     if (index < 0 || index > 2) {
-      logger.warn('Invalid step index', LogCategory.UI, { index });
       return;
     }
 
     if (!this._state.canNavigateToStep[index]) {
-      logger.warn(
-        'Cannot navigate to step - prerequisites not met',
-        LogCategory.UI,
-        { index }
-      );
       return;
     }
 
-    logger.info('Navigating to data tab step', LogCategory.UI, {
-      from: this._state.activeStepIndex,
-      to: index
-    });
 
     this._state.activeStepIndex = index;
   }
@@ -82,7 +72,6 @@ export class DataTabStore {
       this._state.canNavigateToStep[index + 1] = true;
     }
 
-    logger.info('Step completed', LogCategory.UI, { step: index });
   }
 
   /**
@@ -102,7 +91,6 @@ export class DataTabStore {
     this._state.activeStepIndex = 0;
     this._state.canNavigateToStep = [true, true, true];
     this._state.hasCompletedStep = [false, false, false];
-    logger.info('Data tab state reset', LogCategory.UI);
   }
 
   /**
