@@ -158,7 +158,6 @@ class CsvProcessor extends FileProcessor {
     const csvParser = new CSVParser();
     const rawDataset = await csvParser.parse(file);
 
-
     // Convert RawDataset to the format expected by the rest of the code
     const headers = rawDataset.columns.map((col) => col.name);
     const csvRows = rawDataset.columns[0].values.map((_, rowIndex) => {
@@ -181,14 +180,10 @@ class CsvProcessor extends FileProcessor {
 
     if (csvValidation.warnings.length > 0) {
       csvValidation.warnings.forEach((warning) => {
-        logger.warn(
-          `[CSV validation warning] ${warning}`,
-          LogCategory.FILE,
-          {
-            fileId: uploadedFile.id,
-            fileName: file.name
-          }
-        );
+        logger.warn(`[CSV validation warning] ${warning}`, LogCategory.FILE, {
+          fileId: uploadedFile.id,
+          fileName: file.name
+        });
       });
     }
 
@@ -231,7 +226,6 @@ class CsvProcessor extends FileProcessor {
     }
 
     this.callbacks.onStatusChange(uploadedFile.id, 'complete');
-
   }
 
   private async performDeepAnalysis(
@@ -239,7 +233,6 @@ class CsvProcessor extends FileProcessor {
     rows: CsvRow[],
     headers: string[]
   ): Promise<boolean> {
-
     const dataMatrix: CsvMatrix = rows.map((row) =>
       headers.map((header) => row[header] ?? null)
     );

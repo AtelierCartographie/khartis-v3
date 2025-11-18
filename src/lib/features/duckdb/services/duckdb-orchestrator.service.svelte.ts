@@ -153,7 +153,10 @@ class DuckDBOrchestratorService {
     if (this.initialized) return;
 
     const start = performance.now();
-    logger.info('Starting DuckDB orchestrator initialization', LogCategory.DUCKDB);
+    logger.info(
+      'Starting DuckDB orchestrator initialization',
+      LogCategory.DUCKDB
+    );
     try {
       await initDuckDB();
       this.initialized = true;
@@ -223,8 +226,6 @@ class DuckDBOrchestratorService {
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
-
-
       logger.success('DuckDB table registered', LogCategory.DUCKDB, {
         tableName,
         datasetId: dataset.id,
@@ -272,10 +273,14 @@ class DuckDBOrchestratorService {
       } else if (file.fileType === FileType.GEOPARQUET) {
         result = await this.processGeoParquet(file, tableName);
       } else {
-        logger.warn('Unsupported file type for DuckDB ingestion', LogCategory.DUCKDB, {
-          fileId: file.id,
-          fileType: file.fileType
-        });
+        logger.warn(
+          'Unsupported file type for DuckDB ingestion',
+          LogCategory.DUCKDB,
+          {
+            fileId: file.id,
+            fileType: file.fileType
+          }
+        );
       }
 
       const totalDuration = performance.now() - startTime;
@@ -423,7 +428,6 @@ class DuckDBOrchestratorService {
       tableName
     });
 
-
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
@@ -566,24 +570,24 @@ class DuckDBOrchestratorService {
 
     await insertArrowTableIntoDuckDB(arrowTable, tableName);
 
-      if (geoMetadata) {
-        const geomColumn = geoMetadata.primary_column;
-        try {
-          await Duck.query(`
+    if (geoMetadata) {
+      const geomColumn = geoMetadata.primary_column;
+      try {
+        await Duck.query(`
             CREATE OR REPLACE TABLE ${tableName} AS
           SELECT * REPLACE (
             ST_GeomFromWKB("${geomColumn}")::GEOMETRY AS "${geomColumn}"
           )
             FROM ${tableName}
           `);
-        } catch (error) {
-          logger.warn(
-            'Failed to convert GeoParquet geometry column',
-            LogCategory.DUCKDB,
-            error
-          );
-        }
+      } catch (error) {
+        logger.warn(
+          'Failed to convert GeoParquet geometry column',
+          LogCategory.DUCKDB,
+          error
+        );
       }
+    }
 
     await Duck.query(`
       CREATE OR REPLACE SEQUENCE id_${tableName} START 1;
@@ -725,7 +729,6 @@ class DuckDBOrchestratorService {
     const { arrowTableWithMetadata, geoArrowMetadata } =
       await this.createArrowTableWithMetadata(tableName);
 
-
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
       tableName,
@@ -797,7 +800,6 @@ class DuckDBOrchestratorService {
       order?: 'ASC' | 'DESC' | null;
     }
   ): Promise<ArrowTableLike> {
-
     if (!this.initialized) {
       await this.initialize();
     }
@@ -919,7 +921,6 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-
     await Duck.query(
       `ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`
     );
@@ -946,7 +947,6 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-
     await Duck.query(
       `ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
     );
@@ -969,7 +969,6 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-
     await Duck.query(`ALTER TABLE ${tableName} DROP COLUMN "${columnName}"`);
 
     await Duck.analyse(tableName, { force: true });
@@ -990,7 +989,6 @@ class DuckDBOrchestratorService {
     }
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
-
 
     await Duck.drop_rows(tableName, rowIds);
     await Duck.analyse(tableName, { force: true });
@@ -1014,7 +1012,6 @@ class DuckDBOrchestratorService {
     }
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
-
 
     const operations: Record<RefineOperation, string> = {
       [RefineOperation.UPPERCASE]: `UPDATE ${tableName} SET "${columnName}" = UPPER("${columnName}")`,
@@ -1048,7 +1045,6 @@ class DuckDBOrchestratorService {
     }
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
-
 
     const countResult = (await Duck.query(
       `SELECT COUNT(*) as count FROM ${tableName} WHERE "${columnName}"::TEXT LIKE '%${searchValue}%'`
@@ -1111,7 +1107,6 @@ class DuckDBOrchestratorService {
       );
     }
 
-
     await Duck.query(
       `CREATE OR REPLACE TABLE ${tableName} AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM ${tableName}`
     );
@@ -1144,7 +1139,6 @@ class DuckDBOrchestratorService {
     }
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
-
 
     const result = (await Duck.query(
       `SELECT (${expression}) as result FROM ${tableName} LIMIT 1`
@@ -1350,7 +1344,6 @@ class DuckDBOrchestratorService {
         metadataMap;
       (schema as unknown as { fields: Field[] }).fields = updatedFields;
 
-
       return normalizedTable;
     } catch (error) {
       logger.error(
@@ -1517,7 +1510,6 @@ class DuckDBOrchestratorService {
       await this.initialize();
     }
 
-
     const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
     const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
       arrowTable,
@@ -1528,7 +1520,6 @@ class DuckDBOrchestratorService {
   }
 
   async getArrowTable(tableName: string): Promise<Table> {
-
     if (!this.initialized) {
       await this.initialize();
     }
@@ -1585,7 +1576,6 @@ class DuckDBOrchestratorService {
       return existing;
     }
 
-
     return Promise.resolve();
   }
 
@@ -1628,7 +1618,6 @@ class DuckDBOrchestratorService {
   }
 
   async dropTable(tableName: string): Promise<void> {
-
     const start = performance.now();
     if (!this.initialized) {
       return;
@@ -1646,7 +1635,6 @@ class DuckDBOrchestratorService {
           break;
         }
       }
-
 
       if (idToDelete) {
         this.updateDatasets((datasets) => {
@@ -1690,10 +1678,14 @@ class DuckDBOrchestratorService {
     duckDataset: DuckDBDataset
   ): Promise<ProcessedDataset> {
     const start = performance.now();
-    logger.debug('Converting DuckDB dataset to processed dataset', LogCategory.DUCKDB, {
-      datasetId: duckDataset.id,
-      tableName: duckDataset.tableName
-    });
+    logger.debug(
+      'Converting DuckDB dataset to processed dataset',
+      LogCategory.DUCKDB,
+      {
+        datasetId: duckDataset.id,
+        tableName: duckDataset.tableName
+      }
+    );
 
     let data: Record<string, unknown>[] = [];
     try {
@@ -1777,11 +1769,15 @@ class DuckDBOrchestratorService {
       geoDetection: duckDataset.geoDetection
     };
 
-    logger.info('DuckDB dataset converted to processed dataset', LogCategory.DUCKDB, {
-      datasetId: duckDataset.id,
-      rowCount: duckDataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
+    logger.info(
+      'DuckDB dataset converted to processed dataset',
+      LogCategory.DUCKDB,
+      {
+        datasetId: duckDataset.id,
+        rowCount: duckDataset.rowCount,
+        durationMs: (performance.now() - start).toFixed(2)
+      }
+    );
 
     return processedDataset;
   }
@@ -2403,10 +2399,12 @@ function readHeader(
 }
 
 function parsePoint(view: DataView, offset: number): ParseResult<NestedPoint> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 1) {
     throw new Error(`Expected WKB Point but found type ${type}`);
   }
@@ -2423,10 +2421,12 @@ function parseLineString(
   view: DataView,
   offset: number
 ): ParseResult<LineStringCoords> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 2) {
     throw new Error(`Expected WKB LineString but found type ${type}`);
   }
@@ -2451,10 +2451,12 @@ function parsePolygon(
   view: DataView,
   offset: number
 ): ParseResult<PolygonCoords> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 3) {
     throw new Error(`Expected WKB Polygon but found type ${type}`);
   }

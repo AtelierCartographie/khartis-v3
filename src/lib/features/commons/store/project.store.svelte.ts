@@ -134,7 +134,6 @@ class ProjectStore {
           geoMatchResult: file.geoMatchResult
         };
 
-
         // Force reactivity by reassigning currentProject with deep copy of data
         // Do everything in one assignment to avoid intermediate states
 
@@ -148,7 +147,6 @@ class ProjectStore {
             ]
           }
         };
-
 
         try {
           await dataOrchestrator.onFileAdded(fileCopy);
@@ -235,11 +233,9 @@ class ProjectStore {
   }
 
   async loadProject(id: string): Promise<void> {
-
     const project = await projectRepository.load(id);
 
     if (project) {
-
       this._state.currentProject = project;
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
@@ -256,7 +252,6 @@ class ProjectStore {
     if (!this._state.currentProject) {
       return;
     }
-
 
     try {
       const projectValidation = ProjectValidator.validateProjectSize(
