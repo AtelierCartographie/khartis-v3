@@ -18,7 +18,6 @@ import {
  * const validator = new SizeValidator();
  * const result = validator.validate(dataset);
  * if (!result.isValid) {
- logger.error('Operation', LogCategory.DATA);
  * }
  * ```
  */

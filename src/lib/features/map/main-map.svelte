@@ -19,29 +19,40 @@
   async function convertDatasetToGeoJSON(
     dataset: DatasetResult
   ): Promise<ArrowTable | FeatureCollection | null> {
+    const start = performance.now();
+    logger.info('Preparing dataset for map rendering', LogCategory.MAP, {
+      datasetId: dataset.id,
+      fileName: dataset.name,
+      hasGeometry: Boolean(dataset.geometry)
+    });
     try {
-
       if (dataset.geometry && dataset.sourceFileId) {
-        // Get the DuckDB dataset (with GeoArrow metadata) by sourceFileId
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
         );
 
-
         if (duckDBDataset?.tableName) {
-
-          // Use Arrow table directly from DuckDB orchestrator (has GeoArrow metadata)
           const arrowTable = await duckDBOrchestrator.getArrowTableDirect(
             duckDBDataset.tableName
           );
           if (arrowTable) {
-            const schemaMetadata = arrowTable.schema?.metadata;
+            logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
+              tableName: duckDBDataset.tableName,
+              rows: arrowTable.numRows,
+              durationMs: (performance.now() - start).toFixed(2)
+            });
             return arrowTable;
           }
         }
-      } else {
       }
 
+      logger.warn(
+        'Dataset missing geometry metadata, falling back to basemap',
+        LogCategory.MAP,
+        {
+          datasetId: dataset.id
+        }
+      );
       return null;
     } catch (error) {
       logger.error(
@@ -54,11 +65,17 @@
   }
 
   async function loadFallbackBasemap(): Promise<void> {
-
+    const start = performance.now();
+    logger.info('Loading fallback basemap for map view', LogCategory.MAP);
     const basemap = await basemapService.loadDefaultBasemap();
 
     if (basemap?.geometryTable) {
       displayTable = basemap.geometryTable;
+      displayGeoJSON = null;
+      logger.success('Fallback basemap ready', LogCategory.MAP, {
+        basemapId: basemap.metadata.file,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     } else {
       logger.error('Failed to load fallback basemap', LogCategory.MAP);
     }
@@ -71,7 +88,9 @@
     }
 
     if (selectedDataset) {
-
+      logger.debug('Map reacting to dataset change', LogCategory.MAP, {
+        datasetId: selectedDataset.id
+      });
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
           if (result) {
@@ -80,10 +99,16 @@
               // ArrowTable
               displayTable = result;
               displayGeoJSON = null;
+              logger.info('Map display updated with Arrow table', LogCategory.MAP, {
+                rows: result.numRows
+              });
             } else if ('features' in result) {
               // GeoJSON
               displayTable = null;
               displayGeoJSON = result;
+              logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
+                features: result.features.length
+              });
             }
           } else {
             loadFallbackBasemap();
@@ -98,6 +123,8 @@
   });
 
   onMount(async () => {
+    const start = performance.now();
+    logger.info('Initializing main map view', LogCategory.MAP);
 
     await basemapService.initialize();
 
@@ -121,6 +148,9 @@
       await loadFallbackBasemap();
     }
 
+    logger.success('Main map initialized', LogCategory.MAP, {
+      durationMs: (performance.now() - start).toFixed(2)
+    });
     isInitializing = false;
   });
 </script>

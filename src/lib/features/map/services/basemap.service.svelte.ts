@@ -26,13 +26,21 @@ class BasemapService {
 
   async initialize(): Promise<void> {
     try {
+      logger.info('Initializing basemap service', LogCategory.MAP);
       await this.loadMetadata();
 
       if (Duck) {
         await this.loadAttributesIntoDuckDB();
       } else {
+        logger.warn(
+          'DuckDB not available, skipping basemap attributes preloading',
+          LogCategory.MAP
+        );
       }
 
+      logger.success('Basemap service initialized', LogCategory.MAP, {
+        basemapCount: this._availableBasemaps.length
+      });
     } catch (error) {
       logger.error(
         'Failed to initialize basemap service',
@@ -44,6 +52,7 @@ class BasemapService {
 
   private async loadMetadata(): Promise<void> {
     try {
+      logger.info('Loading basemap metadata catalog', LogCategory.MAP);
       const response = await fetch(BASEMAP_METADATA_URL);
 
       if (!response.ok) {
@@ -51,6 +60,9 @@ class BasemapService {
       }
 
       this._availableBasemaps = await response.json();
+      logger.debug('Basemap metadata loaded', LogCategory.MAP, {
+        count: this._availableBasemaps.length
+      });
     } catch (error) {
       logger.error('Failed to load basemap metadata', LogCategory.MAP, error);
       throw error;
@@ -67,6 +79,7 @@ class BasemapService {
         throw new Error(`Failed to fetch attributes: ${response.statusText}`);
       }
 
+      logger.info('Loading basemap attributes into DuckDB', LogCategory.MAP);
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
       const attributesFile = new File(
@@ -93,6 +106,7 @@ class BasemapService {
       }
 
       this._attributesLoaded = true;
+      logger.success('Basemap attributes stored in DuckDB', LogCategory.MAP);
     } catch (error) {
       logger.error('Failed to load basemap attributes', LogCategory.MAP, error);
       throw error;
@@ -100,6 +114,8 @@ class BasemapService {
   }
 
   private async loadGeometryFromParquet(filename: string): Promise<ArrowTable> {
+    const start = performance.now();
+    logger.debug('Loading basemap geometry', LogCategory.MAP, { filename });
     let url = `${GEOMETRY_BASE_PATH}${filename}.parquet`;
 
     let response = await fetch(url);
@@ -125,6 +141,11 @@ class BasemapService {
       jsTable = await readGeoArrowParquet(arrayBuffer);
     }
 
+    logger.success('Basemap geometry loaded', LogCategory.MAP, {
+      filename,
+      rows: jsTable.numRows,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
     return jsTable;
   }
 
@@ -138,9 +159,16 @@ class BasemapService {
         continue;
       }
       try {
+        logger.debug('Loading basemap layer geometry', LogCategory.MAP, {
+          layerFile: layer.file
+        });
         const table = await this.loadGeometryFromParquet(layer.file);
         layerTables.set(layer.file, table);
       } catch (error) {
+        logger.warn('Failed to load basemap layer', LogCategory.MAP, {
+          layerFile: layer.file,
+          error
+        });
       }
     }
 
@@ -158,6 +186,7 @@ class BasemapService {
     }
 
     try {
+      logger.info('Loading basemap', LogCategory.MAP, { basemapId });
 
       const geometryTable = await this.loadGeometryFromParquet(metadata.file);
       const layerTables = await this.loadBasemapLayers(metadata.layers);
@@ -168,6 +197,10 @@ class BasemapService {
         layerTables
       };
 
+      logger.success('Basemap loaded', LogCategory.MAP, {
+        basemapId,
+        layerCount: metadata.layers.length
+      });
       return this._currentBasemap;
     } catch (error) {
       logger.error(

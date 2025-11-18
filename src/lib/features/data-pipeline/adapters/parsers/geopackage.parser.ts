@@ -30,13 +30,25 @@ export class GeoPackageParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
+      const start = performance.now();
+      logger.info('Parsing GeoPackage file', LogCategory.DATA, {
+        fileName: file.name,
+        fileType: file.type
+      });
 
       const buffer = await file.arrayBuffer();
       const geojson = (await parseGeoPackage(
         buffer
       )) as GeoJSONFeatureCollection;
 
-      return convertGeoJSONToRawDataset(geojson);
+      const dataset = convertGeoJSONToRawDataset(geojson);
+      logger.success('GeoPackage parsed', LogCategory.DATA, {
+        fileName: file.name,
+        rows: dataset.rows.length,
+        columns: dataset.columns.length,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+      return dataset;
     } catch (error) {
       logger.error('GeoPackage parsing failed', LogCategory.DATA, error);
       throw new ParserError(

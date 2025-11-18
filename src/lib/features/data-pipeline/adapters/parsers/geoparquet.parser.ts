@@ -29,12 +29,24 @@ export class GeoParquetParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
+      const start = performance.now();
+      logger.info('Parsing GeoParquet file', LogCategory.DATA, {
+        fileName: file.name,
+        fileType: file.type
+      });
 
       const buffer = await file.arrayBuffer();
       const arrowTable = await geoParquetReader.readGeoParquet(buffer);
       const geoMetadata = geoParquetReader.extractMetadata(arrowTable);
 
       const dataset = this.convertArrowTable(arrowTable, geoMetadata);
+      logger.success('GeoParquet parsed', LogCategory.DATA, {
+        fileName: file.name,
+        rows: dataset.rows.length,
+        columns: dataset.columns.length,
+        durationMs: (performance.now() - start).toFixed(2),
+        hasGeoMetadata: Boolean(geoMetadata)
+      });
       return dataset;
     } catch (error) {
       if (error instanceof ParserError) {
