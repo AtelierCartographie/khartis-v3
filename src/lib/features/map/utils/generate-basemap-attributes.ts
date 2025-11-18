@@ -121,7 +121,6 @@ export async function generateCustomBasemapAttributes(
       INSERT INTO custom_basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
     `);
-
   } catch (error) {
     logger.error(
       `Failed to generate attributes for basemap ${basemapId}`,
