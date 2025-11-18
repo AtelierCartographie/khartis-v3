@@ -223,7 +223,7 @@ export function useTableSearch(
 
     try {
       // Effectuer le remplacement dans DuckDB
-      const count = await duckDBOrchestrator.replaceInColumn(
+      await duckDBOrchestrator.replaceInColumn(
         tableName,
         '', // Colonne vide = toutes les colonnes
         searchQuery,
@@ -235,7 +235,6 @@ export function useTableSearch(
 
       // Recharger les données
       await props.onReplace();
-
     } catch (err) {
       logger.error('Error replacing values', LogCategory.UI, err);
     }

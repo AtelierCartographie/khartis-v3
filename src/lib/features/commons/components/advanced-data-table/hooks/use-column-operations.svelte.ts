@@ -165,7 +165,6 @@ export function useColumnOperations(
     }
 
     try {
-
       // Renommer dans DuckDB
       await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
 
@@ -181,7 +180,6 @@ export function useColumnOperations(
 
       // Recharger les données
       await props.onColumnsChange();
-
     } catch (err) {
       logger.error('Error renaming column', LogCategory.UI, err);
     }
@@ -198,7 +196,6 @@ export function useColumnOperations(
     }
 
     try {
-
       // Supprimer dans DuckDB
       await duckDBOrchestrator.dropColumn(tableName, columnName);
 
@@ -213,7 +210,6 @@ export function useColumnOperations(
 
       // Recharger les données
       await props.onColumnsChange();
-
     } catch (err) {
       logger.error('Error dropping column', LogCategory.UI, err);
     }
@@ -223,7 +219,6 @@ export function useColumnOperations(
    * Masque ou affiche une colonne (toggle)
    */
   function toggleColumnVisibility(columnName: string): void {
-
     if (hiddenColumns.has(columnName)) {
       hiddenColumns.delete(columnName);
     } else {
@@ -232,7 +227,6 @@ export function useColumnOperations(
 
     // Force reactivity
     hiddenColumns = new SvelteSet(hiddenColumns);
-
   }
 
   /**
@@ -272,13 +266,11 @@ export function useColumnOperations(
     }
 
     try {
-
       // Appliquer l'opération de raffinement
       await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
 
       // Recharger les données
       await props.onColumnsChange();
-
     } catch (err) {
       logger.error('Error refining column', LogCategory.UI, err);
     }

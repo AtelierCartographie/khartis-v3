@@ -74,18 +74,14 @@
       const safeName = sanitizeProjectName(projectName.trim());
 
       creationStep = m.create_project_processing_status();
-      const createStart = performance.now();
       await projectStore.createProject(safeName, validFiles);
 
       creationStep = m.create_project_processing_status();
 
       await projectsStore.refresh();
 
-
       createProjectActions.resetAllTabs();
       await goto('/', { replaceState: true });
-
-      const totalDuration = performance.now() - startTime;
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error('Failed to create project', LogCategory.PROJECT, {

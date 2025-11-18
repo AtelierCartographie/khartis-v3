@@ -2,7 +2,6 @@ import { ToolbarStep } from '$lib/features/commons/types/global';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
@@ -52,13 +51,12 @@ export const mainToolbarActions = {
 
   navigateToVisualization(): void {
     if (projectStore.isDirty) {
-      projectStore.saveCurrentProject().then(() => {});
+      void projectStore.saveCurrentProject();
     }
 
     const derived = getDerivedToolbarState();
     if (derived.canVisualize) {
       globalActions.setNavigationState(ToolbarStep.Visualizations);
-    } else {
     }
   },
 

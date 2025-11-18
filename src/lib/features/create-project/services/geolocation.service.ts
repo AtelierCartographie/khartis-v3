@@ -28,7 +28,6 @@ export class GeolocationService {
       detectedType
     };
 
-
     return result;
   }
 
@@ -94,8 +93,8 @@ export class GeolocationService {
   }
 
   static async analyzeGeoColumn(
-    datasetId: string,
-    columnName: string
+    _datasetId: string,
+    _columnName: string
   ): Promise<{
     pattern?: string;
     uniqueValues: number;
@@ -103,7 +102,6 @@ export class GeolocationService {
     bbox?: [number, number, number, number];
   }> {
     try {
-
       return {
         uniqueValues: 0,
         sampleValues: []

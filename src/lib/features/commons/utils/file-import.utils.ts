@@ -310,7 +310,6 @@ export async function detectDuplicateRows<T extends DataRow>(
   duplicateIndices: number[];
   duplicateCount: number;
 }> {
-
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
 
@@ -333,7 +332,6 @@ export async function detectDuplicateRows<T extends DataRow>(
     });
   }
 
-
   return {
     hasDuplicates: duplicateIndices.length > 0,
     duplicateIndices,
@@ -345,7 +343,6 @@ export async function detectDataTypes(
   data: DataRow[],
   headers: string[]
 ): Promise<Record<string, string>> {
-
   const types: Record<string, string> = {};
 
   // Process headers in chunks to avoid blocking
@@ -383,7 +380,6 @@ export async function detectDataTypes(
     }
   }
 
-
   return types;
 }
 
@@ -391,7 +387,6 @@ export async function getDataStatistics(
   data: DataRow[],
   headers: string[]
 ): Promise<Record<string, ColumnStatSummary>> {
-
   const stats: Record<string, ColumnStatSummary> = {};
   const dataTypes = await detectDataTypes(data, headers);
 
@@ -424,7 +419,6 @@ export async function getDataStatistics(
       }
     }
   }
-
 
   return stats;
 }

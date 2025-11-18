@@ -28,9 +28,6 @@
   let isLoading = $state(true);
 
   onMount(async () => {
-    const startTime = performance.now();
-
-    const duckdbInitStart = performance.now();
     try {
       await duckDBOrchestrator.initialize();
     } catch (error) {
@@ -45,15 +42,12 @@
     }
 
     // Wait for project store to initialize from IndexedDB
-    const projectInitStart = performance.now();
     await projectStore.waitForInit();
 
     // Initialize data orchestrator to process any existing files
-    const dataInitStart = performance.now();
     await dataOrchestrator.initialize();
 
     isLoading = false;
-
 
     // Show modal only if no project exists
     if (!projectStore.currentProject) {

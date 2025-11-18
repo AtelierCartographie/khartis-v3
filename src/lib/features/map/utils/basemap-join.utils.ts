@@ -13,7 +13,6 @@ export async function analyzeJoinQuality(
   }
 
   try {
-
     const totalCountResult = (await Duck.query(
       `
       SELECT COUNT(*) as count
@@ -132,7 +131,6 @@ export async function analyzeJoinQuality(
       totalEntities
     };
 
-
     return quality;
   } catch (error) {
     logger.error('Failed to analyze join quality', LogCategory.DATA, error);
@@ -164,7 +162,7 @@ async function findSimilarMatches(
     return result && Array.isArray(result)
       ? result.map((r) => String(r[basemapColumnName] ?? ''))
       : [];
-  } catch (error) {
+  } catch {
     return [];
   }
 }

@@ -6,7 +6,6 @@
   import { FileType } from '$lib/features/commons/store/create-project.types';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -60,7 +59,6 @@
 
   async function handleLoadOnlineFile() {
     if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
-
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
       await createProjectActions.loadOnlineFile();
       if (!createProjectState.newProject.error) {

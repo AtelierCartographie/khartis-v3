@@ -123,7 +123,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
 
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
 
-
         // Filtrer les colonnes exclues
         const filteredAnalysis = analysis.filter(
           (a: AnalysisResult) => !EXCLUDED_COLUMNS.includes(a.name)
@@ -141,7 +140,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           analysisMap.set(a.name, a);
         });
         columnAnalysis = analysisMap;
-
 
         // Récupérer le nombre de lignes
         const count = await duckDBOrchestrator.getRowCount(tableName);

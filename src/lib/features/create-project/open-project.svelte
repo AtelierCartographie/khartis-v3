@@ -110,10 +110,7 @@
     }
   }
 
-  async function handleDuplicateProject(
-    projectId: string,
-    projectName: string
-  ) {
+  async function handleDuplicateProject(projectId: string) {
     isDuplicating = true;
     error = '';
 
@@ -238,7 +235,7 @@
                     disabled={isDuplicating}
                     on:click={(e) => {
                       e.stopPropagation();
-                      handleDuplicateProject(project.id, project.name);
+                      handleDuplicateProject(project.id);
                     }}
                   >
                     <Copy size={16} />

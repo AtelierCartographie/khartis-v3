@@ -5,7 +5,6 @@ import {
   compressData,
   decompressData
 } from '$lib/features/commons/utils/compression.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import type { SerializedProject } from '$lib/types/serialization.types';
 
 export class ProjectFileService {
@@ -69,7 +68,7 @@ export class ProjectFileService {
     try {
       // .kh archives use gzip compression; decompress first before checking for plain JSON
       return await decompressData(buffer);
-    } catch (error) {
+    } catch {
       const decoder = new TextDecoder();
       return decoder.decode(buffer);
     }

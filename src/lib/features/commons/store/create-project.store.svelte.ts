@@ -463,7 +463,6 @@ export const createProjectActions = {
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
-
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(
@@ -486,7 +485,6 @@ export const createProjectActions = {
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
-
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
 
@@ -499,7 +497,6 @@ export const createProjectActions = {
       projectStore.currentProject?.id &&
       projectStore.currentProject.data
     ) {
-
       projectStore.currentProject.data.sourceFiles = [];
       projectStore.markAsDirty();
       await projectStore.saveCurrentProject();
@@ -511,7 +508,6 @@ export const createProjectActions = {
    * Used when closing the add-data modal after successful import.
    */
   clearUploadState(): void {
-
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
 
@@ -656,7 +652,7 @@ function getFilenameFromContentDisposition(
   const value = match[1].replace(/(^"|"$)/g, '').trim();
   try {
     return decodeURIComponent(value);
-  } catch (error) {
+  } catch {
     return value;
   }
 }

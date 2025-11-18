@@ -413,7 +413,6 @@
           LogCategory.MAP,
           metadataDetails
         );
-      } else {
       }
 
       // Try to find geometry column manually as fallback diagnostic
@@ -421,13 +420,8 @@
         (f) => f.name === 'geom' || f.name === 'geometry'
       );
 
-      if (!geomColumn) {
-        if (hasUserDataset) {
-          logger.error('No geometry column found in table', LogCategory.MAP);
-        } else {
-        }
-      } else if (hasUserDataset) {
-      } else {
+      if (!geomColumn && hasUserDataset) {
+        logger.error('No geometry column found in table', LogCategory.MAP);
       }
 
       return [];
@@ -464,15 +458,13 @@
       const resolvedGeometryType =
         extensionGeometryType ?? normalizedGeometryType;
 
-
-      if (!hasMatchingGeoExtension) {
-        if (hasUserDataset) {
-        } else {
-        }
+      if (!hasMatchingGeoExtension && hasUserDataset) {
+        logger.warn(
+          'Geometry extension mismatch detected',
+          LogCategory.MAP,
+          { geometryType: resolvedGeometryType, arrowExtension }
+        );
       }
-      if (hasMatchingGeoExtension) {
-      }
-
 
       const viz = defaultVisualization;
       // OPTIMIZATION: Use memoized colors instead of converting on every call
@@ -716,7 +708,6 @@
     const fillOpacity: number = (viz?.style.fillOpacity ?? 0.6) * 255;
     const strokeWidth: number = viz?.style.strokeWidth ?? 1;
 
-
     const layer = new GeoJsonLayer({
       id: 'geojson-layer',
       data: geojson,
@@ -763,10 +754,14 @@
       if (!hasGeoMetadata) {
         if (lastPendingGeoTable !== datasetId) {
           lastPendingGeoTable = datasetId ?? null;
-          logger.warn('Arrow table missing GeoArrow metadata', LogCategory.MAP, {
-            datasetId,
-            note: 'Waiting for metadata-prefetch'
-          });
+          logger.warn(
+            'Arrow table missing GeoArrow metadata',
+            LogCategory.MAP,
+            {
+              datasetId,
+              note: 'Waiting for metadata-prefetch'
+            }
+          );
         }
         return;
       }
@@ -807,21 +802,23 @@
     const savedCenter = localStorage.getItem(MAP_CENTER_STORAGE_KEY);
     const savedZoom = localStorage.getItem(MAP_ZOOM_STORAGE_KEY);
 
-    if (savedCenter && savedZoom) {
-      try {
-        const center = JSON.parse(savedCenter);
-        const zoom = parseFloat(savedZoom);
+      if (savedCenter && savedZoom) {
+        try {
+          const center = JSON.parse(savedCenter);
+          const zoom = parseFloat(savedZoom);
 
-        if (center.lng && center.lat && !isNaN(zoom)) {
-          map.setCenter([center.lng, center.lat]);
-          map.setZoom(zoom);
-          baseZoomLevel = zoom;
-          globalActions.setMapZoom(100);
-
+          if (center.lng && center.lat && !isNaN(zoom)) {
+            map.setCenter([center.lng, center.lat]);
+            map.setZoom(zoom);
+            baseZoomLevel = zoom;
+            globalActions.setMapZoom(100);
+          }
+        } catch (error) {
+          logger.warn('Failed to restore saved map position', LogCategory.MAP, {
+            error
+          });
         }
-      } catch (error) {
       }
-    }
   }
 
   function syncZoomToMap(): void {
@@ -940,7 +937,8 @@
         map.addLayer(rasterLayer);
 
         logger.debug('OSM raster basemap applied', LogCategory.MAP, {
-          style: osmBasemap.id
+          basemap: osmBasemap.file,
+          title: osmBasemap.title
         });
       }
     }

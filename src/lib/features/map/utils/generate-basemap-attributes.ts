@@ -31,7 +31,6 @@ export async function generateCustomBasemapAttributes(
   }
 
   try {
-
     // Create custom attributes table if it doesn't exist
     await duck.query(`
       CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
@@ -63,14 +62,12 @@ export async function generateCustomBasemapAttributes(
     });
 
     if (candidateColumns.length === 0) {
-
       // Fallback: use first text column
       const textColumn = columns.find((col) => col.type_simple === 'string');
       if (textColumn) {
         candidateColumns.push(textColumn);
       }
     }
-
 
     // Get total count for basemap_count field
     const countQuery = (await duck.query(
@@ -125,18 +122,6 @@ export async function generateCustomBasemapAttributes(
       ${unionQueries.join('\nUNION ALL\n')}
     `);
 
-
-    // Verify attributes were created
-    const verifyQuery = (await duck.query(
-      `
-      SELECT COUNT(*) as count
-      FROM custom_basemap_attributes
-      WHERE basemap = '${safeBasemapId}'
-    `,
-      { format: 'array', useProxy: false }
-    )) as Array<{ count: number }>;
-
-    const generatedCount = Number(verifyQuery?.[0]?.count ?? 0);
   } catch (error) {
     logger.error(
       `Failed to generate attributes for basemap ${basemapId}`,

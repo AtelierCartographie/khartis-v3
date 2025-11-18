@@ -41,12 +41,6 @@
     DATA: 2
   } as const;
 
-  const EXPORT_TAB_TYPES = {
-    [ExportTab.PROJECT]: 'project',
-    [ExportTab.MAP]: 'map',
-    [ExportTab.DATA]: 'data'
-  } as const;
-
   const MAP_FORMAT = {
     SVG: 'svg',
     JPG: 'jpg'
@@ -70,7 +64,6 @@
       projectStore.updateProjectName(exportFileName);
     }
 
-
     isExporting = true;
     try {
       switch (selectedTabIndex) {
@@ -92,7 +85,6 @@
             showError(m.export_map_error(), m.export_map_no_data());
             break;
           }
-
 
           try {
             let blob: Blob;
@@ -160,7 +152,6 @@
                 format = 'json';
                 extension = 'json';
             }
-
 
             const blob = exportProcessedDatasets(
               normalizeDatasets(datasetsStore.datasets),
