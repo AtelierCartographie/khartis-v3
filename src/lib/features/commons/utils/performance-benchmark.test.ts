@@ -22,7 +22,6 @@ describe('Performance Benchmarks', () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-
     expect(result.rowCount).toBe(1000);
     expect(result.columnCount).toBe(10);
     expect(duration).toBeLessThan(3000); // < 3 seconds
@@ -48,7 +47,6 @@ describe('Performance Benchmarks', () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-
     expect(result.rowCount).toBe(5000);
     expect(result.columnCount).toBe(20);
     expect(duration).toBeLessThan(10000); // < 10 seconds
@@ -67,14 +65,9 @@ describe('Performance Benchmarks', () => {
       })
     );
 
-    const startTime = performance.now();
     const result = await DeepDataValidator.analyzeDataContent(headers, data, {
       skipGeoDetection: true
     });
-    const endTime = performance.now();
-    const duration = endTime - startTime;
-
-
     expect(result.rowCount).toBe(10000);
     expect(result.columnCount).toBe(30);
     // Should complete (no specific time constraint for edge case)
@@ -111,7 +104,6 @@ describe('Performance Benchmarks', () => {
     const welfordStdDev = Math.sqrt(m2 / count);
     const welfordEnd = performance.now();
     const welfordDuration = welfordEnd - welfordStart;
-
 
     // Results should be very close (within floating point precision)
     expect(Math.abs(naiveStdDev - welfordStdDev)).toBeLessThan(0.0001);

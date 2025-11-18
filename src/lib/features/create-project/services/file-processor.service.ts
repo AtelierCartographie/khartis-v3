@@ -51,8 +51,6 @@ export class FileProcessorService {
 
       const processor = this.getProcessor(uploadedFile.fileType);
       await processor.process(uploadedFile, file);
-
-      const duration = performance.now() - startTime;
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error(
@@ -134,7 +132,16 @@ abstract class FileProcessor {
       }
 
       if (asyncValidation.warnings.length > 0) {
-        asyncValidation.warnings.forEach((warning) =>
+        asyncValidation.warnings.forEach((warning) => {
+          logger.warn(
+            `[FileProcessor:validateAsync] ${warning}`,
+            LogCategory.FILE,
+            {
+              fileId: uploadedFile.id,
+              fileName: file.name
+            }
+          );
+        });
       }
     }
 
@@ -144,12 +151,7 @@ abstract class FileProcessor {
 
 class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    const startTime = performance.now();
-
     if (!(await this.validateAsync(uploadedFile, file))) return;
-
-    // Use new dataPipeline CSV parser (no Web Worker issues)
-    const parseStart = performance.now();
 
     // Import CSV parser from new architecture
     const { CSVParser } = await import('$lib/features/data-pipeline');
@@ -178,14 +180,20 @@ class CsvProcessor extends FileProcessor {
     }
 
     if (csvValidation.warnings.length > 0) {
-      csvValidation.warnings.forEach((warning) =>
+      csvValidation.warnings.forEach((warning) => {
+        logger.warn(
+          `[CSV validation warning] ${warning}`,
+          LogCategory.FILE,
+          {
+            fileId: uploadedFile.id,
+            fileName: file.name
+          }
+        );
+      });
     }
 
-    // Use async versions of data analysis functions to avoid blocking
-    const dupStart = performance.now();
     const duplicates = await detectDuplicateRows(csvRows);
 
-    const statsStart = performance.now();
     const statistics = await getDataStatistics(csvRows, headers);
 
     const tabularData = csvRowsToTabularData(csvRows);
@@ -193,8 +201,6 @@ class CsvProcessor extends FileProcessor {
     // Yield before JSON.stringify to avoid blocking
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    // Stringify in chunks for large datasets to avoid blocking
-    const stringifyStart = performance.now();
     const content = await this.stringifyInChunks(tabularData);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
@@ -214,7 +220,6 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
-    const deepAnalysisStart = performance.now();
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
       csvRows,
@@ -227,7 +232,6 @@ class CsvProcessor extends FileProcessor {
 
     this.callbacks.onStatusChange(uploadedFile.id, 'complete');
 
-    const totalDuration = performance.now() - startTime;
   }
 
   private async performDeepAnalysis(
@@ -240,7 +244,6 @@ class CsvProcessor extends FileProcessor {
       headers.map((header) => row[header] ?? null)
     );
 
-    const deepAnalysisStart = performance.now();
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
       dataMatrix,
@@ -290,7 +293,16 @@ class GeoJsonProcessor extends FileProcessor {
       }
 
       if (geoValidation.warnings.length > 0) {
-        geoValidation.warnings.forEach((warning) =>
+        geoValidation.warnings.forEach((warning) => {
+          logger.warn(
+            `[GeoJSON validation warning] ${warning}`,
+            LogCategory.FILE,
+            {
+              fileId: uploadedFile.id,
+              fileName: file.name
+            }
+          );
+        });
       }
 
       this.callbacks.onDataUpdate(uploadedFile.id, {

@@ -57,6 +57,7 @@ class GlobalStore {
 
   constructor() {
     if (typeof window !== 'undefined' && this._selectedDataButtonId) {
+      this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
     }
   }
 
@@ -111,7 +112,6 @@ class GlobalStore {
     try {
       const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
-
       // If we have files but no selection, or selected file no longer exists
       if (sourceFiles.length > 0) {
         const selectedFileExists = sourceFiles.some(
@@ -126,8 +126,7 @@ class GlobalStore {
           const isPending = this._pendingDatasetSelections.has(
             this._selectedDataButtonId
           );
-          if (isPending) {
-          } else {
+          if (!isPending) {
             const firstFileId = sourceFiles[0].id;
             this.selectDataButton(firstFileId);
           }
@@ -152,7 +151,6 @@ class GlobalStore {
 
   dataButtons = $derived.by(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
-
 
     return sourceFiles.map((file) => ({
       id: file.id,
@@ -253,7 +251,6 @@ class GlobalStore {
   }
 
   selectDataButton(id: string): void {
-
     if (this._selectedDataButtonId === id) return;
     this._selectedDataButtonId = id;
 

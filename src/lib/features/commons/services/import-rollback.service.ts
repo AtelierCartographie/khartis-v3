@@ -61,7 +61,6 @@ class ImportRollbackService {
       visualizationIds: existingVisualizationsIds
     };
 
-
     return snapshot;
   }
 
@@ -70,7 +69,6 @@ class ImportRollbackService {
    * Only called on FATAL errors
    */
   async rollback(snapshot: ImportSnapshot): Promise<void> {
-
     const cleanupResults = {
       projectFile: false,
       dataset: false,
@@ -125,10 +123,8 @@ class ImportRollbackService {
           await this.cleanupDuckDBResources(duckDataset.tableName);
           cleanupResults.duckDBTable = true;
           cleanupResults.duckDBCache = true;
-
         }
       }
-
     } catch (rollbackError) {
       logger.error('Rollback failed partially', LogCategory.DATA, {
         fileId: snapshot.fileId,
@@ -176,8 +172,12 @@ class ImportRollbackService {
       if (Duck.table_geoparquet_cache.has(tableName)) {
         Duck.table_geoparquet_cache.delete(tableName);
       }
-
     } catch (error) {
+      logger.warn(
+        'Failed to cleanup DuckDB state during rollback',
+        LogCategory.DUCKDB,
+        error
+      );
     }
   }
 }

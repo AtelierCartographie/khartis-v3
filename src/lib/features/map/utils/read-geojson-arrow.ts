@@ -6,7 +6,6 @@ import {
   Field
 } from 'apache-arrow/Arrow';
 import { Duck } from '$lib/features/duckdb';
-import { logger, LogCategory } from '../../commons/utils/logger';
 
 function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
@@ -37,7 +36,6 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
       } else if (extensionName.includes('polygon')) {
         geometryTypes = ['Polygon', 'MultiPolygon'];
       }
-
     } else if (extensionName === 'ogc.wkb') {
       encoding = 'WKB';
     }
@@ -77,7 +75,6 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const newSchema = new Schema(newFields, newMetadata);
   const newTable = new Table(newSchema, table.batches);
 
-
   return newTable;
 }
 
@@ -93,7 +90,6 @@ export async function readGeoJSONAsArrow(
     .replace(/dataset_/g, '')
     .replace(/-/g, '_')
     .replace('.geojson', '');
-
 
   const geojsonFile = new File([geojsonText], `${sanitizedName}.geojson`, {
     type: 'application/geo+json'
@@ -111,11 +107,9 @@ export async function readGeoJSONAsArrow(
 
   let table = tableFromIPC(result as Uint8Array);
 
-
   if (!table.schema.metadata.has('geo')) {
     table = addGeoArrowMetadata(table);
   }
-
 
   return table;
 }

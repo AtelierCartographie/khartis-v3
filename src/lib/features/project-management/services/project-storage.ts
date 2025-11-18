@@ -24,6 +24,10 @@ export const projectStorage = {
       if (!value) return null;
       return JSON.parse(value) as T;
     } catch (error) {
+      logger.warn('Failed to load project storage entry', LogCategory.PERSISTENCE, {
+        key,
+        error
+      });
       return null;
     }
   },

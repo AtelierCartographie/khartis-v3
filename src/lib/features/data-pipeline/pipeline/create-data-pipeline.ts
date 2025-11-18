@@ -61,10 +61,7 @@ export function createDataPipeline(): DataPipeline {
     if (initialized) return;
 
     const start = performance.now();
-    logger.info(
-      'Initializing data pipeline DuckDB session',
-      LogCategory.DATA
-    );
+    logger.info('Initializing data pipeline DuckDB session', LogCategory.DATA);
 
     try {
       await initDuckDB();
@@ -86,12 +83,16 @@ export function createDataPipeline(): DataPipeline {
   ): Promise<DatasetResult> {
     await ensureInit();
     const start = performance.now();
-    logger.info('Processing uploaded file via data pipeline', LogCategory.DATA, {
-      uploadedFileId: uploadedFile.id,
-      fileName: uploadedFile.name,
-      fileType: uploadedFile.fileType,
-      hasOriginal: Boolean(originalFile)
-    });
+    logger.info(
+      'Processing uploaded file via data pipeline',
+      LogCategory.DATA,
+      {
+        uploadedFileId: uploadedFile.id,
+        fileName: uploadedFile.name,
+        fileType: uploadedFile.fileType,
+        hasOriginal: Boolean(originalFile)
+      }
+    );
 
     try {
       let dataset: DatasetResult;
@@ -186,10 +187,14 @@ export function createDataPipeline(): DataPipeline {
       });
       return dataset;
     } catch (error) {
-      logger.error('Failed to process file via data pipeline', LogCategory.DATA, {
-        fileName: file.name,
-        error
-      });
+      logger.error(
+        'Failed to process file via data pipeline',
+        LogCategory.DATA,
+        {
+          fileName: file.name,
+          error
+        }
+      );
       throw error;
     }
   }

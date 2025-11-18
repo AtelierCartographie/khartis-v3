@@ -4,7 +4,6 @@
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     ComposedModal,
@@ -36,7 +35,6 @@
   }
 
   function selectTile(index: number) {
-    const tabNames = ['', 'new project', 'open project', 'try example'];
     createProjectActions.selectTab(index as 1 | 2 | 3);
   }
 </script>

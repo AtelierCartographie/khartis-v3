@@ -1,5 +1,4 @@
 import type { BasemapMetadata } from '../types/basemap.types';
-import { logger, LogCategory } from '../../commons/utils/logger';
 
 /**
  * OSM Tile Service

@@ -83,6 +83,7 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
       const decoder = new TextDecoder();
       return decoder.decode(result);
     } catch (error) {
+      logger.error('Decompression failed', LogCategory.SYSTEM, error);
       throw error;
     }
   }

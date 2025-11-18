@@ -209,8 +209,7 @@ class Logger {
       };
     }
 
-    const logFn =
-      level === LogLevel.ERROR ? console.error : console.log;
+    const logFn = level === LogLevel.ERROR ? console.error : console.log;
 
     if (data !== undefined) {
       logFn(`%c${prefix} ${message}`, style, data);

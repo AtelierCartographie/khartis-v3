@@ -49,7 +49,6 @@ class BasemapCatalogService {
       };
 
       this._state.isLoaded = true;
-
     } catch (error) {
       logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
       throw error;
@@ -91,7 +90,6 @@ class BasemapCatalogService {
       .filter((s) => s.matchScore > 0)
       .sort((a, b) => b.matchScore - a.matchScore)
       .slice(0, limit);
-
 
     return suggestions;
   }

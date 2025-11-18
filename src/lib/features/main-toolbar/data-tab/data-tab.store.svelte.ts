@@ -8,7 +8,6 @@
  */
 
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export type DataTabStep = 'control' | 'geolocate' | 'join';
 
@@ -55,7 +54,6 @@ export class DataTabStore {
       return;
     }
 
-
     this._state.activeStepIndex = index;
   }
 
@@ -71,7 +69,6 @@ export class DataTabStore {
     if (index < 2) {
       this._state.canNavigateToStep[index + 1] = true;
     }
-
   }
 
   /**

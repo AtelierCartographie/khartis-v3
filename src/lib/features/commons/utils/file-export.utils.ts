@@ -7,7 +7,6 @@ import {
 } from '$lib/types/data';
 import Papa from 'papaparse';
 import type { UploadedFile } from '../store/create-project.types';
-import { LogCategory, logger } from './logger';
 import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
@@ -248,7 +247,6 @@ export async function exportProjectData(
           allFeatures.push(...file.parsedData.features);
         } else if (isGeoJSONFeature(file.parsedData)) {
           allFeatures.push(file.parsedData);
-        } else if (isTabularData(file.parsedData)) {
         }
       }
     }

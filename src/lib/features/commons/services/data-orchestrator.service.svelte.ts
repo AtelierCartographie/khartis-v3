@@ -4,7 +4,6 @@ import { ColumnType } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
 import { convertKMLFileToGeoJSON } from '$lib/features/data-pipeline/adapters/parsers/kml.parser';
 import {
-  getParsedDataLength,
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
@@ -43,11 +42,8 @@ class DataOrchestratorService {
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
-    const start = performance.now();
-
     // Create snapshot BEFORE any changes for potential rollback
     const snapshot = importRollbackService.createSnapshot(file);
-    const pipelineStart = performance.now();
 
     try {
       const dataset = await datasetsStore.addFile(file);
@@ -59,7 +55,6 @@ class DataOrchestratorService {
         return;
       }
 
-      const duckStart = performance.now();
       await this.processFileInDuckDB(file, dataset);
 
       // Mark file as processed to prevent reprocessing
@@ -75,7 +70,6 @@ class DataOrchestratorService {
         visualizationStore.getVisualizationsByDataset(dataset.id);
       if (existingVisualizations.length === 0) {
         this.createDefaultVisualization(dataset.id);
-      } else {
       }
 
       layersActions.syncWithVisualizations();
@@ -85,7 +79,6 @@ class DataOrchestratorService {
 
       // Check if error is fatal (requires rollback) or non-fatal (just show toast)
       if (isFatalError(error)) {
-
         // Rollback all changes
         await importRollbackService.rollback(snapshot);
 
@@ -109,7 +102,6 @@ class DataOrchestratorService {
       if (isFatalError(error)) {
         throw error;
       }
-    } finally {
     }
   }
 
@@ -118,7 +110,6 @@ class DataOrchestratorService {
   }
 
   async onFileRemoved(fileId: string): Promise<void> {
-
     const dataset = datasetsStore.getDatasetBySourceFile(fileId);
 
     if (dataset) {
@@ -143,7 +134,6 @@ class DataOrchestratorService {
 
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
-    } else {
     }
 
     // Remove from processed files set
@@ -185,12 +175,14 @@ class DataOrchestratorService {
 
       // Remove from cache (will be handled by LRU but we can force it)
       if (Duck.table_geoparquet_cache.has(tableName)) {
-        const buffer = Duck.table_geoparquet_cache.get(tableName);
         Duck.table_geoparquet_cache.delete(tableName);
-
       }
-
     } catch (error) {
+      logger.warn(
+        'Failed to cleanup DuckDB resources',
+        LogCategory.DUCKDB,
+        error
+      );
     }
   }
 
@@ -208,11 +200,9 @@ class DataOrchestratorService {
     );
 
     if (orphanedDatasets.length > 0) {
-
       orphanedDatasets.forEach((dataset) => {
         datasetsStore.removeDataset(dataset.id);
       });
-
     }
   }
 
@@ -228,7 +218,6 @@ class DataOrchestratorService {
       file.fileType === FileType.GEOPARQUET ||
       file.fileType === FileType.KML ||
       file.fileType === FileType.KMZ;
-
 
     if (!requiresGeoProcessing) {
       return null;
@@ -283,20 +272,9 @@ class DataOrchestratorService {
     const geojsonString = file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
     file.preparedGeoJSON = geojsonString;
 
-    const hasFeatures = (
-      value: unknown
-    ): value is { features: { length: number }[] } => {
-      return (
-        typeof value === 'object' &&
-        value !== null &&
-        Array.isArray((value as { features?: unknown }).features)
-      );
-    };
-
     const geojsonName = file.name.endsWith('.shp')
       ? file.name.replace(/\.shp$/i, '.geojson')
       : `${file.name}.geojson`;
-
 
     return {
       ...file,
@@ -378,7 +356,6 @@ class DataOrchestratorService {
     file: UploadedFile,
     datasetOverride?: DatasetResult
   ): Promise<void> {
-    const start = performance.now();
     const dataset =
       datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
 
@@ -409,9 +386,8 @@ class DataOrchestratorService {
     }
 
     if (dataset.tableName) {
-
       try {
-        const duckDataset = await duckDBOrchestrator.registerExistingTable(
+        await duckDBOrchestrator.registerExistingTable(
           dataset.tableName,
           dataset.sourceFileId || file.id,
           file.name,
@@ -428,15 +404,10 @@ class DataOrchestratorService {
           tableName: dataset.tableName
         });
       }
-    } else {
     }
-
   }
 
   async onProjectChanged(): Promise<void> {
-    const start = performance.now();
-
-
     // Wait for DuckDB to be ready before processing files
     await duckDBOrchestrator.waitForInitialization();
 
@@ -452,7 +423,6 @@ class DataOrchestratorService {
     if (currentProject?.data?.sourceFiles) {
       await this.processProjectFiles(currentProject.data.sourceFiles);
     }
-
   }
 
   private processedFileIds = new Set<string>();
@@ -489,14 +459,10 @@ class DataOrchestratorService {
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    const start = performance.now();
-
-
     // Filter out files that are already processed OR currently being processed
     const unprocessedFiles = files.filter(
       (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
-
 
     if (unprocessedFiles.length === 0) {
       return;
@@ -506,9 +472,7 @@ class DataOrchestratorService {
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
 
     try {
-      const streamingStart = performance.now();
       const concurrency = this.determineProjectConcurrency();
-
 
       await this.processWithLimit(
         unprocessedFiles,
@@ -516,11 +480,8 @@ class DataOrchestratorService {
         async (file, index, total) => {
           const progress = `${index + 1}/${total}`;
 
-          let processedSuccessfully = false;
-          const fileStart = performance.now();
           try {
             await this.onFileAdded(file);
-            processedSuccessfully = true;
           } catch (error) {
             logger.error(
               'Project file processing failed',
@@ -538,18 +499,13 @@ class DataOrchestratorService {
             );
           } finally {
             this.processingFiles.delete(file.id);
-            if (processedSuccessfully) {
-            }
           }
         }
       );
 
-      const streamingDuration = performance.now() - streamingStart;
-
       layersActions.syncWithVisualizations();
 
       // No cache persistence – DuckDB remains the canonical storage during the session.
-
     } catch (error) {
       // Cleanup on error - remove all unprocessed files from processing
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));

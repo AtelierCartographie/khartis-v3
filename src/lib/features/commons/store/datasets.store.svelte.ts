@@ -51,7 +51,6 @@ class DatasetsStore {
       (d) => d.id === this._state.selectedDatasetId
     );
 
-
     return dataset;
   }
 
@@ -131,7 +130,6 @@ class DatasetsStore {
         throw new Error(`File ${file.name} has no content`);
       }
 
-      const processStart = performance.now();
       const dataset = await dataPipeline.processUploadedFile(
         file,
         file.originalFile
@@ -144,7 +142,6 @@ class DatasetsStore {
         );
 
         if (existingDataset) {
-
           // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
             d.sourceFileId === dataset.sourceFileId ? dataset : d
@@ -175,7 +172,6 @@ class DatasetsStore {
 
         addedDataset = dataset;
 
-
         const pendingResolvers = this.pendingDatasetResolvers.get(
           dataset.sourceFileId
         );
@@ -184,8 +180,6 @@ class DatasetsStore {
           this.pendingDatasetResolvers.delete(dataset.sourceFileId);
         }
       }
-
-      const totalDuration = performance.now() - startTime;
 
       return addedDataset;
     } catch (error) {
@@ -205,7 +199,6 @@ class DatasetsStore {
   }
 
   selectDataset(datasetId: string): void {
-
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
 
     if (dataset) {
@@ -214,11 +207,9 @@ class DatasetsStore {
   }
 
   removeDataset(datasetId: string): void {
-
     const filteredDatasets = this._state.datasets.filter(
       (d) => d.id !== datasetId
     );
-
 
     if (this._state.selectedDatasetId === datasetId) {
       const newSelectedId = filteredDatasets[0]?.id;
@@ -226,7 +217,6 @@ class DatasetsStore {
     }
 
     this._state.datasets = filteredDatasets;
-
   }
 
   getAllDatasets(): DatasetResult[] {
@@ -234,7 +224,6 @@ class DatasetsStore {
   }
 
   getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
-
     const dataset = this._state.datasets.find(
       (d) => d.sourceFileId === sourceFileId
     );
@@ -324,7 +313,6 @@ class DatasetsStore {
     if (!dataset.originalData) {
       return false;
     }
-
 
     const resetDataset = {
       ...dataset,

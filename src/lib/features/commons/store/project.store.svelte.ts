@@ -267,14 +267,19 @@ class ProjectStore {
       }
 
       if (projectValidation.warnings.length > 0) {
-        projectValidation.warnings.forEach((warning) =>
+        projectValidation.warnings.forEach((warning) => {
+          logger.warn(
+            `[ProjectStore:saveCurrentProject] ${warning}`,
+            LogCategory.PROJECT,
+            {
+              projectId: this._state.currentProject?.id
+            }
+          );
+        });
       }
       this._state.currentProject.manifest.updatedAt = new Date();
 
       await projectRepository.save(this._state.currentProject);
-      const cachedFiles = this._state.currentProject.data?.sourceFiles ?? [];
-
-
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
     } catch (error) {
@@ -357,7 +362,15 @@ class ProjectStore {
       projects.length
     );
     if (storageCheck.warnings.length > 0) {
-      storageCheck.warnings.forEach((warning) =>
+      storageCheck.warnings.forEach((warning) => {
+        logger.warn(
+          `[ProjectStore:listProjects] ${warning}`,
+          LogCategory.PROJECT,
+          {
+            projectCount: projects.length
+          }
+        );
+      });
     }
 
     return projects;

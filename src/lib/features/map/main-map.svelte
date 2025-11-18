@@ -99,9 +99,13 @@
               // ArrowTable
               displayTable = result;
               displayGeoJSON = null;
-              logger.info('Map display updated with Arrow table', LogCategory.MAP, {
-                rows: result.numRows
-              });
+              logger.info(
+                'Map display updated with Arrow table',
+                LogCategory.MAP,
+                {
+                  rows: result.numRows
+                }
+              );
             } else if ('features' in result) {
               // GeoJSON
               displayTable = null;

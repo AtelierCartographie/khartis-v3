@@ -86,14 +86,15 @@ export class GeoParquetReader implements IGeoArrowReader {
       const uint8Buffer =
         buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-
       const data = await readGeoParquetWasm(uint8Buffer);
       const table = tableFromIPC(data.intoIPCStream());
       const hasMetadata = this.hasMetadata(table);
 
-
       if (!hasMetadata) {
-        logger.warn('GeoParquet table missing GeoArrow metadata', LogCategory.DATA);
+        logger.warn(
+          'GeoParquet table missing GeoArrow metadata',
+          LogCategory.DATA
+        );
       } else {
         logger.debug('GeoParquet metadata detected', LogCategory.DATA);
       }
@@ -133,7 +134,6 @@ export class GeoParquetReader implements IGeoArrowReader {
       if (!isGeoArrowMetadata(parsed)) {
         return null;
       }
-
 
       return parsed;
     } catch (error) {

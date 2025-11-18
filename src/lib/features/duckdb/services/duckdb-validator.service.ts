@@ -51,7 +51,6 @@ export const DuckDBValidatorService = {
     } = {}
   ): Promise<ValidationResult> {
     try {
-
       await DuckDBValidatorService.installAnalysisMacros();
 
       const dataAnalysis = await DeepDataValidator.analyzeDataContent(
@@ -125,15 +124,10 @@ export const DuckDBValidatorService = {
       throw new DuckDBError('DuckDB not initialized');
     }
 
-    try {
-    } catch (error) {
-      logger.error(
-        'Failed to install analysis macros',
-        LogCategory.DUCKDB,
-        error
-      );
-      throw error;
-    }
+    logger.debug(
+      'DuckDB analysis macros are bundled and ready',
+      LogCategory.DUCKDB
+    );
   },
 
   async runDuckDBAnalysis(
@@ -215,9 +209,13 @@ export const DuckDBValidatorService = {
             }
           }
         } catch (error) {
+          logger.warn(
+            'Failed to compute DuckDB column summary',
+            LogCategory.DUCKDB,
+            { header, error }
+          );
         }
       }
-
 
       return { columns, summaries, histograms };
     } catch (error) {

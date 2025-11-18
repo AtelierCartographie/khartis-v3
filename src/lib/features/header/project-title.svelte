@@ -1,7 +1,6 @@
 <script lang="ts">
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages.js';
   import { Button, TextInput } from 'carbon-components-svelte';
   import { Save } from 'carbon-icons-svelte';
