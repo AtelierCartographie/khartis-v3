@@ -8,7 +8,6 @@ const __dirname = dirname(__filename);
 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
 
 async function convertToGeoParquet() {
-  console.log('Initializing DuckDB...');
 
   const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
   const worker = new Worker(bundle.mainWorker);
@@ -16,22 +15,18 @@ async function convertToGeoParquet() {
   const db = new duckdb.AsyncDuckDB(logger, worker);
   await db.instantiate(bundle.mainModule);
 
-  console.log('Loading spatial extension...');
   await db.query(`INSTALL spatial; LOAD spatial;`);
 
-  console.log('Reading GeoJSON...');
   const geojsonPath = join(
     __dirname,
     '../static/basemaps/geometry/world-countries-50m.geojson'
   );
 
-  console.log('Creating table from GeoJSON...');
   await db.query(`
     CREATE TABLE world_countries AS
     SELECT * FROM ST_Read('${geojsonPath}')
   `);
 
-  console.log('Exporting to GeoParquet...');
   await db.query(`
     COPY (
       SELECT
@@ -42,7 +37,6 @@ async function convertToGeoParquet() {
     (FORMAT PARQUET, COMPRESSION ZSTD, ROW_GROUP_SIZE 100000)
   `);
 
-  console.log('Conversion complete!');
   await db.terminate();
 }
 

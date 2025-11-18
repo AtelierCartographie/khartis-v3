@@ -28,9 +28,6 @@
   let isImporting = $state(false);
 
   const closeModal = () => {
-    logger.info('Closing add data modal', LogCategory.FILE, {
-      filesCount: createProjectState.newProject.uploadedFiles.length
-    });
     open = false;
     createProjectActions.clearUploadState();
     uploaderResetKey++;
@@ -46,7 +43,6 @@
     );
 
     if (validFiles.length === 0) {
-      logger.warn('No valid files to import', LogCategory.FILE);
       return;
     }
 
@@ -57,10 +53,6 @@
     if (projectStore.currentProject) {
       try {
         isImporting = true;
-        logger.info('Adding files to project', LogCategory.FILE, {
-          count: validFiles.length,
-          files: validFiles.map((f) => f.name)
-        });
 
         await projectStore.addFilesToProject(validFiles);
         const lastFile = validFiles[validFiles.length - 1];

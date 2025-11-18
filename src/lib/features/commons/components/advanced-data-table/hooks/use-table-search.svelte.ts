@@ -218,10 +218,6 @@ export function useTableSearch(
     const tableName = getValue(props.tableName);
 
     if (!tableName || !searchQuery || !replaceValue) {
-      logger.warn(
-        'Cannot replace: missing tableName, searchQuery or replaceValue',
-        LogCategory.UI
-      );
       return;
     }
 
@@ -240,7 +236,6 @@ export function useTableSearch(
       // Recharger les données
       await props.onReplace();
 
-      logger.success(`${count} valeurs remplacées`, LogCategory.UI);
     } catch (err) {
       logger.error('Error replacing values', LogCategory.UI, err);
     }

@@ -45,12 +45,6 @@ export class FileProcessorService {
 
   async processFile(uploadedFile: UploadedFile, file: File): Promise<void> {
     const startTime = performance.now();
-    logger.debug('[FileProcessorService:processFile] START', LogCategory.FILE, {
-      fileId: uploadedFile.id,
-      fileName: file.name,
-      fileSize: file.size,
-      fileType: uploadedFile.fileType
-    });
 
     try {
       this.callbacks.onStatusChange(uploadedFile.id, 'processing');
@@ -59,10 +53,6 @@ export class FileProcessorService {
       await processor.process(uploadedFile, file);
 
       const duration = performance.now() - startTime;
-      logger.debug('[FileProcessorService:processFile] END', LogCategory.FILE, {
-        fileId: uploadedFile.id,
-        duration: `${duration.toFixed(2)}ms`
-      });
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error(
@@ -145,8 +135,6 @@ abstract class FileProcessor {
 
       if (asyncValidation.warnings.length > 0) {
         asyncValidation.warnings.forEach((warning) =>
-          logger.warn(warning, LogCategory.FILE)
-        );
       }
     }
 
@@ -157,18 +145,10 @@ abstract class FileProcessor {
 class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     const startTime = performance.now();
-    logger.debug('[CsvProcessor:process] START', LogCategory.FILE, {
-      fileId: uploadedFile.id,
-      fileName: file.name
-    });
 
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
     // Use new dataPipeline CSV parser (no Web Worker issues)
-    logger.debug(
-      '[CsvProcessor:process] Parsing CSV with dataPipeline...',
-      LogCategory.FILE
-    );
     const parseStart = performance.now();
 
     // Import CSV parser from new architecture
@@ -176,11 +156,6 @@ class CsvProcessor extends FileProcessor {
     const csvParser = new CSVParser();
     const rawDataset = await csvParser.parse(file);
 
-    logger.debug('[CsvProcessor:process] CSV parsed', LogCategory.FILE, {
-      duration: `${(performance.now() - parseStart).toFixed(2)}ms`,
-      rowCount: rawDataset.rows.length,
-      columnCount: rawDataset.columns.length
-    });
 
     // Convert RawDataset to the format expected by the rest of the code
     const headers = rawDataset.columns.map((col) => col.name);
@@ -192,10 +167,6 @@ class CsvProcessor extends FileProcessor {
       return normalizeCsvRow(row, headers);
     });
 
-    logger.debug(
-      '[CsvProcessor:process] Validating CSV data...',
-      LogCategory.FILE
-    );
     const csvValidation = DataValidator.validateCSVData(csvRows);
     if (!csvValidation.isValid) {
       this.callbacks.onStatusChange(
@@ -208,61 +179,23 @@ class CsvProcessor extends FileProcessor {
 
     if (csvValidation.warnings.length > 0) {
       csvValidation.warnings.forEach((warning) =>
-        logger.warn(warning, LogCategory.FILE)
-      );
     }
 
     // Use async versions of data analysis functions to avoid blocking
-    logger.debug(
-      '[CsvProcessor:process] Detecting duplicates...',
-      LogCategory.FILE
-    );
     const dupStart = performance.now();
     const duplicates = await detectDuplicateRows(csvRows);
-    logger.debug(
-      '[CsvProcessor:process] Duplicates detected',
-      LogCategory.FILE,
-      {
-        duration: `${(performance.now() - dupStart).toFixed(2)}ms`,
-        hasDuplicates: duplicates.hasDuplicates,
-        count: duplicates.duplicateCount
-      }
-    );
 
-    logger.debug(
-      '[CsvProcessor:process] Computing statistics...',
-      LogCategory.FILE
-    );
     const statsStart = performance.now();
     const statistics = await getDataStatistics(csvRows, headers);
-    logger.debug(
-      '[CsvProcessor:process] Statistics computed',
-      LogCategory.FILE,
-      {
-        duration: `${(performance.now() - statsStart).toFixed(2)}ms`
-      }
-    );
 
-    logger.debug(
-      '[CsvProcessor:process] Converting to tabular data...',
-      LogCategory.FILE
-    );
     const tabularData = csvRowsToTabularData(csvRows);
 
     // Yield before JSON.stringify to avoid blocking
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     // Stringify in chunks for large datasets to avoid blocking
-    logger.debug(
-      '[CsvProcessor:process] Stringifying data...',
-      LogCategory.FILE
-    );
     const stringifyStart = performance.now();
     const content = await this.stringifyInChunks(tabularData);
-    logger.debug('[CsvProcessor:process] Data stringified', LogCategory.FILE, {
-      duration: `${(performance.now() - stringifyStart).toFixed(2)}ms`,
-      size: content.length
-    });
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
@@ -281,23 +214,11 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
-    logger.debug(
-      '[CsvProcessor:process] Starting deep analysis...',
-      LogCategory.FILE
-    );
     const deepAnalysisStart = performance.now();
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
       csvRows,
       headers
-    );
-    logger.debug(
-      '[CsvProcessor:process] Deep analysis completed',
-      LogCategory.FILE,
-      {
-        duration: `${(performance.now() - deepAnalysisStart).toFixed(2)}ms`,
-        success: deepAnalysisCompleted
-      }
     );
 
     if (!deepAnalysisCompleted) {
@@ -307,10 +228,6 @@ class CsvProcessor extends FileProcessor {
     this.callbacks.onStatusChange(uploadedFile.id, 'complete');
 
     const totalDuration = performance.now() - startTime;
-    logger.debug('[CsvProcessor:process] END', LogCategory.FILE, {
-      fileId: uploadedFile.id,
-      totalDuration: `${totalDuration.toFixed(2)}ms`
-    });
   }
 
   private async performDeepAnalysis(
@@ -318,36 +235,16 @@ class CsvProcessor extends FileProcessor {
     rows: CsvRow[],
     headers: string[]
   ): Promise<boolean> {
-    logger.debug('[CsvProcessor:performDeepAnalysis] START', LogCategory.FILE, {
-      rowCount: rows.length,
-      columnCount: headers.length
-    });
 
-    logger.debug(
-      '[CsvProcessor:performDeepAnalysis] Creating data matrix...',
-      LogCategory.FILE
-    );
     const dataMatrix: CsvMatrix = rows.map((row) =>
       headers.map((header) => row[header] ?? null)
     );
 
-    logger.debug(
-      '[CsvProcessor:performDeepAnalysis] Calling DeepDataValidator...',
-      LogCategory.FILE
-    );
     const deepAnalysisStart = performance.now();
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
       dataMatrix,
       { sampleSize: Math.min(100, dataMatrix.length) }
-    );
-    logger.debug(
-      '[CsvProcessor:performDeepAnalysis] DeepDataValidator completed',
-      LogCategory.FILE,
-      {
-        duration: `${(performance.now() - deepAnalysisStart).toFixed(2)}ms`,
-        hasGeoColumns: deepAnalysis.geoDetection.hasGeoColumns
-      }
     );
 
     if (!deepAnalysis.geoDetection.hasGeoColumns) {
@@ -367,7 +264,6 @@ class CsvProcessor extends FileProcessor {
     }
 
     this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-    logger.debug('[CsvProcessor:performDeepAnalysis] END', LogCategory.FILE);
     return true;
   }
 }
@@ -395,8 +291,6 @@ class GeoJsonProcessor extends FileProcessor {
 
       if (geoValidation.warnings.length > 0) {
         geoValidation.warnings.forEach((warning) =>
-          logger.warn(warning, LogCategory.FILE)
-        );
       }
 
       this.callbacks.onDataUpdate(uploadedFile.id, {

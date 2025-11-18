@@ -31,10 +31,6 @@ export async function generateCustomBasemapAttributes(
   }
 
   try {
-    logger.info(
-      `Generating attributes for custom basemap: ${basemapId}`,
-      LogCategory.MAP
-    );
 
     // Create custom attributes table if it doesn't exist
     await duck.query(`
@@ -67,10 +63,6 @@ export async function generateCustomBasemapAttributes(
     });
 
     if (candidateColumns.length === 0) {
-      logger.warn(
-        `No candidate columns found for basemap ${basemapId}. Using first text column as fallback.`,
-        LogCategory.MAP
-      );
 
       // Fallback: use first text column
       const textColumn = columns.find((col) => col.type_simple === 'string');
@@ -79,10 +71,6 @@ export async function generateCustomBasemapAttributes(
       }
     }
 
-    logger.info(
-      `Found ${candidateColumns.length} candidate columns: ${candidateColumns.map((c) => c.name).join(', ')}`,
-      LogCategory.MAP
-    );
 
     // Get total count for basemap_count field
     const countQuery = (await duck.query(
@@ -96,20 +84,12 @@ export async function generateCustomBasemapAttributes(
       const nullCount = Number(col.nulls ?? 0);
       const recordCount = Number(col.count ?? 0);
       if (recordCount > 0 && nullCount > recordCount * 0.5) {
-        logger.warn(
-          `Skipping column ${col.name} (${col.nulls} nulls out of ${col.count})`,
-          LogCategory.MAP
-        );
         return false;
       }
       return true;
     });
 
     if (validColumns.length === 0) {
-      logger.warn(
-        `No valid columns found for basemap ${basemapId}`,
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -145,10 +125,6 @@ export async function generateCustomBasemapAttributes(
       ${unionQueries.join('\nUNION ALL\n')}
     `);
 
-    logger.success(
-      `Generated attributes for ${validColumns.length} columns in basemap ${basemapId}`,
-      LogCategory.MAP
-    );
 
     // Verify attributes were created
     const verifyQuery = (await duck.query(
@@ -161,10 +137,6 @@ export async function generateCustomBasemapAttributes(
     )) as Array<{ count: number }>;
 
     const generatedCount = Number(verifyQuery?.[0]?.count ?? 0);
-    logger.success(
-      `Generated ${generatedCount} attribute entries for basemap ${basemapId}`,
-      LogCategory.MAP
-    );
   } catch (error) {
     logger.error(
       `Failed to generate attributes for basemap ${basemapId}`,
@@ -192,13 +164,8 @@ export async function clearCustomBasemapAttributes(
         DELETE FROM custom_basemap_attributes
         WHERE basemap = '${safeBasemapId}'
       `);
-      logger.info(
-        `Cleared attributes for basemap ${basemapId}`,
-        LogCategory.MAP
-      );
     } else {
       await duck.query(`DROP TABLE IF EXISTS custom_basemap_attributes`);
-      logger.info('Cleared all custom basemap attributes', LogCategory.MAP);
     }
   } catch (error) {
     logger.error(

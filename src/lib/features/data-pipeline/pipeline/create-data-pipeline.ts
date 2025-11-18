@@ -103,11 +103,6 @@ export function createDataPipeline(): DataPipeline {
         : uploadedFile.parsedData;
 
     const structureInfo = describeGeojsonStructure(parsedGeojson);
-    logger.debug(
-      'GeoJSON structure validated',
-      LogCategory.DATA,
-      structureInfo
-    );
 
     const normalizedGeojson = normalizeGeojsonInput(
       parsedGeojson as GeoJSONLike
@@ -372,7 +367,6 @@ async function extractGeometryInfo(
       featureCount: undefined
     };
   } catch (error) {
-    logger.warn('Failed to extract geometry info', LogCategory.DATA, error);
     return undefined;
   }
 }

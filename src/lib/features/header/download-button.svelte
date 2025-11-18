@@ -67,28 +67,16 @@
 
   async function handleDownload() {
     if (exportFileName !== projectStore.projectName) {
-      logger.info('Updating project name for export', LogCategory.EXPORT, {
-        oldName: projectStore.projectName,
-        newName: exportFileName
-      });
       projectStore.updateProjectName(exportFileName);
     }
 
-    logger.info('Starting export', LogCategory.EXPORT, {
-      type: EXPORT_TAB_TYPES[selectedTabIndex as keyof typeof EXPORT_TAB_TYPES],
-      fileName: exportFileName
-    });
 
     isExporting = true;
     try {
       switch (selectedTabIndex) {
         case ExportTab.PROJECT:
           if (projectStore.currentProject) {
-            logger.info('Exporting project', LogCategory.EXPORT, {
-              fileName: exportFileName
-            });
             await projectStore.exportProject(exportFileName);
-            logger.success('Project exported successfully', LogCategory.EXPORT);
           }
           break;
 
@@ -105,12 +93,6 @@
             break;
           }
 
-          logger.info('Exporting map', LogCategory.EXPORT, {
-            format: selectedMapFormat,
-            fileName: exportFileName,
-            datasetsCount: datasetsStore.datasets.length,
-            visualizationsCount: visualizationStore.activeVisualizations.length
-          });
 
           try {
             let blob: Blob;
@@ -126,13 +108,6 @@
                 MAP_FORMAT.SVG
               );
               downloadFile(blob, filename);
-              logger.success(
-                'SVG map exported successfully',
-                LogCategory.EXPORT,
-                {
-                  filename
-                }
-              );
             } else if (selectedMapFormat === MAP_FORMAT.JPG) {
               blob = await exportMapToJpg(
                 processedDatasets,
@@ -143,13 +118,6 @@
                 MAP_FORMAT.JPG
               );
               downloadFile(blob, filename);
-              logger.success(
-                'JPG map exported successfully',
-                LogCategory.EXPORT,
-                {
-                  filename
-                }
-              );
             }
           } catch (mapExportError) {
             logger.error(
@@ -193,11 +161,6 @@
                 extension = 'json';
             }
 
-            logger.info('Exporting processed datasets', LogCategory.EXPORT, {
-              format,
-              extension,
-              datasetCount: datasetsStore.datasets.length
-            });
 
             const blob = exportProcessedDatasets(
               normalizeDatasets(datasetsStore.datasets),
@@ -205,9 +168,6 @@
             );
             const filename = generateExportFilename(exportFileName, extension);
             downloadFile(blob, filename);
-            logger.success('Data exported successfully', LogCategory.EXPORT, {
-              filename
-            });
           } else {
             logger.error('No data to export', LogCategory.EXPORT);
             showError(m.export_data_error(), m.export_data_no_data());

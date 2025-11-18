@@ -59,7 +59,6 @@ export const mainToolbarActions = {
     if (derived.canVisualize) {
       globalActions.setNavigationState(ToolbarStep.Visualizations);
     } else {
-      logger.warn('Cannot navigate: no valid data or project', LogCategory.UI);
     }
   },
 

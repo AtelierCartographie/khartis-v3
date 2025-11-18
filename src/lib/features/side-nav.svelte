@@ -44,10 +44,6 @@
     const project = projectsStore.getProjectById(projectId);
 
     if (project) {
-      logger.info('Duplicating project from side nav', LogCategory.PROJECT, {
-        originalId: projectId,
-        newName
-      });
 
       const duplicatedProject = await projectsStore.duplicateProject(projectId);
 
@@ -59,9 +55,6 @@
 
       if (duplicatedProject) {
         await projectsStore.openProject(duplicatedProject.id);
-        logger.success('Project duplicated and opened', LogCategory.PROJECT, {
-          newId: duplicatedProject.id
-        });
       }
     }
 
@@ -73,10 +66,6 @@
     const newLocale = target.value as Locale;
     const oldLocale = currentLocale;
 
-    logger.info('Changing language', LogCategory.UI, {
-      from: oldLocale,
-      to: newLocale
-    });
 
     setLocale(newLocale);
     currentLocale = newLocale;

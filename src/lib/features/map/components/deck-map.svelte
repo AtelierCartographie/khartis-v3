@@ -414,11 +414,6 @@
           metadataDetails
         );
       } else {
-        logger.info(
-          'No GeoArrow metadata in Arrow table',
-          LogCategory.MAP,
-          metadataDetails
-        );
       }
 
       // Try to find geometry column manually as fallback diagnostic
@@ -430,28 +425,9 @@
         if (hasUserDataset) {
           logger.error('No geometry column found in table', LogCategory.MAP);
         } else {
-          logger.debug('No geometry column found in table', LogCategory.MAP);
         }
       } else if (hasUserDataset) {
-        logger.warn(
-          'Geometry column exists but no GeoArrow metadata',
-          LogCategory.MAP,
-          {
-            geomColumnName: geomColumn.name,
-            suggestion:
-              'Table may have come from DuckDB query instead of GeoParquetReader'
-          }
-        );
       } else {
-        logger.info(
-          'Geometry column exists but no GeoArrow metadata',
-          LogCategory.MAP,
-          {
-            geomColumnName: geomColumn.name,
-            suggestion:
-              'Table may have come from DuckDB query instead of GeoParquetReader'
-          }
-        );
       }
 
       return [];
@@ -465,13 +441,6 @@
       const geometryField = jsTable.schema.fields.find(
         (field) => field.name === geoColumn
       );
-      logger.info('Geometry field inspection', LogCategory.MAP, {
-        geoColumn,
-        fieldType: geometryField?.type?.toString() ?? 'unknown',
-        fieldMetadataKeys: geometryField?.metadata
-          ? Array.from(geometryField.metadata.keys())
-          : []
-      });
       const arrowExtensionRaw =
         geometryField?.metadata?.get('ARROW:extension:name') ?? null;
       const arrowExtension = arrowExtensionRaw
@@ -495,55 +464,15 @@
       const resolvedGeometryType =
         extensionGeometryType ?? normalizedGeometryType;
 
-      logger.debug('GeoArrow metadata parsed', LogCategory.MAP, {
-        geoColumn,
-        geometryType,
-        normalizedGeometryType,
-        arrowExtension,
-        expectedExtension,
-        extensionGeometryType,
-        hasMatchingGeoExtension
-      });
 
       if (!hasMatchingGeoExtension) {
         if (hasUserDataset) {
-          logger.warn(
-            'GeoArrow extension metadata missing or mismatched, falling back to manual accessor',
-            LogCategory.MAP,
-            {
-              geoColumn,
-              geometryType: resolvedGeometryType,
-              arrowExtension,
-              expectedExtension
-            }
-          );
         } else {
-          logger.info(
-            'GeoArrow extension metadata missing or mismatched, falling back to manual accessor',
-            LogCategory.MAP,
-            {
-              geoColumn,
-              geometryType: resolvedGeometryType,
-              arrowExtension,
-              expectedExtension
-            }
-          );
         }
       }
       if (hasMatchingGeoExtension) {
-        logger.info('GeoArrow extension validated', LogCategory.MAP, {
-          geoColumn,
-          geometryType: resolvedGeometryType,
-          arrowExtension
-        });
       }
 
-      logger.info('Creating deck layers', LogCategory.MAP, {
-        geoColumn,
-        geometryType: resolvedGeometryType,
-        rowCount: jsTable.numRows,
-        hasVisualization: !!defaultVisualization
-      });
 
       const viz = defaultVisualization;
       // OPTIMIZATION: Use memoized colors instead of converting on every call
@@ -752,14 +681,6 @@
 
           if (polygonVector) {
             polygonProps.getPolygon = polygonVector;
-            logger.debug(
-              'Polygon vector (manual accessor) detected',
-              LogCategory.MAP,
-              {
-                geoColumn,
-                vectorConstructor: polygonVector.constructor?.name ?? 'unknown'
-              }
-            );
           }
 
           deckLayer = new geodecklayers.GeoArrowPolygonLayer(polygonProps);
@@ -778,11 +699,6 @@
           return [];
       }
 
-      logger.info('Deck layer constructed', LogCategory.MAP, {
-        layerId: deckLayer?.props?.id ?? 'unknown',
-        geometryType: resolvedGeometryType,
-        datasetId
-      });
       return [deckLayer];
     } catch (error) {
       logger.error('Failed to create Deck.gl layers', LogCategory.MAP, error);
@@ -800,9 +716,6 @@
     const fillOpacity: number = (viz?.style.fillOpacity ?? 0.6) * 255;
     const strokeWidth: number = viz?.style.strokeWidth ?? 1;
 
-    logger.info('Creating GeoJSON layer', LogCategory.MAP, {
-      featureCount: geojson.features.length
-    });
 
     const layer = new GeoJsonLayer({
       id: 'geojson-layer',
@@ -833,43 +746,17 @@
     jsTable: ArrowTable | null,
     geojson: FeatureCollection | null
   ): void {
-    logger.info('updateMapLayers invoked', LogCategory.MAP, {
-      hasJsTable: !!jsTable,
-      hasGeoJSON: !!geojson,
-      isMapLoaded,
-      deckOverlayAvailable: !!deckOverlay,
-      datasetId
-    });
     if (!deckOverlay || !isMapLoaded) {
-      logger.debug(
-        'Cannot update layers: deckOverlay or map not ready',
-        LogCategory.MAP,
-        {
-          hasDeckOverlay: !!deckOverlay,
-          isMapLoaded
-        }
-      );
       return;
     }
 
     let layers: Layer<DeckDataRow>[];
     if (geojson) {
       layers = createGeoJsonLayers(geojson);
-      logger.info('Updating map with GeoJSON layers', LogCategory.MAP, {
-        layerCount: layers.length,
-        featureCount: geojson.features.length
-      });
     } else if (jsTable) {
       const hasGeoMetadata = !!jsTable.schema.metadata?.get('geo');
       if (!hasGeoMetadata) {
         if (lastPendingGeoTable !== datasetId) {
-          logger.info(
-            'Waiting for GeoArrow metadata before rendering dataset',
-            LogCategory.MAP,
-            {
-              datasetId
-            }
-          );
           lastPendingGeoTable = datasetId ?? null;
         }
         return;
@@ -877,24 +764,11 @@
       lastPendingGeoTable = null;
 
       layers = createDeckLayers(jsTable);
-      logger.info('Updating map with Arrow layers', LogCategory.MAP, {
-        layerCount: layers.length,
-        tableRows: jsTable.numRows
-      });
     } else {
       layers = [];
-      logger.warn('No data available to build map layers', LogCategory.MAP, {
-        hasArrowData: !!jsTable,
-        hasGeoJsonData: !!geojson
-      });
     }
 
     deckOverlay.setProps({ layers });
-    logger.info('Deck overlay props updated', LogCategory.MAP, {
-      layerCount: layers.length,
-      hasArrowData: !!jsTable,
-      hasGeoJsonData: !!geojson
-    });
   }
 
   let isZoomSyncing = false;
@@ -932,17 +806,8 @@
           baseZoomLevel = zoom;
           globalActions.setMapZoom(100);
 
-          logger.info(
-            'Restored map position from localStorage',
-            LogCategory.MAP,
-            {
-              center,
-              zoom
-            }
-          );
         }
       } catch (error) {
-        logger.warn('Failed to restore map position', LogCategory.MAP, error);
       }
     }
   }
@@ -1005,10 +870,6 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
       if (bounds) {
-        logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
-          bounds,
-          featureCount: userGeoJSON.features.length
-        });
 
         map.fitBounds(bounds, { padding: 50, duration: 1000 });
 
@@ -1047,19 +908,13 @@
       // Remove existing OSM layer and source if present
       if (map.getLayer(OSM_LAYER_ID)) {
         map.removeLayer(OSM_LAYER_ID);
-        logger.info('Removed existing OSM layer', LogCategory.MAP);
       }
       if (map.getSource(OSM_SOURCE_ID)) {
         map.removeSource(OSM_SOURCE_ID);
-        logger.info('Removed existing OSM source', LogCategory.MAP);
       }
 
       // Add new OSM raster layer if active
       if (osmBasemap && tileConfig) {
-        logger.info('Adding OSM raster layer', LogCategory.MAP, {
-          basemap: osmBasemap.title,
-          urlTemplate: tileConfig.urlTemplate
-        });
 
         const rasterSource = createOSMRasterSource(tileConfig);
         const rasterLayer = createOSMRasterLayer(OSM_SOURCE_ID);
@@ -1067,7 +922,6 @@
         map.addSource(OSM_SOURCE_ID, rasterSource);
         map.addLayer(rasterLayer);
 
-        logger.success('OSM raster layer added successfully', LogCategory.MAP);
       }
     }
   });

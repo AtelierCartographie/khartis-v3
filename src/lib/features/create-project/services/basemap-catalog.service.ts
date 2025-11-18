@@ -15,7 +15,6 @@ export class BasemapCatalogService {
     }
 
     try {
-      logger.info('Loading basemaps catalog', LogCategory.DATA);
 
       const response = await fetch(BASEMAPS_METADATA_URL);
 
@@ -27,10 +26,6 @@ export class BasemapCatalogService {
 
       const metadata = (await response.json()) as BasemapMetadata[];
 
-      logger.info('Basemaps catalog loaded', LogCategory.DATA, {
-        count: metadata.length,
-        basemaps: metadata.map((b) => b.file)
-      });
 
       this.cachedMetadata = metadata;
       return metadata;
@@ -162,7 +157,6 @@ export class BasemapCatalogService {
         throw new Error(`Failed to preload basemap: ${response.statusText}`);
       }
 
-      logger.info('Basemap preloaded', LogCategory.DATA, { file });
     } catch (error) {
       logger.error('Failed to preload basemap', LogCategory.DATA, error);
       throw error;

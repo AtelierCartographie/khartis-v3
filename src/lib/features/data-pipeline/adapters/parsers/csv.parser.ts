@@ -36,7 +36,6 @@ export class CSVParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     return new Promise((resolve, reject) => {
-      logger.debug('Operation', LogCategory.DATA);
 
       Papa.parse(file, {
         header: true,
@@ -46,7 +45,6 @@ export class CSVParser implements IParser {
         escapeChar: '"',
         complete: (results) => {
           try {
-            logger.debug('Operation', LogCategory.DATA);
 
             if (results.errors.length > 0) {
               logger.error('Operation', LogCategory.DATA);
@@ -59,7 +57,6 @@ export class CSVParser implements IParser {
             }
 
             const headers = results.meta.fields || [];
-            logger.debug('Operation', LogCategory.DATA);
 
             if (headers.length === 0) {
               throw new ParserError(

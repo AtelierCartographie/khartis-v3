@@ -33,10 +33,6 @@ class OSMBasemapStore {
       const config = getOSMTileConfig(basemap);
       this._state.activeOSMBasemap = basemap;
       this._state.tileConfig = config;
-      logger.success(
-        `OSM basemap activated: ${basemap.title}`,
-        LogCategory.MAP
-      );
     } else {
       this.clear();
     }
