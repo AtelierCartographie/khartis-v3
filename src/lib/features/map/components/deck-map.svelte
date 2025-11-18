@@ -459,11 +459,10 @@
         extensionGeometryType ?? normalizedGeometryType;
 
       if (!hasMatchingGeoExtension && hasUserDataset) {
-        logger.warn(
-          'Geometry extension mismatch detected',
-          LogCategory.MAP,
-          { geometryType: resolvedGeometryType, arrowExtension }
-        );
+        logger.warn('Geometry extension mismatch detected', LogCategory.MAP, {
+          geometryType: resolvedGeometryType,
+          arrowExtension
+        });
       }
 
       const viz = defaultVisualization;
@@ -802,23 +801,23 @@
     const savedCenter = localStorage.getItem(MAP_CENTER_STORAGE_KEY);
     const savedZoom = localStorage.getItem(MAP_ZOOM_STORAGE_KEY);
 
-      if (savedCenter && savedZoom) {
-        try {
-          const center = JSON.parse(savedCenter);
-          const zoom = parseFloat(savedZoom);
+    if (savedCenter && savedZoom) {
+      try {
+        const center = JSON.parse(savedCenter);
+        const zoom = parseFloat(savedZoom);
 
-          if (center.lng && center.lat && !isNaN(zoom)) {
-            map.setCenter([center.lng, center.lat]);
-            map.setZoom(zoom);
-            baseZoomLevel = zoom;
-            globalActions.setMapZoom(100);
-          }
-        } catch (error) {
-          logger.warn('Failed to restore saved map position', LogCategory.MAP, {
-            error
-          });
+        if (center.lng && center.lat && !isNaN(zoom)) {
+          map.setCenter([center.lng, center.lat]);
+          map.setZoom(zoom);
+          baseZoomLevel = zoom;
+          globalActions.setMapZoom(100);
         }
+      } catch (error) {
+        logger.warn('Failed to restore saved map position', LogCategory.MAP, {
+          error
+        });
       }
+    }
   }
 
   function syncZoomToMap(): void {
