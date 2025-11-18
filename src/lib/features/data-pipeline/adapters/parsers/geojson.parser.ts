@@ -7,6 +7,7 @@ import type {
   GeoJSONFeature as SharedGeoJSONFeature,
   GeoJSONFeatureCollection as SharedGeoJSONFeatureCollection
 } from '$lib/types/data';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export type GeoJSONFeature = SharedGeoJSONFeature;
 export type GeoJSONFeatureCollection = SharedGeoJSONFeatureCollection;
@@ -37,6 +38,10 @@ export class GeoJSONParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
+      const start = performance.now();
+      logger.info('Parsing GeoJSON file', LogCategory.DATA, {
+        fileName: file.name
+      });
       const text = await file.text();
       const geojson: GeoJSONFeatureCollection = JSON.parse(text);
 
@@ -56,7 +61,14 @@ export class GeoJSONParser implements IParser {
         );
       }
 
-      return convertGeoJSONToRawDataset(geojson);
+      const dataset = convertGeoJSONToRawDataset(geojson);
+      logger.success('GeoJSON parsed', LogCategory.DATA, {
+        fileName: file.name,
+        rows: dataset.rows.length,
+        columns: dataset.columns.length,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+      return dataset;
     } catch (error) {
       if (error instanceof ParserError) {
         throw error;

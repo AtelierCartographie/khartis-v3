@@ -29,8 +29,19 @@ export class KMLParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
+      const start = performance.now();
+      logger.info('Parsing KML/KMZ file', LogCategory.DATA, {
+        fileName: file.name
+      });
       const geojson = await convertKMLFileToGeoJSON(file);
-      return convertGeoJSONToRawDataset(geojson);
+      const dataset = convertGeoJSONToRawDataset(geojson);
+      logger.success('KML/KMZ parsed', LogCategory.DATA, {
+        fileName: file.name,
+        rows: dataset.rows.length,
+        columns: dataset.columns.length,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+      return dataset;
     } catch (error) {
       if (error instanceof ParserError) {
         throw error;

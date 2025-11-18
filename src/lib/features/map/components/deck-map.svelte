@@ -750,6 +750,11 @@
       return;
     }
 
+    logger.debug('Updating Deck.gl layers', LogCategory.MAP, {
+      hasArrowTable: Boolean(jsTable),
+      hasGeoJSON: Boolean(geojson)
+    });
+
     let layers: Layer<DeckDataRow>[];
     if (geojson) {
       layers = createGeoJsonLayers(geojson);
@@ -758,6 +763,10 @@
       if (!hasGeoMetadata) {
         if (lastPendingGeoTable !== datasetId) {
           lastPendingGeoTable = datasetId ?? null;
+          logger.warn('Arrow table missing GeoArrow metadata', LogCategory.MAP, {
+            datasetId,
+            note: 'Waiting for metadata-prefetch'
+          });
         }
         return;
       }
@@ -769,6 +778,9 @@
     }
 
     deckOverlay.setProps({ layers });
+    logger.success('Deck.gl layers applied', LogCategory.MAP, {
+      layerCount: layers.length
+    });
   }
 
   let isZoomSyncing = false;
@@ -850,6 +862,10 @@
       const bounds = calculateBoundsFromGeoArrow(jsTable);
       if (bounds) {
         map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        logger.info('Fitting map to Arrow dataset bounds', LogCategory.MAP, {
+          datasetId,
+          bounds
+        });
 
         setTimeout(() => {
           if (map) {
@@ -870,8 +886,10 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
       if (bounds) {
-
         map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
+          featureCount: userGeoJSON.features.length
+        });
 
         setTimeout(() => {
           if (map) {
@@ -915,18 +933,21 @@
 
       // Add new OSM raster layer if active
       if (osmBasemap && tileConfig) {
-
         const rasterSource = createOSMRasterSource(tileConfig);
         const rasterLayer = createOSMRasterLayer(OSM_SOURCE_ID);
 
         map.addSource(OSM_SOURCE_ID, rasterSource);
         map.addLayer(rasterLayer);
 
+        logger.debug('OSM raster basemap applied', LogCategory.MAP, {
+          style: osmBasemap.id
+        });
       }
     }
   });
 
   onMount(() => {
+    logger.info('Mounting Deck.gl map component', LogCategory.MAP);
     tooltip = document.createElement('div');
     tooltip.style.position = 'absolute';
     tooltip.style.zIndex = '1';
@@ -982,6 +1003,7 @@
       mapInstanceStore.setMapInstance(map);
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
+      logger.success('Maplibre + Deck.gl ready', LogCategory.MAP);
 
       if (jsTable || userGeoJSON) {
         updateMapLayers(jsTable, userGeoJSON);
@@ -1016,6 +1038,7 @@
         map.remove();
       }
       mapInstanceStore.reset();
+      logger.info('Deck.gl map destroyed', LogCategory.MAP);
     };
   });
 </script>

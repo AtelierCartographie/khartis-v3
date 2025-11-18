@@ -120,6 +120,19 @@ class DuckDBOrchestratorService {
     void this._datasetsVersion;
   }
 
+  private logDatasetReady(
+    source: string,
+    dataset: DuckDBDataset,
+    startTime: number
+  ): void {
+    logger.success(`${source} dataset ready`, LogCategory.DUCKDB, {
+      datasetId: dataset.id,
+      tableName: dataset.tableName,
+      rowCount: dataset.rowCount,
+      durationMs: (performance.now() - startTime).toFixed(2)
+    });
+  }
+
   private updateDatasets(
     updater: (datasets: SvelteMap<string, DuckDBDataset>) => void
   ): void {
@@ -139,9 +152,14 @@ class DuckDBOrchestratorService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
+    const start = performance.now();
+    logger.info('Starting DuckDB orchestrator initialization', LogCategory.DUCKDB);
     try {
       await initDuckDB();
       this.initialized = true;
+      logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     } catch (error) {
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
       showError('DuckDB initialization failed', 'Please refresh the page');
@@ -164,6 +182,7 @@ class DuckDBOrchestratorService {
       geoDetection?: GeoDetectionResult;
     }
   ): Promise<DuckDBDataset | null> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -173,6 +192,10 @@ class DuckDBOrchestratorService {
     }
 
     try {
+      logger.info('Registering existing DuckDB table', LogCategory.DUCKDB, {
+        tableName,
+        sourceFileId
+      });
 
       const columns = await Duck.analyse(tableName);
       const rowCount = await this.getRowCount(tableName);
@@ -207,6 +230,11 @@ class DuckDBOrchestratorService {
 
 
 
+      logger.success('DuckDB table registered', LogCategory.DUCKDB, {
+        tableName,
+        datasetId: dataset.id,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return dataset;
     } catch (error) {
       logger.error(
@@ -220,11 +248,14 @@ class DuckDBOrchestratorService {
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
     const startTime = performance.now();
-
-    const { getParsedDataSample } = await import('$lib/types/data');
+    logger.info('Processing file with DuckDB', LogCategory.DUCKDB, {
+      fileId: file.id,
+      fileName: file.name,
+      fileType: file.fileType,
+      status: file.status
+    });
 
     if (!this.initialized) {
-      const initStart = performance.now();
       await this.initialize();
     }
 
@@ -238,21 +269,29 @@ class DuckDBOrchestratorService {
       let result: DuckDBDataset | null = null;
 
       if (file.fileType === FileType.CSV) {
-        const csvStart = performance.now();
         result = await this.processCSV(file, tableName);
       } else if (file.fileType === FileType.GEOJSON) {
-        const geojsonStart = performance.now();
         result = await this.processGeoJSON(file, tableName);
       } else if (file.fileType === FileType.GEOPACKAGE) {
-        const gpkgStart = performance.now();
         result = await this.processGeoPackage(file, tableName);
       } else if (file.fileType === FileType.GEOPARQUET) {
-        const gpqStart = performance.now();
         result = await this.processGeoParquet(file, tableName);
       } else {
+        logger.warn('Unsupported file type for DuckDB ingestion', LogCategory.DUCKDB, {
+          fileId: file.id,
+          fileType: file.fileType
+        });
       }
 
       const totalDuration = performance.now() - startTime;
+      if (result) {
+        logger.success('File processed via DuckDB', LogCategory.DUCKDB, {
+          fileId: file.id,
+          datasetId: result.id,
+          fileType: file.fileType,
+          durationMs: totalDuration.toFixed(2)
+        });
+      }
 
       return result;
     } catch (error) {
@@ -274,6 +313,11 @@ class DuckDBOrchestratorService {
     file: UploadedFile,
     tableName: string
   ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing CSV file', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
     const { getParsedDataLength, getParsedDataSample, isTabularData } =
       await import('$lib/types/data');
 
@@ -325,8 +369,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = finalTableName;
 
-
-
+    this.logDatasetReady('CSV', dataset, start);
     return dataset;
   }
 
@@ -346,9 +389,13 @@ class DuckDBOrchestratorService {
       try {
         return await this.processGeoJSONWithSTRead(file, tableName);
       } catch (error) {
-        logger.error(
-          `⚠️  [${new Date().toISOString()}] [DuckDB:processGeoJSON] ST_Read failed:`,
-          error
+        logger.warn(
+          'DuckDB ST_Read pipeline failed, falling back',
+          LogCategory.DUCKDB,
+          {
+            fileId: file.id,
+            error
+          }
         );
       }
     }
@@ -357,9 +404,13 @@ class DuckDBOrchestratorService {
       try {
         return await this.processGeoJSONWithArrow(file, tableName);
       } catch (error) {
-        logger.error(
-          `⚠️  [${new Date().toISOString()}] [DuckDB:processGeoJSON] Arrow failed:`,
-          error
+        logger.warn(
+          'Arrow pipeline failed, falling back to legacy GeoJSON loader',
+          LogCategory.DUCKDB,
+          {
+            fileId: file.id,
+            error
+          }
         );
       }
     }
@@ -372,6 +423,10 @@ class DuckDBOrchestratorService {
     tableName: string
   ): Promise<DuckDBDataset> {
     const startTime = performance.now();
+    logger.debug('Processing GeoJSON via ST_Read', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
 
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
@@ -445,7 +500,7 @@ class DuckDBOrchestratorService {
       this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
 
-
+      this.logDatasetReady('GeoJSON ST_Read', dataset, startTime);
       return dataset;
     } catch (error) {
       const errorDuration = performance.now() - startTime;
@@ -466,6 +521,11 @@ class DuckDBOrchestratorService {
     file: UploadedFile,
     tableName: string
   ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing GeoPackage file', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const gpkgFile = this.getFileForDuckDB(
@@ -509,7 +569,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = actualTableName;
 
-
+    this.logDatasetReady('GeoPackage', dataset, start);
     return dataset;
   }
 
@@ -517,6 +577,11 @@ class DuckDBOrchestratorService {
     file: UploadedFile,
     tableName: string
   ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing GeoParquet file', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const buffer = await this.getArrayBufferFromUploadedFile(file);
@@ -572,7 +637,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
-
+    this.logDatasetReady('GeoParquet', dataset, start);
     return dataset;
   }
 
@@ -581,6 +646,10 @@ class DuckDBOrchestratorService {
     tableName: string
   ): Promise<DuckDBDataset> {
     const startTime = performance.now();
+    logger.debug('Processing GeoJSON via Arrow pipeline', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
 
     if (!file.parsedData || !isGeoJSONFeatureCollection(file.parsedData)) {
       throw new ParseError(
@@ -657,7 +726,7 @@ class DuckDBOrchestratorService {
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
-
+      this.logDatasetReady('GeoJSON Arrow', dataset, startTime);
       return dataset;
     } catch (error) {
       logger.error(
@@ -673,6 +742,11 @@ class DuckDBOrchestratorService {
     file: UploadedFile,
     tableName: string
   ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing GeoJSON via legacy pipeline', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
 
     const geoJsonData = JSON.stringify(file.parsedData);
 
@@ -714,8 +788,7 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
-
-
+    this.logDatasetReady('GeoJSON Legacy', dataset, start);
     return dataset;
   }
 
@@ -878,6 +951,7 @@ class DuckDBOrchestratorService {
     oldName: string,
     newName: string
   ): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -891,6 +965,12 @@ class DuckDBOrchestratorService {
 
     await Duck.analyse(tableName, { force: true });
 
+    logger.info('Renamed DuckDB column', LogCategory.DUCKDB, {
+      tableName,
+      oldName,
+      newName,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async changeColumnType(
@@ -898,6 +978,7 @@ class DuckDBOrchestratorService {
     columnName: string,
     newType: string
   ): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -911,9 +992,16 @@ class DuckDBOrchestratorService {
 
     await Duck.analyse(tableName, { force: true });
 
+    logger.info('Changed DuckDB column type', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      newType,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async dropColumn(tableName: string, columnName: string): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -925,11 +1013,17 @@ class DuckDBOrchestratorService {
 
     await Duck.analyse(tableName, { force: true });
 
+    logger.info('Dropped DuckDB column', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async dropRows(tableName: string, rowIds: number[]): Promise<void> {
     if (!rowIds.length) return;
 
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -941,6 +1035,11 @@ class DuckDBOrchestratorService {
     await Duck.analyse(tableName, { force: true });
     this.bumpDatasetsVersion();
 
+    logger.info('Dropped rows from DuckDB table', LogCategory.DUCKDB, {
+      tableName,
+      rowCount: rowIds.length,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async refineColumn(
@@ -948,6 +1047,7 @@ class DuckDBOrchestratorService {
     columnName: string,
     operation: RefineOperation
   ): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -967,6 +1067,12 @@ class DuckDBOrchestratorService {
 
     await Duck.analyse(tableName, { force: true });
 
+    logger.info('Refined DuckDB column', LogCategory.DUCKDB, {
+      tableName,
+      columnName,
+      operation,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async replaceInColumn(
@@ -975,6 +1081,7 @@ class DuckDBOrchestratorService {
     searchValue: string,
     replaceValue: string
   ): Promise<number> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -990,12 +1097,24 @@ class DuckDBOrchestratorService {
     const count = Number(countRow?.count) || 0;
 
     if (count > 0) {
+      logger.info('Replacing values in DuckDB column', LogCategory.DUCKDB, {
+        tableName,
+        columnName,
+        count,
+        searchValue,
+        replaceValue
+      });
       await Duck.query(
         `UPDATE ${tableName} SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${searchValue}', '${replaceValue}')`
       );
 
       await Duck.analyse(tableName, { force: true });
-
+      logger.success('Column values replaced', LogCategory.DUCKDB, {
+        tableName,
+        columnName,
+        count,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     }
 
     return count;
@@ -1006,6 +1125,7 @@ class DuckDBOrchestratorService {
     columnName: string,
     expression: string
   ): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -1047,7 +1167,11 @@ class DuckDBOrchestratorService {
     }
 
     this.bumpDatasetsVersion();
-
+    logger.success('Calculated column added to DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      columnName: sanitizedColumnName,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async testExpression(
@@ -1100,6 +1224,11 @@ class DuckDBOrchestratorService {
       filterMap.set(tableName, filters);
     });
 
+    logger.debug('DuckDB filter added', LogCategory.DUCKDB, {
+      tableName,
+      filterId: filter.id,
+      operator: filter.operator
+    });
 
     return this.getFilters(tableName);
   }
@@ -1114,6 +1243,10 @@ class DuckDBOrchestratorService {
       filterMap.set(tableName, updated);
     });
 
+    logger.debug('DuckDB filter removed', LogCategory.DUCKDB, {
+      tableName,
+      filterId
+    });
 
     return this.getFilters(tableName);
   }
@@ -1557,6 +1690,7 @@ class DuckDBOrchestratorService {
 
   async dropTable(tableName: string): Promise<void> {
 
+    const start = performance.now();
     if (!this.initialized) {
       return;
     }
@@ -1587,12 +1721,17 @@ class DuckDBOrchestratorService {
       if (this._state.currentTableName === tableName) {
         this._state.currentTableName = null;
       }
+      logger.info('Dropped DuckDB table', LogCategory.DUCKDB, {
+        tableName,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     } catch (error) {
       logger.error('[duckDBOrchestrator:dropTable] ERROR', error);
     }
   }
 
   async clear(): Promise<void> {
+    const start = performance.now();
     for (const dataset of this._state.datasets.values()) {
       await this.dropTable(dataset.tableName);
     }
@@ -1601,11 +1740,19 @@ class DuckDBOrchestratorService {
     this.bumpDatasetsVersion();
     this._state.currentTableName = null;
 
+    logger.info('Cleared DuckDB orchestrator state', LogCategory.DUCKDB, {
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
   async convertToProcessedDataset(
     duckDataset: DuckDBDataset
   ): Promise<ProcessedDataset> {
+    const start = performance.now();
+    logger.debug('Converting DuckDB dataset to processed dataset', LogCategory.DUCKDB, {
+      datasetId: duckDataset.id,
+      tableName: duckDataset.tableName
+    });
 
     let data: Record<string, unknown>[] = [];
     try {
@@ -1689,6 +1836,11 @@ class DuckDBOrchestratorService {
       geoDetection: duckDataset.geoDetection
     };
 
+    logger.info('DuckDB dataset converted to processed dataset', LogCategory.DUCKDB, {
+      datasetId: duckDataset.id,
+      rowCount: duckDataset.rowCount,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
 
     return processedDataset;
   }
@@ -1764,6 +1916,7 @@ class DuckDBOrchestratorService {
     basemapTableName: string,
     basemapColumnName: string
   ): Promise<string> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -1773,6 +1926,12 @@ class DuckDBOrchestratorService {
     }
 
     try {
+      logger.info('Joining data with basemap in DuckDB', LogCategory.DUCKDB, {
+        dataTableName,
+        basemapTableName,
+        dataColumnName,
+        basemapColumnName
+      });
 
       const joinedTableName = `joined_${Date.now().toString(36)}`;
 
@@ -1793,6 +1952,11 @@ class DuckDBOrchestratorService {
       const countRow = countResult.get(0) as Record<string, unknown>;
       const joinedCount = Number(countRow?.count) || 0;
 
+      logger.success('DuckDB basemap join completed', LogCategory.DUCKDB, {
+        joinedTableName,
+        joinedCount,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
 
       return joinedTableName;
     } catch (error) {
@@ -2001,6 +2165,7 @@ class DuckDBOrchestratorService {
     dataColumnName: string,
     corrections: Map<string, string>
   ): Promise<void> {
+    const start = performance.now();
     if (!this.initialized) {
       await this.initialize();
     }
@@ -2010,6 +2175,11 @@ class DuckDBOrchestratorService {
     }
 
     try {
+      logger.info('Applying join corrections in DuckDB', LogCategory.DUCKDB, {
+        dataTableName,
+        dataColumnName,
+        correctionCount: corrections.size
+      });
 
       for (const [dataValue, correctedValue] of corrections.entries()) {
         await Duck.query(`
@@ -2019,6 +2189,11 @@ class DuckDBOrchestratorService {
         `);
       }
 
+      logger.success('Join corrections applied', LogCategory.DUCKDB, {
+        dataTableName,
+        correctionCount: corrections.size,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     } catch (error) {
       logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
       throw error;

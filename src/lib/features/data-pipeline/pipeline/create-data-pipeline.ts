@@ -58,9 +58,25 @@ export function createDataPipeline(): DataPipeline {
   let initialized = false;
 
   async function ensureInit(): Promise<void> {
-    if (!initialized) {
+    if (initialized) return;
+
+    const start = performance.now();
+    logger.info(
+      'Initializing data pipeline DuckDB session',
+      LogCategory.DATA
+    );
+
+    try {
       await initDuckDB();
       initialized = true;
+      logger.success('Data pipeline ready', LogCategory.DATA, {
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      logger.error('Data pipeline initialization failed', LogCategory.DATA, {
+        error
+      });
+      throw error;
     }
   }
 
@@ -69,34 +85,53 @@ export function createDataPipeline(): DataPipeline {
     originalFile?: File
   ): Promise<DatasetResult> {
     await ensureInit();
+    const start = performance.now();
+    logger.info('Processing uploaded file via data pipeline', LogCategory.DATA, {
+      uploadedFileId: uploadedFile.id,
+      fileName: uploadedFile.name,
+      fileType: uploadedFile.fileType,
+      hasOriginal: Boolean(originalFile)
+    });
 
-    if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
-      const dataset = await processShapefile(uploadedFile);
+    try {
+      let dataset: DatasetResult;
+      if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
+        dataset = await processShapefile(uploadedFile);
+      } else if (originalFile) {
+        dataset = await processFileInternal(originalFile);
+      } else {
+        const fallback = await createFileFromUpload(uploadedFile);
+        dataset = await processFileInternal(fallback);
+      }
+
       dataset.sourceFileId = uploadedFile.id;
       applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
       dataset.name = uploadedFile.name;
-      return dataset;
-    }
 
-    if (originalFile) {
-      const dataset = await processFileInternal(originalFile);
-      dataset.sourceFileId = uploadedFile.id;
-      applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
-      dataset.name = uploadedFile.name;
+      logger.success('Uploaded file processed', LogCategory.DATA, {
+        datasetId: dataset.id,
+        fileName: dataset.name,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return dataset;
+    } catch (error) {
+      logger.error('Failed to process uploaded file', LogCategory.DATA, {
+        fileId: uploadedFile.id,
+        error
+      });
+      throw error;
     }
-
-    const fallback = await createFileFromUpload(uploadedFile);
-    const dataset = await processFileInternal(fallback);
-    dataset.sourceFileId = uploadedFile.id;
-    applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
-    dataset.name = uploadedFile.name;
-    return dataset;
   }
 
   async function processShapefile(
     uploadedFile: UploadedFilePayload
   ): Promise<DatasetResult> {
+    const start = performance.now();
+    logger.info('Processing shapefile upload', LogCategory.DATA, {
+      fileId: uploadedFile.id,
+      fileName: uploadedFile.name
+    });
+
     const parsedGeojson =
       typeof uploadedFile.parsedData === 'string'
         ? JSON.parse(uploadedFile.parsedData)
@@ -127,12 +162,36 @@ export function createDataPipeline(): DataPipeline {
 
     dataset.sourceFileId = uploadedFile.id;
     dataset.name = uploadedFile.name;
+    logger.success('Shapefile converted to dataset', LogCategory.DATA, {
+      fileId: uploadedFile.id,
+      featureKeys: structureInfo.keys,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
     return dataset;
   }
 
   async function processFile(file: File): Promise<DatasetResult> {
     await ensureInit();
-    return processFileInternal(file);
+    const start = performance.now();
+    logger.info('Processing file via data pipeline', LogCategory.DATA, {
+      fileName: file.name,
+      fileType: file.type
+    });
+    try {
+      const dataset = await processFileInternal(file);
+      logger.success('File processed via data pipeline', LogCategory.DATA, {
+        datasetId: dataset.id,
+        tableName: dataset.tableName,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+      return dataset;
+    } catch (error) {
+      logger.error('Failed to process file via data pipeline', LogCategory.DATA, {
+        fileName: file.name,
+        error
+      });
+      throw error;
+    }
   }
 
   async function processFileInternal(
@@ -148,54 +207,79 @@ export function createDataPipeline(): DataPipeline {
     const tableName = generateTableName(fileInfo.name);
     const isGeoFile = isGeospatialFile(fileInfo.name);
 
+    const start = performance.now();
+    logger.debug('Reading file into DuckDB via pipeline', LogCategory.DATA, {
+      fileName: fileInfo.name,
+      tableName,
+      isGeoFile
+    });
+
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    await Duck.register_files([file]);
-    if (isGeoFile) {
-      await Duck.read_geofile(file, { tablename: tableName });
-    } else {
-      await Duck.read_tabular(file, { tablename: tableName });
+    try {
+      await Duck.register_files([file]);
+      if (isGeoFile) {
+        await Duck.read_geofile(file, { tablename: tableName });
+      } else {
+        await Duck.read_tabular(file, { tablename: tableName });
+      }
+
+      const duckdbColumns = await Duck.analyse(tableName);
+      const rowCount = await Duck.get_row_count(tableName);
+      const geometryInfo = await extractGeometryInfo(tableName);
+      const enrichedColumns = enrichColumns(duckdbColumns);
+
+      const fileFormat = detectFileType(fileInfo.name) ?? 'unknown';
+      const dataset = buildDatasetResult({
+        file: fileInfo,
+        tableName,
+        enrichedColumns,
+        rowCount,
+        isGeoFile,
+        geometryInfo,
+        format: fileFormat
+      });
+
+      if (options.rawDataset) {
+        const rawColumns = convertRawColumnsToEnriched(options.rawDataset);
+        dataset.originalData = {
+          columns: rawColumns,
+          data: options.rawDataset.rows.map((row) => {
+            const record: Record<string, unknown> = {};
+            options.rawDataset?.headers?.forEach((header, index) => {
+              record[header] = row[index];
+            });
+            return record;
+          }),
+          rowCount: options.rawDataset.rows.length
+        };
+      }
+
+      logger.success('DuckDB dataset built', LogCategory.DATA, {
+        tableName,
+        rowCount,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return dataset;
+    } catch (error) {
+      logger.error('Failed to build DuckDB dataset', LogCategory.DATA, {
+        fileName: fileInfo.name,
+        tableName,
+        error
+      });
+      throw error;
     }
-
-    const duckdbColumns = await Duck.analyse(tableName);
-    const rowCount = await Duck.get_row_count(tableName);
-    const geometryInfo = await extractGeometryInfo(tableName);
-    const enrichedColumns = enrichColumns(duckdbColumns);
-
-    const fileFormat = detectFileType(fileInfo.name) ?? 'unknown';
-    const dataset = buildDatasetResult({
-      file: fileInfo,
-      tableName,
-      enrichedColumns,
-      rowCount,
-      isGeoFile,
-      geometryInfo,
-      format: fileFormat
-    });
-
-    if (options.rawDataset) {
-      const rawColumns = convertRawColumnsToEnriched(options.rawDataset);
-      dataset.originalData = {
-        columns: rawColumns,
-        data: options.rawDataset.rows.map((row) => {
-          const record: Record<string, unknown> = {};
-          options.rawDataset?.headers?.forEach((header, index) => {
-            record[header] = row[index];
-          });
-          return record;
-        }),
-        rowCount: options.rawDataset.rows.length
-      };
-    }
-
-    return dataset;
   }
 
   async function validateFile(file: File): Promise<ValidationResult> {
     const maxSize = 50 * 1024 * 1024;
     if (file.size === 0) {
+      logger.warn('Uploaded file is empty', LogCategory.DATA, {
+        fileName: file.name
+      });
       return {
         isValid: false,
         errors: ['File is empty'],
@@ -204,6 +288,10 @@ export function createDataPipeline(): DataPipeline {
     }
 
     if (file.size > maxSize) {
+      logger.warn('Uploaded file exceeds size limit', LogCategory.DATA, {
+        fileName: file.name,
+        fileSize: file.size
+      });
       return {
         isValid: false,
         errors: ['File size exceeds 50MB limit'],
@@ -211,11 +299,16 @@ export function createDataPipeline(): DataPipeline {
       };
     }
 
+    logger.debug('File passed basic validation', LogCategory.DATA, {
+      fileName: file.name,
+      fileSize: file.size
+    });
     return validationSuccess();
   }
 
   async function destroy(): Promise<void> {
     initialized = false;
+    logger.info('Data pipeline destroyed', LogCategory.DATA);
   }
 
   return {
@@ -367,6 +460,10 @@ async function extractGeometryInfo(
       featureCount: undefined
     };
   } catch (error) {
+    logger.warn('Failed to extract geometry info', LogCategory.DATA, {
+      tableName,
+      error
+    });
     return undefined;
   }
 }
@@ -524,6 +621,10 @@ async function createFileFromUpload(
   uploadedFile: UploadedFilePayload
 ): Promise<File> {
   if (!uploadedFile.content) {
+    logger.error('Uploaded file is missing inline content', LogCategory.DATA, {
+      fileId: uploadedFile.id,
+      fileName: uploadedFile.name
+    });
     throw new Error('Uploaded file has no content');
   }
   return createFileFromUploadContent(

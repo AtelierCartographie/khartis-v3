@@ -382,6 +382,7 @@ class DuckDB {
   }
 
   private async configureRuntimeSettings(): Promise<void> {
+    const start = performance.now();
     const pragmas: string[] = [
       `PRAGMA memory_limit='1024MB';`,
       `PRAGMA enable_progress_bar=false;`
@@ -393,6 +394,9 @@ class DuckDB {
           ? Math.max(1, Math.min(navigator.hardwareConcurrency, 8))
           : 4;
       pragmas.unshift(`PRAGMA threads=${desiredThreads};`);
+      logger.info('Configuring DuckDB threads', LogCategory.DUCKDB, {
+        desiredThreads
+      });
     }
 
     for (const pragma of pragmas) {
@@ -403,20 +407,42 @@ class DuckDB {
       await this.query('INSTALL httpfs; LOAD httpfs;', {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
+      logger.debug('HTTPFS extension loaded', LogCategory.DUCKDB);
     } catch (error) {
+      logger.warn('Failed to load HTTPFS extension', LogCategory.DUCKDB, error);
     }
+
+    logger.debug('Runtime settings applied', LogCategory.DUCKDB, {
+      durationMs: (performance.now() - start).toFixed(2)
+    });
   }
 
-  private async runInTransaction(callback: () => Promise<void>): Promise<void> {
+  private async runInTransaction(
+    callback: () => Promise<void>,
+    context = 'transaction'
+  ): Promise<void> {
     if (!this.connection) {
       throw new DuckDBError('Connection not established');
     }
+    const start = performance.now();
+    logger.debug('Starting DuckDB transaction', LogCategory.DUCKDB, {
+      context
+    });
     await this.connection.query('BEGIN TRANSACTION;');
     try {
       await callback();
       await this.connection.query('COMMIT;');
+      logger.info('DuckDB transaction committed', LogCategory.DUCKDB, {
+        context,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
     } catch (error) {
       await this.connection.query('ROLLBACK;');
+      logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
+        context,
+        durationMs: (performance.now() - start).toFixed(2),
+        error
+      });
       throw error;
     }
   }
@@ -428,6 +454,10 @@ class DuckDB {
     try {
       await this.db.dropFile(fileId);
     } catch (error) {
+      logger.warn('Failed to drop registered DuckDB file', LogCategory.DUCKDB, {
+        fileId,
+        error
+      });
     } finally {
       this.registered_files.delete(fileId);
     }
@@ -440,6 +470,7 @@ class DuckDB {
 
   async init(): Promise<void> {
     const startTime = performance.now();
+    logger.info('DuckDB initialization started', LogCategory.DUCKDB);
 
     try {
       const bundleStart = performance.now();
@@ -454,41 +485,73 @@ class DuckDB {
         }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
+      const bundleVariant =
+        bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
       this.threadsSupported = Boolean(bundle.pthreadWorker);
+      logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
+        bundleVariant,
+        threadsSupported: this.threadsSupported,
+        durationMs: (performance.now() - bundleStart).toFixed(2)
+      });
 
       const workerStart = performance.now();
       const worker = new Worker(bundle.mainWorker!);
+      logger.debug('DuckDB worker created', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - workerStart).toFixed(2)
+      });
 
       const dbCreateStart = performance.now();
       const duckdbLogger = new duckdb.ConsoleLogger();
       this.db = new duckdb.AsyncDuckDB(duckdbLogger, worker);
+      logger.debug('AsyncDuckDB instance ready', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - dbCreateStart).toFixed(2)
+      });
 
       const instantiateStart = performance.now();
       await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+      logger.debug('DuckDB WASM instantiated', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - instantiateStart).toFixed(2)
+      });
 
       const openStart = performance.now();
       await this.db.open({
         filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
         query: { castBigIntToDouble: false }
       });
+      logger.debug('DuckDB database opened', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - openStart).toFixed(2)
+      });
 
       const connectStart = performance.now();
       this.connection = await this.db.connect();
+      logger.debug('DuckDB connection established', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - connectStart).toFixed(2)
+      });
 
       const spatialStart = performance.now();
       await this.query(`INSTALL spatial; LOAD spatial;`, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      logger.debug('Spatial extension loaded', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - spatialStart).toFixed(2)
       });
 
       const macrosStart = performance.now();
       await this.query(breaks + analyse + join_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
+      logger.debug('Custom macros registered', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - macrosStart).toFixed(2)
+      });
 
       await this.configureRuntimeSettings();
 
       this.clearGeoParquetCache();
+      logger.debug('GeoParquet cache initialized', LogCategory.DUCKDB);
 
+      logger.success('DuckDB initialization complete', LogCategory.DUCKDB, {
+        totalDurationMs: (performance.now() - startTime).toFixed(2)
+      });
     } catch (error) {
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, {
         duration: `${(performance.now() - startTime).toFixed(2)}ms`,
@@ -603,6 +666,7 @@ class DuckDB {
     input: string | File,
     options: ReadTabularOptions = {}
   ): Promise<string> {
+    const start = performance.now();
     let { tablename } = options;
     const decimal_separator =
       options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
@@ -610,6 +674,12 @@ class DuckDB {
     let filename: string;
     let fileid: string;
     let cleanupFileId: string | undefined;
+
+    const sourceType = typeof input === 'string' ? 'text' : 'file';
+    logger.info('Ingesting tabular data into DuckDB', LogCategory.DUCKDB, {
+      tablename,
+      sourceType
+    });
 
     try {
       if (typeof input === 'string') {
@@ -639,10 +709,11 @@ class DuckDB {
         );
       }
 
-      await this.runInTransaction(async () => {
-        if (!tablename) {
-          throw new DuckDBError('Unable to determine target table name');
-        }
+      await this.runInTransaction(
+        async () => {
+          if (!tablename) {
+            throw new DuckDBError('Unable to determine target table name');
+          }
         if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
           const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
           await this.query(query, {
@@ -655,8 +726,10 @@ class DuckDB {
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
         }
-        await this.add_row_id(tablename!);
-      });
+          await this.add_row_id(tablename!);
+        },
+        'read_tabular'
+      );
 
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
@@ -664,6 +737,11 @@ class DuckDB {
 
       this.loaded_files.set(tablename, filename);
       this.markTableMutated(tablename);
+      logger.success('Tabular data ingested', LogCategory.DUCKDB, {
+        tablename,
+        filename,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return tablename;
     } catch (error) {
       logger.error('Failed to read tabular data', LogCategory.DUCKDB, error);
@@ -679,6 +757,7 @@ class DuckDB {
     geofile: File,
     options: ReadGeofileOptions = {}
   ): Promise<DuckDBMetadata | string> {
+    const start = performance.now();
     let { tablename } = options;
     const meta = options.meta ?? false;
     try {
@@ -699,15 +778,18 @@ class DuckDB {
         tablename = generate_unique_table_name(geofile.name, this.loaded_files);
       }
 
-      await this.runInTransaction(async () => {
-        await this.query(
-          `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
-          {
-            format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-          }
-        );
-        await this.add_row_id(tablename!);
-      });
+      await this.runInTransaction(
+        async () => {
+          await this.query(
+            `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
+            {
+              format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+            }
+          );
+          await this.add_row_id(tablename!);
+        },
+        'read_geofile'
+      );
 
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
@@ -715,7 +797,11 @@ class DuckDB {
 
       this.loaded_files.set(tablename, geofile.name);
       this.markTableMutated(tablename);
-
+      logger.success('Geofile ingested', LogCategory.DUCKDB, {
+        tablename,
+        filename: geofile.name,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return tablename;
     } catch (error) {
       logger.error('Failed to read geofile', LogCategory.DUCKDB, error);
@@ -724,6 +810,7 @@ class DuckDB {
   }
 
   async read_link(url: string, options: ReadLinkOptions = {}): Promise<string> {
+    const start = performance.now();
     let { tablename } = options;
     const decimal_separator =
       options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
@@ -733,6 +820,12 @@ class DuckDB {
 
     if (!tablename)
       tablename = generate_unique_table_name(filename, this.loaded_files);
+    logger.info('Ingesting remote file into DuckDB', LogCategory.DUCKDB, {
+      url,
+      filename,
+      inferredType: file_type,
+      tablename
+    });
     await this.db!.registerFileURL(
       filename,
       url,
@@ -741,10 +834,11 @@ class DuckDB {
     );
 
     try {
-      await this.runInTransaction(async () => {
-        if (!tablename) {
-          throw new DuckDBError('Unable to determine target table name');
-        }
+      await this.runInTransaction(
+        async () => {
+          if (!tablename) {
+            throw new DuckDBError('Unable to determine target table name');
+          }
         switch (file_type) {
           case DUCK_CONST.TYPE.TABULAR:
             await this.query(
@@ -769,14 +863,21 @@ class DuckDB {
             );
             break;
         }
-        await this.add_row_id(tablename);
-      });
+          await this.add_row_id(tablename);
+        },
+        'read_link'
+      );
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
       }
 
       this.loaded_files.set(tablename, filename);
       this.markTableMutated(tablename);
+      logger.success('Remote file ingested', LogCategory.DUCKDB, {
+        tablename,
+        filename,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return tablename;
     } catch (error) {
       logger.error('Failed to read file url', LogCategory.DUCKDB, error);

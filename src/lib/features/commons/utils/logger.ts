@@ -183,11 +183,6 @@ class Logger {
   log(message: string, options: LogOptions): void {
     const level = options.level || LogLevel.INFO;
 
-    // Only allow error logs to reach the console
-    if (level !== LogLevel.ERROR) {
-      return;
-    }
-
     if (!this.shouldLog(options.category, level)) return;
 
     // Detect infinite loops
@@ -214,10 +209,13 @@ class Logger {
       };
     }
 
+    const logFn =
+      level === LogLevel.ERROR ? console.error : console.log;
+
     if (data !== undefined) {
-      console.error(`%c${prefix} ${message}`, style, data);
+      logFn(`%c${prefix} ${message}`, style, data);
     } else {
-      console.error(`%c${prefix} ${message}`, style);
+      logFn(`%c${prefix} ${message}`, style);
     }
   }
 
@@ -299,12 +297,12 @@ class Logger {
   // Special method for grouping related logs
   group(title: string, category: LogCategory): void {
     if (!this.config.enabled) return;
-    // Non-error logging is disabled, keep method for API compatibility
+    console.group(`[${category}] ${title}`);
   }
 
   groupEnd(): void {
     if (!this.config.enabled) return;
-    // Non-error logging is disabled, keep method for API compatibility
+    console.groupEnd();
   }
 
   // Method to check if logging is enabled
