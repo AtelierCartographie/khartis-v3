@@ -2,7 +2,6 @@ import {
   GeoColumnDetector,
   type GeoDetectionResult
 } from './geo-detector.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export interface ColumnStatistics {
   name: string;
@@ -63,7 +62,6 @@ export const DeepDataValidator = {
       sampleSize?: number;
     } = {}
   ): Promise<DataAnalysisResult> {
-
     const rowCount = data.length;
     const columnCount = headers.length;
 
@@ -99,7 +97,6 @@ export const DeepDataValidator = {
       columnCount
     );
 
-
     return {
       rowCount,
       columnCount,
@@ -116,7 +113,6 @@ export const DeepDataValidator = {
     headers: string[],
     data: unknown[][]
   ): Promise<ColumnStatistics[]> {
-
     const columns: ColumnStatistics[] = [];
     const COLUMN_CHUNK_SIZE = 10;
 
@@ -137,7 +133,6 @@ export const DeepDataValidator = {
         columns.push(columnStats);
       }
     }
-
 
     return columns;
   },

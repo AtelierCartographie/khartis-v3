@@ -2,7 +2,6 @@
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
   import {
@@ -44,7 +43,6 @@
     const project = projectsStore.getProjectById(projectId);
 
     if (project) {
-
       const duplicatedProject = await projectsStore.duplicateProject(projectId);
 
       if (duplicatedProject && newName !== duplicatedProject.name) {
@@ -64,9 +62,6 @@
   const handleLanguageChange = (event: Event) => {
     const target = event.target as HTMLSelectElement;
     const newLocale = target.value as Locale;
-    const oldLocale = currentLocale;
-
-
     setLocale(newLocale);
     currentLocale = newLocale;
   };

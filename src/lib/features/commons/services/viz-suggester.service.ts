@@ -255,6 +255,14 @@ export class VizSuggesterService {
       .filter((col) => this.getUniqueCount(col) > 1); // Exclure colonnes avec 1 seule valeur
 
     if (debug) {
+      logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
+        geometry: simplifiedGeomType,
+        columns: enrichedColumns.map((col) => ({
+          name: col.name,
+          semioType: col.semioType,
+          score: col.score
+        }))
+      });
     }
 
     // Générer suggestions

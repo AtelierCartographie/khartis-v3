@@ -4,7 +4,6 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages.js';
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
   import clsx from 'clsx';

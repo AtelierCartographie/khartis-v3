@@ -373,7 +373,6 @@ class DuckDB {
     if (index > -1) {
       this.cacheState.accessOrder.splice(index, 1);
     }
-
   }
 
   private markTableMutated(table: string): void {
@@ -485,8 +484,7 @@ class DuckDB {
         }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      const bundleVariant =
-        bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
+      const bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
       this.threadsSupported = Boolean(bundle.pthreadWorker);
       logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
         bundleVariant,
@@ -709,11 +707,10 @@ class DuckDB {
         );
       }
 
-      await this.runInTransaction(
-        async () => {
-          if (!tablename) {
-            throw new DuckDBError('Unable to determine target table name');
-          }
+      await this.runInTransaction(async () => {
+        if (!tablename) {
+          throw new DuckDBError('Unable to determine target table name');
+        }
         if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
           const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
           await this.query(query, {
@@ -726,10 +723,8 @@ class DuckDB {
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
         }
-          await this.add_row_id(tablename!);
-        },
-        'read_tabular'
-      );
+        await this.add_row_id(tablename!);
+      }, 'read_tabular');
 
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
@@ -778,18 +773,15 @@ class DuckDB {
         tablename = generate_unique_table_name(geofile.name, this.loaded_files);
       }
 
-      await this.runInTransaction(
-        async () => {
-          await this.query(
-            `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
-            {
-              format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-            }
-          );
-          await this.add_row_id(tablename!);
-        },
-        'read_geofile'
-      );
+      await this.runInTransaction(async () => {
+        await this.query(
+          `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
+          {
+            format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+          }
+        );
+        await this.add_row_id(tablename!);
+      }, 'read_geofile');
 
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
@@ -834,11 +826,10 @@ class DuckDB {
     );
 
     try {
-      await this.runInTransaction(
-        async () => {
-          if (!tablename) {
-            throw new DuckDBError('Unable to determine target table name');
-          }
+      await this.runInTransaction(async () => {
+        if (!tablename) {
+          throw new DuckDBError('Unable to determine target table name');
+        }
         switch (file_type) {
           case DUCK_CONST.TYPE.TABULAR:
             await this.query(
@@ -863,10 +854,8 @@ class DuckDB {
             );
             break;
         }
-          await this.add_row_id(tablename);
-        },
-        'read_link'
-      );
+        await this.add_row_id(tablename);
+      }, 'read_link');
       if (!tablename) {
         throw new DuckDBError('Unable to determine target table name');
       }
@@ -1137,7 +1126,6 @@ class DuckDB {
   }
 
   clearGeoParquetCache(): void {
-    const count = this.table_geoparquet_cache.size;
     this.table_geoparquet_cache.clear();
     this.cacheState.accessOrder = [];
     this.cacheState.size = 0;
@@ -1154,7 +1142,6 @@ class DuckDB {
       return cachedBuffer.slice();
     }
 
-
     await this.query(
       `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'uncompressed');`,
       {
@@ -1166,7 +1153,12 @@ class DuckDB {
 
     try {
       await this.db!.dropFile(`${table}.parquet`);
-    } catch (_error) {
+    } catch (error) {
+      logger.warn(
+        'Failed to remove temporary GeoParquet file',
+        LogCategory.DUCKDB,
+        error
+      );
     }
 
     while (
@@ -1184,7 +1176,6 @@ class DuckDB {
     this.table_geoparquet_cache.set(table, stableBuffer);
     this.cacheState.accessOrder.push(table);
     this.cacheState.size += stableBuffer.byteLength;
-
 
     return stableBuffer.slice();
   }

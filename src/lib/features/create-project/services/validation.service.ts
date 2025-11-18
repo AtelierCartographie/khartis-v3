@@ -37,6 +37,10 @@ export class CreateProjectValidationService {
       }
 
       if (fileResult.warnings.length > 0) {
+        logger.warn('File validation warnings', LogCategory.FILE, {
+          filename,
+          warnings: fileResult.warnings
+        });
       }
     }
 
@@ -80,6 +84,10 @@ export class CreateProjectValidationService {
     }
 
     if (warnings.length > 0) {
+      logger.warn('URL validation warnings', LogCategory.FILE, {
+        urls,
+        warnings
+      });
     }
 
     return {

@@ -8,7 +8,6 @@ const __dirname = dirname(__filename);
 const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
 
 async function convertToGeoParquet() {
-
   const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
   const worker = new Worker(bundle.mainWorker);
   const logger = new duckdb.ConsoleLogger();

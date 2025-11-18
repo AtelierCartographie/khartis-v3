@@ -26,8 +26,8 @@
     type FilterStats,
     type AnalysisResult
   } from '$lib/features/duckdb';
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { logger, LogCategory } from '../utils/logger';
+  import type { ProcessedDataset } from '$lib/features/data-pipeline';
+  import { logger, LogCategory } from '../utils/logger';
   import {
     create_summary_plot,
     type SummaryPlotData,
@@ -35,8 +35,8 @@ import { logger, LogCategory } from '../utils/logger';
     type CategoricalHistogram
   } from '$lib/features/duckdb/services/duckdb/summary-plot';
   import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
-import ColumnRenameModal from './column-rename-modal.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import ColumnRenameModal from './column-rename-modal.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
   type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -287,7 +287,6 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 
   async function renameColumn(oldName: string, newName: string) {
     if (tableName) {
-
       await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
 
       if (sortColumn === oldName) {
@@ -302,7 +301,6 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 
       await loadColumnsInfo();
       await initializeRows(startIndex);
-
 
       recordDatasetTransformation(`Renommage de ${oldName} en ${newName}`);
     }
@@ -345,13 +343,11 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
   }
 
   function toggleColumnVisibility(columnName: string) {
-
     if (hiddenColumns.has(columnName)) {
       hiddenColumns.delete(columnName);
     } else {
       hiddenColumns.add(columnName);
     }
-
   }
 
   function performSearch() {
@@ -688,25 +684,21 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
     clearSearch();
     await loadColumnsInfo();
     await initializeRows(startIndex);
-
   }
 
   async function handleRefine(columnName: string, operation: RefineOperation) {
     if (!tableName) return;
-
 
     await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
 
     await loadColumnsInfo();
     await initializeRows(startIndex);
 
-
     recordDatasetTransformation(`Affinage (${operation}) sur ${columnName}`);
   }
 
   async function changeColumnType(columnName: string, duckType: string) {
     if (!tableName) return;
-
 
     await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
     await loadColumnsInfo();
@@ -852,13 +844,10 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
   });
 
   $effect(() => {
-
-
     selectedRowIds = new SvelteSet();
     selectAllVisible = false;
 
     if (dataset || tableName) {
-
       untrack(async () => {
         await loadColumnsInfo();
 

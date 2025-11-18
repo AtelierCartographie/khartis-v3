@@ -1,7 +1,6 @@
 import type { BasemapMetadata } from '../types/basemap.types';
 import type { OSMTileConfig } from '../services/osm-tile.service';
 import { isOSMBasemap, getOSMTileConfig } from '../services/osm-tile.service';
-import { logger, LogCategory } from '../../commons/utils/logger';
 
 /**
  * Store for managing OSM basemap state

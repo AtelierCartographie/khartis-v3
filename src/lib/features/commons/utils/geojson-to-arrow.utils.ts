@@ -8,7 +8,6 @@ import {
   type DataType
 } from 'apache-arrow';
 import type { GeoJSONFeatureCollection, GeoJSONFeature } from '$lib/types/data';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 interface SchemaInfo {
   fields: Map<string, DataType>;
   hasGeometry: boolean;
@@ -34,7 +33,6 @@ export function convertGeoJSONToArrow(
     );
   }
 
-
   // Step 1: Infer schema from all features
   const schemaInfo = inferGeoJSONSchema(features);
 
@@ -43,7 +41,6 @@ export function convertGeoJSONToArrow(
 
   // Step 3: Create Arrow table
   const table = tableFromArrays(columns);
-
 
   return table;
 }
