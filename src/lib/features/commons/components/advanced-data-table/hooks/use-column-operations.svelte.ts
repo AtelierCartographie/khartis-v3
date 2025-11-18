@@ -161,18 +161,10 @@ export function useColumnOperations(
     const tableName = getValue(props.tableName);
 
     if (!tableName) {
-      logger.warn(
-        'Cannot rename column: tableName not provided',
-        LogCategory.UI
-      );
       return;
     }
 
     try {
-      logger.debug('Renaming column', LogCategory.UI, {
-        oldName,
-        newName
-      });
 
       // Renommer dans DuckDB
       await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
@@ -185,19 +177,11 @@ export function useColumnOperations(
         hiddenColumns.delete(oldName);
         hiddenColumns.add(newName);
         hiddenColumns = new SvelteSet(hiddenColumns); // Force reactivity
-        logger.debug('Updated hidden columns after rename', LogCategory.UI, {
-          oldName,
-          newName
-        });
       }
 
       // Recharger les données
       await props.onColumnsChange();
 
-      logger.debug('Rename complete', LogCategory.UI, {
-        oldName,
-        newName
-      });
     } catch (err) {
       logger.error('Error renaming column', LogCategory.UI, err);
     }
@@ -210,12 +194,10 @@ export function useColumnOperations(
     const tableName = getValue(props.tableName);
 
     if (!tableName) {
-      logger.warn('Cannot drop column: tableName not provided', LogCategory.UI);
       return;
     }
 
     try {
-      logger.debug('Dropping column', LogCategory.UI, { columnName });
 
       // Supprimer dans DuckDB
       await duckDBOrchestrator.dropColumn(tableName, columnName);
@@ -232,9 +214,6 @@ export function useColumnOperations(
       // Recharger les données
       await props.onColumnsChange();
 
-      logger.debug('Column dropped successfully', LogCategory.UI, {
-        columnName
-      });
     } catch (err) {
       logger.error('Error dropping column', LogCategory.UI, err);
     }
@@ -244,11 +223,6 @@ export function useColumnOperations(
    * Masque ou affiche une colonne (toggle)
    */
   function toggleColumnVisibility(columnName: string): void {
-    logger.debug('Toggle column visibility', LogCategory.UI, {
-      columnName,
-      wasHidden: hiddenColumns.has(columnName),
-      currentHiddenColumns: Array.from(hiddenColumns)
-    });
 
     if (hiddenColumns.has(columnName)) {
       hiddenColumns.delete(columnName);
@@ -259,11 +233,6 @@ export function useColumnOperations(
     // Force reactivity
     hiddenColumns = new SvelteSet(hiddenColumns);
 
-    logger.debug('Column visibility toggled', LogCategory.UI, {
-      columnName,
-      isNowHidden: hiddenColumns.has(columnName),
-      hiddenCount: hiddenColumns.size
-    });
   }
 
   /**
@@ -281,10 +250,6 @@ export function useColumnOperations(
     if (!columnToRename) return;
 
     const oldName = columnToRename;
-    logger.debug('handleRename called', LogCategory.UI, {
-      oldName,
-      newName
-    });
 
     await renameColumn(oldName, newName);
 
@@ -303,18 +268,10 @@ export function useColumnOperations(
     const tableName = getValue(props.tableName);
 
     if (!tableName) {
-      logger.warn(
-        'Cannot refine column: tableName not provided',
-        LogCategory.UI
-      );
       return;
     }
 
     try {
-      logger.debug('Refining column', LogCategory.UI, {
-        columnName,
-        operation
-      });
 
       // Appliquer l'opération de raffinement
       await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
@@ -322,10 +279,6 @@ export function useColumnOperations(
       // Recharger les données
       await props.onColumnsChange();
 
-      logger.success(
-        `Colonne "${columnName}" raffinée avec succès`,
-        LogCategory.UI
-      );
     } catch (err) {
       logger.error('Error refining column', LogCategory.UI, err);
     }

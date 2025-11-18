@@ -61,13 +61,6 @@ class ImportRollbackService {
       visualizationIds: existingVisualizationsIds
     };
 
-    logger.info('Import snapshot created', LogCategory.DATA, {
-      fileId: file.id,
-      fileName: file.name,
-      hadProjectFile: snapshot.hadProjectFile,
-      hadDataset: snapshot.hadDataset,
-      hadDuckDBTable: snapshot.hadDuckDBTable
-    });
 
     return snapshot;
   }
@@ -77,11 +70,6 @@ class ImportRollbackService {
    * Only called on FATAL errors
    */
   async rollback(snapshot: ImportSnapshot): Promise<void> {
-    logger.warn('Starting import rollback', LogCategory.DATA, {
-      fileId: snapshot.fileId,
-      fileName: snapshot.fileName,
-      snapshotAge: Date.now() - snapshot.timestamp.getTime()
-    });
 
     const cleanupResults = {
       projectFile: false,
@@ -102,9 +90,6 @@ class ImportRollbackService {
           if (fileIndex !== -1) {
             currentProject.data.sourceFiles.splice(fileIndex, 1);
             cleanupResults.projectFile = true;
-            logger.info('Rolled back project file', LogCategory.DATA, {
-              fileId: snapshot.fileId
-            });
           }
         }
       }
@@ -124,10 +109,6 @@ class ImportRollbackService {
 
           datasetsStore.removeDataset(dataset.id);
           cleanupResults.dataset = true;
-          logger.info('Rolled back dataset', LogCategory.DATA, {
-            datasetId: dataset.id,
-            visualizationsRemoved: cleanupResults.visualizations
-          });
         }
       }
 
@@ -145,21 +126,9 @@ class ImportRollbackService {
           cleanupResults.duckDBTable = true;
           cleanupResults.duckDBCache = true;
 
-          logger.info(
-            'Rolled back DuckDB table and cache',
-            LogCategory.DUCKDB,
-            {
-              tableName: duckDataset.tableName
-            }
-          );
         }
       }
 
-      logger.info('Import rollback completed successfully', LogCategory.DATA, {
-        fileId: snapshot.fileId,
-        fileName: snapshot.fileName,
-        cleanupResults
-      });
     } catch (rollbackError) {
       logger.error('Rollback failed partially', LogCategory.DATA, {
         fileId: snapshot.fileId,
@@ -182,10 +151,6 @@ class ImportRollbackService {
       const { Duck } = await import('$lib/features/duckdb');
 
       if (!Duck) {
-        logger.warn(
-          'DuckDB not initialized, skipping cleanup',
-          LogCategory.DUCKDB
-        );
         return;
       }
 
@@ -212,22 +177,7 @@ class ImportRollbackService {
         Duck.table_geoparquet_cache.delete(tableName);
       }
 
-      logger.info(
-        'DuckDB resources cleaned up during rollback',
-        LogCategory.DUCKDB,
-        {
-          tableName
-        }
-      );
     } catch (error) {
-      logger.warn(
-        'Failed to cleanup DuckDB resources during rollback',
-        LogCategory.DUCKDB,
-        {
-          tableName,
-          error
-        }
-      );
     }
   }
 }

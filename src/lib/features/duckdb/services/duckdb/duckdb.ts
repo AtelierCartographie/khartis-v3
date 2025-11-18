@@ -374,9 +374,6 @@ class DuckDB {
       this.cacheState.accessOrder.splice(index, 1);
     }
 
-    logger.debug('Invalidated GeoParquet cache entry', LogCategory.DUCKDB, {
-      table
-    });
   }
 
   private markTableMutated(table: string): void {
@@ -407,11 +404,6 @@ class DuckDB {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
     } catch (error) {
-      logger.warn(
-        'Failed to load httpfs extension (optional)',
-        LogCategory.DUCKDB,
-        error
-      );
     }
   }
 
@@ -436,10 +428,6 @@ class DuckDB {
     try {
       await this.db.dropFile(fileId);
     } catch (error) {
-      logger.warn('Failed to drop registered file', LogCategory.DUCKDB, {
-        fileId,
-        error
-      });
     } finally {
       this.registered_files.delete(fileId);
     }
@@ -452,7 +440,6 @@ class DuckDB {
 
   async init(): Promise<void> {
     const startTime = performance.now();
-    logger.info('🦆 Starting DuckDB initialization', LogCategory.DUCKDB);
 
     try {
       const bundleStart = performance.now();
@@ -468,67 +455,40 @@ class DuckDB {
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
       this.threadsSupported = Boolean(bundle.pthreadWorker);
-      logger.info('📦 Bundle selected (local)', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - bundleStart).toFixed(2)}ms`
-      });
 
       const workerStart = performance.now();
       const worker = new Worker(bundle.mainWorker!);
-      logger.info('👷 Worker created', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - workerStart).toFixed(2)}ms`
-      });
 
       const dbCreateStart = performance.now();
       const duckdbLogger = new duckdb.ConsoleLogger();
       this.db = new duckdb.AsyncDuckDB(duckdbLogger, worker);
-      logger.info('🗄️ AsyncDuckDB instance created', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - dbCreateStart).toFixed(2)}ms`
-      });
 
       const instantiateStart = performance.now();
       await this.db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-      logger.info('⚡ WASM module instantiated', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - instantiateStart).toFixed(2)}ms`
-      });
 
       const openStart = performance.now();
       await this.db.open({
         filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
         query: { castBigIntToDouble: false }
       });
-      logger.info('🔓 Database opened', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - openStart).toFixed(2)}ms`
-      });
 
       const connectStart = performance.now();
       this.connection = await this.db.connect();
-      logger.info('🔌 Connection established', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - connectStart).toFixed(2)}ms`
-      });
 
       const spatialStart = performance.now();
       await this.query(`INSTALL spatial; LOAD spatial;`, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      });
-      logger.info('🌍 Spatial extension loaded', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - spatialStart).toFixed(2)}ms`
       });
 
       const macrosStart = performance.now();
       await this.query(breaks + analyse + join_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
-      logger.info('📜 Custom macros loaded', LogCategory.DUCKDB, {
-        duration: `${(performance.now() - macrosStart).toFixed(2)}ms`
-      });
 
       await this.configureRuntimeSettings();
 
       this.clearGeoParquetCache();
 
-      logger.success('✅ DuckDB initialization complete', LogCategory.DUCKDB, {
-        totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
-      });
     } catch (error) {
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, {
         duration: `${(performance.now() - startTime).toFixed(2)}ms`,
@@ -756,7 +716,6 @@ class DuckDB {
       this.loaded_files.set(tablename, geofile.name);
       this.markTableMutated(tablename);
 
-      logger.info('Table created', LogCategory.DUCKDB, { tablename });
       return tablename;
     } catch (error) {
       logger.error('Failed to read geofile', LogCategory.DUCKDB, error);
@@ -1081,9 +1040,6 @@ class DuckDB {
     this.table_geoparquet_cache.clear();
     this.cacheState.accessOrder = [];
     this.cacheState.size = 0;
-    logger.info('GeoParquet cache cleared', LogCategory.DUCKDB, {
-      entriesCleared: count
-    });
   }
 
   async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
@@ -1093,18 +1049,10 @@ class DuckDB {
         this.cacheState.accessOrder.splice(index, 1);
         this.cacheState.accessOrder.push(table);
       }
-      logger.debug(
-        'GeoParquet buffer retrieved from cache',
-        LogCategory.DUCKDB,
-        { table }
-      );
       const cachedBuffer = this.table_geoparquet_cache.get(table)!;
       return cachedBuffer.slice();
     }
 
-    logger.debug('Converting DuckDB table to GeoParquet', LogCategory.DUCKDB, {
-      table
-    });
 
     await this.query(
       `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'uncompressed');`,
@@ -1117,17 +1065,7 @@ class DuckDB {
 
     try {
       await this.db!.dropFile(`${table}.parquet`);
-      logger.debug('Deleted temporary Parquet file', LogCategory.DUCKDB, {
-        filename: `${table}.parquet`
-      });
     } catch (_error) {
-      logger.debug(
-        'Could not delete Parquet file (may not exist)',
-        LogCategory.DUCKDB,
-        {
-          filename: `${table}.parquet`
-        }
-      );
     }
 
     while (
@@ -1139,9 +1077,6 @@ class DuckDB {
       if (oldBuffer) {
         this.cacheState.size -= oldBuffer.byteLength;
         this.table_geoparquet_cache.delete(oldest);
-        logger.debug('Evicted from GeoParquet cache', LogCategory.DUCKDB, {
-          table: oldest
-        });
       }
     }
 
@@ -1149,11 +1084,6 @@ class DuckDB {
     this.cacheState.accessOrder.push(table);
     this.cacheState.size += stableBuffer.byteLength;
 
-    logger.success('GeoParquet buffer created and cached', LogCategory.DUCKDB, {
-      table,
-      sizeKB: (stableBuffer.byteLength / 1024).toFixed(2),
-      cacheSize: this.cacheState.accessOrder.length
-    });
 
     return stableBuffer.slice();
   }
@@ -1533,10 +1463,6 @@ let duckInitPromise: Promise<void> | null = null;
 
 async function initDuckDB(): Promise<void> {
   if (Duck) {
-    logger.debug(
-      'DuckDB already initialized, reusing existing instance',
-      LogCategory.DUCKDB
-    );
     return;
   }
 

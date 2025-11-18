@@ -31,11 +31,6 @@ export class ShapefileParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
-      logger.debug('Parsing shapefile', LogCategory.DATA, {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
 
       const geojson = await this.toGeoJSON(file);
       return convertGeoJSONToRawDataset(geojson);

@@ -83,11 +83,6 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
       const decoder = new TextDecoder();
       return decoder.decode(result);
     } catch (error) {
-      logger.warn(
-        'Failed to decompress as gzip, trying as plain text',
-        LogCategory.FILE,
-        error
-      );
       throw error;
     }
   }

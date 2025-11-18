@@ -22,7 +22,6 @@ describe('Performance Benchmarks', () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    console.log(`Typical dataset (1000x10): ${duration.toFixed(2)}ms`);
 
     expect(result.rowCount).toBe(1000);
     expect(result.columnCount).toBe(10);
@@ -49,7 +48,6 @@ describe('Performance Benchmarks', () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    console.log(`Large dataset (5000x20): ${duration.toFixed(2)}ms`);
 
     expect(result.rowCount).toBe(5000);
     expect(result.columnCount).toBe(20);
@@ -76,7 +74,6 @@ describe('Performance Benchmarks', () => {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
-    console.log(`Very large dataset (10000x30): ${duration.toFixed(2)}ms`);
 
     expect(result.rowCount).toBe(10000);
     expect(result.columnCount).toBe(30);
@@ -115,11 +112,6 @@ describe('Performance Benchmarks', () => {
     const welfordEnd = performance.now();
     const welfordDuration = welfordEnd - welfordStart;
 
-    console.log(`Naive algorithm: ${naiveDuration.toFixed(4)}ms`);
-    console.log(`Welford algorithm: ${welfordDuration.toFixed(4)}ms`);
-    console.log(
-      `Speedup: ${(naiveDuration / welfordDuration).toFixed(2)}x faster`
-    );
 
     // Results should be very close (within floating point precision)
     expect(Math.abs(naiveStdDev - welfordStdDev)).toBeLessThan(0.0001);

@@ -636,7 +636,6 @@ define(['exports'], (function (exports) { 'use strict';
           // behind this behavior.
           if (url.origin !== location.origin && result.index !== 0) {
             {
-              logger.debug(`The regular expression '${regExp.toString()}' only partially matched ` + `against the cross-origin URL '${url.toString()}'. RegExpRoute's will only ` + `handle cross-origin requests if they match the entire URL.`);
             }
             return;
           }
@@ -756,7 +755,6 @@ define(['exports'], (function (exports) { 'use strict';
               payload
             } = event.data;
             {
-              logger.debug(`Caching URLs from the window`, payload.urlsToCache);
             }
             const requestPromises = Promise.all(payload.urlsToCache.map(entry => {
               if (typeof entry === 'string') {
@@ -806,7 +804,6 @@ define(['exports'], (function (exports) { 'use strict';
         const url = new URL(request.url, location.href);
         if (!url.protocol.startsWith('http')) {
           {
-            logger.debug(`Workbox Router only supports URLs that start with 'http'.`);
           }
           return;
         }
@@ -843,22 +840,17 @@ define(['exports'], (function (exports) { 'use strict';
           {
             // No handler so Workbox will do nothing. If logs is set of debug
             // i.e. verbose, we should print out this information.
-            logger.debug(`No route found for: ${getFriendlyURL(url)}`);
           }
           return;
         }
         {
           // We have a handler, meaning Workbox is going to handle the route.
           // print the routing details to the console.
-          logger.groupCollapsed(`Router is responding to: ${getFriendlyURL(url)}`);
           debugMessages.forEach(msg => {
             if (Array.isArray(msg)) {
-              logger.log(...msg);
             } else {
-              logger.log(msg);
             }
           });
-          logger.groupEnd();
         }
         // Wrap in try and catch in case the handle method throws a synchronous
         // error. It should still callback to the catch handler.
@@ -882,10 +874,8 @@ define(['exports'], (function (exports) { 'use strict';
               {
                 // Still include URL here as it will be async from the console group
                 // and may not make sense without the URL
-                logger.groupCollapsed(`Error thrown when responding to: ` + ` ${getFriendlyURL(url)}. Falling back to route's Catch Handler.`);
                 logger.error(`Error thrown by:`, route);
                 logger.error(err);
-                logger.groupEnd();
               }
               try {
                 return await catchHandler.handle({
@@ -904,10 +894,8 @@ define(['exports'], (function (exports) { 'use strict';
               {
                 // Still include URL here as it will be async from the console group
                 // and may not make sense without the URL
-                logger.groupCollapsed(`Error thrown when responding to: ` + ` ${getFriendlyURL(url)}. Falling back to global Catch Handler.`);
                 logger.error(`Error thrown by:`, route);
                 logger.error(err);
-                logger.groupEnd();
               }
               return this._catchHandler.handle({
                 url,
@@ -957,7 +945,6 @@ define(['exports'], (function (exports) { 'use strict';
               // Warn developers that using an async matchCallback is almost always
               // not the right thing to do.
               if (matchResult instanceof Promise) {
-                logger.warn(`While routing ${getFriendlyURL(url)}, an async ` + `matchCallback function was used. Please convert the ` + `following route to use a synchronous matchCallback function:`, route);
               }
             }
             // See https://github.com/GoogleChrome/workbox/issues/2079
@@ -1147,7 +1134,6 @@ define(['exports'], (function (exports) { 'use strict';
           // See https://github.com/pillarjs/path-to-regexp#parameters
           const wildcards = '[*:?+]';
           if (new RegExp(`${wildcards}`).exec(valueToCheck)) {
-            logger.debug(`The '$capture' parameter contains an Express-style wildcard ` + `character (${wildcards}). Strings are now always interpreted as ` + `exact matches; use a RegExp for partial or wildcard matches.`);
           }
         }
         const matchCallback = ({
@@ -1155,7 +1141,6 @@ define(['exports'], (function (exports) { 'use strict';
         }) => {
           {
             if (url.pathname === captureUrl.pathname && url.origin !== captureUrl.origin) {
-              logger.debug(`${capture} only partially matches the cross-origin URL ` + `${url.toString()}. This route will only handle cross-origin requests ` + `if they match the entire URL.`);
             }
           }
           return url.href === captureUrl.href;
@@ -1283,7 +1268,6 @@ define(['exports'], (function (exports) { 'use strict';
       }
       quotaErrorCallbacks.add(callback);
       {
-        logger.log('Registered a callback to respond to quota errors.', callback);
       }
     }
 
@@ -1815,12 +1799,8 @@ define(['exports'], (function (exports) { 'use strict';
         }
         {
           if (urlsExpired.length > 0) {
-            logger.groupCollapsed(`Expired ${urlsExpired.length} ` + `${urlsExpired.length === 1 ? 'entry' : 'entries'} and removed ` + `${urlsExpired.length === 1 ? 'it' : 'them'} from the ` + `'${this._cacheName}' cache.`);
-            logger.log(`Expired the following ${urlsExpired.length === 1 ? 'URL' : 'URLs'}:`);
             urlsExpired.forEach(url => logger.log(`    ${url}`));
-            logger.groupEnd();
           } else {
-            logger.debug(`Cache expiration ran and found no entries to remove.`);
           }
         }
         this._isRunning = false;
@@ -1968,7 +1948,6 @@ define(['exports'], (function (exports) { 'use strict';
               {
                 // The event may not be a fetch event; only log the URL if it is.
                 if ('request' in event) {
-                  logger.warn(`Unable to ensure service worker stays alive when ` + `updating cache entry for ` + `'${getFriendlyURL(event.request.url)}'.`);
                 }
               }
             }
@@ -2227,24 +2206,10 @@ define(['exports'], (function (exports) { 'use strict';
         }
         {
           if (!cacheable) {
-            logger.groupCollapsed(`The request for ` + `'${getFriendlyURL(response.url)}' returned a response that does ` + `not meet the criteria for being cached.`);
-            logger.groupCollapsed(`View cacheability criteria here.`);
-            logger.log(`Cacheable statuses: ` + JSON.stringify(this._statuses));
-            logger.log(`Cacheable headers: ` + JSON.stringify(this._headers, null, 2));
-            logger.groupEnd();
             const logFriendlyHeaders = {};
             response.headers.forEach((value, key) => {
               logFriendlyHeaders[key] = value;
             });
-            logger.groupCollapsed(`View response status and headers here.`);
-            logger.log(`Response status: ${response.status}`);
-            logger.log(`Response headers: ` + JSON.stringify(logFriendlyHeaders, null, 2));
-            logger.groupEnd();
-            logger.groupCollapsed(`View full response details here.`);
-            logger.log(response.headers);
-            logger.log(response);
-            logger.groupEnd();
-            logger.groupEnd();
           }
         }
         return cacheable;
@@ -2387,16 +2352,13 @@ define(['exports'], (function (exports) { 'use strict';
      */
     async function executeQuotaErrorCallbacks() {
       {
-        logger.log(`About to run ${quotaErrorCallbacks.size} ` + `callbacks to clean up caches.`);
       }
       for (const callback of quotaErrorCallbacks) {
         await callback();
         {
-          logger.log(callback, 'is complete.');
         }
       }
       {
-        logger.log('Finished running callbacks.');
       }
     }
 
@@ -2542,7 +2504,6 @@ define(['exports'], (function (exports) { 'use strict';
           const possiblePreloadResponse = await event.preloadResponse;
           if (possiblePreloadResponse) {
             {
-              logger.log(`Using a preloaded navigation response for ` + `'${getFriendlyURL(request.url)}'`);
             }
             return possiblePreloadResponse;
           }
@@ -2574,7 +2535,6 @@ define(['exports'], (function (exports) { 'use strict';
           // See https://github.com/GoogleChrome/workbox/issues/1796
           fetchResponse = await fetch(request, request.mode === 'navigate' ? undefined : this._strategy.fetchOptions);
           if ("development" !== 'production') {
-            logger.debug(`Network request for ` + `'${getFriendlyURL(request.url)}' returned a response with ` + `status '${fetchResponse.status}'.`);
           }
           for (const callback of this.iterateCallbacks('fetchDidSucceed')) {
             fetchResponse = await callback({
@@ -2586,7 +2546,6 @@ define(['exports'], (function (exports) { 'use strict';
           return fetchResponse;
         } catch (error) {
           {
-            logger.log(`Network request for ` + `'${getFriendlyURL(request.url)}' threw an error.`, error);
           }
           // `originalRequest` will only exist if a `fetchDidFail` callback
           // is being used (see above).
@@ -2643,9 +2602,7 @@ define(['exports'], (function (exports) { 'use strict';
         cachedResponse = await caches.match(effectiveRequest, multiMatchOptions);
         {
           if (cachedResponse) {
-            logger.debug(`Found a cached response in '${cacheName}'.`);
           } else {
-            logger.debug(`No cached response found in '${cacheName}'.`);
           }
         }
         for (const callback of this.iterateCallbacks('cachedResponseWillBeUsed')) {
@@ -2690,7 +2647,6 @@ define(['exports'], (function (exports) { 'use strict';
           // See https://github.com/GoogleChrome/workbox/issues/2818
           const vary = response.headers.get('Vary');
           if (vary) {
-            logger.debug(`The response for ${getFriendlyURL(effectiveRequest.url)} ` + `has a 'Vary: ${vary}' header. ` + `Consider setting the {ignoreVary: true} option on your strategy ` + `to ensure cache matching and deletion works as expected.`);
           }
         }
         if (!response) {
@@ -2704,7 +2660,6 @@ define(['exports'], (function (exports) { 'use strict';
         const responseToCache = await this._ensureResponseSafeToCache(response);
         if (!responseToCache) {
           {
-            logger.debug(`Response '${getFriendlyURL(effectiveRequest.url)}' ` + `will not be cached.`, responseToCache);
           }
           return false;
         }
@@ -2720,7 +2675,6 @@ define(['exports'], (function (exports) { 'use strict';
         // precaching.
         cache, effectiveRequest.clone(), ['__WB_REVISION__'], matchOptions) : null;
         {
-          logger.debug(`Updating the '${cacheName}' cache with a new Response ` + `for ${getFriendlyURL(effectiveRequest.url)}.`);
         }
         try {
           await cache.put(effectiveRequest, hasCacheUpdateCallback ? responseToCache.clone() : responseToCache);
@@ -2907,9 +2861,7 @@ define(['exports'], (function (exports) { 'use strict';
             if (responseToCache) {
               if (responseToCache.status !== 200) {
                 if (responseToCache.status === 0) {
-                  logger.warn(`The response for '${this.request.url}' ` + `is an opaque response. The caching strategy that you're ` + `using will not cache opaque responses by default.`);
                 } else {
-                  logger.debug(`The response for '${this.request.url}' ` + `returned a status code of '${response.status}' and won't ` + `be cached as a result.`);
                 }
               }
             }
@@ -3086,7 +3038,6 @@ define(['exports'], (function (exports) { 'use strict';
           if (!response) {
             throw error;
           } else {
-            logger.log(`While responding to '${getFriendlyURL(request.url)}', ` + `an ${error instanceof Error ? error.toString() : ''} error occurred. Using a fallback response provided by ` + `a handlerDidError plugin.`);
           }
         }
         for (const callback of handler.iterateCallbacks('handlerWillRespond')) {
@@ -3161,9 +3112,6 @@ define(['exports'], (function (exports) { 'use strict';
       strategyStart: (strategyName, request) => `Using ${strategyName} to respond to '${getFriendlyURL(request.url)}'`,
       printFinalResponse: response => {
         if (response) {
-          logger.groupCollapsed(`View the final response here.`);
-          logger.log(response || '[No response returned]');
-          logger.groupEnd();
         }
       }
     };
@@ -3233,12 +3181,9 @@ define(['exports'], (function (exports) { 'use strict';
           }
         }
         {
-          logger.groupCollapsed(messages.strategyStart(this.constructor.name, request));
           for (const log of logs) {
-            logger.log(log);
           }
           messages.printFinalResponse(response);
-          logger.groupEnd();
         }
         if (!response) {
           throw new WorkboxError('no-response', {
@@ -3432,11 +3377,8 @@ define(['exports'], (function (exports) { 'use strict';
      * @private
      */
     const logGroup = (groupTitle, deletedURLs) => {
-      logger.groupCollapsed(groupTitle);
       for (const url of deletedURLs) {
-        logger.log(url);
       }
-      logger.groupEnd();
     };
     /**
      * @param {Array<string>} deletedURLs
@@ -3447,9 +3389,7 @@ define(['exports'], (function (exports) { 'use strict';
     function printCleanupDetails(deletedURLs) {
       const deletionCount = deletedURLs.length;
       if (deletionCount > 0) {
-        logger.groupCollapsed(`During precaching cleanup, ` + `${deletionCount} cached ` + `request${deletionCount === 1 ? ' was' : 's were'} deleted.`);
         logGroup('Deleted Cache Requests', deletedURLs);
-        logger.groupEnd();
       }
     }
 
@@ -3470,11 +3410,8 @@ define(['exports'], (function (exports) { 'use strict';
       if (urls.length === 0) {
         return;
       }
-      logger.groupCollapsed(groupTitle);
       for (const url of urls) {
-        logger.log(url);
       }
-      logger.groupEnd();
     }
     /**
      * @param {Array<string>} urlsToPrecache
@@ -3491,10 +3428,8 @@ define(['exports'], (function (exports) { 'use strict';
         if (alreadyPrecachedCount > 0) {
           message += ` ${alreadyPrecachedCount} ` + `file${alreadyPrecachedCount === 1 ? ' is' : 's are'} already cached.`;
         }
-        logger.groupCollapsed(message);
         _nestedGroup(`View newly precached URLs.`, urlsToPrecache);
         _nestedGroup(`View previously precached URLs.`, urlsAlreadyPrecached);
-        logger.groupEnd();
       }
     }
 
@@ -3659,7 +3594,6 @@ define(['exports'], (function (exports) { 'use strict';
         // Fall back to the network if we're configured to do so.
         if (this._fallbackToNetwork) {
           {
-            logger.warn(`The precached response for ` + `${getFriendlyURL(request.url)} in ${this.cacheName} was not ` + `found. Falling back to the network.`);
           }
           const integrityInManifest = params.integrity;
           const integrityInRequest = request.integrity;
@@ -3681,7 +3615,6 @@ define(['exports'], (function (exports) { 'use strict';
             const wasCached = await handler.cachePut(request, response.clone());
             {
               if (wasCached) {
-                logger.log(`A response for ${getFriendlyURL(request.url)} ` + `was used to "repair" the precache.`);
               }
             }
           }
@@ -3697,15 +3630,6 @@ define(['exports'], (function (exports) { 'use strict';
           const cacheKey = params.cacheKey || (await handler.getCacheKey(request, 'read'));
           // Workbox is going to handle the route.
           // print the routing details to the console.
-          logger.groupCollapsed(`Precaching is responding to: ` + getFriendlyURL(request.url));
-          logger.log(`Serving the precached url: ${getFriendlyURL(cacheKey instanceof Request ? cacheKey.url : cacheKey)}`);
-          logger.groupCollapsed(`View request details here.`);
-          logger.log(request);
-          logger.groupEnd();
-          logger.groupCollapsed(`View response details here.`);
-          logger.log(response);
-          logger.groupEnd();
-          logger.groupEnd();
         }
         return response;
       }
@@ -3910,7 +3834,6 @@ define(['exports'], (function (exports) { 'use strict';
           if (urlsToWarnAbout.length > 0) {
             const warningMessage = `Workbox is precaching URLs without revision ` + `info: ${urlsToWarnAbout.join(', ')}\nThis is generally NOT safe. ` + `Learn more at https://bit.ly/wb-precache`;
             {
-              logger.warn(warningMessage);
             }
           }
         }
@@ -4231,7 +4154,6 @@ define(['exports'], (function (exports) { 'use strict';
             }
           }
           {
-            logger.debug(`Precaching did not find a match for ` + getFriendlyURL(request.url));
           }
           return;
         };
@@ -4378,7 +4300,6 @@ define(['exports'], (function (exports) { 'use strict';
         event.waitUntil(deleteOutdatedCaches(cacheName).then(cachesDeleted => {
           {
             if (cachesDeleted.length > 0) {
-              logger.log(`The following out-of-date precaches were cleaned up ` + `automatically:`, cachesDeleted);
             }
           }
         }));
@@ -4475,19 +4396,16 @@ define(['exports'], (function (exports) { 'use strict';
         for (const regExp of this._denylist) {
           if (regExp.test(pathnameAndSearch)) {
             {
-              logger.log(`The navigation route ${pathnameAndSearch} is not ` + `being used, since the URL matches this denylist pattern: ` + `${regExp.toString()}`);
             }
             return false;
           }
         }
         if (this._allowlist.some(regExp => regExp.test(pathnameAndSearch))) {
           {
-            logger.debug(`The navigation route ${pathnameAndSearch} ` + `is being used.`);
           }
           return true;
         }
         {
-          logger.log(`The navigation route ${pathnameAndSearch} is not ` + `being used, since the URL being navigated to doesn't ` + `match the allowlist.`);
         }
         return false;
       }

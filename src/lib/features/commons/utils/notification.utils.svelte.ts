@@ -69,10 +69,6 @@ class NotificationManager {
   }
 
   warning(options: NotificationOptions): string {
-    logger.warn(
-      `${options.title}: ${options.subtitle || ''}`,
-      LogCategory.NOTIFICATION
-    );
     return this.addNotification(NotificationType.WARNING, options);
   }
 

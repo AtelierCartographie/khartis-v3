@@ -51,9 +51,6 @@ export const DuckDBValidatorService = {
     } = {}
   ): Promise<ValidationResult> {
     try {
-      logger.info('Starting DuckDB validation', LogCategory.DUCKDB, {
-        tableName
-      });
 
       await DuckDBValidatorService.installAnalysisMacros();
 
@@ -129,8 +126,6 @@ export const DuckDBValidatorService = {
     }
 
     try {
-      logger.debug('Installing analysis macros', LogCategory.DUCKDB);
-      logger.debug('Analysis macros skipped', LogCategory.DUCKDB);
     } catch (error) {
       logger.error(
         'Failed to install analysis macros',
@@ -220,19 +215,9 @@ export const DuckDBValidatorService = {
             }
           }
         } catch (error) {
-          logger.warn(
-            `Failed to analyze column ${header}`,
-            LogCategory.DUCKDB,
-            error
-          );
         }
       }
 
-      logger.debug('DuckDB analysis complete', LogCategory.DUCKDB, {
-        columns: columns.length,
-        summaries: summaries.length,
-        histograms: histograms.length
-      });
 
       return { columns, summaries, histograms };
     } catch (error) {

@@ -43,19 +43,7 @@ class DataOrchestratorService {
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
-    const endTiming = logger.startTiming(
-      `onFileAdded:${file.name}`,
-      LogCategory.DATA
-    );
     const start = performance.now();
-    logger.info('Processing file', LogCategory.DATA, {
-      name: file.name,
-      id: file.id,
-      status: file.status,
-      fileType: file.fileType,
-      hasParsedData: !!file.parsedData,
-      parsedDataLength: getParsedDataLength(file.parsedData)
-    });
 
     // Create snapshot BEFORE any changes for potential rollback
     const snapshot = importRollbackService.createSnapshot(file);
@@ -63,11 +51,6 @@ class DataOrchestratorService {
 
     try {
       const dataset = await datasetsStore.addFile(file);
-      logger.debug('datasetsStore.addFile resolved', LogCategory.DATA, {
-        fileId: file.id,
-        durationMs: (performance.now() - pipelineStart).toFixed(2)
-      });
-      logger.info('File processed via datasetsStore', LogCategory.DATA);
 
       if (!dataset) {
         logger.error('Dataset not found after processing', LogCategory.DATA, {
@@ -75,29 +58,13 @@ class DataOrchestratorService {
         });
         return;
       }
-      logger.info('Dataset retrieved after data pipeline', LogCategory.DATA, {
-        datasetId: dataset.id,
-        datasetName: dataset.name,
-        sourceFileId: dataset.sourceFileId,
-        tableName: dataset.tableName,
-        hasGeometryFlag: !!dataset.geometry,
-        columnCount: dataset.columns.length
-      });
 
       const duckStart = performance.now();
       await this.processFileInDuckDB(file, dataset);
-      logger.debug('processFileInDuckDB finished', LogCategory.DATA, {
-        fileId: file.id,
-        durationMs: (performance.now() - duckStart).toFixed(2)
-      });
 
       // Mark file as processed to prevent reprocessing
       this.processedFileIds.add(file.id);
       // Legacy pipeline: no GeoParquet cache, rely on DuckDB state
-      logger.debug('File marked as processed', LogCategory.DATA, {
-        fileId: file.id,
-        totalProcessedFiles: this.processedFileIds.size
-      });
 
       if (dataset.geometry) {
         this._geometryDatasetsVersion++;
@@ -108,15 +75,7 @@ class DataOrchestratorService {
         visualizationStore.getVisualizationsByDataset(dataset.id);
       if (existingVisualizations.length === 0) {
         this.createDefaultVisualization(dataset.id);
-        logger.info('Default visualization created', LogCategory.DATA, {
-          datasetId: dataset.id
-        });
       } else {
-        logger.info(
-          'Visualization already exists for dataset',
-          LogCategory.DATA,
-          { datasetId: dataset.id }
-        );
       }
 
       layersActions.syncWithVisualizations();
@@ -126,14 +85,6 @@ class DataOrchestratorService {
 
       // Check if error is fatal (requires rollback) or non-fatal (just show toast)
       if (isFatalError(error)) {
-        logger.warn(
-          'Fatal error detected, initiating rollback',
-          LogCategory.DATA,
-          {
-            fileId: file.id,
-            fileName: file.name
-          }
-        );
 
         // Rollback all changes
         await importRollbackService.rollback(snapshot);
@@ -145,14 +96,6 @@ class DataOrchestratorService {
         );
       } else {
         // Non-fatal error: just show warning toast, keep changes
-        logger.info(
-          'Non-fatal error, keeping partial import',
-          LogCategory.DATA,
-          {
-            fileId: file.id,
-            fileName: file.name
-          }
-        );
 
         showWarning(
           'Avertissement',
@@ -164,15 +107,9 @@ class DataOrchestratorService {
 
       // Re-throw only fatal errors to stop further processing
       if (isFatalError(error)) {
-        endTiming();
         throw error;
       }
     } finally {
-      logger.debug('onFileAdded duration', LogCategory.DATA, {
-        fileId: file.id,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-      endTiming();
     }
   }
 
@@ -181,23 +118,13 @@ class DataOrchestratorService {
   }
 
   async onFileRemoved(fileId: string): Promise<void> {
-    logger.info('Removing file from project', LogCategory.DATA, { fileId });
 
     const dataset = datasetsStore.getDatasetBySourceFile(fileId);
-    logger.debug('Dataset lookup result', LogCategory.DATA, {
-      found: !!dataset,
-      datasetId: dataset?.id,
-      datasetName: dataset?.name
-    });
 
     if (dataset) {
       const visualizations = visualizationStore.getVisualizationsByDataset(
         dataset.id
       );
-      logger.info('Removing visualizations', LogCategory.DATA, {
-        count: visualizations.length,
-        datasetId: dataset.id
-      });
       visualizations.forEach((viz) => {
         visualizationStore.removeVisualization(viz.id);
       });
@@ -206,36 +133,21 @@ class DataOrchestratorService {
         .getAllDatasets()
         .find((d) => d.sourceFileId === fileId);
       if (duckDataset) {
-        logger.info('Dropping DuckDB table', LogCategory.DUCKDB, {
-          tableName: duckDataset.tableName
-        });
         await duckDBOrchestrator.dropTable(duckDataset.tableName);
 
         // Cleanup DuckDB cache and file handles to prevent memory leaks
         await this.cleanupDuckDBResources(duckDataset.tableName);
 
-        logger.success('DuckDB table dropped', LogCategory.DUCKDB, {
-          tableName: duckDataset.tableName
-        });
         this._geometryDatasetsVersion++;
       }
 
-      logger.debug('Removing dataset from store', LogCategory.DATA, {
-        datasetId: dataset.id
-      });
       datasetsStore.removeDataset(dataset.id);
       layersActions.syncWithVisualizations();
-      logger.success('File removal complete', LogCategory.DATA, { fileId });
     } else {
-      logger.warn('No dataset found for fileId', LogCategory.DATA, { fileId });
     }
 
     // Remove from processed files set
     this.processedFileIds.delete(fileId);
-    logger.debug('File removed from tracking', LogCategory.DATA, {
-      fileId,
-      remainingProcessedFiles: this.processedFileIds.size
-    });
 
     // Clean up orphaned datasets (datasets whose sourceFileId no longer exists in project)
     this.cleanupOrphanedDatasets();
@@ -250,19 +162,12 @@ class DataOrchestratorService {
       const { Duck } = await import('$lib/features/duckdb');
 
       if (!Duck) {
-        logger.warn(
-          'DuckDB not initialized, skipping cleanup',
-          LogCategory.DUCKDB
-        );
         return;
       }
 
       // Remove from loaded files tracking
       if (Duck.loaded_files.has(tableName)) {
         Duck.loaded_files.delete(tableName);
-        logger.debug('Removed from loaded_files', LogCategory.DUCKDB, {
-          tableName
-        });
       }
 
       // Remove from registered files (find by table name)
@@ -271,18 +176,11 @@ class DataOrchestratorService {
       );
       if (registeredFile) {
         Duck.registered_files.delete(registeredFile);
-        logger.debug('Removed from registered_files', LogCategory.DUCKDB, {
-          tableName,
-          fileId: registeredFile
-        });
       }
 
       // Remove from table metadata
       if (Duck.table_metadata.has(tableName)) {
         Duck.table_metadata.delete(tableName);
-        logger.debug('Removed from table_metadata', LogCategory.DUCKDB, {
-          tableName
-        });
       }
 
       // Remove from cache (will be handled by LRU but we can force it)
@@ -290,23 +188,9 @@ class DataOrchestratorService {
         const buffer = Duck.table_geoparquet_cache.get(tableName);
         Duck.table_geoparquet_cache.delete(tableName);
 
-        logger.debug('Removed from cache', LogCategory.DUCKDB, {
-          tableName,
-          size: buffer
-            ? `${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB`
-            : 'unknown'
-        });
       }
 
-      logger.success('DuckDB resources cleaned up', LogCategory.DUCKDB, {
-        tableName
-      });
     } catch (error) {
-      logger.warn(
-        'Failed to cleanup DuckDB resources',
-        LogCategory.DUCKDB,
-        error
-      );
     }
   }
 
@@ -324,29 +208,11 @@ class DataOrchestratorService {
     );
 
     if (orphanedDatasets.length > 0) {
-      logger.info('Cleaning up orphaned datasets', LogCategory.DATA, {
-        totalDatasets: allDatasets.length,
-        validSourceFileIds: Array.from(validSourceFileIds),
-        orphanedCount: orphanedDatasets.length,
-        orphanedIds: orphanedDatasets.map((d) => ({
-          datasetId: d.id,
-          sourceFileId: d.sourceFileId,
-          name: d.name
-        }))
-      });
 
       orphanedDatasets.forEach((dataset) => {
-        logger.debug('Removing orphaned dataset', LogCategory.DATA, {
-          datasetId: dataset.id,
-          sourceFileId: dataset.sourceFileId,
-          name: dataset.name
-        });
         datasetsStore.removeDataset(dataset.id);
       });
 
-      logger.success('Orphaned datasets cleaned', LogCategory.DATA, {
-        count: orphanedDatasets.length
-      });
     }
   }
 
@@ -363,37 +229,12 @@ class DataOrchestratorService {
       file.fileType === FileType.KML ||
       file.fileType === FileType.KMZ;
 
-    logger.debug('Evaluating DuckDB preparation need', LogCategory.DUCKDB, {
-      fileId: file.id,
-      fileName: file.name,
-      fileType: file.fileType,
-      datasetId: dataset?.id,
-      datasetGeometryDetected: !!dataset?.geometry,
-      requiresGeoProcessing
-    });
 
     if (!requiresGeoProcessing) {
-      logger.debug(
-        'Skipping DuckDB geo processing for file',
-        LogCategory.DUCKDB,
-        {
-          fileId: file.id,
-          reason: 'no_geometry_detected'
-        }
-      );
       return null;
     }
 
     if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) {
-      logger.info(
-        'Dataset already includes DuckDB geo table, skipping conversion',
-        LogCategory.DUCKDB,
-        {
-          fileId: file.id,
-          datasetId: dataset.id,
-          tableName: dataset.tableName
-        }
-      );
       return null;
     }
 
@@ -456,14 +297,6 @@ class DataOrchestratorService {
       ? file.name.replace(/\.shp$/i, '.geojson')
       : `${file.name}.geojson`;
 
-    logger.info('Converted shapefile to GeoJSON for DuckDB', LogCategory.DATA, {
-      originalName: file.name,
-      normalizedName: geojsonName,
-      originalSize: file.size,
-      featureCount: hasFeatures(geojsonObject)
-        ? geojsonObject.features.length
-        : undefined
-    });
 
     return {
       ...file,
@@ -550,39 +383,12 @@ class DataOrchestratorService {
       datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
 
     if (!dataset) {
-      logger.warn(
-        'Cannot process file in DuckDB - dataset missing',
-        LogCategory.DUCKDB,
-        {
-          fileId: file.id,
-          fileName: file.name
-        }
-      );
       return;
     }
-    logger.debug('processFileInDuckDB start', LogCategory.DUCKDB, {
-      fileId: file.id,
-      datasetId: dataset.id,
-      tableName: dataset.tableName
-    });
 
     const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
 
     if (duckDBFile) {
-      logger.info(
-        'Running DuckDB Geo pipeline for uploaded file',
-        LogCategory.DUCKDB,
-        {
-          originalFileName: file.name,
-          normalizedFileName: duckDBFile.name,
-          fileType: file.fileType,
-          normalizedType: duckDBFile.fileType,
-          hasParsedData: !!duckDBFile.parsedData,
-          geometryDetected: !!dataset.geometry,
-          datasetId: dataset.id,
-          datasetTableName: dataset.tableName
-        }
-      );
       try {
         const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
         if (duckResult && dataset) {
@@ -603,14 +409,6 @@ class DataOrchestratorService {
     }
 
     if (dataset.tableName) {
-      logger.debug('Registering table from dataPipeline', LogCategory.DUCKDB, {
-        tableName: dataset.tableName,
-        sourceFileId: dataset.sourceFileId,
-        fileId: file.id,
-        fileName: file.name,
-        datasetId: dataset.id,
-        currentDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
-      });
 
       try {
         const duckDataset = await duckDBOrchestrator.registerExistingTable(
@@ -621,11 +419,6 @@ class DataOrchestratorService {
             geoDetection: dataset.geoDetection
           }
         );
-        logger.success('Table registered successfully', LogCategory.DUCKDB, {
-          tableName: dataset.tableName,
-          duckDatasetId: duckDataset?.id,
-          totalDuckDBDatasets: duckDBOrchestrator.getAllDatasets().length
-        });
       } catch (registerError) {
         logger.error('Failed to register table', LogCategory.DUCKDB, {
           error:
@@ -636,30 +429,16 @@ class DataOrchestratorService {
         });
       }
     } else {
-      logger.warn('No tableName in dataset to register', LogCategory.DUCKDB, {
-        datasetId: dataset.id,
-        datasetName: dataset.name
-      });
     }
 
-    logger.debug('processFileInDuckDB complete', LogCategory.DUCKDB, {
-      fileId: file.id,
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   }
 
   async onProjectChanged(): Promise<void> {
-    const endTiming = logger.startTiming(
-      'Project changed',
-      LogCategory.PROJECT
-    );
     const start = performance.now();
 
-    logger.info('Project change initiated', LogCategory.PROJECT);
 
     // Wait for DuckDB to be ready before processing files
     await duckDBOrchestrator.waitForInitialization();
-    logger.debug('DuckDB ready for project processing', LogCategory.PROJECT);
 
     visualizationStore.clear();
     datasetsStore.clear();
@@ -668,20 +447,12 @@ class DataOrchestratorService {
 
     // Clear processed file IDs when switching projects
     this.processedFileIds.clear();
-    logger.debug('Cleared processed file tracking', LogCategory.PROJECT);
 
     const currentProject = projectStore.currentProject;
     if (currentProject?.data?.sourceFiles) {
-      logger.info('Processing project files', LogCategory.PROJECT, {
-        fileCount: currentProject.data.sourceFiles.length
-      });
       await this.processProjectFiles(currentProject.data.sourceFiles);
     }
 
-    endTiming();
-    logger.success('Project change complete', LogCategory.PROJECT, {
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   }
 
   private processedFileIds = new Set<string>();
@@ -718,65 +489,32 @@ class DataOrchestratorService {
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    const endTiming = logger.startTiming(
-      'Process project files',
-      LogCategory.PROJECT
-    );
     const start = performance.now();
 
-    logger.info('Processing project files', LogCategory.PROJECT, {
-      fileCount: files.length,
-      processedFileIds: Array.from(this.processedFileIds),
-      processingFiles: Array.from(this.processingFiles)
-    });
 
     // Filter out files that are already processed OR currently being processed
     const unprocessedFiles = files.filter(
       (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
 
-    logger.info('📊 Unprocessed files analysis', LogCategory.PROJECT, {
-      totalFiles: files.length,
-      unprocessedCount: unprocessedFiles.length,
-      unprocessedIds: unprocessedFiles.map((f) => f.id),
-      unprocessedNames: unprocessedFiles.map((f) => f.name)
-    });
 
     if (unprocessedFiles.length === 0) {
-      logger.info('All files already processed, skipping', LogCategory.PROJECT);
       return;
     }
 
     // Mark files as processing BEFORE starting to prevent race conditions
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
-    logger.info('Marked files as processing', LogCategory.PROJECT, {
-      count: unprocessedFiles.length,
-      fileNames: unprocessedFiles.map((f) => f.name),
-      processingFiles: Array.from(this.processingFiles)
-    });
 
     try {
       const streamingStart = performance.now();
       const concurrency = this.determineProjectConcurrency();
 
-      logger.info(
-        'Processing project files with streaming pipeline',
-        LogCategory.PROJECT,
-        {
-          fileCount: unprocessedFiles.length,
-          maxConcurrent: concurrency
-        }
-      );
 
       await this.processWithLimit(
         unprocessedFiles,
         concurrency,
         async (file, index, total) => {
           const progress = `${index + 1}/${total}`;
-          logger.info('Processing project file', LogCategory.PROJECT, {
-            progress,
-            fileName: file.name
-          });
 
           let processedSuccessfully = false;
           const fileStart = performance.now();
@@ -801,39 +539,17 @@ class DataOrchestratorService {
           } finally {
             this.processingFiles.delete(file.id);
             if (processedSuccessfully) {
-              logger.success(
-                'Project file fully processed',
-                LogCategory.PROJECT,
-                {
-                  progress,
-                  fileName: file.name,
-                  durationMs: (performance.now() - fileStart).toFixed(2)
-                }
-              );
             }
           }
         }
       );
 
       const streamingDuration = performance.now() - streamingStart;
-      logger.success(
-        'Streaming project processing complete',
-        LogCategory.PROJECT,
-        {
-          duration: `${streamingDuration.toFixed(2)}ms`,
-          processedFiles: unprocessedFiles.length
-        }
-      );
 
       layersActions.syncWithVisualizations();
 
       // No cache persistence – DuckDB remains the canonical storage during the session.
 
-      endTiming();
-      logger.success('Project files processing complete', LogCategory.PROJECT, {
-        remainingProcessingFiles: Array.from(this.processingFiles),
-        totalDurationMs: (performance.now() - start).toFixed(2)
-      });
     } catch (error) {
       // Cleanup on error - remove all unprocessed files from processing
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
@@ -841,8 +557,6 @@ class DataOrchestratorService {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
       throw error;
-    } finally {
-      endTiming();
     }
   }
 

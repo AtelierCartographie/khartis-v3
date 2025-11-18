@@ -28,7 +28,6 @@ export class GeolocationService {
       detectedType
     };
 
-    logger.info('Geo columns detected', LogCategory.DATA, result);
 
     return result;
   }
@@ -104,10 +103,6 @@ export class GeolocationService {
     bbox?: [number, number, number, number];
   }> {
     try {
-      logger.info('Analyzing geo column', LogCategory.DATA, {
-        datasetId,
-        columnName
-      });
 
       return {
         uniqueValues: 0,

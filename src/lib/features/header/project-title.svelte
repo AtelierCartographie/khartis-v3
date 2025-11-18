@@ -29,10 +29,6 @@
     const sanitized = sanitizeProjectName(trimmed);
 
     if (sanitized !== originalName) {
-      logger.info('Updating project name', LogCategory.PROJECT, {
-        oldName: originalName,
-        newName: sanitized
-      });
       projectStore.updateProjectName(sanitized);
       projectStore.saveCurrentProject();
       originalName = sanitized;

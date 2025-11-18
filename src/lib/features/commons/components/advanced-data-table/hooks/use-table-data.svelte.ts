@@ -120,16 +120,9 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
 
       if (tableName) {
         // Chargement depuis DuckDB avec analyse complète
-        logger.debug('Loading columns with analysis', LogCategory.UI, {
-          tableName
-        });
 
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
 
-        logger.debug('Analysis loaded', LogCategory.UI, {
-          count: analysis.length,
-          sample: analysis[0]
-        });
 
         // Filtrer les colonnes exclues
         const filteredAnalysis = analysis.filter(
@@ -149,19 +142,12 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         });
         columnAnalysis = analysisMap;
 
-        logger.debug('Column analysis map created', LogCategory.UI, {
-          size: columnAnalysis.size
-        });
 
         // Récupérer le nombre de lignes
         const count = await duckDBOrchestrator.getRowCount(tableName);
         numRows = count;
       } else if (dataset) {
         // Chargement depuis un dataset (pas d'analyse)
-        logger.debug(
-          'Loading columns from dataset (no analysis)',
-          LogCategory.UI
-        );
 
         columns = dataset.columns.filter(
           (c) => !EXCLUDED_COLUMNS.includes(c.name)
@@ -252,10 +238,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       currentSortColumn &&
       !columns.some((c) => c.name === currentSortColumn)
     ) {
-      logger.debug('Reset sort - column not found', LogCategory.UI, {
-        sortColumn: currentSortColumn,
-        availableColumns: columns.map((c) => c.name)
-      });
       onReset();
     }
   }

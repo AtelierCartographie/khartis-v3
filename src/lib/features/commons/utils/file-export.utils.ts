@@ -153,10 +153,6 @@ export function exportProcessedDatasets(
 
     for (const dataset of datasets) {
       if (!dataset.geometry) {
-        logger.warn(
-          `Skipping dataset ${dataset.name} without geometry for GeoJSON export`,
-          LogCategory.EXPORT
-        );
         continue;
       }
 
@@ -253,10 +249,6 @@ export async function exportProjectData(
         } else if (isGeoJSONFeature(file.parsedData)) {
           allFeatures.push(file.parsedData);
         } else if (isTabularData(file.parsedData)) {
-          logger.warn(
-            `Skipping CSV file ${file.name} for GeoJSON export`,
-            LogCategory.EXPORT
-          );
         }
       }
     }

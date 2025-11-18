@@ -42,7 +42,6 @@ export class GeoParquetReader implements IGeoArrowReader {
       try {
         await wasmInit({ module_or_path: wasmUrl });
         this.wasmInitialized = true;
-        logger.success('GeoParquet WASM initialized', LogCategory.DATA);
       } catch (error) {
         logger.error(
           'Failed to initialize GeoParquet WASM',
@@ -80,32 +79,13 @@ export class GeoParquetReader implements IGeoArrowReader {
       const uint8Buffer =
         buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-      logger.debug(
-        'Reading GeoParquet with metadata preservation',
-        LogCategory.DATA,
-        {
-          bufferSize: uint8Buffer.byteLength
-        }
-      );
 
       const data = await readGeoParquetWasm(uint8Buffer);
       const table = tableFromIPC(data.intoIPCStream());
       const hasMetadata = this.hasMetadata(table);
 
-      logger.success('GeoParquet read complete', LogCategory.DATA, {
-        numRows: table.numRows,
-        numColumns: table.schema.fields.length,
-        hasMetadata,
-        metadataKeys: table.schema.metadata
-          ? Array.from(table.schema.metadata.keys())
-          : []
-      });
 
       if (!hasMetadata) {
-        logger.warn(
-          'GeoParquet file read but no GeoArrow metadata found',
-          LogCategory.DATA
-        );
       }
 
       return table;
@@ -137,17 +117,9 @@ export class GeoParquetReader implements IGeoArrowReader {
       const parsed = JSON.parse(geoMetadataStr);
 
       if (!isGeoArrowMetadata(parsed)) {
-        logger.warn('Invalid GeoArrow metadata structure', LogCategory.DATA, {
-          parsed
-        });
         return null;
       }
 
-      logger.debug('GeoArrow metadata extracted', LogCategory.DATA, {
-        version: parsed.version,
-        primaryColumn: parsed.primary_column,
-        columns: Object.keys(parsed.columns)
-      });
 
       return parsed;
     } catch (error) {

@@ -29,14 +29,10 @@
 
   onMount(async () => {
     const startTime = performance.now();
-    logger.info('🚀 Application startup', LogCategory.SYSTEM);
 
     const duckdbInitStart = performance.now();
     try {
       await duckDBOrchestrator.initialize();
-      logger.info('🦆 DuckDB initialized', LogCategory.SYSTEM, {
-        duration: `${(performance.now() - duckdbInitStart).toFixed(2)}ms`
-      });
     } catch (error) {
       logger.error(
         'DuckDB initialization failed - application cannot continue',
@@ -51,22 +47,13 @@
     // Wait for project store to initialize from IndexedDB
     const projectInitStart = performance.now();
     await projectStore.waitForInit();
-    logger.info('📦 Project store initialized', LogCategory.SYSTEM, {
-      duration: `${(performance.now() - projectInitStart).toFixed(2)}ms`
-    });
 
     // Initialize data orchestrator to process any existing files
     const dataInitStart = performance.now();
     await dataOrchestrator.initialize();
-    logger.info('📊 Data orchestrator initialized', LogCategory.SYSTEM, {
-      duration: `${(performance.now() - dataInitStart).toFixed(2)}ms`
-    });
 
     isLoading = false;
 
-    logger.success('✅ Application ready', LogCategory.SYSTEM, {
-      totalDuration: `${(performance.now() - startTime).toFixed(2)}ms`
-    });
 
     // Show modal only if no project exists
     if (!projectStore.currentProject) {

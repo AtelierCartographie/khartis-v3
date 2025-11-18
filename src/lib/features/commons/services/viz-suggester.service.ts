@@ -255,11 +255,6 @@ export class VizSuggesterService {
       .filter((col) => this.getUniqueCount(col) > 1); // Exclure colonnes avec 1 seule valeur
 
     if (debug) {
-      logger.debug(
-        '[VizSuggester] Colonnes enrichies:',
-        LogCategory.VISUALIZATION,
-        enrichedColumns
-      );
     }
 
     // Générer suggestions

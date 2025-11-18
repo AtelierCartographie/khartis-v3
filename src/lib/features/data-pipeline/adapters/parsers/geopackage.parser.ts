@@ -30,10 +30,6 @@ export class GeoPackageParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     try {
-      logger.debug('Parsing GeoPackage file', LogCategory.DATA, {
-        name: file.name,
-        size: file.size
-      });
 
       const buffer = await file.arrayBuffer();
       const geojson = (await parseGeoPackage(
