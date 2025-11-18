@@ -11,6 +11,10 @@ export async function insertArrowTableIntoDuckDB(
   tableName: string
 ): Promise<void> {
   const startTime = performance.now();
+  logger.info('Inserting Arrow table into DuckDB', LogCategory.DUCKDB, {
+    tableName,
+    rows: table.numRows
+  });
 
   if (!Duck) {
     throw new Error('DuckDB not initialized - Duck instance is null');
@@ -34,6 +38,11 @@ export async function insertArrowTableIntoDuckDB(
     });
 
     const duration = performance.now() - startTime;
+    logger.success('Arrow table inserted into DuckDB', LogCategory.DUCKDB, {
+      tableName,
+      rows: table.numRows,
+      durationMs: duration.toFixed(2)
+    });
 
   } catch (error) {
     logger.error(

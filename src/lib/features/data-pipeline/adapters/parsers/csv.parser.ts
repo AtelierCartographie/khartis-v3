@@ -36,6 +36,11 @@ export class CSVParser implements IParser {
 
   async parse(file: File): Promise<RawDataset> {
     return new Promise((resolve, reject) => {
+      const start = performance.now();
+      logger.info('Parsing CSV/TSV file', LogCategory.DATA, {
+        fileName: file.name,
+        fileType: file.type
+      });
 
       Papa.parse(file, {
         header: true,
@@ -45,10 +50,14 @@ export class CSVParser implements IParser {
         escapeChar: '"',
         complete: (results) => {
           try {
-
             if (results.errors.length > 0) {
-              logger.error('Operation', LogCategory.DATA);
               const error = results.errors[0];
+              logger.error('CSV parsing error', LogCategory.DATA, {
+                fileName: file.name,
+                row: error.row,
+                type: error.type,
+                code: error.code
+              });
               throw new ParserError(
                 `CSV parsing error at row ${error.row}: ${error.message}`,
                 error,
@@ -77,6 +86,12 @@ export class CSVParser implements IParser {
               values: dataRows.map((row) => row[name] ?? null)
             }));
 
+            logger.success('CSV parsed successfully', LogCategory.DATA, {
+              fileName: file.name,
+              rows: rows.length,
+              columns: headers.length,
+              durationMs: (performance.now() - start).toFixed(2)
+            });
             resolve({
               headers,
               rows,
@@ -93,6 +108,10 @@ export class CSVParser implements IParser {
             if (error instanceof ParserError) {
               reject(error);
             } else {
+              logger.error('Unexpected CSV parsing failure', LogCategory.DATA, {
+                fileName: file.name,
+                error
+              });
               reject(
                 new ParserError(
                   `Failed to process CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -104,6 +123,10 @@ export class CSVParser implements IParser {
           }
         },
         error: (error) => {
+          logger.error('CSV parsing failed', LogCategory.DATA, {
+            fileName: file.name,
+            error
+          });
           reject(
             new ParserError(
               `CSV parsing failed: ${error.message}`,

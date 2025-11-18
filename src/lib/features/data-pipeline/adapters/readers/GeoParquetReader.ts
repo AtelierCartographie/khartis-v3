@@ -38,10 +38,16 @@ export class GeoParquetReader implements IGeoArrowReader {
 
     const wasmUrl = this.LOCAL_WASM_URL;
 
+    const start = performance.now();
+    logger.info('Initializing GeoParquet WASM reader', LogCategory.DATA);
+
     this.initializationPromise = (async () => {
       try {
         await wasmInit({ module_or_path: wasmUrl });
         this.wasmInitialized = true;
+        logger.success('GeoParquet WASM ready', LogCategory.DATA, {
+          durationMs: (performance.now() - start).toFixed(2)
+        });
       } catch (error) {
         logger.error(
           'Failed to initialize GeoParquet WASM',
@@ -76,6 +82,7 @@ export class GeoParquetReader implements IGeoArrowReader {
     await GeoParquetReader.initialize();
 
     try {
+      const start = performance.now();
       const uint8Buffer =
         buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
@@ -86,8 +93,15 @@ export class GeoParquetReader implements IGeoArrowReader {
 
 
       if (!hasMetadata) {
+        logger.warn('GeoParquet table missing GeoArrow metadata', LogCategory.DATA);
+      } else {
+        logger.debug('GeoParquet metadata detected', LogCategory.DATA);
       }
 
+      logger.success('GeoParquet file read', LogCategory.DATA, {
+        rows: table.numRows,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
       return table;
     } catch (error) {
       logger.error('Failed to read GeoParquet', LogCategory.DATA, error);
