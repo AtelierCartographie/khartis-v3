@@ -18,29 +18,8 @@ export interface WorkerResponse<T = unknown> {
   progress?: number;
 }
 
-// CSV Parser messages
-export interface CSVParseRequest {
-  fileData: ArrayBuffer | string;
-  options?: {
-    delimiter?: string;
-    header?: boolean;
-    skipEmptyLines?: boolean;
-    preview?: number;
-    encoding?: string;
-  };
-}
-
-export interface CSVParseResponse {
-  headers: string[];
-  rows: unknown[][];
-  rowCount: number;
-  metadata?: {
-    delimiter: string;
-    linebreak: string;
-    aborted: boolean;
-    truncated: boolean;
-  };
-}
+// Note: CSV parsing has been migrated to DuckDB's native read_csv()
+// for better performance and simpler architecture
 
 // Type Inference messages
 export interface TypeInferenceRequest {
@@ -83,44 +62,18 @@ export interface DuckDBBatchResponse {
   totalExecutionTime: number;
 }
 
-// Shapefile Parser messages
-export interface ShapefileParseRequest {
-  shpData: ArrayBuffer;
-  dbfData?: ArrayBuffer;
-  shxData?: ArrayBuffer;
-  prjData?: ArrayBuffer;
-}
-
-export interface ShapefileParseResponse {
-  features: Array<{
-    type: 'Feature';
-    properties: Record<string, unknown>;
-    geometry: unknown;
-  }>;
-  bounds?: [number, number, number, number];
-  crs?: string;
-}
-
-// GeoJSON Parser messages
-export interface GeoJSONParseRequest {
-  data: string | ArrayBuffer;
-  validate?: boolean;
-  simplify?: boolean;
-  tolerance?: number;
-}
-
-export interface GeoJSONParseResponse {
-  type: 'FeatureCollection' | 'Feature' | 'Geometry';
-  features?: unknown[];
-  geometry?: unknown;
-  properties?: Record<string, unknown>;
-  bounds?: [number, number, number, number];
-  validationErrors?: string[];
-}
+// Note: Shapefile and GeoJSON parsing have been migrated to DuckDB's native ST_Read()
+// for better performance and simpler architecture
 
 // Geometry Processing messages
 export interface GeometryProcessRequest {
-  operation: 'extent' | 'centroid' | 'simplify' | 'buffer' | 'union' | 'intersect';
+  operation:
+    | 'extent'
+    | 'centroid'
+    | 'simplify'
+    | 'buffer'
+    | 'union'
+    | 'intersect';
   geometry: unknown;
   params?: Record<string, unknown>;
 }

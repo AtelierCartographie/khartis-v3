@@ -89,6 +89,7 @@ export interface DuckDBDataset {
 
 class DuckDBOrchestratorService {
   private initialized = false;
+
   private initPromise: Promise<void> | null = null;
 
   private _state = $state<{
@@ -1271,7 +1272,7 @@ class DuckDBOrchestratorService {
     try {
       // Check if we already have cached metadata for this table
       const dataset = Array.from(this._state.datasets.values()).find(
-        d => d.tableName === tableName
+        (d) => d.tableName === tableName
       );
 
       let geomColumn: { column_name: string; column_type: string } | undefined;
@@ -1424,9 +1425,13 @@ class DuckDBOrchestratorService {
       arrowTableWithMetadata
     );
     if (!geoArrowMetadata) {
-      logger.warn('GeoArrow metadata missing after conversion', LogCategory.DUCKDB, {
-        tableName
-      });
+      logger.warn(
+        'GeoArrow metadata missing after conversion',
+        LogCategory.DUCKDB,
+        {
+          tableName
+        }
+      );
     }
     return { arrowTableWithMetadata, geoArrowMetadata };
   }
@@ -1533,16 +1538,23 @@ class DuckDBOrchestratorService {
     // Check cache first
     for (const dataset of this._state.datasets.values()) {
       if (dataset.tableName === tableName && dataset.arrowTableWithMetadata) {
-        logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
-          tableName
-        });
+        logger.debug(
+          'Using cached Arrow table with metadata',
+          LogCategory.DUCKDB,
+          {
+            tableName
+          }
+        );
         return dataset.arrowTableWithMetadata;
       }
     }
 
     // Not in cache, generate it
     const baseTable = await this.fetchArrowTableWithGeometry(tableName);
-    const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(baseTable, tableName);
+    const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
+      baseTable,
+      tableName
+    );
 
     // Update cache for future use
     for (const dataset of this._state.datasets.values()) {
@@ -1633,7 +1645,11 @@ class DuckDBOrchestratorService {
           tableName: dataset.tableName
         });
       } catch (error) {
-        logger.error('Failed to prefetch Arrow metadata', LogCategory.DUCKDB, error);
+        logger.error(
+          'Failed to prefetch Arrow metadata',
+          LogCategory.DUCKDB,
+          error
+        );
       } finally {
         // Clean up the prefetch promise
         this.metadataPrefetches.delete(dataset.tableName);
@@ -2250,7 +2266,7 @@ function convertGeometryColumnToGeoArrow(
     return { table, converted: false };
   }
 
-  const { builder, dataType } = builderInfo;
+  const { builder } = builderInfo;
   const rowCount = table.numRows;
 
   for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
@@ -2302,18 +2318,25 @@ function createGeoArrowBuilderForType(geometryType: string): {
       const builder = makeBuilder({ type: pointType });
       return { dataType: pointType, builder };
     }
+
     case 'MULTIPOINT':
+    // falls through
+
     case 'LINESTRING': {
       const lineType = listOf('points', pointType);
       const builder = makeBuilder({ type: lineType });
       return { dataType: lineType, builder };
     }
+
     case 'POLYGON':
+    // falls through
+
     case 'MULTILINESTRING': {
       const structureType = listOf('parts', listOf('points', pointType));
       const builder = makeBuilder({ type: structureType });
       return { dataType: structureType, builder };
     }
+
     case 'MULTIPOLYGON': {
       const polygonType = listOf(
         'polygons',
@@ -2322,6 +2345,7 @@ function createGeoArrowBuilderForType(geometryType: string): {
       const builder = makeBuilder({ type: polygonType });
       return { dataType: polygonType, builder };
     }
+
     default:
       return null;
   }
@@ -2406,7 +2430,7 @@ const WKB_TYPE_IDS: Record<string, number> = {
   MULTIPOLYGON: 6
 };
 
-const loggedGeometryTypeMismatches = new Set<string>();
+const loggedGeometryTypeMismatches = new SvelteSet<string>();
 
 function readHeader(
   view: DataView,
@@ -2458,10 +2482,12 @@ function readHeader(
 }
 
 function parsePoint(view: DataView, offset: number): ParseResult<NestedPoint> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 1) {
     throw new Error(`Expected WKB Point but found type ${type}`);
   }
@@ -2478,10 +2504,12 @@ function parseLineString(
   view: DataView,
   offset: number
 ): ParseResult<LineStringCoords> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 2) {
     throw new Error(`Expected WKB LineString but found type ${type}`);
   }
@@ -2506,10 +2534,12 @@ function parsePolygon(
   view: DataView,
   offset: number
 ): ParseResult<PolygonCoords> {
-  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
-    view,
-    offset
-  );
+  const {
+    littleEndian,
+    type,
+    offset: cursor,
+    coordinateSize
+  } = readHeader(view, offset);
   if (type !== 3) {
     throw new Error(`Expected WKB Polygon but found type ${type}`);
   }
@@ -2600,16 +2630,22 @@ function parseGeometryByType(view: DataView, type: number): unknown {
   switch (type) {
     case 1:
       return parsePoint(view, 0).geometry;
+
     case 2:
       return parseLineString(view, 0).geometry;
+
     case 3:
       return parsePolygon(view, 0).geometry;
+
     case 4:
       return parseMultiPoint(view, 0).geometry;
+
     case 5:
       return parseMultiLineString(view, 0).geometry;
+
     case 6:
       return parseMultiPolygon(view, 0).geometry;
+
     default:
       throw new Error(`Unsupported WKB geometry type ${type}`);
   }

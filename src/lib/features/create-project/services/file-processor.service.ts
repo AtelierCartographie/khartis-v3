@@ -4,7 +4,6 @@ import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.ut
 import {
   detectDuplicateRows,
   getDataStatistics,
-  parseGeoPackage,
   readFileContent,
   validateGeospatialFile
 } from '$lib/features/commons/utils/file-import.utils';
@@ -328,34 +327,9 @@ class GeoPackageProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    const content = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress * 0.5);
-    });
-
-    const geojson = await parseGeoPackage(
-      content as ArrayBuffer,
-      (progress) => {
-        this.callbacks.onProgress(uploadedFile.id, 50 + progress * 0.5);
-      }
+    throw new Error(
+      'GeoPackage files should be processed by the data pipeline, not here'
     );
-
-    const geoValidation = await validateGeospatialFile(JSON.stringify(geojson));
-    if (!geoValidation.isValid) {
-      this.callbacks.onStatusChange(
-        uploadedFile.id,
-        'error',
-        geoValidation.errors[0]
-      );
-      return;
-    }
-
-    this.callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: geojson as UploadedFile['parsedData'],
-      content: JSON.stringify(geojson),
-      validation: geoValidation
-    });
-
-    this.callbacks.onStatusChange(uploadedFile.id, 'complete');
   }
 }
 

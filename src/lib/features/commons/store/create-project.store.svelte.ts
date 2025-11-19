@@ -13,9 +13,7 @@ import {
   getFilenameFromUrl,
   groupShapefiles,
   isShapefileComponent,
-  isValidUrl,
-  parseShapefile,
-  readFileContent
+  isValidUrl
 } from '../utils/file-import.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
@@ -210,8 +208,8 @@ export const createProjectActions = {
       onStatusChange: (
         fileId: string,
         status: UploadedFile['status'],
-        _errorMessage?: string
-      ) => this.updateFileStatus(fileId, status, _errorMessage),
+        errorMessage?: string
+      ) => this.updateFileStatus(fileId, status, errorMessage),
       onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
         this.updateFileData(fileId, data)
     };
@@ -269,47 +267,39 @@ export const createProjectActions = {
       return;
     }
 
+    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'));
+
+    if (!shpFile) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: baseName,
+        size: files.reduce((sum, f) => sum + f.size, 0),
+        type: 'application/x-shapefile',
+        fileType: FileType.SHAPEFILE,
+        status: 'error',
+        errorMessage: 'Missing .shp file in shapefile set',
+        sourceType
+      };
+      this.addUploadedFile(errorFile);
+      showError('Shapefile processing failed', 'No .shp file found');
+      return;
+    }
+
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
       size: files.reduce((sum, f) => sum + f.size, 0),
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
-      status: 'processing',
+      status: 'complete',
       sourceType,
-      relatedFiles: files.map((f) => f.name)
+      relatedFiles: files.map((f) => f.name),
+      relatedFileObjects: files,
+      originalFile: shpFile,
+      content: new ArrayBuffer(0)
     };
 
     this.addUploadedFile(uploadedFile);
-
-    try {
-      const fileContents: Record<string, ArrayBuffer> = {};
-      for (const file of files) {
-        const content = await readFileContent(file);
-        if (content instanceof ArrayBuffer) {
-          const extension = file.name.split('.').pop()?.toLowerCase() || '';
-          fileContents[extension] = content;
-        }
-      }
-
-      const geojson = await parseShapefile(fileContents, (progress) => {
-        this.updateFileProgress(uploadedFile.id, progress);
-      });
-
-      this.updateFileData(uploadedFile.id, {
-        parsedData: geojson as UploadedFile['parsedData'],
-        content: JSON.stringify(geojson),
-        status: 'complete'
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to process shapefile';
-      this.updateFileData(uploadedFile.id, {
-        status: 'error',
-        errorMessage: message
-      });
-      showError('Shapefile processing failed', message, error);
-    }
   },
 
   async processPastedData(pastedText: string): Promise<void> {

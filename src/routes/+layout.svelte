@@ -35,7 +35,10 @@
       // Hide loader as soon as DuckDB is ready
       isLoading = false;
 
-      logger.info('App ready - continuing background initialization', LogCategory.SYSTEM);
+      logger.info(
+        'App ready - continuing background initialization',
+        LogCategory.SYSTEM
+      );
     } catch (error) {
       logger.error(
         'DuckDB initialization failed - application cannot continue',
@@ -62,7 +65,11 @@
 
       logger.success('Background initialization complete', LogCategory.SYSTEM);
     } catch (error) {
-      logger.error('Background initialization failed', LogCategory.SYSTEM, error);
+      logger.error(
+        'Background initialization failed',
+        LogCategory.SYSTEM,
+        error
+      );
       // Show modal to allow user to create a new project
       globalState.isCreateProjectModalOpen = true;
     }

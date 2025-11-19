@@ -7,31 +7,17 @@
  * Compatible with Vite + PWA configuration.
  */
 
-// Worker Service (Vite-compatible)
-export { csvWorkerService, CSVWorkerService } from './csv-worker.service';
-
 // Worker Message Types
-export type {
-  WorkerRequest,
-  WorkerResponse,
-  CSVParseRequest,
-  CSVParseResponse
-} from './types/worker-messages';
+export type { WorkerRequest, WorkerResponse } from './types/worker-messages';
 
 /**
  * Quick Start Guide
  *
- * CSV Parsing with Worker:
- * ```typescript
- * import { csvWorkerService } from '$lib/features/workers';
- * const dataset = await csvWorkerService.parseFile(file);
- * ```
+ * Workers are available for CPU-intensive operations that need to run
+ * in a background thread to keep the UI responsive.
  *
- * The worker will automatically:
- * - Parse CSV/TSV files in a background thread
- * - Keep the UI responsive during parsing
- * - Fall back to main thread if workers are unavailable
- * - Report progress for large files
+ * Note: CSV parsing has been migrated to use DuckDB's native read_csv()
+ * for better performance and simpler architecture.
  *
  * For detailed documentation, see README.md and VITE-COMPATIBILITY.md
  */

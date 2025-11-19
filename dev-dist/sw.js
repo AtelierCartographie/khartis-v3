@@ -82,7 +82,7 @@ define(['./workbox-f6195dc0'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.ippousktljc"
+    "revision": "0.nt2qk6q5jv4"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
@@ -92,7 +92,7 @@ define(['./workbox-f6195dc0'], (function (workbox) { 'use strict';
     "cacheName": "duckdb-extensions",
     plugins: [new workbox.ExpirationPlugin({
       maxEntries: 10,
-      maxAgeSeconds: 2592000
+      maxAgeSeconds: 31536000
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]
     })]
