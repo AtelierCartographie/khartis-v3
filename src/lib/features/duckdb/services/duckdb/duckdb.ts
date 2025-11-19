@@ -1146,7 +1146,7 @@ class DuckDB {
     }
 
     await this.query(
-      `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'uncompressed');`,
+      `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
