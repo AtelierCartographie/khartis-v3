@@ -35,6 +35,7 @@ export interface UploadedFile {
   fileType: FileType;
   content?: string | ArrayBuffer;
   originalFile?: File; // Keep reference to original File object to avoid re-parsing
+  relatedFileObjects?: File[]; // For shapefiles: store all companion File objects (.shx, .dbf, .prj, etc.)
   parsedData?: ParsedData;
   /**
    * Optional normalized GeoJSON content generated during preprocessing

@@ -3944,13 +3944,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@tmcw/togeojson@npm:^7.1.2":
-  version: 7.1.2
-  resolution: "@tmcw/togeojson@npm:7.1.2"
-  checksum: 10c0/f8d39de30e9ec023c88a24c9b85c4b09c46118c6cc60f05203878c2ea75467efb050faee0df67bff90b3c43fee8db2bc517e66c8ee64380e16db244af6bddb59
-  languageName: node
-  linkType: hard
-
 "@turf/along@npm:7.3.0":
   version: 7.3.0
   resolution: "@turf/along@npm:7.3.0"
@@ -6169,15 +6162,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/papaparse@npm:^5.5.0":
-  version: 5.5.0
-  resolution: "@types/papaparse@npm:5.5.0"
-  dependencies:
-    "@types/node": "npm:*"
-  checksum: 10c0/df2db19b602c6d9a049085737fcd3be49e4db528704a25bf4e9a08378053951f7069738b8a3fcb8b1c760ccbc41125f1e358b21db905d6f7e8bcf4062b29df49
-  languageName: node
-  linkType: hard
-
 "@types/pbf@npm:^3.0.5":
   version: 3.0.5
   resolution: "@types/pbf@npm:3.0.5"
@@ -6189,16 +6173,6 @@ __metadata:
   version: 1.20.2
   resolution: "@types/resolve@npm:1.20.2"
   checksum: 10c0/c5b7e1770feb5ccfb6802f6ad82a7b0d50874c99331e0c9b259e415e55a38d7a86ad0901c57665d93f75938be2a6a0bc9aa06c9749192cadb2e4512800bbc6e6
-  languageName: node
-  linkType: hard
-
-"@types/shpjs@npm:^3.4.7":
-  version: 3.4.7
-  resolution: "@types/shpjs@npm:3.4.7"
-  dependencies:
-    "@types/geojson": "npm:*"
-    "@types/node": "npm:*"
-  checksum: 10c0/9f38cdb5b76bdaa941ccc1a79c4b7275119f5e211f706c24f97597375ace2fdca45e0175a9a0026bd758e76b39508bbea08a4d8d78d7f390cc53f898e693c573
   languageName: node
   linkType: hard
 
@@ -6901,13 +6875,6 @@ __metadata:
   version: 1.1.2
   resolution: "buffer-from@npm:1.1.2"
   checksum: 10c0/124fff9d66d691a86d3b062eff4663fe437a9d9ee4b47b1b9e97f5a5d14f6d5399345db80f796827be7c95e70a8e765dd404b7c3ff3b3324f98e9b0c8826cc34
-  languageName: node
-  linkType: hard
-
-"but-unzip@npm:^0.1.4":
-  version: 0.1.7
-  resolution: "but-unzip@npm:0.1.7"
-  checksum: 10c0/de2dbd2dafcb0f1ff25bfe4cd8a305f77f7c3af635ae706e10e35e32d4870ace4298730bd2bbac7a5af017595c7193f8f4d16d32a692786bb6c375a4ba1d4bc2
   languageName: node
   linkType: hard
 
@@ -10071,7 +10038,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jszip@npm:^3.1.5, jszip@npm:^3.10.1":
+"jszip@npm:^3.1.5":
   version: 3.10.1
   resolution: "jszip@npm:3.10.1"
   dependencies:
@@ -10131,15 +10098,12 @@ __metadata:
     "@sveltejs/vite-plugin-svelte": "npm:^6.2.1"
     "@testing-library/jest-dom": "npm:^6.9.1"
     "@testing-library/svelte": "npm:^5.2.9"
-    "@tmcw/togeojson": "npm:^7.1.2"
     "@turf/turf": "npm:^7.3.0"
     "@types/carbon__themes": "npm:^0.0.3"
     "@types/d3": "npm:^7.4.3"
     "@types/d3-geo": "npm:^3.1.0"
     "@types/geojson": "npm:^7946.0.16"
     "@types/node": "npm:^24.10.1"
-    "@types/papaparse": "npm:^5.5.0"
-    "@types/shpjs": "npm:^3.4.7"
     "@types/sql.js": "npm:^1.4.9"
     "@uwdata/flechette": "npm:^2.2.6"
     "@vite-pwa/assets-generator": "npm:^1.0.2"
@@ -10162,17 +10126,13 @@ __metadata:
     hotkeys-js: "npm:^4.0.0-beta.6"
     husky: "npm:^9.1.7"
     jsdom: "npm:^27.2.0"
-    jszip: "npm:^3.10.1"
     localforage: "npm:^1.10.0"
     mapbox-gl: "npm:^3.16.0"
     maplibre-gl: "npm:^5.13.0"
-    papaparse: "npm:^5.5.3"
     parquet-wasm: "npm:^0.7.1"
     prettier: "npm:^3.6.2"
     prettier-plugin-svelte: "npm:^3.4.0"
     sass-embedded: "npm:^1.93.3"
-    shpjs: "npm:^6.2.0"
-    sql.js: "npm:^1.13.0"
     svelte: "npm:^5.43.12"
     svelte-check: "npm:^4.3.4"
     svelte-dnd-action: "npm:^0.9.67"
@@ -10992,13 +10952,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"papaparse@npm:^5.5.3":
-  version: 5.5.3
-  resolution: "papaparse@npm:5.5.3"
-  checksum: 10c0/623aae6a35703308fd5a39d616fb3837231ebc70697346355ea508154d3f24df75b6554b736afc1924192205518a5db14e75f5e1cf35d154326050a37cdd9447
-  languageName: node
-  linkType: hard
-
 "parent-module@npm:^1.0.0":
   version: 1.0.1
   resolution: "parent-module@npm:1.0.1"
@@ -11033,13 +10986,6 @@ __metadata:
   dependencies:
     entities: "npm:^6.0.0"
   checksum: 10c0/8279892dcd77b2f2229707f60eb039e303adf0288812b2a8fd5acf506a4d432da833c6c5d07a6554bef722c2367a81ef4a1f7e9336564379a7dba3e798bf16b3
-  languageName: node
-  linkType: hard
-
-"parsedbf@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "parsedbf@npm:2.0.0"
-  checksum: 10c0/83fbb36cd0f1707af0cd99b965b18b2c0155ecd9c42c82a2332c1ead52c1739ed6be873aa91e27016577f59b415bc304d0f0c8add1c79aec63717584df57aafb
   languageName: node
   linkType: hard
 
@@ -11351,7 +11297,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"proj4@npm:^2.1.4, proj4@npm:^2.9.2":
+"proj4@npm:^2.9.2":
   version: 2.19.10
   resolution: "proj4@npm:2.19.10"
   dependencies:
@@ -12336,17 +12282,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"shpjs@npm:^6.2.0":
-  version: 6.2.0
-  resolution: "shpjs@npm:6.2.0"
-  dependencies:
-    but-unzip: "npm:^0.1.4"
-    parsedbf: "npm:^2.0.0"
-    proj4: "npm:^2.1.4"
-  checksum: 10c0/5b5862ae186d4a2b8dafbf1d370bbf99c8be62bf2a3358bb256691fe549868a86c1846d32fe585bda5187cada2b9ec7c4e915b2821b58c5229ebc46a87ba102a
-  languageName: node
-  linkType: hard
-
 "side-channel-list@npm:^1.0.0":
   version: 1.0.0
   resolution: "side-channel-list@npm:1.0.0"
@@ -12543,13 +12478,6 @@ __metadata:
   version: 1.0.3
   resolution: "sprintf-js@npm:1.0.3"
   checksum: 10c0/ecadcfe4c771890140da5023d43e190b7566d9cf8b2d238600f31bec0fc653f328da4450eb04bd59a431771a8e9cc0e118f0aa3974b683a4981b4e07abc2a5bb
-  languageName: node
-  linkType: hard
-
-"sql.js@npm:^1.13.0":
-  version: 1.13.0
-  resolution: "sql.js@npm:1.13.0"
-  checksum: 10c0/ecad62bf74082bf296a42db9bf001a79cd1b2fc954dbaddb97d689f7382c573ec827a692bd4490322fac47358d74c026258042466e258b34ea7c07b35d4a2e8e
   languageName: node
   linkType: hard
 

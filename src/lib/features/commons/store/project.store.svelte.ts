@@ -131,7 +131,10 @@ class ProjectStore {
           statistics: file.statistics,
           sourceType: file.sourceType,
           deepAnalysis: file.deepAnalysis,
-          geoMatchResult: file.geoMatchResult
+          geoMatchResult: file.geoMatchResult,
+          relatedFileObjects: file.relatedFileObjects,
+          originalFile: file.originalFile,
+          relatedFiles: file.relatedFiles
         };
 
         // Force reactivity by reassigning currentProject with deep copy of data

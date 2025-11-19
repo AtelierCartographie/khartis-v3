@@ -79,6 +79,7 @@ interface TableMetadata {
   analysis?: AnalysisResults | null;
   join: JoinInfo | null;
   filters: Map<number, string>;
+  version?: number; // Version tracking for cache invalidation
 }
 
 interface JoinInfo {
@@ -96,6 +97,7 @@ interface ReadTabularOptions {
 interface ReadGeofileOptions {
   tablename?: string;
   meta?: boolean;
+  shapefile?: boolean;
 }
 
 interface ReadLinkOptions {
@@ -107,6 +109,7 @@ interface GetDataOptions {
   geometry?: boolean;
   columns?: string[]; // Specific columns to select
   limit?: number; // Limit number of rows for sampling
+  format?: QueryFormat; // Output format (Arrow IPC, etc.)
 }
 
 interface CalculateBreaksOptions {
@@ -288,13 +291,30 @@ class DuckDB {
 
   public registered_files: Set<string> = new Set();
 
+  // Query result cache with versioning for performance
+  private queryCache = new Map<
+    string,
+    {
+      result: unknown;
+      timestamp: number;
+      tableVersions: Map<string, number>;
+    }
+  >();
+
+  private readonly CACHE_MAX_AGE = 60000; // 60 seconds cache TTL
+
+  private readonly CACHE_MAX_SIZE = 100; // Max number of cached queries
+
   public table_metadata: Map<string, TableMetadata> = new Map();
 
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
 
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024;
+
   private readonly GEO_PARQUET_READ_RETRIES = 3;
+
   private readonly GEO_PARQUET_RETRY_DELAY_MS = 15;
+
   private readonly PARQUET_MAGIC = new Uint8Array([0x50, 0x41, 0x52, 0x31]);
 
   private describeCache = new Map<string, DescribeResult>();
@@ -393,18 +413,116 @@ class DuckDB {
   private markTableMutated(table: string): void {
     this.invalidateTableCache(table);
     this.evictGeoParquetEntry(table);
+    // Also invalidate query cache entries that reference this table
+    this.invalidateCacheForTable(table);
+  }
+
+  /**
+   * Get cached query result if available and not stale
+   */
+  private getCachedQuery(sql: string, tables: string[] = []): unknown | null {
+    const cacheKey = this.generateCacheKey(sql);
+    const cached = this.queryCache.get(cacheKey);
+
+    if (!cached) return null;
+
+    // Check if cache is expired by time
+    if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
+      this.queryCache.delete(cacheKey);
+      return null;
+    }
+
+    // Check if any referenced table has been modified
+    for (const table of tables) {
+      const currentVersion = this.table_metadata.get(table)?.version || 0;
+      const cachedVersion = cached.tableVersions.get(table) || 0;
+      if (currentVersion !== cachedVersion) {
+        this.queryCache.delete(cacheKey);
+        return null;
+      }
+    }
+
+    logger.debug('Cache hit for query', LogCategory.DUCKDB, {
+      sql: sql.substring(0, 100)
+    });
+    return cached.result;
+  }
+
+  /**
+   * Cache query result with table version tracking
+   */
+  private setCachedQuery(
+    sql: string,
+    result: unknown,
+    tables: string[] = []
+  ): void {
+    const cacheKey = this.generateCacheKey(sql);
+
+    // Enforce cache size limit
+    if (this.queryCache.size >= this.CACHE_MAX_SIZE) {
+      // Remove oldest entry
+      const firstKey = this.queryCache.keys().next().value;
+      if (firstKey) this.queryCache.delete(firstKey);
+    }
+
+    // Track current version of all referenced tables
+    const tableVersions = new Map<string, number>();
+    for (const table of tables) {
+      const version = this.table_metadata.get(table)?.version || 0;
+      tableVersions.set(table, version);
+    }
+
+    this.queryCache.set(cacheKey, {
+      result,
+      timestamp: Date.now(),
+      tableVersions
+    });
+  }
+
+  /**
+   * Generate cache key from SQL query
+   */
+  private generateCacheKey(sql: string): string {
+    // Simple hash for now - could be improved with proper hashing
+    return sql.trim().toLowerCase();
+  }
+
+  /**
+   * Invalidate all cache entries that reference a specific table
+   */
+  private invalidateCacheForTable(table: string): void {
+    for (const [key, cached] of this.queryCache.entries()) {
+      if (cached.tableVersions.has(table)) {
+        this.queryCache.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Clear entire query cache
+   */
+  clearQueryCache(): void {
+    this.queryCache.clear();
   }
 
   private calculateOptimalMemory(): string {
     // Use deviceMemory API if available (Chrome/Edge)
     if (typeof navigator !== 'undefined' && 'deviceMemory' in navigator) {
-      const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
+      const deviceMemory =
+        (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
       // Use 50% of device memory, capped at 3GB (safe under WASM 4GB limit)
-      const optimalMemory = Math.min(Math.floor(deviceMemory * 0.5 * 1024), 3072);
-      logger.info('Dynamic memory allocation based on device', LogCategory.DUCKDB, {
-        deviceMemory: `${deviceMemory}GB`,
-        allocatedMemory: `${optimalMemory}MB`
-      });
+      const optimalMemory = Math.min(
+        Math.floor(deviceMemory * 0.5 * 1024),
+        3072
+      );
+      logger.info(
+        'Dynamic memory allocation based on device',
+        LogCategory.DUCKDB,
+        {
+          deviceMemory: `${deviceMemory}GB`,
+          allocatedMemory: `${optimalMemory}MB`
+        }
+      );
       return `${optimalMemory}MB`;
     }
     // Default to 2GB if deviceMemory unavailable
@@ -638,8 +756,8 @@ class DuckDB {
     const results = await Promise.allSettled(extensionPromises);
 
     // Log results
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    const successful = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.filter((r) => r.status === 'rejected').length;
 
     logger.success('Extensions preloaded', LogCategory.DUCKDB, {
       successful,
@@ -651,9 +769,13 @@ class DuckDB {
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         const extensionName = ['spatial', 'httpfs', 'parquet'][index];
-        logger.warn(`Failed to preload ${extensionName} extension`, LogCategory.DUCKDB, {
-          reason: result.reason
-        });
+        logger.warn(
+          `Failed to preload ${extensionName} extension`,
+          LogCategory.DUCKDB,
+          {
+            reason: result.reason
+          }
+        );
       }
     });
   }
@@ -673,7 +795,9 @@ class DuckDB {
         durationMs: (performance.now() - start).toFixed(2)
       });
     } catch (error) {
-      logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, { error });
+      logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, {
+        error
+      });
       // Don't throw - allow app to continue, extension can be loaded on demand
     }
   }
@@ -693,7 +817,9 @@ class DuckDB {
         durationMs: (performance.now() - start).toFixed(2)
       });
     } catch (error) {
-      logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, { error });
+      logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, {
+        error
+      });
       // Don't throw - allow app to continue
     }
   }
@@ -708,9 +834,12 @@ class DuckDB {
       logger.debug('Parquet extension preloaded', LogCategory.DUCKDB, {
         durationMs: (performance.now() - start).toFixed(2)
       });
-    } catch (error) {
+    } catch {
       // Parquet is usually already loaded, so this is not critical
-      logger.debug('Parquet extension already loaded or not needed', LogCategory.DUCKDB);
+      logger.debug(
+        'Parquet extension already loaded or not needed',
+        LogCategory.DUCKDB
+      );
     }
   }
 
@@ -928,11 +1057,12 @@ class DuckDB {
     const start = performance.now();
     let { tablename } = options;
     const meta = options.meta ?? false;
+    const shapefile = options.shapefile ?? false;
     try {
       // Ensure spatial extension is loaded before processing geo files
       await this.ensureSpatialExtension();
 
-      await this.register_files([geofile]);
+      await this.register_files([geofile], { shapefile });
       const geofileWithId = geofile as FileWithId;
       if (meta) {
         const result = await this
@@ -1107,7 +1237,7 @@ class DuckDB {
     let selection: string;
     if (columns && columns.length > 0) {
       // Explicit columns requested
-      selection = columns.map(col => `"${col}"`).join(', ');
+      selection = columns.map((col) => `"${col}"`).join(', ');
     } else if (!geometry) {
       // Exclude geometry columns for better performance
       selection = `COLUMNS(c -> c NOT ILIKE '%geom%')`;
@@ -1133,8 +1263,25 @@ class DuckDB {
     limit = 1000,
     options: GetDataOptions = {}
   ): Promise<Uint8Array> {
-    // Optimized method for quick previews
-    return this.get_data(table, { ...options, limit });
+    // Use TABLESAMPLE for fast random sampling (constant time regardless of table size)
+    const { format = DUCK_CONST.QUERY_FORMAT.ARROW_IPC } = options;
+
+    // Build column selection
+    const columnSelection = options.columns
+      ? options.columns.map((col) => `"${col}"`).join(', ')
+      : '*';
+
+    // Use TABLESAMPLE for efficient sampling - much faster than LIMIT for large tables
+    const query = `SELECT ${columnSelection} FROM ${table} USING SAMPLE ${limit} ROWS`;
+
+    logger.debug('Using TABLESAMPLE for preview', LogCategory.DUCKDB, {
+      table,
+      limit,
+      query: query.substring(0, 100)
+    });
+
+    const result = await this.query(query, { format });
+    return result as Uint8Array;
   }
 
   async sort_table(
@@ -1334,6 +1481,52 @@ class DuckDB {
     this.cacheState.size = 0;
   }
 
+  async copy_to_csv_as_string(
+    table: string,
+    options?: { delimiter?: string; header?: boolean }
+  ): Promise<string> {
+    const delimiter = options?.delimiter || ',';
+    const header = options?.header !== false;
+
+    // Create temporary filename
+    const filename = `${table}_export_${Date.now()}.csv`;
+
+    try {
+      // Use COPY TO to generate CSV file
+      await this.query(
+        `COPY ${table} TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
+        {
+          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+        }
+      );
+
+      // Read the CSV file content
+      const buffer = await this.db!.copyFileToBuffer(filename);
+
+      // Convert buffer to string
+      const decoder = new TextDecoder('utf-8');
+      const csvString = decoder.decode(buffer);
+
+      logger.debug('CSV export completed', LogCategory.DUCKDB, {
+        table,
+        byteLength: buffer.byteLength
+      });
+
+      return csvString;
+    } finally {
+      // Clean up temporary file
+      try {
+        await this.db!.dropFile(filename);
+      } catch (error) {
+        logger.warn(
+          'Failed to remove temporary CSV file',
+          LogCategory.DUCKDB,
+          error
+        );
+      }
+    }
+  }
+
   async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
     if (this.table_geoparquet_cache.has(table)) {
       const index = this.cacheState.accessOrder.indexOf(table);
@@ -1403,9 +1596,7 @@ class DuckDB {
     for (let attempt = 0; attempt < this.GEO_PARQUET_READ_RETRIES; attempt++) {
       const rawBuffer = await this.db.copyFileToBuffer(filename);
       const sourceView =
-        rawBuffer instanceof Uint8Array
-          ? rawBuffer
-          : new Uint8Array(rawBuffer);
+        rawBuffer instanceof Uint8Array ? rawBuffer : new Uint8Array(rawBuffer);
       const stableBuffer = new Uint8Array(sourceView.byteLength);
       stableBuffer.set(sourceView);
 
@@ -1631,70 +1822,117 @@ class DuckDB {
       useProxy: false
     })) as Record<string, unknown>[];
 
-    const indicators = describe_full.map(async (d) => {
-      let summary_general: ArrowTableLike | null = null;
-      let summary_numeric: ArrowTableLike | null = null;
-      let summary_date: ArrowTableLike | null = null;
-      let histogram = null;
-      switch (d.type_simple) {
-        case 'numeric':
-          summary_general = (await this.query(
-            `FROM summary_general(${table}, "${d.name}")`,
-            {
-              useProxy: false
-            }
-          )) as ArrowTableLike;
-          summary_numeric = (await this.query(
-            `FROM summary_numeric(${table}, "${d.name}")`,
-            {
-              useProxy: false
-            }
-          )) as ArrowTableLike;
-          histogram = await this.query(
-            `FROM histogram_numeric(${table}, "${d.name}")`
-          );
-          break;
+    // Batch column analysis into groups by type for efficiency
+    const numericColumns = describe_full.filter(
+      (d) => d.type_simple === 'numeric'
+    );
+    const dateColumns = describe_full.filter((d) => d.type_simple === 'date');
+    const stringColumns = describe_full.filter(
+      (d) => d.type_simple === 'string'
+    );
+    const otherColumns = describe_full.filter(
+      (d) =>
+        d.type_simple !== 'numeric' &&
+        d.type_simple !== 'date' &&
+        d.type_simple !== 'string'
+    );
 
-        case 'date':
-          summary_general = (await this.query(
-            `FROM summary_general(${table}, "${d.name}")`,
-            {
-              useProxy: false
-            }
-          )) as ArrowTableLike;
-          summary_date = (await this.query(
-            `FROM summary_date(${table}, "${d.name}")`,
-            {
-              useProxy: false
-            }
-          )) as ArrowTableLike;
-          histogram = await this.query(
-            `FROM histogram_numeric(${table}, "${d.name}")`
-          );
-          break;
+    // Process columns in batches by type to reduce query overhead
+    const processColumnBatch = async (columns: any[], type: string) => {
+      if (columns.length === 0) return [];
 
-        case 'string':
-          summary_general = (await this.query(
-            `FROM summary_general(${table}, "${d.name}")`,
-            {
-              useProxy: false
+      const results = await Promise.all(
+        columns.map(async (d) => {
+          let summary_general: ArrowTableLike | null = null;
+          let summary_numeric: ArrowTableLike | null = null;
+          let summary_date: ArrowTableLike | null = null;
+          let histogram = null;
+
+          // Batch queries for the same type columns
+          switch (type) {
+            case 'numeric': {
+              // Run all 3 queries for numeric columns concurrently
+              const [general, numeric, hist] = await Promise.all([
+                this.query(`FROM summary_general(${table}, "${d.name}")`, {
+                  useProxy: false
+                }) as Promise<ArrowTableLike>,
+                this.query(`FROM summary_numeric(${table}, "${d.name}")`, {
+                  useProxy: false
+                }) as Promise<ArrowTableLike>,
+                this.query(`FROM histogram_numeric(${table}, "${d.name}")`)
+              ]);
+              summary_general = general;
+              summary_numeric = numeric;
+              histogram = hist;
+              break;
             }
-          )) as ArrowTableLike;
-          histogram = await this.query(
-            `FROM histogram_categorical(${table}, "${d.name}")`
-          );
-          break;
-      }
-      return {
-        ...d,
-        ...(summary_general?.get(0) ?? {}),
-        ...(summary_numeric?.get(0) ?? {}),
-        ...(summary_date?.get(0) ?? {}),
-        histogram
-      } as AnalysisResult;
+
+            case 'date': {
+              // Run all 3 queries for date columns concurrently
+              const [generalDate, dateSum, histDate] = await Promise.all([
+                this.query(`FROM summary_general(${table}, "${d.name}")`, {
+                  useProxy: false
+                }) as Promise<ArrowTableLike>,
+                this.query(`FROM summary_date(${table}, "${d.name}")`, {
+                  useProxy: false
+                }) as Promise<ArrowTableLike>,
+                this.query(`FROM histogram_numeric(${table}, "${d.name}")`)
+              ]);
+              summary_general = generalDate;
+              summary_date = dateSum;
+              histogram = histDate;
+              break;
+            }
+
+            case 'string': {
+              // Run both queries for string columns concurrently
+              const [generalStr, histStr] = await Promise.all([
+                this.query(`FROM summary_general(${table}, "${d.name}")`, {
+                  useProxy: false
+                }) as Promise<ArrowTableLike>,
+                this.query(`FROM histogram_categorical(${table}, "${d.name}")`)
+              ]);
+              summary_general = generalStr;
+              histogram = histStr;
+              break;
+            }
+          }
+
+          return {
+            ...d,
+            ...(summary_general?.get(0) ?? {}),
+            ...(summary_numeric?.get(0) ?? {}),
+            ...(summary_date?.get(0) ?? {}),
+            histogram
+          } as AnalysisResult;
+        })
+      );
+
+      return results;
+    };
+
+    // Process all column types in parallel
+    const [numericResults, dateResults, stringResults, otherResults] =
+      await Promise.all([
+        processColumnBatch(numericColumns, 'numeric'),
+        processColumnBatch(dateColumns, 'date'),
+        processColumnBatch(stringColumns, 'string'),
+        Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult)) // Other types get minimal processing
+      ]);
+
+    // Combine all results in original order
+    const analysis_result = describe_full.map((col) => {
+      // Find the processed result for this column
+      const allResults = [
+        ...numericResults,
+        ...dateResults,
+        ...stringResults,
+        ...otherResults
+      ];
+      return (
+        allResults.find((r) => r.name === col.name) || (col as AnalysisResult)
+      );
     });
-
-    const analysis_result = await Promise.all(indicators);
 
     table_metadata.analysis = analysis_result;
 
@@ -1852,7 +2090,7 @@ async function initDuckDB(): Promise<void> {
   // Atomic check-and-set to prevent race condition
   if (initializationStarted) {
     // Another thread just started initialization, wait a tick and retry
-    await new Promise(resolve => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     return initDuckDB(); // Recursive call will hit the duckInitPromise check
   }
 

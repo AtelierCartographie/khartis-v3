@@ -4,6 +4,7 @@ import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
+import { ProcessingSemaphore } from '../utils/processing-semaphore';
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -24,6 +25,9 @@ class DatasetsStore {
     string,
     Array<(datasetId: string) => void>
   >();
+
+  // Semaphore to limit concurrent file processing to prevent memory exhaustion
+  private processingSemaphore = new ProcessingSemaphore(2);
 
   constructor() {
     // DISABLED: Reactive sync causes triple processing
@@ -91,12 +95,37 @@ class DatasetsStore {
     this._state.error = undefined;
 
     try {
+      logger.info(
+        `Processing ${files.length} files with semaphore (max 2 concurrent)`,
+        LogCategory.STORE
+      );
+
+      // Process files with semaphore to limit concurrent operations
       const newDatasets = await Promise.all(
         files.map(async (file) => {
-          if (!file.content && !file.originalFile) {
-            throw new Error(`File ${file.name} has no content or originalFile`);
-          }
-          return dataPipeline.processUploadedFile(file, file.originalFile);
+          return this.processingSemaphore.run(async () => {
+            logger.debug(
+              `Processing file: ${file.name} (active: ${this.processingSemaphore.activeCount}, queued: ${this.processingSemaphore.queuedCount})`,
+              LogCategory.STORE
+            );
+
+            if (!file.content && !file.originalFile) {
+              throw new Error(
+                `File ${file.name} has no content or originalFile`
+              );
+            }
+
+            const dataset = await dataPipeline.processUploadedFile(
+              file,
+              file.originalFile
+            );
+
+            logger.debug(
+              `Completed processing: ${file.name}`,
+              LogCategory.STORE
+            );
+            return dataset;
+          });
         })
       );
 
@@ -105,6 +134,11 @@ class DatasetsStore {
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
+
+      logger.success(
+        `All ${files.length} files processed successfully`,
+        LogCategory.STORE
+      );
     } catch (error) {
       logger.error('Files processing failed', LogCategory.STORE, {
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -126,14 +160,19 @@ class DatasetsStore {
     let addedDataset: DatasetResult | null = null;
 
     try {
-      if (!file.content) {
-        throw new Error(`File ${file.name} has no content`);
-      }
+      // Use semaphore for single file processing to maintain consistency
+      const dataset = await this.processingSemaphore.run(async () => {
+        if (!file.content) {
+          throw new Error(`File ${file.name} has no content`);
+        }
 
-      const dataset = await dataPipeline.processUploadedFile(
-        file,
-        file.originalFile
-      );
+        logger.debug(
+          `Processing single file: ${file.name} (active: ${this.processingSemaphore.activeCount})`,
+          LogCategory.STORE
+        );
+
+        return await dataPipeline.processUploadedFile(file, file.originalFile);
+      });
 
       if (dataset) {
         // Check for duplicates by sourceFileId

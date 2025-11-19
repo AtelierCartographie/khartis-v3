@@ -2,7 +2,6 @@ import { duckDBOrchestrator } from '$lib/features/duckdb';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { ColumnType } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
-import { convertKMLFileToGeoJSON } from '$lib/features/data-pipeline/adapters/parsers/kml.parser';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -229,8 +228,8 @@ class DataOrchestratorService {
       return null;
     }
 
-    if (file.fileType === FileType.SHAPEFILE) {
-      return await this.convertShapefileForDuckDB(file);
+    if (dataset?.tableName) {
+      return null;
     }
 
     if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
@@ -240,55 +239,7 @@ class DataOrchestratorService {
     return file;
   }
 
-  // Legacy pipeline: caching disabled. DuckDB remains the source of truth.
-
-  private async convertShapefileForDuckDB(
-    file: UploadedFile
-  ): Promise<UploadedFile> {
-    if (!file.parsedData) {
-      throw new ParseError(
-        'Missing parsed GeoJSON data for shapefile',
-        FileType.SHAPEFILE,
-        { fileId: file.id, fileName: file.name }
-      );
-    }
-
-    let geojsonObject: unknown;
-    try {
-      geojsonObject =
-        typeof file.parsedData === 'string'
-          ? JSON.parse(file.parsedData)
-          : file.parsedData;
-    } catch (error) {
-      throw new ParseError(
-        'Invalid GeoJSON data generated from shapefile',
-        FileType.SHAPEFILE,
-        {
-          fileId: file.id,
-          fileName: file.name,
-          originalError: error instanceof Error ? error.message : String(error)
-        }
-      );
-    }
-
-    const geojsonString = file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
-    file.preparedGeoJSON = geojsonString;
-
-    const geojsonName = file.name.endsWith('.shp')
-      ? file.name.replace(/\.shp$/i, '.geojson')
-      : `${file.name}.geojson`;
-
-    return {
-      ...file,
-      name: geojsonName,
-      type: 'application/geo+json',
-      fileType: FileType.GEOJSON,
-      content: geojsonString,
-      preparedGeoJSON: geojsonString,
-      parsedData: geojsonObject as UploadedFile['parsedData']
-    };
-  }
-
+  // KML conversion is now handled directly by DuckDB ST_Read in kml.parser.ts
   private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
     try {
       let geojsonObject: ParserGeoJSONFeatureCollection;
@@ -296,11 +247,11 @@ class DataOrchestratorService {
       if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
         geojsonObject = file.parsedData as ParserGeoJSONFeatureCollection;
       } else {
-        const sourceFile = await this.ensureFileObject(
-          file,
-          'application/vnd.google-earth.kml+xml'
+        // KML parsing is now done via DuckDB in the data pipeline
+        // This path should not be reached with the new architecture
+        throw new Error(
+          'KML files should be processed by the data pipeline, not here'
         );
-        geojsonObject = await convertKMLFileToGeoJSON(sourceFile);
       }
 
       const geojsonString =
@@ -377,7 +328,9 @@ class DataOrchestratorService {
           );
 
           // Mark dataset as DuckDB-processed to prevent reprocessing
-          const updatedDataset = datasetsStore.datasets.find(d => d.id === dataset.id);
+          const updatedDataset = datasetsStore.datasets.find(
+            (d) => d.id === dataset.id
+          );
           if (updatedDataset) {
             updatedDataset.metadata = {
               ...updatedDataset.metadata,

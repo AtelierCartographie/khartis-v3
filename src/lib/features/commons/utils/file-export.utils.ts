@@ -5,26 +5,131 @@ import {
   isGeoJSONFeatureCollection,
   isTabularData
 } from '$lib/types/data';
-import Papa from 'papaparse';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
 
-export function exportToCsv(
-  data: Record<string, unknown>[],
+/**
+ * Export data to CSV using DuckDB's COPY TO when table is available,
+ * falling back to JavaScript implementation for in-memory data
+ */
+export async function exportToCsv(
+  data: Record<string, unknown>[] | string,
   headers?: string[]
-): Blob {
-  const csv = Papa.unparse({
-    fields: headers || (data.length > 0 ? Object.keys(data[0]) : []),
-    data
-  });
+): Promise<Blob> {
+  // If data is a DuckDB table name, use COPY TO
+  if (typeof data === 'string') {
+    const tableName = data;
 
+    // Ensure DuckDB is initialized
+    await initDuckDB();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    // Use DuckDB's COPY TO to generate CSV
+    const csvString = await Duck.copy_to_csv_as_string(tableName, {
+      delimiter: ',',
+      header: true
+    });
+
+    // Add BOM for Excel compatibility
+    const bom = '\uFEFF';
+    return new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
+  }
+
+  // Fallback: JavaScript implementation for in-memory data
+  const rows = data as Record<string, unknown>[];
+  const fields = headers || (rows.length > 0 ? Object.keys(rows[0]) : []);
+
+  // Build CSV manually
+  const csvRows: string[] = [];
+
+  // Add header
+  csvRows.push(fields.map(escapeCSVField).join(','));
+
+  // Add data rows
+  for (const row of rows) {
+    const values = fields.map((field) => {
+      const value = row[field];
+      return escapeCSVField(value);
+    });
+    csvRows.push(values.join(','));
+  }
+
+  const csv = csvRows.join('\n');
   const bom = '\uFEFF';
   return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
 }
 
-export function exportDatasetToCsv(dataset: ProcessedDataset): Blob {
+/**
+ * Escape a field value for CSV format
+ */
+function escapeCSVField(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const str = String(value);
+
+  // Check if the field needs quotes
+  if (
+    str.includes(',') ||
+    str.includes('"') ||
+    str.includes('\n') ||
+    str.includes('\r')
+  ) {
+    // Escape quotes by doubling them
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+export async function exportDatasetToCsv(
+  dataset: ProcessedDataset
+): Promise<Blob> {
+  // If dataset has a DuckDB table, use that
+  if (dataset.duckdbTableName) {
+    // Ensure DuckDB is initialized
+    await initDuckDB();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    // Create a view that excludes geometry columns
+    const viewName = `export_view_${Date.now()}`;
+    const nonGeomColumns = dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .map((col) => `"${col.name}"`)
+      .join(', ');
+
+    try {
+      // Create temporary view with only non-geometry columns
+      await Duck.query(`
+        CREATE TEMPORARY VIEW ${viewName} AS
+        SELECT ${nonGeomColumns} FROM ${dataset.duckdbTableName}
+      `);
+
+      // Export using DuckDB
+      const blob = await exportToCsv(viewName);
+
+      // Clean up view
+      await Duck.query(`DROP VIEW IF EXISTS ${viewName}`);
+
+      return blob;
+    } catch (error) {
+      // Clean up on error
+      if (Duck) {
+        await Duck.query(`DROP VIEW IF EXISTS ${viewName}`).catch(() => {});
+      }
+      throw error;
+    }
+  }
+
+  // Fallback to JavaScript implementation
   const headers = dataset.columns
     .filter((col) => col.type !== 'geometry')
     .map((col) => col.name);
@@ -111,10 +216,10 @@ export function exportToJson(data: unknown): Blob {
   return new Blob([jsonString], { type: 'application/json' });
 }
 
-export function exportProcessedDatasets(
+export async function exportProcessedDatasets(
   datasets: ProcessedDataset[],
   format: 'csv' | 'geojson' | 'json' = 'json'
-): Blob {
+): Promise<Blob> {
   if (datasets.length === 0) {
     throw new Error('No datasets to export');
   }
@@ -124,6 +229,51 @@ export function exportProcessedDatasets(
       return exportDatasetToCsv(datasets[0]);
     }
 
+    // For multiple datasets, check if they have DuckDB tables
+    const haveDuckDBTables = datasets.every((d) => d.duckdbTableName);
+
+    if (haveDuckDBTables) {
+      // Ensure DuckDB is initialized
+      await initDuckDB();
+      if (!Duck) {
+        throw new Error('DuckDB not initialized');
+      }
+
+      // Use DuckDB UNION ALL to combine tables
+      const unionViewName = `export_union_${Date.now()}`;
+
+      try {
+        // Build UNION ALL query
+        const unionParts = datasets.map((dataset) => {
+          const nonGeomColumns = dataset.columns
+            .filter((col) => col.type !== 'geometry')
+            .map((col) => `"${col.name}"`)
+            .join(', ');
+
+          return `SELECT ${nonGeomColumns}, '${dataset.name}' as _source_dataset FROM ${dataset.duckdbTableName}`;
+        });
+
+        const unionQuery = `
+          CREATE TEMPORARY VIEW ${unionViewName} AS
+          ${unionParts.join(' UNION ALL ')}
+        `;
+
+        await Duck.query(unionQuery);
+        const blob = await exportToCsv(unionViewName);
+        await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`);
+
+        return blob;
+      } catch (error) {
+        if (Duck) {
+          await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`).catch(
+            () => {}
+          );
+        }
+        throw error;
+      }
+    }
+
+    // Fallback to JavaScript implementation
     const allData: Record<string, unknown>[] = [];
     for (const dataset of datasets) {
       const dataWithSource = dataset.data.map((row) => ({

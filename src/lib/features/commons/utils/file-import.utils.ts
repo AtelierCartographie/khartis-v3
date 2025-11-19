@@ -1,7 +1,4 @@
-import type { FeatureCollection } from 'geojson';
-import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
-import shp from 'shpjs';
-import { FileGroupError, ParseError } from '../errors/pipeline.errors';
+import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
   type UploadedFile,
@@ -20,17 +17,6 @@ type ColumnStatSummary = {
   min?: number;
   max?: number;
   mean?: number;
-};
-
-type ShapefileGeoJSON = FeatureCollection | FeatureCollection[];
-
-type ShapefileComponentInput = {
-  shp: ArrayBuffer;
-  dbf: ArrayBuffer;
-  shx?: ArrayBuffer;
-  prj?: string;
-  cpg?: string;
-  [key: string]: string | ArrayBuffer | undefined;
 };
 
 export { DataSourceType, FileType } from '../store/create-project.types';
@@ -252,56 +238,7 @@ export function parseCsvHeaders(csvContent: string): string[] {
     .map((header) => header.trim().replace(/^["']|["']$/g, ''));
 }
 
-export async function parseShapefile(
-  files: Record<string, ArrayBuffer>,
-  onProgress?: (progress: number) => void
-): Promise<ShapefileGeoJSON> {
-  try {
-    if (onProgress) onProgress(10);
-
-    const shpBuffer = files['shp'];
-    const dbfBuffer = files['dbf'];
-
-    if (!shpBuffer || !dbfBuffer) {
-      const missingFiles = [];
-      if (!shpBuffer) missingFiles.push('.shp');
-      if (!dbfBuffer) missingFiles.push('.dbf');
-      throw new FileGroupError(
-        'Missing required shapefile components',
-        missingFiles
-      );
-    }
-
-    if (onProgress) onProgress(30);
-
-    const shapefileData: ShapefileComponentInput = {
-      shp: shpBuffer,
-      dbf: dbfBuffer
-    };
-
-    if (files['prj']) {
-      shapefileData.prj = new TextDecoder().decode(files['prj']);
-    }
-
-    if (files['cpg']) {
-      shapefileData.cpg = new TextDecoder().decode(files['cpg']).trim();
-    }
-
-    const shapefileInput = shapefileData as unknown as Parameters<
-      typeof shp
-    >[0];
-    const geojson = (await shp(shapefileInput)) as ShapefileGeoJSON;
-
-    if (onProgress) onProgress(80);
-
-    if (onProgress) onProgress(100);
-
-    return geojson;
-  } catch (error) {
-    logger.error('Shapefile parsing error', LogCategory.FILE, error);
-    throw error;
-  }
-}
+// Shapefile parsing is now handled by DuckDB ST_Read in shapefile.parser.ts
 
 export async function detectDuplicateRows<T extends DataRow>(
   data: T[]
@@ -598,88 +535,5 @@ export function getFilenameFromUrl(url: string): string {
     return filename;
   } catch {
     return 'download';
-  }
-}
-
-export async function parseGeoPackage(
-  buffer: ArrayBuffer,
-  onProgress?: (progress: number) => void
-): Promise<FeatureCollection> {
-  try {
-    onProgress?.(10);
-
-    const SQL = await import('sql.js/dist/sql-wasm.js');
-    const sqlJs = await SQL.default({
-      locateFile: () => sqlWasmUrl
-    });
-
-    onProgress?.(30);
-
-    const db = new sqlJs.Database(new Uint8Array(buffer));
-
-    onProgress?.(50);
-
-    const tables = db.exec(
-      "SELECT table_name FROM gpkg_contents WHERE data_type IN ('features', 'tiles')"
-    );
-
-    if (!tables[0] || !tables[0].values.length) {
-      throw new ParseError(
-        'No feature tables found in GeoPackage',
-        FileType.GEOPACKAGE
-      );
-    }
-
-    const featureTable = tables[0].values[0][0] as string;
-
-    onProgress?.(70);
-
-    const features = db.exec(
-      `SELECT AsGeoJSON(geom) as geometry, * FROM ${featureTable}`
-    );
-
-    if (!features[0]) {
-      throw new ParseError(
-        `No features found in table '${featureTable}'`,
-        FileType.GEOPACKAGE,
-        { table: featureTable }
-      );
-    }
-
-    const geojson = {
-      type: 'FeatureCollection' as const,
-      features: features[0].values.map((row) => {
-        const geom = JSON.parse(row[0] as string);
-        const properties: Record<string, unknown> = {};
-
-        features[0].columns.forEach((col, idx) => {
-          if (col !== 'AsGeoJSON(geom)' && col !== 'geom') {
-            properties[col] = row[idx];
-          }
-        });
-
-        return {
-          type: 'Feature' as const,
-          geometry: geom,
-          properties
-        };
-      })
-    };
-
-    onProgress?.(100);
-    db.close();
-
-    return geojson;
-  } catch (error) {
-    // Re-throw if already a typed error
-    if (error instanceof ParseError || error instanceof FileGroupError) {
-      throw error;
-    }
-    logger.error('Failed to parse GeoPackage', LogCategory.FILE, error);
-    throw new ParseError(
-      `Failed to parse GeoPackage: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      FileType.GEOPACKAGE,
-      { originalError: error }
-    );
   }
 }

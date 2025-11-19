@@ -35,7 +35,9 @@
           // Use cached Arrow table if available (avoids expensive WKB→GeoArrow conversion)
           const arrowTable = duckDBDataset.arrowTableWithMetadata
             ? duckDBDataset.arrowTableWithMetadata
-            : await duckDBOrchestrator.getArrowTableDirect(duckDBDataset.tableName);
+            : await duckDBOrchestrator.getArrowTableDirect(
+                duckDBDataset.tableName
+              );
 
           if (arrowTable) {
             logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
