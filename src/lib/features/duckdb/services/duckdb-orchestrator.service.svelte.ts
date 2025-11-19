@@ -21,7 +21,6 @@ import {
   FixedSizeList,
   Float64,
   List,
-  Schema,
   Table,
   Type,
   makeBuilder,
@@ -1238,6 +1237,131 @@ class DuckDBOrchestratorService {
     );
   }
 
+  /**
+   * Re-materialize a DuckDB table as GeoParquet and read it back to keep GeoArrow metadata intact.
+   * DuckDB drops metadata when querying directly, hence the GeoParquet round trip.
+   */
+  private async addGeoArrowMetadataFromDuckDB(
+    table: Table,
+    tableName: string
+  ): Promise<Table> {
+    if (!Duck) {
+      return table;
+    }
+
+    try {
+      const tableInfo = await Duck.describe_table(tableName);
+      const columns = tableInfo.name.map((name, index) => ({
+        column_name: name,
+        column_type: tableInfo.type[index]
+      }));
+
+      const geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+
+      if (!geomColumn) {
+        logger.warn(
+          'No geometry column found in DuckDB table',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+        return table;
+      }
+
+      const geomTypeResult = (await Duck.query(
+        `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
+        { format: 'array' as never }
+      )) as Array<{ geom_type: string }>;
+
+      const geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
+      const normalizedGeometry = geometryType
+        .replace(/^ST_/i, '')
+        .toLowerCase();
+      const geoarrowExtension = `geoarrow.${normalizedGeometry || 'geometry'}`;
+
+      const geoMetadata = {
+        version: '1.0.0',
+        primary_column: geomColumn.column_name,
+        columns: {
+          [geomColumn.column_name]: {
+            encoding: geoarrowExtension,
+            geometry_types: [geometryType.replace('ST_', '')],
+            crs: {
+              type: 'name',
+              properties: {
+                name: 'EPSG:4326'
+              }
+            },
+            bbox: [-180, -90, 180, 90]
+          }
+        }
+      };
+
+      const tableWithWkb = await this.ensureGeometryColumnIsWkb(
+        table,
+        tableName,
+        geomColumn.column_name
+      );
+
+      const conversionResult = convertGeometryColumnToGeoArrow(
+        tableWithWkb,
+        geomColumn.column_name,
+        geometryType
+      );
+      const normalizedTable = conversionResult.table;
+      const schema = normalizedTable.schema;
+      if (!schema) {
+        logger.warn(
+          'Arrow table missing schema, cannot add GeoArrow metadata',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
+        return normalizedTable;
+      }
+
+      const newMetadata = schema.metadata
+        ? new SvelteMap(schema.metadata)
+        : new SvelteMap<string, string>();
+      newMetadata.set('geo', JSON.stringify(geoMetadata));
+
+      const updatedFields = (schema.fields ?? []).map((field) => {
+        if (field.name !== geomColumn.column_name) {
+          return field;
+        }
+        const updatedMetadata = field.metadata
+          ? new SvelteMap(field.metadata)
+          : new SvelteMap<string, string>();
+        updatedMetadata.set('ARROW:extension:name', geoarrowExtension);
+        updatedMetadata.set(
+          'ARROW:extension:metadata',
+          JSON.stringify({
+            geometry_type: geometryType.replace('ST_', ''),
+            crs: 'EPSG:4326'
+          })
+        );
+        return new Field(
+          field.name,
+          conversionResult.geometryDataType ?? field.type,
+          field.nullable,
+          updatedMetadata
+        );
+      });
+
+      const metadataMap = new Map<string, string>(newMetadata);
+      (schema as unknown as { metadata: Map<string, string> }).metadata =
+        metadataMap;
+      (schema as unknown as { fields: Field[] }).fields = updatedFields;
+
+      return normalizedTable;
+    } catch (error) {
+      logger.error(
+        'Failed to add GeoArrow metadata from DuckDB',
+        LogCategory.DUCKDB,
+        error
+      );
+      return table;
+    }
+  }
+
   private async createArrowTableWithMetadata(tableName: string): Promise<{
     arrowTableWithMetadata: Table;
     geoArrowMetadata: GeoArrowMetadata | null;
@@ -1246,94 +1370,70 @@ class DuckDBOrchestratorService {
       throw new DuckDBError('DuckDB not initialized');
     }
 
-    // Get Arrow table directly from DuckDB (no GeoParquet round-trip needed)
-    const baseTable = await this.fetchArrowTableWithGeometry(tableName);
-
-    // Extract and attach geometry metadata to the table schema
-    const { table: arrowTableWithMetadata, metadata: geoArrowMetadata } =
-      await this.attachGeometryMetadataToTable(baseTable, tableName);
-
+    const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
+    const arrowTableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
+      arrowTable,
+      tableName
+    );
+    const geoArrowMetadata = geoParquetReader.extractMetadata(
+      arrowTableWithMetadata
+    );
+    if (!geoArrowMetadata) {
+      logger.warn('GeoArrow metadata missing after conversion', LogCategory.DUCKDB, {
+        tableName
+      });
+    }
     return { arrowTableWithMetadata, geoArrowMetadata };
   }
 
-  private async attachGeometryMetadataToTable(
+  private async ensureGeometryColumnIsWkb(
     table: Table,
-    tableName: string
-  ): Promise<{
-    table: Table;
-    metadata: GeoArrowMetadata | null;
-  }> {
-    // Look for geometry column in the table schema
-    const geomField = table.schema.fields.find(
-      (f) => f.name === 'geom' || f.name === 'geometry'
+    tableName: string,
+    geometryColumn: string
+  ): Promise<Table> {
+    const columnIndex = table.schema.fields.findIndex(
+      (field) => field.name === geometryColumn
     );
-
-    if (!geomField) {
-      return { table, metadata: null };
+    if (columnIndex === -1) {
+      return table;
     }
 
-    // Extract geometry type from field metadata or type
-    const fieldMetadata = geomField.metadata;
-    const extensionName = fieldMetadata?.get('ARROW:extension:name');
-
-    // Get actual geometry types from DuckDB by querying the table
-    let geometryTypes: string[] = [];
-    if (Duck) {
-      try {
-        const result = await Duck.query(
-          `SELECT DISTINCT ST_GeometryType(${geomField.name}) as geom_type FROM ${tableName} WHERE ${geomField.name} IS NOT NULL LIMIT 10`
-        );
-        if (result && typeof result === 'object' && 'toArray' in result) {
-          const rows = (result as Table).toArray();
-          geometryTypes = rows
-            .map((row) => {
-              const type = (row as { geom_type?: string }).geom_type;
-              return type ? type.replace('ST_', '').toUpperCase() : null;
-            })
-            .filter((t): t is string => t !== null);
-        }
-      } catch (error) {
-        logger.warn(
-          'Failed to get geometry types from DuckDB, using default',
-          LogCategory.DUCKDB,
-          error
-        );
-        // Fallback to a generic geometry type
-        geometryTypes = ['Geometry'];
+    const vector = table.getChildAt(columnIndex);
+    const sampleCount = Math.min(table.numRows, 5);
+    for (let i = 0; i < sampleCount; i++) {
+      const value = (vector?.get(i) as Uint8Array | null) ?? null;
+      if (!value || value.length === 0) {
+        continue;
       }
-    }
-
-    // If no geometry types found, use a default
-    if (geometryTypes.length === 0) {
-      geometryTypes = ['Geometry'];
-    }
-
-    // Create GeoArrow metadata object
-    const geoArrowMetadata: GeoArrowMetadata = {
-      version: '1.0.0',
-      primary_column: geomField.name,
-      columns: {
-        [geomField.name]: {
-          encoding: extensionName || 'geoarrow.wkb',
-          geometry_types: geometryTypes,
-          bbox: [0, 0, 0, 0], // Will be computed later if needed
-          crs: fieldMetadata?.get('crs') ? { name: fieldMetadata.get('crs')! } : undefined
-        }
+      const firstByte = value[0];
+      if (firstByte === 0 || firstByte === 1) {
+        return table;
       }
-    };
+      break;
+    }
 
-    // Attach metadata to table schema (CRITICAL for Deck.gl)
-    const newMetadata = new Map(table.schema.metadata);
-    newMetadata.set('geo', JSON.stringify(geoArrowMetadata));
+    return this.fetchTableWithGeometryAsWkb(tableName, geometryColumn);
+  }
 
-    const newFields = table.schema.fields.map(
-      (field) => new Field(field.name, field.type, field.nullable, field.metadata)
-    );
+  private async fetchTableWithGeometryAsWkb(
+    tableName: string,
+    geometryColumn: string
+  ): Promise<Table> {
+    if (!Duck) {
+      throw new DuckDBError('DuckDB not initialized');
+    }
 
-    const newSchema = new Schema(newFields, newMetadata);
-    const newTable = new Table(newSchema, table.batches);
+    const buffer = (await Duck.query(
+      `SELECT * REPLACE (
+          ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
+        )
+        FROM ${tableName}`,
+      { format: 'arrow-ipc' as never }
+    )) as ArrayBuffer | Uint8Array;
 
-    return { table: newTable, metadata: geoArrowMetadata };
+    const ipcBuffer =
+      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    return tableFromIPC(ipcBuffer);
   }
 
   async exportTableToGeoParquet(tableName: string): Promise<Uint8Array> {
@@ -1385,17 +1485,8 @@ class DuckDBOrchestratorService {
       await this.initialize();
     }
 
-    if (!Duck) {
-      throw new DuckDBError('DuckDB not initialized');
-    }
-
-    // Get Arrow table directly from DuckDB (no GeoParquet round-trip)
     const baseTable = await this.fetchArrowTableWithGeometry(tableName);
-
-    // Attach GeoArrow metadata to the table schema
-    const { table } = await this.attachGeometryMetadataToTable(baseTable, tableName);
-
-    return table;
+    return this.addGeoArrowMetadataFromDuckDB(baseTable, tableName);
   }
 
   async getArrowTable(tableName: string): Promise<Table> {
@@ -2018,3 +2109,413 @@ class DuckDBOrchestratorService {
 }
 
 export const duckDBOrchestrator = new DuckDBOrchestratorService();
+
+type NestedPoint = [number, number];
+type LineStringCoords = NestedPoint[];
+type PolygonCoords = LineStringCoords[];
+type MultiPolygonCoords = PolygonCoords[];
+
+type GeoArrowConversionResult = {
+  table: Table;
+  geometryDataType?: List | FixedSizeList;
+  converted: boolean;
+};
+
+function convertGeometryColumnToGeoArrow(
+  table: Table,
+  columnName: string,
+  geometryType: string
+): GeoArrowConversionResult {
+  const geometryIndex = table.schema.fields.findIndex(
+    (field) => field.name === columnName
+  );
+  if (geometryIndex === -1) {
+    return { table, converted: false };
+  }
+
+  const geometryColumn = table.getChildAt(geometryIndex);
+  if (!geometryColumn) {
+    return { table, converted: false };
+  }
+
+  const field = table.schema.fields[geometryIndex];
+  const isBinaryColumn =
+    field.typeId === Type.Binary || field.typeId === Type.FixedSizeBinary;
+
+  if (!isBinaryColumn) {
+    return {
+      table,
+      geometryDataType: field.type as List | FixedSizeList,
+      converted: false
+    };
+  }
+
+  const builderInfo = createGeoArrowBuilderForType(geometryType);
+  if (!builderInfo) {
+    return { table, converted: false };
+  }
+
+  const { builder, dataType } = builderInfo;
+  const rowCount = table.numRows;
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+    const value = geometryColumn.get(rowIndex) as Uint8Array | null;
+    if (!value) {
+      builder.append(null);
+      continue;
+    }
+    try {
+      const parsedGeometry = parseWkbGeometry(value, geometryType);
+      builder.append(parsedGeometry);
+    } catch (error) {
+      logger.error(
+        'Failed to parse WKB geometry; inserting null',
+        LogCategory.DUCKDB,
+        {
+          rowIndex,
+          geometryType,
+          error
+        }
+      );
+      builder.append(null);
+    }
+  }
+
+  const geoVector = builder.finish().toVector();
+  const updatedTable = table.setChildAt(geometryIndex, geoVector);
+
+  return {
+    table: updatedTable,
+    geometryDataType: geoVector.type as List | FixedSizeList,
+    converted: true
+  };
+}
+
+function createGeoArrowBuilderForType(geometryType: string): {
+  dataType: List | FixedSizeList;
+  builder: ReturnType<typeof makeBuilder>;
+} | null {
+  const upper = geometryType.replace(/^ST_/i, '').toUpperCase();
+  const coordinateField = new Field('coords', new Float64(), false);
+  const pointType = new FixedSizeList(2, coordinateField);
+
+  const listOf = (name: string, child: List | FixedSizeList) =>
+    new List(new Field(name, child, false));
+
+  switch (upper) {
+    case 'POINT': {
+      const builder = makeBuilder({ type: pointType });
+      return { dataType: pointType, builder };
+    }
+    case 'MULTIPOINT':
+    case 'LINESTRING': {
+      const lineType = listOf('points', pointType);
+      const builder = makeBuilder({ type: lineType });
+      return { dataType: lineType, builder };
+    }
+    case 'POLYGON':
+    case 'MULTILINESTRING': {
+      const structureType = listOf('parts', listOf('points', pointType));
+      const builder = makeBuilder({ type: structureType });
+      return { dataType: structureType, builder };
+    }
+    case 'MULTIPOLYGON': {
+      const polygonType = listOf(
+        'polygons',
+        listOf('rings', listOf('points', pointType))
+      );
+      const builder = makeBuilder({ type: polygonType });
+      return { dataType: polygonType, builder };
+    }
+    default:
+      return null;
+  }
+}
+
+function parseWkbGeometry(binary: Uint8Array, geometryType: string): unknown {
+  const upper = geometryType.replace(/^ST_/i, '').toUpperCase();
+  const view = new DataView(
+    binary.buffer,
+    binary.byteOffset,
+    binary.byteLength
+  );
+
+  const header = readHeader(view, 0);
+  const actualType = header.type;
+  const actualTypeName =
+    Object.entries(WKB_TYPE_IDS).find(([, id]) => id === actualType)?.[0] ??
+    `TYPE_${actualType}`;
+  const expectedTypeId = WKB_TYPE_IDS[upper] ?? actualType;
+
+  if (actualType !== expectedTypeId) {
+    const mismatchKey = `${upper}->${actualTypeName}`;
+    if (!loggedGeometryTypeMismatches.has(mismatchKey)) {
+      logger.warn(
+        'Geometry type mismatch between metadata and WKB payload',
+        LogCategory.DUCKDB,
+        {
+          expected: upper,
+          actual: actualTypeName
+        }
+      );
+      loggedGeometryTypeMismatches.add(mismatchKey);
+    }
+  }
+
+  const parsedGeometry = parseGeometryByType(view, actualType);
+
+  if (upper === 'MULTIPOLYGON' && actualType === WKB_TYPE_IDS.POLYGON) {
+    return [parsedGeometry];
+  }
+  if (upper === 'MULTILINESTRING' && actualType === WKB_TYPE_IDS.LINESTRING) {
+    return [parsedGeometry];
+  }
+  if (upper === 'MULTIPOINT' && actualType === WKB_TYPE_IDS.POINT) {
+    return [parsedGeometry];
+  }
+
+  return parsedGeometry;
+}
+
+type ParseResult<T> = { geometry: T; offset: number };
+
+function readCoordinatePair(
+  view: DataView,
+  offset: number,
+  littleEndian: boolean,
+  coordinateSize: number
+): { point: NestedPoint; offset: number } {
+  let cursor = offset;
+  const x = view.getFloat64(cursor, littleEndian);
+  cursor += 8;
+  const y = view.getFloat64(cursor, littleEndian);
+  cursor += 8;
+  const extraDimensions = Math.max(0, coordinateSize - 2);
+  if (extraDimensions > 0) {
+    cursor += extraDimensions * 8;
+  }
+  return { point: [x, y], offset: cursor };
+}
+
+const EWKB_Z_FLAG = 0x80000000;
+const EWKB_M_FLAG = 0x40000000;
+const EWKB_SRID_FLAG = 0x20000000;
+const EWKB_RESERVED_FLAG = 0x10000000;
+
+const WKB_TYPE_IDS: Record<string, number> = {
+  POINT: 1,
+  LINESTRING: 2,
+  POLYGON: 3,
+  MULTIPOINT: 4,
+  MULTILINESTRING: 5,
+  MULTIPOLYGON: 6
+};
+
+const loggedGeometryTypeMismatches = new Set<string>();
+
+function readHeader(
+  view: DataView,
+  offset: number
+): {
+  littleEndian: boolean;
+  type: number;
+  offset: number;
+  coordinateSize: number;
+} {
+  const byteOrder = view.getUint8(offset);
+  const littleEndian = byteOrder === 1;
+  let typeWithFlags = view.getUint32(offset + 1, littleEndian) >>> 0;
+  let cursor = offset + 5;
+
+  let coordinateSize = 2;
+  const hasZ = (typeWithFlags & EWKB_Z_FLAG) !== 0;
+  const hasM = (typeWithFlags & EWKB_M_FLAG) !== 0;
+  const hasSrid = (typeWithFlags & EWKB_SRID_FLAG) !== 0;
+
+  if (hasZ || hasM) {
+    coordinateSize = 2 + (hasZ ? 1 : 0) + (hasM ? 1 : 0);
+  }
+
+  typeWithFlags &=
+    ~EWKB_Z_FLAG & ~EWKB_M_FLAG & ~EWKB_SRID_FLAG & ~EWKB_RESERVED_FLAG;
+
+  if (typeWithFlags >= 3000) {
+    coordinateSize = Math.max(coordinateSize, 4);
+    typeWithFlags -= 3000;
+  } else if (typeWithFlags >= 2000) {
+    coordinateSize = Math.max(coordinateSize, 3);
+    typeWithFlags -= 2000;
+  } else if (typeWithFlags >= 1000) {
+    coordinateSize = Math.max(coordinateSize, 3);
+    typeWithFlags -= 1000;
+  }
+
+  if (hasSrid) {
+    cursor += 4;
+  }
+
+  return {
+    littleEndian,
+    type: typeWithFlags,
+    offset: cursor,
+    coordinateSize
+  };
+}
+
+function parsePoint(view: DataView, offset: number): ParseResult<NestedPoint> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 1) {
+    throw new Error(`Expected WKB Point but found type ${type}`);
+  }
+  const { point, offset: nextOffset } = readCoordinatePair(
+    view,
+    cursor,
+    littleEndian,
+    coordinateSize
+  );
+  return { geometry: point, offset: nextOffset };
+}
+
+function parseLineString(
+  view: DataView,
+  offset: number
+): ParseResult<LineStringCoords> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 2) {
+    throw new Error(`Expected WKB LineString but found type ${type}`);
+  }
+  let current = cursor;
+  const numPoints = view.getUint32(current, littleEndian);
+  current += 4;
+  const points: LineStringCoords = [];
+  for (let i = 0; i < numPoints; i++) {
+    const { point, offset: nextOffset } = readCoordinatePair(
+      view,
+      current,
+      littleEndian,
+      coordinateSize
+    );
+    points.push(point);
+    current = nextOffset;
+  }
+  return { geometry: points, offset: current };
+}
+
+function parsePolygon(
+  view: DataView,
+  offset: number
+): ParseResult<PolygonCoords> {
+  const { littleEndian, type, offset: cursor, coordinateSize } = readHeader(
+    view,
+    offset
+  );
+  if (type !== 3) {
+    throw new Error(`Expected WKB Polygon but found type ${type}`);
+  }
+  let current = cursor;
+  const numRings = view.getUint32(current, littleEndian);
+  current += 4;
+  const rings: PolygonCoords = [];
+  for (let i = 0; i < numRings; i++) {
+    const numPoints = view.getUint32(current, littleEndian);
+    current += 4;
+    const ring: LineStringCoords = [];
+    for (let j = 0; j < numPoints; j++) {
+      const { point, offset: nextOffset } = readCoordinatePair(
+        view,
+        current,
+        littleEndian,
+        coordinateSize
+      );
+      ring.push(point);
+      current = nextOffset;
+    }
+    rings.push(ring);
+  }
+  return { geometry: rings, offset: current };
+}
+
+function parseMultiPoint(
+  view: DataView,
+  offset: number
+): ParseResult<NestedPoint[]> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 4) {
+    throw new Error(`Expected WKB MultiPoint but found type ${type}`);
+  }
+  let current = cursor;
+  const numPoints = view.getUint32(current, littleEndian);
+  current += 4;
+  const points: NestedPoint[] = [];
+  for (let i = 0; i < numPoints; i++) {
+    const result = parsePoint(view, current);
+    points.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: points, offset: current };
+}
+
+function parseMultiLineString(
+  view: DataView,
+  offset: number
+): ParseResult<LineStringCoords[]> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 5) {
+    throw new Error(`Expected WKB MultiLineString but found type ${type}`);
+  }
+  let current = cursor;
+  const numLines = view.getUint32(current, littleEndian);
+  current += 4;
+  const lines: LineStringCoords[] = [];
+  for (let i = 0; i < numLines; i++) {
+    const result = parseLineString(view, current);
+    lines.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: lines, offset: current };
+}
+
+function parseMultiPolygon(
+  view: DataView,
+  offset: number
+): ParseResult<MultiPolygonCoords> {
+  const { littleEndian, type, offset: cursor } = readHeader(view, offset);
+  if (type !== 6) {
+    throw new Error(`Expected WKB MultiPolygon but found type ${type}`);
+  }
+  let current = cursor;
+  const numPolygons = view.getUint32(current, littleEndian);
+  current += 4;
+  const polygons: MultiPolygonCoords = [];
+  for (let i = 0; i < numPolygons; i++) {
+    const result = parsePolygon(view, current);
+    polygons.push(result.geometry);
+    current = result.offset;
+  }
+  return { geometry: polygons, offset: current };
+}
+
+function parseGeometryByType(view: DataView, type: number): unknown {
+  switch (type) {
+    case 1:
+      return parsePoint(view, 0).geometry;
+    case 2:
+      return parseLineString(view, 0).geometry;
+    case 3:
+      return parsePolygon(view, 0).geometry;
+    case 4:
+      return parseMultiPoint(view, 0).geometry;
+    case 5:
+      return parseMultiLineString(view, 0).geometry;
+    case 6:
+      return parseMultiPolygon(view, 0).geometry;
+    default:
+      throw new Error(`Unsupported WKB geometry type ${type}`);
+  }
+}
