@@ -27,6 +27,7 @@ type UploadedFilePayload = {
   fileType?: string;
   deepAnalysis?: DataAnalysisResult;
   preparedGeoJSON?: string;
+  relatedFileObjects?: File[];
 };
 
 type GeoJSONLike =
@@ -99,7 +100,11 @@ export function createDataPipeline(): DataPipeline {
       if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
         dataset = await processShapefile(uploadedFile);
       } else if (originalFile) {
-        dataset = await processFileInternal(originalFile);
+        // Pass companion files for shapefiles
+        const companionFiles = uploadedFile.relatedFileObjects?.filter(
+          (f: File) => f !== originalFile
+        );
+        dataset = await processFileInternal(originalFile, { companionFiles });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
         dataset = await processFileInternal(fallback);
@@ -201,7 +206,11 @@ export function createDataPipeline(): DataPipeline {
 
   async function processFileInternal(
     file: File,
-    options: { originalName?: string; rawDataset?: RawDataset } = {}
+    options: {
+      originalName?: string;
+      rawDataset?: RawDataset;
+      companionFiles?: File[];
+    } = {}
   ): Promise<DatasetResult> {
     const fileInfo: FileInfo = {
       name: options.originalName ?? file.name,
@@ -211,12 +220,15 @@ export function createDataPipeline(): DataPipeline {
 
     const tableName = generateTableName(fileInfo.name);
     const isGeoFile = isGeospatialFile(fileInfo.name);
+    const isShapefile = fileInfo.name.toLowerCase().endsWith('.shp');
 
     const start = performance.now();
     logger.debug('Reading file into DuckDB via pipeline', LogCategory.DATA, {
       fileName: fileInfo.name,
       tableName,
-      isGeoFile
+      isGeoFile,
+      isShapefile,
+      hasCompanionFiles: Boolean(options.companionFiles?.length)
     });
 
     if (!Duck) {
@@ -224,9 +236,24 @@ export function createDataPipeline(): DataPipeline {
     }
 
     try {
-      await Duck.register_files([file]);
+      // For shapefiles with companion files, register all files together with shapefile flag
+      if (
+        isShapefile &&
+        options.companionFiles &&
+        options.companionFiles.length > 0
+      ) {
+        const allShapefileFiles = [file, ...options.companionFiles];
+        await Duck.register_files(allShapefileFiles, { shapefile: true });
+      } else if (!isShapefile) {
+        // For non-shapefile files, register normally
+        await Duck.register_files([file]);
+      }
+
       if (isGeoFile) {
-        await Duck.read_geofile(file, { tablename: tableName });
+        await Duck.read_geofile(file, {
+          tablename: tableName,
+          shapefile: isShapefile
+        });
       } else {
         await Duck.read_tabular(file, { tablename: tableName });
       }
@@ -408,33 +435,35 @@ async function extractGeometryInfo(
       return undefined;
     }
 
-    const geomTypeResult = (await Duck.query(
-      `SELECT ST_GeometryType(${geometryColumn.name}) as geom_type FROM ${tableName} LIMIT 1`,
-      { format: 'array' as never }
-    )) as Array<{ geom_type: string }>;
-
-    const geometryType = geomTypeResult[0]?.geom_type ?? 'GEOMETRY';
-
-    const bboxQuery = `
-      WITH extent AS (
-        SELECT ST_Extent(${geometryColumn.name}) AS bbox FROM ${tableName}
+    // Consolidate all geometry queries into a single query
+    const consolidatedQuery = `
+      WITH bbox AS (
+        SELECT ST_Extent(${geometryColumn.name}) AS extent FROM ${tableName}
+      ),
+      first_row AS (
+        SELECT ${geometryColumn.name} AS geom FROM ${tableName} WHERE ${geometryColumn.name} IS NOT NULL LIMIT 1
       )
       SELECT
-        ST_XMin(bbox) AS minX,
-        ST_YMin(bbox) AS minY,
-        ST_XMax(bbox) AS maxX,
-        ST_YMax(bbox) AS maxY
-      FROM extent
+        ST_GeometryType((SELECT geom FROM first_row)) AS geom_type,
+        ST_XMin(extent) AS minX,
+        ST_YMin(extent) AS minY,
+        ST_XMax(extent) AS maxX,
+        ST_YMax(extent) AS maxY
+      FROM bbox
     `;
 
-    const [extent] = (await Duck.query(bboxQuery, {
+    const [result] = (await Duck.query(consolidatedQuery, {
       format: 'array' as never
     })) as Array<{
+      geom_type: string | null;
       minX: number | null;
       minY: number | null;
       maxX: number | null;
       maxY: number | null;
     }>;
+
+    const geometryType = result?.geom_type ?? 'GEOMETRY';
+    const extent = result;
 
     if (
       !extent ||
