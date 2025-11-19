@@ -24,6 +24,8 @@ class BasemapService {
 
   private _attributesLoaded = false;
 
+  private _basemapCache = new SvelteMap<string, LoadedBasemap>();
+
   async initialize(): Promise<void> {
     try {
       logger.info('Initializing basemap service', LogCategory.MAP);
@@ -176,6 +178,12 @@ class BasemapService {
   }
 
   async loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
+    if (this._basemapCache.has(basemapId)) {
+      logger.debug('Basemap loaded from cache', LogCategory.MAP, { basemapId });
+      this._currentBasemap = this._basemapCache.get(basemapId)!;
+      return this._currentBasemap;
+    }
+
     const metadata = this._availableBasemaps.find(
       (bm) => bm.file === basemapId
     );
@@ -186,6 +194,7 @@ class BasemapService {
     }
 
     try {
+      const start = performance.now();
       logger.info('Loading basemap', LogCategory.MAP, { basemapId });
 
       const geometryTable = await this.loadGeometryFromParquet(metadata.file);
@@ -197,9 +206,12 @@ class BasemapService {
         layerTables
       };
 
+      this._basemapCache.set(basemapId, this._currentBasemap);
+
       logger.success('Basemap loaded', LogCategory.MAP, {
         basemapId,
-        layerCount: metadata.layers.length
+        layerCount: metadata.layers.length,
+        durationMs: (performance.now() - start).toFixed(2)
       });
       return this._currentBasemap;
     } catch (error) {
@@ -234,6 +246,11 @@ class BasemapService {
 
   reset(): void {
     this._currentBasemap = null;
+  }
+
+  clearCache(): void {
+    this._basemapCache.clear();
+    logger.debug('Basemap cache cleared', LogCategory.MAP);
   }
 }
 
