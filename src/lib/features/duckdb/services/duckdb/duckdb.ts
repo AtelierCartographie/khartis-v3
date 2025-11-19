@@ -291,6 +291,9 @@ class DuckDB {
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
 
   private readonly MAX_CACHE_SIZE = 100 * 1024 * 1024;
+  private readonly GEO_PARQUET_READ_RETRIES = 3;
+  private readonly GEO_PARQUET_RETRY_DELAY_MS = 15;
+  private readonly PARQUET_MAGIC = new Uint8Array([0x50, 0x41, 0x52, 0x31]);
 
   private describeCache = new Map<string, DescribeResult>();
 
@@ -1148,18 +1151,30 @@ class DuckDB {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
     );
-    const buffer = await this.db!.copyFileToBuffer(`${table}.parquet`);
-    const stableBuffer = new Uint8Array(buffer); // copy out of WASM memory
-
+    const filename = `${table}.parquet`;
+    let stableBuffer: Uint8Array | null = null;
     try {
-      await this.db!.dropFile(`${table}.parquet`);
-    } catch (error) {
-      logger.warn(
-        'Failed to remove temporary GeoParquet file',
-        LogCategory.DUCKDB,
-        error
+      stableBuffer = await this.readStableParquetBuffer(filename);
+    } finally {
+      try {
+        await this.db!.dropFile(filename);
+      } catch (error) {
+        logger.warn(
+          'Failed to remove temporary GeoParquet file',
+          LogCategory.DUCKDB,
+          error
+        );
+      }
+    }
+    if (!stableBuffer) {
+      throw new DuckDBError(
+        `Failed to materialize GeoParquet buffer for ${table}`
       );
     }
+    logger.debug('GeoParquet buffer materialized', LogCategory.DUCKDB, {
+      table,
+      byteLength: stableBuffer.byteLength
+    });
 
     while (
       this.cacheState.size + stableBuffer.byteLength > this.MAX_CACHE_SIZE &&
@@ -1178,6 +1193,74 @@ class DuckDB {
     this.cacheState.size += stableBuffer.byteLength;
 
     return stableBuffer.slice();
+  }
+
+  private async readStableParquetBuffer(filename: string): Promise<Uint8Array> {
+    if (!this.db) {
+      throw new DuckDBError('DuckDB not initialized');
+    }
+
+    for (let attempt = 0; attempt < this.GEO_PARQUET_READ_RETRIES; attempt++) {
+      const rawBuffer = await this.db.copyFileToBuffer(filename);
+      const sourceView =
+        rawBuffer instanceof Uint8Array
+          ? rawBuffer
+          : new Uint8Array(rawBuffer);
+      const stableBuffer = new Uint8Array(sourceView.byteLength);
+      stableBuffer.set(sourceView);
+
+      if (this.isValidParquetBuffer(stableBuffer)) {
+        if (attempt > 0) {
+          logger.debug(
+            'GeoParquet buffer validated after retry',
+            LogCategory.DUCKDB,
+            { filename, attempt: attempt + 1 }
+          );
+        }
+        return stableBuffer;
+      }
+
+      logger.warn(
+        'GeoParquet buffer incomplete, retrying',
+        LogCategory.DUCKDB,
+        {
+          filename,
+          byteLength: stableBuffer.byteLength,
+          attempt: attempt + 1
+        }
+      );
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.GEO_PARQUET_RETRY_DELAY_MS * (attempt + 1))
+      );
+    }
+
+    throw new DuckDBError(
+      `Failed to read valid GeoParquet buffer from ${filename}`
+    );
+  }
+
+  private isValidParquetBuffer(buffer: Uint8Array): boolean {
+    if (buffer.byteLength < 8) {
+      return false;
+    }
+
+    const magicLength = this.PARQUET_MAGIC.length;
+    for (let i = 0; i < magicLength; i++) {
+      if (buffer[i] !== this.PARQUET_MAGIC[i]) {
+        return false;
+      }
+    }
+
+    for (let i = 0; i < magicLength; i++) {
+      if (
+        buffer[buffer.byteLength - magicLength + i] !== this.PARQUET_MAGIC[i]
+      ) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   async filter_datasets_with_geometry(): Promise<
