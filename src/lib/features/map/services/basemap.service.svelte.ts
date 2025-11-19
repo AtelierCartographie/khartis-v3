@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
 import { logger, LogCategory } from '../../commons/utils/logger';
@@ -6,9 +7,9 @@ import { readGeoArrowParquet } from '../utils/read-geoarrow-parquet';
 import { readGeoJSONAsArrow } from '../utils/read-geojson-arrow';
 import { SvelteMap } from 'svelte/reactivity';
 
-const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
-const BASEMAP_ATTRIBUTES_URL = '/basemaps/all-basemaps-attributes.parquet';
-const GEOMETRY_BASE_PATH = '/basemaps/geometry/';
+const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
+const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
+const GEOMETRY_BASE_PATH = `${base}/basemaps/geometry/`;
 const DEFAULT_BASEMAP_ID = 'france-region-2025';
 
 interface LoadedBasemap {
@@ -98,9 +99,14 @@ class BasemapService {
         (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
+      // Optimized Parquet scan with performance hints
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
-        SELECT * FROM parquet_scan('${fileId}')
+        SELECT * FROM parquet_scan('${fileId}',
+          hive_partitioning=false,  -- No Hive partitioning in our files
+          union_by_name=false,      -- No union needed
+          filename=false             -- Don't include filename column
+        )
       `);
 
       if (!result) {

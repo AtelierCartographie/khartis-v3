@@ -857,19 +857,22 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoArrow(jsTable);
       if (bounds) {
-        map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        map.fitBounds(bounds, { padding: 50, duration: 300 }); // Reduced from 1000ms
         logger.info('Fitting map to Arrow dataset bounds', LogCategory.MAP, {
           datasetId,
           bounds
         });
 
-        setTimeout(() => {
+        // Use moveend event instead of setTimeout
+        const onMoveEnd = () => {
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
             saveMapPosition();
+            map.off('moveend', onMoveEnd); // Remove listener after use
           }
-        }, 1100);
+        };
+        map.once('moveend', onMoveEnd);
 
         lastFitTable = jsTable;
       }
@@ -882,18 +885,21 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
       if (bounds) {
-        map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        map.fitBounds(bounds, { padding: 50, duration: 300 }); // Reduced from 1000ms
         logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
           featureCount: userGeoJSON.features.length
         });
 
-        setTimeout(() => {
+        // Use moveend event instead of setTimeout
+        const onMoveEnd = () => {
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
             saveMapPosition();
+            map.off('moveend', onMoveEnd); // Remove listener after use
           }
-        }, 1100);
+        };
+        map.once('moveend', onMoveEnd);
 
         lastFitGeoJSON = userGeoJSON;
       }

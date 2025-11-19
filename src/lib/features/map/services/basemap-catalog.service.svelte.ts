@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import type {
@@ -6,7 +7,7 @@ import type {
   BasemapSuggestion
 } from '../types/basemap.types';
 
-const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
+const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 
 class BasemapCatalogService {
   private _state = $state<{

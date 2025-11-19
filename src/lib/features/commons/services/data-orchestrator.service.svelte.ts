@@ -61,8 +61,10 @@ class DataOrchestratorService {
       this.processedFileIds.add(file.id);
       // Legacy pipeline: no GeoParquet cache, rely on DuckDB state
 
+      // Note: _geometryDatasetsVersion is now incremented inside processFileInDuckDB
+      // after DuckDB dataset is fully ready (prevents 5s delay in map reaction)
+
       if (dataset.geometry) {
-        this._geometryDatasetsVersion++;
         projectionActions.suggestProjectionForCurrentData();
       }
 
@@ -373,6 +375,18 @@ class DataOrchestratorService {
             dataset.id,
             duckResult.tableName
           );
+
+          // Mark dataset as DuckDB-processed to prevent reprocessing
+          const updatedDataset = datasetsStore.datasets.find(d => d.id === dataset.id);
+          if (updatedDataset) {
+            updatedDataset.metadata = {
+              ...updatedDataset.metadata,
+              geoDuckTableReady: true
+            };
+          }
+
+          // Increment geometry datasets version to trigger map reactivity
+          this._geometryDatasetsVersion++;
         }
       } catch (error) {
         logger.error(

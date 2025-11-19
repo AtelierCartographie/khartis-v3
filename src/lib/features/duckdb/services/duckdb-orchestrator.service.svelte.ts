@@ -89,6 +89,7 @@ export interface DuckDBDataset {
 
 class DuckDBOrchestratorService {
   private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   private _state = $state<{
     datasets: SvelteMap<string, DuckDBDataset>;
@@ -152,22 +153,35 @@ class DuckDBOrchestratorService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
+    // If initialization is in progress, wait for it
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
     const start = performance.now();
     logger.info(
       'Starting DuckDB orchestrator initialization',
       LogCategory.DUCKDB
     );
-    try {
-      await initDuckDB();
-      this.initialized = true;
-      logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } catch (error) {
-      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
-      showError('DuckDB initialization failed', 'Please refresh the page');
-      throw error;
-    }
+
+    // Store the promise to prevent concurrent initializations
+    this.initPromise = (async () => {
+      try {
+        await initDuckDB();
+        this.initialized = true;
+        logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+      } catch (error) {
+        this.initPromise = null; // Reset on error to allow retry
+        logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
+        showError('DuckDB initialization failed', 'Please refresh the page');
+        throw error;
+      }
+    })();
+
+    await this.initPromise;
   }
 
   async waitForInitialization(): Promise<void> {
@@ -450,12 +464,12 @@ class DuckDBOrchestratorService {
       const actualTableName =
         typeof resultTableName === 'string' ? resultTableName : tableName;
 
-      const columns = await Duck.analyse(actualTableName);
+      // Parallelize column analysis and row count
+      const [columns, rowCount] = await Promise.all([
+        Duck.analyse(actualTableName),
+        this.getRowCount(actualTableName)
+      ]);
 
-      const rowCount = await this.getRowCount(actualTableName);
-
-      const { arrowTableWithMetadata, geoArrowMetadata } =
-        await this.createArrowTableWithMetadata(actualTableName);
       const dataset: DuckDBDataset = {
         id: crypto.randomUUID(),
         tableName: actualTableName,
@@ -467,14 +481,15 @@ class DuckDBOrchestratorService {
           processedAt: new Date(),
           fileType: file.fileType
         },
-        geoDetection: file.deepAnalysis?.geoDetection,
-        arrowTableWithMetadata,
-        geoArrowMetadata: geoArrowMetadata ?? undefined
+        geoDetection: file.deepAnalysis?.geoDetection
+        // Don't create Arrow table here - let prefetch handle it
       };
 
       this.updateDatasets((datasets) => {
         datasets.set(dataset.id, dataset);
       });
+
+      // Start prefetching Arrow table metadata in background
       void this.prefetchArrowMetadata(dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
@@ -594,10 +609,11 @@ class DuckDBOrchestratorService {
       ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
     `);
 
-    const columns = await Duck.analyse(tableName);
-    const rowCount = await this.getRowCount(tableName);
-    const { arrowTableWithMetadata, geoArrowMetadata } =
-      await this.createArrowTableWithMetadata(tableName);
+    // Parallelize column analysis and row count
+    const [columns, rowCount] = await Promise.all([
+      Duck.analyse(tableName),
+      this.getRowCount(tableName)
+    ]);
 
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
@@ -611,13 +627,16 @@ class DuckDBOrchestratorService {
         fileType: file.fileType
       },
       geoDetection: file.deepAnalysis?.geoDetection,
-      arrowTableWithMetadata,
-      geoArrowMetadata: geoArrowMetadata ?? undefined
+      // We already have geoMetadata from the GeoParquet file
+      geoArrowMetadata: geoMetadata ?? undefined
+      // Don't create Arrow table here - let it be created on demand
     };
 
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
+
+    // Start prefetching Arrow table in background
     void this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
@@ -1250,29 +1269,55 @@ class DuckDBOrchestratorService {
     }
 
     try {
-      const tableInfo = await Duck.describe_table(tableName);
-      const columns = tableInfo.name.map((name, index) => ({
-        column_name: name,
-        column_type: tableInfo.type[index]
-      }));
+      // Check if we already have cached metadata for this table
+      const dataset = Array.from(this._state.datasets.values()).find(
+        d => d.tableName === tableName
+      );
 
-      const geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+      let geomColumn: { column_name: string; column_type: string } | undefined;
+      let geometryType: string;
 
-      if (!geomColumn) {
-        logger.warn(
-          'No geometry column found in DuckDB table',
-          LogCategory.DUCKDB,
-          { tableName }
-        );
-        return table;
+      // Use cached metadata if available
+      if (dataset?.geoArrowMetadata) {
+        const primaryColumn = dataset.geoArrowMetadata.primary_column;
+        geomColumn = { column_name: primaryColumn, column_type: 'GEOMETRY' };
+        const columnMeta = dataset.geoArrowMetadata.columns[primaryColumn];
+        geometryType = columnMeta?.geometry_types?.[0] || 'GEOMETRY';
+        if (!geometryType.startsWith('ST_')) {
+          geometryType = 'ST_' + geometryType;
+        }
+
+        logger.debug('Using cached geometry metadata', LogCategory.DUCKDB, {
+          tableName,
+          geometryType
+        });
+      } else {
+        // Only query if not cached
+        const tableInfo = await Duck.describe_table(tableName);
+        const columns = tableInfo.name.map((name, index) => ({
+          column_name: name,
+          column_type: tableInfo.type[index]
+        }));
+
+        geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+
+        if (!geomColumn) {
+          logger.warn(
+            'No geometry column found in DuckDB table',
+            LogCategory.DUCKDB,
+            { tableName }
+          );
+          return table;
+        }
+
+        const geomTypeResult = (await Duck.query(
+          `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
+          { format: 'array' as never }
+        )) as Array<{ geom_type: string }>;
+
+        geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
       }
 
-      const geomTypeResult = (await Duck.query(
-        `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
-        { format: 'array' as never }
-      )) as Array<{ geom_type: string }>;
-
-      const geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
       const normalizedGeometry = geometryType
         .replace(/^ST_/i, '')
         .toLowerCase();
@@ -1485,8 +1530,32 @@ class DuckDBOrchestratorService {
       await this.initialize();
     }
 
+    // Check cache first
+    for (const dataset of this._state.datasets.values()) {
+      if (dataset.tableName === tableName && dataset.arrowTableWithMetadata) {
+        logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
+          tableName
+        });
+        return dataset.arrowTableWithMetadata;
+      }
+    }
+
+    // Not in cache, generate it
     const baseTable = await this.fetchArrowTableWithGeometry(tableName);
-    return this.addGeoArrowMetadataFromDuckDB(baseTable, tableName);
+    const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(baseTable, tableName);
+
+    // Update cache for future use
+    for (const dataset of this._state.datasets.values()) {
+      if (dataset.tableName === tableName) {
+        dataset.arrowTableWithMetadata = tableWithMetadata;
+        logger.info('Cached Arrow table with metadata', LogCategory.DUCKDB, {
+          tableName
+        });
+        break;
+      }
+    }
+
+    return tableWithMetadata;
   }
 
   async getArrowTable(tableName: string): Promise<Table> {
@@ -1546,7 +1615,33 @@ class DuckDBOrchestratorService {
       return existing;
     }
 
-    return Promise.resolve();
+    // Start prefetching the Arrow table in the background
+    const prefetchPromise = (async () => {
+      try {
+        logger.debug('Prefetching Arrow table metadata', LogCategory.DUCKDB, {
+          tableName: dataset.tableName
+        });
+
+        const { arrowTableWithMetadata, geoArrowMetadata } =
+          await this.createArrowTableWithMetadata(dataset.tableName);
+
+        // Update cache
+        dataset.arrowTableWithMetadata = arrowTableWithMetadata;
+        dataset.geoArrowMetadata = geoArrowMetadata || undefined;
+
+        logger.info('Prefetched Arrow table metadata', LogCategory.DUCKDB, {
+          tableName: dataset.tableName
+        });
+      } catch (error) {
+        logger.error('Failed to prefetch Arrow metadata', LogCategory.DUCKDB, error);
+      } finally {
+        // Clean up the prefetch promise
+        this.metadataPrefetches.delete(dataset.tableName);
+      }
+    })();
+
+    this.metadataPrefetches.set(dataset.tableName, prefetchPromise);
+    return prefetchPromise;
   }
 
   getDataset(id: string): DuckDBDataset | undefined {
