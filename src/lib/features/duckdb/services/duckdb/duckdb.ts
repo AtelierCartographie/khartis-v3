@@ -105,6 +105,8 @@ interface ReadLinkOptions {
 
 interface GetDataOptions {
   geometry?: boolean;
+  columns?: string[]; // Specific columns to select
+  limit?: number; // Limit number of rows for sampling
 }
 
 interface CalculateBreaksOptions {
@@ -315,6 +317,16 @@ class DuckDB {
     rowCount: null
   };
 
+  private extensionsLoaded = {
+    spatial: false,
+    httpfs: false
+  };
+
+  private extensionLoadPromises = {
+    spatial: null as Promise<void> | null,
+    httpfs: null as Promise<void> | null
+  };
+
   private threadsSupported = false;
 
   constructor() {}
@@ -383,11 +395,32 @@ class DuckDB {
     this.evictGeoParquetEntry(table);
   }
 
+  private calculateOptimalMemory(): string {
+    // Use deviceMemory API if available (Chrome/Edge)
+    if (typeof navigator !== 'undefined' && 'deviceMemory' in navigator) {
+      const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
+      // Use 50% of device memory, capped at 3GB (safe under WASM 4GB limit)
+      const optimalMemory = Math.min(Math.floor(deviceMemory * 0.5 * 1024), 3072);
+      logger.info('Dynamic memory allocation based on device', LogCategory.DUCKDB, {
+        deviceMemory: `${deviceMemory}GB`,
+        allocatedMemory: `${optimalMemory}MB`
+      });
+      return `${optimalMemory}MB`;
+    }
+    // Default to 2GB if deviceMemory unavailable
+    return '2048MB';
+  }
+
   private async configureRuntimeSettings(): Promise<void> {
     const start = performance.now();
     const pragmas: string[] = [
-      `PRAGMA memory_limit='1024MB';`,
-      `PRAGMA enable_progress_bar=false;`
+      `PRAGMA memory_limit='${this.calculateOptimalMemory()}';`,
+      `PRAGMA enable_progress_bar=false;`,
+      // Performance optimizations
+      `PRAGMA preserve_insertion_order=false;`, // Allow query optimizer to reorder
+      `PRAGMA enable_object_cache=true;`, // Cache parsed objects
+      `PRAGMA temp_directory='/tmp/duckdb';`, // Enable disk spilling for large operations
+      `PRAGMA max_temp_directory_size='5GB';` // Limit temp space usage
     ];
 
     if (this.threadsSupported) {
@@ -529,14 +562,6 @@ class DuckDB {
         durationMs: (performance.now() - connectStart).toFixed(2)
       });
 
-      const spatialStart = performance.now();
-      await this.query(`INSTALL spatial; LOAD spatial;`, {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      });
-      logger.debug('Spatial extension loaded', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - spatialStart).toFixed(2)
-      });
-
       const macrosStart = performance.now();
       await this.query(breaks + analyse + join_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
@@ -546,6 +571,9 @@ class DuckDB {
       });
 
       await this.configureRuntimeSettings();
+
+      // Preload extensions in parallel for better performance
+      await this.preloadExtensions();
 
       this.clearGeoParquetCache();
       logger.debug('GeoParquet cache initialized', LogCategory.DUCKDB);
@@ -576,10 +604,152 @@ class DuckDB {
     this.rowCountCache.clear();
     this.cacheState.accessOrder = [];
     this.cacheState.size = 0;
+    this.extensionsLoaded.spatial = false;
+    this.extensionsLoaded.httpfs = false;
+    this.extensionLoadPromises.spatial = null;
+    this.extensionLoadPromises.httpfs = null;
     await this.closePreparedStatements();
     await this.connection?.close();
     await this.db?.dropFiles();
     await this.db?.reset();
+  }
+
+  /**
+   * Preload all commonly used extensions in parallel at startup
+   * This avoids delays when extensions are needed later
+   */
+  private async preloadExtensions(): Promise<void> {
+    const startTime = performance.now();
+    logger.info('Preloading DuckDB extensions', LogCategory.DUCKDB);
+
+    // Load all extensions in parallel for maximum efficiency
+    const extensionPromises: Promise<void>[] = [];
+
+    // Spatial extension - always needed for geo files
+    extensionPromises.push(this.loadSpatialExtension());
+
+    // HTTPFS extension - needed for remote files
+    extensionPromises.push(this.loadHTTPFSExtension());
+
+    // Parquet extension - usually already loaded but ensure it
+    extensionPromises.push(this.loadParquetExtension());
+
+    // Wait for all extensions to load
+    const results = await Promise.allSettled(extensionPromises);
+
+    // Log results
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    logger.success('Extensions preloaded', LogCategory.DUCKDB, {
+      successful,
+      failed,
+      totalDurationMs: (performance.now() - startTime).toFixed(2)
+    });
+
+    // Log any failures
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const extensionName = ['spatial', 'httpfs', 'parquet'][index];
+        logger.warn(`Failed to preload ${extensionName} extension`, LogCategory.DUCKDB, {
+          reason: result.reason
+        });
+      }
+    });
+  }
+
+  private async loadSpatialExtension(): Promise<void> {
+    if (this.extensionsLoaded.spatial) {
+      return;
+    }
+
+    const start = performance.now();
+    try {
+      await this.query(`INSTALL spatial; LOAD spatial;`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      this.extensionsLoaded.spatial = true;
+      logger.debug('Spatial extension preloaded', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, { error });
+      // Don't throw - allow app to continue, extension can be loaded on demand
+    }
+  }
+
+  private async loadHTTPFSExtension(): Promise<void> {
+    if (this.extensionsLoaded.httpfs) {
+      return;
+    }
+
+    const start = performance.now();
+    try {
+      await this.query(`INSTALL httpfs; LOAD httpfs;`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      this.extensionsLoaded.httpfs = true;
+      logger.debug('HTTPFS extension preloaded', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, { error });
+      // Don't throw - allow app to continue
+    }
+  }
+
+  private async loadParquetExtension(): Promise<void> {
+    const start = performance.now();
+    try {
+      // Parquet is usually auto-loaded, but ensure it explicitly
+      await this.query(`INSTALL parquet; LOAD parquet;`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      logger.debug('Parquet extension preloaded', LogCategory.DUCKDB, {
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      // Parquet is usually already loaded, so this is not critical
+      logger.debug('Parquet extension already loaded or not needed', LogCategory.DUCKDB);
+    }
+  }
+
+  /**
+   * Ensure spatial extension is loaded (now mostly a no-op due to preloading)
+   * This is kept for backward compatibility
+   */
+  async ensureSpatialExtension(): Promise<void> {
+    if (this.extensionsLoaded.spatial) {
+      return; // Already preloaded at startup
+    }
+
+    // Fallback: load on demand if preloading failed
+    if (this.extensionLoadPromises.spatial) {
+      return this.extensionLoadPromises.spatial;
+    }
+
+    this.extensionLoadPromises.spatial = this.loadSpatialExtension();
+    await this.extensionLoadPromises.spatial;
+    this.extensionLoadPromises.spatial = null;
+  }
+
+  /**
+   * Ensure HTTPFS extension is loaded (now mostly a no-op due to preloading)
+   * This is kept for backward compatibility
+   */
+  async ensureHTTPFSExtension(): Promise<void> {
+    if (this.extensionsLoaded.httpfs) {
+      return; // Already preloaded at startup
+    }
+
+    // Fallback: load on demand if preloading failed
+    if (this.extensionLoadPromises.httpfs) {
+      return this.extensionLoadPromises.httpfs;
+    }
+
+    this.extensionLoadPromises.httpfs = this.loadHTTPFSExtension();
+    await this.extensionLoadPromises.httpfs;
+    this.extensionLoadPromises.httpfs = null;
   }
 
   private async add_row_id(table: string): Promise<void> {
@@ -759,6 +929,9 @@ class DuckDB {
     let { tablename } = options;
     const meta = options.meta ?? false;
     try {
+      // Ensure spatial extension is loaded before processing geo files
+      await this.ensureSpatialExtension();
+
       await this.register_files([geofile]);
       const geofileWithId = geofile as FileWithId;
       if (meta) {
@@ -928,13 +1101,40 @@ class DuckDB {
     table: string,
     options: GetDataOptions = {}
   ): Promise<Uint8Array> {
-    const { geometry = false } = options;
-    const selection = geometry ? '*' : `COLUMNS(c -> c NOT ILIKE '%geom%')`;
-    const query = `SELECT ${selection} FROM ${table}`;
+    const { geometry = false, columns, limit } = options;
+
+    // Optimize column selection
+    let selection: string;
+    if (columns && columns.length > 0) {
+      // Explicit columns requested
+      selection = columns.map(col => `"${col}"`).join(', ');
+    } else if (!geometry) {
+      // Exclude geometry columns for better performance
+      selection = `COLUMNS(c -> c NOT ILIKE '%geom%')`;
+    } else {
+      // Full table including geometry
+      selection = '*';
+    }
+
+    // Build optimized query
+    let query = `SELECT ${selection} FROM ${table}`;
+    if (limit && limit > 0) {
+      query += ` LIMIT ${limit}`;
+    }
+
     const result = (await this.query(query, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     })) as ArrayBuffer | Uint8Array;
     return result instanceof Uint8Array ? result : new Uint8Array(result);
+  }
+
+  async get_data_sample(
+    table: string,
+    limit = 1000,
+    options: GetDataOptions = {}
+  ): Promise<Uint8Array> {
+    // Optimized method for quick previews
+    return this.get_data(table, { ...options, limit });
   }
 
   async sort_table(
@@ -1635,26 +1835,44 @@ class DuckDB {
 let class_name_counter = 0;
 let Duck: DuckDB | null = null;
 let duckInitPromise: Promise<void> | null = null;
+let initializationStarted = false; // Synchronous flag to prevent race condition
 
 async function initDuckDB(): Promise<void> {
+  // If already initialized, return immediately
   if (Duck) {
     return;
   }
 
-  if (!duckInitPromise) {
-    duckInitPromise = (async () => {
-      try {
-        const instance = new DuckDB();
-        await instance.init();
-        Duck = instance;
-      } catch (error) {
-        Duck = null;
-        throw error;
-      } finally {
-        duckInitPromise = null;
-      }
-    })();
+  // If initialization is in progress, wait for it
+  if (duckInitPromise) {
+    await duckInitPromise;
+    return;
   }
+
+  // Atomic check-and-set to prevent race condition
+  if (initializationStarted) {
+    // Another thread just started initialization, wait a tick and retry
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return initDuckDB(); // Recursive call will hit the duckInitPromise check
+  }
+
+  // Mark initialization as started SYNCHRONOUSLY (before any await)
+  initializationStarted = true;
+
+  // Start initialization
+  duckInitPromise = (async () => {
+    try {
+      const instance = new DuckDB();
+      await instance.init();
+      Duck = instance;
+    } catch (error) {
+      Duck = null;
+      duckInitPromise = null;
+      initializationStarted = false; // Reset on error to allow retry
+      throw error;
+    }
+    // Keep duckInitPromise set to detect concurrent calls
+  })();
 
   await duckInitPromise;
 }

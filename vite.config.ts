@@ -35,7 +35,7 @@ export default defineConfig(() => ({
               cacheName: 'duckdb-extensions',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 30
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year (extensions are versioned in URL)
               },
               cacheableResponse: {
                 statuses: [0, 200]
@@ -153,6 +153,15 @@ export default defineConfig(() => ({
       }
     })
   ],
+  // Web Worker configuration
+  worker: {
+    format: 'es' as const,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name]-[hash].worker.js'
+      }
+    }
+  },
   test: {
     projects: [
       {
