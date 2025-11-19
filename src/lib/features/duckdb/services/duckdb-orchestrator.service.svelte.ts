@@ -1363,38 +1363,17 @@ class DuckDBOrchestratorService {
       throw new DuckDBError('DuckDB not initialized');
     }
 
-    try {
-      const buffer = await Duck.copy_to_geoparquet_as_buffer(tableName);
+    const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
 
-      const arrowTableFromParquet =
-        await geoParquetReader.readGeoParquet(buffer);
-      const geoArrowMetadata = geoParquetReader.extractMetadata(
-        arrowTableFromParquet
-      );
+    const arrowTableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
+      arrowTable,
+      tableName
+    );
+    const geoArrowMetadata = geoParquetReader.extractMetadata(
+      arrowTableWithMetadata
+    );
 
-      return {
-        arrowTableWithMetadata: arrowTableFromParquet,
-        geoArrowMetadata
-      };
-    } catch (error) {
-      logger.error(
-        'GeoParquet round-trip failed, falling back to direct Arrow fetch',
-        LogCategory.DUCKDB,
-        error
-      );
-
-      const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
-
-      const arrowTableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
-        arrowTable,
-        tableName
-      );
-      const geoArrowMetadata = geoParquetReader.extractMetadata(
-        arrowTableWithMetadata
-      );
-
-      return { arrowTableWithMetadata, geoArrowMetadata };
-    }
+    return { arrowTableWithMetadata, geoArrowMetadata };
   }
 
   private async ensureGeometryColumnIsWkb(
