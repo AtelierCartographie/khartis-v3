@@ -2,7 +2,6 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
-    ButtonSet,
     Column,
     Grid,
     NumberInput,
@@ -27,15 +26,10 @@
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
+  import { TextAlign } from '$lib/features/commons/types/enums';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
-
-  const TextAlign = {
-    LEFT: 'left',
-    CENTER: 'center',
-    RIGHT: 'right'
-  } as const;
 
   const predefinedStyles = [
     { value: 'note', text: m.annotations_note() },
@@ -48,16 +42,17 @@
     annotationsActions.addAnnotation('text', '');
   }
 
-  function handleFontSizeChange(e: any) {
+  function handleFontSizeChange(e: CustomEvent<number | string | null>) {
+    const detail = e.detail;
     const value =
-      typeof e?.detail === 'string' ? parseInt(e.detail) : (e?.detail ?? 0);
+      typeof detail === 'string' ? parseInt(detail, 10) : (detail ?? 0);
     if (!isNaN(value)) {
       annotationsActions.updateDefaultStyle({ fontSize: value });
     }
   }
 
-  function handleAlignChange(align: string) {
-    annotationsActions.setTextAlign(align as any);
+  function handleAlignChange(align: TextAlign) {
+    annotationsActions.setTextAlign(align);
   }
 
   const selectedText = $derived.by(() => {
@@ -92,7 +87,7 @@
             (e.currentTarget as HTMLSelectElement).value
           )}
       >
-        {#each predefinedStyles as style}
+        {#each predefinedStyles as style (style.value)}
           <SelectItem value={style.value} text={style.text} />
         {/each}
       </Select>
@@ -112,7 +107,7 @@
           value={selectedText
             ? (selectedText.content as string)
             : annotationsState.textContent}
-          oninput={handleContentInput}
+          on:input={handleContentInput}
           placeholder={selectedText ? '' : 'Aucune'}
           disabled={!selectedText}
           rows={4}
@@ -140,7 +135,7 @@
     <Column>
       <div class="section">
         <NumberInput
-          label={m.annotations_size()}
+          labelText={m.annotations_size()}
           value={defaultStyle.fontSize || 16}
           min={8}
           max={72}
@@ -207,28 +202,28 @@
           <p class="alignment-label">Alignement</p>
           <div class="alignment-buttons">
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.LEFT
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.Left
                 ? 'active'
                 : ''}"
-              onclick={() => handleAlignChange(TextAlign.LEFT)}
+              onclick={() => handleAlignChange(TextAlign.Left)}
               aria-label="Aligner à gauche"
             >
               <TextAlignLeft />
             </button>
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.CENTER
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.Center
                 ? 'active'
                 : ''}"
-              onclick={() => handleAlignChange(TextAlign.CENTER)}
+              onclick={() => handleAlignChange(TextAlign.Center)}
               aria-label="Centrer"
             >
               <TextAlignCenter />
             </button>
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.RIGHT
+              class="alignment-btn {defaultStyle.textAlign === TextAlign.Right
                 ? 'active'
                 : ''}"
-              onclick={() => handleAlignChange(TextAlign.RIGHT)}
+              onclick={() => handleAlignChange(TextAlign.Right)}
               aria-label="Aligner à droite"
             >
               <TextAlignRight />

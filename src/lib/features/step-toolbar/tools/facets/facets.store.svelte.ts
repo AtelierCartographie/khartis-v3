@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { FacetsState } from './facets.types';
 
 const FIXTURE_VARIABLES = [
@@ -32,10 +33,6 @@ const DEFAULT_STATE: FacetsState = {
 export const facetsState = $state<FacetsState>({ ...DEFAULT_STATE });
 
 export const facetsActions = {
-  setState(newState: Partial<FacetsState>): void {
-    Object.assign(facetsState, newState);
-  },
-
   addVariable(variable: string): void {
     if (!facetsState.variables.includes(variable)) {
       facetsState.variables.push(variable);
@@ -90,7 +87,6 @@ export const facetsActions = {
   },
 
   removeCollection(id: string): void {
-    const collection = facetsState.collections.find((c) => c.id === id);
     facetsState.collections = facetsState.collections.filter(
       (c) => c.id !== id
     );
@@ -112,9 +108,7 @@ export const facetsActions = {
     facetsState.selectedVariables = [...facetsState.variables];
   },
 
-  reset(): void {
-    Object.assign(facetsState, DEFAULT_STATE);
-  }
+  reset: createResetFunction(facetsState, DEFAULT_STATE)
 };
 
 export function getSelectedVariablesCount(): number {

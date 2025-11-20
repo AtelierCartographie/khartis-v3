@@ -20,7 +20,9 @@
   ];
 
   $effect(() => {
-    selectedModel = formatState.model;
+    if (formatState.model && selectedModel !== formatState.model) {
+      selectedModel = formatState.model;
+    }
   });
 
   $effect(() => {
@@ -39,7 +41,7 @@
         labelText={m.format_model()}
         size="xl"
       >
-        {#each modelOptions as option}
+        {#each modelOptions as option (option.value)}
           <SelectItem value={option.value} text={option.text} />
         {/each}
       </Select>

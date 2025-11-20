@@ -9,9 +9,9 @@
     >{m.create_visualization_button()}</Button
   >
 
-  <Link href="#" inline size="sm" class="learn-more"
-    >{m.learn_more_visualizations()}</Link
-  >
+  <div class="learn-more">
+    <Link href="#" inline size="sm">{m.learn_more_visualizations()}</Link>
+  </div>
 </section>
 
 <style lang="scss">
@@ -26,5 +26,9 @@
     --btn-height: 48px;
     height: var(--btn-height);
     padding-inline: var(--cds-spacing-06);
+  }
+
+  .learn-more {
+    display: inline-flex;
   }
 </style>

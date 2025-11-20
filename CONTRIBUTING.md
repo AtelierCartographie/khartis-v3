@@ -154,15 +154,87 @@ BREAKING CHANGE: Legacy authentication method removed
 
 ## 5) Code style & architecture
 
+### Core Principles
+
 - **TypeScript strict**: keep types accurate; no implicit `any`
-- **Svelte 5 (Runes)**: use the project’s runes patterns; avoid legacy stores
+- **Svelte 5 (Runes)**: use `$state` and `$derived` patterns; avoid legacy stores
 - **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
 - **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
 - **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
 - **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
 - **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
 
-## 6) Testing
+### Store Pattern (Svelte 5 Runes)
+
+```typescript
+export class FeatureStore {
+  private _state = $state({ data: null });
+
+  get data() {
+    return this._state.data;
+  }
+  setData(data) {
+    this._state.data = data;
+  }
+}
+```
+
+### Data Pipeline Architecture
+
+- **DuckDB-first**: Use DuckDB native functions for all data operations
+- **No external parsers**: Use `Duck.read_csv()` instead of PapaParse, `ST_Read()` for geo files
+- **Contracts pattern**: Define interfaces in `contracts/`, implementations in `adapters/`
+- **Pipeline pattern**: Use `dataPipeline.processFile()` for all file imports
+
+### Web Workers Usage
+
+Workers are available for:
+
+- Type inference
+- DuckDB batch queries
+- Geometry processing
+- **Note**: CSV/GeoJSON parsing has been migrated to DuckDB native functions
+
+### Performance Guidelines
+
+- Use `TABLESAMPLE` for large dataset previews
+- Implement query result caching with table version tracking
+- Limit concurrent file imports (max 2 via ProcessingSemaphore)
+- Use debounced operations for frequent updates
+
+## 6) Error Handling
+
+### Error Classes
+
+Use the hierarchical error system:
+
+- `KhartisError` (base class)
+- `DataError`, `DataValidationError`, `DataParseError`
+- `DuckDBError`, `DuckDBConnectionError`
+- `VisualizationError`, `ClassificationError`
+- `StorageError`, `QuotaExceededError`
+
+### Error Patterns
+
+```typescript
+try {
+  await operation();
+} catch (error) {
+  if (error instanceof DataValidationError) {
+    // Handle validation error
+  } else {
+    logger.error('Unexpected error', error);
+  }
+}
+```
+
+### User-Friendly Messages
+
+- Always provide actionable error messages
+- Use `getUserMessage()` helper for technical errors
+- Show warnings for non-critical issues
+
+## 7) Testing
 
 ### Test types
 
@@ -224,10 +296,19 @@ yarn build         # Ensure production build works
 
 ## 11) Getting help
 
-- Documentation: see docs/summary.md
-- Issues: search existing ones or open a new issue
-- Discussions: use GitHub Discussions for ideas and Q&A
-- Maintainers: see contributors in package.json
+- **Documentation**: See `/docs` folder for comprehensive guides:
+  - `README.md` - Documentation overview
+  - `ARCHITECTURE.md` - System design and principles
+  - `DATA_PIPELINE.md` - Data processing architecture
+  - `VISUALIZATION.md` - Rendering and visualization types
+  - `STATE_AND_FEATURES.md` - State management patterns
+  - `REFERENCE.md` - Types and utilities reference
+  - `TROUBLESHOOTING.md` - Common issues and solutions
+  - `TESTING.md` - Testing strategies and examples
+  - `MIGRATION_GUIDE.md` - Migration from v2 to v3
+- **Issues**: Search existing ones or open a new issue
+- **Discussions**: Use GitHub Discussions for ideas and Q&A
+- **Maintainers**: See contributors in package.json
 
 ## 12) Code of Conduct
 

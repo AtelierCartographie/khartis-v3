@@ -3,7 +3,9 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { FileType } from '$lib/features/commons/store/create-project.types';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
+  import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -12,24 +14,39 @@
     InlineNotification,
     ProgressBar,
     TextArea,
-    TextInput
+    TextInput,
+    Tile,
+    Tag,
+    Loading
   } from 'carbon-components-svelte';
-  import { CloudDownload, Link, TrashCan } from 'carbon-icons-svelte';
+  import {
+    CloudDownload,
+    Link,
+    TrashCan,
+    DocumentBlank
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ProjectName from './project-name.svelte';
+  import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
     onClose?: () => void;
     isModal?: boolean;
+    resetToken?: number;
   }
 
-  const { onClose, isModal = false }: Props = $props();
+  const { onClose, isModal = false, resetToken = 0 }: Props = $props();
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
 
+  const globalValidationErrors = $derived(
+    createProjectState.newProject.validationErrors
+  );
+
   async function handleFileDrop(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
+
     await createProjectActions.processFiles(files);
   }
 
@@ -41,7 +58,7 @@
   }
 
   async function handleLoadOnlineFile() {
-    if (onlineUrlValue.trim()) {
+    if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
       createProjectActions.setOnlineFileUrl(onlineUrlValue);
       await createProjectActions.loadOnlineFile();
       if (!createProjectState.newProject.error) {
@@ -50,51 +67,92 @@
     }
   }
 
-  function handleRemoveFile(fileId: string) {
-    createProjectActions.removeUploadedFile(fileId);
+  let deletingFileIds = $state(new Set<string>());
+  let isDeletingAll = $state(false);
+
+  async function handleRemoveFile(fileId: string) {
+    deletingFileIds.add(fileId);
+    await createProjectActions.removeUploadedFile(fileId);
+    deletingFileIds.delete(fileId);
   }
 
-  function handleClearAllFiles() {
-    createProjectActions.clearAllFiles();
+  async function handleClearAllFiles() {
+    isDeletingAll = true;
+    await createProjectActions.clearAllFiles(true);
+    isDeletingAll = false;
   }
+
+  type TagColor = 'blue' | 'green' | 'purple' | 'teal' | 'magenta' | 'gray';
+
+  const FILE_TYPE_TAGS: Record<FileType, { label: string; color: TagColor }> = {
+    [FileType.CSV]: { label: 'CSV', color: 'blue' },
+    [FileType.TSV]: { label: 'TSV', color: 'blue' },
+    [FileType.GEOJSON]: { label: 'GeoJSON', color: 'green' },
+    [FileType.SHAPEFILE]: { label: 'Shapefile', color: 'purple' },
+    [FileType.GEOPACKAGE]: { label: 'GeoPackage', color: 'purple' },
+    [FileType.GEOPARQUET]: { label: 'GeoParquet', color: 'teal' },
+    [FileType.KML]: { label: 'KML', color: 'magenta' },
+    [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
+    [FileType.UNKNOWN]: {
+      label: m.create_project_file_type_unknown(),
+      color: 'gray'
+    }
+  };
+
+  const urlValidation = $derived(
+    onlineUrlValue.trim()
+      ? CreateProjectValidationService.validateURL(onlineUrlValue)
+      : null
+  );
+
+  const pastedDataValidation = $derived(
+    pastedDataValue.trim()
+      ? CreateProjectValidationService.validatePastedData(pastedDataValue)
+      : null
+  );
+
+  const getFileTypeTag = (fileType: FileType) =>
+    FILE_TYPE_TAGS[fileType] ?? FILE_TYPE_TAGS[FileType.UNKNOWN];
 </script>
 
 <section
   id="khartis-create-new-project"
+  data-testid="create-new-project-section"
   class={clsx('grid grid-cols-1 gap-3', isModal && 'is-modal-create-project')}
 >
   <header class="mb-4">
     {#if !isModal}
-      <h6 class="mb-3">Importer des données</h6>
+      <h6 class="mb-3">{m.create_project_import_data()}</h6>
     {/if}
 
     <span class="text-grey">
-      Il peut s’agir d’un tableau de données au format csv ou d’un fichier
-      d’informations géographiques (shp, geojson, geopackage).
+      {m.create_project_import_data_description()}
     </span>
   </header>
 
   <div class="grid grid-cols-2 gap-5">
     <div>
-      <FileUploaderDropContainer
-        labelText={m.create_project_drag_drop_file()}
-        multiple
-        accept={[
-          '.csv',
-          '.tsv',
-          '.txt',
-          '.geojson',
-          '.json',
-          '.shp',
-          '.shx',
-          '.dbf',
-          '.prj',
-          '.cpg',
-          '.gpkg'
-        ]}
-        validateFiles={(files) => files}
-        on:change={handleFileDrop}
-      />
+      {#key resetToken}
+        <FileUploaderDropContainer
+          data-testid="file-upload-container"
+          labelText={m.create_project_drag_drop_file()}
+          multiple
+          accept={[
+            ...SUPPORTED_FILE_TYPES.tabular.extensions,
+            ...SUPPORTED_FILE_TYPES.geojson.extensions,
+            ...SUPPORTED_FILE_TYPES.shapefile.extensions,
+            ...SUPPORTED_FILE_TYPES.geopackage.extensions,
+            ...SUPPORTED_FILE_TYPES.geoparquet.extensions,
+            ...SUPPORTED_FILE_TYPES.kml.extensions
+          ]}
+          validateFiles={(files) => {
+            const validationResult =
+              CreateProjectValidationService.validateFiles(Array.from(files));
+            return validationResult.isValid ? files : [];
+          }}
+          on:change={handleFileDrop}
+        />
+      {/key}
     </div>
 
     <div class="paste-container">
@@ -102,6 +160,12 @@
         bind:value={pastedDataValue}
         placeholder={m.create_project_paste_data()}
         rows={4}
+        invalid={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+        invalidText={pastedDataValidation?.errors[0] || ''}
+        warn={!!(
+          pastedDataValidation && pastedDataValidation.warnings.length > 0
+        )}
+        warnText={pastedDataValidation?.warnings[0] || ''}
       />
       {#if pastedDataValue.trim()}
         <div class="paste-actions">
@@ -110,9 +174,15 @@
             kind="secondary"
             on:click={() => (pastedDataValue = '')}
           >
-            Clear
+            {m.create_project_clear_button()}
           </Button>
-          <Button size="field" on:click={handlePasteData}>Process</Button>
+          <Button
+            size="field"
+            disabled={!!(pastedDataValidation && !pastedDataValidation.isValid)}
+            on:click={handlePasteData}
+          >
+            {m.create_project_process_button()}
+          </Button>
         </div>
       {/if}
     </div>
@@ -123,21 +193,35 @@
       <TextInput
         bind:value={onlineUrlValue}
         labelText={m.create_project_online_file_link()}
-        placeholder="https://"
+        placeholder="https://example.com/data.csv"
         disabled={createProjectState.newProject.isLoading}
+        invalid={!!(urlValidation && !urlValidation.isValid)}
+        invalidText={urlValidation?.errors[0] || ''}
+        warn={!!(urlValidation && urlValidation.warnings.length > 0)}
+        warnText={urlValidation?.warnings[0] || ''}
       />
 
-      <div>
+      <div class:button-loading={createProjectState.newProject.isLoading}>
         <Button
           size="field"
-          icon={CloudDownload}
+          icon={createProjectState.newProject.isLoading
+            ? undefined
+            : CloudDownload}
           disabled={!onlineUrlValue.trim() ||
+            (urlValidation && !urlValidation.isValid) ||
             createProjectState.newProject.isLoading}
           on:click={handleLoadOnlineFile}
         >
-          {createProjectState.newProject.isLoading
-            ? 'Loading...'
-            : m.create_project_load()}
+          <div class="button-with-loader">
+            {#if createProjectState.newProject.isLoading}
+              <Loading small withOverlay={false} />
+            {/if}
+            <span>
+              {createProjectState.newProject.isLoading
+                ? m.create_project_loading_status()
+                : m.create_project_load()}
+            </span>
+          </div>
         </Button>
       </div>
     </div>
@@ -146,27 +230,46 @@
       <InlineNotification
         lowContrast
         kind="error"
-        title="Error:"
+        title={m.create_project_error_label()}
         subtitle={createProjectState.newProject.error}
         on:close={() => createProjectActions.setNewProjectError()}
       />
     {/if}
 
     <div class="files-section">
+      {#if globalValidationErrors.length > 0}
+        <InlineNotification
+          kind="error"
+          title={m.create_project_validation_errors()}
+          subtitle={globalValidationErrors.join(', ')}
+          lowContrast
+          hideCloseButton
+        />
+      {/if}
+
       {#if createProjectState.newProject.uploadedFiles.length > 0}
         <div class="files-header">
           <span class="files-count">
-            {createProjectState.newProject.uploadedFiles.length} file(s) -
+            {createProjectState.newProject.uploadedFiles.length}
+            {m.create_project_files_label()} -
             {formatFileSize(createProjectActions.getTotalFileSize())}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
             <Button
               size="field"
               kind="ghost"
-              icon={TrashCan}
+              icon={isDeletingAll ? undefined : TrashCan}
+              disabled={isDeletingAll}
               on:click={handleClearAllFiles}
             >
-              Clear all
+              {#if isDeletingAll}
+                <div class="button-with-loader">
+                  <Loading small withOverlay={false} />
+                  <span>{m.create_project_processing_status()}</span>
+                </div>
+              {:else}
+                {m.create_project_clear_all_button()}
+              {/if}
             </Button>
           {/if}
         </div>
@@ -187,17 +290,22 @@
                   value={file.uploadProgress || 0}
                   max={100}
                   helperText={file.status === 'processing'
-                    ? 'Processing...'
-                    : 'Uploading...'}
+                    ? m.create_project_processing_status()
+                    : m.create_project_uploading_status()}
                 />
               </div>
               <Button
                 size="field"
                 kind="ghost"
                 iconDescription="Cancel"
-                icon={TrashCan}
+                icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
-              />
+              >
+                {#if deletingFileIds.has(file.id)}
+                  <Loading small withOverlay={false} />
+                {/if}
+              </Button>
             </div>
           {:else if file.status === 'error'}
             <div class="file-error-row">
@@ -205,51 +313,84 @@
                 invalid
                 class="w-full"
                 name={file.name}
-                errorSubject="Error"
-                errorBody={file.errorMessage || 'File processing failed'}
+                errorSubject={m.create_project_error_status()}
+                errorBody={file.errorMessage || m.create_project_error_label()}
                 status="edit"
               />
               <Button
                 size="field"
                 kind="ghost"
                 iconDescription="Remove file"
-                icon={TrashCan}
+                icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
-              />
+              >
+                {#if deletingFileIds.has(file.id)}
+                  <Loading small withOverlay={false} />
+                {/if}
+              </Button>
             </div>
           {:else if file.status === 'complete'}
-            <div class="file-complete-row">
-              <FileUploaderItem
-                class="w-full"
-                name={`${file.name} (${formatFileSize(file.size)})`}
-                status="complete"
-              />
-              <Button
-                size="field"
-                kind="ghost"
-                iconDescription="Remove file"
-                icon={TrashCan}
-                on:click={() => handleRemoveFile(file.id)}
-              />
-            </div>
-            {#if file.validation?.warnings && file.validation.warnings.length > 0}
-              <InlineNotification
-                lowContrast
-                kind="warning"
-                title="Warnings:"
-                subtitle={file.validation.warnings.join(', ')}
-                hideCloseButton
-              />
-            {/if}
-          {/if}
+            {@const fileTag = getFileTypeTag(file.fileType)}
+            <Tile class="file-complete-tile">
+              <div class="file-header">
+                <div class="file-info">
+                  <DocumentBlank size={20} class="file-icon" />
+                  <div class="file-details">
+                    <div class="file-name">{file.name}</div>
+                    <div class="file-size">{formatFileSize(file.size)}</div>
+                    <div class="file-tags">
+                      <Tag size="sm" type={fileTag.color}>
+                        {fileTag.label}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  size="small"
+                  kind="ghost"
+                  iconDescription="Remove file"
+                  icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                  disabled={deletingFileIds.has(file.id)}
+                  on:click={() => handleRemoveFile(file.id)}
+                >
+                  {#if deletingFileIds.has(file.id)}
+                    <Loading small withOverlay={false} />
+                  {/if}
+                </Button>
+              </div>
 
-          {#if file.relatedFiles && file.relatedFiles.length > 0}
-            <div class="related-files">
-              <span class="related-files-label">Related files:</span>
-              <span class="related-files-list"
-                >{file.relatedFiles.join(', ')}</span
-              >
-            </div>
+              {#if file.relatedFiles && file.relatedFiles.length > 0}
+                <div class="related-files-tags">
+                  <span class="related-files-label">Related files:</span>
+                  <div class="tags-container">
+                    {#each file.relatedFiles as relatedFile, idx (idx)}
+                      <Tag size="sm" type="gray">{relatedFile}</Tag>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+
+              {#if file.validation?.errors && file.validation.errors.length > 0}
+                <InlineNotification
+                  lowContrast
+                  kind="error"
+                  title={m.create_project_error_status()}
+                  subtitle={file.validation.errors.join(', ')}
+                  hideCloseButton
+                />
+              {/if}
+
+              {#if file.validation?.warnings && file.validation.warnings.length > 0}
+                <InlineNotification
+                  lowContrast
+                  kind="warning"
+                  title={m.create_project_validation_errors()}
+                  subtitle={file.validation.warnings.join(', ')}
+                  hideCloseButton
+                />
+              {/if}
+            </Tile>
           {/if}
         </div>
       {/each}
@@ -320,25 +461,81 @@
     gap: var(--cds-spacing-02);
   }
 
-  .related-files {
-    padding-left: var(--cds-spacing-05);
+  .file-complete-tile :global(.bx--tile) {
+    padding: var(--cds-spacing-04);
+    border: 1px solid var(--cds-border-subtle);
+    background: var(--cds-layer-01);
+  }
+
+  .file-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .file-info :global(.file-icon) {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary);
+  }
+
+  .file-details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-01);
+    min-width: 0;
+  }
+
+  .file-tags {
+    display: flex;
+    gap: var(--cds-spacing-02);
+    flex-wrap: wrap;
+    margin-top: var(--cds-spacing-02);
+  }
+
+  .file-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-size {
     font-size: 0.75rem;
     color: var(--cds-text-secondary);
+  }
+
+  .related-files-tags {
+    margin-top: var(--cds-spacing-04);
     display: flex;
+    flex-direction: column;
     gap: var(--cds-spacing-02);
   }
 
   .related-files-label {
+    font-size: 0.75rem;
     font-weight: 500;
+    color: var(--cds-text-secondary);
   }
 
-  .related-files-list {
-    font-style: italic;
+  .tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cds-spacing-02);
   }
 
   .file-processing-row,
-  .file-error-row,
-  .file-complete-row {
+  .file-error-row {
     display: flex;
     align-items: flex-start;
     gap: var(--cds-spacing-03);
@@ -353,16 +550,34 @@
   }
 
   .file-processing-row :global(.bx--file__selected-file),
-  .file-error-row :global(.bx--file__selected-file),
-  .file-complete-row :global(.bx--file__selected-file) {
+  .file-error-row :global(.bx--file__selected-file) {
     max-width: none;
     width: 100%;
   }
 
   .file-processing-row :global(.bx--btn),
-  .file-error-row :global(.bx--btn),
-  .file-complete-row :global(.bx--btn) {
+  .file-error-row :global(.bx--btn) {
     flex-shrink: 0;
     min-width: auto;
+  }
+
+  .button-with-loader {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .button-with-loader :global(.bx--loading) {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .button-with-loader :global(.bx--loading__svg) {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .button-loading :global(.bx--btn) {
+    pointer-events: none;
   }
 </style>

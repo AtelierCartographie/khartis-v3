@@ -1,12 +1,13 @@
 <script lang="ts">
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
-  import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
+  import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { ZoomMode } from '$lib/features/commons/types/global';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import Header from '$lib/features/header/header.svelte';
   import Logo from '$lib/features/header/logo.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
@@ -27,23 +28,49 @@
   let isLoading = $state(true);
 
   onMount(async () => {
-    // Initialize DuckDB first
     try {
+      // Initialize DuckDB WASM runtime (critical for app functionality)
       await duckDBOrchestrator.initialize();
+
+      // Hide loader as soon as DuckDB is ready
+      isLoading = false;
+
+      logger.info(
+        'App ready - continuing background initialization',
+        LogCategory.SYSTEM
+      );
     } catch (error) {
-      // Silent fail - DuckDB initialization is optional
+      logger.error(
+        'DuckDB initialization failed - application cannot continue',
+        LogCategory.DUCKDB,
+        error
+      );
+      isLoading = false;
+      globalState.isCreateProjectModalOpen = true;
+      return;
     }
 
-    // Wait for project store to initialize from IndexedDB
-    await projectStore.waitForInit();
+    // Continue initialization in background (non-blocking)
+    try {
+      // Wait for project store to initialize from IndexedDB
+      await projectStore.waitForInit();
 
-    // Initialize data orchestrator to process any existing files
-    await dataOrchestrator.initialize();
+      // Initialize data orchestrator to process any existing files
+      await dataOrchestratorService.initialize();
 
-    isLoading = false;
+      // Show modal only if no project exists
+      if (!projectStore.currentProject) {
+        globalState.isCreateProjectModalOpen = true;
+      }
 
-    // Show modal only if no project exists
-    if (!projectStore.currentProject) {
+      logger.success('Background initialization complete', LogCategory.SYSTEM);
+    } catch (error) {
+      logger.error(
+        'Background initialization failed',
+        LogCategory.SYSTEM,
+        error
+      );
+      // Show modal to allow user to create a new project
       globalState.isCreateProjectModalOpen = true;
     }
   });
@@ -54,9 +81,7 @@
 
   // Reactive transform style for page zoom
   const pageTransformStyle = $derived(
-    globalState.zoom.mode === ZoomMode.Page
-      ? `transform: scale(${globalState.zoom.pageZoomLevel / 100}); transform-origin: center center;`
-      : ''
+    `transform: scale(${globalState.zoom.pageZoomLevel / 100}); transform-origin: center center;`
   );
 </script>
 
@@ -94,6 +119,7 @@
 
     <MainToolbar />
     <NotificationContainer />
+    <PwaUpdatePrompt />
   </main>
 {/if}
 

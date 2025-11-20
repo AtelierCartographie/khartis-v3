@@ -52,15 +52,15 @@
     aria-expanded={expanded}
     aria-label={m.section_toggle()}
     onclick={toggle}
-    onkeydown={(e) =>
+    onkeydown={(e: KeyboardEvent) =>
       (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle())}
   >
     {#if showToggle}
       <div
         class="section-toggle"
         role="presentation"
-        onclick={(e) => e.stopPropagation()}
-        onkeydown={(e) => e.stopPropagation()}
+        onclick={(e: MouseEvent) => e.stopPropagation()}
+        onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
       >
         <Toggle
           size="sm"

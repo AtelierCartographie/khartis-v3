@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { FormatState } from './format.types';
 
 const DEFAULT_FORMAT_STATE: FormatState = {
@@ -64,9 +65,7 @@ export const formatActions = {
     formatState.gridEnabled = !formatState.gridEnabled;
   },
 
-  reset(): void {
-    Object.assign(formatState, DEFAULT_FORMAT_STATE);
-  }
+  reset: createResetFunction(formatState, DEFAULT_FORMAT_STATE)
 };
 
 export function getFormatState(): FormatState {

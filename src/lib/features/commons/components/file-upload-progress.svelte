@@ -6,37 +6,15 @@
     ErrorFilled
   } from 'carbon-icons-svelte';
   import type { UploadedFile } from '../store/create-project.types';
+  import { getParsedDataLength } from '$lib/types/data';
 
   let { file = $bindable() }: { file: UploadedFile } = $props();
-
-  function getStatusIcon(status: UploadedFile['status']) {
-    switch (status) {
-      case 'complete':
-        return CheckmarkFilled;
-      case 'error':
-        return ErrorFilled;
-      default:
-        return null;
-    }
-  }
-
-  function getStatusColor(status: UploadedFile['status']) {
-    switch (status) {
-      case 'complete':
-        return 'green';
-      case 'error':
-        return 'red';
-      case 'processing':
-        return 'blue';
-      default:
-        return 'gray';
-    }
-  }
 
   const hasProgress = $derived(
     file.status === 'processing' && file.uploadProgress !== undefined
   );
   const hasDuplicates = $derived(file.duplicates?.hasDuplicates);
+  const rowCount = $derived(getParsedDataLength(file.parsedData));
 </script>
 
 <div class="file-progress-wrapper">
@@ -76,9 +54,9 @@
       <span class="stat-item">
         Columns: {Object.keys(file.statistics).length}
       </span>
-      {#if file.parsedData}
+      {#if rowCount > 0}
         <span class="stat-item">
-          Rows: {file.parsedData.length}
+          Rows: {rowCount}
         </span>
       {/if}
     </div>

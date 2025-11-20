@@ -1,23 +1,28 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
+  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import type { SavedProjectMetadata } from '$lib/features/project-management';
+  import {
+    formatDate,
+    formatFileSize
+  } from '$lib/features/commons/utils/format.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import {
     FileUploaderDropContainer,
-    Tooltip,
     InlineNotification,
-    SkeletonPlaceholder
+    Modal,
+    OverflowMenu,
+    OverflowMenuItem,
+    SkeletonPlaceholder,
+    Tooltip
   } from 'carbon-components-svelte';
-  import { Calendar, Link } from 'carbon-icons-svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import {
-    createProjectActions,
-    createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import type { SavedProjectMetadata } from '$lib/features/commons/store/project.types';
-  import { goto } from '$app/navigation';
+  import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
-  import { formatDate, formatFileSize } from '$lib/features/commons/utils/format.utils';
+  import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
     onClose?: () => void;
@@ -30,6 +35,9 @@
   let isLoading = $state(true);
   let error = $state('');
   let isImporting = $state(false);
+  let isDuplicating = $state(false);
+  let projectToDelete = $state<string | null>(null);
+  let showDeleteConfirm = $state(false);
 
   onMount(async () => {
     await loadProjects();
@@ -42,6 +50,7 @@
     try {
       savedProjects = await projectStore.listProjects();
     } catch (err) {
+      logger.error('Failed to load projects', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load projects';
     } finally {
       isLoading = false;
@@ -61,8 +70,9 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (err) {
+      logger.error('Failed to load project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load project';
       selectedProjectId = null;
     }
@@ -70,12 +80,16 @@
 
   async function handleFileImport(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
+
     const khFile = files.find(
       (f) => f.name.endsWith('.kh') || f.name.endsWith('.khartis')
     );
 
     if (!khFile) {
-      error = 'Please select a valid .kh or .khartis file';
+      logger.error('No valid Khartis file found', LogCategory.PROJECT, {
+        fileNames: files.map((f) => f.name)
+      });
+      error = m.validation_invalid_khartis_file();
       return;
     }
 
@@ -87,14 +101,69 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      goto('/');
+      await goto('/', { replaceState: true });
     } catch (err) {
+      logger.error('Failed to import project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to import project';
     } finally {
       isImporting = false;
     }
   }
 
+  async function handleDuplicateProject(projectId: string) {
+    isDuplicating = true;
+    error = '';
+
+    try {
+      const newProjectId = await projectStore.duplicateProject(projectId);
+      await loadProjects();
+      selectedProjectId = newProjectId;
+    } catch (err) {
+      logger.error('Failed to duplicate project', LogCategory.PROJECT, err);
+      error =
+        err instanceof Error ? err.message : 'Failed to duplicate project';
+    } finally {
+      isDuplicating = false;
+    }
+  }
+
+  function confirmDeleteProject(projectId: string) {
+    projectToDelete = projectId;
+    showDeleteConfirm = true;
+  }
+
+  async function handleDeleteProject() {
+    if (!projectToDelete) return;
+
+    error = '';
+    const deletingId = projectToDelete;
+    projectToDelete = null;
+    showDeleteConfirm = false;
+
+    try {
+      await projectStore.deleteProject(deletingId);
+
+      if (selectedProjectId === deletingId) {
+        selectedProjectId = null;
+      }
+
+      await loadProjects();
+    } catch (err) {
+      logger.error('Failed to delete project', LogCategory.PROJECT, err);
+      error = err instanceof Error ? err.message : 'Failed to delete project';
+    }
+  }
+
+  function cancelDelete() {
+    projectToDelete = null;
+    showDeleteConfirm = false;
+  }
+
+  function validateKhartisFiles(files: readonly File[]): readonly File[] {
+    return CreateProjectValidationService.validateKhartisFiles(
+      Array.from(files)
+    );
+  }
 </script>
 
 <section id="khartis-open-project" class="grid grid-cols-1 gap-3">
@@ -118,7 +187,7 @@
     <InlineNotification
       lowContrast
       kind="error"
-      title="Error:"
+      title={m.create_project_error_label()}
       subtitle={error}
       on:close={() => (error = '')}
     />
@@ -126,34 +195,66 @@
 
   <div class="flex gap-5 overflow-x-auto pb-3">
     {#if isLoading}
-      {#each Array(3) as _}
+      {#each Array(3) as _item, idx (idx)}
         <div class="project-card-skeleton">
           <SkeletonPlaceholder style="width: 200px; height: 150px;" />
         </div>
       {/each}
     {:else if savedProjects.length === 0}
       <div class="no-projects">
-        <p class="text-grey">No saved projects yet</p>
+        <p class="text-grey">{m.create_project_no_saved_projects()}</p>
       </div>
     {:else}
-      {#each savedProjects as project}
-        <ProjectCard
-          title={project.name}
-          subtitle={project.description || formatFileSize(project.size)}
-          variant="blue"
-          selected={selectedProjectId === project.id}
-          onclick={() => handleProjectClick(project.id)}
-        >
-          {#snippet footer()}
-            <div class="flex items-center">
-              <Calendar
-                size={16}
-                style="color: var(--calendar-color); fill: var(--calendar-color);"
-              />
-              <span class="ml-2 text-sm">{formatDate(project.updatedAt)}</span>
-            </div>
-          {/snippet}
-        </ProjectCard>
+      {#each savedProjects as project (project.id)}
+        <div class="project-card-wrapper">
+          <ProjectCard
+            title={project.name}
+            subtitle={project.description || formatFileSize(project.size)}
+            variant="blue"
+            selected={selectedProjectId === project.id}
+            onclick={() => handleProjectClick(project.id)}
+          >
+            {#snippet footer()}
+              <div class="flex items-center justify-between w-full">
+                <div class="flex items-center">
+                  <Calendar
+                    size={16}
+                    style="color: var(--calendar-color); fill: var(--calendar-color);"
+                  />
+                  <span class="ml-2 text-sm"
+                    >{formatDate(project.updatedAt)}</span
+                  >
+                </div>
+                <OverflowMenu
+                  size="sm"
+                  flipped
+                  on:click={(e: MouseEvent) => e.stopPropagation()}
+                >
+                  <OverflowMenuItem
+                    text={m.open_project_duplicate()}
+                    disabled={isDuplicating}
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      handleDuplicateProject(project.id);
+                    }}
+                  >
+                    <Copy size={16} />
+                  </OverflowMenuItem>
+                  <OverflowMenuItem
+                    danger
+                    text={m.open_project_delete()}
+                    on:click={(e) => {
+                      e.stopPropagation();
+                      confirmDeleteProject(project.id);
+                    }}
+                  >
+                    <TrashCan size={16} />
+                  </OverflowMenuItem>
+                </OverflowMenu>
+              </div>
+            {/snippet}
+          </ProjectCard>
+        </div>
       {/each}
     {/if}
   </div>
@@ -171,7 +272,7 @@
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
         accept={['.kh', '.khartis']}
-        validateFiles={(files) => files}
+        validateFiles={validateKhartisFiles}
         disabled={isImporting}
         on:change={handleFileImport}
       />
@@ -183,6 +284,21 @@
       <Link size={24} />
     </div>
   </div>
+
+  <Modal
+    danger
+    bind:open={showDeleteConfirm}
+    modalHeading={m.open_project_delete_confirm_title()}
+    primaryButtonText={m.open_project_delete_confirm_button()}
+    secondaryButtonText={m.open_project_cancel()}
+    on:click:button--primary={handleDeleteProject}
+    on:click:button--secondary={cancelDelete}
+    size="xs"
+  >
+    <p>
+      {m.open_project_delete_confirm_message()}
+    </p>
+  </Modal>
 </section>
 
 <style>
@@ -200,5 +316,25 @@
     text-align: center;
     border: 1px dashed var(--cds-border-subtle);
     border-radius: 4px;
+  }
+
+  .project-card-wrapper {
+    position: relative;
+  }
+
+  .project-card-wrapper :global(.bx--overflow-menu) {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 10;
+  }
+
+  .project-card-wrapper :global(.bx--overflow-menu__icon) {
+    fill: var(--cds-icon-secondary);
+  }
+
+  .project-card-wrapper
+    :global(.bx--overflow-menu:hover .bx--overflow-menu__icon) {
+    fill: var(--cds-icon-primary);
   }
 </style>

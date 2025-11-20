@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import {
   SimplificationLevel,
   SimplificationSource
@@ -60,11 +61,6 @@ export const simplificationActions = {
 
     simplificationState.isProcessing = true;
 
-    const sourceType =
-      simplificationState.source === SimplificationSource.Basemap
-        ? 'basemap'
-        : 'geodata';
-
     try {
       const result = await this.performSimplification(geometryData);
 
@@ -82,15 +78,13 @@ export const simplificationActions = {
       };
 
       return result;
-    } catch (error) {
-      throw error;
     } finally {
       simplificationState.isProcessing = false;
     }
   },
 
   async performSimplification(
-    geometryData?: unknown
+    _geometryData?: unknown
   ): Promise<SimplificationResult> {
     return new Promise((resolve) => {
       setTimeout(() => {
@@ -129,9 +123,7 @@ export const simplificationActions = {
     }
   },
 
-  reset(): void {
-    Object.assign(simplificationState, DEFAULT_SIMPLIFICATION_STATE);
-  }
+  reset: createResetFunction(simplificationState, DEFAULT_SIMPLIFICATION_STATE)
 };
 
 export function getVertexReduction(level: SimplificationLevel): number {

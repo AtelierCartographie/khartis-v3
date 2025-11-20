@@ -51,15 +51,16 @@
     <Row padding>
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="width-input"
-            label={widthLabel}
-            value={width}
-            on:change={(e) => updateSize(e.detail ?? width, height)}
-            min={1}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="width-input"
+              labelText={widthLabel}
+              value={width}
+              on:change={(e) => updateSize(e.detail ?? width, height)}
+              min={1}
+              hideSteppers
+            />
+          </div>
           <div class="margin-buttons">
             <Button
               kind="ghost"
@@ -79,15 +80,16 @@
 
       <Column lg={8} md={4} sm={2}>
         <div class="margin-controls">
-          <NumberInput
-            id="height-input"
-            label={heightLabel}
-            value={height}
-            on:change={(e) => updateSize(width, e.detail ?? height)}
-            min={1}
-            hideSteppers
-            class="margin-input"
-          />
+          <div class="margin-input">
+            <NumberInput
+              id="height-input"
+              labelText={heightLabel}
+              value={height}
+              on:change={(e) => updateSize(width, e.detail ?? height)}
+              min={1}
+              hideSteppers
+            />
+          </div>
 
           <div class="margin-buttons">
             <Button
@@ -116,9 +118,12 @@
     align-items: flex-end;
   }
 
-  #khartis-custom-size-tool :global(.margin-input) {
+  .margin-input {
     flex: 1;
-    font-weight: 600;
+  }
+
+  .margin-input :global(.bx--number) {
+    width: 100%;
   }
 
   .margin-buttons {

@@ -11,11 +11,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-  }
-
-  article {
-    position: relative;
+    flex: 1;
     background-color: white;
-    padding: 40px;
   }
 </style>

@@ -68,105 +68,97 @@
       toggleChecked={state.scale.enabled}
       onToggleChange={() => store.toggleScale()}
     >
-      {#snippet children()}
-        <Grid padding noGutter>
-          <Row>
-            <Column>
-              <Select
-                id="style-select"
-                labelText={m.geo_style()}
-                selected={state.scale.style}
+      <Grid padding noGutter>
+        <Row>
+          <Column>
+            <Select
+              id="style-select"
+              labelText={m.geo_style()}
+              selected={state.scale.style}
+              on:change={(e) => store.setScaleStyle((e as CustomEvent).detail)}
+              size="xl"
+            >
+              {#each styleOptions as option (option.value)}
+                <SelectItem value={option.value} text={option.text} />
+              {/each}
+            </Select>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="distance-controls">
+              <NumberInput
+                id="distance-input"
+                labelText={m.geo_distance()}
+                value={state.scale.distance}
                 on:change={(e) =>
-                  store.setScaleStyle((e as CustomEvent).detail)}
+                  store.setScaleDistance((e as CustomEvent).detail || 0)}
+                min={0}
+                hideSteppers
                 size="xl"
-              >
-                {#each styleOptions as option}
-                  <SelectItem value={option.value} text={option.text} />
-                {/each}
-              </Select>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column sm={3} md={6} lg={13}>
-              <div class="distance-controls">
-                <NumberInput
-                  id="distance-input"
-                  label={m.geo_distance()}
-                  value={state.scale.distance}
-                  on:change={(e) =>
-                    store.setScaleDistance((e as CustomEvent).detail || 0)}
-                  min={0}
-                  hideSteppers
-                  size="xl"
-                />
-              </div>
-            </Column>
-
-            <Column sm={1} md={2} lg={3}>
-              <div class="distance-buttons">
-                <Button
-                  kind="ghost"
-                  size="small"
-                  on:click={() => store.decrementScaleDistance()}
-                  class="distance-button"
-                >
-                  −
-                </Button>
-                <Button
-                  kind="ghost"
-                  size="small"
-                  on:click={() => store.incrementScaleDistance()}
-                  class="distance-button"
-                >
-                  +
-                </Button>
-              </div>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column>
-              <RadioButtonGroup
-                legendText={m.geo_units()}
-                selected={state.scale.units}
-                on:change={(e) =>
-                  store.setScaleUnits((e as CustomEvent).detail)}
-              >
-                <RadioButton
-                  id="kilometers"
-                  value="kilometers"
-                  labelText={m.geo_kilometers()}
-                />
-                <RadioButton
-                  id="miles"
-                  value="miles"
-                  labelText={m.geo_miles()}
-                />
-              </RadioButtonGroup>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column>
-              <ColorPicker
-                triggerLabel={m.geo_color()}
-                hex={scaleHex}
-                hue={state.scale.color.hue}
-                saturation={state.scale.color.saturation}
-                lightness={state.scale.color.lightness}
-                onValidate={({
-                  hue,
-                  saturation,
-                  lightness
-                }: ColorPickerValidateEvent) => {
-                  store.setScaleColor({ hue, saturation, lightness });
-                }}
               />
-            </Column>
-          </Row>
-        </Grid>
-      {/snippet}
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="distance-buttons">
+              <Button
+                kind="ghost"
+                size="small"
+                on:click={() => store.decrementScaleDistance()}
+                class="distance-button"
+              >
+                −
+              </Button>
+              <Button
+                kind="ghost"
+                size="small"
+                on:click={() => store.incrementScaleDistance()}
+                class="distance-button"
+              >
+                +
+              </Button>
+            </div>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <RadioButtonGroup
+              legendText={m.geo_units()}
+              selected={state.scale.units}
+              on:change={(e) => store.setScaleUnits((e as CustomEvent).detail)}
+            >
+              <RadioButton
+                id="kilometers"
+                value="kilometers"
+                labelText={m.geo_kilometers()}
+              />
+              <RadioButton id="miles" value="miles" labelText={m.geo_miles()} />
+            </RadioButtonGroup>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <ColorPicker
+              triggerLabel={m.geo_color()}
+              hex={scaleHex}
+              hue={state.scale.color.hue}
+              saturation={state.scale.color.saturation}
+              lightness={state.scale.color.lightness}
+              onValidate={({
+                hue,
+                saturation,
+                lightness
+              }: ColorPickerValidateEvent) => {
+                store.setScaleColor({ hue, saturation, lightness });
+              }}
+            />
+          </Column>
+        </Row>
+      </Grid>
     </ExpandableSection>
 
     <ExpandableSection
@@ -176,76 +168,74 @@
       toggleChecked={state.orientation.enabled}
       onToggleChange={() => store.toggleOrientation()}
     >
-      {#snippet children()}
-        <Grid padding noGutter>
-          <Row>
-            <Column>
-              <RadioButtonGroup
-                legendText={m.geo_orientation_style()}
-                selected={state.orientation.style}
-                on:change={(e) =>
-                  store.setOrientationStyle((e as CustomEvent).detail)}
-              >
-                <RadioButton
-                  id="arrow-style"
-                  value="arrow"
-                  labelText={m.geo_orientation_arrow()}
-                />
-                <RadioButton
-                  id="compass-style"
-                  value="compass"
-                  labelText={m.geo_orientation_compass()}
-                />
-              </RadioButtonGroup>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column sm={3} md={6} lg={13}>
-              <div class="slider">
-                <Slider
-                  labelText={m.geo_orientation_size()}
-                  min={5}
-                  max={30}
-                  step={1}
-                  value={state.orientation.size}
-                  on:change={(e) =>
-                    store.setOrientationSize((e as CustomEvent).detail.value)}
-                  hideTextInput
-                  fullWidth
-                />
-              </div>
-            </Column>
-
-            <Column sm={1} md={2} lg={3}>
-              <div class="input-wrapper">
-                <div class="value-display">
-                  {state.orientation.size}
-                </div>
-              </div>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column>
-              <ColorPicker
-                triggerLabel={m.geo_orientation_color()}
-                hex={orientationHex}
-                hue={state.orientation.color.hue}
-                saturation={state.orientation.color.saturation}
-                lightness={state.orientation.color.lightness}
-                onValidate={({
-                  hue,
-                  saturation,
-                  lightness
-                }: ColorPickerValidateEvent) => {
-                  store.setOrientationColor({ hue, saturation, lightness });
-                }}
+      <Grid padding noGutter>
+        <Row>
+          <Column>
+            <RadioButtonGroup
+              legendText={m.geo_orientation_style()}
+              selected={state.orientation.style}
+              on:change={(e) =>
+                store.setOrientationStyle((e as CustomEvent).detail)}
+            >
+              <RadioButton
+                id="arrow-style"
+                value="arrow"
+                labelText={m.geo_orientation_arrow()}
               />
-            </Column>
-          </Row>
-        </Grid>
-      {/snippet}
+              <RadioButton
+                id="compass-style"
+                value="compass"
+                labelText={m.geo_orientation_compass()}
+              />
+            </RadioButtonGroup>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                labelText={m.geo_orientation_size()}
+                min={5}
+                max={30}
+                step={1}
+                value={state.orientation.size}
+                on:change={(e) =>
+                  store.setOrientationSize((e as CustomEvent).detail.value)}
+                hideTextInput
+                fullWidth
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <div class="value-display">
+                {state.orientation.size}
+              </div>
+            </div>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <ColorPicker
+              triggerLabel={m.geo_orientation_color()}
+              hex={orientationHex}
+              hue={state.orientation.color.hue}
+              saturation={state.orientation.color.saturation}
+              lightness={state.orientation.color.lightness}
+              onValidate={({
+                hue,
+                saturation,
+                lightness
+              }: ColorPickerValidateEvent) => {
+                store.setOrientationColor({ hue, saturation, lightness });
+              }}
+            />
+          </Column>
+        </Row>
+      </Grid>
     </ExpandableSection>
 
     <ExpandableSection
@@ -255,128 +245,126 @@
       toggleChecked={state.insetMap.enabled}
       onToggleChange={() => store.toggleInsetMap()}
     >
-      {#snippet children()}
-        <Grid padding noGutter>
-          <Row>
-            <Column>
-              <RadioButtonGroup
-                legendText={m.geo_inset_map_type()}
-                selected={state.insetMap.type}
-                on:change={(e) =>
-                  store.setInsetMapType((e as CustomEvent).detail)}
-              >
-                <RadioButton
-                  id="globe-type"
-                  value="globe"
-                  labelText={m.geo_inset_map_globe()}
-                />
-                <RadioButton
-                  id="planisphere-type"
-                  value="planisphere"
-                  labelText={m.geo_inset_map_planisphere()}
-                />
-              </RadioButtonGroup>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column sm={3} md={6} lg={13}>
-              <div class="slider">
-                <Slider
-                  labelText={m.geo_inset_map_size()}
-                  min={20}
-                  max={210}
-                  step={1}
-                  value={state.insetMap.size}
-                  on:change={(e) =>
-                    store.setInsetMapSize((e as CustomEvent).detail.value)}
-                  hideTextInput
-                  fullWidth
-                />
-              </div>
-            </Column>
-
-            <Column sm={1} md={2} lg={3}>
-              <div class="input-wrapper">
-                <div class="value-display">
-                  {state.insetMap.size}
-                </div>
-              </div>
-            </Column>
-          </Row>
-
-          <Row>
-            <Column>
-              <ColorPicker
-                triggerLabel={m.geo_inset_map_window_color()}
-                hex={insetMapWindowHex}
-                hue={state.insetMap.windowColor.hue}
-                saturation={state.insetMap.windowColor.saturation}
-                lightness={state.insetMap.windowColor.lightness}
-                onValidate={({
-                  hue,
-                  saturation,
-                  lightness
-                }: ColorPickerValidateEvent) => {
-                  store.setInsetMapWindowColor({ hue, saturation, lightness });
-                }}
+      <Grid padding noGutter>
+        <Row>
+          <Column>
+            <RadioButtonGroup
+              legendText={m.geo_inset_map_type()}
+              selected={state.insetMap.type}
+              on:change={(e) =>
+                store.setInsetMapType((e as CustomEvent).detail)}
+            >
+              <RadioButton
+                id="globe-type"
+                value="globe"
+                labelText={m.geo_inset_map_globe()}
               />
-            </Column>
-          </Row>
+              <RadioButton
+                id="planisphere-type"
+                value="planisphere"
+                labelText={m.geo_inset_map_planisphere()}
+              />
+            </RadioButtonGroup>
+          </Column>
+        </Row>
 
-          <Row>
-            <Column sm={3} md={6} lg={13}>
-              <div class="slider">
-                <Slider
-                  labelText={m.geo_inset_map_zoom()}
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={state.insetMap.zoom}
-                  on:change={(e) =>
-                    store.setInsetMapZoom((e as CustomEvent).detail.value)}
-                  hideTextInput
-                  fullWidth
-                />
-              </div>
-            </Column>
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                labelText={m.geo_inset_map_size()}
+                min={20}
+                max={210}
+                step={1}
+                value={state.insetMap.size}
+                on:change={(e) =>
+                  store.setInsetMapSize((e as CustomEvent).detail.value)}
+                hideTextInput
+                fullWidth
+              />
+            </div>
+          </Column>
 
-            <Column sm={1} md={2} lg={3}>
-              <div class="input-wrapper">
-                <div class="value-display">
-                  {state.insetMap.zoom}%
-                </div>
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <div class="value-display">
+                {state.insetMap.size}
               </div>
-            </Column>
-          </Row>
+            </div>
+          </Column>
+        </Row>
 
-          <Row>
-            <Column sm={3} md={6} lg={13}>
-              <div class="slider">
-                <Slider
-                  labelText={m.geo_inset_map_contrast()}
-                  min={0}
-                  max={100}
-                  step={1}
-                  value={state.insetMap.contrast}
-                  on:change={(e) =>
-                    store.setInsetMapContrast((e as CustomEvent).detail.value)}
-                  hideTextInput
-                  fullWidth
-                />
-              </div>
-            </Column>
+        <Row>
+          <Column>
+            <ColorPicker
+              triggerLabel={m.geo_inset_map_window_color()}
+              hex={insetMapWindowHex}
+              hue={state.insetMap.windowColor.hue}
+              saturation={state.insetMap.windowColor.saturation}
+              lightness={state.insetMap.windowColor.lightness}
+              onValidate={({
+                hue,
+                saturation,
+                lightness
+              }: ColorPickerValidateEvent) => {
+                store.setInsetMapWindowColor({ hue, saturation, lightness });
+              }}
+            />
+          </Column>
+        </Row>
 
-            <Column sm={1} md={2} lg={3}>
-              <div class="input-wrapper">
-                <div class="value-display">
-                  {state.insetMap.contrast}%
-                </div>
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                labelText={m.geo_inset_map_zoom()}
+                min={0}
+                max={100}
+                step={1}
+                value={state.insetMap.zoom}
+                on:change={(e) =>
+                  store.setInsetMapZoom((e as CustomEvent).detail.value)}
+                hideTextInput
+                fullWidth
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <div class="value-display">
+                {state.insetMap.zoom}%
               </div>
-            </Column>
-          </Row>
-        </Grid>
-      {/snippet}
+            </div>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                labelText={m.geo_inset_map_contrast()}
+                min={0}
+                max={100}
+                step={1}
+                value={state.insetMap.contrast}
+                on:change={(e) =>
+                  store.setInsetMapContrast((e as CustomEvent).detail.value)}
+                hideTextInput
+                fullWidth
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <div class="value-display">
+                {state.insetMap.contrast}%
+              </div>
+            </div>
+          </Column>
+        </Row>
+      </Grid>
     </ExpandableSection>
   </div>
 </div>

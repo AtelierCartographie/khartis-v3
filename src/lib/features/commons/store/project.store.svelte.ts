@@ -1,19 +1,28 @@
 import type {
   KhartisProject,
-  ProjectState,
-  ProjectHistoryEntry,
-  VisualizationConfig,
   LayoutConfig,
   ProjectData,
-  SavedProjectMetadata
-} from './project.types';
-import { ProjectStorageKey } from './project.types';
-import { projectPersistence } from '../utils/project-persistence.utils';
+  ProjectHistoryEntry,
+  ProjectState,
+  SavedProjectMetadata,
+  VisualizationConfig
+} from '$lib/features/project-management';
+import {
+  AutoSaveController,
+  ProjectStorageKey,
+  duplicateProject as duplicateProjectEntity,
+  projectFiles,
+  projectRepository,
+  projectStorage
+} from '$lib/features/project-management';
+import { m } from '$lib/paraglide/messages';
+import { dataOrchestratorService } from '../services/data-orchestrator.service.svelte';
+import { downloadFile } from '../utils/file-export.utils';
+import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
-import { generateProjectFilename, slugify } from '../utils/string.utils';
+import { generateProjectFilename } from '../utils/string.utils';
+import { ProjectValidator } from '../utils/validation.utils';
 import type { UploadedFile } from './create-project.types';
-import { globalActions } from './global.svelte';
-import { dataOrchestrator } from '../services/data-orchestrator.service';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -29,7 +38,8 @@ class ProjectStore {
     isLoading: false
   });
 
-  private autoSaveTimer?: number;
+  private autoSave = new AutoSaveController(() => this.saveCurrentProject());
+
   private initPromise?: Promise<void>;
 
   constructor() {
@@ -99,16 +109,11 @@ class ProjectStore {
       this._state.currentProject.data.sourceFiles = [];
     }
 
-    const isFirstFile = this._state.currentProject.data.sourceFiles.length === 0;
-    let addedFiles = 0;
-
     for (const file of newFiles) {
       const exists = this._state.currentProject.data.sourceFiles.find(
         (f) => f.id === file.id || f.name === file.name
       );
       if (!exists) {
-        // Create a deep copy of the file to preserve parsedData
-        // Use JSON parse/stringify as structuredClone fails with proxy objects
         const fileCopy = {
           id: file.id,
           name: file.name,
@@ -119,42 +124,51 @@ class ProjectStore {
           uploadProgress: file.uploadProgress,
           errorMessage: file.errorMessage,
           validation: file.validation,
-          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : null,
+          parsedData: file.parsedData,
           content: file.content,
+          preparedGeoJSON: file.preparedGeoJSON,
           duplicates: file.duplicates,
           statistics: file.statistics,
-          sourceType: file.sourceType
+          sourceType: file.sourceType,
+          deepAnalysis: file.deepAnalysis,
+          geoMatchResult: file.geoMatchResult,
+          relatedFileObjects: file.relatedFileObjects,
+          originalFile: file.originalFile,
+          relatedFiles: file.relatedFiles,
+          relatedFilesData: file.relatedFilesData
         };
 
-        console.log('[ProjectStore] Adding file to sourceFiles:', {
-          name: fileCopy.name,
-          parsedDataLength: Array.isArray(fileCopy.parsedData) ? fileCopy.parsedData.length : 0
-        });
+        // Force reactivity by reassigning currentProject with deep copy of data
+        // Do everything in one assignment to avoid intermediate states
 
-        this._state.currentProject.data.sourceFiles.push(fileCopy);
-
-        // Select the first file added or when it's the first file in the project
-        const shouldSelect = isFirstFile && addedFiles === 0;
-        globalActions.addDataButtonForFile(file.id, file.name, shouldSelect);
-        addedFiles++;
+        this._state.currentProject = {
+          ...this._state.currentProject,
+          data: {
+            ...this._state.currentProject.data,
+            sourceFiles: [
+              ...this._state.currentProject.data.sourceFiles,
+              fileCopy
+            ]
+          }
+        };
 
         try {
-          await dataOrchestrator.onFileAdded(fileCopy);
+          await dataOrchestratorService.onFileAdded(fileCopy);
         } catch (error) {
-          console.error('[ProjectStore] Failed to process file:', error);
+          logger.error('Failed to process file', LogCategory.PROJECT, error);
 
-          // Remove the file from sourceFiles if processing failed
-          const index = this._state.currentProject.data.sourceFiles.findIndex(
-            f => f.id === fileCopy.id
-          );
-          if (index > -1) {
-            this._state.currentProject.data.sourceFiles.splice(index, 1);
-          }
+          // Force reactivity by reassigning currentProject with deep copy of data
+          // Remove the failed file in one assignment
+          this._state.currentProject = {
+            ...this._state.currentProject,
+            data: {
+              ...this._state.currentProject.data,
+              sourceFiles: this._state.currentProject.data.sourceFiles.filter(
+                (f) => f.id !== fileCopy.id
+              )
+            }
+          };
 
-          // Remove the data button
-          globalActions.removeDataButton(file.id);
-
-          // Re-throw the error to be handled by the caller
           throw error;
         }
       }
@@ -169,28 +183,39 @@ class ProjectStore {
       return;
     }
 
-    const index = this._state.currentProject.data.sourceFiles.findIndex(
-      (f) => f.id === fileId
-    );
-    if (index > -1) {
-      const fileName = this._state.currentProject.data.sourceFiles[index].name;
-      this._state.currentProject.data.sourceFiles.splice(index, 1);
+    // Force reactivity by reassigning currentProject with deep copy of data
+    // Remove the file in one assignment to avoid intermediate states
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: this._state.currentProject.data.sourceFiles.filter(
+          (f) => f.id !== fileId
+        )
+      }
+    };
 
-      await dataOrchestrator.onFileRemoved(fileId);
+    await dataOrchestratorService.onFileRemoved(fileId);
 
-      this._state.isDirty = true;
-      await this.saveCurrentProject();
-    }
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
   }
 
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
+    const nameValidation = ProjectValidator.validateProjectName(name);
+    if (!nameValidation.isValid) {
+      throw new Error(nameValidation.errors.join(', '));
+    }
+
+    const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+
     const project: KhartisProject = {
       id: crypto.randomUUID(),
       manifest: {
         version: '3.0.0',
         createdAt: new Date(),
         updatedAt: new Date(),
-        name,
+        name: sanitizedName,
         format: 'kh'
       },
       data: {
@@ -202,51 +227,28 @@ class ProjectStore {
     this._state.isDirty = false;
     this._state.lastSaved = new Date();
 
-    globalActions.clearAllDataButtons();
-    for (const file of files) {
-      globalActions.addDataButtonForFile(file.id, file.name);
-    }
-
     this.addToHistory('Project created', project);
 
     await this.saveCurrentProject();
 
-    projectPersistence.saveToLocalStorage(
-      ProjectStorageKey.CURRENT,
-      project.id
-    );
+    await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
-    await dataOrchestrator.onProjectChanged();
+    await dataOrchestratorService.onProjectChanged();
   }
 
   async loadProject(id: string): Promise<void> {
-    try {
-      const project = await projectPersistence.loadProject(id);
+    const project = await projectRepository.load(id);
 
-      if (project) {
-        this._state.currentProject = project;
-        this._state.isDirty = false;
-        this._state.lastSaved = new Date();
-        this._state.history = [];
-        this._state.historyIndex = -1;
+    if (project) {
+      this._state.currentProject = project;
+      this._state.isDirty = false;
+      this._state.lastSaved = new Date();
+      this._state.history = [];
+      this._state.historyIndex = -1;
 
-        globalActions.clearAllDataButtons();
+      await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
-        if (project.data?.sourceFiles) {
-          for (const file of project.data.sourceFiles) {
-            globalActions.addDataButtonForFile(file.id, file.name);
-          }
-        }
-
-        projectPersistence.saveToLocalStorage(
-          ProjectStorageKey.CURRENT,
-          project.id
-        );
-
-        await dataOrchestrator.onProjectChanged();
-      }
-    } catch (error) {
-      throw error;
+      await dataOrchestratorService.onProjectChanged();
     }
   }
 
@@ -256,15 +258,37 @@ class ProjectStore {
     }
 
     try {
+      const projectValidation = ProjectValidator.validateProjectSize(
+        this._state.currentProject
+      );
+      if (!projectValidation.isValid) {
+        throw new Error(projectValidation.errors.join(', '));
+      }
+
+      if (projectValidation.warnings.length > 0) {
+        projectValidation.warnings.forEach((warning) => {
+          logger.warn(
+            `[ProjectStore:saveCurrentProject] ${warning}`,
+            LogCategory.PROJECT,
+            {
+              projectId: this._state.currentProject?.id
+            }
+          );
+        });
+      }
       this._state.currentProject.manifest.updatedAt = new Date();
 
-      await projectPersistence.saveProject(this._state.currentProject);
-
+      await projectRepository.save(this._state.currentProject);
       this._state.isDirty = false;
       this._state.lastSaved = new Date();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to save project';
+      logger.error(
+        'Failed to save project to IndexedDB',
+        LogCategory.PROJECT,
+        error
+      );
       showError('Failed to save project', message, error);
       throw error;
     }
@@ -272,11 +296,11 @@ class ProjectStore {
 
   async deleteProject(id: string): Promise<void> {
     try {
-      await projectPersistence.deleteProject(id);
+      await projectRepository.remove(id);
 
       if (this._state.currentProject?.id === id) {
         this._state.currentProject = undefined;
-        projectPersistence.clearLocalStorage(ProjectStorageKey.CURRENT);
+        await projectStorage.remove(ProjectStorageKey.CURRENT);
       }
     } catch (error) {
       const message =
@@ -286,8 +310,69 @@ class ProjectStore {
     }
   }
 
+  async duplicateProject(id: string, newName?: string): Promise<string> {
+    try {
+      const originalProject = await projectRepository.load(id);
+
+      if (!originalProject) {
+        throw new Error('Project not found');
+      }
+
+      const projects = await this.listProjects();
+      const capacityCheck = ProjectValidator.validateStorageCapacity(
+        projects.length
+      );
+      if (!capacityCheck.isValid) {
+        throw new Error(capacityCheck.errors.join(', '));
+      }
+
+      const duplicationSuffix =
+        typeof m.project_duplicate_suffix === 'function'
+          ? m.project_duplicate_suffix()
+          : '(copy)';
+      const duplicatedName =
+        newName || `${originalProject.manifest.name} ${duplicationSuffix}`;
+      const nameValidation =
+        ProjectValidator.validateProjectName(duplicatedName);
+      if (!nameValidation.isValid) {
+        throw new Error(nameValidation.errors.join(', '));
+      }
+
+      const duplicatedProject = duplicateProjectEntity(
+        originalProject,
+        ProjectValidator.sanitizeProjectName(duplicatedName)
+      );
+
+      await projectRepository.save(duplicatedProject);
+
+      return duplicatedProject.id;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to duplicate project';
+      showError('Failed to duplicate project', message, error);
+      throw error;
+    }
+  }
+
   async listProjects(): Promise<SavedProjectMetadata[]> {
-    return projectPersistence.listProjects();
+    const projects = await projectRepository.listMetadata();
+
+    const storageCheck = ProjectValidator.validateStorageCapacity(
+      projects.length
+    );
+    if (storageCheck.warnings.length > 0) {
+      storageCheck.warnings.forEach((warning) => {
+        logger.warn(
+          `[ProjectStore:listProjects] ${warning}`,
+          LogCategory.PROJECT,
+          {
+            projectCount: projects.length
+          }
+        );
+      });
+    }
+
+    return projects;
   }
 
   async exportProject(customName?: string): Promise<void> {
@@ -296,19 +381,13 @@ class ProjectStore {
     }
 
     try {
-      const blob = await projectPersistence.createProjectArchive(
-        this._state.currentProject
-      );
+      const blob = await projectFiles.createArchive(this._state.currentProject);
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       const projectName =
         customName || this._state.currentProject.manifest.name;
       const filename = generateProjectFilename(projectName);
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+
+      downloadFile(blob, filename);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to export project';
@@ -319,7 +398,7 @@ class ProjectStore {
 
   async importProject(file: File): Promise<void> {
     try {
-      const project = await projectPersistence.importProject(file);
+      const project = await projectFiles.importProject(file);
 
       this._state.currentProject = project;
       this._state.isDirty = false;
@@ -327,10 +406,7 @@ class ProjectStore {
       this._state.history = [];
       this._state.historyIndex = -1;
 
-      projectPersistence.saveToLocalStorage(
-        ProjectStorageKey.CURRENT,
-        project.id
-      );
+      await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to import project';
@@ -436,14 +512,14 @@ class ProjectStore {
     }
   }
 
-  clearProject(): void {
+  async clearProject(): Promise<void> {
     this._state.currentProject = undefined;
     this._state.isDirty = false;
     this._state.lastSaved = undefined;
     this._state.history = [];
     this._state.historyIndex = -1;
 
-    projectPersistence.clearLocalStorage(ProjectStorageKey.CURRENT);
+    await projectStorage.remove(ProjectStorageKey.CURRENT);
   }
 
   private addToHistory(action: string, snapshot?: KhartisProject): void {
@@ -471,25 +547,19 @@ class ProjectStore {
 
   private markDirty(): void {
     this._state.isDirty = true;
-    if (this._state.autoSaveEnabled) {
-      this.scheduleAutoSave();
-    }
+    this.scheduleAutoSave();
   }
 
   private scheduleAutoSave(): void {
-    if (this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
-    }
-
-    if (this._state.autoSaveEnabled && this._state.isDirty) {
-      this.autoSaveTimer = window.setTimeout(() => {
-        this.saveCurrentProject();
-      }, this._state.autoSaveInterval);
-    }
+    this.autoSave.updateConfig({
+      enabled: this._state.autoSaveEnabled,
+      interval: this._state.autoSaveInterval
+    });
+    this.autoSave.schedule(this._state.isDirty);
   }
 
   private async loadLastProject(): Promise<void> {
-    const lastProjectId = projectPersistence.loadFromLocalStorage<string>(
+    const lastProjectId = await projectStorage.load<string>(
       ProjectStorageKey.CURRENT
     );
 
@@ -497,8 +567,7 @@ class ProjectStore {
       try {
         await this.loadProject(lastProjectId);
       } catch (error) {
-        console.error('Failed to load last project:', error);
-        // Don't show toast here as it's during initialization
+        logger.error('Failed to load last project', LogCategory.PROJECT, error);
       }
     }
   }
@@ -510,10 +579,15 @@ class ProjectStore {
       this._state.autoSaveInterval = interval;
     }
 
+    this.autoSave.updateConfig({
+      enabled: this._state.autoSaveEnabled,
+      interval: this._state.autoSaveInterval
+    });
+
     if (enabled && this._state.isDirty) {
       this.scheduleAutoSave();
-    } else if (!enabled && this.autoSaveTimer) {
-      clearTimeout(this.autoSaveTimer);
+    } else if (!enabled) {
+      this.autoSave.cancel();
     }
   }
 }

@@ -1,6 +1,7 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { Layer, LayersState } from './layers.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { SvelteSet } from 'svelte/reactivity';
 
 const FIXTURE_LAYERS = [
   {
@@ -189,21 +190,15 @@ export const layersActions = {
     };
   },
 
-  reset(): void {
-    Object.assign(layersState, DEFAULT_STATE);
-  },
+  reset: createResetFunction(layersState, DEFAULT_STATE),
 
   syncWithVisualizations(): void {
     const visualizations = visualizationStore.visualizations;
 
-    const existingIds = new Set(layersState.layers.map((l) => l.id));
+    const existingIds = new SvelteSet(layersState.layers.map((l) => l.id));
 
     visualizations.forEach((viz) => {
       if (!existingIds.has(viz.id)) {
-        const dataset = datasetsStore.datasets.find(
-          (d) => d.id === viz.datasetId
-        );
-
         this.addLayer({
           name: viz.name,
           visible: viz.enabled,
@@ -216,10 +211,11 @@ export const layersActions = {
       }
     });
 
-    const vizIds = new Set(visualizations.map((v) => v.id));
-    layersState.layers = layersState.layers.filter(
+    const vizIds = new SvelteSet(visualizations.map((v) => v.id));
+    const filteredLayers = layersState.layers.filter(
       (layer) => layer.type === 'geographic' || vizIds.has(layer.id)
     );
+    layersState.layers = filteredLayers;
   },
 
   createLayerFromVisualization(vizId: string): Layer | null {
