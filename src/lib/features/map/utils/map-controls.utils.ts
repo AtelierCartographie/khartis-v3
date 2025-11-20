@@ -76,14 +76,10 @@ function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
       return [geometry.coordinates];
 
     case 'MultiPoint':
-
-    // fallthrough
     case 'LineString':
       return geometry.coordinates;
 
     case 'MultiLineString':
-
-    // fallthrough
     case 'Polygon':
       return geometry.coordinates.flat();
 

@@ -135,7 +135,6 @@
     return variables;
   });
 
-  // OPTIMIZATION: Memoize color conversions to avoid repeated hexToRgb calls
   const memoizedColors = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz) {
@@ -155,7 +154,6 @@
     };
   });
 
-  // OPTIMIZATION: Cache statistics to avoid repeated store queries
   const memoizedStatistics = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz || !viz.mapping.sizeColumn || !datasetId) {
@@ -180,7 +178,6 @@
     return { min: 0, max: 100 };
   });
 
-  // OPTIMIZATION: Cache category color map to avoid recreation on every render
   const memoizedCategoryColorMap = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz || !viz.mapping.categoryColumn || !datasetId) {
@@ -392,7 +389,6 @@
   }
 
   function createDeckLayers(jsTable: ArrowTable): Layer<DeckDataRow>[] {
-    // CRITICAL: Check metadata exists before accessing
     const geoMetadata = jsTable.schema.metadata?.get('geo');
 
     const hasUserDataset = Boolean(datasetId);
@@ -461,8 +457,30 @@
       if (!hasMatchingGeoExtension && hasUserDataset) {
         logger.warn('Geometry extension mismatch detected', LogCategory.MAP, {
           geometryType: resolvedGeometryType,
-          arrowExtension
+          arrowExtension,
+          expectedExtension
         });
+
+        // Validate that we can extract geometry manually if extension is missing
+        const geometryField = jsTable.schema.fields.find(
+          (field) => field.name === geoColumn
+        );
+        const geometryVector = geometryField
+          ? jsTable.getChild(geoColumn)
+          : null;
+
+        if (!geometryVector) {
+          logger.error(
+            'Cannot render geometry: missing proper GeoArrow extension metadata and unable to extract geometry column',
+            LogCategory.MAP,
+            {
+              geometryType: resolvedGeometryType,
+              geoColumn,
+              availableFields: jsTable.schema.fields.map((f) => f.name)
+            }
+          );
+          return [];
+        }
       }
 
       const viz = defaultVisualization;
@@ -476,8 +494,8 @@
       let deckLayer: Layer<DeckDataRow>;
       switch (resolvedGeometryType) {
         case 'POINT':
+        // falls through
 
-        // fallthrough
         case 'MULTIPOINT': {
           const pointVector = hasMatchingGeoExtension
             ? null
@@ -568,8 +586,8 @@
         }
 
         case 'LINESTRING':
+        // falls through
 
-        // fallthrough
         case 'MULTILINESTRING': {
           const pathVector = hasMatchingGeoExtension
             ? null
@@ -615,8 +633,8 @@
         }
 
         case 'POLYGON':
+        // falls through
 
-        // fallthrough
         case 'MULTIPOLYGON': {
           const polygonVector = hasMatchingGeoExtension
             ? null
@@ -628,6 +646,19 @@
               { geoColumn }
             );
             return [];
+          }
+
+          // Additional validation: check if geometry data is compatible
+          if (!hasMatchingGeoExtension) {
+            logger.warn(
+              'Rendering polygon layer without proper GeoArrow extension metadata - using fallback extraction',
+              LogCategory.MAP,
+              {
+                geometryType: resolvedGeometryType,
+                geoColumn,
+                hasVector: !!polygonVector
+              }
+            );
           }
 
           const useChoropleth = viz && shouldApplyChoropleth(viz);
@@ -857,19 +888,22 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoArrow(jsTable);
       if (bounds) {
-        map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        map.fitBounds(bounds, { padding: 50, duration: 300 }); // Reduced from 1000ms
         logger.info('Fitting map to Arrow dataset bounds', LogCategory.MAP, {
           datasetId,
           bounds
         });
 
-        setTimeout(() => {
+        // Use moveend event instead of setTimeout
+        const onMoveEnd = () => {
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
             saveMapPosition();
+            map.off('moveend', onMoveEnd); // Remove listener after use
           }
-        }, 1100);
+        };
+        map.once('moveend', onMoveEnd);
 
         lastFitTable = jsTable;
       }
@@ -882,18 +916,21 @@
       shouldRestorePosition = false;
       const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
       if (bounds) {
-        map.fitBounds(bounds, { padding: 50, duration: 1000 });
+        map.fitBounds(bounds, { padding: 50, duration: 300 }); // Reduced from 1000ms
         logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
           featureCount: userGeoJSON.features.length
         });
 
-        setTimeout(() => {
+        // Use moveend event instead of setTimeout
+        const onMoveEnd = () => {
           if (map) {
             baseZoomLevel = map.getZoom();
             globalActions.setMapZoom(100);
             saveMapPosition();
+            map.off('moveend', onMoveEnd); // Remove listener after use
           }
-        }, 1100);
+        };
+        map.once('moveend', onMoveEnd);
 
         lastFitGeoJSON = userGeoJSON;
       }

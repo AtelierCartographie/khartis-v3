@@ -1,10 +1,11 @@
+import { base } from '$app/paths';
 import type {
   BasemapMetadata,
   BasemapMatchResult
 } from '../types/basemap.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
-const BASEMAPS_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
+const BASEMAPS_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 
 export class BasemapCatalogService {
   private static cachedMetadata: BasemapMetadata[] | null = null;
@@ -143,7 +144,7 @@ export class BasemapCatalogService {
   }
 
   static getBasemapGeometryUrl(file: string): string {
-    return `/basemaps/geometry/${file}.parquet`;
+    return `${base}/basemaps/geometry/${file}.parquet`;
   }
 
   static async preloadBasemap(file: string): Promise<void> {

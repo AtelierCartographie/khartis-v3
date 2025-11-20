@@ -153,7 +153,7 @@
                 extension = 'json';
             }
 
-            const blob = exportProcessedDatasets(
+            const blob = await exportProcessedDatasets(
               normalizeDatasets(datasetsStore.datasets),
               format
             );

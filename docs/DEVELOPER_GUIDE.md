@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and explore `src/lib/features/` to understand the structure.
+Open http://localhost:5176/cartographie/khartisnewpprd/ and explore `src/lib/features/` to understand the structure.
 
 ## 🎯 Golden Rules
 
@@ -220,4 +220,4 @@ import * as m from '$paraglide/messages';
 ---
 
 **Documentation Version**: 3.1.0
-**Last Updated**: 2025-01-09
+**Last Updated**: 2025-11-20

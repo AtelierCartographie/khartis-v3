@@ -18,17 +18,13 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
 
   const geoColumnName = geomColumn.name;
 
-  // Try to detect existing encoding from Arrow extension metadata
   const extensionName = geomColumn.metadata?.get('ARROW:extension:name');
-  let encoding = 'WKB'; // Default fallback
-  let geometryTypes = ['Polygon', 'MultiPolygon']; // Default
+  let encoding = 'WKB';
+  let geometryTypes = ['Polygon', 'MultiPolygon'];
 
   if (extensionName) {
     if (extensionName.includes('geoarrow')) {
-      // GeoArrow encoding detected
-      encoding = extensionName; // e.g., 'geoarrow.polygon', 'geoarrow.point'
-
-      // Infer geometry types from encoding
+      encoding = extensionName;
       if (extensionName.includes('point')) {
         geometryTypes = ['Point', 'MultiPoint'];
       } else if (extensionName.includes('line')) {
@@ -41,11 +37,7 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
     }
   }
 
-  // Try to calculate bbox from actual data (only for first batch to avoid performance hit)
-  const columnBounds: [number, number, number, number] = [-180, -90, 180, 90]; // Default world bounds
-
-  // Note: Actual bbox calculation would require parsing geometry data
-  // For now, use default bounds. Proper implementation would need DuckDB query.
+  const columnBounds: [number, number, number, number] = [-180, -90, 180, 90];
 
   const geoMetadata = {
     version: '1.0.0',
