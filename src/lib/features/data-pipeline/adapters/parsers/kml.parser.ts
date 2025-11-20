@@ -1,9 +1,9 @@
+import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { IParser } from '../../contracts/parser';
 import { ParserError } from '../../contracts/parser';
 import type { RawDataset } from '../../models/raw-dataset';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 /**
  * Parses KML and KMZ files through DuckDB's spatial extension.
@@ -56,16 +56,22 @@ export class KMLParser implements IParser {
         meta: false
       });
 
-      const columnsInfo = (await Duck.query(`
+      const columnsInfo = (await Duck.query(
+        `
         SELECT column_name, data_type
         FROM information_schema.columns
         WHERE table_name = '${tableName}'
         ORDER BY ordinal_position
-      `)) as Array<{ column_name: string; data_type: string }>;
+      `,
+        { format: 'array' }
+      )) as Array<{ column_name: string; data_type: string }>;
 
-      const [{ count: rowCount }] = (await Duck.query(`
+      const [{ count: rowCount }] = (await Duck.query(
+        `
         SELECT COUNT(*) as count FROM ${tableName}
-      `)) as Array<{ count: number }>;
+      `,
+        { format: 'array' }
+      )) as Array<{ count: number }>;
 
       const headers = columnsInfo
         .filter((col) => col.data_type !== 'GEOMETRY')
@@ -76,9 +82,12 @@ export class KMLParser implements IParser {
       );
 
       const sampleSize = Math.min(1000, Number(rowCount));
-      const sampleData = (await Duck.query(`
+      const sampleData = (await Duck.query(
+        `
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
-      `)) as Array<Record<string, unknown>>;
+      `,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
 
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
@@ -93,7 +102,8 @@ export class KMLParser implements IParser {
       let bounds: [number, number, number, number] | undefined;
 
       if (geometryColumn) {
-        const [geomInfo] = (await Duck.query(`
+        const [geomInfo] = (await Duck.query(
+          `
           WITH bbox AS (
             SELECT ST_Extent(${geometryColumn.column_name}) AS extent
             FROM ${tableName}
@@ -111,7 +121,9 @@ export class KMLParser implements IParser {
             ST_XMax(extent) AS maxX,
             ST_YMax(extent) AS maxY
           FROM bbox
-        `)) as Array<{
+        `,
+          { format: 'array' }
+        )) as Array<{
           geom_type: string;
           minX: number | null;
           minY: number | null;

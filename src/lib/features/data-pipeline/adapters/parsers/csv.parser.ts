@@ -57,24 +57,33 @@ export class CSVParser implements IParser {
 
       await Duck.query(createTableQuery);
 
-      const columnsInfo = (await Duck.query(`
+      const columnsInfo = (await Duck.query(
+        `
         SELECT column_name, data_type
         FROM information_schema.columns
         WHERE table_name = '${tableName}'
         ORDER BY ordinal_position
-      `)) as Array<{ column_name: string; data_type: string }>;
+      `,
+        { format: 'array' }
+      )) as Array<{ column_name: string; data_type: string }>;
 
-      const [{ count: rowCount }] = (await Duck.query(`
+      const [{ count: rowCount }] = (await Duck.query(
+        `
         SELECT COUNT(*) as count FROM ${tableName}
-      `)) as Array<{ count: number }>;
+      `,
+        { format: 'array' }
+      )) as Array<{ count: number }>;
 
       const headers = columnsInfo.map((col) => col.column_name);
 
       // Provide rows/columns for downstream consumers without loading everything.
       const sampleSize = Math.min(1000, Number(rowCount));
-      const sampleData = (await Duck.query(`
+      const sampleData = (await Duck.query(
+        `
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
-      `)) as Array<Record<string, unknown>>;
+      `,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
 
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
