@@ -154,5 +154,5 @@ npm run test:coverage # Coverage report
 ---
 
 **Documentation Version**: 3.1.0
-**Last Updated**: 2025-01-09
+**Last Updated**: 2025-11-20
 **Codebase**: Khartis v3

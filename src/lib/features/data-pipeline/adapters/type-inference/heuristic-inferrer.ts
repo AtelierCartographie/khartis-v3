@@ -4,21 +4,7 @@ import type { InferredColumn } from '../../models/inferred-column';
 import type { RawColumn } from '../../models/raw-column';
 
 /**
- * Heuristic Type Inferrer - Infers column types using heuristics
- *
- * Type inference priority (from highest to lowest):
- * 1. BOOLEAN - true/false, 0/1, yes/no
- * 2. DATE - ISO dates, timestamps
- * 3. NUMBER - integers, floats
- * 4. GEOMETRY - GeoJSON geometry objects
- * 5. TEXT - fallback for everything else
- *
- * @example
- * ```typescript
- * const inferrer = new HeuristicTypeInferrer();
- * const numericType = inferrer.inferType(['1', '2', '3']);
- * const booleanType = inferrer.inferType(['true', 'false']);
- * ```
+ * Infers column types with simple heuristics (boolean → date → number → geometry → text).
  */
 export class HeuristicTypeInferrer implements ITypeInferrer {
   private static readonly SAMPLE_SIZE = 100;
@@ -64,9 +50,6 @@ export class HeuristicTypeInferrer implements ITypeInferrer {
     }));
   }
 
-  /**
-   * Count how many values match a predicate
-   */
   private countMatches(
     values: unknown[],
     predicate: (v: unknown) => boolean
@@ -74,9 +57,6 @@ export class HeuristicTypeInferrer implements ITypeInferrer {
     return values.filter(predicate).length;
   }
 
-  /**
-   * Check if value is boolean
-   */
   private isBoolean(value: unknown): boolean {
     if (typeof value === 'boolean') return true;
 
@@ -84,9 +64,6 @@ export class HeuristicTypeInferrer implements ITypeInferrer {
     return ['true', 'false', '0', '1', 'yes', 'no', 'y', 'n'].includes(str);
   }
 
-  /**
-   * Check if value is date
-   */
   private isDate(value: unknown): boolean {
     if (value instanceof Date) return true;
 
@@ -111,9 +88,6 @@ export class HeuristicTypeInferrer implements ITypeInferrer {
     return false;
   }
 
-  /**
-   * Check if value is number
-   */
   private isNumber(value: unknown): boolean {
     if (typeof value === 'number') return !isNaN(value) && isFinite(value);
 
@@ -125,9 +99,6 @@ export class HeuristicTypeInferrer implements ITypeInferrer {
     return !isNaN(num) && isFinite(num);
   }
 
-  /**
-   * Check if value is geometry (GeoJSON geometry object)
-   */
   private isGeometry(value: unknown): boolean {
     if (typeof value === 'object' && value !== null) {
       const obj = value as Record<string, unknown>;

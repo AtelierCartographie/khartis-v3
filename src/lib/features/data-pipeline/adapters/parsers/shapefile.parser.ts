@@ -6,17 +6,7 @@ import { Duck, initDuckDB } from '$lib/features/duckdb';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 /**
- * Shapefile Parser - Uses DuckDB's native ST_Read for shapefile parsing
- *
- * Accepts zipped shapefiles (recommended) and transforms them directly
- * into DuckDB tables using the spatial extension's ST_Read function.
- * This is significantly faster and more memory-efficient than the
- * previous shpjs-based approach.
- *
- * Supports:
- * - Zipped shapefiles (.zip with .shp, .shx, .dbf, .prj)
- * - Individual .shp files (with companion files)
- * - Direct spatial analysis without intermediate GeoJSON conversion
+ * Parses shapefiles (including zipped bundles) through DuckDB's ST_Read.
  */
 export class ShapefileParser implements IParser {
   readonly supportedExtensions = ['.shp', '.zip'];
@@ -38,25 +28,21 @@ export class ShapefileParser implements IParser {
         fileSize: file.size
       });
 
-      // Ensure DuckDB is initialized with spatial extension
       await initDuckDB();
       if (!Duck) {
         throw new DuckDBError('DuckDB not initialized');
       }
 
-      // Generate unique table name
       const baseTableName = file.name
         .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_]/g, '_');
       tableName = `shp_${baseTableName}_${Date.now()}`;
 
-      // Use DuckDB's native shapefile reading capability
       await Duck.read_geofile(file, {
         tablename: tableName,
         meta: false
       });
 
-      // Get table structure
       const columnsInfo = (await Duck.query(`
         SELECT column_name, data_type
         FROM information_schema.columns
@@ -64,45 +50,37 @@ export class ShapefileParser implements IParser {
         ORDER BY ordinal_position
       `)) as Array<{ column_name: string; data_type: string }>;
 
-      // Get row count
       const [{ count: rowCount }] = (await Duck.query(`
         SELECT COUNT(*) as count FROM ${tableName}
       `)) as Array<{ count: number }>;
 
-      // Extract headers (excluding geometry column for RawDataset compatibility)
       const headers = columnsInfo
         .filter((col) => col.data_type !== 'GEOMETRY')
         .map((col) => col.column_name);
 
-      // Get geometry column info
       const geometryColumn = columnsInfo.find(
         (col) => col.data_type === 'GEOMETRY'
       );
 
-      // For RawDataset compatibility, fetch a sample of data
-      // We'll limit to 1000 rows for type inference compatibility
+      // Limit sample for type inference compatibility.
       const sampleSize = Math.min(1000, Number(rowCount));
       const sampleData = (await Duck.query(`
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
       `)) as Array<Record<string, unknown>>;
 
-      // Convert to rows format (excluding geometry for tabular view)
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
       );
 
-      // Build columns structure for compatibility
       const columns = headers.map((name) => ({
         name,
         values: sampleData.map((row) => row[name] ?? null)
       }));
 
-      // Get geometry type and bounds if geometry exists
       let geometryType: string | undefined;
       let bounds: [number, number, number, number] | undefined;
 
       if (geometryColumn) {
-        // Get geometry type and bounds in a single query
         const [geomInfo] = (await Duck.query(`
           WITH bbox AS (
             SELECT ST_Extent(${geometryColumn.column_name}) AS extent
@@ -175,7 +153,6 @@ export class ShapefileParser implements IParser {
         }
       };
     } catch (error) {
-      // Clean up table if created
       if (tableName && Duck) {
         try {
           await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);

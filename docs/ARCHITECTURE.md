@@ -90,6 +90,86 @@ interface Project {
 
 **Target**: <3s load, ~60fps rendering (small-medium datasets)
 
+## Web Workers Architecture
+
+The **Web Workers** feature (`src/lib/features/workers/`) provides background thread execution for CPU-intensive operations, preventing UI freezes and improving responsiveness.
+
+### Purpose & Benefits
+- **Non-blocking UI**: Heavy computations run in background threads
+- **Parallel Processing**: Multiple workers can run simultaneously
+- **Better Performance**: Offload CPU-intensive tasks from main thread
+- **Improved UX**: UI remains responsive during data processing
+
+### Supported Operations
+
+| Operation                 | Status         | Notes                                |
+| ------------------------- | -------------- | ------------------------------------ |
+| **Type Inference**        | ✅ Active      | Column type detection in background |
+| **DuckDB Batch Queries**  | ✅ Active      | Execute multiple queries in parallel |
+| **Geometry Processing**   | ✅ Active      | Simplify, buffer, union operations  |
+| **CSV Parsing**           | ⚠️ Deprecated  | Migrated to DuckDB's native `read_csv()` |
+| **Shapefile Parsing**     | ⚠️ Deprecated  | Migrated to DuckDB's native `ST_Read()` |
+| **GeoJSON Parsing**       | ⚠️ Deprecated  | Migrated to DuckDB's native `ST_Read()` |
+
+### Worker Communication
+
+Workers use type-safe message passing:
+
+```typescript
+// Request to worker
+interface WorkerRequest<T> {
+  id: string;           // Unique request ID
+  type: string;         // Operation type
+  payload: T;           // Request data
+  transferables?: Transferable[]; // For efficient memory transfer
+}
+
+// Response from worker
+interface WorkerResponse<T> {
+  id: string;           // Matching request ID
+  type: 'success' | 'error' | 'progress';
+  payload?: T;          // Result data
+  error?: string;       // Error message if failed
+  progress?: number;    // Progress percentage (0-100)
+}
+```
+
+### Usage Example
+
+```typescript
+// Type inference in background
+const request: TypeInferenceRequest = {
+  columns: [
+    { name: 'age', values: [25, 30, 'N/A', 45] },
+    { name: 'date', values: ['2024-01-01', '2024-02-15'] }
+  ],
+  sampleSize: 100,
+  threshold: 0.8
+};
+
+// Worker will respond with inferred types
+const response: TypeInferenceResponse = {
+  columns: [
+    { name: 'age', type: 'numeric', confidence: 0.75, nullable: true },
+    { name: 'date', type: 'date', confidence: 1.0, nullable: false }
+  ]
+};
+```
+
+### Worker Pool Management
+
+- **Pool Size**: Automatically managed based on CPU cores
+- **Task Queue**: Pending tasks queued when all workers busy
+- **Error Recovery**: Failed tasks can be retried or fallback to main thread
+- **Performance Monitoring**: Track execution times and throughput
+
+### Implementation Notes
+
+- Workers are compatible with Vite + PWA configuration
+- SharedArrayBuffer support enables efficient data sharing
+- Fallback to main thread execution when workers unavailable
+- Type guards ensure type-safe message passing
+
 ## Extensibility Contracts
 
 ```ts

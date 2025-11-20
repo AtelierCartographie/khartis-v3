@@ -79,7 +79,7 @@ interface TableMetadata {
   analysis?: AnalysisResults | null;
   join: JoinInfo | null;
   filters: Map<number, string>;
-  version?: number; // Version tracking for cache invalidation
+  version?: number; // Used to invalidate cached queries when tables change
 }
 
 interface JoinInfo {
@@ -107,9 +107,9 @@ interface ReadLinkOptions {
 
 interface GetDataOptions {
   geometry?: boolean;
-  columns?: string[]; // Specific columns to select
-  limit?: number; // Limit number of rows for sampling
-  format?: QueryFormat; // Output format (Arrow IPC, etc.)
+  columns?: string[];
+  limit?: number;
+  format?: QueryFormat;
 }
 
 interface CalculateBreaksOptions {
@@ -291,7 +291,6 @@ class DuckDB {
 
   public registered_files: Set<string> = new Set();
 
-  // Query result cache with versioning for performance
   private queryCache = new Map<
     string,
     {
@@ -301,9 +300,9 @@ class DuckDB {
     }
   >();
 
-  private readonly CACHE_MAX_AGE = 60000; // 60 seconds cache TTL
+  private readonly CACHE_MAX_AGE = 60000; // ms TTL for query cache
 
-  private readonly CACHE_MAX_SIZE = 100; // Max number of cached queries
+  private readonly CACHE_MAX_SIZE = 100;
 
   public table_metadata: Map<string, TableMetadata> = new Map();
 
@@ -413,26 +412,20 @@ class DuckDB {
   private markTableMutated(table: string): void {
     this.invalidateTableCache(table);
     this.evictGeoParquetEntry(table);
-    // Also invalidate query cache entries that reference this table
     this.invalidateCacheForTable(table);
   }
 
-  /**
-   * Get cached query result if available and not stale
-   */
   private getCachedQuery(sql: string, tables: string[] = []): unknown | null {
     const cacheKey = this.generateCacheKey(sql);
     const cached = this.queryCache.get(cacheKey);
 
     if (!cached) return null;
 
-    // Check if cache is expired by time
     if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
       this.queryCache.delete(cacheKey);
       return null;
     }
 
-    // Check if any referenced table has been modified
     for (const table of tables) {
       const currentVersion = this.table_metadata.get(table)?.version || 0;
       const cachedVersion = cached.tableVersions.get(table) || 0;
@@ -448,9 +441,6 @@ class DuckDB {
     return cached.result;
   }
 
-  /**
-   * Cache query result with table version tracking
-   */
   private setCachedQuery(
     sql: string,
     result: unknown,
@@ -458,14 +448,11 @@ class DuckDB {
   ): void {
     const cacheKey = this.generateCacheKey(sql);
 
-    // Enforce cache size limit
     if (this.queryCache.size >= this.CACHE_MAX_SIZE) {
-      // Remove oldest entry
       const firstKey = this.queryCache.keys().next().value;
       if (firstKey) this.queryCache.delete(firstKey);
     }
 
-    // Track current version of all referenced tables
     const tableVersions = new Map<string, number>();
     for (const table of tables) {
       const version = this.table_metadata.get(table)?.version || 0;
@@ -479,17 +466,10 @@ class DuckDB {
     });
   }
 
-  /**
-   * Generate cache key from SQL query
-   */
   private generateCacheKey(sql: string): string {
-    // Simple hash for now - could be improved with proper hashing
     return sql.trim().toLowerCase();
   }
 
-  /**
-   * Invalidate all cache entries that reference a specific table
-   */
   private invalidateCacheForTable(table: string): void {
     for (const [key, cached] of this.queryCache.entries()) {
       if (cached.tableVersions.has(table)) {
@@ -498,19 +478,14 @@ class DuckDB {
     }
   }
 
-  /**
-   * Clear entire query cache
-   */
   clearQueryCache(): void {
     this.queryCache.clear();
   }
 
   private calculateOptimalMemory(): string {
-    // Use deviceMemory API if available (Chrome/Edge)
     if (typeof navigator !== 'undefined' && 'deviceMemory' in navigator) {
       const deviceMemory =
         (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
-      // Use 50% of device memory, capped at 3GB (safe under WASM 4GB limit)
       const optimalMemory = Math.min(
         Math.floor(deviceMemory * 0.5 * 1024),
         3072
@@ -525,7 +500,6 @@ class DuckDB {
       );
       return `${optimalMemory}MB`;
     }
-    // Default to 2GB if deviceMemory unavailable
     return '2048MB';
   }
 
@@ -534,7 +508,6 @@ class DuckDB {
     const pragmas: string[] = [
       `PRAGMA memory_limit='${this.calculateOptimalMemory()}';`,
       `PRAGMA enable_progress_bar=false;`,
-      // Performance optimizations
       `PRAGMA preserve_insertion_order=false;`, // Allow query optimizer to reorder
       `PRAGMA enable_object_cache=true;`, // Cache parsed objects
       `PRAGMA temp_directory='/tmp/duckdb';`, // Enable disk spilling for large operations
@@ -690,7 +663,6 @@ class DuckDB {
 
       await this.configureRuntimeSettings();
 
-      // Preload extensions in parallel for better performance
       await this.preloadExtensions();
 
       this.clearGeoParquetCache();
@@ -733,29 +705,20 @@ class DuckDB {
   }
 
   /**
-   * Preload all commonly used extensions in parallel at startup
-   * This avoids delays when extensions are needed later
+   * Preload common extensions in parallel to avoid runtime delays.
    */
   private async preloadExtensions(): Promise<void> {
     const startTime = performance.now();
     logger.info('Preloading DuckDB extensions', LogCategory.DUCKDB);
 
-    // Load all extensions in parallel for maximum efficiency
     const extensionPromises: Promise<void>[] = [];
 
-    // Spatial extension - always needed for geo files
     extensionPromises.push(this.loadSpatialExtension());
-
-    // HTTPFS extension - needed for remote files
     extensionPromises.push(this.loadHTTPFSExtension());
-
-    // Parquet extension - usually already loaded but ensure it
     extensionPromises.push(this.loadParquetExtension());
 
-    // Wait for all extensions to load
     const results = await Promise.allSettled(extensionPromises);
 
-    // Log results
     const successful = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.filter((r) => r.status === 'rejected').length;
 
@@ -765,7 +728,6 @@ class DuckDB {
       totalDurationMs: (performance.now() - startTime).toFixed(2)
     });
 
-    // Log any failures
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
         const extensionName = ['spatial', 'httpfs', 'parquet'][index];
@@ -798,7 +760,6 @@ class DuckDB {
       logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, {
         error
       });
-      // Don't throw - allow app to continue, extension can be loaded on demand
     }
   }
 
@@ -820,14 +781,12 @@ class DuckDB {
       logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, {
         error
       });
-      // Don't throw - allow app to continue
     }
   }
 
   private async loadParquetExtension(): Promise<void> {
     const start = performance.now();
     try {
-      // Parquet is usually auto-loaded, but ensure it explicitly
       await this.query(`INSTALL parquet; LOAD parquet;`, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
@@ -835,7 +794,6 @@ class DuckDB {
         durationMs: (performance.now() - start).toFixed(2)
       });
     } catch {
-      // Parquet is usually already loaded, so this is not critical
       logger.debug(
         'Parquet extension already loaded or not needed',
         LogCategory.DUCKDB
@@ -849,10 +807,9 @@ class DuckDB {
    */
   async ensureSpatialExtension(): Promise<void> {
     if (this.extensionsLoaded.spatial) {
-      return; // Already preloaded at startup
+      return;
     }
 
-    // Fallback: load on demand if preloading failed
     if (this.extensionLoadPromises.spatial) {
       return this.extensionLoadPromises.spatial;
     }
@@ -868,10 +825,9 @@ class DuckDB {
    */
   async ensureHTTPFSExtension(): Promise<void> {
     if (this.extensionsLoaded.httpfs) {
-      return; // Already preloaded at startup
+      return;
     }
 
-    // Fallback: load on demand if preloading failed
     if (this.extensionLoadPromises.httpfs) {
       return this.extensionLoadPromises.httpfs;
     }
@@ -1059,7 +1015,6 @@ class DuckDB {
     const meta = options.meta ?? false;
     const shapefile = options.shapefile ?? false;
     try {
-      // Ensure spatial extension is loaded before processing geo files
       await this.ensureSpatialExtension();
 
       await this.register_files([geofile], { shapefile });
@@ -1233,20 +1188,15 @@ class DuckDB {
   ): Promise<Uint8Array> {
     const { geometry = false, columns, limit } = options;
 
-    // Optimize column selection
     let selection: string;
     if (columns && columns.length > 0) {
-      // Explicit columns requested
       selection = columns.map((col) => `"${col}"`).join(', ');
     } else if (!geometry) {
-      // Exclude geometry columns for better performance
       selection = `COLUMNS(c -> c NOT ILIKE '%geom%')`;
     } else {
-      // Full table including geometry
       selection = '*';
     }
 
-    // Build optimized query
     let query = `SELECT ${selection} FROM ${table}`;
     if (limit && limit > 0) {
       query += ` LIMIT ${limit}`;
@@ -1263,15 +1213,12 @@ class DuckDB {
     limit = 1000,
     options: GetDataOptions = {}
   ): Promise<Uint8Array> {
-    // Use TABLESAMPLE for fast random sampling (constant time regardless of table size)
     const { format = DUCK_CONST.QUERY_FORMAT.ARROW_IPC } = options;
 
-    // Build column selection
     const columnSelection = options.columns
       ? options.columns.map((col) => `"${col}"`).join(', ')
       : '*';
 
-    // Use TABLESAMPLE for efficient sampling - much faster than LIMIT for large tables
     const query = `SELECT ${columnSelection} FROM ${table} USING SAMPLE ${limit} ROWS`;
 
     logger.debug('Using TABLESAMPLE for preview', LogCategory.DUCKDB, {
@@ -1488,11 +1435,9 @@ class DuckDB {
     const delimiter = options?.delimiter || ',';
     const header = options?.header !== false;
 
-    // Create temporary filename
     const filename = `${table}_export_${Date.now()}.csv`;
 
     try {
-      // Use COPY TO to generate CSV file
       await this.query(
         `COPY ${table} TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
         {
@@ -1500,10 +1445,8 @@ class DuckDB {
         }
       );
 
-      // Read the CSV file content
       const buffer = await this.db!.copyFileToBuffer(filename);
 
-      // Convert buffer to string
       const decoder = new TextDecoder('utf-8');
       const csvString = decoder.decode(buffer);
 
@@ -1514,7 +1457,6 @@ class DuckDB {
 
       return csvString;
     } finally {
-      // Clean up temporary file
       try {
         await this.db!.dropFile(filename);
       } catch (error) {
@@ -1822,7 +1764,6 @@ class DuckDB {
       useProxy: false
     })) as Record<string, unknown>[];
 
-    // Batch column analysis into groups by type for efficiency
     const numericColumns = describe_full.filter(
       (d) => d.type_simple === 'numeric'
     );
@@ -1837,7 +1778,6 @@ class DuckDB {
         d.type_simple !== 'string'
     );
 
-    // Process columns in batches by type to reduce query overhead
     const processColumnBatch = async (columns: any[], type: string) => {
       if (columns.length === 0) return [];
 
@@ -1848,10 +1788,8 @@ class DuckDB {
           let summary_date: ArrowTableLike | null = null;
           let histogram = null;
 
-          // Batch queries for the same type columns
           switch (type) {
             case 'numeric': {
-              // Run all 3 queries for numeric columns concurrently
               const [general, numeric, hist] = await Promise.all([
                 this.query(`FROM summary_general(${table}, "${d.name}")`, {
                   useProxy: false
@@ -1868,7 +1806,6 @@ class DuckDB {
             }
 
             case 'date': {
-              // Run all 3 queries for date columns concurrently
               const [generalDate, dateSum, histDate] = await Promise.all([
                 this.query(`FROM summary_general(${table}, "${d.name}")`, {
                   useProxy: false
@@ -1885,7 +1822,6 @@ class DuckDB {
             }
 
             case 'string': {
-              // Run both queries for string columns concurrently
               const [generalStr, histStr] = await Promise.all([
                 this.query(`FROM summary_general(${table}, "${d.name}")`, {
                   useProxy: false
@@ -1911,18 +1847,15 @@ class DuckDB {
       return results;
     };
 
-    // Process all column types in parallel
     const [numericResults, dateResults, stringResults, otherResults] =
       await Promise.all([
         processColumnBatch(numericColumns, 'numeric'),
         processColumnBatch(dateColumns, 'date'),
         processColumnBatch(stringColumns, 'string'),
-        Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult)) // Other types get minimal processing
+        Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult))
       ]);
 
-    // Combine all results in original order
     const analysis_result = describe_full.map((col) => {
-      // Find the processed result for this column
       const allResults = [
         ...numericResults,
         ...dateResults,
@@ -1966,10 +1899,8 @@ class DuckDB {
     let join_across_query: string;
 
     if (basemaps_table) {
-      // Create unified view combining catalog and custom basemap attributes
       const unified_table = 'unified_basemap_attributes';
 
-      // Check if custom_basemap_attributes table exists and has data
       let hasCustomAttributes = false;
       try {
         const customCheck = (await this.query(
@@ -1979,11 +1910,9 @@ class DuckDB {
         const count = customCheck?.[0]?.count ?? 0;
         hasCustomAttributes = count > 0;
       } catch {
-        // Table doesn't exist, that's fine
         hasCustomAttributes = false;
       }
 
-      // Create unified view with UNION ALL
       if (hasCustomAttributes) {
         await this.query(
           `CREATE OR REPLACE TABLE ${unified_table} AS
@@ -1997,7 +1926,6 @@ class DuckDB {
         join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
 			FROM apply_join_across_basemaps(${table}, ${table_id}, ${unified_table})`;
       } else {
-        // No custom attributes, use catalog only
         join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
 			FROM apply_join_across_basemaps(${table}, ${table_id}, ${basemaps_table})`;
       }
@@ -2073,31 +2001,25 @@ class DuckDB {
 let class_name_counter = 0;
 let Duck: DuckDB | null = null;
 let duckInitPromise: Promise<void> | null = null;
-let initializationStarted = false; // Synchronous flag to prevent race condition
+let initializationStarted = false; // guard against concurrent init
 
 async function initDuckDB(): Promise<void> {
-  // If already initialized, return immediately
   if (Duck) {
     return;
   }
 
-  // If initialization is in progress, wait for it
   if (duckInitPromise) {
     await duckInitPromise;
     return;
   }
 
-  // Atomic check-and-set to prevent race condition
   if (initializationStarted) {
-    // Another thread just started initialization, wait a tick and retry
     await new Promise((resolve) => setTimeout(resolve, 0));
-    return initDuckDB(); // Recursive call will hit the duckInitPromise check
+    return initDuckDB();
   }
 
-  // Mark initialization as started SYNCHRONOUSLY (before any await)
   initializationStarted = true;
 
-  // Start initialization
   duckInitPromise = (async () => {
     try {
       const instance = new DuckDB();
@@ -2106,10 +2028,9 @@ async function initDuckDB(): Promise<void> {
     } catch (error) {
       Duck = null;
       duckInitPromise = null;
-      initializationStarted = false; // Reset on error to allow retry
+      initializationStarted = false; // allow retry after failure
       throw error;
     }
-    // Keep duckInitPromise set to detect concurrent calls
   })();
 
   await duckInitPromise;

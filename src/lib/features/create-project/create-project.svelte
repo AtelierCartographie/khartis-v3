@@ -24,11 +24,9 @@
 
   const { open = false, onClose }: Props = $props();
 
-  // Check if a current project exists - only allow dismissal if there is one
   const canDismiss = $derived(!!projectStore.currentProject);
 
   function handleClose() {
-    // Only allow closing if there's a current project
     if (canDismiss) {
       onClose?.();
     }

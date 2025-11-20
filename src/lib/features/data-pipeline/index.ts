@@ -1,16 +1,5 @@
 /**
- * Data Feature - Public API
- *
- * Provides a simple facade over the data ingestion pipeline plus
- * the core models/contracts needed to extend it.
- *
- * @example
- * ```typescript
- * import { dataPipeline, ColumnType } from '$lib/features/data';
- *
- * await dataPipeline.initialize();
- * const dataset = await dataPipeline.processFile(file);
- * ```
+ * Public API for the data ingestion pipeline plus extension contracts.
  */
 
 export {

@@ -135,7 +135,6 @@
     return variables;
   });
 
-  // OPTIMIZATION: Memoize color conversions to avoid repeated hexToRgb calls
   const memoizedColors = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz) {
@@ -155,7 +154,6 @@
     };
   });
 
-  // OPTIMIZATION: Cache statistics to avoid repeated store queries
   const memoizedStatistics = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz || !viz.mapping.sizeColumn || !datasetId) {
@@ -180,7 +178,6 @@
     return { min: 0, max: 100 };
   });
 
-  // OPTIMIZATION: Cache category color map to avoid recreation on every render
   const memoizedCategoryColorMap = $derived.by(() => {
     const viz = defaultVisualization;
     if (!viz || !viz.mapping.categoryColumn || !datasetId) {
@@ -392,7 +389,6 @@
   }
 
   function createDeckLayers(jsTable: ArrowTable): Layer<DeckDataRow>[] {
-    // CRITICAL: Check metadata exists before accessing
     const geoMetadata = jsTable.schema.metadata?.get('geo');
 
     const hasUserDataset = Boolean(datasetId);
@@ -476,8 +472,6 @@
       let deckLayer: Layer<DeckDataRow>;
       switch (resolvedGeometryType) {
         case 'POINT':
-
-        // fallthrough
         case 'MULTIPOINT': {
           const pointVector = hasMatchingGeoExtension
             ? null
@@ -568,8 +562,6 @@
         }
 
         case 'LINESTRING':
-
-        // fallthrough
         case 'MULTILINESTRING': {
           const pathVector = hasMatchingGeoExtension
             ? null
@@ -615,8 +607,6 @@
         }
 
         case 'POLYGON':
-
-        // fallthrough
         case 'MULTIPOLYGON': {
           const polygonVector = hasMatchingGeoExtension
             ? null

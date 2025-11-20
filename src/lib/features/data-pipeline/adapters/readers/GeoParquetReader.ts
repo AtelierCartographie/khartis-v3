@@ -9,10 +9,7 @@ import type { GeoArrowMetadata } from '../../models/geo-arrow-metadata';
 import { isGeoArrowMetadata } from '../../models/geo-arrow-metadata';
 
 /**
- * GeoParquet reader ported from khartis-pipeline-old to preserve GeoArrow metadata.
- * @geoarrow/deck.gl-layers requires the Apache Arrow Vector instances returned by
- * `tableFromIPC`. Flechette returns Column objects instead and strips metadata,
- * which breaks Deck.gl rendering. This reader keeps the original metadata flow.
+ * GeoParquet reader that preserves GeoArrow metadata required by deck.gl layers.
  */
 export class GeoParquetReader implements IGeoArrowReader {
   private static readonly LOCAL_WASM_URL = geoParquetWasmUrl;
@@ -21,11 +18,7 @@ export class GeoParquetReader implements IGeoArrowReader {
 
   private static initializationPromise: Promise<void> | null = null;
 
-  /**
-   * Initialize WASM module
-   * Called automatically on first use, but can be called explicitly
-   * for better control over initialization timing
-   */
+  /** Initialize WASM module (idempotent). */
   static async initialize(): Promise<void> {
     if (this.wasmInitialized) {
       return;
@@ -64,19 +57,7 @@ export class GeoParquetReader implements IGeoArrowReader {
   }
 
   /**
-   * Read GeoParquet file and preserve GeoArrow metadata
-   *
-   * CRITICAL: This is the ONLY way to get Arrow tables with GeoArrow metadata
-   * preserved. DuckDB queries do NOT preserve metadata.
-   *
-   * IMPORTANT NOTE from pipeline-old:
-   * @geoarrow/deck.gl-layers is designed to work specifically with
-   * Apache Arrow JS classes (particularly Vector from getChild('column_name')).
-   * If you use Flechette, it returns a Column class from getChild which
-   * doesn't work with Deck.gl.
-   *
-   * @param buffer - GeoParquet file buffer
-   * @returns Arrow table with metadata in schema.metadata.get('geo')
+   * Reads GeoParquet while keeping the GeoArrow metadata that DuckDB queries drop.
    */
   async readGeoParquet(buffer: ArrayBuffer | Uint8Array): Promise<ArrowTable> {
     await GeoParquetReader.initialize();
@@ -112,12 +93,7 @@ export class GeoParquetReader implements IGeoArrowReader {
     }
   }
 
-  /**
-   * Extract and parse GeoArrow metadata from Arrow table
-   *
-   * @param table - Arrow table with potential metadata
-   * @returns Parsed GeoArrow metadata or null if not present
-   */
+  /** Extract GeoArrow metadata from the Arrow table if present. */
   extractMetadata(table: ArrowTable): GeoArrowMetadata | null {
     if (!this.hasMetadata(table)) {
       return null;
@@ -146,19 +122,11 @@ export class GeoParquetReader implements IGeoArrowReader {
     }
   }
 
-  /**
-   * Check if Arrow table has valid GeoArrow metadata
-   *
-   * @param table - Arrow table to check
-   * @returns true if table.schema.metadata has 'geo' key
-   */
+  /** Check whether the Arrow table carries GeoArrow metadata. */
   hasMetadata(table: ArrowTable): boolean {
     return !!(table.schema.metadata && table.schema.metadata.has('geo'));
   }
 }
 
-/**
- * Singleton instance for convenience
- * Can use either GeoParquetReader.instance or new GeoParquetReader()
- */
+/** Convenience singleton instance. */
 export const geoParquetReader = new GeoParquetReader();

@@ -1,10 +1,5 @@
 import type { BasemapMetadata } from '../types/basemap.types';
 
-/**
- * OSM Tile Service
- * Provides tile URL templates and configuration for OpenStreetMap raster tiles
- */
-
 export interface OSMTileConfig {
   urlTemplate: string;
   attribution: string;
@@ -45,26 +40,16 @@ const OSM_TILE_SERVERS = {
   }
 };
 
-/**
- * Detect if a basemap is an OSM raster basemap
- */
 export function isOSMBasemap(basemap: BasemapMetadata | null): boolean {
   if (!basemap) return false;
   return basemap.file.startsWith('osm_');
 }
 
-/**
- * Extract OSM style from basemap file ID
- * @example 'osm_osm-standard_1234567890' → 'osm-standard'
- */
 export function extractOSMStyle(basemapId: string): string | null {
   const match = basemapId.match(/^osm_([^_]+)_\d+$/);
   return match ? match[1] : null;
 }
 
-/**
- * Get OSM tile configuration from basemap metadata
- */
 export function getOSMTileConfig(
   basemap: BasemapMetadata
 ): OSMTileConfig | null {
@@ -83,10 +68,6 @@ export function getOSMTileConfig(
   return config;
 }
 
-/**
- * Generate tile URL for specific coordinates
- * Replaces {s}, {z}, {x}, {y} placeholders
- */
 export function generateTileURL(
   urlTemplate: string,
   z: number,
@@ -103,9 +84,6 @@ export function generateTileURL(
     .replace('{y}', y.toString());
 }
 
-/**
- * Create MapLibre raster source configuration for OSM tiles
- */
 export function createOSMRasterSource(config: OSMTileConfig) {
   return {
     type: 'raster' as const,
@@ -117,9 +95,6 @@ export function createOSMRasterSource(config: OSMTileConfig) {
   };
 }
 
-/**
- * Create MapLibre raster layer configuration for OSM tiles
- */
 export function createOSMRasterLayer(sourceId: string) {
   return {
     id: `${sourceId}-layer`,

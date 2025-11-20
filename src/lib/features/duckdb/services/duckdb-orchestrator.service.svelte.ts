@@ -82,7 +82,6 @@ export interface DuckDBDataset {
     fileType: FileType;
   };
   geoDetection?: GeoDetectionResult;
-  // Keep the GeoParquet-derived Arrow table so GeoArrow metadata stays intact.
   arrowTableWithMetadata?: Table;
   geoArrowMetadata?: GeoArrowMetadata;
 }
@@ -154,7 +153,6 @@ class DuckDBOrchestratorService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    // If initialization is in progress, wait for it
     if (this.initPromise) {
       await this.initPromise;
       return;
@@ -166,7 +164,6 @@ class DuckDBOrchestratorService {
       LogCategory.DUCKDB
     );
 
-    // Store the promise to prevent concurrent initializations
     this.initPromise = (async () => {
       try {
         await initDuckDB();
@@ -175,7 +172,7 @@ class DuckDBOrchestratorService {
           durationMs: (performance.now() - start).toFixed(2)
         });
       } catch (error) {
-        this.initPromise = null; // Reset on error to allow retry
+        this.initPromise = null; // allow retry after failure
         logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
         showError('DuckDB initialization failed', 'Please refresh the page');
         throw error;
@@ -188,7 +185,6 @@ class DuckDBOrchestratorService {
   async waitForInitialization(): Promise<void> {
     if (this.initialized) return;
 
-    // Wait for initialization to complete
     await this.initialize();
   }
 
@@ -465,7 +461,6 @@ class DuckDBOrchestratorService {
       const actualTableName =
         typeof resultTableName === 'string' ? resultTableName : tableName;
 
-      // Parallelize column analysis and row count
       const [columns, rowCount] = await Promise.all([
         Duck.analyse(actualTableName),
         this.getRowCount(actualTableName)
@@ -480,20 +475,19 @@ class DuckDBOrchestratorService {
         rowCount,
         metadata: {
           processedAt: new Date(),
-          fileType: file.fileType
-        },
-        geoDetection: file.deepAnalysis?.geoDetection
-        // Don't create Arrow table here - let prefetch handle it
-      };
+        fileType: file.fileType
+      },
+      geoDetection: file.deepAnalysis?.geoDetection
+    };
 
-      this.updateDatasets((datasets) => {
-        datasets.set(dataset.id, dataset);
-      });
+    this.updateDatasets((datasets) => {
+      datasets.set(dataset.id, dataset);
+    });
 
-      // Start prefetching Arrow table metadata in background
-      void this.prefetchArrowMetadata(dataset);
-      this.bumpDatasetsVersion();
-      this._state.currentTableName = actualTableName;
+    // Prefetch Arrow metadata in the background.
+    void this.prefetchArrowMetadata(dataset);
+    this.bumpDatasetsVersion();
+    this._state.currentTableName = actualTableName;
 
       this.logDatasetReady('GeoJSON ST_Read', dataset, startTime);
       return dataset;

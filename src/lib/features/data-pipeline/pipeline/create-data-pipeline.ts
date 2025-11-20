@@ -100,7 +100,6 @@ export function createDataPipeline(): DataPipeline {
       if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
         dataset = await processShapefile(uploadedFile);
       } else if (originalFile) {
-        // Pass companion files for shapefiles
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
           (f: File) => f !== originalFile
         );
@@ -236,7 +235,6 @@ export function createDataPipeline(): DataPipeline {
     }
 
     try {
-      // For shapefiles with companion files, register all files together with shapefile flag
       if (
         isShapefile &&
         options.companionFiles &&
@@ -245,7 +243,6 @@ export function createDataPipeline(): DataPipeline {
         const allShapefileFiles = [file, ...options.companionFiles];
         await Duck.register_files(allShapefileFiles, { shapefile: true });
       } else if (!isShapefile) {
-        // For non-shapefile files, register normally
         await Duck.register_files([file]);
       }
 

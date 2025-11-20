@@ -4,18 +4,7 @@ import type { ValidationResult } from '../../models/validation-result';
 import { validationSuccess } from '../../models/validation-result';
 
 /**
- * Quality Validator - Validates data quality
- *
- * Checks (warnings only, no errors):
- * - High null percentage (>50%)
- * - Low cardinality (all same value)
- * - Suspicious patterns
- *
- * @example
- * ```typescript
- * const validator = new QualityValidator();
- * const result = validator.validate(dataset);
- * ```
+ * Flags columns with high null ratios or suspiciously low cardinality.
  */
 export class QualityValidator implements IValidator {
   private static readonly HIGH_NULL_THRESHOLD = 0.5;
