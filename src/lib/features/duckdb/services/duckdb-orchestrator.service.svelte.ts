@@ -21,6 +21,7 @@ import {
   FixedSizeList,
   Float64,
   List,
+  Schema,
   Table,
   Type,
   makeBuilder,
@@ -211,6 +212,24 @@ class DuckDBOrchestratorService {
         sourceFileId
       });
 
+      // Check if table actually exists in DuckDB (might be lost after page reload)
+      const tableCheck = (await Duck.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
+        { format: 'array' }
+      )) as Array<{ table_name: string }>;
+
+      if (!tableCheck || tableCheck.length === 0) {
+        logger.warn(
+          'Table does not exist in DuckDB, needs re-processing',
+          LogCategory.DUCKDB,
+          {
+            tableName,
+            sourceFileId
+          }
+        );
+        return null;
+      }
+
       const columns = await Duck.analyse(tableName);
       const rowCount = await this.getRowCount(tableName);
 
@@ -232,7 +251,7 @@ class DuckDBOrchestratorService {
         datasets.set(dataset.id, dataset);
       });
 
-      void this.prefetchArrowMetadata(dataset);
+      await this.prefetchArrowMetadata(dataset);
 
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
@@ -378,7 +397,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = finalTableName;
 
@@ -486,8 +505,8 @@ class DuckDBOrchestratorService {
         datasets.set(dataset.id, dataset);
       });
 
-      // Prefetch Arrow metadata in the background.
-      void this.prefetchArrowMetadata(dataset);
+      // Prefetch Arrow metadata and wait for it to complete.
+      await this.prefetchArrowMetadata(dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
 
@@ -557,7 +576,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = actualTableName;
 
@@ -633,8 +652,8 @@ class DuckDBOrchestratorService {
       datasets.set(dataset.id, dataset);
     });
 
-    // Start prefetching Arrow table in background
-    void this.prefetchArrowMetadata(dataset);
+    // Prefetch Arrow table and wait for it to complete
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
@@ -704,7 +723,7 @@ class DuckDBOrchestratorService {
       this.updateDatasets((datasets) => {
         datasets.set(dataset.id, dataset);
       });
-      void this.prefetchArrowMetadata(dataset);
+      await this.prefetchArrowMetadata(dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
@@ -764,7 +783,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
@@ -1333,12 +1352,56 @@ class DuckDBOrchestratorService {
           return table;
         }
 
+        // Query all distinct geometry types to handle mixed geometries
         const geomTypeResult = (await Duck.query(
-          `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
+          `SELECT DISTINCT ST_GeometryType(${geomColumn.column_name}) as geom_type
+           FROM ${tableName}
+           WHERE ${geomColumn.column_name} IS NOT NULL`,
           { format: 'array' as never }
         )) as Array<{ geom_type: string }>;
 
-        geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
+        const types = geomTypeResult.map((r) => r.geom_type);
+
+        // Normalize to Multi* variant if mixed types found
+        if (types.length === 0) {
+          geometryType = 'GEOMETRY';
+        } else if (types.length === 1) {
+          geometryType = types[0];
+        } else {
+          // Mixed types detected - normalize to Multi* variant
+          const hasPoint = types.some((t) => t === 'ST_Point' || t === 'POINT');
+          const hasMultiPoint = types.some(
+            (t) => t === 'ST_MultiPoint' || t === 'MULTIPOINT'
+          );
+          const hasLineString = types.some(
+            (t) => t === 'ST_LineString' || t === 'LINESTRING'
+          );
+          const hasMultiLineString = types.some(
+            (t) => t === 'ST_MultiLineString' || t === 'MULTILINESTRING'
+          );
+          const hasPolygon = types.some(
+            (t) => t === 'ST_Polygon' || t === 'POLYGON'
+          );
+          const hasMultiPolygon = types.some(
+            (t) => t === 'ST_MultiPolygon' || t === 'MULTIPOLYGON'
+          );
+
+          if (hasPolygon || hasMultiPolygon) {
+            geometryType = 'MULTIPOLYGON';
+          } else if (hasLineString || hasMultiLineString) {
+            geometryType = 'MULTILINESTRING';
+          } else if (hasPoint || hasMultiPoint) {
+            geometryType = 'MULTIPOINT';
+          } else {
+            geometryType = 'GEOMETRY';
+          }
+
+          logger.info(
+            'Mixed geometry types detected, normalized to Multi* variant',
+            LogCategory.DUCKDB,
+            { tableName, detectedTypes: types, normalizedType: geometryType }
+          );
+        }
       }
 
       const normalizedGeometry = geometryType
@@ -1406,20 +1469,38 @@ class DuckDBOrchestratorService {
             crs: 'EPSG:4326'
           })
         );
+        // Convert SvelteMap to standard Map for Arrow Field compatibility
+        const fieldMetadataMap = new Map<string, string>(updatedMetadata);
+        // Keep the original field type to match RecordBatch schemas - only update metadata
         return new Field(
           field.name,
-          conversionResult.geometryDataType ?? field.type,
+          field.type,  // Keep original type, don't use conversionResult.geometryDataType
           field.nullable,
-          updatedMetadata
+          fieldMetadataMap
         );
       });
 
       const metadataMap = new Map<string, string>(newMetadata);
-      (schema as unknown as { metadata: Map<string, string> }).metadata =
-        metadataMap;
-      (schema as unknown as { fields: Field[] }).fields = updatedFields;
 
-      return normalizedTable;
+      // Create a new Schema with updated fields and metadata
+      const newSchema = new Schema(updatedFields, metadataMap);
+
+      // Create a new Table with the updated schema
+      const tableWithMetadata = new Table(newSchema, normalizedTable.batches);
+
+      logger.debug(
+        'Added GeoArrow metadata to Arrow table',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          geometryType,
+          geoarrowExtension,
+          hasSchemaMetadata: !!tableWithMetadata.schema.metadata,
+          geoFieldMetadata: updatedFields.find(f => f.name === geomColumn.column_name)?.metadata
+        }
+      );
+
+      return tableWithMetadata;
     } catch (error) {
       logger.error(
         'Failed to add GeoArrow metadata from DuckDB',
@@ -2321,7 +2402,7 @@ class DuckDBOrchestratorService {
       datasets.set(dataset.id, dataset);
     });
 
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = actualTableName;
 

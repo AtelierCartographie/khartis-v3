@@ -233,14 +233,22 @@ export class DataError extends KhartisError {
 }
 
 export class DataValidationError extends DataError {
-  constructor(message: string, public errors: string[], public warnings: string[]) {
+  constructor(
+    message: string,
+    public errors: string[],
+    public warnings: string[]
+  ) {
     super(message, { errors, warnings });
     this.code = 'DATA_VALIDATION_ERROR';
   }
 }
 
 export class DataParseError extends DataError {
-  constructor(message: string, public line?: number, public column?: string) {
+  constructor(
+    message: string,
+    public line?: number,
+    public column?: string
+  ) {
     super(message, { line, column });
     this.code = 'DATA_PARSE_ERROR';
   }
@@ -248,7 +256,10 @@ export class DataParseError extends DataError {
 
 // DuckDB errors
 export class DuckDBError extends KhartisError {
-  constructor(message: string, public query?: string) {
+  constructor(
+    message: string,
+    public query?: string
+  ) {
     super(message, 'DUCKDB_ERROR', true, { query });
   }
 }
@@ -263,13 +274,20 @@ export class DuckDBConnectionError extends DuckDBError {
 
 // Visualization errors
 export class VisualizationError extends KhartisError {
-  constructor(message: string, public vizType?: string) {
+  constructor(
+    message: string,
+    public vizType?: string
+  ) {
     super(message, 'VIZ_ERROR', true, { vizType });
   }
 }
 
 export class ClassificationError extends VisualizationError {
-  constructor(message: string, public method?: string, public data?: any) {
+  constructor(
+    message: string,
+    public method?: string,
+    public data?: any
+  ) {
     super(message);
     this.code = 'CLASSIFICATION_ERROR';
     this.details = { method, data };
@@ -278,13 +296,19 @@ export class ClassificationError extends VisualizationError {
 
 // Storage errors
 export class StorageError extends KhartisError {
-  constructor(message: string, public operation?: string) {
+  constructor(
+    message: string,
+    public operation?: string
+  ) {
     super(message, 'STORAGE_ERROR', false, { operation });
   }
 }
 
 export class QuotaExceededError extends StorageError {
-  constructor(public used: number, public quota: number) {
+  constructor(
+    public used: number,
+    public quota: number
+  ) {
     super(`Storage quota exceeded: ${used}/${quota} bytes`);
     this.code = 'QUOTA_EXCEEDED';
     this.recoverable = true; // Can recover by deleting old projects
@@ -302,8 +326,8 @@ try {
 } catch (error) {
   if (error instanceof DataValidationError) {
     // Show validation errors to user
-    error.errors.forEach(e => notificationStore.error(e));
-    error.warnings.forEach(w => notificationStore.warning(w));
+    error.errors.forEach((e) => notificationStore.error(e));
+    error.warnings.forEach((w) => notificationStore.warning(w));
   } else if (error instanceof DuckDBError) {
     // Log technical error, show user-friendly message
     logger.error('DuckDB query failed', error);
@@ -397,11 +421,11 @@ const dataset = await withErrorHandling(
 #### 4. Validation with Result Type
 
 ```typescript
-type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 
-function validateDataset(data: any): Result<ProcessedDataset, DataValidationError> {
+function validateDataset(
+  data: any
+): Result<ProcessedDataset, DataValidationError> {
   const errors: string[] = [];
 
   if (!data.columns || data.columns.length === 0) {
@@ -433,18 +457,18 @@ if (!result.ok) {
 
 ### Error Recovery Strategies
 
-| Error Type | Recovery Strategy | User Action Required |
-| --- | --- | --- |
-| **File Too Large** | Suggest file splitting | Split file or sample data |
-| **Invalid Format** | Show format requirements | Fix file format |
-| **Parse Error** | Show line/column | Fix data at specific location |
-| **Type Mismatch** | Suggest type conversion | Convert or cast column |
-| **Classification Fail** | Fallback to quantiles | Accept fallback or manual breaks |
-| **Quota Exceeded** | Auto-delete old projects | Confirm deletion |
-| **Network Error** | Retry with backoff | Wait or retry manually |
-| **Worker Crash** | Fallback to main thread | None (automatic) |
-| **Memory Error** | Clear caches and retry | Reduce dataset size |
-| **Projection Error** | Use default projection | Select different projection |
+| Error Type              | Recovery Strategy        | User Action Required             |
+| ----------------------- | ------------------------ | -------------------------------- |
+| **File Too Large**      | Suggest file splitting   | Split file or sample data        |
+| **Invalid Format**      | Show format requirements | Fix file format                  |
+| **Parse Error**         | Show line/column         | Fix data at specific location    |
+| **Type Mismatch**       | Suggest type conversion  | Convert or cast column           |
+| **Classification Fail** | Fallback to quantiles    | Accept fallback or manual breaks |
+| **Quota Exceeded**      | Auto-delete old projects | Confirm deletion                 |
+| **Network Error**       | Retry with backoff       | Wait or retry manually           |
+| **Worker Crash**        | Fallback to main thread  | None (automatic)                 |
+| **Memory Error**        | Clear caches and retry   | Reduce dataset size              |
+| **Projection Error**    | Use default projection   | Select different projection      |
 
 ### Error Monitoring
 
@@ -486,15 +510,17 @@ export const errorMonitor = new ErrorMonitor();
 ```typescript
 // Map technical errors to user-friendly messages
 const ERROR_MESSAGES: Record<string, string> = {
-  'ENOENT': 'File not found. Please check the file path.',
-  'EACCES': 'Permission denied. Please check file permissions.',
-  'EMFILE': 'Too many files open. Please close some files and try again.',
-  'ENOMEM': 'Out of memory. Please try with a smaller dataset.',
-  'ETIMEDOUT': 'Operation timed out. Please check your connection and try again.',
-  'ECONNREFUSED': 'Connection refused. Please check if the service is running.',
-  'DataCloneError': 'Cannot process this data type. Please use a different format.',
-  'QuotaExceededError': 'Storage limit reached. Please delete old projects.',
-  'NetworkError': 'Network connection lost. Please check your internet connection.',
+  ENOENT: 'File not found. Please check the file path.',
+  EACCES: 'Permission denied. Please check file permissions.',
+  EMFILE: 'Too many files open. Please close some files and try again.',
+  ENOMEM: 'Out of memory. Please try with a smaller dataset.',
+  ETIMEDOUT: 'Operation timed out. Please check your connection and try again.',
+  ECONNREFUSED: 'Connection refused. Please check if the service is running.',
+  DataCloneError:
+    'Cannot process this data type. Please use a different format.',
+  QuotaExceededError: 'Storage limit reached. Please delete old projects.',
+  NetworkError:
+    'Network connection lost. Please check your internet connection.'
 };
 
 export function getUserMessage(error: Error): string {

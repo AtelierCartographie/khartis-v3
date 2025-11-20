@@ -51,11 +51,51 @@ export class CSVParser implements IParser {
         ? '\t'
         : undefined;
 
+      // Verify file is readable and has data before creating table
+      // Use same parameters as CREATE TABLE to catch any issues early
+      const verifyQuery = delimiter
+        ? `SELECT COUNT(*) as count FROM read_csv('${fileWithId.id}', header=true, delimiter='${delimiter}', normalize_names=true, auto_detect=true)`
+        : `SELECT COUNT(*) as count FROM read_csv('${fileWithId.id}', header=true, normalize_names=true, auto_detect=true)`;
+
+      try {
+        const verifyResult = (await Duck.query(verifyQuery, {
+          format: 'array'
+        })) as Array<{ count: number }>;
+        const rowCount = verifyResult[0]?.count ?? 0;
+
+        if (rowCount === 0) {
+          logger.warn(
+            'CSV file appears to be empty or unreadable',
+            LogCategory.DATA,
+            {
+              fileName: file.name,
+              fileId: fileWithId.id
+            }
+          );
+        } else {
+          logger.debug('File registration verified', LogCategory.DATA, {
+            fileName: file.name,
+            fileId: fileWithId.id,
+            rowCount
+          });
+        }
+      } catch (verifyError) {
+        throw new ParserError(
+          `Failed to verify file registration: ${verifyError instanceof Error ? verifyError.message : 'Unknown error'}`,
+          verifyError,
+          'csv'
+        );
+      }
+
       const createTableQuery = delimiter
         ? `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, delimiter='${delimiter}', normalize_names=true, auto_detect=true)`
         : `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, normalize_names=true, auto_detect=true)`;
 
       await Duck.query(createTableQuery);
+
+      logger.debug('Table created, verifying row count', LogCategory.DATA, {
+        tableName
+      });
 
       const columnsInfo = (await Duck.query(
         `
@@ -73,6 +113,25 @@ export class CSVParser implements IParser {
       `,
         { format: 'array' }
       )) as Array<{ count: number }>;
+
+      logger.debug('Table row count retrieved', LogCategory.DATA, {
+        tableName,
+        rowCount,
+        columnCount: columnsInfo.length
+      });
+
+      if (rowCount === 0) {
+        logger.error(
+          'Table created but has 0 rows - possible CSV parsing issue',
+          LogCategory.DATA,
+          {
+            fileName: file.name,
+            tableName,
+            fileSize: file.size,
+            delimiter: delimiter ?? ','
+          }
+        );
+      }
 
       const headers = columnsInfo.map((col) => col.column_name);
 

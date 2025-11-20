@@ -352,7 +352,7 @@ class DataOrchestratorService {
 
     if (dataset.tableName) {
       try {
-        await duckDBOrchestrator.registerExistingTable(
+        const registered = await duckDBOrchestrator.registerExistingTable(
           dataset.tableName,
           dataset.sourceFileId || file.id,
           file.name,
@@ -360,6 +360,43 @@ class DataOrchestratorService {
             geoDetection: dataset.geoDetection
           }
         );
+
+        // If table doesn't exist (null returned), re-process the file
+        if (registered === null) {
+          logger.info(
+            'DuckDB table missing, re-processing file from scratch',
+            LogCategory.DUCKDB,
+            {
+              fileId: file.id,
+              fileName: file.name,
+              oldTableName: dataset.tableName
+            }
+          );
+
+          // Re-process through the normal flow (will create new table)
+          const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
+          if (duckDBFile) {
+            const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
+            if (duckResult && dataset) {
+              datasetsStore.updateDatasetTableName(
+                dataset.id,
+                duckResult.tableName
+              );
+
+              const updatedDataset = datasetsStore.datasets.find(
+                (d) => d.id === dataset.id
+              );
+              if (updatedDataset) {
+                updatedDataset.metadata = {
+                  ...updatedDataset.metadata,
+                  geoDuckTableReady: true
+                };
+              }
+
+              this._geometryDatasetsVersion++;
+            }
+          }
+        }
       } catch (registerError) {
         logger.error('Failed to register table', LogCategory.DUCKDB, {
           error:

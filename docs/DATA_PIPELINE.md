@@ -23,14 +23,14 @@ The default pipeline assembles the built-in adapters but you can supply custom l
 
 ## Supported formats
 
-| Format        | Extensions             | Parser            | Notes                                              |
-| ------------- | ---------------------- | ----------------- | -------------------------------------------------- |
-| **CSV/TSV**   | `.csv`, `.tsv`, `.txt` | `CSVParser`       | Tabular data, uses DuckDB's `read_csv()`          |
-| **GeoJSON**   | `.geojson`, `.json`    | `GeoJSONParser`   | Spatial datasets, uses DuckDB's `ST_Read()`       |
-| **Shapefile** | `.shp` + companions    | `ShapefileParser` | Uses DuckDB's `ST_Read()`, handles zipped bundles |
-| **GeoParquet**| `.parquet`             | `GeoParquetParser`| Native DuckDB support with GeoArrow encoding      |
-| **KML**       | `.kml`                 | `KMLParser`       | Uses DuckDB's `ST_Read()`                         |
-| **GeoPackage**| `.gpkg`                | `GeoPackageParser`| Uses DuckDB's `ST_Read()`                         |
+| Format         | Extensions             | Parser             | Notes                                             |
+| -------------- | ---------------------- | ------------------ | ------------------------------------------------- |
+| **CSV/TSV**    | `.csv`, `.tsv`, `.txt` | `CSVParser`        | Tabular data, uses DuckDB's `read_csv()`          |
+| **GeoJSON**    | `.geojson`, `.json`    | `GeoJSONParser`    | Spatial datasets, uses DuckDB's `ST_Read()`       |
+| **Shapefile**  | `.shp` + companions    | `ShapefileParser`  | Uses DuckDB's `ST_Read()`, handles zipped bundles |
+| **GeoParquet** | `.parquet`             | `GeoParquetParser` | Native DuckDB support with GeoArrow encoding      |
+| **KML**        | `.kml`                 | `KMLParser`        | Uses DuckDB's `ST_Read()`                         |
+| **GeoPackage** | `.gpkg`                | `GeoPackageParser` | Uses DuckDB's `ST_Read()`                         |
 
 ## Processing flow
 
@@ -179,12 +179,12 @@ if (!result.isValid) throw new Error(result.errors.join(', '));
 
 ## Performance checklist
 
-| Challenge            | Solution                                    |
-| -------------------- | ------------------------------------------- |
-| Large imports        | DuckDB native parsing with TABLESAMPLE     |
-| Multiple conversions | Single-pass pipeline                        |
-| Metadata preservation| GeoParquet with GeoArrow encoding          |
-| Memory management    | Processing semaphore (max 2 concurrent)    |
+| Challenge             | Solution                                |
+| --------------------- | --------------------------------------- |
+| Large imports         | DuckDB native parsing with TABLESAMPLE  |
+| Multiple conversions  | Single-pass pipeline                    |
+| Metadata preservation | GeoParquet with GeoArrow encoding       |
+| Memory management     | Processing semaphore (max 2 concurrent) |
 
 Target: <3 s load for “standard” datasets, smooth pan/zoom (~60 fps).
 

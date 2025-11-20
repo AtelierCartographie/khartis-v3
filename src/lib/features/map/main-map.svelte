@@ -135,14 +135,14 @@
 
     if (selectedDataset?.geometry) {
       const result = await convertDatasetToGeoJSON(selectedDataset);
-        if (result) {
-          if ('numRows' in result) {
-            displayTable = result;
-            displayGeoJSON = null;
-          } else if ('features' in result) {
-            displayTable = null;
-            displayGeoJSON = result;
-          }
+      if (result) {
+        if ('numRows' in result) {
+          displayTable = result;
+          displayGeoJSON = null;
+        } else if ('features' in result) {
+          displayTable = null;
+          displayGeoJSON = result;
+        }
       } else {
         await loadFallbackBasemap();
       }
