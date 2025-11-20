@@ -320,25 +320,32 @@ export const createProjectActions = {
       counter++;
     }
 
-    const uploadedFile: UploadedFile = {
-      id: crypto.randomUUID(),
-      name: fileName,
-      size: new Blob([pastedText]).size,
-      type: fileType === FileType.CSV ? 'text/csv' : 'application/json',
-      fileType,
-      status: validation.isValid ? 'complete' : 'error',
-      content: pastedText,
-      validation,
-      sourceType: DataSourceType.PASTE,
-      errorMessage: validation.isValid ? undefined : validation.errors[0]
-    };
+    const file = new File([pastedText], fileName, {
+      type: fileType === FileType.CSV ? 'text/csv' : 'application/json'
+    });
 
-    this.addUploadedFile(uploadedFile);
-    this.setPastedData('');
-
+    // If validation fails, surface the error and add an errored entry for visibility.
     if (!validation.isValid) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        size: file.size,
+        type: file.type,
+        fileType,
+        status: 'error',
+        content: pastedText,
+        validation,
+        sourceType: DataSourceType.PASTE,
+        errorMessage: validation.errors[0]
+      };
+      this.addUploadedFile(errorFile);
       showError('Invalid pasted data', validation.errors[0]);
+      this.setPastedData('');
+      return;
     }
+
+    await this.processSingleFile(file, DataSourceType.PASTE);
+    this.setPastedData('');
   },
 
   removeUploadedFile(fileId: string): void {
