@@ -1,9 +1,9 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type {
   SerializedBasemapAttribute,
@@ -219,6 +219,14 @@ export const ProjectSerializer = {
       }
     }
 
+    if (file.relatedFilesData) {
+      const serializedData: Record<string, number[]> = {};
+      for (const [name, buffer] of Object.entries(file.relatedFilesData)) {
+        serializedData[name] = Array.from(new Uint8Array(buffer));
+      }
+      serialized.relatedFilesData = serializedData;
+    }
+
     return serialized;
   },
 
@@ -270,6 +278,14 @@ export const ProjectSerializer = {
       ) {
         file.content = new Uint8Array(data.content).buffer;
       }
+    }
+
+    if (data.relatedFilesData) {
+      const relatedData: Record<string, ArrayBuffer> = {};
+      for (const [name, bytes] of Object.entries(data.relatedFilesData)) {
+        relatedData[name] = new Uint8Array(bytes).buffer;
+      }
+      file.relatedFilesData = relatedData;
     }
 
     return file as UploadedFile;

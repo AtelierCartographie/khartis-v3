@@ -1,7 +1,7 @@
-import { duckDBOrchestrator } from '$lib/features/duckdb';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { ColumnType } from '$lib/features/data-pipeline';
+import { createFileFromUpload } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -9,7 +9,6 @@ import {
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
-  DataValidationError,
   formatError,
   isFatalError,
   ParseError
@@ -20,8 +19,7 @@ import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import {
   visualizationStore,
-  VisualizationType,
-  type VisualizationConfig
+  VisualizationType
 } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
@@ -374,6 +372,13 @@ class DataOrchestratorService {
     }
   }
 
+  private createDefaultVisualization(datasetId: string): void {
+    visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      datasetId
+    );
+  }
+
   async onProjectChanged(): Promise<void> {
     // Wait for DuckDB to be ready before processing files
     await duckDBOrchestrator.waitForInitialization();
@@ -445,109 +450,98 @@ class DataOrchestratorService {
         unprocessedFiles,
         concurrency,
         async (file, index, total) => {
+          // Restore companion files for shapefiles
+          logger.debug(
+            `[DataOrchestrator] Checking file restoration for ${file.name}`,
+            LogCategory.DATA,
+            {
+              fileType: file.fileType,
+              relatedFiles: file.relatedFiles,
+              hasOriginal: !!file.originalFile
+            }
+          );
+
+          if (
+            file.fileType === FileType.SHAPEFILE &&
+            (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
+          ) {
+            if (file.relatedFilesData) {
+              logger.debug(
+                `[DataOrchestrator] Restoring companion files from data for ${file.name}`,
+                LogCategory.DATA
+              );
+              const companionFiles: File[] = [];
+              for (const [name, buffer] of Object.entries(
+                file.relatedFilesData
+              )) {
+                try {
+                  const restoredFile = new File([buffer], name);
+                  companionFiles.push(restoredFile);
+                } catch (err) {
+                  logger.warn(
+                    `Failed to restore companion file ${name}`,
+                    LogCategory.DATA,
+                    { error: err }
+                  );
+                }
+              }
+              if (companionFiles.length > 0) {
+                file.relatedFileObjects = companionFiles;
+                logger.debug(
+                  `[DataOrchestrator] Restored ${companionFiles.length} companion files`,
+                  LogCategory.DATA
+                );
+              }
+            } else {
+              logger.warn(
+                `[DataOrchestrator] No relatedFilesData found for ${file.name}`,
+                LogCategory.DATA
+              );
+            }
+          }
+
+          // Restore original file object if missing (needed for DuckDB ingestion)
+          if (!file.originalFile) {
+            try {
+              file.originalFile = await createFileFromUpload(file);
+            } catch (err) {
+              logger.warn(
+                `Failed to restore original file object for ${file.name}`,
+                LogCategory.DATA,
+                { error: err }
+              );
+            }
+          }
+
           const progress = `${index + 1}/${total}`;
+          logger.debug(
+            `[DataOrchestrator] Processing file ${progress}: ${file.name}`,
+            LogCategory.DATA
+          );
 
           try {
             await this.onFileAdded(file);
-          } catch (error) {
-            logger.error(
-              'Project file processing failed',
-              LogCategory.PROJECT,
-              {
-                progress,
-                fileName: file.name,
-                error: error instanceof Error ? error.message : 'Unknown error'
-              }
-            );
-            logger.error(
-              'Detailed project processing error',
-              LogCategory.PROJECT,
-              formatError(error)
-            );
-          } finally {
-            this.processingFiles.delete(file.id);
+          } catch (_) {
+            // Individual file failure shouldn't stop the whole batch
+            // Error is already logged in onFileAdded
           }
         }
       );
-
-      layersActions.syncWithVisualizations();
-
-      // No cache persistence – DuckDB remains the canonical storage during the session.
     } catch (error) {
-      // Cleanup on error - remove all unprocessed files from processing
+      logger.error('Failed to process project files', LogCategory.DATA, error);
+    } finally {
+      // Clear processing flags
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
-      logger.error('Project files processing failed', LogCategory.PROJECT, {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
     }
   }
 
   private determineProjectConcurrency(): number {
-    if (typeof navigator === 'undefined' || !navigator.hardwareConcurrency) {
-      return 1;
+    // Use lower concurrency for mobile/tablet
+    if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+      return Math.max(1, Math.min(4, navigator.hardwareConcurrency - 1));
     }
-    const cores = navigator.hardwareConcurrency;
-    if (cores <= 2) return 1;
-    if (cores <= 4) return 2;
-    return 3;
-  }
-
-  private createDefaultVisualization(datasetId: string): void {
-    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
-    if (!dataset) return;
-
-    const numericColumns = dataset.columns.filter(
-      (c) => c.type === ColumnType.NUMBER
-    );
-    const stringColumns = dataset.columns.filter(
-      (c) => c.type === ColumnType.TEXT
-    );
-
-    let visualizationType;
-    if (dataset.geometry && numericColumns.length > 0) {
-      visualizationType = VisualizationType.CHOROPLETH;
-    } else if (dataset.geometry && stringColumns.length > 0) {
-      visualizationType = VisualizationType.CATEGORICAL;
-    } else if (numericColumns.length > 0) {
-      visualizationType = VisualizationType.PROPORTIONAL;
-    } else {
-      return;
-    }
-
-    visualizationStore.createVisualization(visualizationType, datasetId);
-  }
-
-  async exportData(format: 'csv' | 'geojson' | 'json'): Promise<Blob> {
-    const { exportProjectData } = await import('../utils/file-export.utils');
-    const currentProject = projectStore.currentProject;
-
-    if (!currentProject?.data?.sourceFiles) {
-      throw new DataValidationError('Aucune donnée à exporter');
-    }
-
-    return exportProjectData(currentProject.data.sourceFiles, format);
-  }
-
-  getVisualizationData(visualizationId: string): {
-    visualization: VisualizationConfig;
-    dataset: DatasetResult;
-  } | null {
-    const visualization = visualizationStore.visualizations.find(
-      (v) => v.id === visualizationId
-    );
-    if (!visualization) return null;
-
-    const dataset = datasetsStore.datasets.find(
-      (d) => d.id === visualization.datasetId
-    );
-    if (!dataset) return null;
-
-    return {
-      visualization,
-      dataset
-    };
+    return 2;
   }
 }
 
-export const dataOrchestrator = new DataOrchestratorService();
+export const dataOrchestratorService = new DataOrchestratorService();
