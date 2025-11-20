@@ -8,6 +8,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+*-old
 
 # Diagnostic reports
 report.*.json
@@ -20,6 +21,7 @@ report.*.json
 /.svelte-kit
 /build
 dist
+dev-dist/
 
 # OS
 .DS_Store
@@ -98,6 +100,5 @@ tmp/
 
 # Inlang cache
 project.inlang/cache/
-
-
-
+cdc.md
+dd.md

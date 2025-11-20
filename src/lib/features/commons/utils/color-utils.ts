@@ -34,8 +34,8 @@ export function hexToHsl(hex: string): HSLColor {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   let h = 0,
-    s = 0,
-    l = (max + min) / 2;
+    s = 0;
+  const l = (max + min) / 2;
 
   if (max !== min) {
     const d = max - min;
@@ -44,9 +44,11 @@ export function hexToHsl(hex: string): HSLColor {
       case r:
         h = (g - b) / d + (g < b ? 6 : 0);
         break;
+
       case g:
         h = (b - r) / d + 2;
         break;
+
       case b:
         h = (r - g) / d + 4;
         break;
@@ -89,4 +91,26 @@ export function createColorValue(
 
 export function isValidHexColor(hex: string): boolean {
   return /^#[0-9A-F]{6}$/i.test(hex);
+}
+
+export function hexToRgb(hex: string): [number, number, number] {
+  const sanitizedHex = hex.replace('#', '');
+
+  const r = parseInt(sanitizedHex.substring(0, 2), 16);
+  const g = parseInt(sanitizedHex.substring(2, 4), 16);
+  const b = parseInt(sanitizedHex.substring(4, 6), 16);
+
+  return [r, g, b];
+}
+
+export function hexToRgba(
+  hex: string,
+  alpha: number = 1
+): [number, number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  return [r, g, b, Math.round(alpha * 255)];
+}
+
+export function rgbToHex(r: number, g: number, b: number): string {
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }

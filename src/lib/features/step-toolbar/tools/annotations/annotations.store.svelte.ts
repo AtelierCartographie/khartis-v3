@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import type {
   AnnotationsState,
@@ -129,9 +130,9 @@ export const annotationsActions = {
   },
 
   toggleVisibility(id: string): void {
-    const annotation = annotationsState.items.find((item) => item.id === id);
-    if (annotation) {
-    }
+    annotationsState.items = annotationsState.items.map((item) =>
+      item.id === id ? { ...item, visible: !item.visible } : item
+    );
   },
 
   clearAll(): void {
@@ -160,9 +161,7 @@ export const annotationsActions = {
     };
   },
 
-  reset(): void {
-    Object.assign(annotationsState, DEFAULT_ANNOTATIONS_STATE);
-  }
+  reset: createResetFunction(annotationsState, DEFAULT_ANNOTATIONS_STATE)
 };
 
 export function getSelectedAnnotation() {

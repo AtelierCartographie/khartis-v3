@@ -3,23 +3,23 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { Button, Modal, Tag } from 'carbon-components-svelte';
   import { Add, Close } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import AddDataModal from './add-data-modal.svelte';
 
-  let tabsScroller: HTMLDivElement | null = null;
+  let tabsScroller: HTMLDivElement | null = $state(null);
+  let lastSourceFilesCount = $state(0);
 
   $effect(() => {
-    const project = projectStore.currentProject;
-    if (project?.data?.sourceFiles && globalState.dataButtons.length === 0) {
-      globalActions.clearAllDataButtons();
-      for (const file of project.data.sourceFiles) {
-        globalActions.addDataButtonForFile(file.id, file.name);
-      }
+    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+
+    if (sourceFiles.length !== lastSourceFilesCount) {
+      lastSourceFilesCount = sourceFiles.length;
+      globalActions.ensureTabSelected();
     }
   });
 
@@ -42,10 +42,6 @@
     isAddDataModalOpen = true;
   };
 
-  const closeAddDataModal = () => {
-    isAddDataModalOpen = false;
-  };
-
   const openDeleteConfirm = (
     fileId: string,
     fileName: string,
@@ -59,7 +55,6 @@
   const handleDeleteFile = async () => {
     if (fileToDelete && projectStore.currentProject) {
       await projectStore.removeFileFromProject(fileToDelete.id);
-      globalActions.removeDataButton(fileToDelete.id);
     }
     isDeleteConfirmOpen = false;
     fileToDelete = null;
@@ -97,13 +92,19 @@
       case 'tsv':
       case 'txt':
         return 'blue';
+
       case 'json':
       case 'geojson':
         return 'green';
+
       case 'shp':
       case 'gpkg':
       case 'kml':
+      case 'kmz':
+      case 'geoparquet':
+      case 'gpq':
         return 'purple';
+
       default:
         return 'gray';
     }
@@ -145,7 +146,7 @@
           </div>
           <button
             class="tab-close-button"
-            onclick={(e) =>
+            onclick={(e: MouseEvent) =>
               openDeleteConfirm(dataButton.id, dataButton.label, e)}
             aria-label="Supprimer le fichier"
             title="Supprimer le fichier"
@@ -172,10 +173,7 @@
   </div>
 </div>
 
-<AddDataModal
-  bind:open={isAddDataModalOpen}
-  addDataButton={closeAddDataModal}
-/>
+<AddDataModal bind:open={isAddDataModalOpen} addDataButton={openAddDataModal} />
 
 <Modal
   danger
@@ -183,6 +181,7 @@
   modalHeading="Supprimer le fichier"
   primaryButtonText="Supprimer"
   secondaryButtonText="Annuler"
+  size="sm"
   on:click:button--secondary={cancelDelete}
   on:click:button--primary={handleDeleteFile}
   on:close={cancelDelete}

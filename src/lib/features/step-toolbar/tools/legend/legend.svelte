@@ -83,7 +83,6 @@
     field: keyof LegendItem,
     value: string
   ): void {
-    // Sanitize input to prevent XSS attacks
     const sanitizedValue = sanitizeTextInput(value);
     legendActions.updateLegendItem(id, { [field]: sanitizedValue });
   }
@@ -189,48 +188,48 @@
             />
           {/snippet}
 
-          {#snippet children()}
-            <Grid padding noGutter>
-              <Row>
-                <Column>
-                  <TextInput
-                    labelText={m.legend_title()}
-                    size="xl"
-                    placeholder={item.name}
-                    id={`${item.id}-title`}
-                    bind:value={item.title}
-                    on:change={() => updateItemField(item.id, 'title', item.title)}
-                  />
-                </Column>
-              </Row>
+          <Grid padding noGutter>
+            <Row>
+              <Column>
+                <TextInput
+                  labelText={m.legend_title()}
+                  size="xl"
+                  placeholder={item.name}
+                  id={`${item.id}-title`}
+                  bind:value={item.title}
+                  on:change={() =>
+                    updateItemField(item.id, 'title', item.title)}
+                />
+              </Column>
+            </Row>
 
-              <Row>
-                <Column>
-                  <TextInput
-                    labelText={m.legend_subtitle()}
-                    size="xl"
-                    placeholder={m.legend_no_subtitle()}
-                    id={`${item.id}-subtitle`}
-                    bind:value={item.subtitle}
-                    on:change={() => updateItemField(item.id, 'subtitle', item.subtitle)}
-                  />
-                </Column>
-              </Row>
+            <Row>
+              <Column>
+                <TextInput
+                  labelText={m.legend_subtitle()}
+                  size="xl"
+                  placeholder={m.legend_no_subtitle()}
+                  id={`${item.id}-subtitle`}
+                  bind:value={item.subtitle}
+                  on:change={() =>
+                    updateItemField(item.id, 'subtitle', item.subtitle)}
+                />
+              </Column>
+            </Row>
 
-              <Row>
-                <Column>
-                  <TextInput
-                    labelText={m.legend_note()}
-                    size="xl"
-                    placeholder={m.legend_no_note()}
-                    id={`${item.id}-note`}
-                    bind:value={item.note}
-                    on:change={() => updateItemField(item.id, 'note', item.note)}
-                  />
-                </Column>
-              </Row>
-            </Grid>
-          {/snippet}
+            <Row>
+              <Column>
+                <TextInput
+                  labelText={m.legend_note()}
+                  size="xl"
+                  placeholder={m.legend_no_note()}
+                  id={`${item.id}-note`}
+                  bind:value={item.note}
+                  on:change={() => updateItemField(item.id, 'note', item.note)}
+                />
+              </Column>
+            </Row>
+          </Grid>
         </ExpandableSection>
       {/each}
     </div>
@@ -252,7 +251,7 @@
             bind:selected={localFontFamily}
             size="xl"
           >
-            {#each availableFonts as f}
+            {#each availableFonts as f (f)}
               <SelectItem value={f} text={f} />
             {/each}
           </Select>
@@ -265,7 +264,7 @@
             bind:selected={localFontSize}
             size="xl"
           >
-            {#each [10, 11, 12, 14, 16, 18, 20, 24] as s}
+            {#each [10, 11, 12, 14, 16, 18, 20, 24] as s (s)}
               <SelectItem value={s} text={String(s)} />
             {/each}
           </Select>

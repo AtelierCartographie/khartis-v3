@@ -1,13 +1,13 @@
-import type { ProcessedDataset } from '../utils/data-pipeline.utils';
-import {
-  createDataPipeline,
-  processUploadedFile
-} from '../utils/data-pipeline.utils';
+import type { DatasetResult } from '$lib/features/data-pipeline';
+import { dataPipeline } from '$lib/features/data-pipeline';
+import { DuplicateFileError } from '../errors/pipeline.errors';
+import { LogCategory, logger } from '../utils/logger';
+import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
-import { projectStore } from './project.store.svelte';
+import { ProcessingSemaphore } from '../utils/processing-semaphore';
 
 interface DatasetsState {
-  datasets: ProcessedDataset[];
+  datasets: DatasetResult[];
   selectedDatasetId?: string;
   isProcessing: boolean;
   error?: string;
@@ -19,14 +19,43 @@ class DatasetsStore {
     isProcessing: false
   });
 
+  private activeOperations = 0;
+
+  private pendingDatasetResolvers = new Map<
+    string,
+    Array<(datasetId: string) => void>
+  >();
+
+  // Semaphore to limit concurrent file processing to prevent memory exhaustion
+  private processingSemaphore = new ProcessingSemaphore(2);
+
+  constructor() {
+    // DISABLED: Reactive sync causes triple processing
+    // DataOrchestrator.onProjectChanged() already handles project file loading
+    // This $effect was triggering addFile() for each file when project changes,
+    // causing files to be processed multiple times
+    // if (typeof window !== 'undefined') {
+    //   $effect.root(() => {
+    //     $effect(() => {
+    //       const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
+    //       if (sourceFiles !== undefined) {
+    //         void this.syncWithProject();
+    //       }
+    //     });
+    //   });
+    // }
+  }
+
   get datasets() {
     return this._state.datasets;
   }
 
   get selectedDataset() {
-    return this._state.datasets.find(
+    const dataset = this._state.datasets.find(
       (d) => d.id === this._state.selectedDatasetId
     );
+
+    return dataset;
   }
 
   get selectedDatasetId() {
@@ -37,9 +66,21 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
-  // Method to directly add a processed dataset (for DuckDB integration)
-  addProcessedDataset(dataset: ProcessedDataset): void {
-    this._state.datasets.push(dataset);
+  private startProcessing(): void {
+    this.activeOperations++;
+    this._state.isProcessing = true;
+  }
+
+  private endProcessing(): void {
+    this.activeOperations = Math.max(0, this.activeOperations - 1);
+    if (this.activeOperations === 0) {
+      this._state.isProcessing = false;
+    }
+  }
+
+  addProcessedDataset(dataset: DatasetResult): void {
+    // Force reactivity by creating a new array
+    this._state.datasets = [...this._state.datasets, dataset];
     if (!this._state.selectedDatasetId) {
       this._state.selectedDatasetId = dataset.id;
     }
@@ -50,158 +91,212 @@ class DatasetsStore {
   }
 
   async processFiles(files: UploadedFile[]): Promise<void> {
-    this._state.isProcessing = true;
+    this.startProcessing();
     this._state.error = undefined;
 
     try {
-      // Try to access parsedData directly
-      console.log('[DatasetsStore.processFiles] Original files:', files.length);
-      files.forEach((file, i) => {
-        console.log(`[DatasetsStore.processFiles] File ${i}:`, {
-          name: file.name,
-          hasParseData: !!file.parsedData,
-          parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
-        });
+      logger.info(
+        `Processing ${files.length} files with semaphore (max 2 concurrent)`,
+        LogCategory.STORE
+      );
 
-        // Try to access first element
-        if (file.parsedData && Array.isArray(file.parsedData) && file.parsedData.length > 0) {
-          console.log(`[DatasetsStore.processFiles] File ${i} first row:`, file.parsedData[0]);
-        }
-      });
+      // Process files with semaphore to limit concurrent operations
+      const newDatasets = await Promise.all(
+        files.map(async (file) => {
+          return this.processingSemaphore.run(async () => {
+            logger.debug(
+              `Processing file: ${file.name} (active: ${this.processingSemaphore.activeCount}, queued: ${this.processingSemaphore.queuedCount})`,
+              LogCategory.STORE
+            );
 
-      // Create clean copies of files to avoid proxy issues
-      const filesCopy = files.map(file => {
-        // Check if parsedData exists and has data
-        if (!file.parsedData) {
-          console.warn(`[DatasetsStore.processFiles] File ${file.name} has no parsedData`);
-        }
+            if (!file.content && !file.originalFile) {
+              throw new Error(
+                `File ${file.name} has no content or originalFile`
+              );
+            }
 
-        // Create a clean copy without proxy references
-        const cleanFile = {
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          fileType: file.fileType,
-          status: file.status,
-          uploadProgress: file.uploadProgress,
-          errorMessage: file.errorMessage,
-          validation: file.validation,
-          parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
-          content: file.content,
-          duplicates: file.duplicates,
-          statistics: file.statistics,
-          sourceType: file.sourceType
-        };
+            const dataset = await dataPipeline.processUploadedFile(
+              file,
+              file.originalFile
+            );
 
-        return cleanFile;
-      });
-
-      console.log('[DatasetsStore.processFiles] Files copy:', filesCopy.length);
-      filesCopy.forEach((file, i) => {
-        console.log(`[DatasetsStore.processFiles] File copy ${i} parsedData:`, file.parsedData?.length);
-      });
-
-      const newDatasets = await createDataPipeline(filesCopy);
+            logger.debug(
+              `Completed processing: ${file.name}`,
+              LogCategory.STORE
+            );
+            return dataset;
+          });
+        })
+      );
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
 
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
+
+      logger.success(
+        `All ${files.length} files processed successfully`,
+        LogCategory.STORE
+      );
     } catch (error) {
+      logger.error('Files processing failed', LogCategory.STORE, {
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
     } finally {
-      this._state.isProcessing = false;
+      this.endProcessing();
     }
   }
 
-  async addFile(file: UploadedFile): Promise<void> {
-    this._state.isProcessing = true;
+  async addFile(file: UploadedFile): Promise<DatasetResult | null> {
+    const startTime = performance.now();
+
+    this.startProcessing();
     this._state.error = undefined;
+    let addedDataset: DatasetResult | null = null;
 
     try {
-      console.log('[DatasetsStore.addFile] Original file:', {
-        name: file.name,
-        hasParseData: !!file.parsedData,
-        parsedDataLength: Array.isArray(file.parsedData) ? file.parsedData.length : 'not array'
+      // Use semaphore for single file processing to maintain consistency
+      const dataset = await this.processingSemaphore.run(async () => {
+        if (!file.content) {
+          throw new Error(`File ${file.name} has no content`);
+        }
+
+        logger.debug(
+          `Processing single file: ${file.name} (active: ${this.processingSemaphore.activeCount})`,
+          LogCategory.STORE
+        );
+
+        return await dataPipeline.processUploadedFile(file, file.originalFile);
       });
 
-      // Create a clean copy without proxy references
-      const fileCopy = {
-        id: file.id,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        fileType: file.fileType,
-        status: file.status,
-        uploadProgress: file.uploadProgress,
-        errorMessage: file.errorMessage,
-        validation: file.validation,
-        parsedData: file.parsedData ? JSON.parse(JSON.stringify(file.parsedData)) : [],
-        content: file.content,
-        duplicates: file.duplicates,
-        statistics: file.statistics,
-        sourceType: file.sourceType
-      };
-
-      console.log('[DatasetsStore.addFile] File copy parsedData:', fileCopy.parsedData?.length);
-
-      const dataset = await processUploadedFile(fileCopy);
-
       if (dataset) {
-        this._state.datasets.push(dataset);
+        // Check for duplicates by sourceFileId
+        const existingDataset = this._state.datasets.find(
+          (d) => d.sourceFileId === dataset.sourceFileId
+        );
+
+        if (existingDataset) {
+          // Replace the existing dataset
+          this._state.datasets = this._state.datasets.map((d) =>
+            d.sourceFileId === dataset.sourceFileId ? dataset : d
+          );
+          // Update selection if we replaced the selected dataset
+          if (this._state.selectedDatasetId === existingDataset.id) {
+            this._state.selectedDatasetId = dataset.id;
+          }
+
+          addedDataset = dataset;
+          // Throw non-fatal error to show warning toast (won't trigger rollback)
+          throw new DuplicateFileError(
+            `Le fichier "${file.name}" existe déjà et a été remplacé`,
+            file.name,
+            {
+              existingDatasetId: existingDataset.id,
+              newDatasetId: dataset.id
+            }
+          );
+        } else {
+          // Force reactivity by creating a new array
+          this._state.datasets = [...this._state.datasets, dataset];
+        }
 
         if (!this._state.selectedDatasetId) {
           this._state.selectedDatasetId = dataset.id;
         }
+
+        addedDataset = dataset;
+
+        const pendingResolvers = this.pendingDatasetResolvers.get(
+          dataset.sourceFileId
+        );
+        if (pendingResolvers?.length) {
+          pendingResolvers.forEach((resolve) => resolve(dataset.id));
+          this.pendingDatasetResolvers.delete(dataset.sourceFileId);
+        }
       }
+
+      return addedDataset;
     } catch (error) {
+      const duration = performance.now() - startTime;
+      logger.error(
+        `Failed to add file to datasets store (duration: ${duration.toFixed(2)}ms)`,
+        LogCategory.DATA,
+        error
+      );
+
       this._state.error =
         error instanceof Error ? error.message : 'Processing failed';
       throw error;
     } finally {
-      this._state.isProcessing = false;
+      this.endProcessing();
     }
   }
 
   selectDataset(datasetId: string): void {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
+
     if (dataset) {
       this._state.selectedDatasetId = datasetId;
     }
   }
 
   removeDataset(datasetId: string): void {
-    this._state.datasets = this._state.datasets.filter(
+    const filteredDatasets = this._state.datasets.filter(
       (d) => d.id !== datasetId
     );
 
     if (this._state.selectedDatasetId === datasetId) {
-      this._state.selectedDatasetId = this._state.datasets[0]?.id;
+      const newSelectedId = filteredDatasets[0]?.id;
+      this._state.selectedDatasetId = newSelectedId;
     }
+
+    this._state.datasets = filteredDatasets;
   }
 
-  getDatasetBySourceFile(sourceFileId: string): ProcessedDataset | undefined {
-    return this._state.datasets.find((d) => d.sourceFileId === sourceFileId);
+  getAllDatasets(): DatasetResult[] {
+    return this._state.datasets;
   }
 
-  getDatasetsByType(hasGeometry: boolean): ProcessedDataset[] {
+  getDatasetBySourceFile(sourceFileId: string): DatasetResult | undefined {
+    const dataset = this._state.datasets.find(
+      (d) => d.sourceFileId === sourceFileId
+    );
+
+    return dataset;
+  }
+
+  waitForDatasetBySourceFile(sourceFileId: string): Promise<string> {
+    const existing = this.getDatasetBySourceFile(sourceFileId);
+    if (existing) {
+      return Promise.resolve(existing.id);
+    }
+
+    return new Promise((resolve) => {
+      const resolvers = this.pendingDatasetResolvers.get(sourceFileId) ?? [];
+      resolvers.push(resolve);
+      this.pendingDatasetResolvers.set(sourceFileId, resolvers);
+    });
+  }
+
+  getDatasetsByType(hasGeometry: boolean): DatasetResult[] {
     return this._state.datasets.filter((d) =>
       hasGeometry ? !!d.geometry : !d.geometry
     );
   }
 
-  getColumnValues(datasetId: string, columnName: string): any[] {
+  getColumnValues(datasetId: string, columnName: string): unknown[] {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
-    if (!dataset) return [];
+    if (!dataset || !dataset.data) return [];
 
     return dataset.data.map((row) => row[columnName]);
   }
 
-  getUniqueValues(datasetId: string, columnName: string): any[] {
+  getUniqueValues(datasetId: string, columnName: string): unknown[] {
     const values = this.getColumnValues(datasetId, columnName);
     return Array.from(new Set(values));
   }
@@ -243,31 +338,106 @@ class DatasetsStore {
       : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
-  async syncWithProject(): Promise<void> {
-    const currentProject = projectStore.currentProject;
-    if (!currentProject?.data?.sourceFiles) {
-      this.clear();
+  resetDataset(datasetId: string): boolean {
+    const datasetIndex = this._state.datasets.findIndex(
+      (d) => d.id === datasetId
+    );
+
+    if (datasetIndex === -1) {
+      return false;
+    }
+
+    const dataset = this._state.datasets[datasetIndex];
+
+    if (!dataset.originalData) {
+      return false;
+    }
+
+    const resetDataset = {
+      ...dataset,
+      columns: structuredClone(dataset.originalData.columns),
+      data: structuredClone(dataset.originalData.data),
+      rowCount: dataset.originalData.rowCount,
+      metadata: {
+        ...dataset.metadata,
+        transformations: []
+      }
+    };
+
+    this._state.datasets = [
+      ...this._state.datasets.slice(0, datasetIndex),
+      resetDataset,
+      ...this._state.datasets.slice(datasetIndex + 1)
+    ];
+
+    return true;
+  }
+
+  hasModifications(datasetId: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    return dataset
+      ? (dataset.metadata.transformations?.length ?? 0) > 0
+      : false;
+  }
+
+  recordTransformation(datasetId: string, description: string): void {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
       return;
     }
 
-    const currentFileIds = new Set(
-      currentProject.data.sourceFiles.map((f) => f.id)
-    );
-    const existingFileIds = new Set(
-      this._state.datasets.map((d) => d.sourceFileId)
-    );
+    const entry = `${new Date().toISOString()} - ${description}`;
+    const updatedTransformations = [
+      ...(dataset.metadata.transformations ?? []),
+      entry
+    ];
 
-    const toRemove = this._state.datasets.filter(
-      (d) => !currentFileIds.has(d.sourceFileId)
+    this._state.datasets = this._state.datasets.map((d) =>
+      d.id === datasetId
+        ? {
+            ...d,
+            metadata: {
+              ...d.metadata,
+              transformations: updatedTransformations
+            }
+          }
+        : d
     );
-    toRemove.forEach((d) => this.removeDataset(d.id));
+  }
 
-    const toAdd = currentProject.data.sourceFiles.filter(
-      (f) => !existingFileIds.has(f.id)
+  updateDatasetRowCount(datasetId: string, rowCount: number): void {
+    this._state.datasets = this._state.datasets.map((d) =>
+      d.id === datasetId
+        ? {
+            ...d,
+            rowCount,
+            metadata: {
+              ...d.metadata
+            }
+          }
+        : d
     );
-    for (const file of toAdd) {
-      await this.addFile(file);
+  }
+
+  renameDataset(datasetId: string, newName: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      return false;
     }
+
+    const sanitizedName = sanitizeTextInput(newName);
+    if (!sanitizedName) {
+      return false;
+    }
+
+    dataset.name = sanitizedName;
+    return true;
+  }
+
+  updateDatasetTableName(datasetId: string, tableName: string): void {
+    this._state.datasets = this._state.datasets.map((dataset) =>
+      dataset.id === datasetId ? { ...dataset, tableName } : dataset
+    );
   }
 
   clear(): void {

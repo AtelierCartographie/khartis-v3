@@ -1,39 +1,205 @@
-import Papa from 'papaparse';
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import type { GeoJSONFeature } from '$lib/types/data';
+import {
+  isGeoJSONFeature,
+  isGeoJSONFeatureCollection,
+  isTabularData
+} from '$lib/types/data';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
-import { FileType } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
 
-export function exportToCsv(data: any[], headers?: string[]): Blob {
-  const csv = Papa.unparse({
-    fields: headers || (data.length > 0 ? Object.keys(data[0]) : []),
-    data
-  });
+/**
+ * Export data to CSV using DuckDB's COPY TO when table is available,
+ * falling back to JavaScript implementation for in-memory data
+ */
+export async function exportToCsv(
+  data: Record<string, unknown>[] | string,
+  headers?: string[]
+): Promise<Blob> {
+  // If data is a DuckDB table name, use COPY TO
+  if (typeof data === 'string') {
+    const tableName = data;
 
+    // Ensure DuckDB is initialized
+    await initDuckDB();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    // Use DuckDB's COPY TO to generate CSV
+    const csvString = await Duck.copy_to_csv_as_string(tableName, {
+      delimiter: ',',
+      header: true
+    });
+
+    // Add BOM for Excel compatibility
+    const bom = '\uFEFF';
+    return new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
+  }
+
+  // Fallback: JavaScript implementation for in-memory data
+  const rows = data as Record<string, unknown>[];
+  const fields = headers || (rows.length > 0 ? Object.keys(rows[0]) : []);
+
+  // Build CSV manually
+  const csvRows: string[] = [];
+
+  // Add header
+  csvRows.push(fields.map(escapeCSVField).join(','));
+
+  // Add data rows
+  for (const row of rows) {
+    const values = fields.map((field) => {
+      const value = row[field];
+      return escapeCSVField(value);
+    });
+    csvRows.push(values.join(','));
+  }
+
+  const csv = csvRows.join('\n');
   const bom = '\uFEFF';
   return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
 }
 
-export function exportToGeoJson(data: any): Blob {
-  let geojson: any;
+/**
+ * Escape a field value for CSV format
+ */
+function escapeCSVField(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
 
-  if (data.type === 'FeatureCollection' || data.type === 'Feature') {
-    geojson = data;
+  const str = String(value);
+
+  // Check if the field needs quotes
+  if (
+    str.includes(',') ||
+    str.includes('"') ||
+    str.includes('\n') ||
+    str.includes('\r')
+  ) {
+    // Escape quotes by doubling them
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+export async function exportDatasetToCsv(
+  dataset: ProcessedDataset
+): Promise<Blob> {
+  // If dataset has a DuckDB table, use that
+  if (dataset.duckdbTableName) {
+    // Ensure DuckDB is initialized
+    await initDuckDB();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    // Create a view that excludes geometry columns
+    const viewName = `export_view_${Date.now()}`;
+    const nonGeomColumns = dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .map((col) => `"${col.name}"`)
+      .join(', ');
+
+    try {
+      // Create temporary view with only non-geometry columns
+      await Duck.query(`
+        CREATE TEMPORARY VIEW ${viewName} AS
+        SELECT ${nonGeomColumns} FROM ${dataset.duckdbTableName}
+      `);
+
+      // Export using DuckDB
+      const blob = await exportToCsv(viewName);
+
+      // Clean up view
+      await Duck.query(`DROP VIEW IF EXISTS ${viewName}`);
+
+      return blob;
+    } catch (error) {
+      // Clean up on error
+      if (Duck) {
+        await Duck.query(`DROP VIEW IF EXISTS ${viewName}`).catch(() => {});
+      }
+      throw error;
+    }
+  }
+
+  // Fallback to JavaScript implementation
+  const headers = dataset.columns
+    .filter((col) => col.type !== 'geometry')
+    .map((col) => col.name);
+
+  const data = dataset.data.map((row) => {
+    const cleanRow: Record<string, unknown> = {};
+    headers.forEach((header) => {
+      cleanRow[header] = row[header];
+    });
+    return cleanRow;
+  });
+
+  return exportToCsv(data, headers);
+}
+
+export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
+  if (!dataset.geometry) {
+    throw new Error('Dataset does not contain geometry data');
+  }
+
+  const features = dataset.data.map((row) => {
+    const properties: Record<string, unknown> = {};
+    dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .forEach((col) => {
+        properties[col.name] = row[col.name];
+      });
+
+    const geometryColumn = dataset.columns.find(
+      (col) => col.type === 'geometry'
+    );
+    const geometry = geometryColumn ? row[geometryColumn.name] : null;
+
+    return {
+      type: 'Feature' as const,
+      geometry,
+      properties
+    };
+  });
+
+  const geojson = {
+    type: 'FeatureCollection',
+    features
+  };
+
+  const jsonString = JSON.stringify(geojson, null, 2);
+  return new Blob([jsonString], { type: 'application/geo+json' });
+}
+
+export function exportToGeoJson(data: unknown): Blob {
+  const dataObj = data as Record<string, unknown>;
+
+  let geojson: unknown;
+
+  if (dataObj.type === 'FeatureCollection' || dataObj.type === 'Feature') {
+    geojson = dataObj;
   } else if (Array.isArray(data)) {
     geojson = {
       type: 'FeatureCollection',
       features: data
         .filter(
-          (item) =>
+          (item: Record<string, unknown>) =>
             item.type === 'Feature' || (item.geometry && item.properties)
         )
-        .map((item) => {
+        .map((item: Record<string, unknown>) => {
           if (item.type === 'Feature') return item;
           return {
-            type: 'Feature',
+            type: 'Feature' as const,
             geometry: item.geometry,
-            properties: item.properties || {}
+            properties: (item.properties as Record<string, unknown>) || {}
           };
         })
     };
@@ -45,9 +211,148 @@ export function exportToGeoJson(data: any): Blob {
   return new Blob([jsonString], { type: 'application/geo+json' });
 }
 
-export function exportToJson(data: any): Blob {
+export function exportToJson(data: unknown): Blob {
   const jsonString = JSON.stringify(data, null, 2);
   return new Blob([jsonString], { type: 'application/json' });
+}
+
+export async function exportProcessedDatasets(
+  datasets: ProcessedDataset[],
+  format: 'csv' | 'geojson' | 'json' = 'json'
+): Promise<Blob> {
+  if (datasets.length === 0) {
+    throw new Error('No datasets to export');
+  }
+
+  if (format === 'csv') {
+    if (datasets.length === 1) {
+      return exportDatasetToCsv(datasets[0]);
+    }
+
+    // For multiple datasets, check if they have DuckDB tables
+    const haveDuckDBTables = datasets.every((d) => d.duckdbTableName);
+
+    if (haveDuckDBTables) {
+      // Ensure DuckDB is initialized
+      await initDuckDB();
+      if (!Duck) {
+        throw new Error('DuckDB not initialized');
+      }
+
+      // Use DuckDB UNION ALL to combine tables
+      const unionViewName = `export_union_${Date.now()}`;
+
+      try {
+        // Build UNION ALL query
+        const unionParts = datasets.map((dataset) => {
+          const nonGeomColumns = dataset.columns
+            .filter((col) => col.type !== 'geometry')
+            .map((col) => `"${col.name}"`)
+            .join(', ');
+
+          return `SELECT ${nonGeomColumns}, '${dataset.name}' as _source_dataset FROM ${dataset.duckdbTableName}`;
+        });
+
+        const unionQuery = `
+          CREATE TEMPORARY VIEW ${unionViewName} AS
+          ${unionParts.join(' UNION ALL ')}
+        `;
+
+        await Duck.query(unionQuery);
+        const blob = await exportToCsv(unionViewName);
+        await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`);
+
+        return blob;
+      } catch (error) {
+        if (Duck) {
+          await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`).catch(
+            () => {}
+          );
+        }
+        throw error;
+      }
+    }
+
+    // Fallback to JavaScript implementation
+    const allData: Record<string, unknown>[] = [];
+    for (const dataset of datasets) {
+      const dataWithSource = dataset.data.map((row) => ({
+        ...row,
+        _source_dataset: dataset.name
+      }));
+      allData.push(...dataWithSource);
+    }
+
+    const allHeaders = Array.from(
+      new Set(
+        datasets.flatMap((d) =>
+          d.columns
+            .filter((col) => col.type !== 'geometry')
+            .map((col) => col.name)
+        )
+      )
+    );
+    allHeaders.push('_source_dataset');
+
+    return exportToCsv(allData, allHeaders);
+  }
+
+  if (format === 'geojson') {
+    const allFeatures: unknown[] = [];
+
+    for (const dataset of datasets) {
+      if (!dataset.geometry) {
+        continue;
+      }
+
+      const geometryColumn = dataset.columns.find(
+        (col) => col.type === 'geometry'
+      );
+      dataset.data.forEach((row) => {
+        const properties: Record<string, unknown> = {};
+        dataset.columns
+          .filter((col) => col.type !== 'geometry')
+          .forEach((col) => {
+            properties[col.name] = row[col.name];
+          });
+        properties._source_dataset = dataset.name;
+
+        allFeatures.push({
+          type: 'Feature' as const,
+          geometry: geometryColumn ? row[geometryColumn.name] : null,
+          properties
+        });
+      });
+    }
+
+    if (allFeatures.length === 0) {
+      throw new Error('No geometric data to export');
+    }
+
+    return exportToGeoJson({
+      type: 'FeatureCollection',
+      features: allFeatures
+    });
+  }
+
+  const exportData = {
+    exportDate: new Date().toISOString(),
+    datasets: datasets.map((d) => ({
+      id: d.id,
+      name: d.name,
+      rowCount: d.rowCount,
+      columns: d.columns.map((col) => ({
+        name: col.name,
+        type: col.type,
+        nullable: col.nullable
+      })),
+      data: d.data,
+      geometry: d.geometry,
+      metadata: d.metadata
+    }))
+  };
+
+  return exportToJson(exportData);
 }
 
 export async function exportProjectData(
@@ -63,19 +368,20 @@ export async function exportProjectData(
   }
 
   if (format === 'csv') {
-    const allData: any[] = [];
+    const allData: Record<string, unknown>[] = [];
 
     for (const file of validFiles) {
-      if (file.fileType === FileType.CSV && file.parsedData) {
-        allData.push(...file.parsedData);
-      } else if (file.parsedData?.features) {
-        const features = file.parsedData.features;
-        const flatData = features.map((f: any) => ({
-          ...f.properties,
-          geometry_type: f.geometry?.type,
-          coordinates: JSON.stringify(f.geometry?.coordinates)
-        }));
-        allData.push(...flatData);
+      if (file.parsedData) {
+        if (isTabularData(file.parsedData)) {
+          allData.push(...file.parsedData);
+        } else if (isGeoJSONFeatureCollection(file.parsedData)) {
+          const flatData = file.parsedData.features.map((f) => ({
+            ...f.properties,
+            geometry_type: f.geometry?.type,
+            coordinates: serializeGeometryCoordinates(f.geometry)
+          }));
+          allData.push(...flatData);
+        }
       }
     }
 
@@ -83,15 +389,15 @@ export async function exportProjectData(
   }
 
   if (format === 'geojson') {
-    const allFeatures: any[] = [];
+    const allFeatures: unknown[] = [];
 
     for (const file of validFiles) {
-      if (file.parsedData?.type === 'FeatureCollection') {
-        allFeatures.push(...file.parsedData.features);
-      } else if (file.parsedData?.type === 'Feature') {
-        allFeatures.push(file.parsedData);
-      } else if (file.fileType === FileType.CSV && file.parsedData) {
-        console.warn(`Skipping CSV file ${file.name} for GeoJSON export`);
+      if (file.parsedData) {
+        if (isGeoJSONFeatureCollection(file.parsedData)) {
+          allFeatures.push(...file.parsedData.features);
+        } else if (isGeoJSONFeature(file.parsedData)) {
+          allFeatures.push(file.parsedData);
+        }
       }
     }
 
@@ -114,6 +420,24 @@ export async function exportProjectData(
   return exportToJson(exportData);
 }
 
+function serializeGeometryCoordinates(
+  geometry: GeoJSONFeature['geometry']
+): string | undefined {
+  if (!geometry || typeof geometry !== 'object') {
+    return undefined;
+  }
+
+  if ('coordinates' in geometry) {
+    return JSON.stringify((geometry as { coordinates?: unknown }).coordinates);
+  }
+
+  if ('geometries' in geometry) {
+    return JSON.stringify((geometry as { geometries?: unknown }).geometries);
+  }
+
+  return JSON.stringify(geometry);
+}
+
 export function downloadFile(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -124,4 +448,3 @@ export function downloadFile(blob: Blob, filename: string): void {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-

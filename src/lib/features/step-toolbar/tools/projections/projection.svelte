@@ -8,7 +8,7 @@
   import ProjectionSettings from './projection-settings.svelte';
 
   const title = m.projection_title();
-  let viewMode = $derived(globalState.projectionViewMode ?? 'list');
+  let _viewMode = $derived(globalState.projectionViewMode ?? 'list');
 </script>
 
 <div id="khartis-projection-tool">

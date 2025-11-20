@@ -4,13 +4,7 @@ export enum ToolbarState {
   Compact = 'compact'
 }
 
-export enum ZoomMode {
-  Map = 'map',
-  Page = 'page'
-}
-
 export interface ZoomState {
-  mode: ZoomMode;
   mapZoomLevel: number;
   pageZoomLevel: number;
   minMapZoom: number;
@@ -35,7 +29,6 @@ export interface GlobalState {
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;
-  dataButtons: DataButton[];
   projectionFilter?: ProjectionFilterId;
   projectionViewMode?: ProjectionViewMode;
   zoom: ZoomState;

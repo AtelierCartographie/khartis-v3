@@ -9,6 +9,7 @@
     selected?: boolean;
     name?: string;
     onclick?: (e: Event) => void | undefined;
+    'data-testid'?: string;
   }
 
   let {
@@ -16,7 +17,8 @@
     icon,
     selected = false,
     name = 'project-type',
-    onclick
+    onclick,
+    'data-testid': dataTestId
   }: ProjectCardProps = $props();
 </script>
 
@@ -28,7 +30,14 @@
   role="button"
   tabindex={0}
   onclick={onclick}
-  onkeydown={onclick}
+  onkeydown={(e: KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onclick?.(e);
+    }
+  }}
+  aria-pressed={selected}
+  data-testid={dataTestId}
 >
   <div class="flex justify-between w-full items-start pb-3">
     <div

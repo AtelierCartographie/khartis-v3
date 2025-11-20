@@ -14,17 +14,6 @@
 
   const description = m.projection_description();
 
-  interface ProjectionItem {
-    id: string;
-    title: string;
-    subtitle: string;
-    tag: string;
-    ratio?: string;
-    previewLabel?: string;
-    disabled?: boolean;
-    variant?: 'default' | 'blue' | 'gray';
-  }
-
   const projections = PROJECTIONS;
 
   let selectedId = $state<string>(projections[0].id);

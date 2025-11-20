@@ -17,20 +17,19 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
-  let hiddenUploader: any;
+  let hiddenUploader: HTMLDivElement | null = null;
 
   function triggerFileDialog() {
     if (hiddenUploader && hiddenUploader?.focus) {
       hiddenUploader.focus();
     }
-    const input: HTMLInputElement | null = (
-      hiddenUploader as any
-    )?.querySelector?.('input[type="file"]');
+    const input: HTMLInputElement | null =
+      hiddenUploader?.querySelector?.('input[type="file"]') ?? null;
     input?.click?.();
   }
 
-  function handleFileUpload(e: any) {
-    const files: readonly File[] = e?.detail || [];
+  function handleFileUpload(e: CustomEvent<readonly File[]>) {
+    const files: readonly File[] = e.detail || [];
     if (files.length > 0) {
       const file = files[0];
       const reader = new FileReader();

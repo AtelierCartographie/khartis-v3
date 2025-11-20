@@ -1,18 +1,28 @@
+import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
   type UploadedFile,
   DataSourceType,
   FileType
 } from '../store/create-project.types';
-import Papa from 'papaparse';
-import shp from 'shpjs';
+import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
-import { formatFileSize } from './format.utils';
 
-export { FileType, DataSourceType } from '../store/create-project.types';
+type DataRow = Record<string, unknown>;
+type ColumnStatSummary = {
+  type: string;
+  count: number;
+  nullCount: number;
+  unique: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+};
+
+export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
 
-export const MAX_FILE_SIZE = 100 * 1024 * 1024;
+export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 export const SUPPORTED_EXTENSIONS = {
   tabular: ['.csv', '.tsv', '.txt'],
@@ -24,7 +34,9 @@ export const SUPPORTED_EXTENSIONS = {
     '.dbf',
     '.prj',
     '.cpg',
-    '.gpkg'
+    '.gpkg',
+    '.geoparquet',
+    '.gpq'
   ]
 };
 
@@ -32,7 +44,12 @@ export const MIME_TYPES = {
   csv: ['text/csv', 'application/csv', 'text/plain'],
   geojson: ['application/geo+json', 'application/json'],
   shapefile: ['application/octet-stream', 'application/x-shapefile'],
-  geopackage: ['application/geopackage+sqlite3', 'application/octet-stream']
+  geopackage: ['application/geopackage+sqlite3', 'application/octet-stream'],
+  geoparquet: [
+    'application/geoparquet',
+    'application/octet-stream',
+    'application/x-parquet'
+  ]
 };
 
 export function detectFileType(file: File): FileType {
@@ -53,6 +70,22 @@ export function detectFileType(file: File): FileType {
 
   if (extension === 'gpkg') {
     return FileType.GEOPACKAGE;
+  }
+
+  if (
+    extension === 'geoparquet' ||
+    extension === 'gpq' ||
+    mimeType.includes('parquet')
+  ) {
+    return FileType.GEOPARQUET;
+  }
+
+  if (extension === 'kml') {
+    return FileType.KML;
+  }
+
+  if (extension === 'kmz') {
+    return FileType.KMZ;
   }
 
   return FileType.UNKNOWN;
@@ -132,12 +165,17 @@ export async function readFileContent(
         if (onProgress) onProgress(100);
         resolve(reader.result);
       } else {
-        reject(new Error('Failed to read file'));
+        reject(new ParseError('Failed to read file', detectFileType(file)));
       }
     };
 
     reader.onerror = () => {
-      reject(new Error(`Error reading file: ${reader.error?.message}`));
+      reject(
+        new ParseError(
+          `Error reading file: ${reader.error?.message}`,
+          detectFileType(file)
+        )
+      );
     };
 
     reader.onprogress = (event) => {
@@ -176,7 +214,6 @@ export function createUploadedFile(
   };
 }
 
-
 export function detectDelimiter(csvContent: string): string {
   const firstLine = csvContent.split('\n')[0];
   if (!firstLine) return ',';
@@ -201,164 +238,36 @@ export function parseCsvHeaders(csvContent: string): string[] {
     .map((header) => header.trim().replace(/^["']|["']$/g, ''));
 }
 
-export async function parseCsvWithPapa(
-  file: File,
-  onProgress?: (progress: number) => void
+// Shapefile parsing is now handled by DuckDB ST_Read in shapefile.parser.ts
+
+export async function detectDuplicateRows<T extends DataRow>(
+  data: T[]
 ): Promise<{
-  data: any[];
-  headers: string[];
-  errors: string[];
-  meta: any;
-}> {
-  console.log('[parseCsvWithPapa] Starting parse of file:', {
-    name: file.name,
-    size: file.size,
-    type: file.type
-  });
-
-  return new Promise((resolve, reject) => {
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      console.log('[parseCsvWithPapa] File content preview:', text.substring(0, 500));
-
-      Papa.parse(text, {
-        header: true,
-        dynamicTyping: true,
-        skipEmptyLines: true,
-        delimiter: detectDelimiter(text),
-        complete: (results) => {
-          console.log('[parseCsvWithPapa] Parse complete:', {
-            dataLength: results.data.length,
-            headers: results.meta.fields,
-            errors: results.errors,
-            firstRow: results.data[0],
-            delimiter: results.meta.delimiter
-          });
-
-          if (results.data.length === 0 && text.trim().length > 0) {
-            console.warn('[parseCsvWithPapa] Empty result but file has content, trying without header');
-
-            Papa.parse(text, {
-              header: false,
-              dynamicTyping: true,
-              skipEmptyLines: true,
-              delimiter: detectDelimiter(text),
-              complete: (retryResults) => {
-                console.log('[parseCsvWithPapa] Retry parse complete:', {
-                  dataLength: retryResults.data.length,
-                  firstRow: retryResults.data[0]
-                });
-
-                if (retryResults.data.length > 0) {
-                  const firstRow = retryResults.data[0] as any[];
-                  const headers = firstRow.map((_: any, i: number) => `Column_${i + 1}`);
-                  const dataRows = retryResults.data.slice(1) as any[][];
-                  const data = dataRows.map((row: any[]) => {
-                    const obj: any = {};
-                    headers.forEach((h: string, i: number) => {
-                      obj[h] = row[i];
-                    });
-                    return obj;
-                  });
-
-                  resolve({
-                    data: data,
-                    headers: headers,
-                    errors: retryResults.errors.map((e) => e.message),
-                    meta: retryResults.meta
-                  });
-                } else {
-                  resolve({
-                    data: results.data,
-                    headers: results.meta.fields || [],
-                    errors: results.errors.map((e) => e.message),
-                    meta: results.meta
-                  });
-                }
-              }
-            });
-          } else {
-            resolve({
-              data: results.data,
-              headers: results.meta.fields || [],
-              errors: results.errors.map((e) => e.message),
-              meta: results.meta
-            });
-          }
-        },
-        error: (error: any) => {
-          console.error('[parseCsvWithPapa] Parse error:', error);
-          reject(error);
-        }
-      });
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
-    };
-
-    reader.readAsText(file, 'UTF-8');
-  });
-}
-
-export async function parseShapefile(
-  files: Record<string, ArrayBuffer>,
-  onProgress?: (progress: number) => void
-): Promise<any> {
-  try {
-    if (onProgress) onProgress(10);
-
-    const shpBuffer = files['shp'];
-    const dbfBuffer = files['dbf'];
-
-    if (!shpBuffer || !dbfBuffer) {
-      throw new Error('Missing required shapefile components');
-    }
-
-    if (onProgress) onProgress(30);
-
-    const geojson: any = await shp.parseShp(shpBuffer as any, dbfBuffer as any);
-
-    if (onProgress) onProgress(80);
-
-    if (files['prj']) {
-      const prjText = new TextDecoder().decode(files['prj']);
-      geojson.prj = prjText;
-    }
-
-    if (files['cpg']) {
-      const cpgText = new TextDecoder().decode(files['cpg']);
-      geojson.encoding = cpgText.trim();
-    }
-
-    if (onProgress) onProgress(100);
-
-    return geojson;
-  } catch (error) {
-    console.error('Shapefile parsing error:', error);
-    throw error;
-  }
-}
-
-export function detectDuplicateRows(data: any[]): {
   hasDuplicates: boolean;
   duplicateIndices: number[];
   duplicateCount: number;
-} {
+}> {
   const seen = new Map<string, number[]>();
   const duplicateIndices: number[] = [];
 
-  data.forEach((row, index) => {
-    const key = JSON.stringify(row);
-    if (seen.has(key)) {
-      seen.get(key)!.push(index);
-      duplicateIndices.push(index);
-    } else {
-      seen.set(key, [index]);
-    }
-  });
+  // Process rows in chunks to avoid blocking
+  const CHUNK_SIZE = 1000;
+  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const chunk = data.slice(i, i + CHUNK_SIZE);
+    chunk.forEach((row, chunkIndex) => {
+      const index = i + chunkIndex;
+      const key = JSON.stringify(row);
+      if (seen.has(key)) {
+        seen.get(key)!.push(index);
+        duplicateIndices.push(index);
+      } else {
+        seen.set(key, [index]);
+      }
+    });
+  }
 
   return {
     hasDuplicates: duplicateIndices.length > 0,
@@ -367,70 +276,86 @@ export function detectDuplicateRows(data: any[]): {
   };
 }
 
-export function detectDataTypes(
-  data: any[],
+export async function detectDataTypes(
+  data: DataRow[],
   headers: string[]
-): Record<string, string> {
+): Promise<Record<string, string>> {
   const types: Record<string, string> = {};
 
-  headers.forEach((header) => {
-    const values = data.map((row) => row[header]).filter((v) => v != null);
+  // Process headers in chunks to avoid blocking
+  const HEADER_CHUNK_SIZE = 10;
+  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
-    if (values.length === 0) {
-      types[header] = 'empty';
-      return;
+    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
+    for (const header of headerChunk) {
+      const values = data.map((row) => row[header]).filter((v) => v != null);
+
+      if (values.length === 0) {
+        types[header] = 'empty';
+        continue;
+      }
+
+      const allNumbers = values.every(
+        (v) => typeof v === 'number' || !isNaN(Number(v))
+      );
+      const allBooleans = values.every(
+        (v) => typeof v === 'boolean' || v === 'true' || v === 'false'
+      );
+      const allDates = values.every((v) => !isNaN(Date.parse(String(v))));
+
+      if (allNumbers) {
+        types[header] = 'number';
+      } else if (allBooleans) {
+        types[header] = 'boolean';
+      } else if (allDates) {
+        types[header] = 'date';
+      } else {
+        types[header] = 'string';
+      }
     }
-
-    const allNumbers = values.every(
-      (v) => typeof v === 'number' || !isNaN(Number(v))
-    );
-    const allBooleans = values.every(
-      (v) => typeof v === 'boolean' || v === 'true' || v === 'false'
-    );
-    const allDates = values.every((v) => !isNaN(Date.parse(String(v))));
-
-    if (allNumbers) {
-      types[header] = 'number';
-    } else if (allBooleans) {
-      types[header] = 'boolean';
-    } else if (allDates) {
-      types[header] = 'date';
-    } else {
-      types[header] = 'string';
-    }
-  });
+  }
 
   return types;
 }
 
-export function getDataStatistics(
-  data: any[],
+export async function getDataStatistics(
+  data: DataRow[],
   headers: string[]
-): Record<string, any> {
-  const stats: Record<string, any> = {};
-  const dataTypes = detectDataTypes(data, headers);
+): Promise<Record<string, ColumnStatSummary>> {
+  const stats: Record<string, ColumnStatSummary> = {};
+  const dataTypes = await detectDataTypes(data, headers);
 
-  headers.forEach((header) => {
-    const values = data.map((row) => row[header]).filter((v) => v != null);
-    const type = dataTypes[header];
+  // Process headers in chunks to avoid blocking
+  const HEADER_CHUNK_SIZE = 10;
+  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
+    // Yield to event loop between chunks
+    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
-    stats[header] = {
-      type,
-      count: values.length,
-      nullCount: data.length - values.length,
-      unique: new Set(values).size
-    };
+    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
+    for (const header of headerChunk) {
+      const values = data.map((row) => row[header]).filter((v) => v != null);
+      const type = dataTypes[header];
 
-    if (type === 'number') {
-      const numbers = values.map(Number).filter((n) => !isNaN(n));
-      if (numbers.length > 0) {
-        stats[header].min = Math.min(...numbers);
-        stats[header].max = Math.max(...numbers);
-        stats[header].mean =
-          numbers.reduce((a, b) => a + b, 0) / numbers.length;
+      stats[header] = {
+        type,
+        count: values.length,
+        nullCount: data.length - values.length,
+        unique: new Set(values).size
+      };
+
+      if (type === 'number') {
+        const numbers = values.map(Number).filter((n) => !isNaN(n));
+        if (numbers.length > 0) {
+          stats[header].min = Math.min(...numbers);
+          stats[header].max = Math.max(...numbers);
+          stats[header].mean =
+            numbers.reduce((a, b) => a + b, 0) / numbers.length;
+        }
       }
     }
-  });
+  }
 
   return stats;
 }
@@ -508,9 +433,12 @@ export function validateGeospatialFile(
       }
 
       if (geojson.features) {
-        const invalidFeatures = geojson.features.filter(
-          (f: any) => !f.geometry || !f.properties
-        );
+        const invalidFeatures = (
+          geojson.features as Array<{
+            geometry?: unknown;
+            properties?: unknown;
+          }>
+        ).filter((feature) => !feature.geometry || !feature.properties);
         if (invalidFeatures.length > 0) {
           warnings.push(
             `${invalidFeatures.length} features have invalid structure`
@@ -519,6 +447,11 @@ export function validateGeospatialFile(
       }
     }
   } catch (error) {
+    logger.error(
+      'Failed to validate GeoJSON structure',
+      LogCategory.FILE,
+      error
+    );
     errors.push('Invalid JSON structure');
   }
 
@@ -587,6 +520,13 @@ export function isValidUrl(url: string): boolean {
   }
 }
 
+export function extractUrlsFromInput(input: string): string[] {
+  return input
+    .split(/\s+/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 export function getFilenameFromUrl(url: string): string {
   try {
     const parsedUrl = new URL(url);
@@ -595,74 +535,5 @@ export function getFilenameFromUrl(url: string): string {
     return filename;
   } catch {
     return 'download';
-  }
-}
-
-export async function parseGeoPackage(
-  buffer: ArrayBuffer,
-  onProgress?: (progress: number) => void
-): Promise<any> {
-  try {
-    onProgress?.(10);
-
-    const SQL = await import('sql.js');
-    const sqlJs = await SQL.default({
-      locateFile: (file: string) => `https://sql.js.org/dist/${file}`
-    });
-
-    onProgress?.(30);
-
-    const db = new sqlJs.Database(new Uint8Array(buffer));
-
-    onProgress?.(50);
-
-    const tables = db.exec(
-      "SELECT table_name FROM gpkg_contents WHERE data_type IN ('features', 'tiles')"
-    );
-
-    if (!tables[0] || !tables[0].values.length) {
-      throw new Error('No feature tables found in GeoPackage');
-    }
-
-    const featureTable = tables[0].values[0][0] as string;
-
-    onProgress?.(70);
-
-    const features = db.exec(
-      `SELECT AsGeoJSON(geom) as geometry, * FROM ${featureTable}`
-    );
-
-    if (!features[0]) {
-      throw new Error('No features found in table');
-    }
-
-    const geojson = {
-      type: 'FeatureCollection',
-      features: features[0].values.map((row) => {
-        const geom = JSON.parse(row[0] as string);
-        const properties: Record<string, any> = {};
-
-        features[0].columns.forEach((col, idx) => {
-          if (col !== 'AsGeoJSON(geom)' && col !== 'geom') {
-            properties[col] = row[idx];
-          }
-        });
-
-        return {
-          type: 'Feature',
-          geometry: geom,
-          properties
-        };
-      })
-    };
-
-    onProgress?.(100);
-    db.close();
-
-    return geojson;
-  } catch (error) {
-    throw new Error(
-      `Failed to parse GeoPackage: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
 }

@@ -1,13 +1,14 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { ProjectionState } from './projections.types';
 import {
   getProjectionById,
   suggestProjection,
   fitProjectionToGeoJSON,
   projectGeoJSON,
-  getBoundsFromGeoJSON,
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
 const DEFAULT_PROJECTION_STATE: ProjectionState = {
   selected: 'mercator',
@@ -54,9 +55,7 @@ export const projectionActions = {
     projectionState.scale = Math.max(0.1, Math.min(10, scale));
   },
 
-  reset(): void {
-    Object.assign(projectionState, DEFAULT_PROJECTION_STATE);
-  },
+  reset: createResetFunction(projectionState, DEFAULT_PROJECTION_STATE),
 
   suggestProjectionForCurrentData(): void {
     const geoDatasets = datasetsStore.getDatasetsByType(true);
@@ -78,19 +77,33 @@ export const projectionActions = {
     datasetId: string,
     width: number,
     height: number
-  ): any {
+  ): FeatureCollection | null {
     const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
     if (!dataset || !dataset.data) return null;
 
-    const geojson = {
-      type: 'FeatureCollection',
-      features: dataset.data
-        .filter((d) => d.geometry)
-        .map((d) => ({
-          type: 'Feature',
+    const features: Feature<Geometry, Record<string, unknown>>[] = dataset.data
+      .map((d) => {
+        if (!isGeometryCandidate(d.geometry)) {
+          return null;
+        }
+        return {
+          type: 'Feature' as const,
           geometry: d.geometry,
-          properties: d
-        }))
+          properties: d as Record<string, unknown>
+        };
+      })
+      .filter(
+        (feature): feature is Feature<Geometry, Record<string, unknown>> =>
+          feature !== null
+      );
+
+    if (features.length === 0) {
+      return null;
+    }
+
+    const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
+      type: 'FeatureCollection',
+      features
     };
 
     if (projectionState.autoFit) {
@@ -101,15 +114,17 @@ export const projectionActions = {
         height
       );
 
-      return projectGeoJSON(geojson, projectionState.selected, {
+      const projected = projectGeoJSON(geojson, projectionState.selected, {
         scale: projection.scale(),
         translate: projection.translate(),
         rotate: [projectionState.rotation, 0, 0],
         center: projectionState.center
       });
+
+      return projected.type === 'FeatureCollection' ? projected : null;
     }
 
-    return projectGeoJSON(geojson, projectionState.selected, {
+    const projected = projectGeoJSON(geojson, projectionState.selected, {
       scale: (projectionState.scale || 1) * 100,
       translate: [width / 2, height / 2],
       rotate: [projectionState.rotation, 0, 0],
@@ -118,9 +133,20 @@ export const projectionActions = {
         projectionState.latitude
       ]
     });
+
+    return projected.type === 'FeatureCollection' ? projected : null;
   },
 
   getCurrentProjectionInfo(): ProjectionInfo | undefined {
     return getProjectionById(projectionState.selected);
   }
 };
+
+function isGeometryCandidate(value: unknown): value is Geometry {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const record = value as { type?: unknown };
+  return typeof record.type === 'string' && 'coordinates' in value;
+}

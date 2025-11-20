@@ -1,40 +1,159 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
-  import { duckDBOrchestrator } from '$lib/features/commons/services/duckdb-orchestrator.service';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { InlineNotification } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    Button,
+    TextInput
+  } from 'carbon-components-svelte';
+  import { Reset, Edit, Checkmark, Close } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import ResetDataModal from './reset-data-modal.svelte';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+  import * as m from '$lib/paraglide/messages';
 
-  const selectedDataset = $derived(datasetsStore.selectedDataset);
-
-  const currentDuckTable = $derived(
-    selectedDataset
-      ? duckDBOrchestrator
-          .getAllDatasets()
-          .find((d) => d.sourceFileId === selectedDataset.sourceFileId)
-          ?.tableName || null
-      : null
+  const selectedDataset = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    return dataset;
+  });
+  const processedDataset = $derived.by(() =>
+    selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
+
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+
+  const currentDuckTable = $derived.by(() => {
+    const _version = duckDBDatasetsVersion;
+    const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
+    const tableName = selectedDataset?.sourceFileId
+      ? allDuckDatasets.find(
+          (d) => d.sourceFileId === selectedDataset.sourceFileId
+        )?.tableName || null
+      : null;
+    return tableName;
+  });
+
+  let resetModalOpen = $state(false);
+  let isEditingName = $state(false);
+  let editedName = $state('');
+
+  function startEditing() {
+    if (!selectedDataset) return;
+    editedName = selectedDataset.name;
+    isEditingName = true;
+  }
+
+  function saveRename() {
+    if (!selectedDataset || !editedName.trim()) {
+      cancelEditing();
+      return;
+    }
+
+    datasetsStore.renameDataset(selectedDataset.id, editedName);
+    isEditingName = false;
+  }
+
+  function cancelEditing() {
+    isEditingName = false;
+    editedName = '';
+  }
+
+  function handleKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      saveRename();
+    } else if (event.key === 'Escape') {
+      cancelEditing();
+    }
+  }
 </script>
 
 <section id="data-control-step">
-  <MainToolBarHeader title="1. Contrôler les données" />
+  <MainToolBarHeader title={m.data_control_step_title()} />
 
   {#if selectedDataset}
     <div class="dataset-info">
-      <span class="dataset-name">{selectedDataset.name}</span>
-      <span class="row-count">{selectedDataset.rowCount} lignes</span>
-      {#if currentDuckTable}
-        <span class="duck-badge">DuckDB ✓</span>
-      {/if}
+      <div class="dataset-meta">
+        {#if isEditingName}
+          <div class="dataset-name-edit">
+            <TextInput
+              size="sm"
+              bind:value={editedName}
+              on:keydown={handleKeyPress}
+              placeholder="Nom du jeu de données"
+            />
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Checkmark}
+              iconDescription="Valider"
+              tooltipPosition="bottom"
+              on:click={saveRename}
+            />
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Close}
+              iconDescription="Annuler"
+              tooltipPosition="bottom"
+              on:click={cancelEditing}
+            />
+          </div>
+        {:else}
+          <div class="dataset-name-display">
+            <span class="dataset-name">{selectedDataset.name}</span>
+            <Button
+              kind="ghost"
+              size="small"
+              icon={Edit}
+              iconDescription="Renommer"
+              tooltipPosition="bottom"
+              on:click={startEditing}
+            />
+          </div>
+        {/if}
+        <span class="row-count">{selectedDataset.rowCount} lignes</span>
+        {#if currentDuckTable}
+          <span class="duck-badge">DuckDB ✓</span>
+        {/if}
+      </div>
+      <Button
+        kind="danger-tertiary"
+        size="small"
+        icon={Reset}
+        tooltipPosition="left"
+        iconDescription="Réinitialiser les données"
+        on:click={() => (resetModalOpen = true)}
+      >
+        Réinitialiser
+      </Button>
     </div>
 
-    <AdvancedDataTable
-      dataset={selectedDataset}
-      tableName={currentDuckTable || undefined}
-      showSummaryPlots={false}
-    />
+    {#if selectedDataset.id}
+      <ResetDataModal
+        bind:open={resetModalOpen}
+        datasetId={selectedDataset.id}
+      />
+    {/if}
+  {/if}
 
+  {#if processedDataset}
+    <AdvancedDataTable
+      dataset={processedDataset}
+      tableName={currentDuckTable || undefined}
+      showSummaryPlots={true}
+    />
+  {:else}
+    <div class="empty-state">
+      <p class="empty-message">Aucune donnée chargée</p>
+      <p class="empty-help">
+        Les outils de contrôle (tableau, filtres, calculatrice) apparaîtront ici
+        après l'import de vos données.
+      </p>
+    </div>
+  {/if}
+
+  {#if selectedDataset}
     <InlineNotification
       title="Types des variables"
       subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
@@ -43,7 +162,7 @@
       hideCloseButton={false}
     />
 
-    {#if selectedDataset.columns.some((col) => col.nullable)}
+    {#if processedDataset && processedDataset.columns.some((col) => col.nullable)}
       <InlineNotification
         title="Valeurs manquantes"
         subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
@@ -52,13 +171,6 @@
         hideCloseButton={false}
       />
     {/if}
-  {:else}
-    <div class="empty-state">
-      <p>
-        Aucune donnée chargée. Veuillez importer un fichier depuis l'onglet
-        précédent.
-      </p>
-    </div>
   {/if}
 </section>
 
@@ -81,6 +193,24 @@
     padding: var(--cds-spacing-03) 0;
     margin-bottom: var(--cds-spacing-03);
     flex-shrink: 0;
+  }
+
+  .dataset-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .dataset-name-display {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+  }
+
+  .dataset-name-edit {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
   }
 
   .dataset-name {
@@ -112,7 +242,16 @@
     margin-top: var(--cds-spacing-05);
   }
 
-  .empty-state p {
+  .empty-message {
+    margin: 0 0 var(--cds-spacing-03) 0;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--cds-text-01);
+  }
+
+  .empty-help {
     margin: 0;
+    font-size: 0.875rem;
+    color: var(--cds-text-02);
   }
 </style>

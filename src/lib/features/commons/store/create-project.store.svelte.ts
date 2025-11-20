@@ -1,3 +1,22 @@
+import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { SvelteMap } from 'svelte/reactivity';
+import {
+  FileProcessorService,
+  type ProcessingCallbacks
+} from '../../create-project/services/file-processor.service';
+import { CreateProjectValidationService } from '../../create-project/services/validation.service';
+import {
+  createUploadedFile,
+  extractDataFromPaste,
+  extractUrlsFromInput,
+  FileType,
+  getFilenameFromUrl,
+  groupShapefiles,
+  isShapefileComponent,
+  isValidUrl
+} from '../utils/file-import.utils';
+import { LogCategory, logger } from '../utils/logger';
+import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
   ExampleCategory,
@@ -6,32 +25,10 @@ import type {
   SavedProject,
   UploadedFile
 } from './create-project.types';
-import {
-  createUploadedFile,
-  readFileContent,
-  validateFile,
-  groupShapefiles,
-  isShapefileComponent,
-  extractDataFromPaste,
-  FileType,
-  isValidUrl,
-  getFilenameFromUrl,
-  validateCsvStructure,
-  validateGeospatialFile,
-  parseCsvWithPapa,
-  parseShapefile,
-  detectDuplicateRows,
-  getDataStatistics,
-  parseGeoPackage,
-  DataSourceType
-} from '../utils/file-import.utils';
-import {
-  showSuccess,
-  showError,
-  showWarning
-} from '../utils/notification.utils.svelte';
-import { globalActions, globalState } from './global.svelte';
+import { DataSourceType } from './create-project.types';
+import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
+import { visualizationStore } from './visualization.store.svelte';
 
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
@@ -41,7 +38,8 @@ const DEFAULT_STATE: CreateProjectState = {
     pastedData: '',
     onlineFileUrl: '',
     projectName: '',
-    isLoading: false
+    isLoading: false,
+    validationErrors: []
   },
 
   openProject: {
@@ -67,15 +65,6 @@ export const createProjectActions = {
 
   addUploadedFile(file: UploadedFile): void {
     createProjectState.newProject.uploadedFiles.push(file);
-
-    const hasExistingSelection = globalState.dataButtons.some(
-      (btn) => btn.isSelected
-    );
-    globalActions.addDataButtonForFile(
-      file.id,
-      file.name,
-      !hasExistingSelection
-    );
   },
 
   isFileDuplicate(fileName: string): boolean {
@@ -97,10 +86,19 @@ export const createProjectActions = {
     return false;
   },
 
-  async processFiles(files: File[]): Promise<void> {
+  async processFiles(
+    files: File[],
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+  ): Promise<void> {
+    const validationResult =
+      CreateProjectValidationService.validateFiles(files);
+
+    createProjectState.newProject.validationErrors =
+      validationResult.globalErrors;
+
     const fileGroups = groupShapefiles(files);
     const duplicates: string[] = [];
-    const toProcess: Map<string, File[]> = new Map();
+    const toProcess: SvelteMap<string, File[]> = new SvelteMap();
 
     for (const [baseName, groupFiles] of fileGroups) {
       const mainFileName =
@@ -111,6 +109,61 @@ export const createProjectActions = {
       } else {
         toProcess.set(baseName, groupFiles);
       }
+    }
+
+    if (!validationResult.isValid) {
+      for (const [baseName, groupFiles] of toProcess) {
+        const mainFile =
+          groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
+        const mainFileName = mainFile.name;
+        const fileValidation = validationResult.results.get(mainFileName);
+
+        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
+          err.includes(`Shapefile "${baseName}"`)
+        );
+
+        const errors: string[] = [];
+        const warnings: string[] = [];
+
+        if (fileValidation) {
+          errors.push(...fileValidation.errors);
+          warnings.push(...fileValidation.warnings);
+        }
+
+        if (shapefileGlobalError) {
+          errors.push(
+            shapefileGlobalError.replace(
+              `Shapefile "${baseName}" incomplet. `,
+              ''
+            )
+          );
+        }
+
+        if (errors.length > 0 || warnings.length > 0) {
+          const errorFile: UploadedFile = {
+            id: crypto.randomUUID(),
+            name: mainFileName,
+            size: mainFile.size,
+            status: 'error',
+            uploadProgress: 100,
+            type: mainFile.type,
+            fileType: mainFile.name.endsWith('.shp')
+              ? FileType.SHAPEFILE
+              : FileType.UNKNOWN,
+            sourceType,
+            relatedFiles: groupFiles
+              .filter((f) => f !== mainFile)
+              .map((f) => f.name),
+            validation: {
+              isValid: errors.length === 0,
+              errors,
+              warnings
+            }
+          };
+          this.addUploadedFile(errorFile);
+        }
+      }
+      return;
     }
 
     if (duplicates.length > 0) {
@@ -125,9 +178,9 @@ export const createProjectActions = {
         groupFiles.length === 1 &&
         !isShapefileComponent(groupFiles[0].name)
       ) {
-        await this.processSingleFile(groupFiles[0]);
+        await this.processSingleFile(groupFiles[0], sourceType);
       } else {
-        await this.processShapefileGroup(baseName, groupFiles);
+        await this.processShapefileGroup(baseName, groupFiles, sourceType);
       }
     }
   },
@@ -144,192 +197,32 @@ export const createProjectActions = {
       return;
     }
 
-    const validation = validateFile(file);
     const uploadedFile = createUploadedFile(file, sourceType);
-
-    uploadedFile.validation = validation;
-    uploadedFile.status = validation.isValid ? 'uploading' : 'error';
-    uploadedFile.errorMessage = validation.isValid ? undefined : validation.errors[0];
-
+    // IMPORTANT: Store the original File object to avoid re-parsing
+    uploadedFile.originalFile = file;
     this.addUploadedFile(uploadedFile);
 
-    if (!validation.isValid) {
-      return;
-    }
+    const callbacks: ProcessingCallbacks = {
+      onProgress: (fileId: string, progress: number) =>
+        this.updateFileProgress(fileId, progress),
+      onStatusChange: (
+        fileId: string,
+        status: UploadedFile['status'],
+        errorMessage?: string
+      ) => this.updateFileStatus(fileId, status, errorMessage),
+      onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
+        this.updateFileData(fileId, data)
+    };
 
-    // Don't add the file yet, wait until we know the final status
-    // this.addUploadedFile(uploadedFile);
-
-    try {
-      this.updateFileStatus(uploadedFile.id, 'processing');
-
-      if (uploadedFile.fileType === FileType.CSV) {
-        console.log('[CreateProjectStore] Parsing CSV file:', file.name);
-        const result = await parseCsvWithPapa(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-
-        console.log('[CreateProjectStore] CSV parse result:', {
-          dataLength: result.data?.length,
-          headers: result.headers,
-          errors: result.errors,
-          firstRow: result.data?.[0]
-        });
-
-        const duplicates = detectDuplicateRows(result.data);
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: result.data,
-          content: JSON.stringify(result.data),
-          duplicates: {
-            hasDuplicates: duplicates.hasDuplicates,
-            duplicateCount: duplicates.duplicateCount
-          }
-        });
-
-        if (duplicates.hasDuplicates) {
-          showWarning(
-            'Duplicate rows detected',
-            `Found ${duplicates.duplicateCount} duplicate rows`
-          );
-        }
-
-        uploadedFile.statistics = getDataStatistics(
-          result.data,
-          result.headers
-        );
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: result.data
-        });
-
-        console.log('[CreateProjectStore] Before duplicate check - parsedData:', {
-          isArray: Array.isArray(result.data),
-          length: result.data?.length,
-          firstRow: result.data?.[0]
-        });
-
-        if (result.errors.length > 0) {
-          this.updateFileData(uploadedFile.id, {
-            validation: {
-              isValid: false,
-              errors: result.errors,
-              warnings: []
-            },
-            status: 'error',
-            errorMessage: result.errors[0]
-          });
-          return;
-        }
-
-        // Mark CSV file as complete
-        this.updateFileStatus(uploadedFile.id, 'complete');
-
-        const updatedFile = createProjectState.newProject.uploadedFiles.find(f => f.id === uploadedFile.id);
-        console.log('[CreateProjectStore] Final uploadedFile parsedData:', {
-          name: updatedFile?.name,
-          parsedDataLength: updatedFile?.parsedData?.length,
-          firstRow: updatedFile?.parsedData?.[0]
-        });
-
-        // Update the file in the array
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else if (uploadedFile.fileType === FileType.GEOJSON) {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-
-        try {
-          const parsedData = JSON.parse(content as string);
-          this.updateFileData(uploadedFile.id, {
-            content: content,
-            parsedData: parsedData
-          });
-        } catch (e) {
-          this.updateFileData(uploadedFile.id, {
-            content: content,
-            status: 'error',
-            errorMessage: 'Invalid JSON format'
-          });
-          return;
-        }
-
-        const geoValidation = await validateGeospatialFile(content as string);
-        this.updateFileData(uploadedFile.id, {
-          validation: {
-            ...uploadedFile.validation,
-            ...geoValidation
-          }
-        });
-
-        if (!geoValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: geoValidation.errors[0]
-          });
-          return;
-        }
-
-        // Mark GeoJSON file as complete
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else if (uploadedFile.fileType === FileType.GEOPACKAGE) {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress * 0.5);
-        });
-
-        const geojson = await parseGeoPackage(
-          content as ArrayBuffer,
-          (progress) => {
-            this.updateFileProgress(uploadedFile.id, 50 + progress * 0.5);
-          }
-        );
-
-        this.updateFileData(uploadedFile.id, {
-          parsedData: geojson,
-          content: JSON.stringify(geojson)
-        });
-
-        const geoValidation = await validateGeospatialFile(
-          JSON.stringify(geojson)
-        );
-        this.updateFileData(uploadedFile.id, {
-          validation: {
-            ...uploadedFile.validation,
-            ...geoValidation
-          }
-        });
-
-        if (!geoValidation.isValid) {
-          this.updateFileData(uploadedFile.id, {
-            status: 'error',
-            errorMessage: geoValidation.errors[0]
-          });
-          return;
-        }
-
-        // Mark GeoPackage file as complete
-        this.updateFileStatus(uploadedFile.id, 'complete');
-      } else {
-        const content = await readFileContent(file, (progress) => {
-          this.updateFileProgress(uploadedFile.id, progress);
-        });
-        this.updateFileData(uploadedFile.id, {
-          content: content,
-          status: 'complete'
-        });
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to process file';
-      this.updateFileData(uploadedFile.id, {
-        status: 'error',
-        errorMessage: message
-      });
-      showError('File processing failed', message, error);
-    }
+    const processor = new FileProcessorService(callbacks);
+    await processor.processFile(uploadedFile, file);
   },
 
-  async processShapefileGroup(baseName: string, files: File[]): Promise<void> {
+  async processShapefileGroup(
+    baseName: string,
+    files: File[],
+    sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
+  ): Promise<void> {
     const mainFile = files.find((f) => f.name.endsWith('.shp'));
     if (!mainFile) {
       const errorFile: UploadedFile = {
@@ -340,7 +233,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: 'Missing .shp file in shapefile set',
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType
       };
       this.addUploadedFile(errorFile);
       showError('Invalid shapefile', 'Missing .shp file in shapefile set');
@@ -364,7 +257,7 @@ export const createProjectActions = {
         fileType: FileType.SHAPEFILE,
         status: 'error',
         errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
-        sourceType: DataSourceType.FILE_UPLOAD
+        sourceType
       };
       this.addUploadedFile(errorFile);
       showError(
@@ -374,54 +267,65 @@ export const createProjectActions = {
       return;
     }
 
+    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'));
+
+    if (!shpFile) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: baseName,
+        size: files.reduce((sum, f) => sum + f.size, 0),
+        type: 'application/x-shapefile',
+        fileType: FileType.SHAPEFILE,
+        status: 'error',
+        errorMessage: 'Missing .shp file in shapefile set',
+        sourceType
+      };
+      this.addUploadedFile(errorFile);
+      showError('Shapefile processing failed', 'No .shp file found');
+      return;
+    }
+
+    // Read content of all files for persistence
+    const relatedFilesData: Record<string, ArrayBuffer> = {};
+    let shpContent: ArrayBuffer = new ArrayBuffer(0);
+
+    try {
+      for (const f of files) {
+        const buffer = await f.arrayBuffer();
+        relatedFilesData[f.name] = buffer;
+        if (f.name === shpFile.name) {
+          shpContent = buffer;
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to read shapefile content', LogCategory.DATA, error);
+      showError('Shapefile read failed', 'Could not read file content');
+      return;
+    }
+
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
       size: files.reduce((sum, f) => sum + f.size, 0),
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
-      status: 'processing',
-      sourceType: DataSourceType.FILE_UPLOAD,
-      relatedFiles: files.map((f) => f.name)
+      status: 'complete',
+      sourceType,
+      relatedFiles: files.map((f) => f.name),
+      relatedFileObjects: files,
+      originalFile: shpFile,
+      content: shpContent,
+      relatedFilesData
     };
 
     this.addUploadedFile(uploadedFile);
-
-    try {
-      const fileContents: Record<string, ArrayBuffer> = {};
-      for (const file of files) {
-        const content = await readFileContent(file);
-        if (content instanceof ArrayBuffer) {
-          const extension = file.name.split('.').pop()?.toLowerCase() || '';
-          fileContents[extension] = content;
-        }
-      }
-
-      const geojson = await parseShapefile(fileContents, (progress) => {
-        this.updateFileProgress(uploadedFile.id, progress);
-      });
-
-      this.updateFileData(uploadedFile.id, {
-        parsedData: geojson,
-        content: JSON.stringify(geojson),
-        status: 'complete'
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to process shapefile';
-      this.updateFileData(uploadedFile.id, {
-        status: 'error',
-        errorMessage: message
-      });
-      showError('Shapefile processing failed', message, error);
-    }
   },
 
   async processPastedData(pastedText: string): Promise<void> {
     const { fileType, validation } = extractDataFromPaste(pastedText);
 
-    let baseName = 'pasted-data';
-    let extension =
+    const baseName = 'pasted-data';
+    const extension =
       fileType === FileType.CSV
         ? 'csv'
         : fileType === FileType.GEOJSON
@@ -435,25 +339,32 @@ export const createProjectActions = {
       counter++;
     }
 
-    const uploadedFile: UploadedFile = {
-      id: crypto.randomUUID(),
-      name: fileName,
-      size: new Blob([pastedText]).size,
-      type: fileType === FileType.CSV ? 'text/csv' : 'application/json',
-      fileType,
-      status: validation.isValid ? 'complete' : 'error',
-      content: pastedText,
-      validation,
-      sourceType: DataSourceType.PASTE,
-      errorMessage: validation.isValid ? undefined : validation.errors[0]
-    };
+    const file = new File([pastedText], fileName, {
+      type: fileType === FileType.CSV ? 'text/csv' : 'application/json'
+    });
 
-    this.addUploadedFile(uploadedFile);
-    this.setPastedData('');
-
+    // If validation fails, surface the error and add an errored entry for visibility.
     if (!validation.isValid) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        size: file.size,
+        type: file.type,
+        fileType,
+        status: 'error',
+        content: pastedText,
+        validation,
+        sourceType: DataSourceType.PASTE,
+        errorMessage: validation.errors[0]
+      };
+      this.addUploadedFile(errorFile);
       showError('Invalid pasted data', validation.errors[0]);
+      this.setPastedData('');
+      return;
     }
+
+    await this.processSingleFile(file, DataSourceType.PASTE);
+    this.setPastedData('');
   },
 
   removeUploadedFile(fileId: string): void {
@@ -461,10 +372,7 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      const fileName = createProjectState.newProject.uploadedFiles[index].name;
       createProjectState.newProject.uploadedFiles.splice(index, 1);
-
-      globalActions.removeDataButton(fileId);
     }
   },
 
@@ -474,10 +382,6 @@ export const createProjectActions = {
     );
     if (file) {
       Object.assign(file, data);
-      console.log('[CreateProjectStore] Updated file data:', {
-        id: fileId,
-        parsedDataLength: file.parsedData?.length
-      });
     }
   },
 
@@ -525,14 +429,22 @@ export const createProjectActions = {
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
     if (error) {
-      console.error('[CreateProject] New project error:', error);
+      logger.error('New project error', LogCategory.PROJECT, error);
     }
   },
 
   async loadOnlineFile(): Promise<void> {
-    const url = createProjectState.newProject.onlineFileUrl;
-    if (!url || !isValidUrl(url)) {
-      this.setNewProjectError('Please enter a valid HTTP or HTTPS URL');
+    const inputValue = createProjectState.newProject.onlineFileUrl;
+    const urls = extractUrlsFromInput(inputValue);
+
+    if (urls.length === 0) {
+      this.setNewProjectError('Please enter at least one HTTP or HTTPS URL');
+      return;
+    }
+
+    const invalidUrls = urls.filter((entry) => !isValidUrl(entry));
+    if (invalidUrls.length > 0) {
+      this.setNewProjectError(`Invalid URL(s): ${invalidUrls.join(', ')}`);
       return;
     }
 
@@ -540,31 +452,83 @@ export const createProjectActions = {
     this.setNewProjectError();
 
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      const downloadedFiles: File[] = [];
+      for (let index = 0; index < urls.length; index++) {
+        const remoteUrl = urls[index];
+        const remoteFile = await this.downloadRemoteFile(remoteUrl, index);
+        downloadedFiles.push(remoteFile);
       }
 
-      const filename = getFilenameFromUrl(url);
-      const blob = await response.blob();
-      const file = new File([blob], filename, { type: blob.type });
+      if (downloadedFiles.length === 1) {
+        await this.processSingleFile(downloadedFiles[0], DataSourceType.URL);
+      } else {
+        await this.processFiles(downloadedFiles, DataSourceType.URL);
+      }
 
-      await this.processSingleFile(file, DataSourceType.URL);
       this.setOnlineFileUrl('');
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to load online file';
+        error instanceof Error
+          ? error.message
+          : 'Failed to load online file(s)';
       this.setNewProjectError(message);
-      showError('Failed to load online file', message, error);
+      showError('Failed to load online file(s)', message, error);
     } finally {
       this.setNewProjectLoading(false);
     }
   },
 
-  clearAllFiles(): void {
-    createProjectState.newProject.uploadedFiles = [];
+  async downloadRemoteFile(url: string, index: number): Promise<File> {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `HTTP ${response.status} (${response.statusText}) for ${url}`
+      );
+    }
 
-    globalActions.clearAllDataButtons();
+    const blob = await response.blob();
+    const headerFilename = getFilenameFromContentDisposition(response.headers);
+    const urlFilename = getFilenameFromUrl(url);
+    const safeName = ensureFilenameHasExtension(
+      headerFilename || urlFilename,
+      blob.type,
+      index
+    );
+
+    return new File([blob], safeName, {
+      type: blob.type || 'application/octet-stream'
+    });
+  },
+
+  async clearAllFiles(saveProject: boolean = false): Promise<void> {
+    createProjectState.newProject.uploadedFiles = [];
+    createProjectState.newProject.validationErrors = [];
+
+    datasetsStore.clear();
+    visualizationStore.clear();
+    await duckDBOrchestrator.clear();
+
+    if (
+      saveProject &&
+      projectStore.currentProject?.id &&
+      projectStore.currentProject.data
+    ) {
+      projectStore.currentProject.data.sourceFiles = [];
+      projectStore.markAsDirty();
+      await projectStore.saveCurrentProject();
+    }
+  },
+
+  /**
+   * Clear only the upload UI state without touching DuckDB tables or project data.
+   * Used when closing the add-data modal after successful import.
+   */
+  clearUploadState(): void {
+    createProjectState.newProject.uploadedFiles = [];
+    createProjectState.newProject.validationErrors = [];
+
+    // Do NOT call datasetsStore.clear(), visualizationStore.clear(), or duckDBOrchestrator.clear()
+    // The data has been successfully added to the project and should remain
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {
@@ -605,7 +569,7 @@ export const createProjectActions = {
   setOpenProjectError(error?: string): void {
     createProjectState.openProject.error = error;
     if (error) {
-      console.error('[CreateProject] Open project error:', error);
+      logger.error('Open project error', LogCategory.PROJECT, error);
     }
   },
 
@@ -629,7 +593,7 @@ export const createProjectActions = {
   setTryExampleError(error?: string): void {
     createProjectState.tryExample.error = error;
     if (error) {
-      console.error('[CreateProject] Try example error:', error);
+      logger.error('Try example error', LogCategory.PROJECT, error);
     }
   },
 
@@ -667,3 +631,66 @@ export const createProjectActions = {
     Object.assign(createProjectState, DEFAULT_STATE);
   }
 };
+
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  'text/csv': '.csv',
+  'application/csv': '.csv',
+  'text/tab-separated-values': '.tsv',
+  'application/json': '.json',
+  'application/geo+json': '.geojson',
+  'application/vnd.geo+json': '.geojson',
+  'application/geopackage+sqlite3': '.gpkg',
+  'application/x-sqlite3': '.gpkg',
+  'application/geoparquet': '.geoparquet',
+  'application/x-parquet': '.parquet',
+  'application/parquet': '.parquet',
+  'application/vnd.google-earth.kml+xml': '.kml',
+  'application/vnd.google-earth.kmz': '.kmz',
+  'application/x-shapefile': '.shp',
+  'application/zip': '.zip',
+  'application/x-zip-compressed': '.zip'
+};
+
+function getFilenameFromContentDisposition(
+  headers: Headers
+): string | undefined {
+  const disposition = headers.get('content-disposition');
+  if (!disposition) {
+    return undefined;
+  }
+
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+
+  if (!match || !match[1]) {
+    return undefined;
+  }
+
+  const value = match[1].replace(/(^"|"$)/g, '').trim();
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function ensureFilenameHasExtension(
+  rawName: string,
+  mimeType: string,
+  index: number
+): string {
+  const baseName =
+    rawName && rawName.length > 0 ? rawName : `remote-file-${index + 1}`;
+
+  if (baseName.includes('.')) {
+    return baseName;
+  }
+
+  const normalizedMime = (mimeType || '').split(';')[0].toLowerCase();
+  const extension = MIME_EXTENSION_MAP[normalizedMime];
+
+  if (extension) {
+    return `${baseName}${extension}`;
+  }
+
+  return `${baseName}.dat`;
+}

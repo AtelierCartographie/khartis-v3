@@ -23,6 +23,22 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
+  type StrokeColorDescriptor = {
+    hue?: number;
+    saturation?: number;
+    lightness?: number;
+  };
+
+  function isStrokeColorDescriptor(
+    value: unknown
+  ): value is StrokeColorDescriptor {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      ('hue' in value || 'saturation' in value || 'lightness' in value)
+    );
+  }
+
   const shapes = [
     { value: 'arrow', text: 'Flèche' },
     { value: 'rectangle', text: 'Rectangle' },
@@ -45,8 +61,8 @@
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else {
-        const c = defaultStyle.strokeColor as any;
+      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
+        const c = defaultStyle.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -84,7 +100,7 @@
         on:change={(e) =>
           (selectedShape = (e.currentTarget as HTMLSelectElement).value)}
       >
-        {#each shapes as s}
+        {#each shapes as s (s.value)}
           <SelectItem value={s.value} text={s.text} />
         {/each}
       </Select>
@@ -145,7 +161,8 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e) => toggleDotted((e as any).detail ?? true)}
+            ontoggle={(e: CustomEvent<boolean>) =>
+              toggleDotted(e.detail ?? true)}
           >
             <span slot="labelA">Oui</span>
             <span slot="labelB">Non</span>
