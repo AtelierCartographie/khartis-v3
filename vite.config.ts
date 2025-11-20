@@ -24,7 +24,7 @@ export default defineConfig(() => ({
             ? ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}']
             : [],
         globIgnores: ['**/node_modules/**/*', '**/*.wasm'],
-        navigateFallback: '/index.html',
+        navigateFallback: '/cartographie/khartisnewpprd/index.html',
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
