@@ -4,53 +4,33 @@
 
 ## Overview
 
-The feature `src/lib/features/data` still embraces **SOLID**, **KISS**, and **DRY**, but is now organized as a feature module: models, contracts, adapters, and the pipeline live together, and everything is wired via `createDataPipeline`. Dependencies are injected, which keeps testing straightforward.
+The feature `src/lib/features/data-pipeline` embraces **SOLID**, **KISS**, and **DRY** principles. It's organized as a feature module where models, contracts, adapters, and the pipeline live together, wired via `createDataPipeline`. Dependencies are injected, which keeps testing straightforward.
 
 ### Folder map
 
 ```
-src/lib/features/data/
+src/lib/features/data-pipeline/
 ├── index.ts               # Public entry (pipeline, adapters, models, contracts)
 ├── pipeline/              # createDataPipeline + orchestration helpers
 ├── adapters/              # Parsers, validators, type inferrer
 ├── models/                # DatasetResult, ColumnType, GeometryInfo, GeoArrow metadata…
 ├── contracts/             # Interfaces IParser, IValidator, ITypeInferrer…
-├── types/                 # Legacy DTOs (ProcessedDataset, AnalysisResult…)
+├── types/                 # Core DTOs (ProcessedDataset, AnalysisResult…)
 └── utils/                 # Processed-dataset helpers, etc.
 ```
 
-The default pipeline assembles the built-in adapters but you can supply custom lists (parsers, validators, type inferrers) when calling the factory. This replaces the former Domain/Application/Infrastructure split without losing responsibilities.
-
-## Migration snapshot
-
-### Components already on the new pipeline
-
-- `datasetsStore` – uses `dataPipeline.processUploadedFile`
-- `FileProcessorService` (CSV path) – calls the CSV parser directly to avoid worker errors
-
-### Migration benefits
-
-1. **Performance** – one pass instead of triple parsing
-2. **Reliability** – no more worker `postMessage` issues
-3. **Maintainability** – DI-friendly architecture
-4. **Type safety** – full TypeScript typings
-
-### Web worker note
-
-The legacy CSV path relied on a worker (`csv-parser.worker.ts`). Browser quirks around `postMessage` made error handling brittle. PapaParse now runs on the main thread:
-
-- Zero worker serialization errors
-- Simpler code
-- Still very fast (PapaParse is heavily optimized)
-- For huge files, type inference samples the first 100 rows
+The default pipeline assembles the built-in adapters but you can supply custom lists (parsers, validators, type inferrers) when calling the factory.
 
 ## Supported formats
 
 | Format        | Extensions             | Parser            | Notes                                              |
 | ------------- | ---------------------- | ----------------- | -------------------------------------------------- |
-| **CSV/TSV**   | `.csv`, `.tsv`, `.txt` | `CSVParser`       | Tabular data, sampled type inference via PapaParse |
-| **GeoJSON**   | `.geojson`, `.json`    | `GeoJSONParser`   | Spatial datasets, bounds + centroid extracted      |
-| **Shapefile** | `.shp` + companions    | `ShapefileParser` | Expects zipped bundle, converts to GeoJSON first   |
+| **CSV/TSV**   | `.csv`, `.tsv`, `.txt` | `CSVParser`       | Tabular data, uses DuckDB's `read_csv()`          |
+| **GeoJSON**   | `.geojson`, `.json`    | `GeoJSONParser`   | Spatial datasets, uses DuckDB's `ST_Read()`       |
+| **Shapefile** | `.shp` + companions    | `ShapefileParser` | Uses DuckDB's `ST_Read()`, handles zipped bundles |
+| **GeoParquet**| `.parquet`             | `GeoParquetParser`| Native DuckDB support with GeoArrow encoding      |
+| **KML**       | `.kml`                 | `KMLParser`       | Uses DuckDB's `ST_Read()`                         |
+| **GeoPackage**| `.gpkg`                | `GeoPackageParser`| Uses DuckDB's `ST_Read()`                         |
 
 ## Processing flow
 
@@ -201,22 +181,20 @@ if (!result.isValid) throw new Error(result.errors.join(', '));
 
 | Challenge            | Solution                                    |
 | -------------------- | ------------------------------------------- |
-| Large imports        | Streaming PapaParse + sampled inference     |
+| Large imports        | DuckDB native parsing with TABLESAMPLE     |
 | Multiple conversions | Single-pass pipeline                        |
-| DuckDB metadata loss | GeoParquet export + GeoArrow-aware reader   |
-| Worker errors        | Main-thread parsing to avoid browser quirks |
+| Metadata preservation| GeoParquet with GeoArrow encoding          |
+| Memory management    | Processing semaphore (max 2 concurrent)    |
 
 Target: <3 s load for “standard” datasets, smooth pan/zoom (~60 fps).
 
-## Backward compatibility
-
-Legacy entry points remain available:
+## API Usage
 
 ```ts
 const result = await dataPipeline.processUploadedFile(uploadedFile);
 ```
 
-Legacy DTOs (`ProcessedDataset`, `ColumnInfo`, `AnalysisResult`) still live in `src/lib/features/data/types` until all consumers migrate.
+Core DTOs (`ProcessedDataset`, `ColumnInfo`, `AnalysisResult`) are defined in `src/lib/features/data-pipeline/types`.
 
 ## Public exports
 

@@ -13,18 +13,7 @@ export type GeoJSONFeature = SharedGeoJSONFeature;
 export type GeoJSONFeatureCollection = SharedGeoJSONFeatureCollection;
 
 /**
- * GeoJSON Parser - Parses GeoJSON FeatureCollections
- *
- * Extracts:
- * - Feature properties as tabular data
- * - Geometry as special column
- * - Bounds and centroid
- *
- * @example
- * ```typescript
- * const parser = new GeoJSONParser();
- * const dataset = await parser.parse(geojsonFile);
- * ```
+ * Converts GeoJSON FeatureCollections into a raw dataset with geometry metadata.
  */
 export class GeoJSONParser implements IParser {
   readonly supportedExtensions = ['.geojson', '.json'];

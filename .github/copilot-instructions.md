@@ -45,7 +45,7 @@ File Upload → ParserRegistry → Parse → ValidationChain → TypeInferrer �
                                         Visualization Suggestion → User Config → Deck.gl Layers → GPU Rendering
 ```
 
-**Key Insight**: Single-pass processing - files are parsed once, not 3 times like the old architecture. DuckDB WASM runs in main thread and provides SQL query capabilities for all data analysis.
+**Key Insight**: Single-pass processing with DuckDB WASM running in main thread, providing SQL query capabilities for all data analysis.
 
 ### Feature-based Structure
 
@@ -147,7 +147,7 @@ const result = await dataPipeline.processFile(file); // Returns DatasetResult
 **Architecture structure**:
 
 ```
-src/lib/features/data/
+src/lib/features/data-pipeline/
 ├── adapters/          # Concrete implementations
 │   ├── parsers/       # File format parsers (CSV, GeoJSON, Shapefile, etc.)
 │   ├── validators/    # Data validators (size, schema, quality)
@@ -161,7 +161,7 @@ src/lib/features/data/
 **To add a new file parser**:
 
 ```typescript
-// 1. Implement IParser interface in src/lib/features/data/adapters/parsers/
+// 1. Implement IParser interface in src/lib/features/data-pipeline/adapters/parsers/
 export class ExcelParser implements IParser {
   readonly supportedExtensions = ['.xlsx'];
 
@@ -175,7 +175,7 @@ export class ExcelParser implements IParser {
   }
 }
 
-// 2. Add to parser list in src/lib/features/data/adapters/parsers/index.ts
+// 2. Add to parser list in src/lib/features/data-pipeline/adapters/parsers/index.ts
 export function createParserList(override?: ParserList): IParser[] {
   return (
     override ?? [
@@ -218,8 +218,6 @@ const tableName = await Duck.read_geofile(file, { tablename: 'geo_table' });
 ```
 
 **DuckDB Service Location**: `src/lib/features/duckdb/` (separate feature, not in commons)
-
-**Key Insight**: No Web Workers for CSV parsing (caused message passing errors). PapaParse in main thread is fast enough, and type inference only samples 100 rows for large files.
 
 #### DuckDB Orchestrator (Advanced)
 
@@ -455,9 +453,9 @@ yarn test:e2e:ui  # Interactive UI mode
 2. **Don't** use Svelte 4 writable stores - use Svelte 5 runes (`$state`, `$derived`)
 3. **Don't** edit `src/lib/paraglide/` manually - it's auto-generated
 4. **Don't** use WKB encoding for basemaps - must be GeoArrow
-5. **Don't** run heavy computations in main thread without debouncing - impacts 60fps target
+5. **Don't** run heavy computations in main thread without debouncing
 6. **Don't** forget to sanitize user inputs (file names, CSV cells, text inputs)
-7. **Don't** create Web Workers for CSV parsing - use PapaParse in main thread
+7. **Don't** use external parsers - use DuckDB native functions (`read_csv()`, `ST_Read()`)
 
 ## Performance Targets
 
