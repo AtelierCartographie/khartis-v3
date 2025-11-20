@@ -52,10 +52,8 @@
     try {
       const file = files[0];
 
-      // Register file with DuckDB
       await duck.register_files([file]);
 
-      // Read as geofile to get table name
       const tableNameResult = await duck.read_geofile(file, {
         tablename: `custom_basemap_${Date.now()}`
       });
@@ -65,10 +63,8 @@
           : (tableNameResult?.name ??
             `custom_basemap_${Date.now().toString(36)}`);
 
-      // Analyze the geometry
       const analysis = await duck.analyse(tableName);
 
-      // Calculate bounding box from geometry
       const bboxQuery = (await duck.query(
         `
         SELECT
@@ -87,7 +83,6 @@
       }>;
       const bounds = bboxQuery[0];
 
-      // Validate bounds
       if (
         !bounds ||
         bounds.minX === null ||
@@ -98,7 +93,6 @@
         throw new Error(m.basemap_import_modal_error_invalid_geometry());
       }
 
-      // Detect geometry type
       const geomTypeQuery = (await duck.query(
         `
         SELECT DISTINCT ST_GeometryType(geom) as geom_type
@@ -109,14 +103,12 @@
       )) as Array<{ geom_type?: string }>;
       const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
 
-      // Map geometry type to layer type
       const layerType = geomType.includes('point')
         ? 'point'
         : geomType.includes('line')
           ? 'line'
           : 'polygon';
 
-      // Create custom basemap metadata
       const customBasemap: BasemapMetadata = {
         file: tableName,
         title: file.name.replace(/\.[^/.]+$/, ''),
@@ -136,7 +128,6 @@
         isCustom: true
       };
 
-      // Generate normalized attributes for fuzzy matching
       await generateCustomBasemapAttributes(tableName, customBasemap.file);
 
       onImport(customBasemap);

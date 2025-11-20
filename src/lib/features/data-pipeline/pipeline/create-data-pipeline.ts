@@ -27,6 +27,7 @@ type UploadedFilePayload = {
   fileType?: string;
   deepAnalysis?: DataAnalysisResult;
   preparedGeoJSON?: string;
+  relatedFileObjects?: File[];
 };
 
 type GeoJSONLike =
@@ -50,6 +51,39 @@ export type DataPipeline = {
     uploadedFile: UploadedFilePayload,
     originalFile?: File
   ): Promise<DatasetResult>;
+  /**
+   * Directly process a remote file without fetching it on the frontend.
+   * Uses DuckDB HTTPFS under the hood.
+   */
+  processRemoteFile(
+    url: string,
+    options?: { tableName?: string; decimalSeparator?: string }
+  ): Promise<DatasetResult>;
+  /**
+   * Convenience wrapper around an inline string (copy/paste).
+   */
+  processPastedData(
+    content: string,
+    options?: { name?: string; type?: string }
+  ): Promise<DatasetResult>;
+  /**
+   * Apply a join suggestion/association on a dataset.
+   */
+  joinDatasetById(
+    tableName: string,
+    idColumn: string,
+    options: {
+      basemapsTable?: string;
+      basemapTable?: string;
+      basemapId?: string;
+      basemapOthersId?: string;
+    }
+  ): Promise<unknown>;
+  applyJoinAssociation(tableName: string, basemap: string): Promise<void>;
+  /**
+   * Simple multi-filter helper (filters are SQL predicates combined with AND).
+   */
+  applyFilters(tableName: string, filters: string[]): Promise<unknown>;
   validateFile(file: File): Promise<ValidationResult>;
   destroy(): Promise<void>;
 };
@@ -99,7 +133,11 @@ export function createDataPipeline(): DataPipeline {
       if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
         dataset = await processShapefile(uploadedFile);
       } else if (originalFile) {
-        dataset = await processFileInternal(originalFile);
+        const originalName = originalFile.name.toLowerCase();
+        const companionFiles = uploadedFile.relatedFileObjects?.filter(
+          (f: File) => f.name.toLowerCase() !== originalName
+        );
+        dataset = await processFileInternal(originalFile, { companionFiles });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
         dataset = await processFileInternal(fallback);
@@ -201,7 +239,11 @@ export function createDataPipeline(): DataPipeline {
 
   async function processFileInternal(
     file: File,
-    options: { originalName?: string; rawDataset?: RawDataset } = {}
+    options: {
+      originalName?: string;
+      rawDataset?: RawDataset;
+      companionFiles?: File[];
+    } = {}
   ): Promise<DatasetResult> {
     const fileInfo: FileInfo = {
       name: options.originalName ?? file.name,
@@ -211,12 +253,15 @@ export function createDataPipeline(): DataPipeline {
 
     const tableName = generateTableName(fileInfo.name);
     const isGeoFile = isGeospatialFile(fileInfo.name);
+    const isShapefile = fileInfo.name.toLowerCase().endsWith('.shp');
 
     const start = performance.now();
     logger.debug('Reading file into DuckDB via pipeline', LogCategory.DATA, {
       fileName: fileInfo.name,
       tableName,
-      isGeoFile
+      isGeoFile,
+      isShapefile,
+      hasCompanionFiles: Boolean(options.companionFiles?.length)
     });
 
     if (!Duck) {
@@ -224,26 +269,31 @@ export function createDataPipeline(): DataPipeline {
     }
 
     try {
-      await Duck.register_files([file]);
+      if (
+        isShapefile &&
+        options.companionFiles &&
+        options.companionFiles.length > 0
+      ) {
+        const allShapefileFiles = [file, ...options.companionFiles];
+        await Duck.register_files(allShapefileFiles, { shapefile: true });
+      } else if (!isShapefile) {
+        await Duck.register_files([file]);
+      }
+
       if (isGeoFile) {
-        await Duck.read_geofile(file, { tablename: tableName });
+        await Duck.read_geofile(file, {
+          tablename: tableName,
+          shapefile: isShapefile
+        });
       } else {
         await Duck.read_tabular(file, { tablename: tableName });
       }
 
-      const duckdbColumns = await Duck.analyse(tableName);
-      const rowCount = await Duck.get_row_count(tableName);
-      const geometryInfo = await extractGeometryInfo(tableName);
-      const enrichedColumns = enrichColumns(duckdbColumns);
-
       const fileFormat = detectFileType(fileInfo.name) ?? 'unknown';
-      const dataset = buildDatasetResult({
+      const dataset = await buildDatasetFromDuckTable({
         file: fileInfo,
         tableName,
-        enrichedColumns,
-        rowCount,
         isGeoFile,
-        geometryInfo,
         format: fileFormat
       });
 
@@ -264,7 +314,7 @@ export function createDataPipeline(): DataPipeline {
 
       logger.success('DuckDB dataset built', LogCategory.DATA, {
         tableName,
-        rowCount,
+        rowCount: dataset.rowCount,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
@@ -277,6 +327,94 @@ export function createDataPipeline(): DataPipeline {
       });
       throw error;
     }
+  }
+
+  async function processRemoteFile(
+    url: string,
+    options: { tableName?: string; decimalSeparator?: string } = {}
+  ): Promise<DatasetResult> {
+    await ensureInit();
+
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const { tableName: providedTableName, decimalSeparator } = options;
+    const filename = url.split('/').pop() || 'remote_file';
+    const format = detectFileType(filename) ?? 'unknown';
+    const isGeoFile = isGeospatialFile(filename);
+    const tableName = providedTableName ?? generateTableName(filename);
+
+    await Duck.read_link(url, {
+      tablename: tableName,
+      decimal_separator: decimalSeparator
+    });
+
+    const dataset = await buildDatasetFromDuckTable({
+      file: {
+        name: filename,
+        size: 0,
+        type: 'application/octet-stream'
+      },
+      tableName,
+      isGeoFile,
+      format
+    });
+
+    dataset.sourceFileId = url;
+    dataset.name = filename;
+    return dataset;
+  }
+
+  async function processPastedData(
+    content: string,
+    options: { name?: string; type?: string } = {}
+  ): Promise<DatasetResult> {
+    const name = options.name ?? 'pasted-data.csv';
+    const type = options.type ?? 'text/csv';
+    const file = await createFileFromUploadContent(content, name, type);
+    return processFile(file);
+  }
+
+  async function buildDatasetFromDuckTable({
+    file,
+    tableName,
+    isGeoFile,
+    format
+  }: {
+    file: FileInfo;
+    tableName: string;
+    isGeoFile: boolean;
+    format: string;
+  }): Promise<DatasetResult> {
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const duckdbColumns = await Duck.analyse(tableName);
+    const rowCount = await Duck.get_row_count(tableName);
+    const geometryInfo = await extractGeometryInfo(tableName);
+    const enrichedColumns = enrichColumns(duckdbColumns);
+
+    const dataset = buildDatasetResult({
+      file,
+      tableName,
+      enrichedColumns,
+      rowCount,
+      isGeoFile,
+      geometryInfo,
+      format
+    });
+
+    const qualityWarnings = computeQualityWarnings(enrichedColumns, rowCount);
+    if (dataset.analysis) {
+      dataset.analysis.warnings = [
+        ...(dataset.analysis.warnings ?? []),
+        ...qualityWarnings
+      ];
+    }
+
+    return dataset;
   }
 
   async function validateFile(file: File): Promise<ValidationResult> {
@@ -316,10 +454,70 @@ export function createDataPipeline(): DataPipeline {
     logger.info('Data pipeline destroyed', LogCategory.DATA);
   }
 
+  async function joinDatasetById(
+    tableName: string,
+    idColumn: string,
+    options: {
+      basemapsTable?: string;
+      basemapTable?: string;
+      basemapId?: string;
+      basemapOthersId?: string;
+    }
+  ): Promise<unknown> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    return Duck.join_by_id(tableName, idColumn, {
+      basemaps_table: options.basemapsTable,
+      basemap_table: options.basemapTable,
+      basemap_id: options.basemapId,
+      basemap_others_id: options.basemapOthersId
+    });
+  }
+
+  async function applyJoinAssociation(
+    tableName: string,
+    basemap: string
+  ): Promise<void> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    await Duck.apply_join_association(tableName, basemap);
+  }
+
+  async function applyFilters(
+    tableName: string,
+    filters: string[]
+  ): Promise<unknown> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    const metadata =
+      Duck.table_metadata.get(tableName) ??
+      (() => {
+        const fresh = { analysis: null, join: null, filters: new Map() };
+        Duck!.table_metadata.set(tableName, fresh as never);
+        return fresh;
+      })();
+    metadata.filters.clear();
+    filters.forEach((filter, index) =>
+      Duck!.add_filter(tableName, index, filter)
+    );
+    return Duck.apply_filters(tableName);
+  }
+
   return {
     initialize: ensureInit,
     processFile,
     processUploadedFile,
+    processRemoteFile,
+    processPastedData,
+    joinDatasetById,
+    applyJoinAssociation,
+    applyFilters,
     validateFile,
     destroy
   };
@@ -392,6 +590,39 @@ function convertRawColumnsToEnriched(rawDataset: RawDataset): EnrichedColumn[] {
   });
 }
 
+function computeQualityWarnings(
+  columns: EnrichedColumn[],
+  rowCount: number
+): string[] {
+  if (rowCount === 0) return [];
+  const warnings: string[] = [];
+
+  columns.forEach((column) => {
+    const nullRatio =
+      column.stats?.count && column.stats.count > 0
+        ? column.stats.nulls / column.stats.count
+        : 0;
+    if (nullRatio > 0.5) {
+      warnings.push(
+        `Colonne "${column.name}" contient ${(nullRatio * 100).toFixed(1)}% de valeurs manquantes`
+      );
+    }
+
+    const nonNullCount =
+      (column.stats?.count ?? 0) - (column.stats?.nulls ?? 0);
+    if (nonNullCount > 0) {
+      const uniquenessRatio = (column.stats?.uniques ?? 0) / nonNullCount;
+      if (uniquenessRatio < 0.01) {
+        warnings.push(
+          `Colonne "${column.name}" a une cardinalite tres faible (${column.stats?.uniques ?? 0} valeurs uniques sur ${nonNullCount})`
+        );
+      }
+    }
+  });
+
+  return warnings;
+}
+
 async function extractGeometryInfo(
   tableName: string
 ): Promise<GeometryInfo | undefined> {
@@ -408,33 +639,35 @@ async function extractGeometryInfo(
       return undefined;
     }
 
-    const geomTypeResult = (await Duck.query(
-      `SELECT ST_GeometryType(${geometryColumn.name}) as geom_type FROM ${tableName} LIMIT 1`,
-      { format: 'array' as never }
-    )) as Array<{ geom_type: string }>;
-
-    const geometryType = geomTypeResult[0]?.geom_type ?? 'GEOMETRY';
-
-    const bboxQuery = `
-      WITH extent AS (
-        SELECT ST_Extent(${geometryColumn.name}) AS bbox FROM ${tableName}
+    // Consolidate all geometry queries into a single query
+    const consolidatedQuery = `
+      WITH bbox AS (
+        SELECT ST_Extent(${geometryColumn.name}) AS extent FROM ${tableName}
+      ),
+      first_row AS (
+        SELECT ${geometryColumn.name} AS geom FROM ${tableName} WHERE ${geometryColumn.name} IS NOT NULL LIMIT 1
       )
       SELECT
-        ST_XMin(bbox) AS minX,
-        ST_YMin(bbox) AS minY,
-        ST_XMax(bbox) AS maxX,
-        ST_YMax(bbox) AS maxY
-      FROM extent
+        ST_GeometryType((SELECT geom FROM first_row)) AS geom_type,
+        ST_XMin(extent) AS minX,
+        ST_YMin(extent) AS minY,
+        ST_XMax(extent) AS maxX,
+        ST_YMax(extent) AS maxY
+      FROM bbox
     `;
 
-    const [extent] = (await Duck.query(bboxQuery, {
+    const [result] = (await Duck.query(consolidatedQuery, {
       format: 'array' as never
     })) as Array<{
+      geom_type: string | null;
       minX: number | null;
       minY: number | null;
       maxX: number | null;
       maxY: number | null;
     }>;
+
+    const geometryType = result?.geom_type ?? 'GEOMETRY';
+    const extent = result;
 
     if (
       !extent ||
@@ -622,7 +855,7 @@ async function createFileFromUploadContent(
   return new File([blob], name, { type: resolvedType });
 }
 
-async function createFileFromUpload(
+export async function createFileFromUpload(
   uploadedFile: UploadedFilePayload
 ): Promise<File> {
   if (!uploadedFile.content) {

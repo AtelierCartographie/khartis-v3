@@ -1,8 +1,7 @@
-import { duckDBOrchestrator } from '$lib/features/duckdb';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { ColumnType } from '$lib/features/data-pipeline';
+import { createFileFromUpload } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
-import { convertKMLFileToGeoJSON } from '$lib/features/data-pipeline/adapters/parsers/kml.parser';
+import { duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -10,7 +9,6 @@ import {
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
-  DataValidationError,
   formatError,
   isFatalError,
   ParseError
@@ -21,8 +19,7 @@ import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import {
   visualizationStore,
-  VisualizationType,
-  type VisualizationConfig
+  VisualizationType
 } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
@@ -61,8 +58,10 @@ class DataOrchestratorService {
       this.processedFileIds.add(file.id);
       // Legacy pipeline: no GeoParquet cache, rely on DuckDB state
 
+      // Note: _geometryDatasetsVersion is now incremented inside processFileInDuckDB
+      // after DuckDB dataset is fully ready (prevents 5s delay in map reaction)
+
       if (dataset.geometry) {
-        this._geometryDatasetsVersion++;
         projectionActions.suggestProjectionForCurrentData();
       }
 
@@ -227,8 +226,8 @@ class DataOrchestratorService {
       return null;
     }
 
-    if (file.fileType === FileType.SHAPEFILE) {
-      return await this.convertShapefileForDuckDB(file);
+    if (dataset?.tableName) {
+      return null;
     }
 
     if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
@@ -238,55 +237,7 @@ class DataOrchestratorService {
     return file;
   }
 
-  // Legacy pipeline: caching disabled. DuckDB remains the source of truth.
-
-  private async convertShapefileForDuckDB(
-    file: UploadedFile
-  ): Promise<UploadedFile> {
-    if (!file.parsedData) {
-      throw new ParseError(
-        'Missing parsed GeoJSON data for shapefile',
-        FileType.SHAPEFILE,
-        { fileId: file.id, fileName: file.name }
-      );
-    }
-
-    let geojsonObject: unknown;
-    try {
-      geojsonObject =
-        typeof file.parsedData === 'string'
-          ? JSON.parse(file.parsedData)
-          : file.parsedData;
-    } catch (error) {
-      throw new ParseError(
-        'Invalid GeoJSON data generated from shapefile',
-        FileType.SHAPEFILE,
-        {
-          fileId: file.id,
-          fileName: file.name,
-          originalError: error instanceof Error ? error.message : String(error)
-        }
-      );
-    }
-
-    const geojsonString = file.preparedGeoJSON ?? JSON.stringify(geojsonObject);
-    file.preparedGeoJSON = geojsonString;
-
-    const geojsonName = file.name.endsWith('.shp')
-      ? file.name.replace(/\.shp$/i, '.geojson')
-      : `${file.name}.geojson`;
-
-    return {
-      ...file,
-      name: geojsonName,
-      type: 'application/geo+json',
-      fileType: FileType.GEOJSON,
-      content: geojsonString,
-      preparedGeoJSON: geojsonString,
-      parsedData: geojsonObject as UploadedFile['parsedData']
-    };
-  }
-
+  // KML conversion is now handled directly by DuckDB ST_Read in kml.parser.ts
   private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
     try {
       let geojsonObject: ParserGeoJSONFeatureCollection;
@@ -294,11 +245,11 @@ class DataOrchestratorService {
       if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
         geojsonObject = file.parsedData as ParserGeoJSONFeatureCollection;
       } else {
-        const sourceFile = await this.ensureFileObject(
-          file,
-          'application/vnd.google-earth.kml+xml'
+        // KML parsing is now done via DuckDB in the data pipeline
+        // This path should not be reached with the new architecture
+        throw new Error(
+          'KML files should be processed by the data pipeline, not here'
         );
-        geojsonObject = await convertKMLFileToGeoJSON(sourceFile);
       }
 
       const geojsonString =
@@ -373,6 +324,20 @@ class DataOrchestratorService {
             dataset.id,
             duckResult.tableName
           );
+
+          // Mark dataset as DuckDB-processed to prevent reprocessing
+          const updatedDataset = datasetsStore.datasets.find(
+            (d) => d.id === dataset.id
+          );
+          if (updatedDataset) {
+            updatedDataset.metadata = {
+              ...updatedDataset.metadata,
+              geoDuckTableReady: true
+            };
+          }
+
+          // Increment geometry datasets version to trigger map reactivity
+          this._geometryDatasetsVersion++;
         }
       } catch (error) {
         logger.error(
@@ -387,7 +352,7 @@ class DataOrchestratorService {
 
     if (dataset.tableName) {
       try {
-        await duckDBOrchestrator.registerExistingTable(
+        const registered = await duckDBOrchestrator.registerExistingTable(
           dataset.tableName,
           dataset.sourceFileId || file.id,
           file.name,
@@ -395,6 +360,43 @@ class DataOrchestratorService {
             geoDetection: dataset.geoDetection
           }
         );
+
+        // If table doesn't exist (null returned), re-process the file
+        if (registered === null) {
+          logger.info(
+            'DuckDB table missing, re-processing file from scratch',
+            LogCategory.DUCKDB,
+            {
+              fileId: file.id,
+              fileName: file.name,
+              oldTableName: dataset.tableName
+            }
+          );
+
+          // Re-process through the normal flow (will create new table)
+          const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
+          if (duckDBFile) {
+            const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
+            if (duckResult && dataset) {
+              datasetsStore.updateDatasetTableName(
+                dataset.id,
+                duckResult.tableName
+              );
+
+              const updatedDataset = datasetsStore.datasets.find(
+                (d) => d.id === dataset.id
+              );
+              if (updatedDataset) {
+                updatedDataset.metadata = {
+                  ...updatedDataset.metadata,
+                  geoDuckTableReady: true
+                };
+              }
+
+              this._geometryDatasetsVersion++;
+            }
+          }
+        }
       } catch (registerError) {
         logger.error('Failed to register table', LogCategory.DUCKDB, {
           error:
@@ -405,6 +407,13 @@ class DataOrchestratorService {
         });
       }
     }
+  }
+
+  private createDefaultVisualization(datasetId: string): void {
+    visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      datasetId
+    );
   }
 
   async onProjectChanged(): Promise<void> {
@@ -478,109 +487,98 @@ class DataOrchestratorService {
         unprocessedFiles,
         concurrency,
         async (file, index, total) => {
+          // Restore companion files for shapefiles
+          logger.debug(
+            `[DataOrchestrator] Checking file restoration for ${file.name}`,
+            LogCategory.DATA,
+            {
+              fileType: file.fileType,
+              relatedFiles: file.relatedFiles,
+              hasOriginal: !!file.originalFile
+            }
+          );
+
+          if (
+            file.fileType === FileType.SHAPEFILE &&
+            (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
+          ) {
+            if (file.relatedFilesData) {
+              logger.debug(
+                `[DataOrchestrator] Restoring companion files from data for ${file.name}`,
+                LogCategory.DATA
+              );
+              const companionFiles: File[] = [];
+              for (const [name, buffer] of Object.entries(
+                file.relatedFilesData
+              )) {
+                try {
+                  const restoredFile = new File([buffer], name);
+                  companionFiles.push(restoredFile);
+                } catch (err) {
+                  logger.warn(
+                    `Failed to restore companion file ${name}`,
+                    LogCategory.DATA,
+                    { error: err }
+                  );
+                }
+              }
+              if (companionFiles.length > 0) {
+                file.relatedFileObjects = companionFiles;
+                logger.debug(
+                  `[DataOrchestrator] Restored ${companionFiles.length} companion files`,
+                  LogCategory.DATA
+                );
+              }
+            } else {
+              logger.warn(
+                `[DataOrchestrator] No relatedFilesData found for ${file.name}`,
+                LogCategory.DATA
+              );
+            }
+          }
+
+          // Restore original file object if missing (needed for DuckDB ingestion)
+          if (!file.originalFile) {
+            try {
+              file.originalFile = await createFileFromUpload(file);
+            } catch (err) {
+              logger.warn(
+                `Failed to restore original file object for ${file.name}`,
+                LogCategory.DATA,
+                { error: err }
+              );
+            }
+          }
+
           const progress = `${index + 1}/${total}`;
+          logger.debug(
+            `[DataOrchestrator] Processing file ${progress}: ${file.name}`,
+            LogCategory.DATA
+          );
 
           try {
             await this.onFileAdded(file);
-          } catch (error) {
-            logger.error(
-              'Project file processing failed',
-              LogCategory.PROJECT,
-              {
-                progress,
-                fileName: file.name,
-                error: error instanceof Error ? error.message : 'Unknown error'
-              }
-            );
-            logger.error(
-              'Detailed project processing error',
-              LogCategory.PROJECT,
-              formatError(error)
-            );
-          } finally {
-            this.processingFiles.delete(file.id);
+          } catch (_) {
+            // Individual file failure shouldn't stop the whole batch
+            // Error is already logged in onFileAdded
           }
         }
       );
-
-      layersActions.syncWithVisualizations();
-
-      // No cache persistence – DuckDB remains the canonical storage during the session.
     } catch (error) {
-      // Cleanup on error - remove all unprocessed files from processing
+      logger.error('Failed to process project files', LogCategory.DATA, error);
+    } finally {
+      // Clear processing flags
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
-      logger.error('Project files processing failed', LogCategory.PROJECT, {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      throw error;
     }
   }
 
   private determineProjectConcurrency(): number {
-    if (typeof navigator === 'undefined' || !navigator.hardwareConcurrency) {
-      return 1;
+    // Use lower concurrency for mobile/tablet
+    if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
+      return Math.max(1, Math.min(4, navigator.hardwareConcurrency - 1));
     }
-    const cores = navigator.hardwareConcurrency;
-    if (cores <= 2) return 1;
-    if (cores <= 4) return 2;
-    return 3;
-  }
-
-  private createDefaultVisualization(datasetId: string): void {
-    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
-    if (!dataset) return;
-
-    const numericColumns = dataset.columns.filter(
-      (c) => c.type === ColumnType.NUMBER
-    );
-    const stringColumns = dataset.columns.filter(
-      (c) => c.type === ColumnType.TEXT
-    );
-
-    let visualizationType;
-    if (dataset.geometry && numericColumns.length > 0) {
-      visualizationType = VisualizationType.CHOROPLETH;
-    } else if (dataset.geometry && stringColumns.length > 0) {
-      visualizationType = VisualizationType.CATEGORICAL;
-    } else if (numericColumns.length > 0) {
-      visualizationType = VisualizationType.PROPORTIONAL;
-    } else {
-      return;
-    }
-
-    visualizationStore.createVisualization(visualizationType, datasetId);
-  }
-
-  async exportData(format: 'csv' | 'geojson' | 'json'): Promise<Blob> {
-    const { exportProjectData } = await import('../utils/file-export.utils');
-    const currentProject = projectStore.currentProject;
-
-    if (!currentProject?.data?.sourceFiles) {
-      throw new DataValidationError('Aucune donnée à exporter');
-    }
-
-    return exportProjectData(currentProject.data.sourceFiles, format);
-  }
-
-  getVisualizationData(visualizationId: string): {
-    visualization: VisualizationConfig;
-    dataset: DatasetResult;
-  } | null {
-    const visualization = visualizationStore.visualizations.find(
-      (v) => v.id === visualizationId
-    );
-    if (!visualization) return null;
-
-    const dataset = datasetsStore.datasets.find(
-      (d) => d.id === visualization.datasetId
-    );
-    if (!dataset) return null;
-
-    return {
-      visualization,
-      dataset
-    };
+    return 2;
   }
 }
 
-export const dataOrchestrator = new DataOrchestratorService();
+export const dataOrchestratorService = new DataOrchestratorService();

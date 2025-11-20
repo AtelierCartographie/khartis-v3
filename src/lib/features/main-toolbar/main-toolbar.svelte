@@ -3,10 +3,12 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     ToolbarState,
     ToolbarStep
   } from '$lib/features/commons/types/global';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     ProgressIndicator,
@@ -21,16 +23,14 @@
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
+  import { dataTabStore } from './data-tab/data-tab.store.svelte';
   import DataTab from './data-tab/data-tab.svelte';
   import {
+    getDerivedToolbarState,
     mainToolbarActions,
-    mainToolbarState,
-    getDerivedToolbarState
+    mainToolbarState
   } from './main-toolbar.state.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import VizualisationTab from './visualization-tab/visualization-tab.svelte';
-  import { dataTabStore } from './data-tab/data-tab.store.svelte';
-  import * as m from '$lib/paraglide/messages';
 
   const listToolsComponents = {
     [ToolbarStep.Data]: DataTab,
@@ -50,17 +50,10 @@
     globalActions.setToolbarState(state);
   }
 
-  const _selectStep = (step: ToolbarStep): void => {
-    globalActions.setNavigationState(step);
-
-    globalState.selectedTool = undefined;
-  };
-
   const derivedToolbarState = $derived(getDerivedToolbarState());
 
   $effect(() => {
     const project = projectStore.currentProject;
-    const _isDirty = projectStore.isDirty;
 
     if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
       mainToolbarState.canNavigateToVisualization = true;

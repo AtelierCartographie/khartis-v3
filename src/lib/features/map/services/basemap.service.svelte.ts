@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
 import { logger, LogCategory } from '../../commons/utils/logger';
@@ -6,9 +7,9 @@ import { readGeoArrowParquet } from '../utils/read-geoarrow-parquet';
 import { readGeoJSONAsArrow } from '../utils/read-geojson-arrow';
 import { SvelteMap } from 'svelte/reactivity';
 
-const BASEMAP_METADATA_URL = '/basemaps/all-basemaps-metadata.json';
-const BASEMAP_ATTRIBUTES_URL = '/basemaps/all-basemaps-attributes.parquet';
-const GEOMETRY_BASE_PATH = '/basemaps/geometry/';
+const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
+const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
+const GEOMETRY_BASE_PATH = `${base}/basemaps/geometry/`;
 const DEFAULT_BASEMAP_ID = 'france-region-2025';
 
 interface LoadedBasemap {
@@ -23,6 +24,8 @@ class BasemapService {
   private _currentBasemap: LoadedBasemap | null = null;
 
   private _attributesLoaded = false;
+
+  private _basemapCache = new SvelteMap<string, LoadedBasemap>();
 
   async initialize(): Promise<void> {
     try {
@@ -96,9 +99,14 @@ class BasemapService {
         (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
+      // Optimized Parquet scan with performance hints
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
-        SELECT * FROM parquet_scan('${fileId}')
+        SELECT * FROM parquet_scan('${fileId}',
+          hive_partitioning=false,  -- No Hive partitioning in our files
+          union_by_name=false,      -- No union needed
+          filename=false             -- Don't include filename column
+        )
       `);
 
       if (!result) {
@@ -176,6 +184,12 @@ class BasemapService {
   }
 
   async loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
+    if (this._basemapCache.has(basemapId)) {
+      logger.debug('Basemap loaded from cache', LogCategory.MAP, { basemapId });
+      this._currentBasemap = this._basemapCache.get(basemapId)!;
+      return this._currentBasemap;
+    }
+
     const metadata = this._availableBasemaps.find(
       (bm) => bm.file === basemapId
     );
@@ -186,6 +200,7 @@ class BasemapService {
     }
 
     try {
+      const start = performance.now();
       logger.info('Loading basemap', LogCategory.MAP, { basemapId });
 
       const geometryTable = await this.loadGeometryFromParquet(metadata.file);
@@ -197,9 +212,12 @@ class BasemapService {
         layerTables
       };
 
+      this._basemapCache.set(basemapId, this._currentBasemap);
+
       logger.success('Basemap loaded', LogCategory.MAP, {
         basemapId,
-        layerCount: metadata.layers.length
+        layerCount: metadata.layers.length,
+        durationMs: (performance.now() - start).toFixed(2)
       });
       return this._currentBasemap;
     } catch (error) {
@@ -234,6 +252,11 @@ class BasemapService {
 
   reset(): void {
     this._currentBasemap = null;
+  }
+
+  clearCache(): void {
+    this._basemapCache.clear();
+    logger.debug('Basemap cache cleared', LogCategory.MAP);
   }
 }
 

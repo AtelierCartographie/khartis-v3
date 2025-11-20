@@ -1,36 +1,20 @@
 /**
- * Data Feature - Public API
- *
- * Provides a simple facade over the data ingestion pipeline plus
- * the core models/contracts needed to extend it.
- *
- * @example
- * ```typescript
- * import { dataPipeline, ColumnType } from '$lib/features/data';
- *
- * await dataPipeline.initialize();
- * const dataset = await dataPipeline.processFile(file);
- * ```
+ * Public API for the data ingestion pipeline plus extension contracts.
  */
 
 export {
-  dataPipeline,
-  createDataPipeline
+  createDataPipeline,
+  createFileFromUpload,
+  dataPipeline
 } from './pipeline/create-data-pipeline';
 export type { DataPipeline } from './pipeline/create-data-pipeline';
 
-export * from './models';
 export * from './contracts';
+export * from './models';
 
-export type { ProcessedDataset } from './types/ProcessedDataset';
 export type { ColumnInfo } from './types/AnalysisResult';
+export type { ProcessedDataset } from './types/ProcessedDataset';
 
-export { CSVParser } from './adapters/parsers/csv.parser';
-export { GeoJSONParser } from './adapters/parsers/geojson.parser';
-export { ShapefileParser } from './adapters/parsers/shapefile.parser';
-export { GeoPackageParser } from './adapters/parsers/geopackage.parser';
-export { KMLParser } from './adapters/parsers/kml.parser';
-export { GeoParquetParser } from './adapters/parsers/geoparquet.parser';
 export {
   createParserList,
   findParser,
@@ -38,11 +22,17 @@ export {
   getSupportedMimeTypes
 } from './adapters/parsers';
 export type { ParserList } from './adapters/parsers';
+export { CSVParser } from './adapters/parsers/csv.parser';
+export { GeoJSONParser } from './adapters/parsers/geojson.parser';
+export { GeoPackageParser } from './adapters/parsers/geopackage.parser';
+export { GeoParquetParser } from './adapters/parsers/geoparquet.parser';
+export { KMLParser } from './adapters/parsers/kml.parser';
+export { ShapefileParser } from './adapters/parsers/shapefile.parser';
 
-export { SizeValidator } from './adapters/validators/size.validator';
-export { SchemaValidator } from './adapters/validators/schema.validator';
-export { QualityValidator } from './adapters/validators/quality.validator';
 export { createValidatorList, runValidators } from './adapters/validators';
 export type { ValidatorList } from './adapters/validators';
+export { QualityValidator } from './adapters/validators/quality.validator';
+export { SchemaValidator } from './adapters/validators/schema.validator';
+export { SizeValidator } from './adapters/validators/size.validator';
 
 export { HeuristicTypeInferrer } from './adapters/type-inference/heuristic-inferrer';

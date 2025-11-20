@@ -4,13 +4,13 @@
 
 ## Visualization Types
 
-| Type                     | Use Case               | Requirements                    |
-| ------------------------ | ---------------------- | ------------------------------- |
-| **Choropleth**           | Color-coded regions    | Geometry + numeric variable     |
-| **Proportional Symbols** | Sized markers          | Geometry + numeric variable     |
-| **Categorical**          | Distinct categories    | Geometry + categorical variable |
-| **Bivariate**            | Two variables combined | Geometry + 2 numeric variables  |
-| **Collections (Facets)** | Multi-map comparison   | Geometry + grouping variable    |
+| Type                     | Use Case                | Requirements                    |
+| ------------------------ | ----------------------- | ------------------------------- |
+| **Choropleth**           | Color-coded regions     | Geometry + numeric variable     |
+| **Proportional Symbols** | Sized markers           | Geometry + numeric variable     |
+| **Categorical**          | Distinct categories     | Geometry + categorical variable |
+| **Bivariate**            | Two variables combined  | Geometry + 2 numeric variables  |
+| **Combined**             | Multiple visualizations | Geometry + multiple variables   |
 
 ## Lifecycle
 
@@ -28,12 +28,18 @@ Layer Assembly (Deck.gl) → GPU Rendering → Legend Generation
 interface VisualizationConfig {
   id: string;
   datasetId: string;
-  type: 'choropleth' | 'proportional' | 'categorical' | 'bivariate' | 'facets';
+  type:
+    | 'choropleth'
+    | 'proportional'
+    | 'categorical'
+    | 'bivariate'
+    | 'combined';
   classification?: Classification;
   color?: ColorConfig;
   proportional?: SymbolConfig;
   categorical?: CategoryConfig;
   bivariate?: BivariateConfig;
+  combined?: CombinedConfig;
 }
 ```
 

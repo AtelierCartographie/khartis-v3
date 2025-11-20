@@ -4,7 +4,6 @@ import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.ut
 import {
   detectDuplicateRows,
   getDataStatistics,
-  parseGeoPackage,
   readFileContent,
   validateGeospatialFile
 } from '$lib/features/commons/utils/file-import.utils';
@@ -91,21 +90,19 @@ abstract class FileProcessor {
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
 
   protected async stringifyInChunks(data: unknown[]): Promise<string> {
-    // For small datasets, use regular JSON.stringify
+    // Chunked stringify to avoid blocking on large datasets.
     if (data.length < 1000) {
       return JSON.stringify(data);
     }
 
-    // For large datasets, stringify in chunks to avoid blocking
     const chunks: string[] = [];
     const CHUNK_SIZE = 500;
 
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-      // Yield to event loop between chunks
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0)); // yield between chunks
 
       const chunk = data.slice(i, i + CHUNK_SIZE);
-      chunks.push(JSON.stringify(chunk).slice(1, -1)); // Remove [ and ]
+      chunks.push(JSON.stringify(chunk).slice(1, -1)); // strip array brackets
     }
 
     return '[' + chunks.join(',') + ']';
@@ -153,12 +150,10 @@ class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    // Import CSV parser from new architecture
     const { CSVParser } = await import('$lib/features/data-pipeline');
     const csvParser = new CSVParser();
     const rawDataset = await csvParser.parse(file);
 
-    // Convert RawDataset to the format expected by the rest of the code
     const headers = rawDataset.columns.map((col) => col.name);
     const csvRows = rawDataset.columns[0].values.map((_, rowIndex) => {
       const row: Record<string, unknown> = {};
@@ -193,8 +188,7 @@ class CsvProcessor extends FileProcessor {
 
     const tabularData = csvRowsToTabularData(csvRows);
 
-    // Yield before JSON.stringify to avoid blocking
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0)); // yield before serialization
 
     const content = await this.stringifyInChunks(tabularData);
 
@@ -328,34 +322,9 @@ class GeoPackageProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    const content = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress * 0.5);
-    });
-
-    const geojson = await parseGeoPackage(
-      content as ArrayBuffer,
-      (progress) => {
-        this.callbacks.onProgress(uploadedFile.id, 50 + progress * 0.5);
-      }
+    throw new Error(
+      'GeoPackage files should be processed by the data pipeline, not here'
     );
-
-    const geoValidation = await validateGeospatialFile(JSON.stringify(geojson));
-    if (!geoValidation.isValid) {
-      this.callbacks.onStatusChange(
-        uploadedFile.id,
-        'error',
-        geoValidation.errors[0]
-      );
-      return;
-    }
-
-    this.callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: geojson as UploadedFile['parsedData'],
-      content: JSON.stringify(geojson),
-      validation: geoValidation
-    });
-
-    this.callbacks.onStatusChange(uploadedFile.id, 'complete');
   }
 }
 

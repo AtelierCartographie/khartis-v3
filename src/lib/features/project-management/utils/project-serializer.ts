@@ -1,9 +1,9 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
 import type {
   SerializedBasemapAttribute,
@@ -74,14 +74,12 @@ export const ProjectSerializer = {
       );
     }
 
-    // Serialize custom basemaps if any exist
     const customBasemaps = basemapCatalogService.basemaps.filter(
       (b: BasemapMetadata) => b.isCustom
     );
 
     if (customBasemaps.length > 0 && Duck) {
       try {
-        // Check if custom_basemap_attributes table exists
         const tableExists = await Duck.query(
           `SELECT name FROM sqlite_master WHERE type='table' AND name='custom_basemap_attributes'`,
           { format: 'array' }
@@ -92,7 +90,6 @@ export const ProjectSerializer = {
           Array.isArray(tableExists) &&
           tableExists.length > 0
         ) {
-          // Query all custom basemap attributes
           const attributes = (await Duck.query(
             'SELECT * FROM custom_basemap_attributes',
             { format: 'array' }
@@ -127,12 +124,10 @@ export const ProjectSerializer = {
       ) as SerializedUploadedFile[];
     }
 
-    // Restore custom basemaps if any were saved
     if (data.customBasemaps && Duck) {
       try {
         const { metadata, attributes } = data.customBasemaps;
 
-        // Recreate custom_basemap_attributes table
         await Duck.query(`
           CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
             raw VARCHAR,
@@ -144,10 +139,8 @@ export const ProjectSerializer = {
           )
         `);
 
-        // Clear existing data (in case table already existed)
         await Duck.query('DELETE FROM custom_basemap_attributes');
 
-        // Insert all attributes if any exist
         if (attributes && attributes.length > 0) {
           const insertValues = attributes
             .map(
@@ -162,7 +155,6 @@ export const ProjectSerializer = {
           `);
         }
 
-        // Re-register custom basemaps in catalog
         metadata.forEach((basemap: BasemapMetadata) => {
           basemapCatalogService.addCustomBasemap(basemap);
         });
@@ -217,8 +209,6 @@ export const ProjectSerializer = {
       serialized.geoMatchResult = file.geoMatchResult;
     }
 
-    // Cached dataset metadata no longer persisted – pipeline reloads from DuckDB
-
     if (file.content) {
       if (typeof file.content === 'string') {
         serialized.content = file.content;
@@ -227,6 +217,14 @@ export const ProjectSerializer = {
         serialized.content = Array.from(new Uint8Array(file.content));
         serialized.contentType = 'arraybuffer';
       }
+    }
+
+    if (file.relatedFilesData) {
+      const serializedData: Record<string, number[]> = {};
+      for (const [name, buffer] of Object.entries(file.relatedFilesData)) {
+        serializedData[name] = Array.from(new Uint8Array(buffer));
+      }
+      serialized.relatedFilesData = serializedData;
     }
 
     return serialized;
@@ -271,8 +269,6 @@ export const ProjectSerializer = {
       file.geoMatchResult = data.geoMatchResult;
     }
 
-    // Cached dataset metadata no longer persisted – pipeline reloads from DuckDB
-
     if (data.content) {
       if (data.contentType === 'string' && typeof data.content === 'string') {
         file.content = data.content;
@@ -282,6 +278,14 @@ export const ProjectSerializer = {
       ) {
         file.content = new Uint8Array(data.content).buffer;
       }
+    }
+
+    if (data.relatedFilesData) {
+      const relatedData: Record<string, ArrayBuffer> = {};
+      for (const [name, bytes] of Object.entries(data.relatedFilesData)) {
+        relatedData[name] = new Uint8Array(bytes).buffer;
+      }
+      file.relatedFilesData = relatedData;
     }
 
     return file as UploadedFile;
@@ -310,25 +314,8 @@ export const ProjectSerializer = {
   },
 
   /**
-   * Prepares a project for IndexedDB storage
-   *
-   * This method performs two distinct operations:
-   * 1. serialize() - Logical conversion (Dates → ISO strings, ArrayBuffers → arrays, custom basemaps)
-   * 2. JSON round-trip - Normalization for IndexedDB compatibility
-   *
-   * The JSON.parse(JSON.stringify()) is NOT redundant serialization.
-   * It's required to strip non-cloneable references that IndexedDB cannot store:
-   * - Object prototypes and class instances
-   * - Functions and getters
-   * - Circular references
-   * - Svelte proxies and reactive objects
-   *
-   * Alternatives tested:
-   * - structuredClone(): Fails with "could not be cloned" error on complex objects
-   * - Direct storage: Fails with IndexedDB DataCloneError
-   *
-   * Performance: This operation is only called on save (user-initiated), not on read.
-   * The JSON round-trip ensures reliable storage across all browsers.
+   * Prepare a project for IndexedDB: serialize then JSON round-trip to strip non-cloneable refs.
+   * structuredClone/direct storage failed on complex objects; this path is used only on save.
    */
   async prepareForIndexedDB(
     project: KhartisProject

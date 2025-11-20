@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Modal } from 'carbon-components-svelte';
-  // import { m } from '$lib/paraglide/messages.js';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     showSuccess,

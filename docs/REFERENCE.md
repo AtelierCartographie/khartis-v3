@@ -205,6 +205,393 @@ try {
 }
 ```
 
+## Error Handling
+
+### Error Class Hierarchy
+
+Khartis v3 uses a hierarchical error system for precise error handling and recovery:
+
+```typescript
+// Base error class
+export class KhartisError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public recoverable: boolean = false,
+    public details?: any
+  ) {
+    super(message);
+    this.name = this.constructor.name;
+  }
+}
+
+// Data processing errors
+export class DataError extends KhartisError {
+  constructor(message: string, details?: any) {
+    super(message, 'DATA_ERROR', true, details);
+  }
+}
+
+export class DataValidationError extends DataError {
+  constructor(
+    message: string,
+    public errors: string[],
+    public warnings: string[]
+  ) {
+    super(message, { errors, warnings });
+    this.code = 'DATA_VALIDATION_ERROR';
+  }
+}
+
+export class DataParseError extends DataError {
+  constructor(
+    message: string,
+    public line?: number,
+    public column?: string
+  ) {
+    super(message, { line, column });
+    this.code = 'DATA_PARSE_ERROR';
+  }
+}
+
+// DuckDB errors
+export class DuckDBError extends KhartisError {
+  constructor(
+    message: string,
+    public query?: string
+  ) {
+    super(message, 'DUCKDB_ERROR', true, { query });
+  }
+}
+
+export class DuckDBConnectionError extends DuckDBError {
+  constructor(message: string) {
+    super(message);
+    this.code = 'DUCKDB_CONNECTION_ERROR';
+    this.recoverable = false;
+  }
+}
+
+// Visualization errors
+export class VisualizationError extends KhartisError {
+  constructor(
+    message: string,
+    public vizType?: string
+  ) {
+    super(message, 'VIZ_ERROR', true, { vizType });
+  }
+}
+
+export class ClassificationError extends VisualizationError {
+  constructor(
+    message: string,
+    public method?: string,
+    public data?: any
+  ) {
+    super(message);
+    this.code = 'CLASSIFICATION_ERROR';
+    this.details = { method, data };
+  }
+}
+
+// Storage errors
+export class StorageError extends KhartisError {
+  constructor(
+    message: string,
+    public operation?: string
+  ) {
+    super(message, 'STORAGE_ERROR', false, { operation });
+  }
+}
+
+export class QuotaExceededError extends StorageError {
+  constructor(
+    public used: number,
+    public quota: number
+  ) {
+    super(`Storage quota exceeded: ${used}/${quota} bytes`);
+    this.code = 'QUOTA_EXCEEDED';
+    this.recoverable = true; // Can recover by deleting old projects
+  }
+}
+```
+
+### Error Handling Patterns
+
+#### 1. Try-Catch with Type Guards
+
+```typescript
+try {
+  const dataset = await dataPipeline.processFile(file);
+} catch (error) {
+  if (error instanceof DataValidationError) {
+    // Show validation errors to user
+    error.errors.forEach((e) => notificationStore.error(e));
+    error.warnings.forEach((w) => notificationStore.warning(w));
+  } else if (error instanceof DuckDBError) {
+    // Log technical error, show user-friendly message
+    logger.error('DuckDB query failed', error);
+    notificationStore.error('Failed to process data. Please try again.');
+  } else if (error instanceof QuotaExceededError) {
+    // Offer to clear old projects
+    const shouldClear = await confirm('Storage full. Delete old projects?');
+    if (shouldClear) {
+      await projectStore.deleteOldProjects(30);
+      // Retry operation
+    }
+  } else {
+    // Unknown error
+    logger.error('Unexpected error', error);
+    notificationStore.error('An unexpected error occurred');
+  }
+}
+```
+
+#### 2. Error Boundaries (Svelte)
+
+```svelte
+<!-- ErrorBoundary.svelte -->
+<script>
+  import { onMount } from 'svelte';
+  import { errorStore } from '$lib/stores';
+
+  let hasError = false;
+  let error = null;
+
+  onMount(() => {
+    // Catch unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      hasError = true;
+      error = event.reason;
+      errorStore.capture(error);
+      event.preventDefault();
+    });
+
+    // Catch uncaught errors
+    window.addEventListener('error', (event) => {
+      hasError = true;
+      error = event.error;
+      errorStore.capture(error);
+      event.preventDefault();
+    });
+  });
+
+  function reset() {
+    hasError = false;
+    error = null;
+    errorStore.clear();
+  }
+</script>
+
+{#if hasError}
+  <div class="error-boundary">
+    <h2>Something went wrong</h2>
+    <p>{error?.message || 'Unknown error'}</p>
+    <button on:click={reset}>Try Again</button>
+  </div>
+{:else}
+  <slot />
+{/if}
+```
+
+#### 3. Async Error Handling
+
+```typescript
+// Wrapper for async operations
+export async function withErrorHandling<T>(
+  operation: () => Promise<T>,
+  errorMessage = 'Operation failed'
+): Promise<T | null> {
+  try {
+    return await operation();
+  } catch (error) {
+    logger.error(errorMessage, error);
+    notificationStore.error(errorMessage);
+    return null;
+  }
+}
+
+// Usage
+const dataset = await withErrorHandling(
+  () => dataPipeline.processFile(file),
+  'Failed to import file'
+);
+```
+
+#### 4. Validation with Result Type
+
+```typescript
+type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+
+function validateDataset(
+  data: any
+): Result<ProcessedDataset, DataValidationError> {
+  const errors: string[] = [];
+
+  if (!data.columns || data.columns.length === 0) {
+    errors.push('Dataset must have at least one column');
+  }
+
+  if (!data.rows || data.rows.length === 0) {
+    errors.push('Dataset must have at least one row');
+  }
+
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      error: new DataValidationError('Dataset validation failed', errors, [])
+    };
+  }
+
+  return { ok: true, value: data as ProcessedDataset };
+}
+
+// Usage
+const result = validateDataset(rawData);
+if (!result.ok) {
+  handleValidationError(result.error);
+} else {
+  processDataset(result.value);
+}
+```
+
+### Error Recovery Strategies
+
+| Error Type              | Recovery Strategy        | User Action Required             |
+| ----------------------- | ------------------------ | -------------------------------- |
+| **File Too Large**      | Suggest file splitting   | Split file or sample data        |
+| **Invalid Format**      | Show format requirements | Fix file format                  |
+| **Parse Error**         | Show line/column         | Fix data at specific location    |
+| **Type Mismatch**       | Suggest type conversion  | Convert or cast column           |
+| **Classification Fail** | Fallback to quantiles    | Accept fallback or manual breaks |
+| **Quota Exceeded**      | Auto-delete old projects | Confirm deletion                 |
+| **Network Error**       | Retry with backoff       | Wait or retry manually           |
+| **Worker Crash**        | Fallback to main thread  | None (automatic)                 |
+| **Memory Error**        | Clear caches and retry   | Reduce dataset size              |
+| **Projection Error**    | Use default projection   | Select different projection      |
+
+### Error Monitoring
+
+```typescript
+class ErrorMonitor {
+  private errors: Map<string, number> = new Map();
+  private readonly threshold = 5;
+  private readonly window = 60000; // 1 minute
+
+  track(error: Error): void {
+    const key = `${error.name}:${error.message}`;
+    const count = (this.errors.get(key) || 0) + 1;
+    this.errors.set(key, count);
+
+    // Alert if error frequency is too high
+    if (count >= this.threshold) {
+      this.alertHighFrequency(error);
+    }
+
+    // Clear old errors
+    setTimeout(() => {
+      this.errors.delete(key);
+    }, this.window);
+  }
+
+  private alertHighFrequency(error: Error): void {
+    logger.warn(`High error frequency detected: ${error.name}`, {
+      message: error.message,
+      count: this.errors.get(`${error.name}:${error.message}`)
+    });
+  }
+}
+
+export const errorMonitor = new ErrorMonitor();
+```
+
+### User-Friendly Error Messages
+
+```typescript
+// Map technical errors to user-friendly messages
+const ERROR_MESSAGES: Record<string, string> = {
+  ENOENT: 'File not found. Please check the file path.',
+  EACCES: 'Permission denied. Please check file permissions.',
+  EMFILE: 'Too many files open. Please close some files and try again.',
+  ENOMEM: 'Out of memory. Please try with a smaller dataset.',
+  ETIMEDOUT: 'Operation timed out. Please check your connection and try again.',
+  ECONNREFUSED: 'Connection refused. Please check if the service is running.',
+  DataCloneError:
+    'Cannot process this data type. Please use a different format.',
+  QuotaExceededError: 'Storage limit reached. Please delete old projects.',
+  NetworkError:
+    'Network connection lost. Please check your internet connection.'
+};
+
+export function getUserMessage(error: Error): string {
+  // Check for known error codes
+  if ('code' in error && error.code in ERROR_MESSAGES) {
+    return ERROR_MESSAGES[error.code];
+  }
+
+  // Check for error name
+  if (error.name in ERROR_MESSAGES) {
+    return ERROR_MESSAGES[error.name];
+  }
+
+  // Default message
+  return 'An unexpected error occurred. Please try again or contact support.';
+}
+```
+
+### Error Logging
+
+```typescript
+interface ErrorLog {
+  timestamp: Date;
+  message: string;
+  stack?: string;
+  code?: string;
+  context?: any;
+  userAgent: string;
+  url: string;
+}
+
+class ErrorLogger {
+  private logs: ErrorLog[] = [];
+  private readonly maxLogs = 100;
+
+  log(error: Error, context?: any): void {
+    const log: ErrorLog = {
+      timestamp: new Date(),
+      message: error.message,
+      stack: error.stack,
+      code: (error as any).code,
+      context,
+      userAgent: navigator.userAgent,
+      url: window.location.href
+    };
+
+    this.logs.push(log);
+
+    // Trim old logs
+    if (this.logs.length > this.maxLogs) {
+      this.logs = this.logs.slice(-this.maxLogs);
+    }
+
+    // Send to console in development
+    if (import.meta.env.DEV) {
+      console.error('Error logged:', log);
+    }
+  }
+
+  export(): string {
+    return JSON.stringify(this.logs, null, 2);
+  }
+
+  clear(): void {
+    this.logs = [];
+  }
+}
+
+export const errorLogger = new ErrorLogger();
+```
+
 ## Performance Strategy
 
 ### Current Implementation
