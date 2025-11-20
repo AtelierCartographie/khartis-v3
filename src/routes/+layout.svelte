@@ -2,7 +2,7 @@
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
-  import { dataOrchestrator } from '$lib/features/commons/services/data-orchestrator.service.svelte';
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -56,7 +56,7 @@
       await projectStore.waitForInit();
 
       // Initialize data orchestrator to process any existing files
-      await dataOrchestrator.initialize();
+      await dataOrchestratorService.initialize();
 
       // Show modal only if no project exists
       if (!projectStore.currentProject) {

@@ -1,11 +1,3 @@
-import { m } from '$lib/paraglide/messages';
-import { dataOrchestrator } from '../services/data-orchestrator.service.svelte';
-import { downloadFile } from '../utils/file-export.utils';
-import { logger, LogCategory } from '../utils/logger';
-import { showError } from '../utils/notification.utils.svelte';
-import { generateProjectFilename } from '../utils/string.utils';
-import { ProjectValidator } from '../utils/validation.utils';
-import type { UploadedFile } from './create-project.types';
 import type {
   KhartisProject,
   LayoutConfig,
@@ -16,13 +8,21 @@ import type {
   VisualizationConfig
 } from '$lib/features/project-management';
 import {
+  AutoSaveController,
   ProjectStorageKey,
-  projectRepository,
-  projectFiles,
-  projectStorage,
   duplicateProject as duplicateProjectEntity,
-  AutoSaveController
+  projectFiles,
+  projectRepository,
+  projectStorage
 } from '$lib/features/project-management';
+import { m } from '$lib/paraglide/messages';
+import { dataOrchestratorService } from '../services/data-orchestrator.service.svelte';
+import { downloadFile } from '../utils/file-export.utils';
+import { LogCategory, logger } from '../utils/logger';
+import { showError } from '../utils/notification.utils.svelte';
+import { generateProjectFilename } from '../utils/string.utils';
+import { ProjectValidator } from '../utils/validation.utils';
+import type { UploadedFile } from './create-project.types';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -134,7 +134,8 @@ class ProjectStore {
           geoMatchResult: file.geoMatchResult,
           relatedFileObjects: file.relatedFileObjects,
           originalFile: file.originalFile,
-          relatedFiles: file.relatedFiles
+          relatedFiles: file.relatedFiles,
+          relatedFilesData: file.relatedFilesData
         };
 
         // Force reactivity by reassigning currentProject with deep copy of data
@@ -152,7 +153,7 @@ class ProjectStore {
         };
 
         try {
-          await dataOrchestrator.onFileAdded(fileCopy);
+          await dataOrchestratorService.onFileAdded(fileCopy);
         } catch (error) {
           logger.error('Failed to process file', LogCategory.PROJECT, error);
 
@@ -194,7 +195,7 @@ class ProjectStore {
       }
     };
 
-    await dataOrchestrator.onFileRemoved(fileId);
+    await dataOrchestratorService.onFileRemoved(fileId);
 
     this._state.isDirty = true;
     await this.saveCurrentProject();
@@ -232,7 +233,7 @@ class ProjectStore {
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
-    await dataOrchestrator.onProjectChanged();
+    await dataOrchestratorService.onProjectChanged();
   }
 
   async loadProject(id: string): Promise<void> {
@@ -247,7 +248,7 @@ class ProjectStore {
 
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
-      await dataOrchestrator.onProjectChanged();
+      await dataOrchestratorService.onProjectChanged();
     }
   }
 

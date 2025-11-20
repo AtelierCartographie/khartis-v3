@@ -285,6 +285,24 @@ export const createProjectActions = {
       return;
     }
 
+    // Read content of all files for persistence
+    const relatedFilesData: Record<string, ArrayBuffer> = {};
+    let shpContent: ArrayBuffer = new ArrayBuffer(0);
+
+    try {
+      for (const f of files) {
+        const buffer = await f.arrayBuffer();
+        relatedFilesData[f.name] = buffer;
+        if (f.name === shpFile.name) {
+          shpContent = buffer;
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to read shapefile content', LogCategory.DATA, error);
+      showError('Shapefile read failed', 'Could not read file content');
+      return;
+    }
+
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
@@ -296,7 +314,8 @@ export const createProjectActions = {
       relatedFiles: files.map((f) => f.name),
       relatedFileObjects: files,
       originalFile: shpFile,
-      content: new ArrayBuffer(0)
+      content: shpContent,
+      relatedFilesData
     };
 
     this.addUploadedFile(uploadedFile);
