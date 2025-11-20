@@ -847,6 +847,12 @@
   $effect(() => {
     selectedRowIds = new SvelteSet();
     selectAllVisible = false;
+    searchQuery = '';
+    replaceValue = '';
+    searchResults = [];
+    currentSearchIndex = 0;
+    sortColumn = null;
+    sortOrder = null;
 
     if (dataset || tableName) {
       untrack(async () => {
