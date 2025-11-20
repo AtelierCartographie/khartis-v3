@@ -1,40 +1,12 @@
 /**
- * Validation result value object
- *
- * Returned by validators to indicate success/failure and collect messages.
- *
- * @example
- * ```typescript
- * const result: ValidationResult = {
- *   isValid: false,
- *   errors: ['File too large: 60MB (max: 50MB)'],
- *   warnings: ['Large dataset may impact performance']
- * };
- * ```
+ * Outcome of a validation run.
  */
 export interface ValidationResult {
-  /**
-   * Whether validation passed
-   */
   isValid: boolean;
-
-  /**
-   * Validation errors (block processing)
-   */
   errors: string[];
-
-  /**
-   * Validation warnings (allow processing but inform user)
-   */
   warnings: string[];
 }
 
-/**
- * Create a successful validation result
- *
- * @param warnings - Optional warnings
- * @returns ValidationResult with isValid=true
- */
 export function validationSuccess(warnings: string[] = []): ValidationResult {
   return {
     isValid: true,
@@ -43,13 +15,6 @@ export function validationSuccess(warnings: string[] = []): ValidationResult {
   };
 }
 
-/**
- * Create a failed validation result
- *
- * @param errors - Validation errors
- * @param warnings - Optional warnings
- * @returns ValidationResult with isValid=false
- */
 export function validationFailure(
   errors: string[],
   warnings: string[] = []
@@ -62,13 +27,7 @@ export function validationFailure(
 }
 
 /**
- * Merge multiple validation results
- *
- * Result is valid only if ALL inputs are valid.
- * Errors and warnings are concatenated.
- *
- * @param results - Array of ValidationResult
- * @returns Merged ValidationResult
+ * Merge multiple validation results; all must be valid for the aggregate to pass.
  */
 export function mergeValidationResults(
   results: ValidationResult[]

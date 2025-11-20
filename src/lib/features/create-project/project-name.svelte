@@ -95,7 +95,6 @@
           : m.error_project_creation_failed();
       showError(m.error_project_creation_failed(), errorMessage);
     } finally {
-      // Always close modal and reset state, even on error
       isCreating = false;
       creationStep = '';
       globalState.isCreateProjectModalOpen = false;

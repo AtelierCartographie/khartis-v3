@@ -46,7 +46,6 @@
 
   const allBasemaps = $derived(basemapCatalogService.basemaps);
 
-  // Check if dataset has GPS coordinates (latitude/longitude columns)
   const hasGPSCoordinates = $derived(() => {
     if (!selectedDataset) return false;
 
@@ -88,26 +87,19 @@
   }
 
   function handleSelectBasemap(basemap: BasemapMetadata) {
-    // Clear OSM store when selecting regular basemap
     osmBasemapStore.clear();
     dataTabActions.selectBasemap(basemap.file);
   }
 
   function handleImportBasemap(basemap: BasemapMetadata) {
-    // Add custom basemap to catalog service
     basemapCatalogService.addCustomBasemap(basemap);
-    // Clear OSM store when selecting custom basemap
     osmBasemapStore.clear();
-    // Select it
     dataTabActions.selectBasemap(basemap.file);
   }
 
   function handleSelectOSM(basemap: BasemapMetadata) {
-    // Add OSM basemap to catalog service
     basemapCatalogService.addCustomBasemap(basemap);
-    // Activate OSM raster layer
     osmBasemapStore.setOSMBasemap(basemap);
-    // Select it
     dataTabActions.selectBasemap(basemap.file);
   }
 

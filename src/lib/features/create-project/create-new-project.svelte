@@ -99,7 +99,6 @@
     }
   };
 
-  // Reactive validation states
   const urlValidation = $derived(
     onlineUrlValue.trim()
       ? CreateProjectValidationService.validateURL(onlineUrlValue)

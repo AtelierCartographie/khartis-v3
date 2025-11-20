@@ -3,24 +3,14 @@ import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import type { BasemapAttribute } from '../types/basemap.types';
 
-/**
- * Escape SQL identifier (table/column names) by doubling quotes
- */
 function escapeIdentifier(name: string): string {
   return name.replace(/"/g, '""');
 }
 
-/**
- * Escape SQL string literal by doubling single quotes
- */
 function escapeLiteral(value: string): string {
   return value.replace(/'/g, "''");
 }
 
-/**
- * Generate normalized attributes for a custom basemap to enable fuzzy matching
- * Extracts candidate columns (name, id, code) and normalizes them for join operations
- */
 export async function generateCustomBasemapAttributes(
   tableName: string,
   basemapId: string
@@ -31,7 +21,6 @@ export async function generateCustomBasemapAttributes(
   }
 
   try {
-    // Create custom attributes table if it doesn't exist
     await duck.query(`
       CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
         raw VARCHAR,
@@ -43,14 +32,11 @@ export async function generateCustomBasemapAttributes(
       )
     `);
 
-    // Escape table name for safe SQL queries
     const safeTableName = escapeIdentifier(tableName);
     const safeBasemapId = escapeLiteral(basemapId);
 
-    // Analyze columns to find candidates for attribute extraction
     const columns = await duck.analyse(tableName);
 
-    // Filter candidate columns (common geographic identifiers)
     const candidateColumns = columns.filter((col) => {
       const name = col.name.toLowerCase();
       return (
@@ -62,21 +48,18 @@ export async function generateCustomBasemapAttributes(
     });
 
     if (candidateColumns.length === 0) {
-      // Fallback: use first text column
       const textColumn = columns.find((col) => col.type_simple === 'string');
       if (textColumn) {
         candidateColumns.push(textColumn);
       }
     }
 
-    // Get total count for basemap_count field
     const countQuery = (await duck.query(
       `SELECT COUNT(*) as total FROM "${safeTableName}"`,
       { format: 'array', useProxy: false }
     )) as Array<{ total: number }>;
     const totalCount = Number(countQuery?.[0]?.total ?? 0);
 
-    // Filter columns with too many nulls
     const validColumns = candidateColumns.filter((col) => {
       const nullCount = Number(col.nulls ?? 0);
       const recordCount = Number(col.count ?? 0);
@@ -90,7 +73,6 @@ export async function generateCustomBasemapAttributes(
       return;
     }
 
-    // Generate normalized attributes for all columns in a single batched query
     const unionQueries = validColumns.map((col) => {
       const safeColName = escapeIdentifier(col.name);
       const safeVariantName = escapeLiteral(col.name);
@@ -116,7 +98,6 @@ export async function generateCustomBasemapAttributes(
       `;
     });
 
-    // Execute single batched INSERT with UNION ALL
     await duck.query(`
       INSERT INTO custom_basemap_attributes
       ${unionQueries.join('\nUNION ALL\n')}
@@ -131,9 +112,6 @@ export async function generateCustomBasemapAttributes(
   }
 }
 
-/**
- * Clear custom basemap attributes (useful for cleanup)
- */
 export async function clearCustomBasemapAttributes(
   basemapId?: string
 ): Promise<void> {
@@ -160,9 +138,6 @@ export async function clearCustomBasemapAttributes(
   }
 }
 
-/**
- * Get all attributes for a basemap (for debugging)
- */
 export async function getBasemapAttributes(
   basemapId: string
 ): Promise<BasemapAttribute[]> {

@@ -32,13 +32,17 @@
         );
 
         if (duckDBDataset?.tableName) {
-          const arrowTable = await duckDBOrchestrator.getArrowTableDirect(
-            duckDBDataset.tableName
-          );
+          const arrowTable = duckDBDataset.arrowTableWithMetadata
+            ? duckDBDataset.arrowTableWithMetadata
+            : await duckDBOrchestrator.getArrowTableDirect(
+                duckDBDataset.tableName
+              );
+
           if (arrowTable) {
             logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
               tableName: duckDBDataset.tableName,
               rows: arrowTable.numRows,
+              cached: Boolean(duckDBDataset.arrowTableWithMetadata),
               durationMs: (performance.now() - start).toFixed(2)
             });
             return arrowTable;
@@ -94,9 +98,7 @@
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
           if (result) {
-            // Check if result is ArrowTable or GeoJSON
             if ('numRows' in result) {
-              // ArrowTable
               displayTable = result;
               displayGeoJSON = null;
               logger.info(
@@ -107,7 +109,6 @@
                 }
               );
             } else if ('features' in result) {
-              // GeoJSON
               displayTable = null;
               displayGeoJSON = result;
               logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
@@ -135,13 +136,10 @@
     if (selectedDataset?.geometry) {
       const result = await convertDatasetToGeoJSON(selectedDataset);
       if (result) {
-        // Check if result is ArrowTable or GeoJSON
         if ('numRows' in result) {
-          // ArrowTable
           displayTable = result;
           displayGeoJSON = null;
         } else if ('features' in result) {
-          // GeoJSON
           displayTable = null;
           displayGeoJSON = result;
         }

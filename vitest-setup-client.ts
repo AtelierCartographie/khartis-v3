@@ -25,7 +25,7 @@ vi.mock('$lib/features/duckdb', () => ({
 vi.mock(
   '$lib/features/commons/services/data-orchestrator.service.svelte',
   () => ({
-    dataOrchestrator: {
+    dataOrchestratorService: {
       initialize: vi.fn().mockResolvedValue(undefined),
       processData: vi.fn().mockResolvedValue(null)
     }

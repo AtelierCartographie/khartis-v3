@@ -13,9 +13,7 @@ import {
   getFilenameFromUrl,
   groupShapefiles,
   isShapefileComponent,
-  isValidUrl,
-  parseShapefile,
-  readFileContent
+  isValidUrl
 } from '../utils/file-import.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
@@ -210,8 +208,8 @@ export const createProjectActions = {
       onStatusChange: (
         fileId: string,
         status: UploadedFile['status'],
-        _errorMessage?: string
-      ) => this.updateFileStatus(fileId, status, _errorMessage),
+        errorMessage?: string
+      ) => this.updateFileStatus(fileId, status, errorMessage),
       onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
         this.updateFileData(fileId, data)
     };
@@ -269,47 +267,58 @@ export const createProjectActions = {
       return;
     }
 
+    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'));
+
+    if (!shpFile) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: baseName,
+        size: files.reduce((sum, f) => sum + f.size, 0),
+        type: 'application/x-shapefile',
+        fileType: FileType.SHAPEFILE,
+        status: 'error',
+        errorMessage: 'Missing .shp file in shapefile set',
+        sourceType
+      };
+      this.addUploadedFile(errorFile);
+      showError('Shapefile processing failed', 'No .shp file found');
+      return;
+    }
+
+    // Read content of all files for persistence
+    const relatedFilesData: Record<string, ArrayBuffer> = {};
+    let shpContent: ArrayBuffer = new ArrayBuffer(0);
+
+    try {
+      for (const f of files) {
+        const buffer = await f.arrayBuffer();
+        relatedFilesData[f.name] = buffer;
+        if (f.name === shpFile.name) {
+          shpContent = buffer;
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to read shapefile content', LogCategory.DATA, error);
+      showError('Shapefile read failed', 'Could not read file content');
+      return;
+    }
+
     const uploadedFile: UploadedFile = {
       id: crypto.randomUUID(),
       name: baseName + '.shp',
       size: files.reduce((sum, f) => sum + f.size, 0),
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
-      status: 'processing',
+      status: 'complete',
       sourceType,
-      relatedFiles: files.map((f) => f.name)
+      relatedFiles: files.map((f) => f.name),
+      relatedFileObjects: files,
+      originalFile: shpFile,
+      content: shpContent,
+      relatedFilesData
     };
 
     this.addUploadedFile(uploadedFile);
-
-    try {
-      const fileContents: Record<string, ArrayBuffer> = {};
-      for (const file of files) {
-        const content = await readFileContent(file);
-        if (content instanceof ArrayBuffer) {
-          const extension = file.name.split('.').pop()?.toLowerCase() || '';
-          fileContents[extension] = content;
-        }
-      }
-
-      const geojson = await parseShapefile(fileContents, (progress) => {
-        this.updateFileProgress(uploadedFile.id, progress);
-      });
-
-      this.updateFileData(uploadedFile.id, {
-        parsedData: geojson as UploadedFile['parsedData'],
-        content: JSON.stringify(geojson),
-        status: 'complete'
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to process shapefile';
-      this.updateFileData(uploadedFile.id, {
-        status: 'error',
-        errorMessage: message
-      });
-      showError('Shapefile processing failed', message, error);
-    }
   },
 
   async processPastedData(pastedText: string): Promise<void> {
@@ -330,25 +339,32 @@ export const createProjectActions = {
       counter++;
     }
 
-    const uploadedFile: UploadedFile = {
-      id: crypto.randomUUID(),
-      name: fileName,
-      size: new Blob([pastedText]).size,
-      type: fileType === FileType.CSV ? 'text/csv' : 'application/json',
-      fileType,
-      status: validation.isValid ? 'complete' : 'error',
-      content: pastedText,
-      validation,
-      sourceType: DataSourceType.PASTE,
-      errorMessage: validation.isValid ? undefined : validation.errors[0]
-    };
+    const file = new File([pastedText], fileName, {
+      type: fileType === FileType.CSV ? 'text/csv' : 'application/json'
+    });
 
-    this.addUploadedFile(uploadedFile);
-    this.setPastedData('');
-
+    // If validation fails, surface the error and add an errored entry for visibility.
     if (!validation.isValid) {
+      const errorFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: fileName,
+        size: file.size,
+        type: file.type,
+        fileType,
+        status: 'error',
+        content: pastedText,
+        validation,
+        sourceType: DataSourceType.PASTE,
+        errorMessage: validation.errors[0]
+      };
+      this.addUploadedFile(errorFile);
       showError('Invalid pasted data', validation.errors[0]);
+      this.setPastedData('');
+      return;
     }
+
+    await this.processSingleFile(file, DataSourceType.PASTE);
+    this.setPastedData('');
   },
 
   removeUploadedFile(fileId: string): void {

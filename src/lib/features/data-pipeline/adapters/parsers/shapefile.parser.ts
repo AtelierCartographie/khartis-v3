@@ -1,23 +1,12 @@
+import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { IParser } from '../../contracts/parser';
 import { ParserError } from '../../contracts/parser';
 import type { RawDataset } from '../../models/raw-dataset';
-import type {
-  GeoJSONFeatureCollection,
-  GeoJSONFeature
-} from './geojson.parser';
-import { convertGeoJSONToRawDataset } from './geojson.parser';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import shp from 'shpjs';
-import type shpjs from 'shpjs';
-import type { Feature as GeoJSONLibFeature } from 'geojson';
 
 /**
- * Shapefile Parser
- *
- * Accepts zipped shapefiles (recommended) and transforms them into the
- * internal RawDataset structure by converting the geometry to GeoJSON.
- * Bare .shp uploads without their companion files are rejected with an
- * explicit error explaining how to proceed.
+ * Parses shapefiles (including zipped bundles) through DuckDB's ST_Read.
  */
 export class ShapefileParser implements IParser {
   readonly supportedExtensions = ['.shp', '.zip'];
@@ -30,102 +19,193 @@ export class ShapefileParser implements IParser {
   }
 
   async parse(file: File): Promise<RawDataset> {
+    const start = performance.now();
+    let tableName: string | undefined;
+
     try {
-      const start = performance.now();
-      logger.info('Parsing shapefile', LogCategory.DATA, {
-        fileName: file.name
+      logger.info('Parsing shapefile with DuckDB ST_Read', LogCategory.DATA, {
+        fileName: file.name,
+        fileSize: file.size
       });
 
-      const geojson = await this.toGeoJSON(file);
-      const dataset = convertGeoJSONToRawDataset(geojson);
-      logger.success('Shapefile parsed', LogCategory.DATA, {
-        fileName: file.name,
-        rows: dataset.rows.length,
-        columns: dataset.columns.length,
-        durationMs: (performance.now() - start).toFixed(2)
+      await initDuckDB();
+      if (!Duck) {
+        throw new DuckDBError('DuckDB not initialized');
+      }
+
+      const baseTableName = file.name
+        .replace(/\.[^.]+$/, '')
+        .replace(/[^a-zA-Z0-9_]/g, '_');
+      tableName = `shp_${baseTableName}_${Date.now()}`;
+
+      await Duck.read_geofile(file, {
+        tablename: tableName,
+        meta: false
       });
-      return dataset;
+
+      const columnsInfo = (await Duck.query(
+        `
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = '${tableName}'
+        ORDER BY ordinal_position
+      `,
+        { format: 'array' }
+      )) as Array<{ column_name: string; data_type: string }>;
+
+      const [{ count: rowCount }] = (await Duck.query(
+        `
+        SELECT COUNT(*) as count FROM ${tableName}
+      `,
+        { format: 'array' }
+      )) as Array<{ count: number }>;
+
+      const headers = columnsInfo
+        .filter((col) => col.data_type !== 'GEOMETRY')
+        .map((col) => col.column_name);
+
+      const geometryColumn = columnsInfo.find(
+        (col) => col.data_type === 'GEOMETRY'
+      );
+
+      // Limit sample for type inference compatibility.
+      const sampleSize = Math.min(1000, Number(rowCount));
+      const sampleData = (await Duck.query(
+        `
+        SELECT * FROM ${tableName} LIMIT ${sampleSize}
+      `,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
+
+      const rows: unknown[][] = sampleData.map((row) =>
+        headers.map((header) => row[header] ?? null)
+      );
+
+      const columns = headers.map((name) => ({
+        name,
+        values: sampleData.map((row) => row[name] ?? null)
+      }));
+
+      let geometryType: string | undefined;
+      let bounds: [number, number, number, number] | undefined;
+
+      if (geometryColumn) {
+        const [geomInfo] = (await Duck.query(
+          `
+          WITH bbox AS (
+            SELECT ST_Extent(${geometryColumn.column_name}) AS extent
+            FROM ${tableName}
+          ),
+          first_geom AS (
+            SELECT ${geometryColumn.column_name} AS geom
+            FROM ${tableName}
+            WHERE ${geometryColumn.column_name} IS NOT NULL
+            LIMIT 1
+          )
+          SELECT
+            ST_GeometryType((SELECT geom FROM first_geom)) AS geom_type,
+            ST_XMin(extent) AS minX,
+            ST_YMin(extent) AS minY,
+            ST_XMax(extent) AS maxX,
+            ST_YMax(extent) AS maxY
+          FROM bbox
+        `,
+          { format: 'array' }
+        )) as Array<{
+          geom_type: string;
+          minX: number | null;
+          minY: number | null;
+          maxX: number | null;
+          maxY: number | null;
+        }>;
+
+        if (geomInfo) {
+          geometryType = geomInfo.geom_type;
+          if (
+            geomInfo.minX !== null &&
+            geomInfo.minY !== null &&
+            geomInfo.maxX !== null &&
+            geomInfo.maxY !== null
+          ) {
+            bounds = [
+              geomInfo.minX,
+              geomInfo.minY,
+              geomInfo.maxX,
+              geomInfo.maxY
+            ];
+          }
+        }
+      }
+
+      logger.success(
+        'Shapefile parsed successfully with DuckDB',
+        LogCategory.DATA,
+        {
+          fileName: file.name,
+          rows: rowCount,
+          columns: headers.length,
+          geometryType,
+          tableName,
+          durationMs: (performance.now() - start).toFixed(2)
+        }
+      );
+
+      return {
+        headers,
+        rows,
+        columns,
+        metadata: {
+          rowCount: Number(rowCount),
+          columnCount: headers.length,
+          fileType: 'shapefile',
+          duckdbTableName: tableName,
+          geometryType,
+          bounds,
+          hasGeometry: !!geometryColumn
+        }
+      };
     } catch (error) {
+      if (tableName && Duck) {
+        try {
+          await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
+        } catch (cleanupError) {
+          logger.warn(
+            'Failed to clean up table after error',
+            LogCategory.DATA,
+            {
+              tableName,
+              error: cleanupError
+            }
+          );
+        }
+      }
+
       if (error instanceof ParserError) {
         throw error;
       }
 
-      logger.error('Failed to parse shapefile', LogCategory.DATA, error);
+      // Check for specific shapefile errors
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      if (errorMessage.includes('companion files')) {
+        throw new ParserError(
+          'Shapefile requires companion files (.shx, .dbf). Please upload a zipped shapefile with all required files.',
+          error,
+          'shapefile'
+        );
+      }
+
+      logger.error(
+        'Failed to parse shapefile with DuckDB',
+        LogCategory.DATA,
+        error
+      );
       throw new ParserError(
-        `Failed to parse shapefile: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to parse shapefile: ${errorMessage}`,
         error,
         'shapefile'
       );
     }
-  }
-
-  private async toGeoJSON(file: File): Promise<GeoJSONFeatureCollection> {
-    const extension = file.name.split('.').pop()?.toLowerCase();
-
-    if (extension === 'zip') {
-      return this.parseZipShapefile(file);
-    }
-
-    if (extension === 'shp') {
-      return this.parseLooseComponents(file);
-    }
-
-    throw new ParserError(
-      `Unsupported shapefile extension ".${extension}"`,
-      undefined,
-      'shapefile'
-    );
-  }
-
-  private async parseZipShapefile(
-    file: File
-  ): Promise<GeoJSONFeatureCollection> {
-    const buffer = await file.arrayBuffer();
-    type ShpResult =
-      | shpjs.FeatureCollectionWithFilename
-      | shpjs.FeatureCollectionWithFilename[];
-    const result = (await shp(buffer)) as ShpResult;
-
-    if (Array.isArray(result)) {
-      if (result.length === 0) {
-        throw new ParserError(
-          'Shapefile archive does not contain any layers',
-          undefined,
-          'shapefile'
-        );
-      }
-      return this.normalizeFeatureCollection(result[0]);
-    }
-
-    return this.normalizeFeatureCollection(result);
-  }
-
-  private async parseLooseComponents(
-    _file: File
-  ): Promise<GeoJSONFeatureCollection> {
-    throw new ParserError(
-      'Incomplete shapefile provided. Upload the zipped bundle (.zip) that contains .shp/.dbf/.shx/.prj files.',
-      undefined,
-      'shapefile'
-    );
-  }
-
-  private normalizeFeatureCollection(
-    collection: shpjs.FeatureCollectionWithFilename
-  ): GeoJSONFeatureCollection {
-    return {
-      type: 'FeatureCollection',
-      features: collection.features.map((feature) =>
-        this.normalizeFeature(feature)
-      )
-    };
-  }
-
-  private normalizeFeature(feature: GeoJSONLibFeature): GeoJSONFeature {
-    return {
-      type: 'Feature',
-      geometry: feature.geometry ?? null,
-      properties: feature.properties ?? undefined
-    };
   }
 }

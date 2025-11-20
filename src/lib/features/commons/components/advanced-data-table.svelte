@@ -1,42 +1,42 @@
 <script lang="ts">
   // eslint-disable svelte/no-unnecessary-state-wrap
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import {
+    duckDBOrchestrator,
+    RefineOperation,
+    type AnalysisResult,
+    type DataTableFilter,
+    type FilterOperator,
+    type FilterStats
+  } from '$lib/features/duckdb';
+  import {
+    create_summary_plot,
+    type CategoricalHistogram,
+    type NumericHistogram,
+    type SummaryPlotData
+  } from '$lib/features/duckdb/services/duckdb/summary-plot';
+  import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
+  import {
+    Button,
     OverflowMenu,
     OverflowMenuItem,
     Search,
-    TextInput,
-    Button,
-    TextArea
+    TextArea,
+    TextInput
   } from 'carbon-components-svelte';
   import {
-    ChevronUp,
     ChevronLeft,
     ChevronRight,
+    ChevronUp,
     Close,
     View,
     ViewOff
   } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-  import {
-    duckDBOrchestrator,
-    RefineOperation,
-    type DataTableFilter,
-    type FilterOperator,
-    type FilterStats,
-    type AnalysisResult
-  } from '$lib/features/duckdb';
-  import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import { logger, LogCategory } from '../utils/logger';
-  import {
-    create_summary_plot,
-    type SummaryPlotData,
-    type NumericHistogram,
-    type CategoricalHistogram
-  } from '$lib/features/duckdb/services/duckdb/summary-plot';
-  import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
+  import { LogCategory, logger } from '../utils/logger';
   import ColumnRenameModal from './column-rename-modal.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
   type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -197,6 +197,7 @@
   }
 
   async function initializeRows(start: number) {
+    tableData = [];
     const end = numRows - start;
     const length = Math.min(end, maxRows * 2);
     rows = createIndexArray(length, start);
@@ -846,6 +847,12 @@
   $effect(() => {
     selectedRowIds = new SvelteSet();
     selectAllVisible = false;
+    searchQuery = '';
+    replaceValue = '';
+    searchResults = [];
+    currentSearchIndex = 0;
+    sortColumn = null;
+    sortOrder = null;
 
     if (dataset || tableName) {
       untrack(async () => {

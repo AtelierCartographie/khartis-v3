@@ -21,6 +21,7 @@ import {
   FixedSizeList,
   Float64,
   List,
+  Schema,
   Table,
   Type,
   makeBuilder,
@@ -82,13 +83,14 @@ export interface DuckDBDataset {
     fileType: FileType;
   };
   geoDetection?: GeoDetectionResult;
-  // Keep the GeoParquet-derived Arrow table so GeoArrow metadata stays intact.
   arrowTableWithMetadata?: Table;
   geoArrowMetadata?: GeoArrowMetadata;
 }
 
 class DuckDBOrchestratorService {
   private initialized = false;
+
+  private initPromise: Promise<void> | null = null;
 
   private _state = $state<{
     datasets: SvelteMap<string, DuckDBDataset>;
@@ -152,28 +154,38 @@ class DuckDBOrchestratorService {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
+    if (this.initPromise) {
+      await this.initPromise;
+      return;
+    }
+
     const start = performance.now();
     logger.info(
       'Starting DuckDB orchestrator initialization',
       LogCategory.DUCKDB
     );
-    try {
-      await initDuckDB();
-      this.initialized = true;
-      logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } catch (error) {
-      logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
-      showError('DuckDB initialization failed', 'Please refresh the page');
-      throw error;
-    }
+
+    this.initPromise = (async () => {
+      try {
+        await initDuckDB();
+        this.initialized = true;
+        logger.success('DuckDB orchestrator initialized', LogCategory.DUCKDB, {
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+      } catch (error) {
+        this.initPromise = null; // allow retry after failure
+        logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
+        showError('DuckDB initialization failed', 'Please refresh the page');
+        throw error;
+      }
+    })();
+
+    await this.initPromise;
   }
 
   async waitForInitialization(): Promise<void> {
     if (this.initialized) return;
 
-    // Wait for initialization to complete
     await this.initialize();
   }
 
@@ -200,6 +212,24 @@ class DuckDBOrchestratorService {
         sourceFileId
       });
 
+      // Check if table actually exists in DuckDB (might be lost after page reload)
+      const tableCheck = (await Duck.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
+        { format: 'array' }
+      )) as Array<{ table_name: string }>;
+
+      if (!tableCheck || tableCheck.length === 0) {
+        logger.warn(
+          'Table does not exist in DuckDB, needs re-processing',
+          LogCategory.DUCKDB,
+          {
+            tableName,
+            sourceFileId
+          }
+        );
+        return null;
+      }
+
       const columns = await Duck.analyse(tableName);
       const rowCount = await this.getRowCount(tableName);
 
@@ -221,7 +251,7 @@ class DuckDBOrchestratorService {
         datasets.set(dataset.id, dataset);
       });
 
-      void this.prefetchArrowMetadata(dataset);
+      await this.prefetchArrowMetadata(dataset);
 
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
@@ -272,6 +302,8 @@ class DuckDBOrchestratorService {
         result = await this.processGeoPackage(file, tableName);
       } else if (file.fileType === FileType.GEOPARQUET) {
         result = await this.processGeoParquet(file, tableName);
+      } else if (file.fileType === FileType.SHAPEFILE) {
+        result = await this.processShapefile(file, tableName);
       } else {
         logger.warn(
           'Unsupported file type for DuckDB ingestion',
@@ -365,7 +397,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = finalTableName;
 
@@ -450,12 +482,11 @@ class DuckDBOrchestratorService {
       const actualTableName =
         typeof resultTableName === 'string' ? resultTableName : tableName;
 
-      const columns = await Duck.analyse(actualTableName);
+      const [columns, rowCount] = await Promise.all([
+        Duck.analyse(actualTableName),
+        this.getRowCount(actualTableName)
+      ]);
 
-      const rowCount = await this.getRowCount(actualTableName);
-
-      const { arrowTableWithMetadata, geoArrowMetadata } =
-        await this.createArrowTableWithMetadata(actualTableName);
       const dataset: DuckDBDataset = {
         id: crypto.randomUUID(),
         tableName: actualTableName,
@@ -467,15 +498,15 @@ class DuckDBOrchestratorService {
           processedAt: new Date(),
           fileType: file.fileType
         },
-        geoDetection: file.deepAnalysis?.geoDetection,
-        arrowTableWithMetadata,
-        geoArrowMetadata: geoArrowMetadata ?? undefined
+        geoDetection: file.deepAnalysis?.geoDetection
       };
 
       this.updateDatasets((datasets) => {
         datasets.set(dataset.id, dataset);
       });
-      void this.prefetchArrowMetadata(dataset);
+
+      // Prefetch Arrow metadata and wait for it to complete.
+      await this.prefetchArrowMetadata(dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = actualTableName;
 
@@ -545,7 +576,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = actualTableName;
 
@@ -594,10 +625,11 @@ class DuckDBOrchestratorService {
       ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
     `);
 
-    const columns = await Duck.analyse(tableName);
-    const rowCount = await this.getRowCount(tableName);
-    const { arrowTableWithMetadata, geoArrowMetadata } =
-      await this.createArrowTableWithMetadata(tableName);
+    // Parallelize column analysis and row count
+    const [columns, rowCount] = await Promise.all([
+      Duck.analyse(tableName),
+      this.getRowCount(tableName)
+    ]);
 
     const dataset: DuckDBDataset = {
       id: crypto.randomUUID(),
@@ -611,14 +643,17 @@ class DuckDBOrchestratorService {
         fileType: file.fileType
       },
       geoDetection: file.deepAnalysis?.geoDetection,
-      arrowTableWithMetadata,
-      geoArrowMetadata: geoArrowMetadata ?? undefined
+      // We already have geoMetadata from the GeoParquet file
+      geoArrowMetadata: geoMetadata ?? undefined
+      // Don't create Arrow table here - let it be created on demand
     };
 
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+
+    // Prefetch Arrow table and wait for it to complete
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
@@ -688,7 +723,7 @@ class DuckDBOrchestratorService {
       this.updateDatasets((datasets) => {
         datasets.set(dataset.id, dataset);
       });
-      void this.prefetchArrowMetadata(dataset);
+      await this.prefetchArrowMetadata(dataset);
       this.bumpDatasetsVersion();
       this._state.currentTableName = tableName;
 
@@ -748,7 +783,7 @@ class DuckDBOrchestratorService {
     this.updateDatasets((datasets) => {
       datasets.set(dataset.id, dataset);
     });
-    void this.prefetchArrowMetadata(dataset);
+    await this.prefetchArrowMetadata(dataset);
     this.bumpDatasetsVersion();
     this._state.currentTableName = tableName;
 
@@ -1099,7 +1134,9 @@ class DuckDBOrchestratorService {
     }
 
     const columns = await Duck.analyse(tableName);
-    if (columns.some((col) => col.name === sanitizedColumnName)) {
+    if (
+      columns.some((col: AnalysisResult) => col.name === sanitizedColumnName)
+    ) {
       throw new DuckDBError(
         `La colonne "${sanitizedColumnName}" existe déjà`,
         undefined,
@@ -1237,6 +1274,28 @@ class DuckDBOrchestratorService {
     );
   }
 
+  private async ensureFileObject(
+    file: UploadedFile,
+    fallbackMime: string
+  ): Promise<File> {
+    if (file.originalFile) {
+      return file.originalFile;
+    }
+
+    if (file.content instanceof ArrayBuffer) {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    if (typeof file.content === 'string') {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    throw new ParseError('Missing original file content', file.fileType, {
+      fileId: file.id,
+      fileName: file.name
+    });
+  }
+
   /**
    * Re-materialize a DuckDB table as GeoParquet and read it back to keep GeoArrow metadata intact.
    * DuckDB drops metadata when querying directly, hence the GeoParquet round trip.
@@ -1250,32 +1309,106 @@ class DuckDBOrchestratorService {
     }
 
     try {
-      // Query DuckDB for geometry column info
-      const tableInfo = await Duck.describe_table(tableName);
-      const columns = tableInfo.name.map((name, index) => ({
-        column_name: name,
-        column_type: tableInfo.type[index]
-      }));
+      // Check if we already have cached metadata for this table
+      const dataset = Array.from(this._state.datasets.values()).find(
+        (d) => d.tableName === tableName
+      );
 
-      const geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+      let geomColumn: { column_name: string; column_type: string } | undefined;
+      let geometryType: string;
 
-      if (!geomColumn) {
-        return table;
+      // Use cached metadata if available
+      if (dataset?.geoArrowMetadata) {
+        const primaryColumn = dataset.geoArrowMetadata.primary_column;
+        geomColumn = { column_name: primaryColumn, column_type: 'GEOMETRY' };
+        const columnMeta = dataset.geoArrowMetadata.columns[primaryColumn];
+        geometryType = columnMeta?.geometry_types?.[0] || 'GEOMETRY';
+        if (!geometryType.startsWith('ST_')) {
+          geometryType = 'ST_' + geometryType;
+        }
+
+        logger.debug('Using cached geometry metadata', LogCategory.DUCKDB, {
+          tableName,
+          geometryType
+        });
+      } else {
+        // Only query if not cached
+        const tableInfo = await Duck.describe_table(tableName);
+        const columns = tableInfo.name.map((name: string, index: number) => ({
+          column_name: name,
+          column_type: tableInfo.type[index]
+        }));
+
+        geomColumn = columns.find(
+          (c: { column_type: string }) => c.column_type === 'GEOMETRY'
+        );
+
+        if (!geomColumn) {
+          logger.warn(
+            'No geometry column found in DuckDB table',
+            LogCategory.DUCKDB,
+            { tableName }
+          );
+          return table;
+        }
+
+        // Query all distinct geometry types to handle mixed geometries
+        const geomTypeResult = (await Duck.query(
+          `SELECT DISTINCT ST_GeometryType(${geomColumn.column_name}) as geom_type
+           FROM ${tableName}
+           WHERE ${geomColumn.column_name} IS NOT NULL`,
+          { format: 'array' as never }
+        )) as Array<{ geom_type: string }>;
+
+        const types = geomTypeResult.map((r) => r.geom_type);
+
+        // Normalize to Multi* variant if mixed types found
+        if (types.length === 0) {
+          geometryType = 'GEOMETRY';
+        } else if (types.length === 1) {
+          geometryType = types[0];
+        } else {
+          // Mixed types detected - normalize to Multi* variant
+          const hasPoint = types.some((t) => t === 'ST_Point' || t === 'POINT');
+          const hasMultiPoint = types.some(
+            (t) => t === 'ST_MultiPoint' || t === 'MULTIPOINT'
+          );
+          const hasLineString = types.some(
+            (t) => t === 'ST_LineString' || t === 'LINESTRING'
+          );
+          const hasMultiLineString = types.some(
+            (t) => t === 'ST_MultiLineString' || t === 'MULTILINESTRING'
+          );
+          const hasPolygon = types.some(
+            (t) => t === 'ST_Polygon' || t === 'POLYGON'
+          );
+          const hasMultiPolygon = types.some(
+            (t) => t === 'ST_MultiPolygon' || t === 'MULTIPOLYGON'
+          );
+
+          if (hasPolygon || hasMultiPolygon) {
+            geometryType = 'MULTIPOLYGON';
+          } else if (hasLineString || hasMultiLineString) {
+            geometryType = 'MULTILINESTRING';
+          } else if (hasPoint || hasMultiPoint) {
+            geometryType = 'MULTIPOINT';
+          } else {
+            geometryType = 'GEOMETRY';
+          }
+
+          logger.info(
+            'Mixed geometry types detected, normalized to Multi* variant',
+            LogCategory.DUCKDB,
+            { tableName, detectedTypes: types, normalizedType: geometryType }
+          );
+        }
       }
 
-      // Get geometry type from first row
-      const geomTypeResult = (await Duck.query(
-        `SELECT ST_GeometryType(${geomColumn.column_name}) as geom_type FROM ${tableName} LIMIT 1`,
-        { format: 'array' as never }
-      )) as Array<{ geom_type: string }>;
-
-      const geometryType = geomTypeResult[0]?.geom_type || 'GEOMETRY';
       const normalizedGeometry = geometryType
         .replace(/^ST_/i, '')
         .toLowerCase();
       const geoarrowExtension = `geoarrow.${normalizedGeometry || 'geometry'}`;
 
-      // Create GeoArrow metadata
       const geoMetadata = {
         version: '1.0.0',
         primary_column: geomColumn.column_name,
@@ -1289,7 +1422,7 @@ class DuckDBOrchestratorService {
                 name: 'EPSG:4326'
               }
             },
-            bbox: [-180, -90, 180, 90] // Default world bounds
+            bbox: [-180, -90, 180, 90]
           }
         }
       };
@@ -1308,6 +1441,11 @@ class DuckDBOrchestratorService {
       const normalizedTable = conversionResult.table;
       const schema = normalizedTable.schema;
       if (!schema) {
+        logger.warn(
+          'Arrow table missing schema, cannot add GeoArrow metadata',
+          LogCategory.DUCKDB,
+          { tableName }
+        );
         return normalizedTable;
       }
 
@@ -1331,20 +1469,38 @@ class DuckDBOrchestratorService {
             crs: 'EPSG:4326'
           })
         );
+        // Convert SvelteMap to standard Map for Arrow Field compatibility
+        const fieldMetadataMap = new Map<string, string>(updatedMetadata);
+        // Keep the original field type to match RecordBatch schemas - only update metadata
         return new Field(
           field.name,
-          conversionResult.geometryDataType ?? field.type,
+          field.type,  // Keep original type, don't use conversionResult.geometryDataType
           field.nullable,
-          updatedMetadata
+          fieldMetadataMap
         );
       });
 
       const metadataMap = new Map<string, string>(newMetadata);
-      (schema as unknown as { metadata: Map<string, string> }).metadata =
-        metadataMap;
-      (schema as unknown as { fields: Field[] }).fields = updatedFields;
 
-      return normalizedTable;
+      // Create a new Schema with updated fields and metadata
+      const newSchema = new Schema(updatedFields, metadataMap);
+
+      // Create a new Table with the updated schema
+      const tableWithMetadata = new Table(newSchema, normalizedTable.batches);
+
+      logger.debug(
+        'Added GeoArrow metadata to Arrow table',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          geometryType,
+          geoarrowExtension,
+          hasSchemaMetadata: !!tableWithMetadata.schema.metadata,
+          geoFieldMetadata: updatedFields.find(f => f.name === geomColumn.column_name)?.metadata
+        }
+      );
+
+      return tableWithMetadata;
     } catch (error) {
       logger.error(
         'Failed to add GeoArrow metadata from DuckDB',
@@ -1364,7 +1520,6 @@ class DuckDBOrchestratorService {
     }
 
     const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
-
     const arrowTableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
       arrowTable,
       tableName
@@ -1372,7 +1527,15 @@ class DuckDBOrchestratorService {
     const geoArrowMetadata = geoParquetReader.extractMetadata(
       arrowTableWithMetadata
     );
-
+    if (!geoArrowMetadata) {
+      logger.warn(
+        'GeoArrow metadata missing after conversion',
+        LogCategory.DUCKDB,
+        {
+          tableName
+        }
+      );
+    }
     return { arrowTableWithMetadata, geoArrowMetadata };
   }
 
@@ -1413,31 +1576,17 @@ class DuckDBOrchestratorService {
       throw new DuckDBError('DuckDB not initialized');
     }
 
-    try {
-      const buffer = (await Duck.query(
-        `SELECT * REPLACE (
+    const buffer = (await Duck.query(
+      `SELECT * REPLACE (
           ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
         )
         FROM ${tableName}`,
-        { format: 'arrow-ipc' as never }
-      )) as ArrayBuffer | Uint8Array;
+      { format: 'arrow-ipc' as never }
+    )) as ArrayBuffer | Uint8Array;
 
-      const ipcBuffer =
-        buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-      const wkbTable = tableFromIPC(ipcBuffer);
-      return wkbTable;
-    } catch (error) {
-      logger.error(
-        'Failed to convert geometry column to WKB',
-        LogCategory.DUCKDB,
-        {
-          tableName,
-          geometryColumn,
-          error
-        }
-      );
-      throw error;
-    }
+    const ipcBuffer =
+      buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    return tableFromIPC(ipcBuffer);
   }
 
   async exportTableToGeoParquet(tableName: string): Promise<Uint8Array> {
@@ -1489,11 +1638,37 @@ class DuckDBOrchestratorService {
       await this.initialize();
     }
 
-    const arrowTable = await this.fetchArrowTableWithGeometry(tableName);
+    // Check cache first
+    for (const dataset of this._state.datasets.values()) {
+      if (dataset.tableName === tableName && dataset.arrowTableWithMetadata) {
+        logger.debug(
+          'Using cached Arrow table with metadata',
+          LogCategory.DUCKDB,
+          {
+            tableName
+          }
+        );
+        return dataset.arrowTableWithMetadata;
+      }
+    }
+
+    // Not in cache, generate it
+    const baseTable = await this.fetchArrowTableWithGeometry(tableName);
     const tableWithMetadata = await this.addGeoArrowMetadataFromDuckDB(
-      arrowTable,
+      baseTable,
       tableName
     );
+
+    // Update cache for future use
+    for (const dataset of this._state.datasets.values()) {
+      if (dataset.tableName === tableName) {
+        dataset.arrowTableWithMetadata = tableWithMetadata;
+        logger.info('Cached Arrow table with metadata', LogCategory.DUCKDB, {
+          tableName
+        });
+        break;
+      }
+    }
 
     return tableWithMetadata;
   }
@@ -1555,7 +1730,37 @@ class DuckDBOrchestratorService {
       return existing;
     }
 
-    return Promise.resolve();
+    // Start prefetching the Arrow table in the background
+    const prefetchPromise = (async () => {
+      try {
+        logger.debug('Prefetching Arrow table metadata', LogCategory.DUCKDB, {
+          tableName: dataset.tableName
+        });
+
+        const { arrowTableWithMetadata, geoArrowMetadata } =
+          await this.createArrowTableWithMetadata(dataset.tableName);
+
+        // Update cache
+        dataset.arrowTableWithMetadata = arrowTableWithMetadata;
+        dataset.geoArrowMetadata = geoArrowMetadata || undefined;
+
+        logger.info('Prefetched Arrow table metadata', LogCategory.DUCKDB, {
+          tableName: dataset.tableName
+        });
+      } catch (error) {
+        logger.error(
+          'Failed to prefetch Arrow metadata',
+          LogCategory.DUCKDB,
+          error
+        );
+      } finally {
+        // Clean up the prefetch promise
+        this.metadataPrefetches.delete(dataset.tableName);
+      }
+    })();
+
+    this.metadataPrefetches.set(dataset.tableName, prefetchPromise);
+    return prefetchPromise;
   }
 
   getDataset(id: string): DuckDBDataset | undefined {
@@ -2115,6 +2320,95 @@ class DuckDBOrchestratorService {
       throw error;
     }
   }
+
+  private async processShapefile(
+    file: UploadedFile,
+    tableName: string
+  ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing Shapefile', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
+
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    // Register main .shp file
+    const shpFile = await this.ensureFileObject(
+      file,
+      'application/x-shapefile'
+    );
+
+    const companionFiles =
+      file.relatedFileObjects?.filter(
+        (f) => f.name.toLowerCase() !== shpFile.name.toLowerCase()
+      ) ?? [];
+
+    logger.debug('Shapefile registration details', LogCategory.DUCKDB, {
+      shpFileName: shpFile.name,
+      shpFileSize: shpFile.size,
+      relatedFiles: companionFiles.map((f) => ({
+        name: f.name,
+        size: f.size
+      }))
+    });
+
+    const shapefileComponents = [shpFile, ...companionFiles];
+
+    // Register everything together with a shared shapefile id so DuckDB can resolve sidecar files after reloads
+    await Duck.register_files(shapefileComponents, { shapefile: true });
+
+    if (companionFiles.length === 0) {
+      logger.warn(
+        'No companion files found for Shapefile - ingestion may fail',
+        LogCategory.DUCKDB
+      );
+    } else {
+      logger.debug(
+        `Registered ${companionFiles.length} companion files for Shapefile`,
+        LogCategory.DUCKDB
+      );
+    }
+
+    // Use ST_Read to ingest the shapefile
+    const resultTableName = await Duck.read_geofile(shpFile, {
+      tablename: tableName,
+      shapefile: true
+    });
+
+    const actualTableName =
+      typeof resultTableName === 'string' ? resultTableName : tableName;
+
+    const [columns, rowCount] = await Promise.all([
+      Duck.analyse(actualTableName),
+      this.getRowCount(actualTableName)
+    ]);
+
+    const dataset: DuckDBDataset = {
+      id: crypto.randomUUID(),
+      tableName: actualTableName,
+      sourceFileId: file.id,
+      name: file.name,
+      columns,
+      rowCount,
+      metadata: {
+        processedAt: new Date(),
+        fileType: file.fileType
+      },
+      geoDetection: file.deepAnalysis?.geoDetection
+    };
+
+    this.updateDatasets((datasets) => {
+      datasets.set(dataset.id, dataset);
+    });
+
+    await this.prefetchArrowMetadata(dataset);
+    this.bumpDatasetsVersion();
+    this._state.currentTableName = actualTableName;
+
+    this.logDatasetReady('Shapefile', dataset, start);
+    return dataset;
+  }
 }
 
 export const duckDBOrchestrator = new DuckDBOrchestratorService();
@@ -2211,18 +2505,6 @@ function createGeoArrowBuilderForType(geometryType: string): {
   const listOf = (name: string, child: List | FixedSizeList) =>
     new List(new Field(name, child, false));
 
-  const buildLineBuilder = () => {
-    const lineType = listOf('points', pointType);
-    const builder = makeBuilder({ type: lineType });
-    return { dataType: lineType, builder };
-  };
-
-  const buildStructureBuilder = () => {
-    const structureType = listOf('parts', listOf('points', pointType));
-    const builder = makeBuilder({ type: structureType });
-    return { dataType: structureType, builder };
-  };
-
   switch (upper) {
     case 'POINT': {
       const builder = makeBuilder({ type: pointType });
@@ -2230,16 +2512,22 @@ function createGeoArrowBuilderForType(geometryType: string): {
     }
 
     case 'MULTIPOINT':
-      return buildLineBuilder();
+    // falls through
 
-    case 'LINESTRING':
-      return buildLineBuilder();
+    case 'LINESTRING': {
+      const lineType = listOf('points', pointType);
+      const builder = makeBuilder({ type: lineType });
+      return { dataType: lineType, builder };
+    }
 
     case 'POLYGON':
-      return buildStructureBuilder();
+    // falls through
 
-    case 'MULTILINESTRING':
-      return buildStructureBuilder();
+    case 'MULTILINESTRING': {
+      const structureType = listOf('parts', listOf('points', pointType));
+      const builder = makeBuilder({ type: structureType });
+      return { dataType: structureType, builder };
+    }
 
     case 'MULTIPOLYGON': {
       const polygonType = listOf(
@@ -2273,6 +2561,14 @@ function parseWkbGeometry(binary: Uint8Array, geometryType: string): unknown {
   if (actualType !== expectedTypeId) {
     const mismatchKey = `${upper}->${actualTypeName}`;
     if (!loggedGeometryTypeMismatches.has(mismatchKey)) {
+      logger.warn(
+        'Geometry type mismatch between metadata and WKB payload',
+        LogCategory.DUCKDB,
+        {
+          expected: upper,
+          actual: actualTypeName
+        }
+      );
       loggedGeometryTypeMismatches.add(mismatchKey);
     }
   }

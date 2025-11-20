@@ -36,10 +36,7 @@ const config = {
       strict: true
     }),
     paths: {
-      base:
-        process.env.NODE_ENV === 'production'
-          ? '/cartographie/khartisnewpprd'
-          : ''
+      base: '/cartographie/khartisnewpprd'
     }
   }
 };
@@ -56,7 +53,7 @@ VitePWA({
   devOptions: {
     enabled: true, // Enable PWA in development
     type: 'module',
-    navigateFallback: '/' // Fallback route for dev server
+    navigateFallback: '/cartographie/khartisnewpprd/index.html' // Fallback route for dev server
   },
 
   includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
@@ -91,7 +88,7 @@ workbox: {
   ],
 
   // SPA fallback configuration
-  navigateFallback: '/index.html',
+  navigateFallback: '/cartographie/khartisnewpprd/index.html',
   navigateFallbackDenylist: [
     /^\/api\//,      // Don't fallback for API routes
     /\.[^/?]+$/      // Don't fallback for files with extensions
@@ -647,7 +644,7 @@ yarn preview
 npm install -g lighthouse
 
 # Run PWA audit
-lighthouse http://localhost:4173 --view --only-categories=pwa
+lighthouse http://localhost:4173/cartographie/khartisnewpprd/ --view --only-categories=pwa
 ```
 
 **Target scores**:

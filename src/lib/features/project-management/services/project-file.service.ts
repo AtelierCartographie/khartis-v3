@@ -66,7 +66,7 @@ export class ProjectFileService {
     const buffer = await file.arrayBuffer();
 
     try {
-      // .kh archives use gzip compression; decompress first before checking for plain JSON
+      // .kh archives are gzipped; attempt decompress before falling back to plain JSON.
       return await decompressData(buffer);
     } catch {
       const decoder = new TextDecoder();
