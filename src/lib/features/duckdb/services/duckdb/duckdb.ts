@@ -18,6 +18,7 @@ import { join_macros } from './join';
 // --- Transaction Mutex ---
 class TransactionMutex {
   private queue: Array<() => void> = [];
+
   private locked = false;
 
   async acquire(): Promise<void> {
@@ -1960,100 +1961,164 @@ class DuckDB {
         d.type_simple !== 'string'
     );
 
+    // OPTIMIZATION: Use sampling for large tables
+    const rowCount = await this.get_row_count(table);
+    const SAMPLE_THRESHOLD = 50000;
+    let analysisTable = table;
+    let isSampled = false;
+    const sampleViewName = `${table}_sample_${Date.now()}`;
+
+    if (rowCount > SAMPLE_THRESHOLD) {
+      try {
+        await this.query(
+          `CREATE VIEW ${sampleViewName} AS SELECT * FROM ${table} USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
+        );
+        analysisTable = sampleViewName;
+        isSampled = true;
+        logger.debug('Using sampled view for analysis', LogCategory.DUCKDB, {
+          table,
+          sampleViewName,
+          rowCount,
+          sampleSize: SAMPLE_THRESHOLD
+        });
+      } catch (error) {
+        logger.warn(
+          'Failed to create sample view, falling back to full table',
+          LogCategory.DUCKDB,
+          error
+        );
+      }
+    }
+
     const processColumnBatch = async (columns: any[], type: string) => {
       if (columns.length === 0) return [];
 
-      const results = await Promise.all(
-        columns.map(async (d) => {
-          let summary_general: ArrowTableLike | null = null;
-          let summary_numeric: ArrowTableLike | null = null;
-          let summary_date: ArrowTableLike | null = null;
-          let histogram = null;
+      // OPTIMIZATION: Limit concurrency
+      const BATCH_SIZE = 5;
+      const results: AnalysisResult[] = [];
 
-          switch (type) {
-            case 'numeric': {
-              const [general, numeric, hist] = await Promise.all([
-                this.query(`FROM summary_general(${table}, "${d.name}")`, {
+      for (let i = 0; i < columns.length; i += BATCH_SIZE) {
+        const batch = columns.slice(i, i + BATCH_SIZE);
+
+        const batchResults = await Promise.all(
+          batch.map(async (d) => {
+            let summary_general: ArrowTableLike | null = null;
+            let summary_numeric: ArrowTableLike | null = null;
+            let summary_date: ArrowTableLike | null = null;
+            let histogram = null;
+
+            // summary_general always on full table for accurate counts
+            try {
+              summary_general = (await this.query(
+                `FROM summary_general(${table}, "${d.name}")`,
+                {
                   useProxy: false
-                }) as Promise<ArrowTableLike>,
-                this.query(`FROM summary_numeric(${table}, "${d.name}")`, {
-                  useProxy: false
-                }) as Promise<ArrowTableLike>,
-                this.query(`FROM histogram_numeric(${table}, "${d.name}")`)
-              ]);
-              summary_general = general;
-              summary_numeric = numeric;
-              histogram = hist;
-              break;
+                }
+              )) as ArrowTableLike;
+            } catch (e) {
+              logger.warn(
+                `Failed summary_general for ${d.name}`,
+                LogCategory.DUCKDB,
+                e
+              );
             }
 
-            case 'date': {
-              const [generalDate, dateSum, histDate] = await Promise.all([
-                this.query(`FROM summary_general(${table}, "${d.name}")`, {
-                  useProxy: false
-                }) as Promise<ArrowTableLike>,
-                this.query(`FROM summary_date(${table}, "${d.name}")`, {
-                  useProxy: false
-                }) as Promise<ArrowTableLike>,
-                this.query(`FROM histogram_numeric(${table}, "${d.name}")`)
-              ]);
-              summary_general = generalDate;
-              summary_date = dateSum;
-              histogram = histDate;
-              break;
+            switch (type) {
+              case 'numeric': {
+                const [numeric, hist] = await Promise.all([
+                  this.query(
+                    `FROM summary_numeric(${analysisTable}, "${d.name}")`,
+                    {
+                      useProxy: false
+                    }
+                  ) as Promise<ArrowTableLike>,
+                  this.query(
+                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                summary_numeric = numeric;
+                histogram = hist;
+                break;
+              }
+
+              case 'date': {
+                const [dateSum, histDate] = await Promise.all([
+                  this.query(
+                    `FROM summary_date(${analysisTable}, "${d.name}")`,
+                    {
+                      useProxy: false
+                    }
+                  ) as Promise<ArrowTableLike>,
+                  this.query(
+                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                summary_date = dateSum;
+                histogram = histDate;
+                break;
+              }
+
+              case 'string': {
+                const [histStr] = await Promise.all([
+                  this.query(
+                    `FROM histogram_categorical(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                histogram = histStr;
+                break;
+              }
+              //'geometry' and 'other' types are not handled
             }
 
-            case 'string': {
-              const [generalStr, histStr] = await Promise.all([
-                this.query(`FROM summary_general(${table}, "${d.name}")`, {
-                  useProxy: false
-                }) as Promise<ArrowTableLike>,
-                this.query(`FROM histogram_categorical(${table}, "${d.name}")`)
-              ]);
-              summary_general = generalStr;
-              histogram = histStr;
-              break;
-            }
-            //'geometry' and 'other' types are not handled
-          }
-
-          return {
-            ...d,
-            ...(summary_general?.get(0) ?? {}),
-            ...(summary_numeric?.get(0) ?? {}),
-            ...(summary_date?.get(0) ?? {}),
-            histogram
-          } as AnalysisResult;
-        })
-      );
+            return {
+              ...d,
+              ...(summary_general?.get(0) ?? {}),
+              ...(summary_numeric?.get(0) ?? {}),
+              ...(summary_date?.get(0) ?? {}),
+              histogram
+            } as AnalysisResult;
+          })
+        );
+        results.push(...batchResults);
+      }
 
       return results;
     };
 
-    const [numericResults, dateResults, stringResults, otherResults] =
-      await Promise.all([
-        processColumnBatch(numericColumns, 'numeric'),
-        processColumnBatch(dateColumns, 'date'),
-        processColumnBatch(stringColumns, 'string'),
-        Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult))
-      ]);
+    try {
+      const [numericResults, dateResults, stringResults, otherResults] =
+        await Promise.all([
+          processColumnBatch(numericColumns, 'numeric'),
+          processColumnBatch(dateColumns, 'date'),
+          processColumnBatch(stringColumns, 'string'),
+          Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult))
+        ]);
 
-    const analysis_result = describe_full.map((col) => {
-      const allResults = [
-        ...numericResults,
-        ...dateResults,
-        ...stringResults,
-        ...otherResults
-      ];
-      return (
-        allResults.find((r) => r.name === col.name) || (col as AnalysisResult)
-      );
-    });
+      const analysis_result = describe_full.map((col) => {
+        const allResults = [
+          ...numericResults,
+          ...dateResults,
+          ...stringResults,
+          ...otherResults
+        ];
+        return (
+          allResults.find((r) => r.name === col.name) || (col as AnalysisResult)
+        );
+      });
 
-    table_metadata.analysis = analysis_result;
+      table_metadata.analysis = analysis_result;
 
-    // Store the analysis results in the tableMetada map
-    return analysis_result;
+      // Store the analysis results in the tableMetada map
+      return analysis_result;
+    } finally {
+      if (isSampled) {
+        try {
+          await this.query(`DROP VIEW IF EXISTS ${sampleViewName}`);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
   }
 
   /**
