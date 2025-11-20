@@ -95,6 +95,7 @@ interface Project {
 The **Web Workers** feature (`src/lib/features/workers/`) provides background thread execution for CPU-intensive operations, preventing UI freezes and improving responsiveness.
 
 ### Purpose & Benefits
+
 - **Non-blocking UI**: Heavy computations run in background threads
 - **Parallel Processing**: Multiple workers can run simultaneously
 - **Better Performance**: Offload CPU-intensive tasks from main thread
@@ -102,14 +103,14 @@ The **Web Workers** feature (`src/lib/features/workers/`) provides background th
 
 ### Supported Operations
 
-| Operation                 | Status         | Notes                                |
-| ------------------------- | -------------- | ------------------------------------ |
-| **Type Inference**        | ✅ Active      | Column type detection in background |
-| **DuckDB Batch Queries**  | ✅ Active      | Execute multiple queries in parallel |
-| **Geometry Processing**   | ✅ Active      | Simplify, buffer, union operations  |
-| **CSV Parsing**           | ⚠️ Deprecated  | Migrated to DuckDB's native `read_csv()` |
-| **Shapefile Parsing**     | ⚠️ Deprecated  | Migrated to DuckDB's native `ST_Read()` |
-| **GeoJSON Parsing**       | ⚠️ Deprecated  | Migrated to DuckDB's native `ST_Read()` |
+| Operation                | Status        | Notes                                    |
+| ------------------------ | ------------- | ---------------------------------------- |
+| **Type Inference**       | ✅ Active     | Column type detection in background      |
+| **DuckDB Batch Queries** | ✅ Active     | Execute multiple queries in parallel     |
+| **Geometry Processing**  | ✅ Active     | Simplify, buffer, union operations       |
+| **CSV Parsing**          | ⚠️ Deprecated | Migrated to DuckDB's native `read_csv()` |
+| **Shapefile Parsing**    | ⚠️ Deprecated | Migrated to DuckDB's native `ST_Read()`  |
+| **GeoJSON Parsing**      | ⚠️ Deprecated | Migrated to DuckDB's native `ST_Read()`  |
 
 ### Worker Communication
 
@@ -118,19 +119,19 @@ Workers use type-safe message passing:
 ```typescript
 // Request to worker
 interface WorkerRequest<T> {
-  id: string;           // Unique request ID
-  type: string;         // Operation type
-  payload: T;           // Request data
+  id: string; // Unique request ID
+  type: string; // Operation type
+  payload: T; // Request data
   transferables?: Transferable[]; // For efficient memory transfer
 }
 
 // Response from worker
 interface WorkerResponse<T> {
-  id: string;           // Matching request ID
+  id: string; // Matching request ID
   type: 'success' | 'error' | 'progress';
-  payload?: T;          // Result data
-  error?: string;       // Error message if failed
-  progress?: number;    // Progress percentage (0-100)
+  payload?: T; // Result data
+  error?: string; // Error message if failed
+  progress?: number; // Progress percentage (0-100)
 }
 ```
 

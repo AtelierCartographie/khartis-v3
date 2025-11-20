@@ -104,9 +104,7 @@ describe('CSVParser', () => {
     const mockTable = 'test_table_123';
 
     Duck.read_csv.mockResolvedValue(mockTable);
-    Duck.query.mockResolvedValue([
-      { col1: 1, col2: 2 }
-    ]);
+    Duck.query.mockResolvedValue([{ col1: 1, col2: 2 }]);
 
     // Act
     const result = await parser.parse(file);
@@ -604,12 +602,9 @@ export function createTestCSV(rows = 100): File {
   const data = [headers.join(',')];
 
   for (let i = 0; i < rows; i++) {
-    data.push([
-      i,
-      `Item ${i}`,
-      Math.random() * 1000,
-      ['A', 'B', 'C'][i % 3]
-    ].join(','));
+    data.push(
+      [i, `Item ${i}`, Math.random() * 1000, ['A', 'B', 'C'][i % 3]].join(',')
+    );
   }
 
   return new File([data.join('\n')], 'test.csv', {
@@ -740,9 +735,11 @@ vi.mock('fs', () => ({
 
 // Mock network requests
 vi.mock('fetch', () => ({
-  default: vi.fn(() => Promise.resolve({
-    json: () => Promise.resolve({ data: 'mocked' })
-  }))
+  default: vi.fn(() =>
+    Promise.resolve({
+      json: () => Promise.resolve({ data: 'mocked' })
+    })
+  )
 }));
 ```
 
