@@ -6,18 +6,7 @@ import { Duck, initDuckDB } from '$lib/features/duckdb';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 /**
- * KML Parser - Uses DuckDB's native ST_Read for KML/KMZ parsing
- *
- * Parses Keyhole Markup Language (KML) and compressed KMZ files
- * directly using DuckDB's spatial extension, which is much more
- * efficient than converting through GeoJSON intermediates.
- *
- * Supports:
- * - KML files (.kml)
- * - KMZ files (.kmz - compressed KML)
- * - Placemarks with extended data
- * - Multi-geometry features
- * - Styles and descriptions (preserved as attributes)
+ * Parses KML and KMZ files through DuckDB's spatial extension.
  */
 export class KMLParser implements IParser {
   readonly supportedExtensions = ['.kml', '.kmz'];
@@ -52,25 +41,21 @@ export class KMLParser implements IParser {
         fileSize: file.size
       });
 
-      // Ensure DuckDB is initialized with spatial extension
       await initDuckDB();
       if (!Duck) {
         throw new DuckDBError('DuckDB not initialized');
       }
 
-      // Generate unique table name
       const baseTableName = file.name
         .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_]/g, '_');
       tableName = `kml_${baseTableName}_${Date.now()}`;
 
-      // Use DuckDB's native KML reading capability
       await Duck.read_geofile(file, {
         tablename: tableName,
         meta: false
       });
 
-      // Get table structure
       const columnsInfo = (await Duck.query(`
         SELECT column_name, data_type
         FROM information_schema.columns
@@ -78,44 +63,36 @@ export class KMLParser implements IParser {
         ORDER BY ordinal_position
       `)) as Array<{ column_name: string; data_type: string }>;
 
-      // Get row count
       const [{ count: rowCount }] = (await Duck.query(`
         SELECT COUNT(*) as count FROM ${tableName}
       `)) as Array<{ count: number }>;
 
-      // Extract headers (excluding geometry column for RawDataset compatibility)
       const headers = columnsInfo
         .filter((col) => col.data_type !== 'GEOMETRY')
         .map((col) => col.column_name);
 
-      // Get geometry column info
       const geometryColumn = columnsInfo.find(
         (col) => col.data_type === 'GEOMETRY'
       );
 
-      // For RawDataset compatibility, fetch a sample of data
       const sampleSize = Math.min(1000, Number(rowCount));
       const sampleData = (await Duck.query(`
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
       `)) as Array<Record<string, unknown>>;
 
-      // Convert to rows format (excluding geometry for tabular view)
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
       );
 
-      // Build columns structure for compatibility
       const columns = headers.map((name) => ({
         name,
         values: sampleData.map((row) => row[name] ?? null)
       }));
 
-      // Get geometry type and bounds if geometry exists
       let geometryType: string | undefined;
       let bounds: [number, number, number, number] | undefined;
 
       if (geometryColumn) {
-        // Get geometry type and bounds in a single query
         const [geomInfo] = (await Duck.query(`
           WITH bbox AS (
             SELECT ST_Extent(${geometryColumn.column_name}) AS extent
@@ -184,7 +161,6 @@ export class KMLParser implements IParser {
         }
       };
     } catch (error) {
-      // Clean up table if created
       if (tableName && Duck) {
         try {
           await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);

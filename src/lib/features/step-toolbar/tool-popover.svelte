@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import type { ProjectionViewMode } from '$lib/features/commons/types/global';
-  import { clickOutside } from '$lib/features/commons/utils/click-outside';
-  // import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-  import { Popover } from 'carbon-components-svelte';
-  import type { Snippet } from 'svelte';
+import { globalState } from '$lib/features/commons/store/global.svelte';
+import type { ProjectionViewMode } from '$lib/features/commons/types/global';
+import { clickOutside } from '$lib/features/commons/utils/click-outside';
+import { Popover } from 'carbon-components-svelte';
+import type { Snippet } from 'svelte';
 
   const {
     open = false,

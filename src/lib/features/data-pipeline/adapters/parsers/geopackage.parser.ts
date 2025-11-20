@@ -6,22 +6,7 @@ import { Duck, initDuckDB } from '$lib/features/duckdb';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 /**
- * GeoPackage Parser - Uses DuckDB's native ST_Read for GeoPackage parsing
- *
- * Parses OGC GeoPackage files (.gpkg) directly using DuckDB's spatial
- * extension, eliminating the need for the heavyweight sql.js library.
- * GeoPackages are SQLite databases with spatial extensions, and DuckDB
- * handles them natively with much better performance.
- *
- * Supports:
- * - Single and multi-layer GeoPackages
- * - All geometry types (Point, LineString, Polygon, etc.)
- * - Attribute tables with spatial data
- * - Coordinate reference systems (CRS)
- * - Raster tiles (as metadata only)
- *
- * This implementation is 5-10x faster than sql.js and reduces
- * the bundle size by ~2.5MB.
+ * Parses GeoPackage files via DuckDB's spatial extension instead of sql.js.
  */
 export class GeoPackageParser implements IParser {
   readonly supportedExtensions = ['.gpkg'];
@@ -47,25 +32,21 @@ export class GeoPackageParser implements IParser {
         fileSize: file.size
       });
 
-      // Ensure DuckDB is initialized with spatial extension
       await initDuckDB();
       if (!Duck) {
         throw new DuckDBError('DuckDB not initialized');
       }
 
-      // Generate unique table name
       const baseTableName = file.name
         .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_]/g, '_');
       tableName = `gpkg_${baseTableName}_${Date.now()}`;
 
-      // Use DuckDB's native GeoPackage reading capability
       await Duck.read_geofile(file, {
         tablename: tableName,
         meta: false
       });
 
-      // Get table structure
       const columnsInfo = (await Duck.query(`
         SELECT column_name, data_type
         FROM information_schema.columns
@@ -73,45 +54,37 @@ export class GeoPackageParser implements IParser {
         ORDER BY ordinal_position
       `)) as Array<{ column_name: string; data_type: string }>;
 
-      // Get row count
       const [{ count: rowCount }] = (await Duck.query(`
         SELECT COUNT(*) as count FROM ${tableName}
       `)) as Array<{ count: number }>;
 
-      // Extract headers (excluding geometry column for RawDataset compatibility)
       const headers = columnsInfo
         .filter((col) => col.data_type !== 'GEOMETRY')
         .map((col) => col.column_name);
 
-      // Get geometry column info
       const geometryColumn = columnsInfo.find(
         (col) => col.data_type === 'GEOMETRY'
       );
 
-      // For RawDataset compatibility, fetch a sample of data
       const sampleSize = Math.min(1000, Number(rowCount));
       const sampleData = (await Duck.query(`
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
       `)) as Array<Record<string, unknown>>;
 
-      // Convert to rows format (excluding geometry for tabular view)
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
       );
 
-      // Build columns structure for compatibility
       const columns = headers.map((name) => ({
         name,
         values: sampleData.map((row) => row[name] ?? null)
       }));
 
-      // Get geometry type and bounds if geometry exists
       let geometryType: string | undefined;
       let bounds: [number, number, number, number] | undefined;
       let crs: string | undefined = 'EPSG:4326'; // Default CRS
 
       if (geometryColumn) {
-        // Get geometry type and bounds in a single query
         const [geomInfo] = (await Duck.query(`
           WITH bbox AS (
             SELECT ST_Extent(${geometryColumn.column_name}) AS extent
@@ -155,7 +128,6 @@ export class GeoPackageParser implements IParser {
           }
         }
 
-        // Try to get CRS information if available
         try {
           const [crsInfo] = (await Duck.query(`
             SELECT ST_SRID(${geometryColumn.column_name}) as srid
@@ -201,7 +173,6 @@ export class GeoPackageParser implements IParser {
         }
       };
     } catch (error) {
-      // Clean up table if created
       if (tableName && Duck) {
         try {
           await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
@@ -224,7 +195,6 @@ export class GeoPackageParser implements IParser {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      // Check for specific GeoPackage errors
       if (
         errorMessage.includes('not a valid SQLite') ||
         errorMessage.includes('database')

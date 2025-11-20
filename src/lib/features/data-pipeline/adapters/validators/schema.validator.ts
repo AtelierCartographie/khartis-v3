@@ -7,18 +7,7 @@ import {
 } from '../../models/validation-result';
 
 /**
- * Schema Validator - Validates dataset schema consistency
- *
- * Checks:
- * - Column names are unique
- * - Column names are not empty
- * - Row length matches header length
- *
- * @example
- * ```typescript
- * const validator = new SchemaValidator();
- * const result = validator.validate(dataset);
- * ```
+ * Validates structural consistency between headers, rows, and column names.
  */
 export class SchemaValidator implements IValidator {
   validate(data: RawDataset): ValidationResult {

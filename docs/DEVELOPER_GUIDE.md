@@ -220,4 +220,4 @@ import * as m from '$paraglide/messages';
 ---
 
 **Documentation Version**: 3.1.0
-**Last Updated**: 2025-01-09
+**Last Updated**: 2025-11-20

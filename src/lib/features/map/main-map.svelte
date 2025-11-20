@@ -32,7 +32,6 @@
         );
 
         if (duckDBDataset?.tableName) {
-          // Use cached Arrow table if available (avoids expensive WKB→GeoArrow conversion)
           const arrowTable = duckDBDataset.arrowTableWithMetadata
             ? duckDBDataset.arrowTableWithMetadata
             : await duckDBOrchestrator.getArrowTableDirect(
@@ -99,9 +98,7 @@
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
           if (result) {
-            // Check if result is ArrowTable or GeoJSON
             if ('numRows' in result) {
-              // ArrowTable
               displayTable = result;
               displayGeoJSON = null;
               logger.info(
@@ -112,7 +109,6 @@
                 }
               );
             } else if ('features' in result) {
-              // GeoJSON
               displayTable = null;
               displayGeoJSON = result;
               logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
@@ -139,17 +135,14 @@
 
     if (selectedDataset?.geometry) {
       const result = await convertDatasetToGeoJSON(selectedDataset);
-      if (result) {
-        // Check if result is ArrowTable or GeoJSON
-        if ('numRows' in result) {
-          // ArrowTable
-          displayTable = result;
-          displayGeoJSON = null;
-        } else if ('features' in result) {
-          // GeoJSON
-          displayTable = null;
-          displayGeoJSON = result;
-        }
+        if (result) {
+          if ('numRows' in result) {
+            displayTable = result;
+            displayGeoJSON = null;
+          } else if ('features' in result) {
+            displayTable = null;
+            displayGeoJSON = result;
+          }
       } else {
         await loadFallbackBasemap();
       }

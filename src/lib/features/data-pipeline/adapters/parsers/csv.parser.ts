@@ -6,21 +6,7 @@ import { ParserError } from '../../contracts/parser';
 import type { RawDataset } from '../../models/raw-dataset';
 
 /**
- * CSV Parser - Parses CSV/TSV files using DuckDB's native read_csv
- *
- * Supports:
- * - CSV (comma-separated)
- * - TSV (tab-separated)
- * - Custom delimiters (auto-detected by DuckDB)
- * - Large files processing efficiently in WASM
- * - Automatic type inference by DuckDB
- * - Direct table creation without intermediate structures
- *
- * @example
- * ```typescript
- * const parser = new CSVParser();
- * const dataset = await parser.parse(csvFile);
- * ```
+ * Parses CSV/TSV files with DuckDB's native CSV reader for fast WASM ingestion.
  */
 export class CSVParser implements IParser {
   readonly supportedExtensions = ['.csv', '.tsv', '.txt'];
@@ -48,36 +34,29 @@ export class CSVParser implements IParser {
     let tableName: string | undefined;
 
     try {
-      // Ensure DuckDB is initialized
       await initDuckDB();
       if (!Duck) {
         throw new DuckDBError('DuckDB not initialized');
       }
 
-      // Generate a unique table name for this CSV
       const baseTableName = file.name
         .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_]/g, '_');
       tableName = `csv_${baseTableName}_${Date.now()}`;
 
-      // Register the file with DuckDB
       await Duck.register_files([file]);
-      const fileWithId = file as any; // File with added id property
+      const fileWithId = file as any; // DuckDB adds an id property.
 
-      // Determine delimiter for TSV files
       const delimiter = file.name.toLowerCase().endsWith('.tsv')
         ? '\t'
         : undefined;
 
-      // Use DuckDB's read_csv to create a table
-      // DuckDB will auto-detect delimiter, headers, and types
       const createTableQuery = delimiter
         ? `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, delimiter='${delimiter}', normalize_names=true, auto_detect=true)`
         : `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, normalize_names=true, auto_detect=true)`;
 
       await Duck.query(createTableQuery);
 
-      // Get table info to build RawDataset structure
       const columnsInfo = (await Duck.query(`
         SELECT column_name, data_type
         FROM information_schema.columns
@@ -85,34 +64,27 @@ export class CSVParser implements IParser {
         ORDER BY ordinal_position
       `)) as Array<{ column_name: string; data_type: string }>;
 
-      // Get row count
       const [{ count: rowCount }] = (await Duck.query(`
         SELECT COUNT(*) as count FROM ${tableName}
       `)) as Array<{ count: number }>;
 
-      // Extract headers from column info
       const headers = columnsInfo.map((col) => col.column_name);
 
-      // For compatibility with existing pipeline, we need to provide rows and columns
-      // But we'll do this efficiently by only fetching a sample for type inference
+      // Provide rows/columns for downstream consumers without loading everything.
       const sampleSize = Math.min(1000, Number(rowCount));
       const sampleData = (await Duck.query(`
         SELECT * FROM ${tableName} LIMIT ${sampleSize}
       `)) as Array<Record<string, unknown>>;
 
-      // Convert DuckDB result to rows format expected by RawDataset
       const rows: unknown[][] = sampleData.map((row) =>
         headers.map((header) => row[header] ?? null)
       );
 
-      // Build columns structure for compatibility
       const columns = headers.map((name) => ({
         name,
         values: sampleData.map((row) => row[name] ?? null)
       }));
 
-      // Get delimiter info if possible (DuckDB doesn't expose this directly)
-      // We'll default to comma for CSV and tab for TSV
       const detectedDelimiter = file.name.toLowerCase().endsWith('.tsv')
         ? '\t'
         : ',';
@@ -140,7 +112,6 @@ export class CSVParser implements IParser {
         }
       };
     } catch (error) {
-      // Clean up table if created
       if (tableName && Duck) {
         try {
           await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);

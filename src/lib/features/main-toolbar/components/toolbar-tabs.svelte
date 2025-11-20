@@ -14,12 +14,9 @@
   let tabsScroller: HTMLDivElement | null = $state(null);
   let lastSourceFilesCount = $state(0);
 
-  // Ensure a tab is always selected when files exist
-  // Guard against infinite loops by only running when file count changes
   $effect(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
-    // Only run if file count changed (not on every reactive update)
     if (sourceFiles.length !== lastSourceFilesCount) {
       lastSourceFilesCount = sourceFiles.length;
       globalActions.ensureTabSelected();
@@ -92,35 +89,19 @@
     const ext = extension.toLowerCase();
     switch (ext) {
       case 'csv':
-
-      // fallthrough
       case 'tsv':
-
-      // fallthrough
       case 'txt':
         return 'blue';
 
       case 'json':
-
-      // fallthrough
       case 'geojson':
         return 'green';
 
       case 'shp':
-
-      // fallthrough
       case 'gpkg':
-
-      // fallthrough
       case 'kml':
-
-      // fallthrough
       case 'kmz':
-
-      // fallthrough
       case 'geoparquet':
-
-      // fallthrough
       case 'gpq':
         return 'purple';
 

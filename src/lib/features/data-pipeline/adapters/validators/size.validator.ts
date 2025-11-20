@@ -7,19 +7,7 @@ import {
 } from '../../models/validation-result';
 
 /**
- * Size Validator - Validates dataset size constraints
- *
- * Checks:
- * - Row count (warning at 5k, error at 10k)
- * - Column count (warning at 50, error at 100)
- *
- * @example
- * ```typescript
- * const validator = new SizeValidator();
- * const result = validator.validate(dataset);
- * if (!result.isValid) {
- * }
- * ```
+ * Guards against datasets that are too large to handle comfortably in the browser.
  */
 export class SizeValidator implements IValidator {
   private static readonly WARNING_ROWS = 5000;
