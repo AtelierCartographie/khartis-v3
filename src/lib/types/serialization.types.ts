@@ -6,8 +6,8 @@
  */
 
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
+import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
 
 /**
@@ -79,6 +79,7 @@ export interface SerializedUploadedFile {
   validation?: unknown;
   sourceType?: string;
   relatedFiles?: string[];
+  relatedFilesData?: Record<string, number[]>;
   uploadProgress?: number;
   parsedData?: unknown;
   statistics?: unknown;

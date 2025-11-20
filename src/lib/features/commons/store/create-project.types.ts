@@ -47,6 +47,7 @@ export interface UploadedFile {
   validation?: FileValidation;
   sourceType: DataSourceType;
   relatedFiles?: string[];
+  relatedFilesData?: Record<string, ArrayBuffer>;
   uploadProgress?: number;
   statistics?: Record<string, unknown>;
   duplicates?: {

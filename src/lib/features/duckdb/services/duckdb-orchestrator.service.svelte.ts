@@ -283,6 +283,8 @@ class DuckDBOrchestratorService {
         result = await this.processGeoPackage(file, tableName);
       } else if (file.fileType === FileType.GEOPARQUET) {
         result = await this.processGeoParquet(file, tableName);
+      } else if (file.fileType === FileType.SHAPEFILE) {
+        result = await this.processShapefile(file, tableName);
       } else {
         logger.warn(
           'Unsupported file type for DuckDB ingestion',
@@ -475,19 +477,19 @@ class DuckDBOrchestratorService {
         rowCount,
         metadata: {
           processedAt: new Date(),
-        fileType: file.fileType
-      },
-      geoDetection: file.deepAnalysis?.geoDetection
-    };
+          fileType: file.fileType
+        },
+        geoDetection: file.deepAnalysis?.geoDetection
+      };
 
-    this.updateDatasets((datasets) => {
-      datasets.set(dataset.id, dataset);
-    });
+      this.updateDatasets((datasets) => {
+        datasets.set(dataset.id, dataset);
+      });
 
-    // Prefetch Arrow metadata in the background.
-    void this.prefetchArrowMetadata(dataset);
-    this.bumpDatasetsVersion();
-    this._state.currentTableName = actualTableName;
+      // Prefetch Arrow metadata in the background.
+      void this.prefetchArrowMetadata(dataset);
+      this.bumpDatasetsVersion();
+      this._state.currentTableName = actualTableName;
 
       this.logDatasetReady('GeoJSON ST_Read', dataset, startTime);
       return dataset;
@@ -1113,7 +1115,9 @@ class DuckDBOrchestratorService {
     }
 
     const columns = await Duck.analyse(tableName);
-    if (columns.some((col) => col.name === sanitizedColumnName)) {
+    if (
+      columns.some((col: AnalysisResult) => col.name === sanitizedColumnName)
+    ) {
       throw new DuckDBError(
         `La colonne "${sanitizedColumnName}" existe déjà`,
         undefined,
@@ -1251,6 +1255,28 @@ class DuckDBOrchestratorService {
     );
   }
 
+  private async ensureFileObject(
+    file: UploadedFile,
+    fallbackMime: string
+  ): Promise<File> {
+    if (file.originalFile) {
+      return file.originalFile;
+    }
+
+    if (file.content instanceof ArrayBuffer) {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    if (typeof file.content === 'string') {
+      return new File([file.content], file.name, { type: fallbackMime });
+    }
+
+    throw new ParseError('Missing original file content', file.fileType, {
+      fileId: file.id,
+      fileName: file.name
+    });
+  }
+
   /**
    * Re-materialize a DuckDB table as GeoParquet and read it back to keep GeoArrow metadata intact.
    * DuckDB drops metadata when querying directly, hence the GeoParquet round trip.
@@ -1289,12 +1315,14 @@ class DuckDBOrchestratorService {
       } else {
         // Only query if not cached
         const tableInfo = await Duck.describe_table(tableName);
-        const columns = tableInfo.name.map((name, index) => ({
+        const columns = tableInfo.name.map((name: string, index: number) => ({
           column_name: name,
           column_type: tableInfo.type[index]
         }));
 
-        geomColumn = columns.find((c) => c.column_type === 'GEOMETRY');
+        geomColumn = columns.find(
+          (c: { column_type: string }) => c.column_type === 'GEOMETRY'
+        );
 
         if (!geomColumn) {
           logger.warn(
@@ -2210,6 +2238,95 @@ class DuckDBOrchestratorService {
       logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
       throw error;
     }
+  }
+
+  private async processShapefile(
+    file: UploadedFile,
+    tableName: string
+  ): Promise<DuckDBDataset> {
+    const start = performance.now();
+    logger.debug('Processing Shapefile', LogCategory.DUCKDB, {
+      fileId: file.id,
+      tableName
+    });
+
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    // Register main .shp file
+    const shpFile = await this.ensureFileObject(
+      file,
+      'application/x-shapefile'
+    );
+
+    const companionFiles =
+      file.relatedFileObjects?.filter(
+        (f) => f.name.toLowerCase() !== shpFile.name.toLowerCase()
+      ) ?? [];
+
+    logger.debug('Shapefile registration details', LogCategory.DUCKDB, {
+      shpFileName: shpFile.name,
+      shpFileSize: shpFile.size,
+      relatedFiles: companionFiles.map((f) => ({
+        name: f.name,
+        size: f.size
+      }))
+    });
+
+    const shapefileComponents = [shpFile, ...companionFiles];
+
+    // Register everything together with a shared shapefile id so DuckDB can resolve sidecar files after reloads
+    await Duck.register_files(shapefileComponents, { shapefile: true });
+
+    if (companionFiles.length === 0) {
+      logger.warn(
+        'No companion files found for Shapefile - ingestion may fail',
+        LogCategory.DUCKDB
+      );
+    } else {
+      logger.debug(
+        `Registered ${companionFiles.length} companion files for Shapefile`,
+        LogCategory.DUCKDB
+      );
+    }
+
+    // Use ST_Read to ingest the shapefile
+    const resultTableName = await Duck.read_geofile(shpFile, {
+      tablename: tableName,
+      shapefile: true
+    });
+
+    const actualTableName =
+      typeof resultTableName === 'string' ? resultTableName : tableName;
+
+    const [columns, rowCount] = await Promise.all([
+      Duck.analyse(actualTableName),
+      this.getRowCount(actualTableName)
+    ]);
+
+    const dataset: DuckDBDataset = {
+      id: crypto.randomUUID(),
+      tableName: actualTableName,
+      sourceFileId: file.id,
+      name: file.name,
+      columns,
+      rowCount,
+      metadata: {
+        processedAt: new Date(),
+        fileType: file.fileType
+      },
+      geoDetection: file.deepAnalysis?.geoDetection
+    };
+
+    this.updateDatasets((datasets) => {
+      datasets.set(dataset.id, dataset);
+    });
+
+    void this.prefetchArrowMetadata(dataset);
+    this.bumpDatasetsVersion();
+    this._state.currentTableName = actualTableName;
+
+    this.logDatasetReady('Shapefile', dataset, start);
+    return dataset;
   }
 }
 

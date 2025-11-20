@@ -133,8 +133,9 @@ export function createDataPipeline(): DataPipeline {
       if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
         dataset = await processShapefile(uploadedFile);
       } else if (originalFile) {
+        const originalName = originalFile.name.toLowerCase();
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
-          (f: File) => f !== originalFile
+          (f: File) => f.name.toLowerCase() !== originalName
         );
         dataset = await processFileInternal(originalFile, { companionFiles });
       } else {
@@ -313,7 +314,7 @@ export function createDataPipeline(): DataPipeline {
 
       logger.success('DuckDB dataset built', LogCategory.DATA, {
         tableName,
-        rowCount,
+        rowCount: dataset.rowCount,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
@@ -406,10 +407,12 @@ export function createDataPipeline(): DataPipeline {
     });
 
     const qualityWarnings = computeQualityWarnings(enrichedColumns, rowCount);
-    dataset.analysis = {
-      ...dataset.analysis,
-      warnings: [...(dataset.analysis?.warnings ?? []), ...qualityWarnings]
-    };
+    if (dataset.analysis) {
+      dataset.analysis.warnings = [
+        ...(dataset.analysis.warnings ?? []),
+        ...qualityWarnings
+      ];
+    }
 
     return dataset;
   }
@@ -465,7 +468,12 @@ export function createDataPipeline(): DataPipeline {
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
-    return Duck.join_by_id(tableName, idColumn, options);
+    return Duck.join_by_id(tableName, idColumn, {
+      basemaps_table: options.basemapsTable,
+      basemap_table: options.basemapTable,
+      basemap_id: options.basemapId,
+      basemap_others_id: options.basemapOthersId
+    });
   }
 
   async function applyJoinAssociation(
@@ -495,7 +503,9 @@ export function createDataPipeline(): DataPipeline {
         return fresh;
       })();
     metadata.filters.clear();
-    filters.forEach((filter, index) => Duck!.add_filter(tableName, index, filter));
+    filters.forEach((filter, index) =>
+      Duck!.add_filter(tableName, index, filter)
+    );
     return Duck.apply_filters(tableName);
   }
 
@@ -845,7 +855,7 @@ async function createFileFromUploadContent(
   return new File([blob], name, { type: resolvedType });
 }
 
-async function createFileFromUpload(
+export async function createFileFromUpload(
   uploadedFile: UploadedFilePayload
 ): Promise<File> {
   if (!uploadedFile.content) {
