@@ -1,13 +1,13 @@
-import type { IParser } from '../../contracts/parser';
-import { ParserError } from '../../contracts/parser';
-import type { RawDataset } from '../../models/raw-dataset';
-import type { RawColumn } from '../../models/raw-column';
-import type { GeometryInfo } from '../../models/geometry-info';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   GeoJSONFeature as SharedGeoJSONFeature,
   GeoJSONFeatureCollection as SharedGeoJSONFeatureCollection
 } from '$lib/types/data';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import type { IParser } from '../../contracts/parser';
+import { ParserError } from '../../contracts/parser';
+import type { GeometryInfo } from '../../models/geometry-info';
+import type { RawColumn } from '../../models/raw-column';
+import type { RawDataset } from '../../models/raw-dataset';
 
 export type GeoJSONFeature = SharedGeoJSONFeature;
 export type GeoJSONFeatureCollection = SharedGeoJSONFeatureCollection;

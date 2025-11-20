@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and explore `src/lib/features/` to understand the structure.
+Open http://localhost:5176/cartographie/khartisnewpprd/ and explore `src/lib/features/` to understand the structure.
 
 ## 🎯 Golden Rules
 

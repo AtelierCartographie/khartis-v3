@@ -1,9 +1,9 @@
+import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { IParser } from '../../contracts/parser';
 import { ParserError } from '../../contracts/parser';
 import type { RawDataset } from '../../models/raw-dataset';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 /**
  * Parses GeoPackage files via DuckDB's spatial extension instead of sql.js.
