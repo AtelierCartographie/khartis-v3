@@ -51,6 +51,39 @@ export type DataPipeline = {
     uploadedFile: UploadedFilePayload,
     originalFile?: File
   ): Promise<DatasetResult>;
+  /**
+   * Directly process a remote file without fetching it on the frontend.
+   * Uses DuckDB HTTPFS under the hood.
+   */
+  processRemoteFile(
+    url: string,
+    options?: { tableName?: string; decimalSeparator?: string }
+  ): Promise<DatasetResult>;
+  /**
+   * Convenience wrapper around an inline string (copy/paste).
+   */
+  processPastedData(
+    content: string,
+    options?: { name?: string; type?: string }
+  ): Promise<DatasetResult>;
+  /**
+   * Apply a join suggestion/association on a dataset.
+   */
+  joinDatasetById(
+    tableName: string,
+    idColumn: string,
+    options: {
+      basemapsTable?: string;
+      basemapTable?: string;
+      basemapId?: string;
+      basemapOthersId?: string;
+    }
+  ): Promise<unknown>;
+  applyJoinAssociation(tableName: string, basemap: string): Promise<void>;
+  /**
+   * Simple multi-filter helper (filters are SQL predicates combined with AND).
+   */
+  applyFilters(tableName: string, filters: string[]): Promise<unknown>;
   validateFile(file: File): Promise<ValidationResult>;
   destroy(): Promise<void>;
 };
@@ -255,19 +288,11 @@ export function createDataPipeline(): DataPipeline {
         await Duck.read_tabular(file, { tablename: tableName });
       }
 
-      const duckdbColumns = await Duck.analyse(tableName);
-      const rowCount = await Duck.get_row_count(tableName);
-      const geometryInfo = await extractGeometryInfo(tableName);
-      const enrichedColumns = enrichColumns(duckdbColumns);
-
       const fileFormat = detectFileType(fileInfo.name) ?? 'unknown';
-      const dataset = buildDatasetResult({
+      const dataset = await buildDatasetFromDuckTable({
         file: fileInfo,
         tableName,
-        enrichedColumns,
-        rowCount,
         isGeoFile,
-        geometryInfo,
         format: fileFormat
       });
 
@@ -301,6 +326,92 @@ export function createDataPipeline(): DataPipeline {
       });
       throw error;
     }
+  }
+
+  async function processRemoteFile(
+    url: string,
+    options: { tableName?: string; decimalSeparator?: string } = {}
+  ): Promise<DatasetResult> {
+    await ensureInit();
+
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const { tableName: providedTableName, decimalSeparator } = options;
+    const filename = url.split('/').pop() || 'remote_file';
+    const format = detectFileType(filename) ?? 'unknown';
+    const isGeoFile = isGeospatialFile(filename);
+    const tableName = providedTableName ?? generateTableName(filename);
+
+    await Duck.read_link(url, {
+      tablename: tableName,
+      decimal_separator: decimalSeparator
+    });
+
+    const dataset = await buildDatasetFromDuckTable({
+      file: {
+        name: filename,
+        size: 0,
+        type: 'application/octet-stream'
+      },
+      tableName,
+      isGeoFile,
+      format
+    });
+
+    dataset.sourceFileId = url;
+    dataset.name = filename;
+    return dataset;
+  }
+
+  async function processPastedData(
+    content: string,
+    options: { name?: string; type?: string } = {}
+  ): Promise<DatasetResult> {
+    const name = options.name ?? 'pasted-data.csv';
+    const type = options.type ?? 'text/csv';
+    const file = await createFileFromUploadContent(content, name, type);
+    return processFile(file);
+  }
+
+  async function buildDatasetFromDuckTable({
+    file,
+    tableName,
+    isGeoFile,
+    format
+  }: {
+    file: FileInfo;
+    tableName: string;
+    isGeoFile: boolean;
+    format: string;
+  }): Promise<DatasetResult> {
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const duckdbColumns = await Duck.analyse(tableName);
+    const rowCount = await Duck.get_row_count(tableName);
+    const geometryInfo = await extractGeometryInfo(tableName);
+    const enrichedColumns = enrichColumns(duckdbColumns);
+
+    const dataset = buildDatasetResult({
+      file,
+      tableName,
+      enrichedColumns,
+      rowCount,
+      isGeoFile,
+      geometryInfo,
+      format
+    });
+
+    const qualityWarnings = computeQualityWarnings(enrichedColumns, rowCount);
+    dataset.analysis = {
+      ...dataset.analysis,
+      warnings: [...(dataset.analysis?.warnings ?? []), ...qualityWarnings]
+    };
+
+    return dataset;
   }
 
   async function validateFile(file: File): Promise<ValidationResult> {
@@ -340,10 +451,63 @@ export function createDataPipeline(): DataPipeline {
     logger.info('Data pipeline destroyed', LogCategory.DATA);
   }
 
+  async function joinDatasetById(
+    tableName: string,
+    idColumn: string,
+    options: {
+      basemapsTable?: string;
+      basemapTable?: string;
+      basemapId?: string;
+      basemapOthersId?: string;
+    }
+  ): Promise<unknown> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    return Duck.join_by_id(tableName, idColumn, options);
+  }
+
+  async function applyJoinAssociation(
+    tableName: string,
+    basemap: string
+  ): Promise<void> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    await Duck.apply_join_association(tableName, basemap);
+  }
+
+  async function applyFilters(
+    tableName: string,
+    filters: string[]
+  ): Promise<unknown> {
+    await ensureInit();
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+    const metadata =
+      Duck.table_metadata.get(tableName) ??
+      (() => {
+        const fresh = { analysis: null, join: null, filters: new Map() };
+        Duck!.table_metadata.set(tableName, fresh as never);
+        return fresh;
+      })();
+    metadata.filters.clear();
+    filters.forEach((filter, index) => Duck!.add_filter(tableName, index, filter));
+    return Duck.apply_filters(tableName);
+  }
+
   return {
     initialize: ensureInit,
     processFile,
     processUploadedFile,
+    processRemoteFile,
+    processPastedData,
+    joinDatasetById,
+    applyJoinAssociation,
+    applyFilters,
     validateFile,
     destroy
   };
@@ -414,6 +578,39 @@ function convertRawColumnsToEnriched(rawDataset: RawDataset): EnrichedColumn[] {
       }
     };
   });
+}
+
+function computeQualityWarnings(
+  columns: EnrichedColumn[],
+  rowCount: number
+): string[] {
+  if (rowCount === 0) return [];
+  const warnings: string[] = [];
+
+  columns.forEach((column) => {
+    const nullRatio =
+      column.stats?.count && column.stats.count > 0
+        ? column.stats.nulls / column.stats.count
+        : 0;
+    if (nullRatio > 0.5) {
+      warnings.push(
+        `Colonne "${column.name}" contient ${(nullRatio * 100).toFixed(1)}% de valeurs manquantes`
+      );
+    }
+
+    const nonNullCount =
+      (column.stats?.count ?? 0) - (column.stats?.nulls ?? 0);
+    if (nonNullCount > 0) {
+      const uniquenessRatio = (column.stats?.uniques ?? 0) / nonNullCount;
+      if (uniquenessRatio < 0.01) {
+        warnings.push(
+          `Colonne "${column.name}" a une cardinalite tres faible (${column.stats?.uniques ?? 0} valeurs uniques sur ${nonNullCount})`
+        );
+      }
+    }
+  });
+
+  return warnings;
 }
 
 async function extractGeometryInfo(
