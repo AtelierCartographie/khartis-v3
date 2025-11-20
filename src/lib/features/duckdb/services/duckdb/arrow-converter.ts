@@ -1,7 +1,32 @@
-import type { Table } from 'apache-arrow';
-import { tableToIPC } from 'apache-arrow';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
 import { Duck } from './duckdb';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+
+/**
+ * Converts an array of objects (TabularData) to an Arrow Table.
+ */
+export function convertTabularDataToArrow(
+  data: Record<string, unknown>[],
+  options: { addRowId?: boolean } = {}
+): Table {
+  if (data.length === 0) return new Table({});
+
+  const columns = Object.keys(data[0]);
+  const vectors: Record<string, Vector> = {};
+
+  if (options.addRowId) {
+    const ids = new Int32Array(data.length);
+    for (let i = 0; i < data.length; i++) ids[i] = i + 1;
+    vectors['__id'] = vectorFromArray(ids);
+  }
+
+  for (const col of columns) {
+    const values = data.map((row) => row[col]);
+    vectors[col] = vectorFromArray(values);
+  }
+
+  return new Table(vectors);
+}
 
 /**
  * Insert an Arrow table into DuckDB using the IPC stream API so the data persists in WASM.

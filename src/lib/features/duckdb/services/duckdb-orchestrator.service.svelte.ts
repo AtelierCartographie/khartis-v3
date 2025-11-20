@@ -28,7 +28,10 @@ import {
   tableFromIPC
 } from 'apache-arrow/Arrow';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-import { insertArrowTableIntoDuckDB } from './duckdb/arrow-converter';
+import {
+  convertTabularDataToArrow,
+  insertArrowTableIntoDuckDB
+} from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
 import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
 
@@ -361,12 +364,53 @@ class DuckDBOrchestratorService {
       );
     }
 
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    // OPTIMIZATION: Use Arrow ingestion
+    try {
+      const arrowTable = convertTabularDataToArrow(file.parsedData, {
+        addRowId: true
+      });
+      await insertArrowTableIntoDuckDB(arrowTable, tableName);
+
+      const columns = await Duck.analyse(tableName);
+      const rowCount = await this.getRowCount(tableName);
+
+      const dataset: DuckDBDataset = {
+        id: crypto.randomUUID(),
+        tableName: tableName,
+        sourceFileId: file.id,
+        name: file.name,
+        columns,
+        rowCount,
+        metadata: {
+          processedAt: new Date(),
+          fileType: file.fileType
+        },
+        geoDetection: file.deepAnalysis?.geoDetection
+      };
+
+      this.updateDatasets((datasets) => {
+        datasets.set(dataset.id, dataset);
+      });
+      await this.prefetchArrowMetadata(dataset);
+      this.bumpDatasetsVersion();
+      this._state.currentTableName = tableName;
+
+      this.logDatasetReady('CSV (Arrow)', dataset, start);
+      return dataset;
+    } catch (error) {
+      logger.warn(
+        'Arrow ingestion failed, falling back to legacy CSV string',
+        LogCategory.DUCKDB,
+        error
+      );
+    }
+
     const csvData = this.convertToCSV(file.parsedData);
 
     const blob = new Blob([csvData], { type: 'text/csv' });
     const duckFile = new File([blob], file.name, { type: 'text/csv' });
-
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await Duck.register_files([duckFile]);
 
@@ -1474,7 +1518,7 @@ class DuckDBOrchestratorService {
         // Keep the original field type to match RecordBatch schemas - only update metadata
         return new Field(
           field.name,
-          field.type,  // Keep original type, don't use conversionResult.geometryDataType
+          field.type, // Keep original type, don't use conversionResult.geometryDataType
           field.nullable,
           fieldMetadataMap
         );
@@ -1496,7 +1540,9 @@ class DuckDBOrchestratorService {
           geometryType,
           geoarrowExtension,
           hasSchemaMetadata: !!tableWithMetadata.schema.metadata,
-          geoFieldMetadata: updatedFields.find(f => f.name === geomColumn.column_name)?.metadata
+          geoFieldMetadata: updatedFields.find(
+            (f) => f.name === geomColumn.column_name
+          )?.metadata
         }
       );
 
