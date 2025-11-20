@@ -10,6 +10,8 @@ export interface GeolocationState {
   geoReference: 'entities' | 'coordinates' | 'custom';
   linkedVariable: number | null;
   linkedVariableName: string;
+  latitudeColumn?: string;
+  longitudeColumn?: string;
   autoDetected: boolean;
 }
 

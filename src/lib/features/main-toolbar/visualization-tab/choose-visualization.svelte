@@ -19,7 +19,6 @@
     ratio?: string;
   }
 
-  // TODO hook to real data inputs when available
   const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
   let selectedFieldId = $state<number>(0);
@@ -78,7 +77,7 @@
               selectedId={selectedFieldId}
               on:select={(e) => (selectedFieldId = e.detail.selectedId)}
               placeholder={m.choose_data_field_placeholder()}
-              titleText=""
+              labelText=""
               size="xl"
             />
           </div>

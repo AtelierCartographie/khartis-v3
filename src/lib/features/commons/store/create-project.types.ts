@@ -1,10 +1,17 @@
+import type { ParsedData } from '$lib/types/data';
+import type { DataAnalysisResult } from '../utils/deep-validator.utils';
+
 export type ProjectTab = 1 | 2 | 3;
 
 export enum FileType {
   CSV = 'csv',
+  TSV = 'tsv',
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
+  GEOPARQUET = 'geoparquet',
+  KML = 'kml',
+  KMZ = 'kmz',
   UNKNOWN = 'unknown'
 }
 
@@ -27,18 +34,42 @@ export interface UploadedFile {
   type: string;
   fileType: FileType;
   content?: string | ArrayBuffer;
-  parsedData?: any;
+  originalFile?: File; // Keep reference to original File object to avoid re-parsing
+  relatedFileObjects?: File[]; // For shapefiles: store all companion File objects (.shx, .dbf, .prj, etc.)
+  parsedData?: ParsedData;
+  /**
+   * Optional normalized GeoJSON content generated during preprocessing
+   * so downstream services (DuckDB) can reuse it without re-stringifying.
+   */
+  preparedGeoJSON?: string;
   status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
   errorMessage?: string;
   validation?: FileValidation;
   sourceType: DataSourceType;
   relatedFiles?: string[];
+  relatedFilesData?: Record<string, ArrayBuffer>;
   uploadProgress?: number;
-  statistics?: Record<string, any>;
+  statistics?: Record<string, unknown>;
   duplicates?: {
     hasDuplicates: boolean;
     duplicateCount: number;
   };
+  deepAnalysis?: DataAnalysisResult;
+  geoMatchResult?: Record<string, unknown>;
+  // Cached dataset snapshots are no longer persisted – the pipeline reloads from DuckDB
+}
+
+export interface ExampleProject {
+  id: string;
+  title: string;
+  subtitle: string;
+  description?: string;
+  category: ExampleCategory;
+  thumbnail?: string;
+  dataUrl?: string;
+  baseMapId?: string;
+  visualizations?: Record<string, unknown>[];
+  tags?: string[];
 }
 
 export interface SavedProject {
@@ -47,15 +78,6 @@ export interface SavedProject {
   subtitle: string;
   createdAt: Date;
   thumbnail?: string;
-}
-
-export interface ExampleProject {
-  id: string;
-  title: string;
-  subtitle: string;
-  category: ExampleCategory;
-  thumbnail?: string;
-  dataUrl?: string;
 }
 
 export type ExampleCategory =
@@ -76,6 +98,7 @@ export interface CreateProjectState {
     projectName: string;
     isLoading: boolean;
     error?: string;
+    validationErrors: string[];
   };
 
   openProject: {

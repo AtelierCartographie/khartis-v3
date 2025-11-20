@@ -7,11 +7,18 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : 1,
   reporter: 'html',
+  globalSetup: './e2e/global-setup.ts',
+  timeout: 45000,
+  expect: {
+    timeout: 15000
+  },
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure'
+    video: 'retain-on-failure',
+    actionTimeout: 15000,
+    navigationTimeout: 15000
   },
 
   projects: [

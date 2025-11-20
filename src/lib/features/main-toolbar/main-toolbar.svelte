@@ -3,10 +3,12 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     ToolbarState,
     ToolbarStep
   } from '$lib/features/commons/types/global';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     ProgressIndicator,
@@ -21,13 +23,13 @@
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
+  import { dataTabStore } from './data-tab/data-tab.store.svelte';
   import DataTab from './data-tab/data-tab.svelte';
   import {
+    getDerivedToolbarState,
     mainToolbarActions,
-    mainToolbarState,
-    getDerivedToolbarState
+    mainToolbarState
   } from './main-toolbar.state.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import VizualisationTab from './visualization-tab/visualization-tab.svelte';
 
   const listToolsComponents = {
@@ -48,20 +50,11 @@
     globalActions.setToolbarState(state);
   }
 
-  const selectStep = (step: ToolbarStep): void => {
-    globalActions.setNavigationState(step);
-
-    globalState.selectedTool = undefined;
-  };
-
   const derivedToolbarState = $derived(getDerivedToolbarState());
 
-  // Update toolbar state when project changes
   $effect(() => {
     const project = projectStore.currentProject;
-    const isDirty = projectStore.isDirty;
 
-    // Update navigation state based on project
     if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
       mainToolbarState.canNavigateToVisualization = true;
     } else {
@@ -143,6 +136,7 @@
 
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const dataCompleteness = mainToolbarActions.checkDataCompleteness()}
+    {@const activeStepIndex = dataTabStore.activeStepIndex}
 
     <footer
       class={clsx(
@@ -151,35 +145,37 @@
       )}
     >
       <ProgressIndicator
-        currentIndex={derivedToolbarState.hasProject
-          ? derivedToolbarState.hasFiles
-            ? 2
-            : 1
-          : 0}
+        currentIndex={activeStepIndex}
         spaceEqually
+        on:click={(e) => {
+          const detail = e.detail;
+          if (detail !== undefined && dataTabStore.canNavigateToStep[detail]) {
+            dataTabStore.setActiveStep(detail);
+          }
+        }}
       >
         <ProgressStep
-          complete={derivedToolbarState.hasProject}
-          label="Créer projet"
-          description={derivedToolbarState.hasProject
-            ? projectStore.currentProject?.manifest.name
-            : 'Créez ou chargez un projet'}
+          complete={dataTabStore.hasCompletedStep[0]}
+          label={m.data_tab_control()}
+          description={dataTabStore.hasCompletedStep[0]
+            ? 'Données contrôlées'
+            : 'Vérifiez et nettoyez vos données'}
         />
         <ProgressStep
-          complete={derivedToolbarState.hasFiles}
-          disabled={!derivedToolbarState.hasProject}
-          label="Importer données"
-          description={derivedToolbarState.hasFiles
-            ? 'Données importées'
-            : 'Importez vos fichiers CSV ou GeoJSON'}
+          complete={dataTabStore.hasCompletedStep[1]}
+          disabled={!dataTabStore.canNavigateToStep[1]}
+          label={m.data_tab_geolocate()}
+          description={dataTabStore.hasCompletedStep[1]
+            ? 'Géolocalisation effectuée'
+            : 'Sélectionnez les colonnes géographiques'}
         />
         <ProgressStep
-          complete={dataCompleteness.isComplete}
-          disabled={!derivedToolbarState.hasFiles}
-          label="Valider"
-          description={dataCompleteness.isComplete
-            ? 'Prêt pour la visualisation'
-            : 'Validation des données'}
+          complete={dataTabStore.hasCompletedStep[2]}
+          disabled={!dataTabStore.canNavigateToStep[2]}
+          label={m.data_tab_join()}
+          description={dataTabStore.hasCompletedStep[2]
+            ? 'Jointure réalisée'
+            : 'Associez vos données au fond de carte'}
         />
 
         <Button
@@ -192,7 +188,7 @@
           iconDescription={!derivedToolbarState.canVisualize
             ? dataCompleteness.missingSteps.join(', ')
             : 'Passer à la visualisation'}
-          size="small">Visualiser</Button
+          size="small">{m.data_tab_visualize()}</Button
         >
       </ProgressIndicator>
 

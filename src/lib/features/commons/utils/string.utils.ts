@@ -1,7 +1,3 @@
-/**
- * Slugify a string for safe file names
- * Removes special characters, accents, spaces and makes lowercase
- */
 export function slugify(text: string): string {
   if (!text) return '';
 
@@ -16,10 +12,6 @@ export function slugify(text: string): string {
     .replace(/-{2,}/g, '-');
 }
 
-
-/**
- * Generate a safe filename with optional timestamp
- */
 export function generateFilename(
   name: string,
   extension: string,
@@ -35,9 +27,6 @@ export function generateFilename(
   return `${slugifiedName}.${extension}`;
 }
 
-/**
- * Generate a safe project filename with timestamp
- */
 export function generateProjectFilename(
   projectName: string,
   extension: string = 'kh'
@@ -45,13 +34,42 @@ export function generateProjectFilename(
   return generateFilename(projectName || 'untitled-project', extension, true);
 }
 
-/**
- * Sanitize filename for display (keep original but remove path)
- */
 export function sanitizeDisplayName(filename: string): string {
   if (!filename) return '';
 
   const pathSeparators = /[/\\]/;
   const parts = filename.split(pathSeparators);
   return parts[parts.length - 1];
+}
+
+/**
+ * Normalise une chaîne pour la comparaison (enlève accents, espaces, ponctuation)
+ * Utilisé pour le matching de données géographiques
+ * @param value La chaîne à normaliser
+ * @param caseSensitive Si vrai, conserve la casse (défaut: false)
+ * @returns La chaîne normalisée
+ */
+export function normalizeForMatching(
+  value: string,
+  caseSensitive: boolean = false
+): string {
+  if (!value) return '';
+
+  let normalized = value.toString().trim();
+
+  // Enlever les accents en utilisant NFD + suppression des diacritiques
+  normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Appliquer la casse si nécessaire
+  if (!caseSensitive) {
+    normalized = normalized.toLowerCase();
+  }
+
+  // Enlever la ponctuation et caractères spéciaux (garder lettres, chiffres et espaces)
+  normalized = normalized.replace(/[^a-z0-9\s]/gi, '');
+
+  // Normaliser les espaces multiples en un seul
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
 }

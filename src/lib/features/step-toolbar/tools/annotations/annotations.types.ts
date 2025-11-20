@@ -6,6 +6,7 @@ export interface AnnotationType {
   content: unknown;
   position: { x: number; y: number };
   style?: AnnotationStyle;
+  visible?: boolean;
 }
 
 export interface AnnotationStyle {

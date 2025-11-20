@@ -3,7 +3,9 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
 
@@ -12,35 +14,73 @@
     addDataButton: () => void;
   }
 
-  let { open = $bindable(), addDataButton }: Props = $props();
+  let { open = $bindable(), addDataButton: _addDataButton }: Props = $props();
+
+  let uploaderResetKey = $state(0);
+  let previousOpen = false;
+  $effect(() => {
+    if (open && !previousOpen) {
+      uploaderResetKey++;
+    }
+    previousOpen = open;
+  });
+
+  let isImporting = $state(false);
 
   const closeModal = () => {
     open = false;
-    createProjectActions.clearAllFiles();
+    createProjectActions.clearUploadState();
+    uploaderResetKey++;
   };
 
-  const handleImport = async () => {
-    const newFiles = createProjectState.newProject.uploadedFiles.filter(
-      (f) => f.status === 'complete'
+  const handleImport = async (e: CustomEvent) => {
+    e.preventDefault();
+
+    const validFiles = createProjectState.newProject.uploadedFiles.filter(
+      (f) =>
+        f.status === 'complete' &&
+        (!f.validation?.errors || f.validation.errors.length === 0)
     );
 
-    if (newFiles.length > 0 && projectStore.currentProject) {
+    if (validFiles.length === 0) {
+      return;
+    }
+
+    if (isLoading) {
+      return;
+    }
+
+    if (projectStore.currentProject) {
       try {
-        await projectStore.addFilesToProject(newFiles);
+        isImporting = true;
+
+        await projectStore.addFilesToProject(validFiles);
+        const lastFile = validFiles[validFiles.length - 1];
+        if (lastFile?.id) {
+          globalActions.selectDataButton(lastFile.id);
+        }
         closeModal();
       } catch (error) {
-        console.error('[AddDataModal] Failed to add files to project:', error);
-        // Don't close modal on error so user can see what happened
-        // The error notification will be shown by the error handling in projectStore
+        logger.error('Failed to add files to project', LogCategory.FILE, error);
+      } finally {
+        isImporting = false;
       }
     } else {
-      closeModal();
+      logger.error('No current project', LogCategory.PROJECT);
     }
   };
 
-  const canImport = $derived(
+  const hasValidFiles = $derived(
     createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === 'complete'
+      (f) =>
+        f.status === 'complete' &&
+        (!f.validation?.errors || f.validation.errors.length === 0)
+    )
+  );
+
+  const hasErrors = $derived(
+    createProjectState.newProject.uploadedFiles.some(
+      (f) => f.validation?.errors && f.validation.errors.length > 0
     )
   );
 
@@ -49,18 +89,23 @@
       (f) => f.status === 'processing'
     )
   );
+
+  const canImport = $derived(hasValidFiles && !hasErrors && !isProcessing);
+
+  const isLoading = $derived(isProcessing || isImporting);
 </script>
 
 <Modal
-  primaryButtonText="Ajouter au projet"
-  primaryButtonDisabled={!canImport || isProcessing}
+  primaryButtonDisabled={!canImport || isLoading}
   secondaryButtonText="Annuler"
+  secondaryButtonDisabled={isLoading}
   open={open}
   modalHeading="Ajouter des données au projet"
+  primaryButtonText={isLoading ? 'Ajout en cours...' : 'Ajouter au projet'}
   size="sm"
   on:click:button--secondary={closeModal}
   on:click:button--primary={handleImport}
   on:close={closeModal}
 >
-  <CreateNewProject isModal />
+  <CreateNewProject isModal resetToken={uploaderResetKey} />
 </Modal>

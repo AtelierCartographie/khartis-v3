@@ -1,4 +1,7 @@
-import type { ProcessedDataset } from '../utils/data-pipeline.utils';
+import type {
+  DatasetResult,
+  ProcessedDataset
+} from '$lib/features/data-pipeline';
 import { datasetsStore } from './datasets.store.svelte';
 
 export enum VisualizationType {
@@ -128,15 +131,64 @@ class VisualizationStore {
     }
   }
 
+  duplicateVisualization(id: string): VisualizationConfig | null {
+    const original = this._state.visualizations.find((v) => v.id === id);
+    if (!original) {
+      return null;
+    }
+
+    const duplicateName = this.generateDuplicateName(original.name);
+
+    const duplicate: VisualizationConfig = {
+      ...structuredClone(original),
+      id: crypto.randomUUID(),
+      name: duplicateName
+    };
+
+    this._state.visualizations.push(duplicate);
+    this._state.selectedVisualizationId = duplicate.id;
+    this._state.activeVisualizationIds.add(duplicate.id);
+
+    return duplicate;
+  }
+
+  private generateDuplicateName(originalName: string): string {
+    const baseMatch = originalName.match(/^(.*?)(?:\s*\((\d+)\))?$/);
+    const baseName = baseMatch?.[1] || originalName;
+
+    const existingNumbers: number[] = [];
+
+    this._state.visualizations.forEach((viz) => {
+      const match = viz.name.match(
+        new RegExp(
+          `^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\((\\d+)\\)$`
+        )
+      );
+      if (match) {
+        existingNumbers.push(parseInt(match[1], 10));
+      }
+    });
+
+    if (existingNumbers.length === 0) {
+      return `${baseName} (1)`;
+    }
+
+    const nextNumber = Math.max(...existingNumbers) + 1;
+    return `${baseName} (${nextNumber})`;
+  }
+
   removeVisualization(id: string): void {
-    this._state.visualizations = this._state.visualizations.filter(
+    const filteredVisualizations = this._state.visualizations.filter(
       (v) => v.id !== id
     );
+
     this._state.activeVisualizationIds.delete(id);
 
     if (this._state.selectedVisualizationId === id) {
-      this._state.selectedVisualizationId = this._state.visualizations[0]?.id;
+      this._state.selectedVisualizationId = filteredVisualizations[0]?.id;
     }
+
+    this._state.visualizations = filteredVisualizations;
   }
 
   toggleVisualization(id: string): void {
@@ -167,6 +219,7 @@ class VisualizationStore {
           strokeWidth: 1,
           strokeOpacity: 1
         };
+
       case VisualizationType.PROPORTIONAL:
         return {
           fillColor: '#3b82f6',
@@ -175,6 +228,7 @@ class VisualizationStore {
           strokeWidth: 2,
           strokeOpacity: 1
         };
+
       case VisualizationType.CATEGORICAL:
         return {
           fillOpacity: 0.8,
@@ -182,6 +236,7 @@ class VisualizationStore {
           strokeWidth: 1,
           strokeOpacity: 1
         };
+
       default:
         return {
           fillColor: '#3b82f6',
@@ -195,7 +250,7 @@ class VisualizationStore {
 
   private getDefaultMapping(
     type: VisualizationType,
-    dataset: ProcessedDataset
+    dataset: ProcessedDataset | DatasetResult
   ) {
     const numericColumns = dataset.columns.filter((c) => c.type === 'number');
     const stringColumns = dataset.columns.filter((c) => c.type === 'string');
@@ -209,12 +264,15 @@ class VisualizationStore {
       case VisualizationType.CHOROPLETH:
         mapping.valueColumn = numericColumns[0]?.name;
         break;
+
       case VisualizationType.PROPORTIONAL:
         mapping.sizeColumn = numericColumns[0]?.name;
         break;
+
       case VisualizationType.CATEGORICAL:
         mapping.categoryColumn = stringColumns[0]?.name;
         break;
+
       case VisualizationType.BIVARIATE:
         mapping.valueColumn = numericColumns[0]?.name;
         mapping.colorColumn = numericColumns[1]?.name;
@@ -264,7 +322,7 @@ class VisualizationStore {
   ): number[] {
     const values = datasetsStore
       .getColumnValues(datasetId, columnName)
-      .filter((v) => typeof v === 'number' && !isNaN(v))
+      .filter((v): v is number => typeof v === 'number' && !isNaN(v))
       .sort((a, b) => a - b);
 
     if (values.length === 0) return [];
@@ -319,8 +377,6 @@ class VisualizationStore {
   }
 
   private jenksBreaks(values: number[], classes: number): number[] {
-    // Simplified Jenks implementation
-    // For production, use a proper implementation like simple-statistics
     return this.quantileBreaks(values, classes);
   }
 

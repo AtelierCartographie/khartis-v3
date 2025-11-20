@@ -9,7 +9,18 @@ import svelteConfig from './svelte.config.js';
 
 const gitignorePath = fileURLToPath(new URL('./.gitignore', import.meta.url));
 
+const ignoredPaths = [
+  'node_modules',
+  'build',
+  'dist',
+  'dev-dist',
+  '.svelte-kit'
+];
+
 export default ts.config(
+  {
+    ignores: ignoredPaths
+  },
   includeIgnoreFile(gitignorePath),
   js.configs.recommended,
   ...ts.configs.recommended,
@@ -22,6 +33,16 @@ export default ts.config(
     },
     rules: {
       'no-undef': 'off',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_'
+        }
+      ],
       'padding-line-between-statements': [
         'error',
         { blankLine: 'always', prev: '*', next: 'function' },
@@ -36,24 +57,28 @@ export default ts.config(
           next: ['const', 'let', 'var', 'function', 'class']
         }
       ],
-      'lines-between-class-members': ['error', 'always'],
-      '@typescript-eslint/padding-line-between-statements': [
-        'error',
-        { blankLine: 'always', prev: 'interface', next: '*' },
-        { blankLine: 'always', prev: '*', next: 'interface' },
-        { blankLine: 'always', prev: 'type', next: '*' },
-        { blankLine: 'always', prev: '*', next: 'type' }
-      ]
+      'lines-between-class-members': ['error', 'always']
     }
   },
   {
-    files: ['***.svelte.ts', '**/*.svelte.js'],
+    files: ['**/*.svelte'],
     languageOptions: {
       parserOptions: {
-        projectService: true,
-        extraFileExtensions: ['.svelte'],
         parser: ts.parser,
+        extraFileExtensions: ['.svelte'],
         svelteConfig
+      }
+    },
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off',
+      'svelte/no-unnecessary-state-wrap': 'off'
+    }
+  },
+  {
+    files: ['**/*.svelte.ts', '**/*.svelte.js'],
+    languageOptions: {
+      parserOptions: {
+        parser: ts.parser
       }
     }
   }

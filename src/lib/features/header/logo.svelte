@@ -4,6 +4,9 @@
   import { m } from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import Separator from '../commons/components/separator.svelte';
+  import { EnvironmentUtils } from '../commons/utils/environment.utils';
+
+  const isNotProduction = $state(!EnvironmentUtils.isProduction());
 </script>
 
 <div id="khartis-logo">
@@ -12,6 +15,7 @@
       <Column class="logo-column">
         <img
           class="sciences-po-logo"
+          class:preprod={isNotProduction}
           src={logoSciencesPo}
           width={100}
           alt={m.logo_sciences_po_alt()}
@@ -42,6 +46,10 @@
 
   .sciences-po-logo {
     margin: auto;
+
+    &.preprod {
+      filter: hue-rotate(90deg) saturate(1.5);
+    }
   }
 
   #khartis-logo :global(.full-height) {

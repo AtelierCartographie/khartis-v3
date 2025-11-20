@@ -1,3 +1,5 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import type { SearchState } from './search.types';
 
 const FIXTURE_RESULTS = [
@@ -185,9 +187,7 @@ export const searchActions = {
     });
   },
 
-  reset(): void {
-    Object.assign(searchState, DEFAULT_STATE);
-  }
+  reset: createResetFunction(searchState, DEFAULT_STATE)
 };
 
 export function getSearchPattern(): RegExp | string {
@@ -204,6 +204,7 @@ export function getSearchPattern(): RegExp | string {
   try {
     return new RegExp(pattern, searchState.caseSensitive ? 'g' : 'gi');
   } catch (error) {
+    logger.error('Invalid regex pattern', LogCategory.UI, error);
     return searchState.searchValue;
   }
 }

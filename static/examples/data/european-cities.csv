@@ -1,0 +1,31 @@
+city,lat,lng,country,population
+Paris,48.8667,2.3333,France,9904000
+London,51.5,-0.1167,United Kingdom,8567000
+Madrid,40.4,-3.6834,Spain,5567000
+Barcelona,41.3833,2.1834,Spain,4920000
+Berlin,52.5218,13.4015,Germany,3406000
+Rome,41.896,12.4833,Italy,3339000
+Athens,37.9833,23.7333,Greece,3242000
+Milan,45.47,9.205,Italy,2945000
+Stuttgart,48.78,9.2,Germany,2944700
+Frankfurt,50.1,8.675,Germany,2895000
+Lisbon,38.7227,-9.1449,Portugal,2812000
+Katowice,50.2604,19.02,Poland,2746000
+Vienna,48.2,16.3666,Austria,2400000
+Mannheim,49.5004,8.47,Germany,2362000
+Birmingham,52.475,-1.92,United Kingdom,2285000
+Naples,40.84,14.245,Italy,2250000
+Manchester,53.5004,-2.248,United Kingdom,2230000
+Bucharest,44.4334,26.0999,Romania,1942000
+Hamburg,53.55,10,Germany,1757000
+Brussels,50.8333,4.3333,Belgium,1743000
+Essen,51.45,7.0166,Germany,1742135
+Warsaw,52.25,21,Poland,1707000
+Budapest,47.5,19.0833,Hungary,1679000
+Turin,45.0704,7.67,Italy,1652000
+Leeds,53.83,-1.58,United Kingdom,1529000
+Florence,43.78,11.25,Italy,1500000
+Lyon,45.77,4.83,France,1423000
+The Hague,52.08,4.27,Netherlands,1406000
+Marseille,43.29,5.375,France,1400000
+Porto,41.15,-8.62,Portugal,1337000

@@ -1,0 +1,16 @@
+country,gdp_per_capita,growth_rate,iso3
+United States,76398,2.5,USA
+China,12720,5.2,CHN
+Germany,48756,0.1,DEU
+Japan,33950,-0.4,JPN
+United Kingdom,46371,0.5,GBR
+France,44408,0.9,FRA
+India,2389,7.8,IND
+Italy,35551,0.9,ITA
+Canada,52051,1.1,CAN
+South Korea,32255,1.4,KOR
+Spain,30103,2.5,ESP
+Australia,64964,2.0,AUS
+Brazil,9673,2.9,BRA
+Mexico,11497,3.2,MEX
+Indonesia,4788,5.0,IDN

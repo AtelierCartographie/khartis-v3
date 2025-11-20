@@ -1,7 +1,27 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
+  import {
+    EXAMPLE_CATEGORIES,
+    EXAMPLE_PROJECTS,
+    getExamplesByCategory,
+    loadExampleData
+  } from '$lib/features/commons/mocks/examples.data';
+  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+  import {
+    DataSourceType as DataSource,
+    FileType as FType
+  } from '$lib/features/commons/store/create-project.types';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
-  import { Tag } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    SkeletonPlaceholder,
+    Tag
+  } from 'carbon-components-svelte';
 
   interface Props {
     onClose?: () => void;
@@ -9,11 +29,73 @@
 
   const { onClose }: Props = $props();
 
-  let selectedCardIndex = $state<number | null>(null);
+  let selectedCategory = $state<string>('all');
+  let selectedExample = $state<string | null>(null);
+  let isLoading = $state(false);
+  let error = $state<string>('');
 
-  function handleCardClick(index: number) {
-    selectedCardIndex = selectedCardIndex === index ? null : index;
-    onClose?.();
+  const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
+
+  function selectCategory(category: string) {
+    selectedCategory = category;
+  }
+
+  async function handleExampleClick(exampleId: string) {
+    if (selectedExample === exampleId) {
+      selectedExample = null;
+      return;
+    }
+
+    selectedExample = exampleId;
+    isLoading = true;
+    error = '';
+
+    try {
+      const example = EXAMPLE_PROJECTS.find((e) => e.id === exampleId);
+      if (!example) {
+        throw new Error('Example not found');
+      }
+
+      const data = await loadExampleData(example);
+
+      const fileName = example.dataUrl
+        ? example.dataUrl.split('/').pop()
+        : 'example-data.csv';
+      const fileType = example.dataUrl?.endsWith('.json')
+        ? 'application/json'
+        : 'text/csv';
+
+      const file = new File(
+        [typeof data === 'string' ? data : JSON.stringify(data)],
+        fileName || 'example-data.csv',
+        { type: fileType }
+      );
+
+      const uploadedFile: UploadedFile = {
+        id: crypto.randomUUID(),
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        fileType: file.type.includes('json') ? FType.GEOJSON : FType.CSV,
+        status: 'complete',
+        sourceType: DataSource.FILE_UPLOAD
+      };
+
+      await createProjectActions.processFiles([file]);
+      createProjectActions.setProjectName(example.title);
+
+      await projectStore.createProject(example.title, [uploadedFile]);
+
+      globalState.isCreateProjectModalOpen = false;
+      createProjectActions.resetAllTabs();
+      onClose?.();
+      await goto('/', { replaceState: true });
+    } catch (err) {
+      logger.error('Failed to load example', LogCategory.PROJECT, err);
+      error = err instanceof Error ? err.message : 'Failed to load example';
+    } finally {
+      isLoading = false;
+    }
   }
 </script>
 
@@ -28,33 +110,74 @@
     </div>
   </header>
 
+  {#if error}
+    <InlineNotification
+      lowContrast
+      kind="error"
+      title={m.create_project_error_label()}
+      subtitle={error}
+      on:close={() => (error = '')}
+    />
+  {/if}
+
   <div>
     <span class="text-grey">{m.try_example_graphic_primitives()}</span>
 
-    <div class="mt-2">
-      <Tag type="high-contrast">{m.try_example_all()}</Tag>
-      <Tag>{m.try_example_symbols()}</Tag>
-      <Tag>{m.try_example_polygons()}</Tag>
-      <Tag>{m.try_example_lines()}</Tag>
-      <Tag>{m.try_example_texts()}</Tag>
-      <Tag>{m.try_example_hybrids()}</Tag>
+    <div class="mt-2 flex gap-2 flex-wrap">
+      {#each EXAMPLE_CATEGORIES as category (category.id)}
+        <Tag
+          type={selectedCategory === category.id ? 'high-contrast' : 'gray'}
+          interactive
+          on:click={() => selectCategory(category.id)}
+        >
+          {#if category.label === 'try_example_all'}
+            {m.try_example_all()}
+          {:else if category.label === 'try_example_symbols'}
+            {m.try_example_symbols()}
+          {:else if category.label === 'try_example_polygons'}
+            {m.try_example_polygons()}
+          {:else if category.label === 'try_example_lines'}
+            {m.try_example_lines()}
+          {:else if category.label === 'try_example_texts'}
+            {m.try_example_texts()}
+          {:else if category.label === 'try_example_hybrids'}
+            {m.try_example_hybrids()}
+          {:else}
+            {category.label}
+          {/if}
+        </Tag>
+      {/each}
     </div>
   </div>
 
   <div class="flex gap-5 overflow-x-auto pb-3">
-    {#each Array(10) as _, index}
-      <ProjectCard
-        title="Title Lorem dolor sit amet"
-        subtitle="Project preview"
-        variant="gray"
-        selected={selectedCardIndex === index}
-        onclick={() => handleCardClick(index)}
-      >
-        {#snippet footer()}
-          <span>Lorem ipsum</span>
-        {/snippet}
-      </ProjectCard>
-    {/each}
+    {#if isLoading}
+      {#each Array(3) as _item, idx (idx)}
+        <div class="example-card-skeleton">
+          <SkeletonPlaceholder style="width: 200px; height: 150px;" />
+        </div>
+      {/each}
+    {:else if filteredExamples.length === 0}
+      <div class="no-examples">
+        <p class="text-grey">{m.create_project_no_examples_category()}</p>
+      </div>
+    {:else}
+      {#each filteredExamples as example (example.id)}
+        <ProjectCard
+          title={example.title}
+          subtitle={example.subtitle}
+          variant={selectedExample === example.id ? 'blue' : 'gray'}
+          selected={selectedExample === example.id}
+          onclick={() => handleExampleClick(example.id)}
+        >
+          {#snippet footer()}
+            <span class="text-xs text-grey"
+              >{example.tags?.join(' • ') || ''}</span
+            >
+          {/snippet}
+        </ProjectCard>
+      {/each}
+    {/if}
   </div>
 </section>
 

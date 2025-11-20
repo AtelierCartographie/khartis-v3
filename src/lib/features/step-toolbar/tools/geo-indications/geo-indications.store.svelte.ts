@@ -1,3 +1,4 @@
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import type { ColorState, GeoIndicationsState } from './geo-indications.types';
 
@@ -127,7 +128,5 @@ export const geoIndicationsActions = {
     );
   },
 
-  reset(): void {
-    Object.assign(geoIndicationsState, DEFAULT_STATE);
-  }
+  reset: createResetFunction(geoIndicationsState, DEFAULT_STATE)
 };

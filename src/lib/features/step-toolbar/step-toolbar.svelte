@@ -60,6 +60,7 @@
     aria-label={m.toolbar_step_selection_aria()}
   >
     <button
+      data-testid="step-data"
       class={clsx('nav-item', {
         selected: isStepSelected(ToolbarStep.Data)
       })}
@@ -72,6 +73,7 @@
     </button>
 
     <button
+      data-testid="step-visualizations"
       class={clsx('nav-item', {
         selected: isStepSelected(ToolbarStep.Visualizations)
       })}
@@ -84,6 +86,7 @@
     </button>
 
     <button
+      data-testid="step-styling"
       class={clsx('nav-item', {
         selected: isStepSelected(ToolbarStep.Styling)
       })}
