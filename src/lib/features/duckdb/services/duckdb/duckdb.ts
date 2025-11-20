@@ -1,19 +1,44 @@
-import * as duckdb from '@duckdb/duckdb-wasm';
-import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
-import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
-import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
-import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import { tableFromIPC, type Table } from '@uwdata/flechette';
 import {
   DataValidationError,
   DuckDBError,
   TypeInferenceError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
+import * as duckdb from '@duckdb/duckdb-wasm';
+import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
+import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
+import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
+import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
+import { tableFromIPC, type Table } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
+
+// --- Transaction Mutex ---
+class TransactionMutex {
+  private queue: Array<() => void> = [];
+  private locked = false;
+
+  async acquire(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      this.queue.push(resolve);
+    });
+  }
+
+  release(): void {
+    const next = this.queue.shift();
+    if (next) {
+      next();
+    } else {
+      this.locked = false;
+    }
+  }
+}
 
 // --- Constants used by Duck class ---
 const DUCK_CONST = {
@@ -73,7 +98,6 @@ import type {
   BreaksRoundedResult,
   DuckDBMetadata,
   DuckDBValue,
-  TableDescribeResult,
   ValidationResult
 } from './types/index.js';
 
@@ -430,14 +454,6 @@ class DuckDB {
     accessOrder: []
   };
 
-  private preparedStatements: {
-    describe: duckdb.AsyncPreparedStatement | null;
-    rowCount: duckdb.AsyncPreparedStatement | null;
-  } = {
-    describe: null,
-    rowCount: null
-  };
-
   private extensionsLoaded = {
     spatial: false,
     httpfs: false
@@ -450,49 +466,9 @@ class DuckDB {
 
   private threadsSupported = false;
 
+  private transactionMutex = new TransactionMutex();
+
   constructor() {}
-
-  private async closePreparedStatements(): Promise<void> {
-    const statements = Object.values(this.preparedStatements).filter(
-      (statement): statement is duckdb.AsyncPreparedStatement =>
-        Boolean(statement)
-    );
-
-    await Promise.allSettled(statements.map((statement) => statement.close()));
-    this.preparedStatements.describe = null;
-    this.preparedStatements.rowCount = null;
-  }
-
-  private async getDescribeStatement(): Promise<duckdb.AsyncPreparedStatement> {
-    if (!this.connection) {
-      throw new DuckDBError('Connection not established');
-    }
-
-    if (!this.preparedStatements.describe) {
-      this.preparedStatements.describe = await this.connection.prepare(
-        `SELECT column_name, data_type AS column_type
-         FROM information_schema.columns
-         WHERE table_name = ? COLLATE NOCASE
-         ORDER BY ordinal_position`
-      );
-    }
-
-    return this.preparedStatements.describe;
-  }
-
-  private async getRowCountStatement(): Promise<duckdb.AsyncPreparedStatement> {
-    if (!this.connection) {
-      throw new DuckDBError('Connection not established');
-    }
-
-    if (!this.preparedStatements.rowCount) {
-      this.preparedStatements.rowCount = await this.connection.prepare(
-        `SELECT COUNT(*) as num_rows FROM query_table(?)`
-      );
-    }
-
-    return this.preparedStatements.rowCount;
-  }
 
   private evictGeoParquetEntry(table: string): void {
     if (!this.table_geoparquet_cache.has(table)) {
@@ -509,6 +485,11 @@ class DuckDB {
     if (index > -1) {
       this.cacheState.accessOrder.splice(index, 1);
     }
+  }
+
+  invalidateTableCache(table: string): void {
+    this.describeCache.delete(table);
+    this.rowCountCache.delete(table);
   }
 
   private markTableMutated(table: string): void {
@@ -653,25 +634,32 @@ class DuckDB {
       throw new DuckDBError('Connection not established');
     }
     const start = performance.now();
-    logger.debug('Starting DuckDB transaction', LogCategory.DUCKDB, {
-      context
-    });
-    await this.connection.query('BEGIN TRANSACTION;');
+
+    await this.transactionMutex.acquire();
+
     try {
-      await callback();
-      await this.connection.query('COMMIT;');
-      logger.info('DuckDB transaction committed', LogCategory.DUCKDB, {
-        context,
-        durationMs: (performance.now() - start).toFixed(2)
+      logger.debug('Starting DuckDB transaction', LogCategory.DUCKDB, {
+        context
       });
-    } catch (error) {
-      await this.connection.query('ROLLBACK;');
-      logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
-        context,
-        durationMs: (performance.now() - start).toFixed(2),
-        error
-      });
-      throw error;
+      await this.connection.query('BEGIN TRANSACTION;');
+      try {
+        await callback();
+        await this.connection.query('COMMIT;');
+        logger.info('DuckDB transaction committed', LogCategory.DUCKDB, {
+          context,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+      } catch (error) {
+        await this.connection.query('ROLLBACK;');
+        logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {
+          context,
+          durationMs: (performance.now() - start).toFixed(2),
+          error
+        });
+        throw error;
+      }
+    } finally {
+      this.transactionMutex.release();
     }
   }
 
@@ -689,11 +677,6 @@ class DuckDB {
     } finally {
       this.registered_files.delete(fileId);
     }
-  }
-
-  invalidateTableCache(table: string): void {
-    this.describeCache.delete(table);
-    this.rowCountCache.delete(table);
   }
 
   // New DuckDb instance + spatial extension
@@ -790,7 +773,6 @@ class DuckDB {
    * Close DuckDB connection.
    */
   async close(): Promise<void> {
-    await this.closePreparedStatements();
     await this.connection?.close();
   }
 
@@ -810,7 +792,6 @@ class DuckDB {
     this.extensionsLoaded.httpfs = false;
     this.extensionLoadPromises.spatial = null;
     this.extensionLoadPromises.httpfs = null;
-    await this.closePreparedStatements();
     await this.connection?.close();
     await this.db?.dropFiles();
     await this.db?.reset();
@@ -1322,9 +1303,14 @@ class DuckDB {
       return cached;
     }
     try {
-      const statement = await this.getDescribeStatement();
-      const resultTable = await statement.query(table);
-      const records = resultTable.toArray() as unknown as TableDescribeResult[];
+      const records = (await this.query(
+        `SELECT column_name, data_type AS column_type
+         FROM information_schema.columns
+         WHERE table_name = '${table}' COLLATE NOCASE
+         ORDER BY ordinal_position`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+      )) as Array<{ column_name: string; column_type: string }>;
+
       const names = records.map((row) => row.column_name);
       const types = records.map((row) => row.column_type);
 
@@ -1346,10 +1332,11 @@ class DuckDB {
       return cached;
     }
     try {
-      const statement = await this.getRowCountStatement();
-      const result = await statement.query(table);
-      const rows = result.toArray() as unknown as Array<{ num_rows: number }>;
-      const count = Number(rows[0]?.num_rows ?? 0);
+      const result = (await this.query(
+        `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM ${table}`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+      )) as Array<{ num_rows: number }>;
+      const count = Number(result[0]?.num_rows ?? 0);
       this.rowCountCache.set(table, count);
       return count;
     } catch (error) {
