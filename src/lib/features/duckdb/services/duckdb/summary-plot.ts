@@ -84,6 +84,9 @@ interface ObservablePlotStackOptions {
   fontVariant?: string;
 }
 
+/**
+ * Creates a summary plot based on the type of data provided.
+ */
 export function create_summary_plot(
   data: SummaryPlotData,
   options: SummaryPlotOptions = {}
@@ -101,6 +104,10 @@ export function create_summary_plot(
   }
 }
 
+/**
+ * Creates a numeric plot (histogram) from analysis of a column.
+ * bins and counts, min and max values, and nulls are used to create the plot.
+ */
 function create_plot_numeric(
   data: NumericData,
   options: SummaryPlotOptions = {}
@@ -162,6 +169,22 @@ function create_plot_numeric(
   });
 }
 
+/**
+ * Creates a categorical plot using the provided data and options.
+ *
+ * @param {Object} data - The data to be plotted.
+ * @param {Object} [options={}] - Configuration options for the plot.
+ * @param {number} [options.width=144] - The width of the plot.
+ * @param {number} [options.height=64] - The height of the plot.
+ * @param {boolean} [options.geoid=false] - Whether to treat the data as geoid.
+ * @param {string} [options.main_color='#fa4d56'] - The main color for the rectangles.
+ * @param {string} [options.nulls_color='gold'] - The color for null values.
+ * @param {string} [options.unique_color='grey'] - The color for unique values.
+ * @param {string} [options.stroke_main='none'] - The stroke color for main values.
+ * @param {string} [options.stroke_nulls='none'] - The stroke color for null values.
+ * @param {string} [options.stroke_unique='none'] - The stroke color for unique values.
+ * @returns {Object} The generated plot.
+ */
 function create_plot_categorical(
   data: CategoricalData,
   options: SummaryPlotOptions = {}
@@ -181,11 +204,13 @@ function create_plot_categorical(
   const { uniques, histogram } = data;
   let histogramData: CategoricalHistogram | CategoryHistogramItem[] = histogram;
 
+  // .toArray() to keep null at the end
   if (geoid) {
     const array = histogram.toArray();
     const has_unique = array.find(
       (d: CategoryHistogramItem) => d.category === 'unique'
     );
+    // If for geoid, category unique has to appear first
     if (has_unique)
       histogramData = [
         has_unique,
@@ -193,9 +218,11 @@ function create_plot_categorical(
       ];
   }
 
+  // Handle null category => show "nulls"
   const get_label: LabelFunction = (label) =>
     label === null ? 'nulls' : label;
 
+  // filter : [low_limit, high limit]
   const label_layer = (filter: PercentRange, lineWidth: number) =>
     Plot.textX(
       histogramData as CategoryHistogramItem[],
@@ -211,9 +238,12 @@ function create_plot_categorical(
     );
 
   const numRows = data.histogram.numRows;
+  // Adapt inset on number of categories. More categories = less inset.
+  // Why? Whitout, rectangles are invisible with too much categories
   const inset: number | undefined =
     numRows > 30 ? undefined : numRows > 20 ? 0.2 : 0.5;
 
+  // Intercept case when only one category.
   const has_one_category = numRows === 1 ? true : false;
 
   const plot = Plot.plot({
@@ -226,6 +256,10 @@ function create_plot_categorical(
     style: 'overflow: visible;',
     x: { axis: null },
     marks: [
+      // Handle fix text with pointer and stack mark
+      // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
+
+      // BARS
       Plot.barX(
         histogramData as CategoryHistogramItem[],
         Plot.stackX({
@@ -246,6 +280,8 @@ function create_plot_categorical(
         } as ObservablePlotStackOptions)
       ),
 
+      // LABELS
+      // special case all uniques values
       has_one_category
         ? Plot.textX(
             histogramData as CategoryHistogramItem[],
@@ -260,6 +296,7 @@ function create_plot_categorical(
             } as ObservablePlotStackOptions)
           )
         : null,
+      // adapt label length on percent values
       !has_one_category ? label_layer([0.8, 1], 9) : null,
       label_layer([0.6, 0.8], 6),
       label_layer([0.4, 0.6], 5),
@@ -273,6 +310,8 @@ function create_plot_categorical(
             dy: 10
           }),
 
+      // INTERACTIVITY
+      // Highlight bar
       Plot.barX(
         histogramData as CategoryHistogramItem[],
         Plot.pointerX(
@@ -283,6 +322,7 @@ function create_plot_categorical(
           } as ObservablePlotStackOptions)
         )
       ),
+      // Mask the count of all categories
       Plot.text(
         histogramData as CategoryHistogramItem[],
         Plot.pointerX({
@@ -295,6 +335,7 @@ function create_plot_categorical(
           strokeWidth: 5
         } as never)
       ),
+      // Show count and category in a fixed place
       Plot.text(
         histogramData as CategoryHistogramItem[],
         Plot.pointerX({

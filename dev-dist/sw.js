@@ -81,11 +81,11 @@ define(['./workbox-f6195dc0'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
-    "url": "/index.html",
-    "revision": "0.2gddm5il7oc"
+    "url": "/cartographie/khartisnewpprd/index.html",
+    "revision": "0.tcvqt4msgeo"
   }], {});
   workbox.cleanupOutdatedCaches();
-  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
+  workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/cartographie/khartisnewpprd/index.html"), {
     allowlist: [/^\/$/]
   }));
   workbox.registerRoute(/^https:\/\/extensions\.duckdb\.org\/.*/, new workbox.CacheFirst({
