@@ -170,8 +170,12 @@ BREAKING CHANGE: Legacy authentication method removed
 export class FeatureStore {
   private _state = $state({ data: null });
 
-  get data() { return this._state.data; }
-  setData(data) { this._state.data = data; }
+  get data() {
+    return this._state.data;
+  }
+  setData(data) {
+    this._state.data = data;
+  }
 }
 ```
 
@@ -185,6 +189,7 @@ export class FeatureStore {
 ### Web Workers Usage
 
 Workers are available for:
+
 - Type inference
 - DuckDB batch queries
 - Geometry processing
@@ -202,6 +207,7 @@ Workers are available for:
 ### Error Classes
 
 Use the hierarchical error system:
+
 - `KhartisError` (base class)
 - `DataError`, `DataValidationError`, `DataParseError`
 - `DuckDBError`, `DuckDBConnectionError`

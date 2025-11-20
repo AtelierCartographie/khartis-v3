@@ -457,8 +457,30 @@
       if (!hasMatchingGeoExtension && hasUserDataset) {
         logger.warn('Geometry extension mismatch detected', LogCategory.MAP, {
           geometryType: resolvedGeometryType,
-          arrowExtension
+          arrowExtension,
+          expectedExtension
         });
+
+        // Validate that we can extract geometry manually if extension is missing
+        const geometryField = jsTable.schema.fields.find(
+          (field) => field.name === geoColumn
+        );
+        const geometryVector = geometryField
+          ? jsTable.getChild(geoColumn)
+          : null;
+
+        if (!geometryVector) {
+          logger.error(
+            'Cannot render geometry: missing proper GeoArrow extension metadata and unable to extract geometry column',
+            LogCategory.MAP,
+            {
+              geometryType: resolvedGeometryType,
+              geoColumn,
+              availableFields: jsTable.schema.fields.map((f) => f.name)
+            }
+          );
+          return [];
+        }
       }
 
       const viz = defaultVisualization;
@@ -472,6 +494,8 @@
       let deckLayer: Layer<DeckDataRow>;
       switch (resolvedGeometryType) {
         case 'POINT':
+        // falls through
+
         case 'MULTIPOINT': {
           const pointVector = hasMatchingGeoExtension
             ? null
@@ -562,6 +586,8 @@
         }
 
         case 'LINESTRING':
+        // falls through
+
         case 'MULTILINESTRING': {
           const pathVector = hasMatchingGeoExtension
             ? null
@@ -607,6 +633,8 @@
         }
 
         case 'POLYGON':
+        // falls through
+
         case 'MULTIPOLYGON': {
           const polygonVector = hasMatchingGeoExtension
             ? null
@@ -618,6 +646,19 @@
               { geoColumn }
             );
             return [];
+          }
+
+          // Additional validation: check if geometry data is compatible
+          if (!hasMatchingGeoExtension) {
+            logger.warn(
+              'Rendering polygon layer without proper GeoArrow extension metadata - using fallback extraction',
+              LogCategory.MAP,
+              {
+                geometryType: resolvedGeometryType,
+                geoColumn,
+                hasVector: !!polygonVector
+              }
+            );
           }
 
           const useChoropleth = viz && shouldApplyChoropleth(viz);
