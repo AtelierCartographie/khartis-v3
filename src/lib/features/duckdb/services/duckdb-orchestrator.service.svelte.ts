@@ -1,4 +1,3 @@
-import { base } from '$app/paths';
 import {
   DuckDBError,
   ParseError
@@ -841,50 +840,15 @@ class DuckDBOrchestratorService {
     return dataset;
   }
 
-  async loadBasemap(basemap: BasemapMetadata): Promise<string> {
-    if (!this.initialized) await this.initialize();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
-
-    const tableName = `basemap_${basemap.file.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-
-    // Check if already loaded
-    const tableCheck = (await Duck.query(
-      `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
-      { format: 'array' }
-    )) as Array<{ table_name: string }>;
-
-    if (tableCheck && tableCheck.length > 0) {
-      return tableName;
-    }
-
-    logger.info('Loading basemap into DuckDB', LogCategory.DUCKDB, {
-      file: basemap.file
-    });
-
-    try {
-      // Fetch basemap file
-      const response = await fetch(`${base}/basemaps/${basemap.file}`);
-      if (!response.ok)
-        throw new Error(`Failed to fetch basemap: ${response.statusText}`);
-
-      const blob = await response.blob();
-      const file = new File([blob], basemap.file);
-
-      await Duck.register_files([file]);
-
-      // Load using ST_Read or read_geofile depending on format
-      // Assuming TopoJSON or GeoJSON which DuckDB handles via spatial extension
-      await Duck.query(
-        `CREATE TABLE ${tableName} AS SELECT * FROM ST_Read('${basemap.file}')`
-      );
-
-      // Create index on name/id columns for faster joins?
-      // For now, just return table name
-      return tableName;
-    } catch (error) {
-      logger.error('Failed to load basemap', LogCategory.DUCKDB, error);
-      throw error;
-    }
+  /**
+   * Get the basemap ID used in the basemap_attributes table.
+   * Basemap attributes are pre-loaded from all-basemaps-attributes.parquet
+   * and don't require loading full basemap geometry into DuckDB.
+   */
+  getBasemapAttributesId(basemap: BasemapMetadata): string {
+    // The basemap column in basemap_attributes uses the file name without extension
+    // e.g., "world-countries-50m" for "world-countries-50m.parquet"
+    return basemap.file.replace(/\.(parquet|geojson)$/i, '');
   }
 
   async computeJoinStats(
@@ -901,29 +865,31 @@ class DuckDBOrchestratorService {
     // Ensure macros are loaded
     await Duck.query(join_macros);
 
-    const basemapTable = await this.loadBasemap(basemap);
+    // Use pre-loaded basemap_attributes table instead of loading full basemap
+    // basemap_attributes has columns: raw, id, variant, normalized, basemap, basemap_count
+    const basemapId = this.getBasemapAttributesId(basemap);
 
-    // Identify basemap name column (assuming first string column or specific logic)
-    // For now, let's assume the basemap has a 'name' or 'NAME' column, or we use the first string column.
-    // Ideally this should be configured in BasemapMetadata.
-    // Looking at basemap types, it seems we might need to guess or pass it.
-    // For this implementation, I'll try to find a column named 'name', 'NAME', 'admin', 'iso_a3', etc.
+    // Check if basemap_attributes table exists
+    const tableCheck = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
 
-    const basemapColumns = await Duck.analyse(basemapTable);
-    const basemapNameCol =
-      basemapColumns.find((c) =>
-        ['name', 'NAME', 'name_long', 'admin', 'iso_a3'].includes(c.name)
-      )?.name || basemapColumns.find((c) => c.type === 'VARCHAR')?.name;
+    if (!tableCheck || tableCheck.length === 0) {
+      throw new Error(
+        'basemap_attributes table not loaded. Ensure basemapService.loadAttributes() was called.'
+      );
+    }
 
-    if (!basemapNameCol)
-      throw new Error('Could not identify name column in basemap');
-
-    // Create a view for the join table expected by macros
-    // The macro expects a table with 'main_id'
-    const joinTableView = `${basemapTable}_view`;
-    await Duck.query(
-      `CREATE OR REPLACE VIEW ${joinTableView} AS SELECT "${basemapNameCol}" as main_id FROM ${basemapTable}`
-    );
+    // Create a filtered view for this specific basemap
+    // The join macros expect: id, variant, normalized, basemap, basemap_count
+    const joinTableView = `basemap_join_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    await Duck.query(`
+      CREATE OR REPLACE VIEW ${joinTableView} AS
+      SELECT raw, id, variant, normalized, basemap, basemap_count
+      FROM basemap_attributes
+      WHERE basemap = '${basemapId}'
+    `);
 
     // Run analysis
     const result = (await Duck.query(
