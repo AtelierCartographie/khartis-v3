@@ -1,20 +1,12 @@
 import type { IParser } from '../../contracts/parser';
 import { CSVParser } from './csv.parser';
 import { GeoJSONParser } from './geojson.parser';
-import { ShapefileParser } from './shapefile.parser';
-import { GeoPackageParser } from './geopackage.parser';
-import { KMLParser } from './kml.parser';
-import { GeoParquetParser } from './geoparquet.parser';
 
 export type ParserList = ReadonlyArray<IParser>;
 
 const baseParsers: ParserList = Object.freeze([
   new CSVParser(),
-  new GeoJSONParser(),
-  new ShapefileParser(),
-  new GeoPackageParser(),
-  new KMLParser(),
-  new GeoParquetParser()
+  new GeoJSONParser()
 ]);
 
 export function createParserList(overrides?: ParserList): ParserList {

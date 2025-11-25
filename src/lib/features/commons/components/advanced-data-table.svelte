@@ -68,6 +68,7 @@
     highlightIds?: number[];
     showSummaryPlots?: boolean;
     maxRows?: number;
+    searchQuery?: string;
   }
 
   let {
@@ -75,7 +76,8 @@
     tableName,
     highlightIds = [],
     showSummaryPlots = true,
-    maxRows = 12.5
+    maxRows = 12.5,
+    searchQuery = $bindable('')
   }: Props = $props();
 
   let root: HTMLDivElement;
@@ -106,7 +108,7 @@
   let hiddenColumns = $state<SvelteSet<string>>(new SvelteSet());
   let renameModalOpen = $state(false);
   let columnToRename = $state<string | null>(null);
-  let searchQuery = $state('');
+  // searchQuery is now a prop
   let replaceValue = $state('');
   let searchResults = $state<number[]>([]);
   let currentSearchIndex = $state(0);

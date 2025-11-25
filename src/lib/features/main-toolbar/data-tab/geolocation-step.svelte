@@ -6,12 +6,12 @@
   } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
   interface GeoComboBoxItem {
     id: number;
@@ -193,6 +193,19 @@
 
   $effect(() => {
     const linkedVar = dataTabState.geolocation.linkedVariable;
+    const linkedName = dataTabState.geolocation.linkedVariableName;
+    const suggested = suggestedColumn();
+
+    if (linkedVar === null && !linkedName && suggested) {
+      dataTabActions.setGeolocationState({
+        linkedVariable: suggested.id,
+        linkedVariableName: suggested.columnName
+      });
+    }
+  });
+
+  $effect(() => {
+    const linkedVar = dataTabState.geolocation.linkedVariable;
     if (linkedVar !== undefined && linkedVar !== null && selectedDataset) {
       autoSelectBasemap();
     }
@@ -206,33 +219,35 @@
     {m.geo_step_description()}
   </p>
 
-  <div class="form-field">
-    <div class="field-label">{m.geo_reference()}</div>
-    <div class="tab-container">
-      <ToggleTabs
-        bind:activeIndex={activeTabIndex}
-        items={tabItems}
-        onChange={handleTabChange}
-        className="geo-tabs"
-      />
-    </div>
-  </div>
-
   {#if activeTabIndex === 0}
     <div class="tab-content">
-      <div class="form-field">
-        <div class="field-label">{m.geo_linked_variable()}</div>
-        <ComboBox
-          items={dataFieldItems()}
-          selectedId={geoFieldId()}
-          on:select={(e) =>
-            dataTabActions.setGeolocationState({
-              linkedVariable: e.detail.selectedId,
-              linkedVariableName:
-                (e.detail.selectedItem as GeoComboBoxItem)?.columnName || ''
-            })}
-          placeholder={m.geo_select_variable()}
-        />
+      <div class="geo-controls-grid">
+        <div class="form-field">
+          <div class="field-label">{m.geo_reference()}</div>
+          <div class="tab-container">
+            <ToggleTabs
+              bind:activeIndex={activeTabIndex}
+              items={tabItems}
+              onChange={handleTabChange}
+              className="geo-tabs"
+            />
+          </div>
+        </div>
+
+        <div class="form-field">
+          <div class="field-label">{m.geo_linked_variable()}</div>
+          <ComboBox
+            items={dataFieldItems()}
+            selectedId={geoFieldId()}
+            on:select={(e) =>
+              dataTabActions.setGeolocationState({
+                linkedVariable: e.detail.selectedId,
+                linkedVariableName:
+                  (e.detail.selectedItem as GeoComboBoxItem)?.columnName || ''
+              })}
+            placeholder={m.geo_select_variable()}
+          />
+        </div>
       </div>
 
       {#if suggestedColumn()}
@@ -389,7 +404,20 @@
     font-weight: 500;
   }
 
+  .geo-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--cds-spacing-05);
+    align-items: start;
+    margin-bottom: var(--cds-spacing-05);
+  }
+
+  .tab-container {
+    margin-bottom: 0;
+  }
+
   :global(.geo-tabs) {
-    max-width: 500px;
+    width: 100%;
+    max-width: none;
   }
 </style>

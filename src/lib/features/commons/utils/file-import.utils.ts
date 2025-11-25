@@ -8,8 +8,7 @@ import {
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
-type DataRow = Record<string, unknown>;
-type ColumnStatSummary = {
+export type ColumnStatSummary = {
   type: string;
   count: number;
   nullCount: number;
@@ -214,201 +213,8 @@ export function createUploadedFile(
   };
 }
 
-export function detectDelimiter(csvContent: string): string {
-  const firstLine = csvContent.split('\n')[0];
-  if (!firstLine) return ',';
-
-  const delimiters = [',', ';', '\t', '|'];
-  const counts = delimiters.map((delimiter) => ({
-    delimiter,
-    count: firstLine.split(delimiter).length
-  }));
-
-  counts.sort((a, b) => b.count - a.count);
-  return counts[0].delimiter;
-}
-
-export function parseCsvHeaders(csvContent: string): string[] {
-  const delimiter = detectDelimiter(csvContent);
-  const firstLine = csvContent.split('\n')[0];
-  if (!firstLine) return [];
-
-  return firstLine
-    .split(delimiter)
-    .map((header) => header.trim().replace(/^["']|["']$/g, ''));
-}
-
-// Shapefile parsing is now handled by DuckDB ST_Read in shapefile.parser.ts
-
-export async function detectDuplicateRows<T extends DataRow>(
-  data: T[]
-): Promise<{
-  hasDuplicates: boolean;
-  duplicateIndices: number[];
-  duplicateCount: number;
-}> {
-  const seen = new Map<string, number[]>();
-  const duplicateIndices: number[] = [];
-
-  // Process rows in chunks to avoid blocking
-  const CHUNK_SIZE = 1000;
-  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-    // Yield to event loop between chunks
-    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const chunk = data.slice(i, i + CHUNK_SIZE);
-    chunk.forEach((row, chunkIndex) => {
-      const index = i + chunkIndex;
-      const key = JSON.stringify(row);
-      if (seen.has(key)) {
-        seen.get(key)!.push(index);
-        duplicateIndices.push(index);
-      } else {
-        seen.set(key, [index]);
-      }
-    });
-  }
-
-  return {
-    hasDuplicates: duplicateIndices.length > 0,
-    duplicateIndices,
-    duplicateCount: duplicateIndices.length
-  };
-}
-
-export async function detectDataTypes(
-  data: DataRow[],
-  headers: string[]
-): Promise<Record<string, string>> {
-  const types: Record<string, string> = {};
-
-  // Process headers in chunks to avoid blocking
-  const HEADER_CHUNK_SIZE = 10;
-  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
-    // Yield to event loop between chunks
-    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
-    for (const header of headerChunk) {
-      const values = data.map((row) => row[header]).filter((v) => v != null);
-
-      if (values.length === 0) {
-        types[header] = 'empty';
-        continue;
-      }
-
-      const allNumbers = values.every(
-        (v) => typeof v === 'number' || !isNaN(Number(v))
-      );
-      const allBooleans = values.every(
-        (v) => typeof v === 'boolean' || v === 'true' || v === 'false'
-      );
-      const allDates = values.every((v) => !isNaN(Date.parse(String(v))));
-
-      if (allNumbers) {
-        types[header] = 'number';
-      } else if (allBooleans) {
-        types[header] = 'boolean';
-      } else if (allDates) {
-        types[header] = 'date';
-      } else {
-        types[header] = 'string';
-      }
-    }
-  }
-
-  return types;
-}
-
-export async function getDataStatistics(
-  data: DataRow[],
-  headers: string[]
-): Promise<Record<string, ColumnStatSummary>> {
-  const stats: Record<string, ColumnStatSummary> = {};
-  const dataTypes = await detectDataTypes(data, headers);
-
-  // Process headers in chunks to avoid blocking
-  const HEADER_CHUNK_SIZE = 10;
-  for (let i = 0; i < headers.length; i += HEADER_CHUNK_SIZE) {
-    // Yield to event loop between chunks
-    if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const headerChunk = headers.slice(i, i + HEADER_CHUNK_SIZE);
-    for (const header of headerChunk) {
-      const values = data.map((row) => row[header]).filter((v) => v != null);
-      const type = dataTypes[header];
-
-      stats[header] = {
-        type,
-        count: values.length,
-        nullCount: data.length - values.length,
-        unique: new Set(values).size
-      };
-
-      if (type === 'number') {
-        const numbers = values.map(Number).filter((n) => !isNaN(n));
-        if (numbers.length > 0) {
-          stats[header].min = Math.min(...numbers);
-          stats[header].max = Math.max(...numbers);
-          stats[header].mean =
-            numbers.reduce((a, b) => a + b, 0) / numbers.length;
-        }
-      }
-    }
-  }
-
-  return stats;
-}
-
-export function validateCsvStructure(csvContent: string): FileValidation {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const lines = csvContent.split('\n').filter((line) => line.trim());
-  if (lines.length === 0) {
-    errors.push('CSV file is empty');
-    return { isValid: false, errors, warnings };
-  }
-
-  const headers = parseCsvHeaders(csvContent);
-  if (headers.length === 0) {
-    errors.push('No headers found in CSV');
-  }
-
-  if (headers.some((h) => !h)) {
-    warnings.push('Some headers are empty');
-  }
-
-  const duplicateHeaders = headers.filter(
-    (header, index) => headers.indexOf(header) !== index
-  );
-  if (duplicateHeaders.length > 0) {
-    warnings.push(`Duplicate headers found: ${duplicateHeaders.join(', ')}`);
-  }
-
-  if (lines.length === 1) {
-    warnings.push('CSV contains only headers, no data rows');
-  }
-
-  const delimiter = detectDelimiter(csvContent);
-  const columnCounts = lines
-    .slice(0, Math.min(10, lines.length))
-    .map((line) => line.split(delimiter).length);
-  const expectedColumns = headers.length;
-  const inconsistentRows = columnCounts.filter(
-    (count) => count !== expectedColumns
-  );
-
-  if (inconsistentRows.length > 0) {
-    warnings.push('Some rows have inconsistent column counts');
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings
-  };
-}
+// Note: CSV parsing, delimiter detection, type inference, duplicate detection,
+// and statistics are now handled by DuckDB via dataPipeline.processFile()
 
 export function validateGeospatialFile(
   content: ArrayBuffer | string
@@ -462,53 +268,29 @@ export function validateGeospatialFile(
   };
 }
 
+/**
+ * Extracts tabular data from pasted text (CSV/TSV only).
+ * JSON/GeoJSON paste is not supported - use file upload for geospatial data.
+ * DuckDB handles the actual parsing via read_csv().
+ */
 export function extractDataFromPaste(pastedText: string): {
   fileType: FileType;
-  validation: FileValidation;
-} {
+  content: string;
+} | null {
   const trimmed = pastedText.trim();
-  if (!trimmed) {
-    return {
-      fileType: FileType.UNKNOWN,
-      validation: {
-        isValid: false,
-        errors: ['Pasted content is empty'],
-        warnings: []
-      }
-    };
-  }
+  if (!trimmed) return null;
 
-  try {
-    JSON.parse(trimmed);
-    return {
-      fileType: FileType.GEOJSON,
-      validation: validateGeospatialFile(trimmed)
-    };
-  } catch {
-    const lines = trimmed.split('\n');
-    const firstLine = lines[0];
+  // Check if it looks like tabular data (has delimiter in first line)
+  const firstLine = trimmed.split('\n')[0];
+  const hasDelimiter = [',', ';', '\t', '|'].some((d) => firstLine.includes(d));
 
-    if (
-      firstLine &&
-      (firstLine.includes(',') ||
-        firstLine.includes(';') ||
-        firstLine.includes('\t'))
-    ) {
-      return {
-        fileType: FileType.CSV,
-        validation: validateCsvStructure(trimmed)
-      };
-    }
+  if (!hasDelimiter) return null;
 
-    return {
-      fileType: FileType.UNKNOWN,
-      validation: {
-        isValid: false,
-        errors: ['Unable to detect data format. Expected CSV or GeoJSON'],
-        warnings: []
-      }
-    };
-  }
+  // Determine TSV vs CSV based on dominant delimiter
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  const fileType = tabCount > 0 ? FileType.TSV : FileType.CSV;
+
+  return { fileType, content: trimmed };
 }
 
 export function isValidUrl(url: string): boolean {

@@ -1,17 +1,18 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
   import {
-    InlineNotification,
     Button,
+    InlineNotification,
     TextInput
   } from 'carbon-components-svelte';
-  import { Reset, Edit, Checkmark, Close } from 'carbon-icons-svelte';
+  import { Checkmark, Close, Edit, Reset } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import * as m from '$lib/paraglide/messages';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -142,6 +143,7 @@
       dataset={processedDataset}
       tableName={currentDuckTable || undefined}
       showSummaryPlots={true}
+      bind:searchQuery={dataTabState.dataControl.searchQuery}
     />
   {:else}
     <div class="empty-state">
