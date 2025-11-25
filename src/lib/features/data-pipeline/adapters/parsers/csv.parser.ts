@@ -6,7 +6,8 @@ import { ParserError } from '../../contracts/parser';
 import type { RawDataset } from '../../models/raw-dataset';
 
 /**
- * Parses CSV/TSV files with DuckDB's native CSV reader for fast WASM ingestion.
+ * Parses CSV/TSV files using DuckDB's native read_csv() for fast WASM ingestion.
+ * DuckDB handles delimiter detection, type inference, and header normalization.
  */
 export class CSVParser implements IParser {
   readonly supportedExtensions = ['.csv', '.tsv', '.txt'];
@@ -19,15 +20,13 @@ export class CSVParser implements IParser {
     const hasValidMime = this.mimeTypes.some((mime) =>
       file.type.includes(mime)
     );
-
     return hasValidExtension || hasValidMime;
   }
 
   async parse(file: File): Promise<RawDataset> {
     const start = performance.now();
-    logger.info('Parsing CSV/TSV file with DuckDB', LogCategory.DATA, {
+    logger.info('Parsing CSV/TSV with DuckDB', LogCategory.DATA, {
       fileName: file.name,
-      fileType: file.type,
       fileSize: file.size
     });
 
@@ -39,175 +38,72 @@ export class CSVParser implements IParser {
         throw new DuckDBError('DuckDB not initialized');
       }
 
+      // Generate unique table name
       const baseTableName = file.name
         .replace(/\.[^.]+$/, '')
         .replace(/[^a-zA-Z0-9_]/g, '_');
       tableName = `csv_${baseTableName}_${Date.now()}`;
 
-      await Duck.register_files([file]);
-      const fileWithId = file as any; // DuckDB adds an id property.
+      // Single call to DuckDB - it handles everything (delimiter, types, headers)
+      await Duck.read_tabular(file, { tablename: tableName });
 
-      const delimiter = file.name.toLowerCase().endsWith('.tsv')
-        ? '\t'
-        : undefined;
+      // Get metadata using Duck's cached methods
+      const tableInfo = await Duck.describe_table(tableName);
+      const rowCount = await Duck.get_row_count(tableName);
+      const headers = tableInfo.name;
 
-      // Verify file is readable and has data before creating table
-      // Use same parameters as CREATE TABLE to catch any issues early
-      const verifyQuery = delimiter
-        ? `SELECT COUNT(*) as count FROM read_csv('${fileWithId.id}', header=true, delimiter='${delimiter}', normalize_names=true, auto_detect=true)`
-        : `SELECT COUNT(*) as count FROM read_csv('${fileWithId.id}', header=true, normalize_names=true, auto_detect=true)`;
+      // Determine delimiter for metadata (TSV vs CSV)
+      const isTsv = file.name.toLowerCase().endsWith('.tsv');
 
-      try {
-        const verifyResult = (await Duck.query(verifyQuery, {
-          format: 'array'
-        })) as Array<{ count: number }>;
-        const rowCount = verifyResult[0]?.count ?? 0;
-
-        if (rowCount === 0) {
-          logger.warn(
-            'CSV file appears to be empty or unreadable',
-            LogCategory.DATA,
-            {
-              fileName: file.name,
-              fileId: fileWithId.id
-            }
-          );
-        } else {
-          logger.debug('File registration verified', LogCategory.DATA, {
-            fileName: file.name,
-            fileId: fileWithId.id,
-            rowCount
-          });
-        }
-      } catch (verifyError) {
-        throw new ParserError(
-          `Failed to verify file registration: ${verifyError instanceof Error ? verifyError.message : 'Unknown error'}`,
-          verifyError,
-          'csv'
-        );
-      }
-
-      const createTableQuery = delimiter
-        ? `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, delimiter='${delimiter}', normalize_names=true, auto_detect=true)`
-        : `CREATE OR REPLACE TABLE ${tableName} AS FROM read_csv('${fileWithId.id}', header=true, normalize_names=true, auto_detect=true)`;
-
-      await Duck.query(createTableQuery);
-
-      logger.debug('Table created, verifying row count', LogCategory.DATA, {
-        tableName
-      });
-
-      const columnsInfo = (await Duck.query(
-        `
-        SELECT column_name, data_type
-        FROM information_schema.columns
-        WHERE table_name = '${tableName}'
-        ORDER BY ordinal_position
-      `,
-        { format: 'array' }
-      )) as Array<{ column_name: string; data_type: string }>;
-
-      const [{ count: rowCount }] = (await Duck.query(
-        `
-        SELECT COUNT(*) as count FROM ${tableName}
-      `,
-        { format: 'array' }
-      )) as Array<{ count: number }>;
-
-      logger.debug('Table row count retrieved', LogCategory.DATA, {
-        tableName,
-        rowCount,
-        columnCount: columnsInfo.length
-      });
-
-      if (rowCount === 0) {
-        logger.error(
-          'Table created but has 0 rows - possible CSV parsing issue',
-          LogCategory.DATA,
-          {
-            fileName: file.name,
-            tableName,
-            fileSize: file.size,
-            delimiter: delimiter ?? ','
-          }
-        );
-      }
-
-      const headers = columnsInfo.map((col) => col.column_name);
-
-      // Provide rows/columns for downstream consumers without loading everything.
-      const sampleSize = Math.min(1000, Number(rowCount));
-      const sampleData = (await Duck.query(
-        `
-        SELECT * FROM ${tableName} LIMIT ${sampleSize}
-      `,
-        { format: 'array' }
-      )) as Array<Record<string, unknown>>;
-
-      const rows: unknown[][] = sampleData.map((row) =>
-        headers.map((header) => row[header] ?? null)
-      );
-
-      const columns = headers.map((name) => ({
-        name,
-        values: sampleData.map((row) => row[name] ?? null)
-      }));
-
-      const detectedDelimiter = file.name.toLowerCase().endsWith('.tsv')
-        ? '\t'
-        : ',';
-
-      logger.success('CSV parsed successfully with DuckDB', LogCategory.DATA, {
+      logger.success('CSV parsed successfully', LogCategory.DATA, {
         fileName: file.name,
+        tableName,
         rows: rowCount,
         columns: headers.length,
-        tableName,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
       return {
         headers,
-        rows,
-        columns,
+        rows: [], // No sample needed - query DuckDB table directly
+        columns: headers.map((name) => ({ name, values: [] })),
         metadata: {
-          delimiter: detectedDelimiter,
-          linebreak: '\n', // Default, DuckDB doesn't expose this
-          rowCount: Number(rowCount),
+          delimiter: isTsv ? '\t' : ',',
+          linebreak: '\n',
+          rowCount,
           columnCount: headers.length,
           fileType: 'csv',
           parsedWithWorker: false,
-          duckdbTableName: tableName // Store table name for later use
+          duckdbTableName: tableName
         }
       };
     } catch (error) {
+      // Cleanup on error
       if (tableName && Duck) {
         try {
           await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
         } catch (cleanupError) {
-          logger.warn(
-            'Failed to clean up table after error',
-            LogCategory.DATA,
-            {
-              tableName,
-              error: cleanupError
-            }
-          );
+          logger.warn('Failed to cleanup table', LogCategory.DATA, {
+            tableName,
+            error: cleanupError
+          });
         }
       }
 
       if (error instanceof ParserError) {
         throw error;
-      } else {
-        logger.error('CSV parsing failed with DuckDB', LogCategory.DATA, {
-          fileName: file.name,
-          error
-        });
-        throw new ParserError(
-          `Failed to parse CSV with DuckDB: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          error,
-          'csv'
-        );
       }
+
+      logger.error('CSV parsing failed', LogCategory.DATA, {
+        fileName: file.name,
+        error
+      });
+
+      throw new ParserError(
+        `Failed to parse CSV: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error,
+        'csv'
+      );
     }
   }
 }

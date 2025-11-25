@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import {
   DuckDBError,
   ParseError
@@ -15,6 +16,10 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { geoParquetReader } from '$lib/features/data-pipeline/adapters/readers/GeoParquetReader';
 import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types/AnalysisResult';
+import type {
+  BasemapMetadata,
+  JoinQuality
+} from '$lib/features/map/types/basemap.types';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import {
   Field,
@@ -33,6 +38,7 @@ import {
   insertArrowTableIntoDuckDB
 } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
+import { join_macros } from './duckdb/join';
 import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
 
 export enum RefineOperation {
@@ -833,6 +839,188 @@ class DuckDBOrchestratorService {
 
     this.logDatasetReady('GeoJSON Legacy', dataset, start);
     return dataset;
+  }
+
+  async loadBasemap(basemap: BasemapMetadata): Promise<string> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const tableName = `basemap_${basemap.file.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+    // Check if already loaded
+    const tableCheck = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
+
+    if (tableCheck && tableCheck.length > 0) {
+      return tableName;
+    }
+
+    logger.info('Loading basemap into DuckDB', LogCategory.DUCKDB, {
+      file: basemap.file
+    });
+
+    try {
+      // Fetch basemap file
+      const response = await fetch(`${base}/basemaps/${basemap.file}`);
+      if (!response.ok)
+        throw new Error(`Failed to fetch basemap: ${response.statusText}`);
+
+      const blob = await response.blob();
+      const file = new File([blob], basemap.file);
+
+      await Duck.register_files([file]);
+
+      // Load using ST_Read or read_geofile depending on format
+      // Assuming TopoJSON or GeoJSON which DuckDB handles via spatial extension
+      await Duck.query(
+        `CREATE TABLE ${tableName} AS SELECT * FROM ST_Read('${basemap.file}')`
+      );
+
+      // Create index on name/id columns for faster joins?
+      // For now, just return table name
+      return tableName;
+    } catch (error) {
+      logger.error('Failed to load basemap', LogCategory.DUCKDB, error);
+      throw error;
+    }
+  }
+
+  async computeJoinStats(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string
+  ): Promise<JoinQuality> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this._state.datasets.get(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    // Ensure macros are loaded
+    await Duck.query(join_macros);
+
+    const basemapTable = await this.loadBasemap(basemap);
+
+    // Identify basemap name column (assuming first string column or specific logic)
+    // For now, let's assume the basemap has a 'name' or 'NAME' column, or we use the first string column.
+    // Ideally this should be configured in BasemapMetadata.
+    // Looking at basemap types, it seems we might need to guess or pass it.
+    // For this implementation, I'll try to find a column named 'name', 'NAME', 'admin', 'iso_a3', etc.
+
+    const basemapColumns = await Duck.analyse(basemapTable);
+    const basemapNameCol =
+      basemapColumns.find((c) =>
+        ['name', 'NAME', 'name_long', 'admin', 'iso_a3'].includes(c.name)
+      )?.name || basemapColumns.find((c) => c.type === 'VARCHAR')?.name;
+
+    if (!basemapNameCol)
+      throw new Error('Could not identify name column in basemap');
+
+    // Create a view for the join table expected by macros
+    // The macro expects a table with 'main_id'
+    const joinTableView = `${basemapTable}_view`;
+    await Duck.query(
+      `CREATE OR REPLACE VIEW ${joinTableView} AS SELECT "${basemapNameCol}" as main_id FROM ${basemapTable}`
+    );
+
+    // Run analysis
+    const result = (await Duck.query(
+      `SELECT * FROM analyze_join_quality('${dataset.tableName}', '${geoColumn}', '${joinTableView}')`,
+      { format: 'array' }
+    )) as Array<{
+      original_name: string;
+      status: 'matched' | 'check' | 'ambiguous' | 'not_found';
+      candidates: { id: string; name: string; score: number; type: string }[];
+      best_score: number;
+    }>;
+
+    const entities = result.map((r) => ({
+      dataValue: r.original_name,
+      status: (r.status === 'ambiguous'
+        ? 'to_verify'
+        : r.status === 'check'
+          ? 'to_verify'
+          : r.status === 'not_found'
+            ? 'unrecognized'
+            : 'joined') as
+        | 'joined'
+        | 'to_verify'
+        | 'duplicate'
+        | 'unrecognized',
+      matches: r.candidates?.map((c) => c.name) || [],
+      matchCount: r.candidates?.length || 0,
+      basemapValue: r.status === 'matched' ? r.candidates[0].name : undefined
+    }));
+
+    return {
+      joinedCount: entities.filter((e) => e.status === 'joined').length,
+      toVerifyCount: entities.filter((e) => e.status === 'to_verify').length,
+      duplicateCount: entities.filter((e) => e.status === 'duplicate').length, // Logic for duplicate detection in dataset side might be needed separately
+      unrecognizedCount: entities.filter((e) => e.status === 'unrecognized')
+        .length,
+      entities,
+      totalEntities: entities.length
+    };
+  }
+
+  async applyJoinCorrections(
+    datasetId: string,
+    geoColumn: string,
+    corrections: Record<string, string>
+  ): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this._state.datasets.get(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    // Create a temporary table for corrections
+    const correctionsTable = `corrections_${crypto.randomUUID().replace(/-/g, '_')}`;
+
+    // Prepare data for bulk update
+    // We can't easily pass a large object to SQL, so we might register a CSV or JSON
+    const correctionEntries = Object.entries(corrections).map(
+      ([original, corrected]) => ({
+        original,
+        corrected
+      })
+    );
+
+    if (correctionEntries.length === 0) return;
+
+    const json = JSON.stringify(correctionEntries);
+    const blob = new Blob([json], { type: 'application/json' });
+    const file = new File([blob], 'corrections.json', {
+      type: 'application/json'
+    });
+
+    await Duck.register_files([file]);
+    await Duck.query(
+      `CREATE TABLE ${correctionsTable} AS SELECT * FROM read_json_auto('corrections.json')`
+    );
+
+    // Update the dataset
+    // Note: This modifies the source data. We might want to create a new column instead?
+    // For now, let's update the column in place as requested "Remplacer les entités incorrectes"
+
+    await Duck.query(`
+      UPDATE ${dataset.tableName}
+      SET "${geoColumn}" = c.corrected
+      FROM ${correctionsTable} c
+      WHERE "${geoColumn}" = c.original
+    `);
+
+    await Duck.query(`DROP TABLE ${correctionsTable}`);
+
+    // Refresh analysis
+    const columns = await Duck.analyse(dataset.tableName);
+    this.updateDatasets((d) => {
+      const ds = d.get(datasetId);
+      if (ds) ds.columns = columns;
+    });
+    this.bumpDatasetsVersion();
   }
 
   private convertToCSV(data: Record<string, unknown>[]): string {
@@ -2325,46 +2513,6 @@ class DuckDBOrchestratorService {
     }
 
     return filters.map((filter) => filter.sql).join(' AND ');
-  }
-
-  async applyJoinCorrections(
-    dataTableName: string,
-    dataColumnName: string,
-    corrections: Map<string, string>
-  ): Promise<void> {
-    const start = performance.now();
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
-    if (!Duck) {
-      throw new DuckDBError('DuckDB not initialized');
-    }
-
-    try {
-      logger.info('Applying join corrections in DuckDB', LogCategory.DUCKDB, {
-        dataTableName,
-        dataColumnName,
-        correctionCount: corrections.size
-      });
-
-      for (const [dataValue, correctedValue] of corrections.entries()) {
-        await Duck.query(`
-          UPDATE ${dataTableName}
-          SET ${dataColumnName} = '${correctedValue}'
-          WHERE ${dataColumnName} = '${dataValue}'
-        `);
-      }
-
-      logger.success('Join corrections applied', LogCategory.DUCKDB, {
-        dataTableName,
-        correctionCount: corrections.size,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } catch (error) {
-      logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
-      throw error;
-    }
   }
 
   private async processShapefile(
