@@ -63,9 +63,37 @@ jobs:
       - name: Run unit tests
         run: yarn run test:unit -- --run
 
+  svelte-check:
+    name: Svelte Type Check
+    needs: dependency-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup yarn
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Run Svelte Check
+        run: yarn check
+
   e2e-tests:
     name: End-to-End Tests (Playwright)
-    needs: unit-tests
+    needs: [unit-tests, svelte-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -141,3 +169,4 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
           echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "Latest version: $LATEST_TAG"
+
