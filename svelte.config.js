@@ -1,6 +1,10 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { optimizeCss, optimizeImports } from 'carbon-preprocess-svelte';
+import { loadEnv } from 'vite';
+
+const mode = process.env.NODE_ENV || 'development';
+const env = loadEnv(mode, process.cwd(), '');
 
 const config = {
   preprocess: [vitePreprocess(), optimizeImports(), optimizeCss()],
@@ -14,7 +18,7 @@ const config = {
       strict: true
     }),
     paths: {
-      base: '/cartographie/khartisnewpprd'
+      base: env.BASE_PATH || ''
     }
   }
 };
