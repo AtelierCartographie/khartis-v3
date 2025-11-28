@@ -1,10 +1,14 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const basePath = env.BASE_PATH || '';
+
+  return {
   plugins: [
     sveltekit(),
     paraglideVitePlugin({
@@ -24,7 +28,7 @@ export default defineConfig(() => ({
             ? ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}']
             : [],
         globIgnores: ['**/node_modules/**/*', '**/*.wasm'],
-        navigateFallback: '/cartographie/khartisnewpprd/index.html',
+        navigateFallback: basePath ? `${basePath}/index.html` : null,
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
         cleanupOutdatedCaches: true,
         runtimeCaching: [
@@ -121,30 +125,30 @@ export default defineConfig(() => ({
         display: 'standalone',
         theme_color: '#ffffff',
         background_color: '#ffffff',
-        start_url: '/cartographie/khartisnewpprd/?standalone=true',
-        scope: '/cartographie/khartisnewpprd/',
+        start_url: `${basePath}/?standalone=true`,
+        scope: `${basePath}/`,
         orientation: 'portrait',
         description:
           'Khartis est un outil simple de créations de cartes thématiques. Projections paramétrables - géoréférencement automatique. Un projet open source de Sciences Po - Atelier de cartographie',
         icons: [
           {
-            src: '/cartographie/khartisnewpprd/pwa-64x64.png',
+            src: `${basePath}/pwa-64x64.png`,
             sizes: '64x64',
             type: 'image/png'
           },
           {
-            src: '/cartographie/khartisnewpprd/pwa-192x192.png',
+            src: `${basePath}/pwa-192x192.png`,
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/cartographie/khartisnewpprd/pwa-512x512.png',
+            src: `${basePath}/pwa-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any'
           },
           {
-            src: '/cartographie/khartisnewpprd/maskable-icon-512x512.png',
+            src: `${basePath}/maskable-icon-512x512.png`,
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable'
@@ -187,4 +191,5 @@ export default defineConfig(() => ({
       }
     ]
   }
-}));
+};
+});

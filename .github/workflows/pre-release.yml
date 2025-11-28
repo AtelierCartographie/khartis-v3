@@ -63,9 +63,37 @@ jobs:
       - name: Run unit tests
         run: yarn run test:unit -- --run
 
+  svelte-check:
+    name: Svelte Type Check
+    needs: dependency-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup yarn
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Run Svelte Check
+        run: yarn check
+
   e2e-tests:
     name: End-to-End Tests (Playwright)
-    needs: unit-tests
+    needs: [unit-tests, svelte-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -142,46 +170,3 @@ jobs:
           echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "Latest version: $LATEST_TAG"
 
-  build-and-deploy:
-    name: Build and Deploy to PPRD
-    needs: semantic-versioning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup yarn
-        run: corepack enable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Build Svelte application
-        run: yarn build
-        env:
-          PUBLIC_BASE_PATH: '/cartographie/khartisnewpprd/'
-
-      - name: Deploy to PPRD via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: cdnscp.reims.sciences-po.fr
-          username: khartis_upload
-          password: ${{ secrets.SFTP_PASSWORD }}
-          protocol: sftp
-          local-dir: ./build/
-          server-dir: /khartis_upload/html/pprd/
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
