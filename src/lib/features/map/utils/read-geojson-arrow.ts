@@ -6,6 +6,7 @@ import {
   Field
 } from 'apache-arrow/Arrow';
 import { Duck } from '$lib/features/duckdb';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 
 function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
@@ -93,7 +94,9 @@ export async function readGeoJSONAsArrow(
   const fileId =
     fileWithId.id || `${geojsonFile.lastModified}-${geojsonFile.name}`;
 
-  const result = await Duck.query(`SELECT * FROM ST_Read('${fileId}')`, {
+  const escapedFileId = escapeSqlString(fileId);
+
+  const result = await Duck.query(`SELECT * FROM ST_Read('${escapedFileId}')`, {
     format: 'arrow-ipc'
   });
 

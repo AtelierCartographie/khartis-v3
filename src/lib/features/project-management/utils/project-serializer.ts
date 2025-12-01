@@ -1,5 +1,6 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
@@ -145,7 +146,7 @@ export const ProjectSerializer = {
           const insertValues = attributes
             .map(
               (attr) =>
-                `('${attr.raw.replace(/'/g, "''")}', '${attr.id.replace(/'/g, "''")}', '${attr.variant.replace(/'/g, "''")}', '${attr.normalized.replace(/'/g, "''")}', '${attr.basemap.replace(/'/g, "''")}', ${attr.basemap_count})`
+                `('${escapeSqlString(attr.raw)}', '${escapeSqlString(attr.id)}', '${escapeSqlString(attr.variant)}', '${escapeSqlString(attr.normalized)}', '${escapeSqlString(attr.basemap)}', ${attr.basemap_count})`
             )
             .join(',\n');
 
