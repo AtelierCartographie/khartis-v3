@@ -195,7 +195,8 @@ class DuckDBManager {
     tableName: string,
     fileName: string
   ): Promise<void> {
-    const sql = `CREATE TABLE IF NOT EXISTS ${tableName} AS SELECT * FROM parquet_scan('${fileName}')`;
+    const escapedFileName = fileName.replace(/'/g, "''");
+    const sql = `CREATE TABLE IF NOT EXISTS "${tableName}" AS SELECT * FROM parquet_scan('${escapedFileName}')`;
     await this.query(sql);
   }
 
