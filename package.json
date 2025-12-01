@@ -24,6 +24,7 @@
   "scripts": {
     "dev": "vite dev --port 5176",
     "build": "NODE_ENV=production vite build",
+    "download:extensions": "bash scripts/download-duckdb-extensions.sh",
     "preview": "vite preview",
     "prepare": "husky",
     "machine-translate": "npx inlang machine translate --project ./project.inlang",

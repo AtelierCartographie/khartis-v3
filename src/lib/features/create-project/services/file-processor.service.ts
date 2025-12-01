@@ -171,8 +171,9 @@ class CsvProcessor extends FileProcessor {
     }
 
     // Detect duplicates using SQL (much faster than JS for large datasets)
+    // Note: COUNT(DISTINCT *) is not supported in DuckDB, use subquery instead
     const duplicateResult = (await Duck!.query(
-      `SELECT COUNT(*) - COUNT(DISTINCT *) as duplicate_count FROM "${tableName}"`,
+      `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
       { format: 'array' }
     )) as Array<{ duplicate_count: number }>;
     const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);

@@ -26,6 +26,7 @@ export interface GlobalState {
   mainPanel: boolean;
   isSideNavOpen: boolean;
   isCreateProjectModalOpen: boolean;
+  isDataTypeSelectionModalOpen: boolean;
   selectedStep: ToolbarStep;
   selectedTool?: StylingTools | VisualizationTools;
   toolbarState: ToolbarState;

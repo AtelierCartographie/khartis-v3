@@ -563,5 +563,14 @@
   "validation_geo_invalid": "Invalid geographic data",
   "validation_geo_feature_collection_invalid": "Invalid FeatureCollection: missing features",
   "validation_geo_no_features": "No geographic features found",
-  "validation_geo_too_many_features": "More than 50,000 geographic features. Performance may be affected."
+  "validation_geo_too_many_features": "More than 50,000 geographic features. Performance may be affected.",
+  "data_type_selection_title": "Choose a data type to import",
+  "data_type_selection_description": "Khartis detected multiple file types. Please indicate the role of each file.",
+  "data_type_role_tabular": "Tabular data",
+  "data_type_role_tabular_description": "Data to join with a basemap (CSV, TSV)",
+  "data_type_role_geographic": "Geographic file",
+  "data_type_role_geographic_description": "Basemap or geometries (GeoJSON, Shapefile)",
+  "data_type_confirm": "Confirm",
+  "data_type_cancel": "Cancel",
+  "data_type_file_detected_as": "Detected as: {type}"
 }

@@ -1343,7 +1343,7 @@ class DuckDBOrchestratorService {
     }
 
     await Duck.query(
-      `CREATE OR REPLACE TABLE ${tableName} AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM ${tableName}`
+      `CREATE OR REPLACE TABLE "${tableName}" AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM "${tableName}"`
     );
 
     // Force refresh of column metadata
