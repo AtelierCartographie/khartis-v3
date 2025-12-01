@@ -642,10 +642,10 @@ async function extractGeometryInfo(
     // Consolidate all geometry queries into a single query
     const consolidatedQuery = `
       WITH bbox AS (
-        SELECT ST_Extent(${geometryColumn.name}) AS extent FROM ${tableName}
+        SELECT ST_Extent("${geometryColumn.name}") AS extent FROM "${tableName}"
       ),
       first_row AS (
-        SELECT ${geometryColumn.name} AS geom FROM ${tableName} WHERE ${geometryColumn.name} IS NOT NULL LIMIT 1
+        SELECT "${geometryColumn.name}" AS geom FROM "${tableName}" WHERE "${geometryColumn.name}" IS NOT NULL LIMIT 1
       )
       SELECT
         ST_GeometryType((SELECT geom FROM first_row)) AS geom_type,

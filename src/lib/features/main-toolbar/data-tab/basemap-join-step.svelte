@@ -510,13 +510,6 @@
     border-top: 1px solid var(--cds-border-subtle);
   }
 
-  .join-stats {
-    display: flex;
-    gap: var(--cds-spacing-03);
-    margin: var(--cds-spacing-05) 0 var(--cds-spacing-04);
-    align-items: center;
-  }
-
   .join-table {
     border: 1px solid var(--cds-border-subtle);
     border-radius: 6px;
