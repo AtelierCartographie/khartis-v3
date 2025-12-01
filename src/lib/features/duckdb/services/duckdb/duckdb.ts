@@ -467,6 +467,10 @@ class DuckDB {
 
   private threadsSupported = false;
 
+  private bundleVariant: 'eh' | 'mvp' = 'eh';
+
+  private localExtensionRepositoryConfigured = false;
+
   private transactionMutex = new TransactionMutex();
 
   constructor() {}
@@ -699,10 +703,10 @@ class DuckDB {
         }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      const bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
+      this.bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
       this.threadsSupported = Boolean(bundle.pthreadWorker);
       logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
-        bundleVariant,
+        bundleVariant: this.bundleVariant,
         threadsSupported: this.threadsSupported,
         durationMs: (performance.now() - bundleStart).toFixed(2)
       });
@@ -753,6 +757,8 @@ class DuckDB {
 
       await this.configureRuntimeSettings();
 
+      await this.configureLocalExtensionRepository();
+
       await this.preloadExtensions();
 
       this.clearGeoParquetCache();
@@ -796,6 +802,46 @@ class DuckDB {
     await this.connection?.close();
     await this.db?.dropFiles();
     await this.db?.reset();
+  }
+
+  /**
+   * Configure local extension repository for offline PWA support.
+   * Extensions are served from static/duckdb-extensions/ instead of the CDN.
+   * Falls back to CDN if local repository is not available.
+   */
+  private async configureLocalExtensionRepository(): Promise<void> {
+    const startTime = performance.now();
+
+    // Only configure for wasm_eh (modern browsers), let wasm_mvp use CDN fallback
+    if (this.bundleVariant !== 'eh') {
+      logger.debug(
+        'Skipping local extension repository (wasm_mvp uses CDN)',
+        LogCategory.DUCKDB
+      );
+      return;
+    }
+
+    const baseUrl =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    const repositoryUrl = `${baseUrl}/duckdb-extensions`;
+
+    try {
+      await this.query(
+        `SET custom_extension_repository = '${repositoryUrl}'`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+      );
+      this.localExtensionRepositoryConfigured = true;
+      logger.debug('Local extension repository configured', LogCategory.DUCKDB, {
+        repositoryUrl,
+        durationMs: (performance.now() - startTime).toFixed(2)
+      });
+    } catch (error) {
+      logger.warn(
+        'Failed to set local extension repository, using CDN fallback',
+        LogCategory.DUCKDB,
+        { error }
+      );
+    }
   }
 
   /**
@@ -937,11 +983,12 @@ class DuckDB {
    * @param {string} table - The name of the table to add the row ID column to.
    */
   private async add_row_id(table: string): Promise<void> {
-    await this.query(`CREATE OR REPLACE SEQUENCE id_${table} START 1;`, {
+    const safeSeqName = table.replace(/[^a-zA-Z0-9_]/g, '_');
+    await this.query(`CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     await this.query(
-      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${table}');`,
+      `ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${safeSeqName}');`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
   }

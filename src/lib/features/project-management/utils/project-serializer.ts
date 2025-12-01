@@ -81,7 +81,7 @@ export const ProjectSerializer = {
     if (customBasemaps.length > 0 && Duck) {
       try {
         const tableExists = await Duck.query(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name='custom_basemap_attributes'`,
+          `SELECT table_name FROM information_schema.tables WHERE table_name = 'custom_basemap_attributes'`,
           { format: 'array' }
         );
 
@@ -145,7 +145,7 @@ export const ProjectSerializer = {
           const insertValues = attributes
             .map(
               (attr) =>
-                `('${attr.raw.replace(/'/g, "''")}', '${attr.id.replace(/'/g, "''")}', '${attr.variant.replace(/'/g, "''")}', '${attr.normalized}', '${attr.basemap.replace(/'/g, "''")}', ${attr.basemap_count})`
+                `('${attr.raw.replace(/'/g, "''")}', '${attr.id.replace(/'/g, "''")}', '${attr.variant.replace(/'/g, "''")}', '${attr.normalized.replace(/'/g, "''")}', '${attr.basemap.replace(/'/g, "''")}', ${attr.basemap_count})`
             )
             .join(',\n');
 
