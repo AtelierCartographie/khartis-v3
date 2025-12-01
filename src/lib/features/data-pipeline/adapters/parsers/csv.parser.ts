@@ -81,7 +81,7 @@ export class CSVParser implements IParser {
       // Cleanup on error
       if (tableName && Duck) {
         try {
-          await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
+          await Duck.query(`DROP TABLE IF EXISTS "${tableName}"`);
         } catch (cleanupError) {
           logger.warn('Failed to cleanup table', LogCategory.DATA, {
             tableName,
