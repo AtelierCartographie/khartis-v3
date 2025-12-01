@@ -36,10 +36,24 @@ export default defineConfig(({ mode }) => {
             urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'duckdb-extensions',
+              cacheName: 'duckdb-extensions-cdn',
               expiration: {
                 maxEntries: 10,
                 maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year (extensions are versioned in URL)
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /\/duckdb-extensions\/.*\.wasm$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'duckdb-extensions-local',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year (local bundled extensions)
               },
               cacheableResponse: {
                 statuses: [0, 200]
