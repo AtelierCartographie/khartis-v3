@@ -11,6 +11,7 @@ import type {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { geoParquetReader } from '$lib/features/data-pipeline/adapters/readers/GeoParquetReader';
 import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
@@ -221,8 +222,9 @@ class DuckDBOrchestratorService {
       });
 
       // Check if table actually exists in DuckDB (might be lost after page reload)
+      const escapedTableNameForCheck = escapeSqlString(tableName);
       const tableCheck = (await Duck.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableNameForCheck}'`,
         { format: 'array' }
       )) as Array<{ table_name: string }>;
 
@@ -654,11 +656,11 @@ class DuckDBOrchestratorService {
       const geomColumn = geoMetadata.primary_column;
       try {
         await Duck.query(`
-            CREATE OR REPLACE TABLE ${tableName} AS
+            CREATE OR REPLACE TABLE "${tableName}" AS
           SELECT * REPLACE (
             ST_GeomFromWKB("${geomColumn}")::GEOMETRY AS "${geomColumn}"
           )
-            FROM ${tableName}
+            FROM "${tableName}"
           `);
       } catch (error) {
         logger.warn(
@@ -669,9 +671,10 @@ class DuckDBOrchestratorService {
       }
     }
 
+    const safeSeqName = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
     await Duck.query(`
-      CREATE OR REPLACE SEQUENCE id_${tableName} START 1;
-      ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
+      CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;
+      ALTER TABLE "${tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeqName}');
     `);
 
     // Parallelize column analysis and row count
@@ -736,15 +739,16 @@ class DuckDBOrchestratorService {
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
       await Duck.query(`
-        CREATE OR REPLACE TABLE ${tableName} AS
+        CREATE OR REPLACE TABLE "${tableName}" AS
         SELECT
           * EXCLUDE (geom),
           ST_GeomFromGeoJSON(geom) as geom
-        FROM ${tableName}
+        FROM "${tableName}"
       `);
+      const safeSeqNameGeo = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
       await Duck.query(`
-        CREATE OR REPLACE SEQUENCE id_${tableName} START 1;
-        ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
+        CREATE OR REPLACE SEQUENCE "id_${safeSeqNameGeo}" START 1;
+        ALTER TABLE "${tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeqNameGeo}');
       `);
 
       const columns = await Duck.analyse(tableName);
@@ -884,16 +888,19 @@ class DuckDBOrchestratorService {
     // Create a filtered view for this specific basemap
     // The join macros expect: id, variant, normalized, basemap, basemap_count
     const joinTableView = `basemap_join_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    const escapedBasemapId = escapeSqlString(basemapId);
     await Duck.query(`
-      CREATE OR REPLACE VIEW ${joinTableView} AS
+      CREATE OR REPLACE VIEW "${joinTableView}" AS
       SELECT raw, id, variant, normalized, basemap, basemap_count
       FROM basemap_attributes
-      WHERE basemap = '${basemapId}'
+      WHERE basemap = '${escapedBasemapId}'
     `);
 
     // Run analysis
+    const escapedTableName = escapeSqlString(dataset.tableName);
+    const escapedGeoColumn = escapeSqlString(geoColumn);
     const result = (await Duck.query(
-      `SELECT * FROM analyze_join_quality('${dataset.tableName}', '${geoColumn}', '${joinTableView}')`,
+      `SELECT * FROM analyze_join_quality('${escapedTableName}', '${escapedGeoColumn}', '${joinTableView}')`,
       { format: 'array' }
     )) as Array<{
       original_name: string;
@@ -964,7 +971,7 @@ class DuckDBOrchestratorService {
 
     await Duck.register_files([file]);
     await Duck.query(
-      `CREATE TABLE ${correctionsTable} AS SELECT * FROM read_json_auto('corrections.json')`
+      `CREATE TABLE "${correctionsTable}" AS SELECT * FROM read_json_auto('corrections.json')`
     );
 
     // Update the dataset
@@ -972,13 +979,13 @@ class DuckDBOrchestratorService {
     // For now, let's update the column in place as requested "Remplacer les entités incorrectes"
 
     await Duck.query(`
-      UPDATE ${dataset.tableName}
+      UPDATE "${dataset.tableName}"
       SET "${geoColumn}" = c.corrected
-      FROM ${correctionsTable} c
+      FROM "${correctionsTable}" c
       WHERE "${geoColumn}" = c.original
     `);
 
-    await Duck.query(`DROP TABLE ${correctionsTable}`);
+    await Duck.query(`DROP TABLE "${correctionsTable}"`);
 
     // Refresh analysis
     const columns = await Duck.analyse(dataset.tableName);
@@ -1040,7 +1047,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      let query = `SELECT * FROM ${tableName}`;
+      let query = `SELECT * FROM "${tableName}"`;
       const whereClause = this.buildFilterWhereClause(tableName);
       if (whereClause) {
         query += ` WHERE ${whereClause}`;
@@ -1105,12 +1112,13 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
+    const escapedTableNameForColumns = escapeSqlString(tableName);
     const result = (await Duck.query(`
       SELECT
         column_name as name,
         data_type as type
       FROM duckdb_columns()
-      WHERE table_name = '${tableName}'
+      WHERE table_name = '${escapedTableNameForColumns}'
     `)) as ArrowTableLike;
 
     const columns = [];
@@ -1155,7 +1163,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await Duck.query(
-      `ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`
+      `ALTER TABLE "${tableName}" RENAME COLUMN "${oldName}" TO "${newName}"`
     );
 
     await Duck.analyse(tableName, { force: true });
@@ -1181,7 +1189,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await Duck.query(
-      `ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
+      `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
     );
 
     await Duck.analyse(tableName, { force: true });
@@ -1202,7 +1210,7 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await Duck.query(`ALTER TABLE ${tableName} DROP COLUMN "${columnName}"`);
+    await Duck.query(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
 
     await Duck.analyse(tableName, { force: true });
 
@@ -1247,11 +1255,11 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const operations: Record<RefineOperation, string> = {
-      [RefineOperation.UPPERCASE]: `UPDATE ${tableName} SET "${columnName}" = UPPER("${columnName}")`,
-      [RefineOperation.LOWERCASE]: `UPDATE ${tableName} SET "${columnName}" = LOWER("${columnName}")`,
-      [RefineOperation.TITLECASE]: `UPDATE ${tableName} SET "${columnName}" = INITCAP("${columnName}")`,
-      [RefineOperation.TRIM]: `UPDATE ${tableName} SET "${columnName}" = TRIM("${columnName}")`,
-      [RefineOperation.TRIM_ALL]: `UPDATE ${tableName} SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
+      [RefineOperation.UPPERCASE]: `UPDATE "${tableName}" SET "${columnName}" = UPPER("${columnName}")`,
+      [RefineOperation.LOWERCASE]: `UPDATE "${tableName}" SET "${columnName}" = LOWER("${columnName}")`,
+      [RefineOperation.TITLECASE]: `UPDATE "${tableName}" SET "${columnName}" = INITCAP("${columnName}")`,
+      [RefineOperation.TRIM]: `UPDATE "${tableName}" SET "${columnName}" = TRIM("${columnName}")`,
+      [RefineOperation.TRIM_ALL]: `UPDATE "${tableName}" SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
     };
 
     await Duck.query(operations[operation]);
@@ -1279,8 +1287,11 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
+    const escapedSearchValue = escapeSqlString(searchValue);
+    const escapedReplaceValue = escapeSqlString(replaceValue);
+
     const countResult = (await Duck.query(
-      `SELECT COUNT(*) as count FROM ${tableName} WHERE "${columnName}"::TEXT LIKE '%${searchValue}%'`
+      `SELECT COUNT(*) as count FROM "${tableName}" WHERE "${columnName}"::TEXT LIKE '%${escapedSearchValue}%'`
     )) as ArrowTableLike;
 
     const countRow = countResult.get(0) as Record<string, unknown>;
@@ -1295,7 +1306,7 @@ class DuckDBOrchestratorService {
         replaceValue
       });
       await Duck.query(
-        `UPDATE ${tableName} SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${searchValue}', '${replaceValue}')`
+        `UPDATE "${tableName}" SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${escapedSearchValue}', '${escapedReplaceValue}')`
       );
 
       await Duck.analyse(tableName, { force: true });
@@ -1376,7 +1387,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const result = (await Duck.query(
-      `SELECT (${expression}) as result FROM ${tableName} LIMIT 1`
+      `SELECT (${expression}) as result FROM "${tableName}" LIMIT 1`
     )) as ArrowTableLike;
 
     if (result.numRows === 0) {
@@ -1552,9 +1563,9 @@ class DuckDBOrchestratorService {
 
         // Query all distinct geometry types to handle mixed geometries
         const geomTypeResult = (await Duck.query(
-          `SELECT DISTINCT ST_GeometryType(${geomColumn.column_name}) as geom_type
-           FROM ${tableName}
-           WHERE ${geomColumn.column_name} IS NOT NULL`,
+          `SELECT DISTINCT ST_GeometryType("${geomColumn.column_name}") as geom_type
+           FROM "${tableName}"
+           WHERE "${geomColumn.column_name}" IS NOT NULL`,
           { format: 'array' as never }
         )) as Array<{ geom_type: string }>;
 
@@ -1780,7 +1791,7 @@ class DuckDBOrchestratorService {
       `SELECT * REPLACE (
           ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
         )
-        FROM ${tableName}`,
+        FROM "${tableName}"`,
       { format: 'arrow-ipc' as never }
     )) as ArrayBuffer | Uint8Array;
 
@@ -2010,7 +2021,7 @@ class DuckDBOrchestratorService {
     try {
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-      await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
+      await Duck.query(`DROP TABLE IF EXISTS "${tableName}"`);
 
       let idToDelete: string | undefined;
       for (const [id, dataset] of this._state.datasets.entries()) {
@@ -2257,17 +2268,17 @@ class DuckDBOrchestratorService {
       const joinedTableName = `joined_${Date.now().toString(36)}`;
 
       await Duck.query(`
-        CREATE TABLE ${joinedTableName} AS
+        CREATE TABLE "${joinedTableName}" AS
         SELECT
           b.*,
-          d.* EXCLUDE (${dataColumnName})
-        FROM ${basemapTableName} b
-        INNER JOIN ${dataTableName} d
-        ON LOWER(TRIM(b.${basemapColumnName})) = LOWER(TRIM(d.${dataColumnName}))
+          d.* EXCLUDE ("${dataColumnName}")
+        FROM "${basemapTableName}" b
+        INNER JOIN "${dataTableName}" d
+        ON LOWER(TRIM(b."${basemapColumnName}")) = LOWER(TRIM(d."${dataColumnName}"))
       `);
 
       const countResult = (await Duck.query(`
-        SELECT COUNT(*) as count FROM ${joinedTableName}
+        SELECT COUNT(*) as count FROM "${joinedTableName}"
       `)) as ArrowTableLike;
 
       const countRow = countResult.get(0) as Record<string, unknown>;
@@ -2296,7 +2307,7 @@ class DuckDBOrchestratorService {
   ): Promise<number> {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    let query = `SELECT COUNT(*) as count FROM ${tableName}`;
+    let query = `SELECT COUNT(*) as count FROM "${tableName}"`;
     const whereClause = applyFilters
       ? this.buildFilterWhereClause(tableName)
       : null;
@@ -2343,7 +2354,7 @@ class DuckDBOrchestratorService {
           'Veuillez préciser un nombre pour le filtre "top"'
         );
       }
-      return `__id IN (SELECT __id FROM ${tableName} ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
+      return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
     };
 
     switch (filter.operator) {
@@ -2458,7 +2469,7 @@ class DuckDBOrchestratorService {
       return trimmed;
     }
 
-    return `'${trimmed.replace(/'/g, "''")}'`;
+    return `'${escapeSqlString(trimmed)}'`;
   }
 
   private assertValue(

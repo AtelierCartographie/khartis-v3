@@ -10,6 +10,7 @@ import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { derived, get, writable } from 'svelte/store';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 
 const browser = typeof window !== 'undefined';
 
@@ -195,7 +196,7 @@ class DuckDBManager {
     tableName: string,
     fileName: string
   ): Promise<void> {
-    const escapedFileName = fileName.replace(/'/g, "''");
+    const escapedFileName = escapeSqlString(fileName);
     const sql = `CREATE TABLE IF NOT EXISTS "${tableName}" AS SELECT * FROM parquet_scan('${escapedFileName}')`;
     await this.query(sql);
   }
