@@ -8,6 +8,7 @@ import {
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
 import { generateFilename } from './string.utils';
+import { escapeSqlString } from './sanitize.utils';
 
 export const generateExportFilename = generateFilename;
 
@@ -109,21 +110,21 @@ export async function exportDatasetToCsv(
     try {
       // Create temporary view with only non-geometry columns
       await Duck.query(`
-        CREATE TEMPORARY VIEW ${viewName} AS
-        SELECT ${nonGeomColumns} FROM ${dataset.duckdbTableName}
+        CREATE TEMPORARY VIEW "${viewName}" AS
+        SELECT ${nonGeomColumns} FROM "${dataset.duckdbTableName}"
       `);
 
       // Export using DuckDB
       const blob = await exportToCsv(viewName);
 
       // Clean up view
-      await Duck.query(`DROP VIEW IF EXISTS ${viewName}`);
+      await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`);
 
       return blob;
     } catch (error) {
       // Clean up on error
       if (Duck) {
-        await Duck.query(`DROP VIEW IF EXISTS ${viewName}`).catch(() => {});
+        await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
       }
       throw error;
     }
@@ -249,23 +250,23 @@ export async function exportProcessedDatasets(
             .filter((col) => col.type !== 'geometry')
             .map((col) => `"${col.name}"`)
             .join(', ');
-
-          return `SELECT ${nonGeomColumns}, '${dataset.name}' as _source_dataset FROM ${dataset.duckdbTableName}`;
+          const escapedName = escapeSqlString(dataset.name);
+          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${dataset.duckdbTableName}"`;
         });
 
         const unionQuery = `
-          CREATE TEMPORARY VIEW ${unionViewName} AS
+          CREATE TEMPORARY VIEW "${unionViewName}" AS
           ${unionParts.join(' UNION ALL ')}
         `;
 
         await Duck.query(unionQuery);
         const blob = await exportToCsv(unionViewName);
-        await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`);
+        await Duck.query(`DROP VIEW IF EXISTS "${unionViewName}"`);
 
         return blob;
       } catch (error) {
         if (Duck) {
-          await Duck.query(`DROP VIEW IF EXISTS ${unionViewName}`).catch(
+          await Duck.query(`DROP VIEW IF EXISTS "${unionViewName}"`).catch(
             () => {}
           );
         }
