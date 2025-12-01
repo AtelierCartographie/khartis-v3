@@ -148,12 +148,14 @@ async function findSimilarMatches(
   }
 
   try {
+    // Escape single quotes in value to prevent SQL injection
+    const escapedValue = value.replace(/'/g, "''");
     const result = (await Duck.query(
       `
-      SELECT ${basemapColumnName}
-      FROM ${basemapTableName}
-      WHERE LOWER(${basemapColumnName}) LIKE '%' || LOWER('${value}') || '%'
-         OR LOWER('${value}') LIKE '%' || LOWER(${basemapColumnName}) || '%'
+      SELECT "${basemapColumnName}"
+      FROM "${basemapTableName}"
+      WHERE LOWER("${basemapColumnName}") LIKE '%' || LOWER('${escapedValue}') || '%'
+         OR LOWER('${escapedValue}') LIKE '%' || LOWER("${basemapColumnName}") || '%'
       LIMIT 3
     `,
       { format: 'array' }

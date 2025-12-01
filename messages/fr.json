@@ -563,5 +563,14 @@
   "validation_geo_invalid": "Données géographiques invalides",
   "validation_geo_feature_collection_invalid": "FeatureCollection invalide : features manquantes",
   "validation_geo_no_features": "Aucune entité géographique trouvée",
-  "validation_geo_too_many_features": "Plus de 50 000 entités géographiques. Les performances pourraient être affectées."
+  "validation_geo_too_many_features": "Plus de 50 000 entités géographiques. Les performances pourraient être affectées.",
+  "data_type_selection_title": "Choisir un type de données à importer",
+  "data_type_selection_description": "Khartis a détecté plusieurs types de fichiers. Veuillez indiquer le rôle de chaque fichier.",
+  "data_type_role_tabular": "Données tabulaires",
+  "data_type_role_tabular_description": "Données à joindre à un fond de carte (CSV, TSV)",
+  "data_type_role_geographic": "Fichier géographique",
+  "data_type_role_geographic_description": "Fond de carte ou géométries (GeoJSON, Shapefile)",
+  "data_type_confirm": "Confirmer",
+  "data_type_cancel": "Annuler",
+  "data_type_file_detected_as": "Détecté comme : {type}"
 }
