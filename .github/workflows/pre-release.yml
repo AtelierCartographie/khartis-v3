@@ -169,4 +169,3 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
           echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
           echo "Latest version: $LATEST_TAG"
-

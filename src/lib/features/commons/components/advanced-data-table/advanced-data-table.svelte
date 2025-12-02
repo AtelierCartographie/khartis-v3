@@ -35,8 +35,8 @@
   } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-  import { LogCategory, logger } from '../utils/logger';
-  import ColumnRenameModal from './column-rename-modal.svelte';
+  import { LogCategory, logger } from '../../utils/logger';
+  import ColumnRenameModal from '../column-rename-modal.svelte';
 
   type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -97,7 +97,7 @@
   let error = $state<string | null>(null);
 
   const rowHeight = 32;
-  const maxHeight = (maxRows + 1) * rowHeight;
+  const maxHeight = $derived((maxRows + 1) * rowHeight);
   let startIndex = 0;
   let offsetRows = 1;
   let rows = $state<number[]>([]);
