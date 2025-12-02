@@ -18,12 +18,17 @@
 
   const { columns, geoDetection, onColumnChange }: Props = $props();
 
-  let selectedGeoColumn = $state(
+  const defaultGeoColumn = $derived(
     geoDetection.geoCodeColumn ||
       geoDetection.locationColumn ||
       geoDetection.latitudeColumn ||
       ''
   );
+  let selectedGeoColumn = $state('');
+
+  $effect(() => {
+    selectedGeoColumn = defaultGeoColumn;
+  });
 
   function handleColumnChange(event: Event) {
     const target = event.target as HTMLSelectElement;

@@ -8,11 +8,11 @@ Khartis is deployed to Sciences Po servers via SFTP. The deployment server is be
 
 ### Environments
 
-| Environment      | BASE_PATH                     | URL                                                    |
-| ---------------- | ----------------------------- | ------------------------------------------------------ |
-| **Local**        | (empty)                       | `http://localhost:5176/`                               |
-| **Pre-prod**     | `/cartographie/khartisnewpprd` | `https://www.sciencespo.fr/cartographie/khartisnewpprd/` |
-| **Production**   | `/cartographie/khartisnewprd`  | `https://www.sciencespo.fr/cartographie/khartisnewprd/`  |
+| Environment    | BASE_PATH                      | URL                                                      |
+| -------------- | ------------------------------ | -------------------------------------------------------- |
+| **Local**      | (empty)                        | `http://localhost:5176/`                                 |
+| **Pre-prod**   | `/cartographie/khartisnewpprd` | `https://www.sciencespo.fr/cartographie/khartisnewpprd/` |
+| **Production** | `/cartographie/khartisnewprd`  | `https://www.sciencespo.fr/cartographie/khartisnewprd/`  |
 
 ## Prerequisites
 
@@ -77,13 +77,13 @@ BASE_PATH=/cartographie/khartisnewprd yarn build
 
 GitHub Actions runs CI checks on push to `develop` (pre-release) and `main` (release):
 
-| Job                  | Description                    |
-| -------------------- | ------------------------------ |
-| `dependency-setup`   | Install and cache dependencies |
-| `unit-tests`         | Run Vitest unit tests          |
-| `svelte-check`       | Run Svelte type checking       |
-| `e2e-tests`          | Run Playwright E2E tests       |
-| `semantic-versioning`| Generate version tags          |
+| Job                   | Description                    |
+| --------------------- | ------------------------------ |
+| `dependency-setup`    | Install and cache dependencies |
+| `unit-tests`          | Run Vitest unit tests          |
+| `svelte-check`        | Run Svelte type checking       |
+| `e2e-tests`           | Run Playwright E2E tests       |
+| `semantic-versioning` | Generate version tags          |
 
 **Note**: CI does not deploy automatically because the server requires VPN access.
 
@@ -166,13 +166,13 @@ If assets return 404 errors after deployment:
 
 ## Server Details
 
-| Setting     | Value                           |
-| ----------- | ------------------------------- |
-| Protocol    | SFTP                            |
-| Server      | `cdnscp.reims.sciences-po.fr`   |
-| User        | `khartis_upload`                |
-| PPRD Path   | `/khartis_upload/html/pprd/`    |
-| PRD Path    | `/khartis_upload/html/prd/`     |
+| Setting   | Value                         |
+| --------- | ----------------------------- |
+| Protocol  | SFTP                          |
+| Server    | `cdnscp.reims.sciences-po.fr` |
+| User      | `khartis_upload`              |
+| PPRD Path | `/khartis_upload/html/pprd/`  |
+| PRD Path  | `/khartis_upload/html/prd/`   |
 
 ---
 

@@ -54,9 +54,7 @@ class DataTypeSelectionStore {
   }
 
   setRole(fileId: string, role: DataRole): void {
-    const assignment = this._state.assignments.find(
-      (a) => a.fileId === fileId
-    );
+    const assignment = this._state.assignments.find((a) => a.fileId === fileId);
     if (assignment) {
       assignment.assignedRole = role;
     }
@@ -87,11 +85,13 @@ class DataTypeSelectionStore {
 export const dataTypeSelectionStore = new DataTypeSelectionStore();
 
 export const dataTypeSelectionActions = {
-  initializeFromFiles:
-    dataTypeSelectionStore.initializeFromFiles.bind(dataTypeSelectionStore),
+  initializeFromFiles: dataTypeSelectionStore.initializeFromFiles.bind(
+    dataTypeSelectionStore
+  ),
   setRole: dataTypeSelectionStore.setRole.bind(dataTypeSelectionStore),
   confirm: dataTypeSelectionStore.confirm.bind(dataTypeSelectionStore),
   reset: dataTypeSelectionStore.reset.bind(dataTypeSelectionStore),
-  shouldShowModal:
-    dataTypeSelectionStore.shouldShowModal.bind(dataTypeSelectionStore)
+  shouldShowModal: dataTypeSelectionStore.shouldShowModal.bind(
+    dataTypeSelectionStore
+  )
 };
