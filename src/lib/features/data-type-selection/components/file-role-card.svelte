@@ -1,8 +1,8 @@
 <script lang="ts">
+  import type { FileType } from '$lib/features/commons/store/create-project.types';
   import { m } from '$lib/paraglide/messages.js';
   import { RadioButton, Tag } from 'carbon-components-svelte';
   import { DocumentBlank, Earth } from 'carbon-icons-svelte';
-  import type { FileType } from '$lib/features/commons/store/create-project.types';
   import { isTabularFileType, type DataRole } from '../types';
 
   interface Props {
@@ -14,7 +14,14 @@
     onRoleChange: (fileId: string, role: DataRole) => void;
   }
 
-  let { fileId, fileName, fileType, assignedRole, groupName, onRoleChange }: Props = $props();
+  let {
+    fileId,
+    fileName,
+    fileType,
+    assignedRole,
+    groupName,
+    onRoleChange
+  }: Props = $props();
 
   const isTabular = $derived(isTabularFileType(fileType));
 
@@ -61,6 +68,7 @@
       </Tag>
     </div>
   </div>
+
   <div class="role-selector">
     <RadioButton
       labelText={m.data_type_role_tabular()}

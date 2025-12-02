@@ -60,6 +60,7 @@
   let isExporting = $state(false);
 
   function handleModalOpen() {
+    exportFileName = projectStore.projectName || 'untitled';
     logger.info('Download modal opened', LogCategory.EXPORT, {
       currentProjectName: projectStore.projectName,
       exportFileName,
@@ -75,7 +76,12 @@
   }
 
   function handleTabChange(tabIndex: number) {
-    const tabName = tabIndex === ExportTab.PROJECT ? 'PROJECT' : tabIndex === ExportTab.MAP ? 'MAP' : 'DATA';
+    const tabName =
+      tabIndex === ExportTab.PROJECT
+        ? 'PROJECT'
+        : tabIndex === ExportTab.MAP
+          ? 'MAP'
+          : 'DATA';
     logger.debug('Export tab changed', LogCategory.EXPORT, {
       from: selectedTabIndex,
       to: tabIndex,
@@ -111,7 +117,12 @@
   async function handleDownload() {
     const exportContext = {
       tab: selectedTabIndex,
-      tabName: selectedTabIndex === ExportTab.PROJECT ? 'PROJECT' : selectedTabIndex === ExportTab.MAP ? 'MAP' : 'DATA',
+      tabName:
+        selectedTabIndex === ExportTab.PROJECT
+          ? 'PROJECT'
+          : selectedTabIndex === ExportTab.MAP
+            ? 'MAP'
+            : 'DATA',
       fileName: exportFileName,
       mapFormat: selectedMapFormat,
       dataFormat: selectedDataFormat,
@@ -149,11 +160,15 @@
 
         case ExportTab.MAP:
           if (!mapInstanceStore.isMapLoaded) {
-            logger.error('Map export failed: map not loaded', LogCategory.EXPORT, {
-              mapInstanceState: {
-                isMapLoaded: mapInstanceStore.isMapLoaded
+            logger.error(
+              'Map export failed: map not loaded',
+              LogCategory.EXPORT,
+              {
+                mapInstanceState: {
+                  isMapLoaded: mapInstanceStore.isMapLoaded
+                }
               }
-            });
+            );
             showError(m.export_map_error(), m.export_map_not_loaded());
             break;
           }
@@ -165,26 +180,32 @@
           }
 
           try {
-            logger.debug('Normalizing datasets for map export', LogCategory.EXPORT, {
-              datasetCount: datasetsStore.datasets.length,
-              datasetIds: datasetsStore.datasets.map(d => d.id)
-            });
+            logger.debug(
+              'Normalizing datasets for map export',
+              LogCategory.EXPORT,
+              {
+                datasetCount: datasetsStore.datasets.length,
+                datasetIds: datasetsStore.datasets.map((d) => d.id)
+              }
+            );
 
             const processedDatasets = normalizeDatasets(datasetsStore.datasets);
 
             logger.debug('Datasets normalized', LogCategory.EXPORT, {
               processedCount: processedDatasets.length,
-              geometryTypes: processedDatasets.map(d => d.geometry)
+              geometryTypes: processedDatasets.map((d) => d.geometry)
             });
 
             let blob: Blob;
 
             if (selectedMapFormat === MAP_FORMAT.SVG) {
               logger.debug('Generating SVG export', LogCategory.EXPORT, {
-                visualizations: visualizationStore.activeVisualizations?.map(v => ({
-                  id: v.id,
-                  type: v.type
-                }))
+                visualizations: visualizationStore.activeVisualizations?.map(
+                  (v) => ({
+                    id: v.id,
+                    type: v.type
+                  })
+                )
               });
 
               blob = exportMapToSvg(
@@ -202,14 +223,17 @@
                 MAP_FORMAT.SVG
               );
               downloadFile(blob, filename);
-              logger.success('SVG export completed', LogCategory.EXPORT, { filename });
-
+              logger.success('SVG export completed', LogCategory.EXPORT, {
+                filename
+              });
             } else if (selectedMapFormat === MAP_FORMAT.JPG) {
               logger.debug('Generating JPG export', LogCategory.EXPORT, {
-                visualizations: visualizationStore.activeVisualizations?.map(v => ({
-                  id: v.id,
-                  type: v.type
-                }))
+                visualizations: visualizationStore.activeVisualizations?.map(
+                  (v) => ({
+                    id: v.id,
+                    type: v.type
+                  })
+                )
               });
 
               blob = await exportMapToJpg(
@@ -227,13 +251,24 @@
                 MAP_FORMAT.JPG
               );
               downloadFile(blob, filename);
-              logger.success('JPG export completed', LogCategory.EXPORT, { filename });
+              logger.success('JPG export completed', LogCategory.EXPORT, {
+                filename
+              });
             }
           } catch (mapExportError) {
             const errorDetails = {
-              errorName: mapExportError instanceof Error ? mapExportError.name : 'Unknown',
-              errorMessage: mapExportError instanceof Error ? mapExportError.message : String(mapExportError),
-              errorStack: mapExportError instanceof Error ? mapExportError.stack : undefined,
+              errorName:
+                mapExportError instanceof Error
+                  ? mapExportError.name
+                  : 'Unknown',
+              errorMessage:
+                mapExportError instanceof Error
+                  ? mapExportError.message
+                  : String(mapExportError),
+              errorStack:
+                mapExportError instanceof Error
+                  ? mapExportError.stack
+                  : undefined,
               format: selectedMapFormat,
               datasetCount: datasetsStore.datasets.length
             };
@@ -278,33 +313,61 @@
               format,
               extension,
               datasetCount: datasetsStore.datasets.length,
-              datasetIds: datasetsStore.datasets.map(d => d.id)
+              datasetIds: datasetsStore.datasets.map((d) => d.id)
             });
 
             try {
-              const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-              logger.debug('Datasets normalized for data export', LogCategory.EXPORT, {
-                normalizedCount: normalizedDatasets.length
-              });
+              const normalizedDatasets = normalizeDatasets(
+                datasetsStore.datasets
+              );
+              logger.debug(
+                'Datasets normalized for data export',
+                LogCategory.EXPORT,
+                {
+                  normalizedCount: normalizedDatasets.length
+                }
+              );
 
-              const blob = await exportProcessedDatasets(normalizedDatasets, format);
+              const blob = await exportProcessedDatasets(
+                normalizedDatasets,
+                format
+              );
               logger.debug('Data blob created', LogCategory.EXPORT, {
                 blobSize: blob.size,
                 blobType: blob.type
               });
 
-              const filename = generateExportFilename(exportFileName, extension);
+              const filename = generateExportFilename(
+                exportFileName,
+                extension
+              );
               downloadFile(blob, filename);
-              logger.success('Data export completed', LogCategory.EXPORT, { filename, format });
+              logger.success('Data export completed', LogCategory.EXPORT, {
+                filename,
+                format
+              });
             } catch (dataExportError) {
               const errorDetails = {
-                errorName: dataExportError instanceof Error ? dataExportError.name : 'Unknown',
-                errorMessage: dataExportError instanceof Error ? dataExportError.message : String(dataExportError),
-                errorStack: dataExportError instanceof Error ? dataExportError.stack : undefined,
+                errorName:
+                  dataExportError instanceof Error
+                    ? dataExportError.name
+                    : 'Unknown',
+                errorMessage:
+                  dataExportError instanceof Error
+                    ? dataExportError.message
+                    : String(dataExportError),
+                errorStack:
+                  dataExportError instanceof Error
+                    ? dataExportError.stack
+                    : undefined,
                 format,
                 datasetCount: datasetsStore.datasets.length
               };
-              logger.error('Data export failed', LogCategory.EXPORT, errorDetails);
+              logger.error(
+                'Data export failed',
+                LogCategory.EXPORT,
+                errorDetails
+              );
               showError(
                 m.export_data_error(),
                 dataExportError instanceof Error
@@ -314,7 +377,10 @@
               break;
             }
           } else {
-            logger.error('Data export failed: no datasets available', LogCategory.EXPORT);
+            logger.error(
+              'Data export failed: no datasets available',
+              LogCategory.EXPORT
+            );
             showError(m.export_data_error(), m.export_data_no_data());
           }
           break;
@@ -329,14 +395,20 @@
         errorStack: error instanceof Error ? error.stack : undefined,
         context: exportContext
       };
-      logger.error('Export failed with unexpected error', LogCategory.EXPORT, errorDetails);
+      logger.error(
+        'Export failed with unexpected error',
+        LogCategory.EXPORT,
+        errorDetails
+      );
       showError(
         m.export_error(),
         error instanceof Error ? error.message : m.export_unknown_error()
       );
     } finally {
       isExporting = false;
-      logger.debug('Export process finished', LogCategory.EXPORT, { isExporting: false });
+      logger.debug('Export process finished', LogCategory.EXPORT, {
+        isExporting: false
+      });
     }
   }
 </script>
@@ -370,91 +442,97 @@
   class="download-modal"
 >
   {#if open}
-  <div class="content-wrapper">
-    <Tabs autoWidth on:change={(e) => handleTabChange(e.detail)}>
-      <Tab label={m.download_tab_project()} />
-      <Tab label={m.download_tab_map()} />
-      <Tab label={m.download_tab_data()} />
+    <div class="content-wrapper">
+      <Tabs autoWidth on:change={(e) => handleTabChange(e.detail)}>
+        <Tab label={m.download_tab_project()} />
+        <Tab label={m.download_tab_map()} />
+        <Tab label={m.download_tab_data()} />
 
-      <svelte:fragment slot="content">
-        <TabContent>
-          <Grid noGutter>
-            <Row>
-              <Column>
-                <header>
-                  <p class="grey-text">
-                    {m.download_project_description()}
-                  </p>
-                </header>
+        <svelte:fragment slot="content">
+          <TabContent>
+            <Grid noGutter>
+              <Row>
+                <Column>
+                  <header>
+                    <p class="grey-text">
+                      {m.download_project_description()}
+                    </p>
+                  </header>
 
-                <FormGroup legendText={m.download_project_name()}>
-                  <TextInput
-                    value={exportFileName}
-                    placeholder={m.project_placeholder()}
-                    on:input={(e) => handleFileNameChange(String(e.detail ?? ''))}
-                  />
-                </FormGroup>
-              </Column>
-            </Row>
-          </Grid>
-        </TabContent>
+                  <FormGroup legendText={m.download_project_name()}>
+                    <TextInput
+                      value={exportFileName}
+                      placeholder={m.project_placeholder()}
+                      on:input={(e) =>
+                        handleFileNameChange(String(e.detail ?? ''))}
+                    />
+                  </FormGroup>
+                </Column>
+              </Row>
+            </Grid>
+          </TabContent>
 
-        <TabContent>
-          <Grid noGutter>
-            <Row>
-              <Column>
-                <header>
-                  <p class="grey-text">
-                    {m.download_map_description()}
-                  </p>
-                </header>
+          <TabContent>
+            <Grid noGutter>
+              <Row>
+                <Column>
+                  <header>
+                    <p class="grey-text">
+                      {m.download_map_description()}
+                    </p>
+                  </header>
 
-                <TileGroup selected={selectedMapFormat} on:select={(e) => handleMapFormatChange(e.detail as MapExportFormat)}>
-                  <RadioTile light value={MAP_FORMAT.SVG}
-                    >{m.download_map_svg()}</RadioTile
+                  <TileGroup
+                    selected={selectedMapFormat}
+                    on:select={(e) =>
+                      handleMapFormatChange(e.detail as MapExportFormat)}
                   >
+                    <RadioTile light value={MAP_FORMAT.SVG}
+                      >{m.download_map_svg()}</RadioTile
+                    >
 
-                  <RadioTile light value={MAP_FORMAT.JPG}
-                    >{m.download_map_jpg()}</RadioTile
-                  >
-                </TileGroup>
-              </Column>
-            </Row>
-          </Grid>
-        </TabContent>
+                    <RadioTile light value={MAP_FORMAT.JPG}
+                      >{m.download_map_jpg()}</RadioTile
+                    >
+                  </TileGroup>
+                </Column>
+              </Row>
+            </Grid>
+          </TabContent>
 
-        <TabContent>
-          <Grid noGutter>
-            <Row>
-              <Column>
-                <header>
-                  <p class="grey-text">
-                    {m.download_data_description()}
-                  </p>
-                </header>
+          <TabContent>
+            <Grid noGutter>
+              <Row>
+                <Column>
+                  <header>
+                    <p class="grey-text">
+                      {m.download_data_description()}
+                    </p>
+                  </header>
 
-                <TileGroup
-                  name="plan-disabled"
-                  selected={selectedDataFormat}
-                  on:select={(e) => handleDataFormatChange(e.detail as DataExportFormat)}
-                >
-                  <RadioTile light value={DATA_FORMAT.CSV}
-                    >{m.download_data_csv()}</RadioTile
+                  <TileGroup
+                    name="plan-disabled"
+                    selected={selectedDataFormat}
+                    on:select={(e) =>
+                      handleDataFormatChange(e.detail as DataExportFormat)}
                   >
-                  <RadioTile light value={DATA_FORMAT.CSV_GEO}
-                    >{m.download_data_csv_geo()}</RadioTile
-                  >
-                  <RadioTile light value={DATA_FORMAT.GEOJSON}
-                    >{m.download_data_geojson()}</RadioTile
-                  >
-                </TileGroup>
-              </Column>
-            </Row>
-          </Grid>
-        </TabContent>
-      </svelte:fragment>
-    </Tabs>
-  </div>
+                    <RadioTile light value={DATA_FORMAT.CSV}
+                      >{m.download_data_csv()}</RadioTile
+                    >
+                    <RadioTile light value={DATA_FORMAT.CSV_GEO}
+                      >{m.download_data_csv_geo()}</RadioTile
+                    >
+                    <RadioTile light value={DATA_FORMAT.GEOJSON}
+                      >{m.download_data_geojson()}</RadioTile
+                    >
+                  </TileGroup>
+                </Column>
+              </Row>
+            </Grid>
+          </TabContent>
+        </svelte:fragment>
+      </Tabs>
+    </div>
   {/if}
 </Modal>
 

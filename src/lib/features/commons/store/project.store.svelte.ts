@@ -202,6 +202,10 @@ class ProjectStore {
   }
 
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
+    if (this._state.currentProject) {
+      await this.saveCurrentProject();
+    }
+
     const nameValidation = ProjectValidator.validateProjectName(name);
     if (!nameValidation.isValid) {
       throw new Error(nameValidation.errors.join(', '));
@@ -237,6 +241,10 @@ class ProjectStore {
   }
 
   async loadProject(id: string): Promise<void> {
+    if (this._state.currentProject && this._state.isDirty) {
+      await this.saveCurrentProject();
+    }
+
     const project = await projectRepository.load(id);
 
     if (project) {
@@ -301,6 +309,7 @@ class ProjectStore {
       if (this._state.currentProject?.id === id) {
         this._state.currentProject = undefined;
         await projectStorage.remove(ProjectStorageKey.CURRENT);
+        await dataOrchestratorService.onProjectChanged();
       }
     } catch (error) {
       const message =
@@ -397,6 +406,10 @@ class ProjectStore {
   }
 
   async importProject(file: File): Promise<void> {
+    if (this._state.currentProject && this._state.isDirty) {
+      await this.saveCurrentProject();
+    }
+
     try {
       const project = await projectFiles.importProject(file);
 
@@ -407,6 +420,8 @@ class ProjectStore {
       this._state.historyIndex = -1;
 
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
+
+      await dataOrchestratorService.onProjectChanged();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to import project';

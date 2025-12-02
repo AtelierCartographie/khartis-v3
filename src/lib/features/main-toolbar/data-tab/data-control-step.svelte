@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table.svelte';
+  import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';

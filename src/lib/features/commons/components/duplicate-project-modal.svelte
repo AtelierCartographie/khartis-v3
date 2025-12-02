@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
   import {
+    InlineLoading,
     Modal,
     RadioButton,
     RadioButtonGroup,
@@ -10,11 +11,17 @@
 
   interface Props {
     open: boolean;
+    isLoading?: boolean;
     onClose: () => void;
     onConfirm: (projectId: string, newName: string) => void;
   }
 
-  let { open = $bindable(), onClose, onConfirm }: Props = $props();
+  let {
+    open = $bindable(),
+    isLoading = false,
+    onClose,
+    onConfirm
+  }: Props = $props();
 
   let selectedProjectId = $state('');
   let newProjectName = $state('');
@@ -71,13 +78,14 @@
 <Modal
   bind:open={open}
   modalHeading={m.duplicate_project_modal_title()}
-  primaryButtonText={m.duplicate_project_modal_confirm()}
+  primaryButtonText={isLoading ? '' : m.duplicate_project_modal_confirm()}
   secondaryButtonText={m.duplicate_project_modal_cancel()}
   on:click:button--primary={handleConfirm}
   on:click:button--secondary={handleCancel}
   on:close={handleCancel}
   size="sm"
-  primaryButtonDisabled={!selectedProjectId || !newProjectName}
+  primaryButtonDisabled={!selectedProjectId || !newProjectName || isLoading}
+  preventCloseOnClickOutside={isLoading}
 >
   <div class="duplicate-modal-content">
     {#if projectsStore.projects.length === 0}
@@ -104,8 +112,15 @@
           labelText={m.duplicate_project_modal_new_name()}
           placeholder={m.duplicate_project_modal_name_placeholder()}
           bind:value={newProjectName}
+          disabled={isLoading}
         />
       </div>
+
+      {#if isLoading}
+        <div class="loading-section">
+          <InlineLoading description={m.duplicate_project_modal_loading()} />
+        </div>
+      {/if}
     {/if}
   </div>
 </Modal>
@@ -142,5 +157,11 @@
   :global(.duplicate-modal-content .bx--radio-button-group) {
     max-height: 200px;
     overflow-y: auto;
+  }
+
+  .loading-section {
+    display: flex;
+    justify-content: center;
+    padding: var(--cds-spacing-03) 0;
   }
 </style>
