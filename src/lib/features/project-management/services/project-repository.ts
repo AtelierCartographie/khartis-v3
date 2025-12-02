@@ -3,6 +3,10 @@ import { ProjectStorageKey } from '../models/project';
 import { projectStorage } from './project-storage';
 import { ProjectSerializer } from '../utils/project-serializer';
 
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 const DB_NAME = 'KhartisDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'projects';
@@ -158,7 +162,7 @@ export class ProjectRepository {
   }
 
   private calculateProjectSize(project: KhartisProject): number {
-    const json = JSON.stringify(project);
+    const json = JSON.stringify(project, bigIntReplacer);
     return new Blob([json]).size;
   }
 }

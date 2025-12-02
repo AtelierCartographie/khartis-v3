@@ -163,7 +163,7 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent<boolean>) => {
+            ontoggle={(e: CustomEvent) => {
               const nextStyle: 'dotted' | 'solid' = e.detail
                 ? 'dotted'
                 : 'solid';

@@ -822,20 +822,22 @@ class DuckDB {
       return;
     }
 
-    const baseUrl =
-      typeof window !== 'undefined' ? window.location.origin : '';
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     const repositoryUrl = `${baseUrl}/duckdb-extensions`;
 
     try {
-      await this.query(
-        `SET custom_extension_repository = '${repositoryUrl}'`,
-        { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-      );
-      this.localExtensionRepositoryConfigured = true;
-      logger.debug('Local extension repository configured', LogCategory.DUCKDB, {
-        repositoryUrl,
-        durationMs: (performance.now() - startTime).toFixed(2)
+      await this.query(`SET custom_extension_repository = '${repositoryUrl}'`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
+      this.localExtensionRepositoryConfigured = true;
+      logger.debug(
+        'Local extension repository configured',
+        LogCategory.DUCKDB,
+        {
+          repositoryUrl,
+          durationMs: (performance.now() - startTime).toFixed(2)
+        }
+      );
     } catch (error) {
       logger.warn(
         'Failed to set local extension repository, using CDN fallback',
@@ -985,9 +987,12 @@ class DuckDB {
    */
   private async add_row_id(table: string): Promise<void> {
     const safeSeqName = table.replace(/[^a-zA-Z0-9_]/g, '_');
-    await this.query(`CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    await this.query(
+      `CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
     await this.query(
       `ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${safeSeqName}');`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
@@ -2258,10 +2263,18 @@ class DuckDB {
     // Escape all string parameters for SQL string literals
     const escapedTable = escapeSqlString(table);
     const escapedTableId = escapeSqlString(table_id);
-    const escapedBasemapsTable = basemaps_table ? escapeSqlString(basemaps_table) : undefined;
-    const escapedBasemapTable = basemap_table ? escapeSqlString(basemap_table) : undefined;
-    const escapedBasemapId = basemap_id ? escapeSqlString(basemap_id) : undefined;
-    const escapedBasemapOthersId = basemap_others_id ? escapeSqlString(basemap_others_id) : undefined;
+    const escapedBasemapsTable = basemaps_table
+      ? escapeSqlString(basemaps_table)
+      : undefined;
+    const escapedBasemapTable = basemap_table
+      ? escapeSqlString(basemap_table)
+      : undefined;
+    const escapedBasemapId = basemap_id
+      ? escapeSqlString(basemap_id)
+      : undefined;
+    const escapedBasemapOthersId = basemap_others_id
+      ? escapeSqlString(basemap_others_id)
+      : undefined;
 
     const table_name = `${table}_join_results`;
     const escapedTableName = escapeSqlString(table_name);

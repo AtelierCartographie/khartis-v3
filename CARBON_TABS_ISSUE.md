@@ -9,6 +9,7 @@ This is the same issue that was fixed for the `Select` component in #2107 / PR #
 ## Reproduction
 
 **Environment:**
+
 - carbon-components-svelte: 0.93.0
 - svelte: 5.x
 - sveltekit: 2.x
@@ -22,9 +23,9 @@ This is the same issue that was fixed for the `Select` component in #2107 / PR #
   let open = $state(false);
 </script>
 
-<button onclick={() => open = true}>Open Modal</button>
+<button onclick={() => (open = true)}>Open Modal</button>
 
-<Modal {open} on:close={() => open = false}>
+<Modal {open} on:close={() => (open = false)}>
   <Tabs>
     <Tab label="Tab 1" />
     <Tab label="Tab 2" />
@@ -37,6 +38,7 @@ This is the same issue that was fixed for the `Select` component in #2107 / PR #
 ```
 
 **Error:**
+
 ```
 Uncaught Svelte error: effect_update_depth_exceeded
 Maximum update depth exceeded. This typically indicates that an effect reads and writes the same piece of state
@@ -47,6 +49,7 @@ Maximum update depth exceeded. This typically indicates that an effect reads and
 In `src/Tabs/Tabs.svelte`, there's a reactive loop between:
 
 1. **Line 220** - Reactive statement:
+
    ```javascript
    $: currentIndex = selected;
    ```
@@ -57,6 +60,7 @@ In `src/Tabs/Tabs.svelte`, there's a reactive loop between:
    ```
 
 This creates a cycle:
+
 1. `selected` changes → `$: currentIndex = selected` triggers
 2. `currentIndex` changes → `afterUpdate()` runs
 3. `afterUpdate()` sets `selected = currentIndex`
@@ -92,6 +96,7 @@ This conditional check prevents unnecessary updates when the value hasn't actual
 Until this is fixed, users can:
 
 1. **Use `patch-package`** to apply the fix locally:
+
    ```bash
    yarn add -D patch-package postinstall-postinstall
    # Manually edit node_modules/carbon-components-svelte/src/Tabs/Tabs.svelte
@@ -99,6 +104,7 @@ Until this is fixed, users can:
    ```
 
 2. **Conditionally render Tabs** only when the parent container is visible:
+
    ```svelte
    <Modal {open}>
      {#if open}
@@ -117,6 +123,7 @@ Until this is fixed, users can:
 ## Additional Context
 
 This issue affects any usage of `Tabs` in a Svelte 5 application, particularly when:
+
 - The component is mounted inside a Modal or other container
 - The parent component uses `$state` for reactive variables
 - Multiple reactive updates occur during initialization
