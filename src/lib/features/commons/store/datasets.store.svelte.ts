@@ -162,8 +162,8 @@ class DatasetsStore {
     try {
       // Use semaphore for single file processing to maintain consistency
       const dataset = await this.processingSemaphore.run(async () => {
-        if (!file.content) {
-          throw new Error(`File ${file.name} has no content`);
+        if (!file.content && !file.originalFile) {
+          throw new Error(`File ${file.name} has no content or originalFile`);
         }
 
         logger.debug(

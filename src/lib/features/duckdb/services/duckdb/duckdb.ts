@@ -4,6 +4,7 @@ import {
   TypeInferenceError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
@@ -467,6 +468,10 @@ class DuckDB {
 
   private threadsSupported = false;
 
+  private bundleVariant: 'eh' | 'mvp' = 'eh';
+
+  private localExtensionRepositoryConfigured = false;
+
   private transactionMutex = new TransactionMutex();
 
   constructor() {}
@@ -699,10 +704,10 @@ class DuckDB {
         }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      const bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
+      this.bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
       this.threadsSupported = Boolean(bundle.pthreadWorker);
       logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
-        bundleVariant,
+        bundleVariant: this.bundleVariant,
         threadsSupported: this.threadsSupported,
         durationMs: (performance.now() - bundleStart).toFixed(2)
       });
@@ -753,6 +758,8 @@ class DuckDB {
 
       await this.configureRuntimeSettings();
 
+      await this.configureLocalExtensionRepository();
+
       await this.preloadExtensions();
 
       this.clearGeoParquetCache();
@@ -796,6 +803,48 @@ class DuckDB {
     await this.connection?.close();
     await this.db?.dropFiles();
     await this.db?.reset();
+  }
+
+  /**
+   * Configure local extension repository for offline PWA support.
+   * Extensions are served from static/duckdb-extensions/ instead of the CDN.
+   * Falls back to CDN if local repository is not available.
+   */
+  private async configureLocalExtensionRepository(): Promise<void> {
+    const startTime = performance.now();
+
+    // Only configure for wasm_eh (modern browsers), let wasm_mvp use CDN fallback
+    if (this.bundleVariant !== 'eh') {
+      logger.debug(
+        'Skipping local extension repository (wasm_mvp uses CDN)',
+        LogCategory.DUCKDB
+      );
+      return;
+    }
+
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const repositoryUrl = `${baseUrl}/duckdb-extensions`;
+
+    try {
+      await this.query(`SET custom_extension_repository = '${repositoryUrl}'`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      this.localExtensionRepositoryConfigured = true;
+      logger.debug(
+        'Local extension repository configured',
+        LogCategory.DUCKDB,
+        {
+          repositoryUrl,
+          durationMs: (performance.now() - startTime).toFixed(2)
+        }
+      );
+    } catch (error) {
+      logger.warn(
+        'Failed to set local extension repository, using CDN fallback',
+        LogCategory.DUCKDB,
+        { error }
+      );
+    }
   }
 
   /**
@@ -937,11 +986,15 @@ class DuckDB {
    * @param {string} table - The name of the table to add the row ID column to.
    */
   private async add_row_id(table: string): Promise<void> {
-    await this.query(`CREATE OR REPLACE SEQUENCE id_${table} START 1;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    const safeSeqName = table.replace(/[^a-zA-Z0-9_]/g, '_');
     await this.query(
-      `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${table}');`,
+      `CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
+    await this.query(
+      `ALTER TABLE "${table}" ADD COLUMN IF NOT EXISTS __id INTEGER DEFAULT nextval('id_${safeSeqName}');`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
   }
@@ -1131,14 +1184,16 @@ class DuckDB {
           throw new DuckDBError('Unable to determine target table name');
         }
         if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
-          const query = `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${fileid}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
+          const escapedFileId = escapeSqlString(fileid);
+          const query = `CREATE OR REPLACE TABLE "${tablename}" AS FROM read_csv('${escapedFileId}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
           await this.query(query, {
             format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
           });
         }
         if (format === DUCK_CONST.TYPE.PARQUET) {
+          const escapedFileIdParquet = escapeSqlString(fileid);
           await this.query(
-            `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${fileid}');`,
+            `CREATE OR REPLACE TABLE "${tablename}" AS FROM read_parquet('${escapedFileIdParquet}');`,
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
         }
@@ -1181,8 +1236,9 @@ class DuckDB {
       await this.register_files([geofile], { shapefile });
       const geofileWithId = geofile as FileWithId;
       if (meta) {
+        const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
         const result = await this
-          .query(`FROM ST_Read_Meta('${geofileWithId.id}')
+          .query(`FROM ST_Read_Meta('${escapedFileIdMeta}')
 					SELECT
 						file_name AS name,
 						driver_short_name AS format,
@@ -1196,8 +1252,9 @@ class DuckDB {
       }
 
       await this.runInTransaction(async () => {
+        const escapedGeoFileId = escapeSqlString(geofileWithId.id);
         await this.query(
-          `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${geofileWithId.id}');`,
+          `CREATE OR REPLACE TABLE "${tablename}" AS FROM ST_Read('${escapedGeoFileId}');`,
           {
             format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
           }
@@ -1252,24 +1309,25 @@ class DuckDB {
         if (!tablename) {
           throw new DuckDBError('Unable to determine target table name');
         }
+        const escapedFilename = escapeSqlString(filename);
         switch (file_type) {
           case DUCK_CONST.TYPE.TABULAR:
             await this.query(
-              `CREATE OR REPLACE TABLE ${tablename} AS FROM read_csv('${filename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
+              `CREATE OR REPLACE TABLE "${tablename}" AS FROM read_csv('${escapedFilename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
             break;
 
           case DUCK_CONST.TYPE.PARQUET:
             await this.query(
-              `CREATE OR REPLACE TABLE ${tablename} AS FROM read_parquet('${filename}');`,
+              `CREATE OR REPLACE TABLE "${tablename}" AS FROM read_parquet('${escapedFilename}');`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
             break;
 
           case DUCK_CONST.TYPE.GEOFILE:
             await this.query(
-              `CREATE OR REPLACE TABLE ${tablename} AS FROM ST_Read('${filename}');`,
+              `CREATE OR REPLACE TABLE "${tablename}" AS FROM ST_Read('${escapedFilename}');`,
               {
                 format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
               }
@@ -1304,10 +1362,11 @@ class DuckDB {
       return cached;
     }
     try {
+      const escapedTableForDescribe = escapeSqlString(table);
       const records = (await this.query(
         `SELECT column_name, data_type AS column_type
          FROM information_schema.columns
-         WHERE table_name = '${table}' COLLATE NOCASE
+         WHERE table_name = '${escapedTableForDescribe}' COLLATE NOCASE
          ORDER BY ordinal_position`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ column_name: string; column_type: string }>;
@@ -1334,7 +1393,7 @@ class DuckDB {
     }
     try {
       const result = (await this.query(
-        `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM ${table}`,
+        `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM "${table}"`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ num_rows: number }>;
       const count = Number(result[0]?.num_rows ?? 0);
@@ -1364,7 +1423,7 @@ class DuckDB {
       selection = '*';
     }
 
-    let query = `SELECT ${selection} FROM ${table}`;
+    let query = `SELECT ${selection} FROM "${table}"`;
     if (limit && limit > 0) {
       query += ` LIMIT ${limit}`;
     }
@@ -1386,7 +1445,7 @@ class DuckDB {
       ? options.columns.map((col) => `"${col}"`).join(', ')
       : '*';
 
-    const query = `SELECT ${columnSelection} FROM ${table} USING SAMPLE ${limit} ROWS`;
+    const query = `SELECT ${columnSelection} FROM "${table}" USING SAMPLE ${limit} ROWS`;
 
     logger.debug('Using TABLESAMPLE for preview', LogCategory.DUCKDB, {
       table,
@@ -1405,8 +1464,8 @@ class DuckDB {
   ): Promise<Table> {
     const result =
       order === undefined
-        ? await this.query(`FROM ${table}`)
-        : await this.query(`FROM ${table} ORDER BY "${column}" ${order}`);
+        ? await this.query(`FROM "${table}"`)
+        : await this.query(`FROM "${table}" ORDER BY "${column}" ${order}`);
     return result as Table;
   }
 
@@ -1416,7 +1475,7 @@ class DuckDB {
     new_name: string
   ): Promise<void> {
     await this.query(
-      `ALTER TABLE ${table} RENAME "${old_name}" to "${new_name}"`,
+      `ALTER TABLE "${table}" RENAME "${old_name}" to "${new_name}"`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -1430,7 +1489,7 @@ class DuckDB {
     new_type: string
   ): Promise<void> {
     await this.query(
-      `ALTER TABLE ${table} ALTER "${column}" SET DATA TYPE ${new_type} USING try_cast("${column}" AS ${new_type})`,
+      `ALTER TABLE "${table}" ALTER "${column}" SET DATA TYPE ${new_type} USING try_cast("${column}" AS ${new_type})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
     this.markTableMutated(table);
@@ -1442,7 +1501,7 @@ class DuckDB {
     caseType: 'lower' | 'upper' = 'lower'
   ): Promise<void> {
     await this.query(
-      `UPDATE ${table} set "${column}" = ${caseType}("${column}")`,
+      `UPDATE "${table}" set "${column}" = ${caseType}("${column}")`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -1451,14 +1510,14 @@ class DuckDB {
   }
 
   async trim_column(table: string, column: string): Promise<void> {
-    await this.query(`UPDATE ${table} set "${column}" = trim("${column}")`, {
+    await this.query(`UPDATE "${table}" set "${column}" = trim("${column}")`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     this.markTableMutated(table);
   }
 
   async drop_column(table: string, column: string): Promise<void> {
-    await this.query(`ALTER TABLE ${table} DROP "${column}"`, {
+    await this.query(`ALTER TABLE "${table}" DROP "${column}"`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     this.markTableMutated(table);
@@ -1466,7 +1525,7 @@ class DuckDB {
 
   async drop_rows(table: string, rows_id: number[]): Promise<void> {
     await this.query(
-      `DELETE FROM ${table} WHERE __id IN (${rows_id.toString()})`,
+      `DELETE FROM "${table}" WHERE __id IN (${rows_id.toString()})`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -1511,7 +1570,7 @@ class DuckDB {
     let value_for_query: string | number | boolean;
     switch (typeof new_value) {
       case 'string':
-        value_for_query = `'${new_value.replace(/'/g, "''")}'`;
+        value_for_query = `'${escapeSqlString(new_value)}'`;
         break;
 
       case 'number':
@@ -1539,10 +1598,10 @@ class DuckDB {
     }
 
     if (typeof id_value === 'string') {
-      id_value = id_value.replace(/'/g, "''");
+      id_value = escapeSqlString(id_value);
     }
     await this.query(
-      `UPDATE ${table} SET "${column}" = ${value_for_query} WHERE "${id_column}" = ${id_value}`,
+      `UPDATE "${table}" SET "${column}" = ${value_for_query} WHERE "${id_column}" = ${id_value}`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
   }
@@ -1559,7 +1618,7 @@ class DuckDB {
 
   async apply_filters(table: string): Promise<Table> {
     try {
-      let query = `SELECT * FROM ${table}`;
+      let query = `SELECT * FROM "${table}"`;
       const { filters } = this.get_table_metadata(table);
       if (filters.size > 0) {
         const filterConditions = Array.from(filters.values()).join(' AND ');
@@ -1579,8 +1638,8 @@ class DuckDB {
     lon_column: string
   ): Promise<void> {
     await this.query(
-      `CREATE OR REPLACE TABLE ${table} AS
-			FROM ${table}
+      `CREATE OR REPLACE TABLE "${table}" AS
+			FROM "${table}"
 			SELECT
 				*,
 				ST_Point("${lon_column}", "${lat_column}") as geom;`,
@@ -1606,7 +1665,7 @@ class DuckDB {
 
     try {
       await this.query(
-        `COPY ${table} TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
+        `COPY "${table}" TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
         {
           format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
         }
@@ -1647,8 +1706,9 @@ class DuckDB {
       return cachedBuffer.slice();
     }
 
+    const escapedTableForFile = escapeSqlString(table);
     await this.query(
-      `COPY ${table} TO '${table}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
+      `COPY "${table}" TO '${escapedTableForFile}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -1801,9 +1861,11 @@ class DuckDB {
     table: string,
     format: string = DUCK_CONST.DEFAULT.FORMAT_TABULAR
   ): Promise<Uint8Array> {
+    const escapedTableForFilename = escapeSqlString(table);
     const filename = table + '.' + format;
+    const escapedFilename = escapeSqlString(filename);
     await this.query(
-      `COPY ${table} TO '${filename}' WITH (FORMAT '${format}')`,
+      `COPY "${table}" TO '${escapedFilename}' WITH (FORMAT '${format}')`,
       {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       }
@@ -1837,17 +1899,20 @@ class DuckDB {
       break_value = null
     } = options;
 
+    // Escape table name for use inside SQL string literals
+    const escapedTable = escapeSqlString(table);
+
     let breaks: number[];
 
     if (!break_value) {
       const result = (await this.query(
-        `SELECT ${method}('FROM query_table(${table}) SELECT "${column}"', "${column}", nb := ${nclass}) as breaks`,
+        `SELECT ${method}('FROM query_table(''${escapedTable}'') SELECT "${column}"', "${column}", nb := ${nclass}) as breaks`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreaksResult[];
       breaks = result[0].breaks;
     } else {
       const break_is_inside = (await this.query(
-        `FROM query_table(${table}) SELECT min("${column}") as min, max("${column}") as max, ${break_value} BETWEEN min AND max as is_inside`,
+        `FROM query_table('${escapedTable}') SELECT min("${column}") as min, max("${column}") as max, ${break_value} BETWEEN min AND max as is_inside`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreakInsideResult[];
       if (break_is_inside[0].is_inside === false)
@@ -1861,11 +1926,11 @@ class DuckDB {
           }
         );
       const breaks_below = (await this.query(
-        `SELECT ${method}('FROM query_table(${table}) SELECT "${column}" WHERE "${column}" < ${break_value}', "${column}", nb := ${nclass}) as breaks`,
+        `SELECT ${method}('FROM query_table(''${escapedTable}'') SELECT "${column}" WHERE "${column}" < ${break_value}', "${column}", nb := ${nclass}) as breaks`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreaksResult[];
       const breaks_above = (await this.query(
-        `SELECT ${method}('FROM query_table(${table}) SELECT "${column}" WHERE "${column}" >= ${break_value}', "${column}", nb := ${nclass_right}) as breaks`,
+        `SELECT ${method}('FROM query_table(''${escapedTable}'') SELECT "${column}" WHERE "${column}" >= ${break_value}', "${column}", nb := ${nclass_right}) as breaks`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreaksResult[];
 
@@ -1878,7 +1943,7 @@ class DuckDB {
 
     if (round) {
       const result = (await this.query(
-        `SELECT round_thresholds([${breaks}], ${table}, "${column}") as breaks_rounded`,
+        `SELECT round_thresholds([${breaks}], '${escapedTable}', "${column}") as breaks_rounded`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as BreaksRoundedResult[];
       const breaks_rounded = result[0].breaks_rounded;
@@ -1899,18 +1964,23 @@ class DuckDB {
   ): Promise<string> {
     const class_column_name = '_class_' + class_name_counter++;
     await this.query(
-      `CREATE OR REPLACE TABLE ${table} AS
-			 SELECT *, add_class("${column}", [${breaks}]) as ${class_column_name} FROM ${table}`
+      `CREATE OR REPLACE TABLE "${table}" AS
+			 SELECT *, add_class("${column}", [${breaks}]) as ${class_column_name} FROM "${table}"`
     );
     this.markTableMutated(table);
     return class_column_name;
   }
 
   async describeColumns(table: string): Promise<AnalysisResults> {
-    const describe_full = (await this.query(`FROM describe_full('${table}')`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY,
-      useProxy: false
-    })) as Record<string, unknown>[];
+    // Escape table name for SQL string literal
+    const escapedTable = escapeSqlString(table);
+    const describe_full = (await this.query(
+      `FROM describe_full('${escapedTable}')`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY,
+        useProxy: false
+      }
+    )) as Record<string, unknown>[];
 
     return describe_full as AnalysisResults;
   }
@@ -1942,10 +2012,16 @@ class DuckDB {
     // force analysis => remove previous cached results
     if (force && analysis) delete table_metadata.analysis;
 
-    const describe_full = (await this.query(`FROM describe_full('${table}')`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY,
-      useProxy: false
-    })) as Record<string, unknown>[];
+    // Escape table name for SQL string literal
+    const escapedTable = escapeSqlString(table);
+
+    const describe_full = (await this.query(
+      `FROM describe_full('${escapedTable}')`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY,
+        useProxy: false
+      }
+    )) as Record<string, unknown>[];
 
     const numericColumns = describe_full.filter(
       (d) => d.type_simple === 'numeric'
@@ -1971,7 +2047,7 @@ class DuckDB {
     if (rowCount > SAMPLE_THRESHOLD) {
       try {
         await this.query(
-          `CREATE VIEW ${sampleViewName} AS SELECT * FROM ${table} USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
+          `CREATE VIEW "${sampleViewName}" AS SELECT * FROM "${table}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
         );
         analysisTable = sampleViewName;
         isSampled = true;
@@ -2113,7 +2189,7 @@ class DuckDB {
     } finally {
       if (isSampled) {
         try {
-          await this.query(`DROP VIEW IF EXISTS ${sampleViewName}`);
+          await this.query(`DROP VIEW IF EXISTS "${sampleViewName}"`);
         } catch (e) {
           // ignore
         }
@@ -2183,7 +2259,25 @@ class DuckDB {
         { basemap_table }
       );
     }
+
+    // Escape all string parameters for SQL string literals
+    const escapedTable = escapeSqlString(table);
+    const escapedTableId = escapeSqlString(table_id);
+    const escapedBasemapsTable = basemaps_table
+      ? escapeSqlString(basemaps_table)
+      : undefined;
+    const escapedBasemapTable = basemap_table
+      ? escapeSqlString(basemap_table)
+      : undefined;
+    const escapedBasemapId = basemap_id
+      ? escapeSqlString(basemap_id)
+      : undefined;
+    const escapedBasemapOthersId = basemap_others_id
+      ? escapeSqlString(basemap_others_id)
+      : undefined;
+
     const table_name = `${table}_join_results`;
+    const escapedTableName = escapeSqlString(table_name);
     let basemap_join_ref_name: string | null = null;
     let join_across_query: string;
 
@@ -2205,44 +2299,48 @@ class DuckDB {
 
       if (hasCustomAttributes) {
         await this.query(
-          `CREATE OR REPLACE TABLE ${unified_table} AS
-          SELECT * FROM ${basemaps_table}
+          `CREATE OR REPLACE TABLE "${unified_table}" AS
+          SELECT * FROM "${basemaps_table}"
           UNION ALL
           SELECT * FROM custom_basemap_attributes`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
         this.markTableMutated(unified_table);
 
-        join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
-			FROM apply_join_across_basemaps(${table}, ${table_id}, ${unified_table})`;
+        join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
+			FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${unified_table}')`;
       } else {
-        join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
-			FROM apply_join_across_basemaps(${table}, ${table_id}, ${basemaps_table})`;
+        join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
+			FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${escapedBasemapsTable}')`;
       }
       // Case 2: Joining to a single basemap (using basemap_table, basemap_id, basemap_others_id)
     } else if (basemap_table) {
       basemap_join_ref_name = `${basemap_table}_join_ref`;
+      const escapedBasemapJoinRefName = basemap_join_ref_name.replace(
+        /'/g,
+        "''"
+      );
       // prepare the basemap table as a join reference table
       if (basemap_others_id) {
         // With alternative ID columns
         await this.query(
-          `CREATE OR REPLACE TABLE ${basemap_join_ref_name} AS
-					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id}, ${basemap_others_id});`,
+          `CREATE OR REPLACE TABLE "${basemap_join_ref_name}" AS
+					  FROM get_join_table_from_basemap('${escapedBasemapTable}', '${escapedBasemapId}', '${escapedBasemapOthersId}');`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
         this.markTableMutated(basemap_join_ref_name);
       } else {
         // With a single ID column
         await this.query(
-          `CREATE OR REPLACE TABLE ${basemap_join_ref_name} AS
-					  FROM get_join_table_from_basemap(${basemap_table}, ${basemap_id})`,
+          `CREATE OR REPLACE TABLE "${basemap_join_ref_name}" AS
+					  FROM get_join_table_from_basemap('${escapedBasemapTable}', '${escapedBasemapId}')`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
         this.markTableMutated(basemap_join_ref_name);
       }
 
-      join_across_query = `CREATE OR REPLACE TABLE ${table_name} AS
-			FROM apply_join_across_basemaps(${table}, ${table_id}, ${basemap_join_ref_name})`;
+      join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
+			FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${escapedBasemapJoinRefName}')`;
     } else {
       throw new DataValidationError(
         'Invalid options configuration',
@@ -2257,9 +2355,12 @@ class DuckDB {
     });
     this.markTableMutated(table_name);
     // Generate the synthesis of the join results
-    const synthesis = await this.query(`FROM join_synthesis(${table_name})`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY
-    });
+    const synthesis = await this.query(
+      `FROM join_synthesis('${escapedTableName}')`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      }
+    );
 
     // Store association
     const table_metadata = this.get_table_metadata(table);
@@ -2295,15 +2396,16 @@ class DuckDB {
       );
     }
     const { id, join_results_name } = join;
-    await this.query(`CREATE OR REPLACE TABLE ${table} AS
-				FROM ${table} as t
+    const escapedBasemap = escapeSqlString(basemap);
+    await this.query(`CREATE OR REPLACE TABLE "${table}" AS
+				FROM "${table}" as t
 				SELECT
 					t.*,
 					j.id as basemap_id,
 					j.typo_match
-				LEFT JOIN ${join_results_name} as j
-				ON t.${id} = j.geoname
-				WHERE j.basemap = '${basemap}'`);
+				LEFT JOIN "${join_results_name}" as j
+				ON t."${id}" = j.geoname
+				WHERE j.basemap = '${escapedBasemap}'`);
     this.markTableMutated(table);
   }
 }

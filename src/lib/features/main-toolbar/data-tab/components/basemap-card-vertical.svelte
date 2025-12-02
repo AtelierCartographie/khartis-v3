@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages';
-  import { RadioButton, ProgressBar } from 'carbon-components-svelte';
-  import { Map, Calendar } from 'carbon-icons-svelte';
-  import clsx from 'clsx';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import { m } from '$lib/paraglide/messages';
+  import { ProgressBar, RadioButton } from 'carbon-components-svelte';
+  import { Calendar, Map } from 'carbon-icons-svelte';
+  import clsx from 'clsx';
 
   interface BasemapCardVerticalProps {
     basemap: BasemapMetadata;
@@ -60,6 +60,7 @@
     <div class="preview-placeholder">
       <Map size={32} />
       <span class="aspect-ratio-label">16:9</span>
+      <span class="preview-label">Basemap preview</span>
     </div>
   </div>
 
@@ -123,6 +124,7 @@
     border-color: var(--cds-interactive-01);
     border-width: 2px;
     box-shadow: 0 0 0 2px var(--cds-focus);
+    background-color: #e5f6ff; /* Light blue background for selected */
   }
 
   .basemap-card-vertical:focus {
@@ -157,6 +159,12 @@
     font-size: 0.75rem;
     color: var(--cds-text-secondary);
     font-weight: 500;
+  }
+
+  .preview-label {
+    font-size: 0.75rem;
+    color: var(--cds-link-01);
+    margin-top: var(--cds-spacing-02);
   }
 
   /* Radio Button */

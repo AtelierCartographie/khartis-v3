@@ -7,6 +7,7 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
+  import DataTypeSelectionModal from '$lib/features/data-type-selection/data-type-selection-modal.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import Header from '$lib/features/header/header.svelte';
   import Logo from '$lib/features/header/logo.svelte';
@@ -116,6 +117,8 @@
       open={!isLoading && globalState.isCreateProjectModalOpen}
       onClose={handleCloseModal}
     />
+
+    <DataTypeSelectionModal />
 
     <MainToolbar />
     <NotificationContainer />
