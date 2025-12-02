@@ -68,22 +68,12 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
+    // Only check duplicates within the current upload session
+    // Users should be able to create multiple projects with the same files
     const uploadingFiles = createProjectState.newProject.uploadedFiles;
-
-    const isInUploadingFiles = uploadingFiles.some(
+    return uploadingFiles.some(
       (f) => f.name === fileName && f.status !== 'error'
     );
-
-    if (isInUploadingFiles) {
-      return true;
-    }
-
-    const currentProject = projectStore.currentProject;
-    if (currentProject?.data?.sourceFiles) {
-      return currentProject.data.sourceFiles.some((f) => f.name === fileName);
-    }
-
-    return false;
   },
 
   async processFiles(
