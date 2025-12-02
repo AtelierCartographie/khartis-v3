@@ -2,12 +2,14 @@
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
   import {
     Button,
     Column,
     Grid,
+    Modal,
     Row,
     Select,
     SelectItem,
@@ -15,12 +17,14 @@
     SideNavItems,
     Theme
   } from 'carbon-components-svelte';
-  import { CopyFile, Launch } from 'carbon-icons-svelte';
+  import { CopyFile, Launch, TrashCan } from 'carbon-icons-svelte';
   import DuplicateProjectModal from './commons/components/duplicate-project-modal.svelte';
   import Separator from './commons/components/separator.svelte';
 
   let currentLocale = $state(getLocale());
   let isDuplicateModalOpen = $state(false);
+  let isDuplicating = $state(false);
+  let isDeleteModalOpen = $state(false);
 
   function handleNewProject() {
     createProjectActions.selectTab(1);
@@ -43,20 +47,39 @@
     const project = projectsStore.getProjectById(projectId);
 
     if (project) {
-      const duplicatedProject = await projectsStore.duplicateProject(projectId);
+      isDuplicating = true;
+      try {
+        const duplicatedProject =
+          await projectsStore.duplicateProject(projectId);
 
-      if (duplicatedProject && newName !== duplicatedProject.name) {
-        await projectsStore.updateProject(duplicatedProject.id, {
-          name: newName
-        });
-      }
+        if (duplicatedProject && newName !== duplicatedProject.name) {
+          await projectsStore.updateProject(duplicatedProject.id, {
+            name: newName
+          });
+        }
 
-      if (duplicatedProject) {
-        await projectsStore.openProject(duplicatedProject.id);
+        if (duplicatedProject) {
+          await projectsStore.openProject(duplicatedProject.id);
+        }
+      } finally {
+        isDuplicating = false;
+        isDuplicateModalOpen = false;
       }
     }
+  }
 
-    isDuplicateModalOpen = false;
+  function handleDeleteProject() {
+    isDeleteModalOpen = true;
+    globalState.isSideNavOpen = false;
+  }
+
+  async function handleDeleteConfirm() {
+    if (projectStore.currentProject) {
+      const projectId = projectStore.currentProject.id;
+      await projectStore.deleteProject(projectId);
+      window.location.reload();
+    }
+    isDeleteModalOpen = false;
   }
 
   const handleLanguageChange = (event: Event) => {
@@ -106,6 +129,7 @@
               size="small"
               kind="ghost"
               class="menu-bar-item"
+              data-testid="sidenav-new-project"
               on:click={handleNewProject}
             >
               {m.sidenav_new_project()}
@@ -117,6 +141,7 @@
               kind="ghost"
               icon={CopyFile}
               class="menu-bar-item"
+              data-testid="sidenav-duplicate-project"
               on:click={handleDuplicateProject}
               >{m.sidenav_duplicate_project()}
             </Button>
@@ -124,7 +149,19 @@
             <Button
               size="small"
               kind="ghost"
+              icon={TrashCan}
               class="menu-bar-item"
+              data-testid="sidenav-delete-project"
+              disabled={!projectStore.currentProject}
+              on:click={handleDeleteProject}
+              >{m.sidenav_delete_project()}
+            </Button>
+
+            <Button
+              size="small"
+              kind="ghost"
+              class="menu-bar-item"
+              data-testid="sidenav-open-project"
               on:click={handleOpenProject}
             >
               {m.sidenav_open_project()}
@@ -248,9 +285,22 @@
 
 <DuplicateProjectModal
   bind:open={isDuplicateModalOpen}
+  isLoading={isDuplicating}
   onClose={() => (isDuplicateModalOpen = false)}
   onConfirm={handleDuplicateConfirm}
 />
+
+<Modal
+  danger
+  bind:open={isDeleteModalOpen}
+  modalHeading={m.sidenav_delete_confirm_title()}
+  primaryButtonText={m.sidenav_delete_confirm_button()}
+  secondaryButtonText={m.open_project_cancel()}
+  on:click:button--primary={handleDeleteConfirm}
+  on:click:button--secondary={() => (isDeleteModalOpen = false)}
+>
+  <p>{m.sidenav_delete_confirm_message({ name: projectStore.projectName })}</p>
+</Modal>
 
 <style>
   #khartis-side-nav :global(.sidenav-bottom-padding) {

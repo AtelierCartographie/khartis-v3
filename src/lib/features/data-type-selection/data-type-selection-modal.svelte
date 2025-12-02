@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
   import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { m } from '$lib/paraglide/messages.js';
   import {
     Button,
     ComposedModal,
@@ -8,12 +8,12 @@
     ModalFooter,
     ModalHeader
   } from 'carbon-components-svelte';
+  import FileRoleCard from './components/file-role-card.svelte';
   import {
     dataTypeSelectionActions,
     dataTypeSelectionStore
   } from './data-type-selection.store.svelte';
   import type { DataRole } from './types';
-  import FileRoleCard from './components/file-role-card.svelte';
 
   interface Props {
     onConfirm?: () => void;
@@ -53,12 +53,14 @@
     <p class="description">{m.data_type_selection_description()}</p>
 
     <div class="sections">
-      {#if tabularFiles.length > 0 || geographicFiles.some(f => f.assignedRole === 'tabular')}
+      {#if tabularFiles.length > 0 || geographicFiles.some((f) => f.assignedRole === 'tabular')}
         <section class="data-section">
           <h4 class="section-title">{m.data_type_role_tabular()}</h4>
-          <p class="section-description">{m.data_type_role_tabular_description()}</p>
+          <p class="section-description">
+            {m.data_type_role_tabular_description()}
+          </p>
           <div class="files-list">
-            {#each dataTypeSelectionStore.assignments.filter(a => a.assignedRole === 'tabular') as file (file.fileId)}
+            {#each dataTypeSelectionStore.assignments.filter((a) => a.assignedRole === 'tabular') as file (file.fileId)}
               <FileRoleCard
                 fileId={file.fileId}
                 fileName={file.fileName}
@@ -72,12 +74,14 @@
         </section>
       {/if}
 
-      {#if geographicFiles.length > 0 || tabularFiles.some(f => f.assignedRole === 'geographic')}
+      {#if geographicFiles.length > 0 || tabularFiles.some((f) => f.assignedRole === 'geographic')}
         <section class="data-section">
           <h4 class="section-title">{m.data_type_role_geographic()}</h4>
-          <p class="section-description">{m.data_type_role_geographic_description()}</p>
+          <p class="section-description">
+            {m.data_type_role_geographic_description()}
+          </p>
           <div class="files-list">
-            {#each dataTypeSelectionStore.assignments.filter(a => a.assignedRole === 'geographic') as file (file.fileId)}
+            {#each dataTypeSelectionStore.assignments.filter((a) => a.assignedRole === 'geographic') as file (file.fileId)}
               <FileRoleCard
                 fileId={file.fileId}
                 fileName={file.fileName}

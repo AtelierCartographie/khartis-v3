@@ -56,8 +56,10 @@ export interface SerializedProjectData {
 /**
  * DatasetResult serialized for storage (Dates converted to ISO strings)
  */
-export interface SerializedDatasetResult
-  extends Omit<DatasetResult, 'metadata' | 'createdAt'> {
+export interface SerializedDatasetResult extends Omit<
+  DatasetResult,
+  'metadata' | 'createdAt'
+> {
   metadata: Omit<DatasetResult['metadata'], 'processedAt'> & {
     processedAt: string;
   };

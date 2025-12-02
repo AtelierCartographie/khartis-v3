@@ -125,17 +125,41 @@ yarn download:extensions
 **Version mapping**
 
 | @duckdb/duckdb-wasm | Extensions |
-|---------------------|------------|
-| 1.31.0 | v1.4.0 |
-| 1.30.0 | v1.3.0 |
+| ------------------- | ---------- |
+| 1.31.0              | v1.4.0     |
+| 1.30.0              | v1.3.0     |
 
 Old extension versions are automatically cleaned up when upgrading.
 
 ## Testing
 
-- Unit tests (Vitest): fast component and logic checks
-- E2E tests (Playwright): core flows and cross‑browser sanity
-- Test setup lives alongside the code in `e2e/` and `vitest-setup-client.ts`
+### Unit tests (Vitest)
+
+```bash
+yarn test:unit              # Run all unit tests
+yarn test:unit path/to/file # Run specific test file
+```
+
+### E2E tests (Playwright)
+
+```bash
+yarn test:e2e               # Run all E2E tests
+yarn test:e2e --headed      # Run with visible browser
+yarn test:e2e --ui          # Run with Playwright UI
+```
+
+**Structure:**
+
+```
+e2e/
+├── features/                    # Tests by feature
+│   ├── create-project.spec.ts   # Project creation (8 tests)
+│   └── side-nav.spec.ts         # Side navigation (9 tests)
+├── utils/test-helpers.ts        # Shared helpers
+└── mocks/csv/                   # Test data
+```
+
+**Test data selectors:** Tests use `data-testid` attributes for stability.
 
 ## Linting and formatting
 
