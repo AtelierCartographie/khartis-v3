@@ -99,12 +99,67 @@ Additional
 - generate-pwa-assets: generate PWA icons
 - machine-translate: run Inlang machine translation
 - init:project: initialize Husky and install
+- download:extensions: download DuckDB extensions for offline use
+
+## DuckDB Extensions (Offline PWA)
+
+DuckDB extensions (spatial, parquet, httpfs) are bundled locally for offline-first PWA support.
+
+**Auto-sync with dependencies**
+
+Extensions are automatically downloaded after `yarn install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
+
+```
+static/duckdb-extensions/v1.4.0/wasm_eh/
+├── spatial.duckdb_extension.wasm  (22 MB)
+├── parquet.duckdb_extension.wasm  (2.9 MB)
+└── httpfs.duckdb_extension.wasm   (374 KB)
+```
+
+**Manual update**
+
+```bash
+yarn download:extensions
+```
+
+**Version mapping**
+
+| @duckdb/duckdb-wasm | Extensions |
+| ------------------- | ---------- |
+| 1.31.0              | v1.4.0     |
+| 1.30.0              | v1.3.0     |
+
+Old extension versions are automatically cleaned up when upgrading.
 
 ## Testing
 
-- Unit tests (Vitest): fast component and logic checks
-- E2E tests (Playwright): core flows and cross‑browser sanity
-- Test setup lives alongside the code in `e2e/` and `vitest-setup-client.ts`
+### Unit tests (Vitest)
+
+```bash
+yarn test:unit              # Run all unit tests
+yarn test:unit path/to/file # Run specific test file
+```
+
+### E2E tests (Playwright)
+
+```bash
+yarn test:e2e               # Run all E2E tests
+yarn test:e2e --headed      # Run with visible browser
+yarn test:e2e --ui          # Run with Playwright UI
+```
+
+**Structure:**
+
+```
+e2e/
+├── features/                    # Tests by feature
+│   ├── create-project.spec.ts   # Project creation (8 tests)
+│   └── side-nav.spec.ts         # Side navigation (9 tests)
+├── utils/test-helpers.ts        # Shared helpers
+└── mocks/csv/                   # Test data
+```
+
+**Test data selectors:** Tests use `data-testid` attributes for stability.
 
 ## Linting and formatting
 

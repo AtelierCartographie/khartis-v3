@@ -1,12 +1,16 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
 export type DataTabStep = 'control' | 'geolocate' | 'join';
+export type WorkflowMode = 'tabular' | 'geographic' | 'auto';
 
 export class DataTabStore {
   private _state = $state({
     activeStepIndex: 0,
     canNavigateToStep: [true, true, true] as [boolean, boolean, boolean],
-    hasCompletedStep: [false, false, false] as [boolean, boolean, boolean]
+    hasCompletedStep: [false, false, false] as [boolean, boolean, boolean],
+    workflowMode: 'auto' as WorkflowMode,
+    primaryDatasetId: undefined as string | undefined,
+    primaryBasemapId: undefined as string | undefined
   });
 
   get activeStepIndex() {
@@ -28,6 +32,30 @@ export class DataTabStore {
 
   get canVisualize() {
     return datasetsStore.datasets.length > 0 && this._state.hasCompletedStep[0];
+  }
+
+  get workflowMode() {
+    return this._state.workflowMode;
+  }
+
+  get primaryDatasetId() {
+    return this._state.primaryDatasetId;
+  }
+
+  get primaryBasemapId() {
+    return this._state.primaryBasemapId;
+  }
+
+  setWorkflowMode(mode: WorkflowMode) {
+    this._state.workflowMode = mode;
+  }
+
+  setPrimaryDatasetId(id: string | undefined) {
+    this._state.primaryDatasetId = id;
+  }
+
+  setPrimaryBasemapId(id: string | undefined) {
+    this._state.primaryBasemapId = id;
   }
 
   setActiveStep(index: number) {
@@ -62,6 +90,9 @@ export class DataTabStore {
     this._state.activeStepIndex = 0;
     this._state.canNavigateToStep = [true, true, true];
     this._state.hasCompletedStep = [false, false, false];
+    this._state.workflowMode = 'auto';
+    this._state.primaryDatasetId = undefined;
+    this._state.primaryBasemapId = undefined;
   }
 
   nextStep() {

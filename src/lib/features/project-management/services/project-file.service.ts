@@ -7,6 +7,10 @@ import {
 } from '$lib/features/commons/utils/compression.utils';
 import type { SerializedProject } from '$lib/types/serialization.types';
 
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 export class ProjectFileService {
   constructor(private readonly repository = projectRepository) {}
 
@@ -24,19 +28,21 @@ export class ProjectFileService {
   }
 
   async createArchive(project: KhartisProject): Promise<Blob> {
+    const serialized = await ProjectSerializer.serialize(project);
+
     const archive = {
       manifest: {
-        ...project.manifest,
+        ...serialized.manifest,
         format: 'kh' as const,
         exportDate: new Date().toISOString()
       },
-      data: project.data,
-      visualization: project.visualization,
-      layout: project.layout,
-      resources: project.resources
+      data: serialized.data,
+      visualization: serialized.visualization,
+      layout: serialized.layout,
+      resources: serialized.resources
     };
 
-    const json = JSON.stringify(archive);
+    const json = JSON.stringify(archive, bigIntReplacer);
     const compressed = await compressData(json);
     return new Blob([compressed], { type: 'application/octet-stream' });
   }

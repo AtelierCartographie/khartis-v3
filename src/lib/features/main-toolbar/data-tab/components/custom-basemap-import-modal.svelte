@@ -72,7 +72,7 @@
           ST_YMin(ST_Extent(geom)) as minY,
           ST_XMax(ST_Extent(geom)) as maxX,
           ST_YMax(ST_Extent(geom)) as maxY
-        FROM ${tableName}
+        FROM "${tableName}"
       `,
         { format: 'array', useProxy: false }
       )) as Array<{
@@ -96,7 +96,7 @@
       const geomTypeQuery = (await duck.query(
         `
         SELECT DISTINCT ST_GeometryType(geom) as geom_type
-        FROM ${tableName}
+        FROM "${tableName}"
         LIMIT 1
       `,
         { format: 'array', useProxy: false }
