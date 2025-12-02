@@ -161,8 +161,7 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent<boolean>) =>
-              toggleDotted(e.detail ?? true)}
+            ontoggle={(e: CustomEvent) => toggleDotted(e.detail ?? true)}
           >
             <span slot="labelA">Oui</span>
             <span slot="labelB">Non</span>

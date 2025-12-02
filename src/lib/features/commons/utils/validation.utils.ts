@@ -10,6 +10,10 @@ import * as m from '$lib/paraglide/messages';
 // Re-export pour compatibilité avec le code existant
 export { STORAGE_LIMITS, type StorageLimits, type ValidationResult };
 
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 export const ProjectValidator = {
   validateFileSize(file: File): ValidationResult {
     const result: ValidationResult = {
@@ -44,7 +48,8 @@ export const ProjectValidator = {
       warnings: []
     };
 
-    const projectSize = new Blob([JSON.stringify(projectData)]).size;
+    const projectSize = new Blob([JSON.stringify(projectData, bigIntReplacer)])
+      .size;
 
     if (projectSize > STORAGE_LIMITS.maxProjectSize) {
       result.isValid = false;
@@ -133,7 +138,7 @@ export const ProjectValidator = {
           totalSize +=
             (typeof value === 'string'
               ? value.length
-              : JSON.stringify(value).length) + key.length;
+              : JSON.stringify(value, bigIntReplacer).length) + key.length;
         }
       }
 

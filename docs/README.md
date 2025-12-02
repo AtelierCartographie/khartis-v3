@@ -16,6 +16,7 @@ This documentation is organized into focused guides covering different aspects o
 | **[REFERENCE.md](REFERENCE.md)**                   | Types, utilities, performance, and cross-cutting concerns |
 | **[BASEMAPS.md](BASEMAPS.md)**                     | Basemap preparation, formats, and catalog management      |
 | **[PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)**   | Progressive Web App setup, offline support, and caching   |
+| **[DEPLOYMENT.md](DEPLOYMENT.md)**                 | Deployment to Sciences Po servers (PPRD/PRD)              |
 
 ## 🚀 Quick Start
 
@@ -26,7 +27,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5176/cartographie/khartisnewpprd/
+Open http://localhost:5176/
 
 ## 🎯 Core Concepts
 
@@ -69,6 +70,7 @@ Start here:
 | **Find type definitions** | [REFERENCE.md](REFERENCE.md#core-type-definitions)                 |
 | **Configure PWA**         | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)                       |
 | **Debug offline issues**  | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md#troubleshooting)       |
+| **Deploy to server**      | [DEPLOYMENT.md](DEPLOYMENT.md)                                     |
 
 ## 🏗️ Project Structure
 

@@ -1,10 +1,14 @@
 import localforage from 'localforage';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 export const projectStorage = {
   async save<T>(key: string, data: T): Promise<void> {
     try {
-      await localforage.setItem(key, JSON.stringify(data));
+      await localforage.setItem(key, JSON.stringify(data, bigIntReplacer));
     } catch (error) {
       logger.error(
         'Failed to save project storage entry',
