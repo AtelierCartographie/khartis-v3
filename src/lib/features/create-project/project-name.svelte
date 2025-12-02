@@ -84,16 +84,19 @@
 
       await projectsStore.refresh();
 
-      createProjectActions.resetAllTabs();
+      // Capture files BEFORE reset (validFiles is a $derived that will become [] after reset)
+      const filesToCheck = [...validFiles];
 
       // Check if we need to show data type selection modal
       const shouldShowDataTypeModal =
-        dataTypeSelectionStore.shouldShowModal(validFiles);
+        dataTypeSelectionStore.shouldShowModal(filesToCheck);
 
       if (shouldShowDataTypeModal) {
-        dataTypeSelectionActions.initializeFromFiles(validFiles);
+        dataTypeSelectionActions.initializeFromFiles(filesToCheck);
         globalState.isDataTypeSelectionModalOpen = true;
       }
+
+      createProjectActions.resetAllTabs();
 
       await goto('/', { replaceState: true });
     } catch (error) {
