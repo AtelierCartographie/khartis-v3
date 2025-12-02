@@ -99,6 +99,37 @@ Additional
 - generate-pwa-assets: generate PWA icons
 - machine-translate: run Inlang machine translation
 - init:project: initialize Husky and install
+- download:extensions: download DuckDB extensions for offline use
+
+## DuckDB Extensions (Offline PWA)
+
+DuckDB extensions (spatial, parquet, httpfs) are bundled locally for offline-first PWA support.
+
+**Auto-sync with dependencies**
+
+Extensions are automatically downloaded after `yarn install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
+
+```
+static/duckdb-extensions/v1.4.0/wasm_eh/
+├── spatial.duckdb_extension.wasm  (22 MB)
+├── parquet.duckdb_extension.wasm  (2.9 MB)
+└── httpfs.duckdb_extension.wasm   (374 KB)
+```
+
+**Manual update**
+
+```bash
+yarn download:extensions
+```
+
+**Version mapping**
+
+| @duckdb/duckdb-wasm | Extensions |
+|---------------------|------------|
+| 1.31.0 | v1.4.0 |
+| 1.30.0 | v1.3.0 |
+
+Old extension versions are automatically cleaned up when upgrading.
 
 ## Testing
 
