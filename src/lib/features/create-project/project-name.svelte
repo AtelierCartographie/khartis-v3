@@ -10,6 +10,10 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+  import {
+    dataTypeSelectionActions,
+    dataTypeSelectionStore
+  } from '$lib/features/data-type-selection';
   import { m } from '$lib/paraglide/messages';
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
@@ -80,7 +84,20 @@
 
       await projectsStore.refresh();
 
+      // Capture files BEFORE reset (validFiles is a $derived that will become [] after reset)
+      const filesToCheck = [...validFiles];
+
+      // Check if we need to show data type selection modal
+      const shouldShowDataTypeModal =
+        dataTypeSelectionStore.shouldShowModal(filesToCheck);
+
+      if (shouldShowDataTypeModal) {
+        dataTypeSelectionActions.initializeFromFiles(filesToCheck);
+        globalState.isDataTypeSelectionModalOpen = true;
+      }
+
       createProjectActions.resetAllTabs();
+
       await goto('/', { replaceState: true });
     } catch (error) {
       const duration = performance.now() - startTime;

@@ -2,6 +2,7 @@ import { base } from '$app/paths';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
 import { logger, LogCategory } from '../../commons/utils/logger';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { readGeoArrowParquet } from '../utils/read-geoarrow-parquet';
 import { readGeoJSONAsArrow } from '../utils/read-geojson-arrow';
@@ -99,10 +100,13 @@ class BasemapService {
         (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
+      // Escape fileId for SQL string literal
+      const escapedFileId = escapeSqlString(fileId);
+
       // Optimized Parquet scan with performance hints
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
-        SELECT * FROM parquet_scan('${fileId}',
+        SELECT * FROM parquet_scan('${escapedFileId}',
           hive_partitioning=false,  -- No Hive partitioning in our files
           union_by_name=false,      -- No union needed
           filename=false             -- Don't include filename column

@@ -8,6 +8,7 @@ import {
   type MatchResult
 } from '$lib/features/commons/utils/geo-matcher.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 
 interface DuckDBAnalysisColumn {
@@ -151,17 +152,21 @@ export const DuckDBValidatorService = {
     const histograms: Array<{ column: string; type: string; data: unknown }> =
       [];
 
+    const escapedTableName = escapeSqlString(tableName);
+
     try {
       const describeResult = (await Duck.query(
-        `SELECT * FROM describe_full('${tableName}')`
+        `SELECT * FROM describe_full('${escapedTableName}')`
       )) as Record<string, unknown>;
       const resultData = (describeResult?.data || []) as DuckDBAnalysisColumn[];
       columns.push(...resultData);
 
       for (const header of headers) {
+        const escapedHeader = escapeSqlString(header);
+
         try {
           const summaryResult = (await Duck.query(
-            `SELECT * FROM summary_general('${tableName}', '${header}')`
+            `SELECT * FROM summary_general('${escapedTableName}', '${escapedHeader}')`
           )) as Record<string, unknown>;
           const summaryData = summaryResult?.data as Record<string, unknown>[];
           if (summaryData && summaryData.length > 0) {
@@ -172,7 +177,7 @@ export const DuckDBValidatorService = {
           if (columnInfo) {
             if (columnInfo.type_simple === 'numeric') {
               const numericSummary = (await Duck.query(
-                `SELECT * FROM summary_numeric('${tableName}', '${header}')`
+                `SELECT * FROM summary_numeric('${escapedTableName}', '${escapedHeader}')`
               )) as Record<string, unknown>;
               const numericData = numericSummary?.data as Record<
                 string,
@@ -186,7 +191,7 @@ export const DuckDBValidatorService = {
               }
 
               const histogram = (await Duck.query(
-                `SELECT * FROM histogram_numeric('${tableName}', '${header}')`
+                `SELECT * FROM histogram_numeric('${escapedTableName}', '${escapedHeader}')`
               )) as Record<string, unknown>;
               if (histogram?.data) {
                 histograms.push({
@@ -197,7 +202,7 @@ export const DuckDBValidatorService = {
               }
             } else if (columnInfo.type_simple === 'string') {
               const histogram = (await Duck.query(
-                `SELECT * FROM histogram_categorical('${tableName}', '${header}')`
+                `SELECT * FROM histogram_categorical('${escapedTableName}', '${escapedHeader}')`
               )) as Record<string, unknown>;
               if (histogram?.data) {
                 histograms.push({

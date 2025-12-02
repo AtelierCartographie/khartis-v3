@@ -39,6 +39,9 @@
 
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
+  let internalResetKey = $state(0);
+
+  const uploaderKey = $derived(resetToken + internalResetKey);
 
   const globalValidationErrors = $derived(
     createProjectState.newProject.validationErrors
@@ -79,6 +82,7 @@
   async function handleClearAllFiles() {
     isDeletingAll = true;
     await createProjectActions.clearAllFiles(true);
+    internalResetKey++;
     isDeletingAll = false;
   }
 
@@ -132,7 +136,7 @@
 
   <div class="grid grid-cols-2 gap-5">
     <div>
-      {#key resetToken}
+      {#key uploaderKey}
         <FileUploaderDropContainer
           data-testid="file-upload-container"
           labelText={m.create_project_drag_drop_file()}

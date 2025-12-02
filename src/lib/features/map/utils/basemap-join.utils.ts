@@ -1,6 +1,7 @@
 import type { JoinQuality, JoinEntity } from '../types/basemap.types';
 import { Duck } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../commons/utils/logger';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 
 export async function analyzeJoinQuality(
   dataTableName: string,
@@ -16,7 +17,7 @@ export async function analyzeJoinQuality(
     const totalCountResult = (await Duck.query(
       `
       SELECT COUNT(*) as count
-      FROM ${dataTableName}
+      FROM "${dataTableName}"
     `,
       { format: 'array' }
     )) as Array<{ count: number }>;
@@ -30,10 +31,10 @@ export async function analyzeJoinQuality(
 
     const joinedResult = (await Duck.query(
       `
-      SELECT DISTINCT d.${dataColumnName} as data_value
-      FROM ${dataTableName} d
-      INNER JOIN ${basemapTableName} b
-      ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
+      SELECT DISTINCT d."${dataColumnName}" as data_value
+      FROM "${dataTableName}" d
+      INNER JOIN "${basemapTableName}" b
+      ON LOWER(TRIM(d."${dataColumnName}")) = LOWER(TRIM(b."${basemapColumnName}"))
     `,
       { format: 'array' }
     )) as Array<{ data_value: string }>;
@@ -47,12 +48,12 @@ export async function analyzeJoinQuality(
     const duplicatesResult = (await Duck.query(
       `
       SELECT
-        d.${dataColumnName} as data_value,
+        d."${dataColumnName}" as data_value,
         COUNT(*) as match_count
-      FROM ${dataTableName} d
-      INNER JOIN ${basemapTableName} b
-      ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
-      GROUP BY d.${dataColumnName}
+      FROM "${dataTableName}" d
+      INNER JOIN "${basemapTableName}" b
+      ON LOWER(TRIM(d."${dataColumnName}")) = LOWER(TRIM(b."${basemapColumnName}"))
+      GROUP BY d."${dataColumnName}"
       HAVING COUNT(*) > 1
     `,
       { format: 'array' }
@@ -68,11 +69,11 @@ export async function analyzeJoinQuality(
 
     const unrecognizedResult = (await Duck.query(
       `
-      SELECT DISTINCT d.${dataColumnName} as data_value
-      FROM ${dataTableName} d
-      LEFT JOIN ${basemapTableName} b
-      ON LOWER(TRIM(d.${dataColumnName})) = LOWER(TRIM(b.${basemapColumnName}))
-      WHERE b.${basemapColumnName} IS NULL
+      SELECT DISTINCT d."${dataColumnName}" as data_value
+      FROM "${dataTableName}" d
+      LEFT JOIN "${basemapTableName}" b
+      ON LOWER(TRIM(d."${dataColumnName}")) = LOWER(TRIM(b."${basemapColumnName}"))
+      WHERE b."${basemapColumnName}" IS NULL
     `,
       { format: 'array' }
     )) as Array<{ data_value: string }>;
@@ -148,12 +149,13 @@ async function findSimilarMatches(
   }
 
   try {
+    const escapedValue = escapeSqlString(value);
     const result = (await Duck.query(
       `
-      SELECT ${basemapColumnName}
-      FROM ${basemapTableName}
-      WHERE LOWER(${basemapColumnName}) LIKE '%' || LOWER('${value}') || '%'
-         OR LOWER('${value}') LIKE '%' || LOWER(${basemapColumnName}) || '%'
+      SELECT "${basemapColumnName}"
+      FROM "${basemapTableName}"
+      WHERE LOWER("${basemapColumnName}") LIKE '%' || LOWER('${escapedValue}') || '%'
+         OR LOWER('${escapedValue}') LIKE '%' || LOWER("${basemapColumnName}") || '%'
       LIMIT 3
     `,
       { format: 'array' }

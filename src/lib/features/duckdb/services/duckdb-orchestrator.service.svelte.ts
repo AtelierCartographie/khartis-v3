@@ -11,10 +11,15 @@ import type {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { geoParquetReader } from '$lib/features/data-pipeline/adapters/readers/GeoParquetReader';
 import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types/AnalysisResult';
+import type {
+  BasemapMetadata,
+  JoinQuality
+} from '$lib/features/map/types/basemap.types';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import {
   Field,
@@ -33,6 +38,7 @@ import {
   insertArrowTableIntoDuckDB
 } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
+import { join_macros } from './duckdb/join';
 import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
 
 export enum RefineOperation {
@@ -216,8 +222,9 @@ class DuckDBOrchestratorService {
       });
 
       // Check if table actually exists in DuckDB (might be lost after page reload)
+      const escapedTableNameForCheck = escapeSqlString(tableName);
       const tableCheck = (await Duck.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_name = '${tableName}'`,
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableNameForCheck}'`,
         { format: 'array' }
       )) as Array<{ table_name: string }>;
 
@@ -649,11 +656,11 @@ class DuckDBOrchestratorService {
       const geomColumn = geoMetadata.primary_column;
       try {
         await Duck.query(`
-            CREATE OR REPLACE TABLE ${tableName} AS
+            CREATE OR REPLACE TABLE "${tableName}" AS
           SELECT * REPLACE (
             ST_GeomFromWKB("${geomColumn}")::GEOMETRY AS "${geomColumn}"
           )
-            FROM ${tableName}
+            FROM "${tableName}"
           `);
       } catch (error) {
         logger.warn(
@@ -664,9 +671,10 @@ class DuckDBOrchestratorService {
       }
     }
 
+    const safeSeqName = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
     await Duck.query(`
-      CREATE OR REPLACE SEQUENCE id_${tableName} START 1;
-      ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
+      CREATE OR REPLACE SEQUENCE "id_${safeSeqName}" START 1;
+      ALTER TABLE "${tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeqName}');
     `);
 
     // Parallelize column analysis and row count
@@ -731,15 +739,16 @@ class DuckDBOrchestratorService {
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
       await Duck.query(`
-        CREATE OR REPLACE TABLE ${tableName} AS
+        CREATE OR REPLACE TABLE "${tableName}" AS
         SELECT
           * EXCLUDE (geom),
           ST_GeomFromGeoJSON(geom) as geom
-        FROM ${tableName}
+        FROM "${tableName}"
       `);
+      const safeSeqNameGeo = tableName.replace(/[^a-zA-Z0-9_]/g, '_');
       await Duck.query(`
-        CREATE OR REPLACE SEQUENCE id_${tableName} START 1;
-        ALTER TABLE ${tableName} ADD COLUMN __id INTEGER DEFAULT nextval('id_${tableName}');
+        CREATE OR REPLACE SEQUENCE "id_${safeSeqNameGeo}" START 1;
+        ALTER TABLE "${tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeqNameGeo}');
       `);
 
       const columns = await Duck.analyse(tableName);
@@ -835,6 +844,158 @@ class DuckDBOrchestratorService {
     return dataset;
   }
 
+  /**
+   * Get the basemap ID used in the basemap_attributes table.
+   * Basemap attributes are pre-loaded from all-basemaps-attributes.parquet
+   * and don't require loading full basemap geometry into DuckDB.
+   */
+  getBasemapAttributesId(basemap: BasemapMetadata): string {
+    // The basemap column in basemap_attributes uses the file name without extension
+    // e.g., "world-countries-50m" for "world-countries-50m.parquet"
+    return basemap.file.replace(/\.(parquet|geojson)$/i, '');
+  }
+
+  async computeJoinStats(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string
+  ): Promise<JoinQuality> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this._state.datasets.get(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    // Ensure macros are loaded
+    await Duck.query(join_macros);
+
+    // Use pre-loaded basemap_attributes table instead of loading full basemap
+    // basemap_attributes has columns: raw, id, variant, normalized, basemap, basemap_count
+    const basemapId = this.getBasemapAttributesId(basemap);
+
+    // Check if basemap_attributes table exists
+    const tableCheck = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
+
+    if (!tableCheck || tableCheck.length === 0) {
+      throw new Error(
+        'basemap_attributes table not loaded. Ensure basemapService.loadAttributes() was called.'
+      );
+    }
+
+    // Create a filtered view for this specific basemap
+    // The join macros expect: id, variant, normalized, basemap, basemap_count
+    const joinTableView = `basemap_join_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    const escapedBasemapId = escapeSqlString(basemapId);
+    await Duck.query(`
+      CREATE OR REPLACE VIEW "${joinTableView}" AS
+      SELECT raw, id, variant, normalized, basemap, basemap_count
+      FROM basemap_attributes
+      WHERE basemap = '${escapedBasemapId}'
+    `);
+
+    // Run analysis
+    const escapedTableName = escapeSqlString(dataset.tableName);
+    const escapedGeoColumn = escapeSqlString(geoColumn);
+    const result = (await Duck.query(
+      `SELECT * FROM analyze_join_quality('${escapedTableName}', '${escapedGeoColumn}', '${joinTableView}')`,
+      { format: 'array' }
+    )) as Array<{
+      original_name: string;
+      status: 'matched' | 'check' | 'ambiguous' | 'not_found';
+      candidates: { id: string; name: string; score: number; type: string }[];
+      best_score: number;
+    }>;
+
+    const entities = result.map((r) => ({
+      dataValue: r.original_name,
+      status: (r.status === 'ambiguous'
+        ? 'to_verify'
+        : r.status === 'check'
+          ? 'to_verify'
+          : r.status === 'not_found'
+            ? 'unrecognized'
+            : 'joined') as
+        | 'joined'
+        | 'to_verify'
+        | 'duplicate'
+        | 'unrecognized',
+      matches: r.candidates?.map((c) => c.name) || [],
+      matchCount: r.candidates?.length || 0,
+      basemapValue: r.status === 'matched' ? r.candidates[0].name : undefined
+    }));
+
+    return {
+      joinedCount: entities.filter((e) => e.status === 'joined').length,
+      toVerifyCount: entities.filter((e) => e.status === 'to_verify').length,
+      duplicateCount: entities.filter((e) => e.status === 'duplicate').length, // Logic for duplicate detection in dataset side might be needed separately
+      unrecognizedCount: entities.filter((e) => e.status === 'unrecognized')
+        .length,
+      entities,
+      totalEntities: entities.length
+    };
+  }
+
+  async applyJoinCorrections(
+    datasetId: string,
+    geoColumn: string,
+    corrections: Record<string, string>
+  ): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this._state.datasets.get(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    // Create a temporary table for corrections
+    const correctionsTable = `corrections_${crypto.randomUUID().replace(/-/g, '_')}`;
+
+    // Prepare data for bulk update
+    // We can't easily pass a large object to SQL, so we might register a CSV or JSON
+    const correctionEntries = Object.entries(corrections).map(
+      ([original, corrected]) => ({
+        original,
+        corrected
+      })
+    );
+
+    if (correctionEntries.length === 0) return;
+
+    const json = JSON.stringify(correctionEntries);
+    const blob = new Blob([json], { type: 'application/json' });
+    const file = new File([blob], 'corrections.json', {
+      type: 'application/json'
+    });
+
+    await Duck.register_files([file]);
+    await Duck.query(
+      `CREATE TABLE "${correctionsTable}" AS SELECT * FROM read_json_auto('corrections.json')`
+    );
+
+    // Update the dataset
+    // Note: This modifies the source data. We might want to create a new column instead?
+    // For now, let's update the column in place as requested "Remplacer les entités incorrectes"
+
+    await Duck.query(`
+      UPDATE "${dataset.tableName}"
+      SET "${geoColumn}" = c.corrected
+      FROM "${correctionsTable}" c
+      WHERE "${geoColumn}" = c.original
+    `);
+
+    await Duck.query(`DROP TABLE "${correctionsTable}"`);
+
+    // Refresh analysis
+    const columns = await Duck.analyse(dataset.tableName);
+    this.updateDatasets((d) => {
+      const ds = d.get(datasetId);
+      if (ds) ds.columns = columns;
+    });
+    this.bumpDatasetsVersion();
+  }
+
   private convertToCSV(data: Record<string, unknown>[]): string {
     if (!data || data.length === 0) return '';
 
@@ -886,7 +1047,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      let query = `SELECT * FROM ${tableName}`;
+      let query = `SELECT * FROM "${tableName}"`;
       const whereClause = this.buildFilterWhereClause(tableName);
       if (whereClause) {
         query += ` WHERE ${whereClause}`;
@@ -951,12 +1112,13 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
+    const escapedTableNameForColumns = escapeSqlString(tableName);
     const result = (await Duck.query(`
       SELECT
         column_name as name,
         data_type as type
       FROM duckdb_columns()
-      WHERE table_name = '${tableName}'
+      WHERE table_name = '${escapedTableNameForColumns}'
     `)) as ArrowTableLike;
 
     const columns = [];
@@ -1001,7 +1163,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await Duck.query(
-      `ALTER TABLE ${tableName} RENAME COLUMN "${oldName}" TO "${newName}"`
+      `ALTER TABLE "${tableName}" RENAME COLUMN "${oldName}" TO "${newName}"`
     );
 
     await Duck.analyse(tableName, { force: true });
@@ -1027,7 +1189,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await Duck.query(
-      `ALTER TABLE ${tableName} ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
+      `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
     );
 
     await Duck.analyse(tableName, { force: true });
@@ -1048,7 +1210,7 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await Duck.query(`ALTER TABLE ${tableName} DROP COLUMN "${columnName}"`);
+    await Duck.query(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
 
     await Duck.analyse(tableName, { force: true });
 
@@ -1093,11 +1255,11 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const operations: Record<RefineOperation, string> = {
-      [RefineOperation.UPPERCASE]: `UPDATE ${tableName} SET "${columnName}" = UPPER("${columnName}")`,
-      [RefineOperation.LOWERCASE]: `UPDATE ${tableName} SET "${columnName}" = LOWER("${columnName}")`,
-      [RefineOperation.TITLECASE]: `UPDATE ${tableName} SET "${columnName}" = INITCAP("${columnName}")`,
-      [RefineOperation.TRIM]: `UPDATE ${tableName} SET "${columnName}" = TRIM("${columnName}")`,
-      [RefineOperation.TRIM_ALL]: `UPDATE ${tableName} SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
+      [RefineOperation.UPPERCASE]: `UPDATE "${tableName}" SET "${columnName}" = UPPER("${columnName}")`,
+      [RefineOperation.LOWERCASE]: `UPDATE "${tableName}" SET "${columnName}" = LOWER("${columnName}")`,
+      [RefineOperation.TITLECASE]: `UPDATE "${tableName}" SET "${columnName}" = INITCAP("${columnName}")`,
+      [RefineOperation.TRIM]: `UPDATE "${tableName}" SET "${columnName}" = TRIM("${columnName}")`,
+      [RefineOperation.TRIM_ALL]: `UPDATE "${tableName}" SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
     };
 
     await Duck.query(operations[operation]);
@@ -1125,8 +1287,11 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
+    const escapedSearchValue = escapeSqlString(searchValue);
+    const escapedReplaceValue = escapeSqlString(replaceValue);
+
     const countResult = (await Duck.query(
-      `SELECT COUNT(*) as count FROM ${tableName} WHERE "${columnName}"::TEXT LIKE '%${searchValue}%'`
+      `SELECT COUNT(*) as count FROM "${tableName}" WHERE "${columnName}"::TEXT LIKE '%${escapedSearchValue}%'`
     )) as ArrowTableLike;
 
     const countRow = countResult.get(0) as Record<string, unknown>;
@@ -1141,7 +1306,7 @@ class DuckDBOrchestratorService {
         replaceValue
       });
       await Duck.query(
-        `UPDATE ${tableName} SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${searchValue}', '${replaceValue}')`
+        `UPDATE "${tableName}" SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${escapedSearchValue}', '${escapedReplaceValue}')`
       );
 
       await Duck.analyse(tableName, { force: true });
@@ -1189,7 +1354,7 @@ class DuckDBOrchestratorService {
     }
 
     await Duck.query(
-      `CREATE OR REPLACE TABLE ${tableName} AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM ${tableName}`
+      `CREATE OR REPLACE TABLE "${tableName}" AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM "${tableName}"`
     );
 
     // Force refresh of column metadata
@@ -1222,7 +1387,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const result = (await Duck.query(
-      `SELECT (${expression}) as result FROM ${tableName} LIMIT 1`
+      `SELECT (${expression}) as result FROM "${tableName}" LIMIT 1`
     )) as ArrowTableLike;
 
     if (result.numRows === 0) {
@@ -1398,9 +1563,9 @@ class DuckDBOrchestratorService {
 
         // Query all distinct geometry types to handle mixed geometries
         const geomTypeResult = (await Duck.query(
-          `SELECT DISTINCT ST_GeometryType(${geomColumn.column_name}) as geom_type
-           FROM ${tableName}
-           WHERE ${geomColumn.column_name} IS NOT NULL`,
+          `SELECT DISTINCT ST_GeometryType("${geomColumn.column_name}") as geom_type
+           FROM "${tableName}"
+           WHERE "${geomColumn.column_name}" IS NOT NULL`,
           { format: 'array' as never }
         )) as Array<{ geom_type: string }>;
 
@@ -1626,7 +1791,7 @@ class DuckDBOrchestratorService {
       `SELECT * REPLACE (
           ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
         )
-        FROM ${tableName}`,
+        FROM "${tableName}"`,
       { format: 'arrow-ipc' as never }
     )) as ArrayBuffer | Uint8Array;
 
@@ -1856,7 +2021,7 @@ class DuckDBOrchestratorService {
     try {
       if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-      await Duck.query(`DROP TABLE IF EXISTS ${tableName}`);
+      await Duck.query(`DROP TABLE IF EXISTS "${tableName}"`);
 
       let idToDelete: string | undefined;
       for (const [id, dataset] of this._state.datasets.entries()) {
@@ -2103,17 +2268,17 @@ class DuckDBOrchestratorService {
       const joinedTableName = `joined_${Date.now().toString(36)}`;
 
       await Duck.query(`
-        CREATE TABLE ${joinedTableName} AS
+        CREATE TABLE "${joinedTableName}" AS
         SELECT
           b.*,
-          d.* EXCLUDE (${dataColumnName})
-        FROM ${basemapTableName} b
-        INNER JOIN ${dataTableName} d
-        ON LOWER(TRIM(b.${basemapColumnName})) = LOWER(TRIM(d.${dataColumnName}))
+          d.* EXCLUDE ("${dataColumnName}")
+        FROM "${basemapTableName}" b
+        INNER JOIN "${dataTableName}" d
+        ON LOWER(TRIM(b."${basemapColumnName}")) = LOWER(TRIM(d."${dataColumnName}"))
       `);
 
       const countResult = (await Duck.query(`
-        SELECT COUNT(*) as count FROM ${joinedTableName}
+        SELECT COUNT(*) as count FROM "${joinedTableName}"
       `)) as ArrowTableLike;
 
       const countRow = countResult.get(0) as Record<string, unknown>;
@@ -2142,7 +2307,7 @@ class DuckDBOrchestratorService {
   ): Promise<number> {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    let query = `SELECT COUNT(*) as count FROM ${tableName}`;
+    let query = `SELECT COUNT(*) as count FROM "${tableName}"`;
     const whereClause = applyFilters
       ? this.buildFilterWhereClause(tableName)
       : null;
@@ -2189,7 +2354,7 @@ class DuckDBOrchestratorService {
           'Veuillez préciser un nombre pour le filtre "top"'
         );
       }
-      return `__id IN (SELECT __id FROM ${tableName} ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
+      return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
     };
 
     switch (filter.operator) {
@@ -2304,7 +2469,7 @@ class DuckDBOrchestratorService {
       return trimmed;
     }
 
-    return `'${trimmed.replace(/'/g, "''")}'`;
+    return `'${escapeSqlString(trimmed)}'`;
   }
 
   private assertValue(
@@ -2325,46 +2490,6 @@ class DuckDBOrchestratorService {
     }
 
     return filters.map((filter) => filter.sql).join(' AND ');
-  }
-
-  async applyJoinCorrections(
-    dataTableName: string,
-    dataColumnName: string,
-    corrections: Map<string, string>
-  ): Promise<void> {
-    const start = performance.now();
-    if (!this.initialized) {
-      await this.initialize();
-    }
-
-    if (!Duck) {
-      throw new DuckDBError('DuckDB not initialized');
-    }
-
-    try {
-      logger.info('Applying join corrections in DuckDB', LogCategory.DUCKDB, {
-        dataTableName,
-        dataColumnName,
-        correctionCount: corrections.size
-      });
-
-      for (const [dataValue, correctedValue] of corrections.entries()) {
-        await Duck.query(`
-          UPDATE ${dataTableName}
-          SET ${dataColumnName} = '${correctedValue}'
-          WHERE ${dataColumnName} = '${dataValue}'
-        `);
-      }
-
-      logger.success('Join corrections applied', LogCategory.DUCKDB, {
-        dataTableName,
-        correctionCount: corrections.size,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } catch (error) {
-      logger.error('Failed to apply corrections', LogCategory.DUCKDB, error);
-      throw error;
-    }
   }
 
   private async processShapefile(

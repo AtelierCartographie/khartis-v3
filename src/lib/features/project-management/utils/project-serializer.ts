@@ -1,5 +1,10 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
+function bigIntReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
@@ -81,7 +86,7 @@ export const ProjectSerializer = {
     if (customBasemaps.length > 0 && Duck) {
       try {
         const tableExists = await Duck.query(
-          `SELECT name FROM sqlite_master WHERE type='table' AND name='custom_basemap_attributes'`,
+          `SELECT table_name FROM information_schema.tables WHERE table_name = 'custom_basemap_attributes'`,
           { format: 'array' }
         );
 
@@ -145,7 +150,7 @@ export const ProjectSerializer = {
           const insertValues = attributes
             .map(
               (attr) =>
-                `('${attr.raw.replace(/'/g, "''")}', '${attr.id.replace(/'/g, "''")}', '${attr.variant.replace(/'/g, "''")}', '${attr.normalized}', '${attr.basemap.replace(/'/g, "''")}', ${attr.basemap_count})`
+                `('${escapeSqlString(attr.raw)}', '${escapeSqlString(attr.id)}', '${escapeSqlString(attr.variant)}', '${escapeSqlString(attr.normalized)}', '${escapeSqlString(attr.basemap)}', ${attr.basemap_count})`
             )
             .join(',\n');
 
@@ -321,6 +326,6 @@ export const ProjectSerializer = {
     project: KhartisProject
   ): Promise<SerializedProject> {
     const serialized = await ProjectSerializer.serialize(project);
-    return JSON.parse(JSON.stringify(serialized));
+    return JSON.parse(JSON.stringify(serialized, bigIntReplacer));
   }
 } as const;
