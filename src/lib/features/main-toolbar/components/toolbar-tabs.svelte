@@ -346,7 +346,7 @@
   }
 
   .tab-label:hover {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--cds-hover-ui);
   }
 
   .tab-name-input {

@@ -194,6 +194,79 @@ class BasemapService {
     return layerTables;
   }
 
+  private _geometryTablesInDuckDB = new Set<string>();
+
+  async loadGeometryIntoDuckDB(basemapId: string): Promise<string> {
+    const tableName = `basemap_geom_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+    // Check if already loaded
+    if (this._geometryTablesInDuckDB.has(tableName)) {
+      logger.debug('Basemap geometry already in DuckDB', LogCategory.MAP, {
+        basemapId,
+        tableName
+      });
+      return tableName;
+    }
+
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const start = performance.now();
+    logger.info('Loading basemap geometry into DuckDB', LogCategory.MAP, {
+      basemapId
+    });
+
+    try {
+      // Try GeoJSON first, fall back to parquet
+      let url = `${GEOMETRY_BASE_PATH}${basemapId}.geojson`;
+      let response = await fetch(url);
+      let isGeoJSON = response.ok;
+
+      if (!isGeoJSON) {
+        url = `${GEOMETRY_BASE_PATH}${basemapId}.parquet`;
+        response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch geometry: ${response.statusText}`);
+        }
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const blob = new Blob([arrayBuffer]);
+      const geometryFile = new File(
+        [blob],
+        isGeoJSON ? `${basemapId}.geojson` : `${basemapId}.parquet`,
+        { type: 'application/octet-stream' }
+      );
+
+      await Duck.register_files([geometryFile]);
+
+      if (isGeoJSON) {
+        await Duck.read_geofile(geometryFile, { tablename: tableName });
+      } else {
+        await Duck.read_geofile(geometryFile, { tablename: tableName });
+      }
+
+      this._geometryTablesInDuckDB.add(tableName);
+
+      logger.success('Basemap geometry loaded into DuckDB', LogCategory.MAP, {
+        basemapId,
+        tableName,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return tableName;
+    } catch (error) {
+      logger.error(
+        'Failed to load basemap geometry into DuckDB',
+        LogCategory.MAP,
+        { basemapId, error }
+      );
+      throw error;
+    }
+  }
+
   async loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
     if (this._basemapCache.has(basemapId)) {
       logger.debug('Basemap loaded from cache', LogCategory.MAP, { basemapId });

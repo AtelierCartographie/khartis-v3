@@ -16,6 +16,7 @@
   let isMapReady = $state(false);
   let displayTable = $state<ArrowTable | null>(null);
   let displayGeoJSON = $state<FeatureCollection | null>(null);
+  let lastDatasetId: string | undefined = undefined;
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -89,16 +90,65 @@
     }
   }
 
+  async function loadJoinedBasemap(
+    dataset: DatasetResult,
+    joinedBasemap: string,
+    tableName: string
+  ): Promise<void> {
+    const start = performance.now();
+    logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
+      datasetId: dataset.id,
+      joinedBasemap,
+      tableName
+    });
+
+    try {
+      const joinedTable = await duckDBOrchestrator.getJoinedArrowTable(
+        tableName,
+        joinedBasemap
+      );
+
+      if (joinedTable) {
+        displayTable = joinedTable;
+        displayGeoJSON = null;
+        logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
+          rows: joinedTable.numRows,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+      } else {
+        logger.warn(
+          'No joined data returned, falling back to basemap',
+          LogCategory.MAP
+        );
+        await loadFallbackBasemap();
+      }
+    } catch (error) {
+      logger.error('Failed to load joined basemap', LogCategory.MAP, error);
+      await loadFallbackBasemap();
+    }
+  }
+
   $effect(() => {
     const _version = duckDBDatasetsVersion;
+    const currentDatasetId = selectedDataset?.id;
+
     if (isInitializing) {
       return;
+    }
+
+    // Only reset map ready state when dataset actually changes
+    const datasetChanged = currentDatasetId !== lastDatasetId;
+    if (datasetChanged) {
+      isMapReady = false;
+      lastDatasetId = currentDatasetId;
     }
 
     if (selectedDataset) {
       logger.debug('Map reacting to dataset change', LogCategory.MAP, {
         datasetId: selectedDataset.id
       });
+
+      // Check if dataset has native geometry (GeoJSON, Shapefile, etc.)
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
           if (result) {
@@ -124,7 +174,20 @@
           }
         });
       } else {
-        loadFallbackBasemap();
+        // Check if dataset is joined to a basemap (tabular data)
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          selectedDataset.sourceFileId
+        );
+
+        if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+          loadJoinedBasemap(
+            selectedDataset,
+            duckDBDataset.joinedBasemap,
+            duckDBDataset.tableName
+          );
+        } else {
+          loadFallbackBasemap();
+        }
       }
     } else {
       loadFallbackBasemap();
@@ -138,6 +201,7 @@
     await basemapService.initialize();
 
     if (selectedDataset?.geometry) {
+      // Dataset has native geometry
       const result = await convertDatasetToGeoJSON(selectedDataset);
       if (result) {
         if ('numRows' in result) {
@@ -147,6 +211,21 @@
           displayTable = null;
           displayGeoJSON = result;
         }
+      } else {
+        await loadFallbackBasemap();
+      }
+    } else if (selectedDataset) {
+      // Check if tabular dataset is joined to a basemap
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+        selectedDataset.sourceFileId
+      );
+
+      if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+        await loadJoinedBasemap(
+          selectedDataset,
+          duckDBDataset.joinedBasemap,
+          duckDBDataset.tableName
+        );
       } else {
         await loadFallbackBasemap();
       }
@@ -215,7 +294,7 @@
 <style>
   .map-container {
     width: 100%;
-    background-color: white;
+    background-color: var(--cds-ui-background);
     position: relative;
     border-radius: 4px;
   }
@@ -240,7 +319,6 @@
     inset: 0;
     z-index: 10;
     overflow: hidden;
-    border-radius: 4px;
   }
 
   .skeleton-loader :global(.bx--skeleton__placeholder) {

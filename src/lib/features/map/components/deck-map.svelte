@@ -1415,14 +1415,14 @@
     position: relative;
     width: 100%;
     height: 700px;
-    background-color: white;
+    background-color: var(--cds-ui-background);
   }
 
   .map-container {
     position: relative;
     width: 100%;
     height: 700px;
-    background-color: white;
+    background-color: var(--cds-ui-background);
   }
 
   :global(.maplibregl-ctrl-attrib) {
