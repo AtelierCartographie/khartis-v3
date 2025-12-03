@@ -15,6 +15,7 @@ import { tableFromIPC, type Table } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
+import { search_macros } from './search';
 
 // --- Transaction Mutex ---
 class TransactionMutex {
@@ -748,8 +749,8 @@ class DuckDB {
       });
 
       const macrosStart = performance.now();
-      // load all macro for discretization, data analysis and join operations
-      await this.query(breaks + analyse + join_macros, {
+      // load all macro for discretization, data analysis, join and search operations
+      await this.query(breaks + analyse + join_macros + search_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
       logger.debug('Custom macros registered', LogCategory.DUCKDB, {
@@ -2194,6 +2195,151 @@ class DuckDB {
           // ignore
         }
       }
+    }
+  }
+
+  /**
+   * Searches for rows in a table using fuzzy text matching.
+   *
+   * Uses Jaro-Winkler similarity for fuzzy matching combined with
+   * LIKE pattern matching for partial/contains matches.
+   *
+   * @param table - The name of the table to search in
+   * @param query - The search term
+   * @param options - Search options
+   * @param options.threshold - Minimum similarity score (0-1), default 0.6
+   * @param options.column - Optional column name to restrict search
+   * @returns Array of row IDs matching the search
+   */
+  async searchInTable(
+    table: string,
+    query: string,
+    options: { threshold?: number; column?: string } = {}
+  ): Promise<number[]> {
+    const { threshold = 0.6, column = null } = options;
+
+    logger.debug('searchInTable called', LogCategory.DUCKDB, {
+      table,
+      query,
+      options
+    });
+
+    if (!query || query.trim() === '') {
+      logger.debug(
+        'searchInTable: empty query, returning []',
+        LogCategory.DUCKDB
+      );
+      return [];
+    }
+
+    const escapedTable = escapeSqlString(table);
+    const escapedQuery = escapeSqlString(query.trim());
+
+    try {
+      // 1. Récupérer TOUTES les colonnes de la table via information_schema.columns
+      // Note: information_schema.columns avec COLLATE NOCASE fonctionne (comme dans la fonction à la ligne 1370)
+      // duckdb_columns() ne trouve pas la table sans COLLATE NOCASE
+      const allColumnsSql = `
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name = '${escapedTable}' COLLATE NOCASE
+        AND column_name NOT LIKE '__%'
+      `;
+
+      logger.debug('searchInTable: querying all columns', LogCategory.DUCKDB, {
+        allColumnsSql
+      });
+
+      const allColumns = (await this.query(allColumnsSql, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      })) as Array<{ column_name: string; data_type: string }>;
+
+      logger.debug('searchInTable: all columns found', LogCategory.DUCKDB, {
+        columnsCount: allColumns.length,
+        columns: allColumns.map((c) => `${c.column_name}:${c.data_type}`)
+      });
+
+      // Filtrer les colonnes texte en JavaScript (VARCHAR, TEXT, STRING)
+      const textTypes = ['VARCHAR', 'TEXT', 'STRING'];
+      let textColumns = allColumns.filter((c) =>
+        textTypes.includes(c.data_type.toUpperCase())
+      );
+
+      // Si une colonne spécifique est demandée, filtrer davantage
+      if (column) {
+        const escapedColumn = escapeSqlString(column);
+        textColumns = textColumns.filter(
+          (c) => c.column_name === escapedColumn
+        );
+      }
+
+      logger.debug('searchInTable: text columns filtered', LogCategory.DUCKDB, {
+        textColumnsCount: textColumns.length,
+        textColumns: textColumns.map((c) => c.column_name)
+      });
+
+      if (textColumns.length === 0) {
+        logger.warn(
+          'searchInTable: no text columns found',
+          LogCategory.DUCKDB,
+          {
+            table: escapedTable,
+            availableTypes: allColumns.map(
+              (c) => `${c.column_name}:${c.data_type}`
+            )
+          }
+        );
+        return [];
+      }
+
+      const columnsResult = textColumns.map((c) => ({
+        column_name: c.column_name
+      }));
+
+      // 2. Générer les conditions de recherche pour chaque colonne
+      const conditions = columnsResult
+        .map(
+          ({ column_name }) => `(
+          jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}')) > ${threshold}
+          OR normalize_text("${column_name}"::VARCHAR) LIKE '%' || normalize_text('${escapedQuery}') || '%'
+        )`
+        )
+        .join('\n        OR ');
+
+      // 3. Exécuter la recherche avec les conditions générées
+      const sql = `
+        SELECT __id
+        FROM "${table}"
+        WHERE ${conditions}
+        ORDER BY __id
+      `;
+
+      logger.debug(
+        'searchInTable: executing search query',
+        LogCategory.DUCKDB,
+        {
+          sql: sql.substring(0, 500) + (sql.length > 500 ? '...' : '')
+        }
+      );
+
+      const result = (await this.query(sql, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      })) as Array<{ __id: number }>;
+
+      const ids = result.map((r) => r.__id);
+      logger.debug('searchInTable: results', LogCategory.DUCKDB, {
+        count: ids.length,
+        firstIds: ids.slice(0, 10)
+      });
+
+      return ids;
+    } catch (error) {
+      logger.error('Search in table failed', LogCategory.DUCKDB, {
+        table,
+        query,
+        error
+      });
+      return [];
     }
   }
 

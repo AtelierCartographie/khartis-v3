@@ -5,7 +5,10 @@
  * replacing 'any' types throughout the codebase.
  */
 
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type {
+  ColumnTransformation,
+  UploadedFile
+} from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
@@ -89,6 +92,7 @@ export interface SerializedUploadedFile {
   duplicates?: UploadedFile['duplicates'];
   deepAnalysis?: UploadedFile['deepAnalysis'];
   geoMatchResult?: UploadedFile['geoMatchResult'];
+  columnTransformations?: ColumnTransformation[];
   // Cached dataset metadata removed – pipeline reloads from DuckDB
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
