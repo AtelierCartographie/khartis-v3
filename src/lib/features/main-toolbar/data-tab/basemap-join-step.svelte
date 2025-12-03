@@ -182,9 +182,40 @@
           dataTabState.geolocation.linkedVariableName
         );
         dataTabActions.setJoinStats(stats);
+
+        // Finalize the join to enable map rendering
+        await handleFinalizeJoin();
       }
     } catch (error) {
       logger.error('Failed to apply corrections', LogCategory.MAP, error);
+    }
+  }
+
+  async function handleFinalizeJoin() {
+    if (!selectedDataset || !dataTabState.geolocation.linkedVariableName)
+      return;
+
+    const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+    if (!basemap) {
+      logger.warn('No basemap selected for join finalization', LogCategory.MAP);
+      return;
+    }
+
+    try {
+      logger.info('Finalizing join to enable map rendering', LogCategory.MAP, {
+        datasetId: selectedDataset.id,
+        basemap: basemap.file
+      });
+
+      await duckDBOrchestrator.finalizeJoin(
+        selectedDataset.id,
+        basemap,
+        dataTabState.geolocation.linkedVariableName
+      );
+
+      logger.success('Join finalized, map should update', LogCategory.MAP);
+    } catch (error) {
+      logger.error('Failed to finalize join', LogCategory.MAP, error);
     }
   }
 
@@ -457,16 +488,29 @@
       hideCloseButton={false}
     />
 
-    <div class="correction">
-      <div class="title">Correction</div>
-      <p>
-        Remplacer les entités incorrectes du tableau de données par celles du
-        fond de carte ?
-      </p>
-      <Button kind="secondary" size="small" on:click={handleApplyCorrections}
-        >Remplacer</Button
-      >
-    </div>
+    {#if toVerifyCount > 0}
+      <div class="correction">
+        <div class="title">Correction</div>
+        <p>
+          Remplacer les entités incorrectes du tableau de données par celles du
+          fond de carte ?
+        </p>
+        <Button kind="secondary" size="small" on:click={handleApplyCorrections}
+          >Remplacer</Button
+        >
+      </div>
+    {:else if joinedCount > 0 && basemapSelected}
+      <div class="validation">
+        <div class="title">Validation</div>
+        <p>
+          Toutes les entités ont été jointes avec succès. Valider la jointure
+          pour afficher les données sur la carte.
+        </p>
+        <Button kind="primary" size="small" on:click={handleFinalizeJoin}
+          >Valider la jointure</Button
+        >
+      </div>
+    {/if}
   </div>
 </section>
 
@@ -552,6 +596,24 @@
     margin-bottom: var(--cds-spacing-03);
   }
 
+  .validation {
+    border-left: 4px solid var(--cds-support-success);
+    background: var(--cds-layer);
+    padding: var(--cds-spacing-04);
+    margin-top: var(--cds-spacing-05);
+    border-radius: 4px;
+  }
+
+  .validation .title {
+    font-weight: 700;
+    margin-bottom: var(--cds-spacing-03);
+    color: var(--cds-support-success);
+  }
+
+  .validation p {
+    margin-bottom: var(--cds-spacing-04);
+  }
+
   /* Accordion Styling */
   .join-stats-accordion {
     display: flex;
@@ -626,14 +688,14 @@
   }
 
   .join-table .head {
-    background-color: #e5f6ff; /* Light blue from design */
+    background-color: var(--cds-highlight);
     color: var(--cds-text-01);
     border-bottom: 1px solid var(--cds-border-subtle);
   }
 
   .join-row {
-    background-color: #f0f9ff; /* Lighter blue */
-    border-bottom: 1px solid #cceeff;
+    background-color: var(--cds-layer-01);
+    border-bottom: 1px solid var(--cds-border-subtle);
   }
 
   .join-row:last-child {

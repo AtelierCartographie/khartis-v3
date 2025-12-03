@@ -3,6 +3,8 @@
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import * as m from '$lib/paraglide/messages';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarState } from '$lib/features/commons/types/global';
   import { dataToolsStore } from '../data-tools.store.svelte';
 
   interface Props {
@@ -11,9 +13,20 @@
   }
 
   let { title, children }: Props = $props();
+
+  const toolbarWidth = $derived.by(() => {
+    switch (globalState.toolbarState) {
+      case ToolbarState.Collapsed:
+        return '50px';
+      case ToolbarState.Compact:
+        return '400px';
+      default:
+        return '50vw';
+    }
+  });
 </script>
 
-<aside class="data-tool-panel">
+<aside class="data-tool-panel" style:right={toolbarWidth}>
   <header class="panel-header">
     <h3>{title}</h3>
     <Button
@@ -32,17 +45,16 @@
 <style>
   .data-tool-panel {
     position: fixed;
-    left: 72px;
-    top: 64px;
+    right: 50vw;
+    top: 50%;
+    transform: translateY(-50%);
     width: 280px;
-    max-height: calc(100vh - 128px);
     background: var(--cds-ui-01);
     border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     z-index: 100;
     display: flex;
     flex-direction: column;
+    transition: right 0.3s ease-in-out;
   }
 
   .panel-header {
@@ -62,7 +74,5 @@
 
   .panel-content {
     padding: var(--cds-spacing-04);
-    overflow-y: auto;
-    flex: 1;
   }
 </style>
