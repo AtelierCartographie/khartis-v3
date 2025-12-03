@@ -423,7 +423,8 @@
           width: 150,
           height: 48,
           main_color: '#a56eff',
-          nulls_color: '#ffd666'
+          nulls_color: '#ffd666',
+          bg_color: '#393939'
         });
         return plot;
       } catch (err) {
@@ -926,18 +927,18 @@
     border: none;
     background: none;
     padding: 0;
-    color: gray;
+    color: var(--cds-text-02);
     cursor: pointer;
     font-size: 10px;
     line-height: 1;
   }
 
   .sort-btn:hover {
-    color: white;
+    color: var(--cds-text-01);
   }
 
   .sort-btn.active {
-    color: white;
+    color: var(--cds-text-01);
   }
 
   .summary-plot {

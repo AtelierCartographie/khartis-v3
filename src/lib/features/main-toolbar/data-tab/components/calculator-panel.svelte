@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     Button,
+    Link,
     Select,
     SelectItem,
     TextArea,
@@ -181,15 +182,15 @@
             <SelectItem value={column.name} text={column.name} />
           {/each}
         </Select>
-        <button
-          type="button"
-          class="insert-btn"
-          onclick={insertVariable}
+        <Button
+          kind="ghost"
+          size="small"
+          hasIconOnly
+          icon={ArrowRight}
+          iconDescription={m.calc_insert_variable()}
           disabled={!selectedVariable}
-          aria-label={m.calc_insert_variable()}
-        >
-          <ArrowRight size={16} />
-        </button>
+          on:click={insertVariable}
+        />
       </div>
     </div>
 
@@ -197,13 +198,13 @@
       <span id="operators-label" class="field-label">{m.calc_operators()}</span>
       <div class="operators" role="group" aria-labelledby="operators-label">
         {#each OPERATORS as op (op.label)}
-          <button
-            type="button"
-            class="operator-btn"
-            onclick={() => insertOperator(op.value)}
+          <Button
+            kind="tertiary"
+            size="small"
+            on:click={() => insertOperator(op.value)}
           >
             {op.label}
-          </button>
+          </Button>
         {/each}
       </div>
     </div>
@@ -215,21 +216,20 @@
             <SelectItem value={fn.value} text={fn.label} />
           {/each}
         </Select>
-        <button
-          type="button"
-          class="insert-btn"
-          onclick={insertFunction}
-          aria-label={m.calc_insert_function()}
-        >
-          <ArrowRight size={16} />
-        </button>
+        <Button
+          kind="ghost"
+          size="small"
+          hasIconOnly
+          icon={ArrowRight}
+          iconDescription={m.calc_insert_function()}
+          on:click={insertFunction}
+        />
       </div>
     </div>
 
-    <button type="button" class="help-link" onclick={() => {}}>
+    <Link href="#" icon={Launch} size="sm">
       {m.calc_help_link()}
-      <Launch size={16} />
-    </button>
+    </Link>
 
     {#if testResult}
       <p class="test-result">{testResult}</p>
@@ -302,65 +302,10 @@
     flex: 1;
   }
 
-  .insert-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-01);
-    color: var(--cds-icon-01);
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-
-  .insert-btn:hover:not(:disabled) {
-    background-color: var(--cds-hover-ui);
-  }
-
-  .insert-btn:disabled {
-    color: var(--cds-disabled-02);
-    cursor: not-allowed;
-  }
-
   .operators {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: var(--cds-spacing-02);
-  }
-
-  .operator-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-01);
-    color: var(--cds-text-01);
-    font-size: 1rem;
-    font-weight: 500;
-    cursor: pointer;
-    border-radius: 4px;
-    transition: all 0.15s;
-  }
-
-  .operator-btn:hover {
-    background-color: var(--cds-hover-ui);
-  }
-
-  .help-link {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.875rem;
-    color: var(--cds-link-01);
-    text-decoration: none;
-  }
-
-  .help-link:hover {
-    text-decoration: underline;
   }
 
   .test-result {

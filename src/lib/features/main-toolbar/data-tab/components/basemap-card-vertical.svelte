@@ -124,7 +124,7 @@
     border-color: var(--cds-interactive-01);
     border-width: 2px;
     box-shadow: 0 0 0 2px var(--cds-focus);
-    background-color: #e5f6ff; /* Light blue background for selected */
+    background-color: var(--cds-highlight);
   }
 
   .basemap-card-vertical:focus {

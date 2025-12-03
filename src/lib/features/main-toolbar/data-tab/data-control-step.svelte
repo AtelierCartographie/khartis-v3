@@ -4,7 +4,10 @@
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
-  import { DataTableSkeleton, InlineNotification } from 'carbon-components-svelte';
+  import {
+    DataTableSkeleton,
+    InlineNotification
+  } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import CalculatorPanel from './components/calculator-panel.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
@@ -214,7 +217,6 @@
     background-color: var(--cds-ui-02);
     padding: var(--cds-spacing-05);
     height: 100%;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     position: relative;
