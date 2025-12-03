@@ -9,6 +9,7 @@
     basemap: BasemapMetadata;
     selected?: boolean;
     matchScore?: number;
+    showMatchScore?: boolean;
     onclick?: () => void;
   }
 
@@ -16,6 +17,7 @@
     basemap,
     selected = false,
     matchScore,
+    showMatchScore = true,
     onclick
   }: BasemapCardVerticalProps = $props();
 
@@ -90,15 +92,17 @@
     </div>
 
     <!-- Match Score Progress Bar -->
-    <div class="match-score-section">
-      <span class="match-score-label">{m.basemap_match_score()}</span>
-      <ProgressBar
-        value={matchPercentage}
-        max={100}
-        helperText={matchHelperText}
-        size="sm"
-      />
-    </div>
+    {#if showMatchScore}
+      <div class="match-score-section">
+        <span class="match-score-label">{m.basemap_match_score()}</span>
+        <ProgressBar
+          value={matchPercentage}
+          max={100}
+          helperText={matchHelperText}
+          size="sm"
+        />
+      </div>
+    {/if}
   </div>
 </div>
 

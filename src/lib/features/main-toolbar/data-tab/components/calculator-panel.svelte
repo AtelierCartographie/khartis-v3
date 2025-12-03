@@ -176,7 +176,11 @@
 
     <div class="field-group">
       <div class="input-with-action">
-        <Select size="sm" labelText={m.calc_variables()} bind:selected={selectedVariable}>
+        <Select
+          size="sm"
+          labelText={m.calc_variables()}
+          bind:selected={selectedVariable}
+        >
           <SelectItem value="" text={m.calc_select_variable()} />
           {#each columns as column (column.name)}
             <SelectItem value={column.name} text={column.name} />
@@ -211,7 +215,11 @@
 
     <div class="field-group">
       <div class="input-with-action">
-        <Select size="sm" labelText={m.calc_functions()} bind:selected={selectedFunction}>
+        <Select
+          size="sm"
+          labelText={m.calc_functions()}
+          bind:selected={selectedFunction}
+        >
           {#each FUNCTIONS as fn (fn.value)}
             <SelectItem value={fn.value} text={fn.label} />
           {/each}

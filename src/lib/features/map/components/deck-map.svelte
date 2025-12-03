@@ -39,6 +39,7 @@
     createOSMRasterSource,
     createOSMRasterLayer
   } from '../services/osm-tile.service';
+  import { basemapService } from '../services/basemap.service.svelte';
 
   const MAP_CENTER_STORAGE_KEY = 'khartis_map_center';
   const MAP_ZOOM_STORAGE_KEY = 'khartis_maplibre_zoom';
@@ -101,6 +102,11 @@
   let deckOverlay: MapboxOverlay;
   let isMapLoaded = $state(false);
   let lastPendingGeoTable = $state<string | null>(null);
+  let worldBaseTable = $state<ArrowTable | null>(null);
+
+  const BASE_FILL_COLOR: [number, number, number] = [232, 232, 232];
+  const BASE_STROKE_COLOR: [number, number, number] = [255, 255, 255];
+  const HIGHLIGHT_FILL_COLOR: [number, number, number] = [180, 180, 180];
 
   const activeVisualizations = $derived(
     visualizationStore.activeVisualizations
@@ -113,18 +119,18 @@
     const viz = defaultVisualization;
     if (!viz) {
       return {
-        fill: [220, 220, 220] as [number, number, number],
-        stroke: [255, 255, 255] as [number, number, number]
+        fill: HIGHLIGHT_FILL_COLOR,
+        stroke: BASE_STROKE_COLOR
       };
     }
 
     return {
       fill: viz.style.fillColor
         ? hexToRgb(viz.style.fillColor as string)
-        : ([220, 220, 220] as [number, number, number]),
+        : HIGHLIGHT_FILL_COLOR,
       stroke: viz.style.strokeColor
         ? hexToRgb(viz.style.strokeColor)
-        : ([255, 255, 255] as [number, number, number])
+        : BASE_STROKE_COLOR
     };
   });
 
@@ -177,7 +183,7 @@
   ) {
     return (object: DeckDataRow): [number, number, number] => {
       const category = object[categoryColumn];
-      return colorMap?.get(String(category)) ?? [128, 128, 128];
+      return colorMap?.get(String(category)) ?? HIGHLIGHT_FILL_COLOR;
     };
   }
 
@@ -217,7 +223,7 @@
       const numericValue =
         typeof rawValue === 'number' ? rawValue : Number(rawValue);
       if (!Number.isFinite(numericValue)) {
-        return [200, 200, 200];
+        return HIGHLIGHT_FILL_COLOR;
       }
       return getColorForValue(numericValue, breaks, colors);
     };
@@ -1008,6 +1014,40 @@
     return [layer];
   }
 
+  function createWorldBaseLayer(baseTable: ArrowTable): Layer<DeckDataRow> | null {
+    const geoMetadata = baseTable.schema.metadata?.get('geo');
+    if (!geoMetadata) {
+      logger.warn('World base table missing geo metadata', LogCategory.MAP);
+      return null;
+    }
+
+    try {
+      const jsonMeta = JSON.parse(geoMetadata);
+      const geoColumn = jsonMeta.primary_column;
+      const geojsonData = arrowTableToGeoJSON(baseTable, geoColumn);
+
+      if (!geojsonData) {
+        logger.warn('Failed to convert world base table to GeoJSON', LogCategory.MAP);
+        return null;
+      }
+
+      return new GeoJsonLayer({
+        id: 'world-base-layer',
+        data: geojsonData,
+        getFillColor: [...BASE_FILL_COLOR, 255],
+        getLineColor: BASE_STROKE_COLOR,
+        opacity: 1,
+        lineWidthUnits: 'pixels',
+        lineWidthScale: 0.25,
+        pickable: false,
+        autoHighlight: false
+      });
+    } catch (error) {
+      logger.error('Failed to create world base layer', LogCategory.MAP, error);
+      return null;
+    }
+  }
+
   function updateMapLayers(
     jsTable: ArrowTable | null,
     geojson: FeatureCollection | null
@@ -1018,12 +1058,21 @@
 
     logger.debug('Updating Deck.gl layers', LogCategory.MAP, {
       hasArrowTable: Boolean(jsTable),
-      hasGeoJSON: Boolean(geojson)
+      hasGeoJSON: Boolean(geojson),
+      hasWorldBase: Boolean(worldBaseTable)
     });
 
-    let layers: Layer<DeckDataRow>[];
+    const layers: Layer<DeckDataRow>[] = [];
+
+    if (worldBaseTable) {
+      const baseLayer = createWorldBaseLayer(worldBaseTable);
+      if (baseLayer) {
+        layers.push(baseLayer);
+      }
+    }
+
     if (geojson) {
-      layers = createGeoJsonLayers(geojson);
+      layers.push(...createGeoJsonLayers(geojson));
     } else if (jsTable) {
       const hasGeoMetadata = !!jsTable.schema.metadata?.get('geo');
       if (!hasGeoMetadata) {
@@ -1038,13 +1087,12 @@
             }
           );
         }
+        deckOverlay.setProps({ layers });
         return;
       }
       lastPendingGeoTable = null;
 
-      layers = createDeckLayers(jsTable);
-    } else {
-      layers = [];
+      layers.push(...createDeckLayers(jsTable));
     }
 
     deckOverlay.setProps({ layers });
@@ -1109,13 +1157,19 @@
 
   function syncBasemapStyle(): void {
     if (!map || !isMapLoaded) return;
-    const styleUrl = basemapStyleStore.selectedStyleUrl;
-    if (map.getStyle()?.sprite !== styleUrl) {
-      map.setStyle(styleUrl);
+    const style = basemapStyleStore.selectedStyleUrl;
+    const currentStyle = map.getStyle();
+    const shouldUpdate =
+      typeof style === 'string'
+        ? currentStyle?.sprite !== style
+        : currentStyle?.name !== (style as maplibregl.StyleSpecification).name;
+    if (shouldUpdate) {
+      map.setStyle(style);
     }
   }
 
   $effect(() => {
+    const _worldBase = worldBaseTable;
     if (isMapLoaded && deckOverlay) {
       updateMapLayers(jsTable, userGeoJSON);
     }
@@ -1364,6 +1418,16 @@
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
       logger.success('Maplibre + Deck.gl ready', LogCategory.MAP);
+
+      basemapService.loadDefaultBasemap().then((basemap) => {
+        if (basemap?.geometryTable) {
+          worldBaseTable = basemap.geometryTable;
+          logger.info('World base layer loaded', LogCategory.MAP, {
+            rows: basemap.geometryTable.numRows
+          });
+          updateMapLayers(jsTable, userGeoJSON);
+        }
+      });
 
       if (jsTable || userGeoJSON) {
         updateMapLayers(jsTable, userGeoJSON);
