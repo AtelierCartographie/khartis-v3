@@ -144,24 +144,24 @@
     <div class="results-navigation">
       <span class="result-text">{resultText}</span>
       <div class="nav-buttons">
-        <button
-          type="button"
-          class="nav-btn"
+        <Button
+          kind="ghost"
+          size="small"
+          hasIconOnly
+          icon={ChevronLeft}
+          iconDescription={m.search_prev_result()}
           disabled={!hasResults}
-          onclick={handlePrevResult}
-          aria-label={m.search_prev_result()}
-        >
-          <ChevronLeft size={16} />
-        </button>
-        <button
-          type="button"
-          class="nav-btn"
+          on:click={handlePrevResult}
+        />
+        <Button
+          kind="ghost"
+          size="small"
+          hasIconOnly
+          icon={ChevronRight}
+          iconDescription={m.search_next_result()}
           disabled={!hasResults}
-          onclick={handleNextResult}
-          aria-label={m.search_next_result()}
-        >
-          <ChevronRight size={16} />
-        </button>
+          on:click={handleNextResult}
+        />
       </div>
     </div>
 
@@ -214,30 +214,6 @@
 
   .nav-buttons {
     display: flex;
-    gap: var(--cds-spacing-02);
-  }
-
-  .nav-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border: none;
-    background: transparent;
-    color: var(--cds-icon-01);
-    cursor: pointer;
-    border-radius: 4px;
-    transition: background-color 0.15s;
-  }
-
-  .nav-btn:hover:not(:disabled) {
-    background-color: var(--cds-hover-ui);
-  }
-
-  .nav-btn:disabled {
-    color: var(--cds-disabled-02);
-    cursor: not-allowed;
   }
 
   .actions {

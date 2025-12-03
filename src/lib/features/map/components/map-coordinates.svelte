@@ -58,19 +58,19 @@
     position: absolute;
     bottom: 10px;
     right: 10px;
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: var(--cds-ui-01);
     padding: 6px 12px;
     border-radius: 4px;
     font-size: 12px;
     font-family: monospace;
     display: flex;
     gap: 12px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--cds-shadow);
     z-index: 1;
     pointer-events: none;
   }
 
   .map-coordinates span {
-    color: #161616;
+    color: var(--cds-text-01);
   }
 </style>
