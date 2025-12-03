@@ -16,7 +16,6 @@
   let isMapReady = $state(false);
   let displayTable = $state<ArrowTable | null>(null);
   let displayGeoJSON = $state<FeatureCollection | null>(null);
-  let lastDatasetId: string | undefined = undefined;
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -130,17 +129,8 @@
 
   $effect(() => {
     const _version = duckDBDatasetsVersion;
-    const currentDatasetId = selectedDataset?.id;
-
     if (isInitializing) {
       return;
-    }
-
-    // Only reset map ready state when dataset actually changes
-    const datasetChanged = currentDatasetId !== lastDatasetId;
-    if (datasetChanged) {
-      isMapReady = false;
-      lastDatasetId = currentDatasetId;
     }
 
     if (selectedDataset) {
@@ -246,14 +236,14 @@
 </script>
 
 <div class="map-container">
-  <!-- Skeleton loader - stays visible until map is fully rendered -->
+  <!-- Skeleton loader - only during initial load -->
   {#if !isMapReady}
     <div class="skeleton-loader" out:fade={{ duration: 300, easing: cubicOut }}>
       <SkeletonPlaceholder style="width: 100%; height: 100%;" />
     </div>
   {/if}
 
-  <!-- Map wrapper - rendered once data is ready, visible when map is ready -->
+  <!-- Map wrapper - rendered once data is ready -->
   {#if !isInitializing && displayTable}
     <div class="map-wrapper" class:visible={isMapReady}>
       <DeckMap
@@ -303,15 +293,11 @@
     width: 100%;
     height: 100%;
     opacity: 0;
-    transform: scale(0.98);
-    transition:
-      opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-      transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.3s ease-out;
   }
 
   .map-wrapper.visible {
     opacity: 1;
-    transform: scale(1);
   }
 
   .skeleton-loader {

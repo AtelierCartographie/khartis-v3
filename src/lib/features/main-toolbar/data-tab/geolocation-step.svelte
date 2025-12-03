@@ -27,24 +27,6 @@
   );
   const geoDetection = $derived(selectedDataset?.geoDetection);
 
-  const hasTypeDetection = $derived(
-    !!selectedDataset && selectedDataset.columns.length > 0
-  );
-
-  const hasMissingValues = $derived(
-    processedDataset
-      ? processedDataset.columns.some((col) => col.nullable === true)
-      : false
-  );
-
-  const showVariableTypesNotification = $derived(
-    dataTabState.notifications.variableTypes && hasTypeDetection
-  );
-
-  const showWarningsNotification = $derived(
-    dataTabState.notifications.warnings && hasMissingValues
-  );
-
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
 
@@ -156,18 +138,6 @@
       dataTabActions.setGeolocationState({
         longitudeColumn: col.columnName
       });
-    }
-  });
-
-  $effect(() => {
-    if (selectedDataset) {
-      if (hasTypeDetection && !dataTabState.notifications.variableTypes) {
-        dataTabActions.toggleNotification('variableTypes');
-      }
-
-      if (hasMissingValues && !dataTabState.notifications.warnings) {
-        dataTabActions.toggleNotification('warnings');
-      }
     }
   });
 
@@ -322,28 +292,6 @@
       {m.geo_learn_more_geocoding()}
       <Launch size={16} />
     </Link>
-
-    {#if showVariableTypesNotification}
-      <InlineNotification
-        title={m.geo_notification_title()}
-        subtitle={m.geo_notification_subtitle()}
-        kind="info"
-        lowContrast
-        hideCloseButton={false}
-        on:close={() => dataTabActions.toggleNotification('variableTypes')}
-      />
-    {/if}
-
-    {#if showWarningsNotification}
-      <InlineNotification
-        title="Valeurs manquantes"
-        subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-        on:close={() => dataTabActions.toggleNotification('warnings')}
-      />
-    {/if}
   </div>
 </section>
 
