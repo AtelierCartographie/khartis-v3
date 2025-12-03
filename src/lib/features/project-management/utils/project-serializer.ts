@@ -232,6 +232,10 @@ export const ProjectSerializer = {
       serialized.relatedFilesData = serializedData;
     }
 
+    if (file.columnTransformations && file.columnTransformations.length > 0) {
+      serialized.columnTransformations = file.columnTransformations;
+    }
+
     return serialized;
   },
 
@@ -291,6 +295,10 @@ export const ProjectSerializer = {
         relatedData[name] = new Uint8Array(bytes).buffer;
       }
       file.relatedFilesData = relatedData;
+    }
+
+    if (data.columnTransformations) {
+      file.columnTransformations = data.columnTransformations;
     }
 
     return file as UploadedFile;

@@ -1,17 +1,18 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    InlineNotification,
-    TextInput
-  } from 'carbon-components-svelte';
-  import { Checkmark, Close, Edit, Reset } from 'carbon-icons-svelte';
+  import { DataTableSkeleton, InlineNotification } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import CalculatorPanel from './components/calculator-panel.svelte';
+  import DataToolPanel from './components/data-tool-panel.svelte';
+  import DataToolsBar from './components/data-tools-bar.svelte';
+  import FiltersPanel from './components/filters-panel.svelte';
+  import SearchPanel from './components/search-panel.svelte';
+  import { DataToolType } from './data-tab.types';
+  import { dataToolsStore } from './data-tools.store.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -21,6 +22,7 @@
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
+  const isProcessingFiles = $derived(datasetsStore.isProcessing);
 
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
 
@@ -38,6 +40,8 @@
   let resetModalOpen = $state(false);
   let isEditingName = $state(false);
   let editedName = $state('');
+  let typesNotificationDismissed = $state(false);
+  let missingValuesNotificationDismissed = $state(false);
 
   function startEditing() {
     if (!selectedDataset) return;
@@ -45,13 +49,13 @@
     isEditingName = true;
   }
 
-  function saveRename() {
+  async function saveRename() {
     if (!selectedDataset || !editedName.trim()) {
       cancelEditing();
       return;
     }
 
-    datasetsStore.renameDataset(selectedDataset.id, editedName);
+    await datasetsStore.renameDataset(selectedDataset.id, editedName);
     isEditingName = false;
   }
 
@@ -67,84 +71,111 @@
       cancelEditing();
     }
   }
+
+  function handleBlur() {
+    if (editedName.trim()) {
+      saveRename();
+    } else {
+      cancelEditing();
+    }
+  }
+
+  function handleDoubleClick() {
+    startEditing();
+  }
+
+  let nameInputRef = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (isEditingName && nameInputRef) {
+      nameInputRef.focus();
+      nameInputRef.select();
+    }
+  });
+
+  // Use a separate key that only increments on explicit refresh calls
+  // This avoids unnecessary remounts during initial batch load
+  let forceRefreshKey = $state(0);
+
+  function refreshTable() {
+    // Increment the key to force a table remount
+    forceRefreshKey++;
+  }
+
+  function handleOpenReset() {
+    resetModalOpen = true;
+  }
+
+  let searchResults = $state<number[]>([]);
+  let currentSearchIndex = $state(0);
+
+  function handleSearchResults(results: number[], currentIndex: number) {
+    searchResults = results;
+    currentSearchIndex = currentIndex;
+  }
+
+  const isToolOpen = $derived(dataToolsStore.isOpen);
+  const activeTool = $derived(dataToolsStore.activeTool);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const skeletonProps = { columns: 5, rows: 12 } as any;
 </script>
 
 <section id="data-control-step">
   <MainToolBarHeader title={m.data_control_step_title()} />
 
-  {#if selectedDataset}
-    <div class="dataset-info">
-      <div class="dataset-meta">
-        {#if isEditingName}
-          <div class="dataset-name-edit">
-            <TextInput
-              size="sm"
-              bind:value={editedName}
-              on:keydown={handleKeyPress}
-              placeholder="Nom du jeu de données"
-            />
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Checkmark}
-              iconDescription="Valider"
-              tooltipPosition="bottom"
-              on:click={saveRename}
-            />
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Close}
-              iconDescription="Annuler"
-              tooltipPosition="bottom"
-              on:click={cancelEditing}
-            />
-          </div>
-        {:else}
-          <div class="dataset-name-display">
-            <span class="dataset-name">{selectedDataset.name}</span>
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Edit}
-              iconDescription="Renommer"
-              tooltipPosition="bottom"
-              on:click={startEditing}
-            />
-          </div>
-        {/if}
-        <span class="row-count">{selectedDataset.rowCount} lignes</span>
-        {#if currentDuckTable}
-          <span class="duck-badge">DuckDB ✓</span>
-        {/if}
-      </div>
-      <Button
-        kind="danger-tertiary"
-        size="small"
-        icon={Reset}
-        tooltipPosition="left"
-        iconDescription="Réinitialiser les données"
-        on:click={() => (resetModalOpen = true)}
-      >
-        Réinitialiser
-      </Button>
-    </div>
+  <!-- Panneaux flottants -->
+  {#if isToolOpen}
+    {#if activeTool === DataToolType.Search}
+      <DataToolPanel title={m.data_tool_search()}>
+        <SearchPanel
+          tableName={currentDuckTable || undefined}
+          onSearchResults={handleSearchResults}
+        />
+      </DataToolPanel>
+    {:else if activeTool === DataToolType.Calculator}
+      <DataToolPanel title={m.data_tool_calculator()}>
+        <CalculatorPanel
+          tableName={currentDuckTable || undefined}
+          onColumnCreated={refreshTable}
+        />
+      </DataToolPanel>
+    {:else if activeTool === DataToolType.Filters}
+      <DataToolPanel title={m.data_tool_filters()}>
+        <FiltersPanel
+          tableName={currentDuckTable || undefined}
+          onFilterChange={refreshTable}
+        />
+      </DataToolPanel>
+    {/if}
+  {/if}
 
+  {#if selectedDataset}
     {#if selectedDataset.id}
       <ResetDataModal
         bind:open={resetModalOpen}
         datasetId={selectedDataset.id}
       />
     {/if}
+
+    <!-- Barre d'outils -->
+    <DataToolsBar onReset={handleOpenReset} />
   {/if}
 
   {#if processedDataset}
-    <AdvancedDataTable
-      dataset={processedDataset}
-      tableName={currentDuckTable || undefined}
-      showSummaryPlots={true}
-      bind:searchQuery={dataTabState.dataControl.searchQuery}
-    />
+    {#key forceRefreshKey}
+      <AdvancedDataTable
+        dataset={processedDataset}
+        tableName={currentDuckTable || undefined}
+        showSummaryPlots={true}
+        highlightIds={searchResults}
+      />
+    {/key}
+  {:else if selectedDataset || isProcessingFiles}
+    <!-- Skeleton loader pendant le chargement -->
+    <div class="table-skeleton-wrapper">
+      <DataTableSkeleton {...skeletonProps} />
+    </div>
   {:else}
     <div class="empty-state">
       <p class="empty-message">Aucune donnée chargée</p>
@@ -155,24 +186,26 @@
     </div>
   {/if}
 
-  {#if selectedDataset}
+  {#if selectedDataset && !typesNotificationDismissed}
     <InlineNotification
       title="Types des variables"
       subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
       kind="info"
       lowContrast
       hideCloseButton={false}
+      on:close={() => (typesNotificationDismissed = true)}
     />
+  {/if}
 
-    {#if processedDataset && processedDataset.columns.some((col) => col.nullable)}
-      <InlineNotification
-        title="Valeurs manquantes"
-        subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
+  {#if processedDataset && processedDataset.columns.some((col) => col.nullable) && !missingValuesNotificationDismissed}
+    <InlineNotification
+      title="Attention"
+      subtitle="Plusieurs variables sont concernées par des avertissements indiqués dans l'en-tête du tableau."
+      kind="warning"
+      lowContrast
+      hideCloseButton={false}
+      on:close={() => (missingValuesNotificationDismissed = true)}
+    />
   {/if}
 </section>
 
@@ -186,53 +219,6 @@
     flex-direction: column;
     position: relative;
     min-height: 0;
-  }
-
-  .dataset-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--cds-spacing-03) 0;
-    margin-bottom: var(--cds-spacing-03);
-    flex-shrink: 0;
-  }
-
-  .dataset-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .dataset-name-display {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .dataset-name-edit {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .dataset-name {
-    font-weight: 600;
-    color: var(--cds-text-01);
-  }
-
-  .row-count {
-    color: var(--cds-text-02);
-    font-size: 0.875rem;
-  }
-
-  .duck-badge {
-    background-color: var(--cds-support-02);
-    color: white;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-left: var(--cds-spacing-03);
   }
 
   .empty-state {
@@ -255,5 +241,17 @@
     margin: 0;
     font-size: 0.875rem;
     color: var(--cds-text-02);
+  }
+
+  .table-skeleton-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Cache le header et la toolbar du DataTableSkeleton */
+  .table-skeleton-wrapper :global(.bx--data-table-header),
+  .table-skeleton-wrapper :global(.bx--table-toolbar) {
+    display: none;
   }
 </style>

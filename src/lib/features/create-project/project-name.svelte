@@ -13,7 +13,7 @@
   import {
     dataTypeSelectionActions,
     dataTypeSelectionStore
-  } from '$lib/features/data-type-selection';
+  } from '$lib/features/commons/components/data-type-selection';
   import { m } from '$lib/paraglide/messages';
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';

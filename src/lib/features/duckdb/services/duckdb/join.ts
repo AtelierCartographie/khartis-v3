@@ -1,15 +1,15 @@
 /**
- * @constant {string} normalize_text_macro
- * @description SQL macro that normalizes a text string by applying NFC normalization,
+ * @constant {string} normalize_text_join_macro
+ * @description SQL macro that normalizes a text string for join operations by applying NFC normalization,
  * stripping accents, converting to lowercase, and trimming whitespace.
+ * Note: Named differently from search's normalize_text to avoid conflict.
  * @example
  * // Example usage within a SQL query:
- * SELECT normalize_text('Héllo Wørld!');
+ * SELECT normalize_text_join('Héllo Wørld!');
  */
-const normalize_text_macro = `CREATE OR REPLACE MACRO normalize_text(string) AS (
-    SELECT
-        nfc_normalize(string).strip_accents().lower().trim()
-    );`;
+const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(string) AS (
+    nfc_normalize(string).strip_accents().lower().trim()
+);`;
 
 /**
  * @constant {string} get_similarity_macro
@@ -19,7 +19,7 @@ const normalize_text_macro = `CREATE OR REPLACE MACRO normalize_text(string) AS 
  */
 const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, join_table) AS TABLE (
   WITH t0 AS (
-    SELECT normalize_text(candidate) as search_term
+    SELECT normalize_text_join(candidate) as search_term
   ), t1 AS (
     FROM t0, query_table(join_table)
     SELECT
@@ -92,7 +92,7 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         "main_id" as raw,
         "main_id" as id,
         "main_id" as variant,
-        normalize_text("main_id") as normalized,
+        normalize_text_join("main_id") as normalized,
         basemap_table as basemap,
         t1.count as basemap_count
     ),
@@ -118,7 +118,7 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         raw,
         id,
         variant,
-        normalize_text(raw) as normalized,
+        normalize_text_join(raw) as normalized,
         basemap_table as basemap,
         t1.count as basemap_count,
       ORDER BY variant, raw
@@ -160,7 +160,7 @@ const apply_join_across_basemaps_macro = `CREATE OR REPLACE MACRO apply_join_acr
 );`;
 
 export const join_macros =
-  normalize_text_macro +
+  normalize_text_join_macro +
   get_similarity_macro +
   analyze_join_quality_macro +
   apply_join_across_basemaps_macro +

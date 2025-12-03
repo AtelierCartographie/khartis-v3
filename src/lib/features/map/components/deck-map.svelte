@@ -88,25 +88,18 @@
 
   type DeckDataRow = Record<string, unknown>;
 
-  interface TooltipEvent {
-    object?: DeckDataRow | null;
-    x: number;
-    y: number;
-    coordinate?: [number, number];
-  }
-
   interface DeckMapProps {
     jsTable: ArrowTable | null;
     userGeoJSON: FeatureCollection | null;
+    onReady?: () => void;
   }
 
-  let { jsTable, userGeoJSON }: DeckMapProps = $props();
+  let { jsTable, userGeoJSON, onReady }: DeckMapProps = $props();
 
   let mapContainer: HTMLDivElement;
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay: MapboxOverlay;
   let isMapLoaded = $state(false);
-  let tooltip: HTMLDivElement;
   let lastPendingGeoTable = $state<string | null>(null);
 
   const activeVisualizations = $derived(
@@ -115,25 +108,6 @@
 
   const defaultVisualization = $derived(activeVisualizations[0]);
   const datasetId = $derived(defaultVisualization?.datasetId);
-
-  const visualizationVariables = $derived.by(() => {
-    if (!defaultVisualization) return [];
-    const variables: string[] = [];
-    const mapping = defaultVisualization.mapping;
-    if (mapping.valueColumn) {
-      variables.push(mapping.valueColumn);
-    }
-    if (mapping.categoryColumn) {
-      variables.push(mapping.categoryColumn);
-    }
-    if (mapping.sizeColumn) {
-      variables.push(mapping.sizeColumn);
-    }
-    if (mapping.colorColumn) {
-      variables.push(mapping.colorColumn);
-    }
-    return variables;
-  });
 
   const memoizedColors = $derived.by(() => {
     const viz = defaultVisualization;
@@ -196,26 +170,6 @@
     return getCategoricalColorMap(categories, viz.classification.colors);
   });
 
-  function formatValue(value: unknown): string {
-    if (value === null || value === undefined) return 'N/A';
-    if (typeof value === 'object') return '';
-    if (typeof value === 'number') {
-      return value.toLocaleString('fr-FR', {
-        maximumFractionDigits: 2
-      });
-    }
-    return String(value);
-  }
-
-  const MAX_SECONDARY_FIELDS = 3;
-  const SECONDARY_PRIORITY_KEYWORDS = ['name', 'nom', 'label', 'iso', 'code'];
-
-  function hideTooltip(): void {
-    if (tooltip) {
-      tooltip.style.display = 'none';
-    }
-  }
-
   // OPTIMIZATION: Extract accessor functions to avoid closure creation on every render
   function createCategoricalColorAccessor(
     categoryColumn: string,
@@ -269,123 +223,415 @@
     };
   }
 
-  function updateTooltip({ object, x, y, coordinate }: TooltipEvent) {
-    if (!tooltip) return;
-
-    if (object) {
-      const {
-        geom: _geom,
-        geometry: _geometry,
-        ...attributes
-      } = object as DeckDataRow;
-
-      const primaryData: Array<[string, unknown]> = [];
-      const secondaryData: Array<[string, unknown]> = [];
-
-      Object.entries(attributes).forEach(([key, value]) => {
-        if (typeof value === 'object') return;
-
-        if (visualizationVariables.includes(key)) {
-          primaryData.push([key, value]);
-        } else if (key !== '__id') {
-          secondaryData.push([key, value]);
-        }
-      });
-
-      let html = '';
-
-      if (primaryData.length > 0) {
-        primaryData.forEach(([key, value]) => {
-          html += `
-            <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 6px;">
-              <span style="color: #525252; font-weight: 600;">${key}:</span>
-              <span style="color: #0f62fe; font-weight: 700; font-size: 14px;">${formatValue(value)}</span>
-            </div>
-          `;
-        });
-        if (secondaryData.length > 0) {
-          html +=
-            '<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>';
-        }
-      }
-
-      if (secondaryData.length > 0) {
-        const prioritized = secondaryData.filter(([key]) =>
-          SECONDARY_PRIORITY_KEYWORDS.some((kw) =>
-            key.toLowerCase().includes(kw)
-          )
-        );
-        const remaining = secondaryData.filter(
-          ([key]) => !prioritized.some(([pk]) => pk === key)
-        );
-        const limitedSecondary = [
-          ...prioritized.slice(0, MAX_SECONDARY_FIELDS),
-          ...remaining.slice(
-            0,
-            Math.max(0, MAX_SECONDARY_FIELDS - prioritized.length)
-          )
-        ];
-
-        limitedSecondary.forEach(([key, value]) => {
-          html += `
-            <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 4px;">
-              <span style="color: #525252; font-weight: 600; font-size: 12px;">${key}:</span>
-              <span style="color: #161616; font-size: 12px;">${formatValue(value)}</span>
-            </div>
-          `;
-        });
-      }
-
-      if (coordinate && coordinate.length >= 2) {
-        html +=
-          '<div style="border-top: 1px solid #e0e0e0; margin: 8px 0;"></div>';
-        html += `
-          <div style="display: flex; justify-content: space-between; gap: 16px; margin-bottom: 4px;">
-            <span style="color: #525252; font-weight: 600; font-size: 11px;">Longitude:</span>
-            <span style="color: #161616; font-size: 11px;">${coordinate[0].toFixed(4)}°</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; gap: 16px;">
-            <span style="color: #525252; font-weight: 600; font-size: 11px;">Latitude:</span>
-            <span style="color: #161616; font-size: 11px;">${coordinate[1].toFixed(4)}°</span>
-          </div>
-        `;
-      }
-
-      tooltip.innerHTML = html;
-      tooltip.style.display = 'block';
-      tooltip.style.left = `${x}px`;
-      tooltip.style.top = `${y}px`;
-    } else {
-      hideTooltip();
+  function formatTooltipValue(value: unknown): string {
+    if (value === null || value === undefined) return '—';
+    if (typeof value === 'bigint') return Number(value).toLocaleString('fr-FR');
+    if (typeof value === 'number') {
+      if (Number.isInteger(value)) return value.toLocaleString('fr-FR');
+      return value.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
     }
+    if (value instanceof Date) return value.toLocaleDateString('fr-FR');
+    const str = String(value);
+    return str.length > 50 ? str.slice(0, 47) + '...' : str;
   }
 
-  function normalizeTooltipCoordinate(
-    coordinate?: number[] | null
-  ): [number, number] | undefined {
+  /**
+   * Check if geometry data is already in GeoJSON format (not GeoArrow nested lists)
+   */
+  function isGeoJsonGeometry(geom: unknown): geom is GeoJSON.Geometry {
+    if (!geom) return false;
+
+    // Handle GeoJSON string (from ST_AsGeoJSON output)
+    if (typeof geom === 'string') {
+      try {
+        const parsed = JSON.parse(geom);
+        return isGeoJsonGeometry(parsed);
+      } catch {
+        return false;
+      }
+    }
+
+    if (typeof geom !== 'object') return false;
+    const g = geom as Record<string, unknown>;
+    // GeoJSON geometry has 'type' and 'coordinates' properties
+    return (
+      typeof g.type === 'string' &&
+      [
+        'Point',
+        'MultiPoint',
+        'LineString',
+        'MultiLineString',
+        'Polygon',
+        'MultiPolygon'
+      ].includes(g.type as string) &&
+      Array.isArray(g.coordinates)
+    );
+  }
+
+  function parseGeoJsonGeometry(geom: unknown): GeoJSON.Geometry | null {
+    if (!geom) return null;
+
+    // Handle GeoJSON string (from ST_AsGeoJSON output)
+    if (typeof geom === 'string') {
+      try {
+        const parsed = JSON.parse(geom);
+        if (isGeoJsonGeometry(parsed)) {
+          return parsed;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    // Handle WKB binary data (Uint8Array)
+    if (geom instanceof Uint8Array) {
+      return parseWkbToGeoJson(geom);
+    }
+
+    // Handle binary data from flechette (may be ArrayBuffer-like or have .buffer property)
+    if (ArrayBuffer.isView(geom)) {
+      const uint8 = new Uint8Array(
+        (geom as ArrayBufferView).buffer,
+        (geom as ArrayBufferView).byteOffset,
+        (geom as ArrayBufferView).byteLength
+      );
+      return parseWkbToGeoJson(uint8);
+    }
+
+    // Handle raw ArrayBuffer
+    if (geom instanceof ArrayBuffer) {
+      return parseWkbToGeoJson(new Uint8Array(geom));
+    }
+
+    // Handle GeoArrow native format (nested arrays for coordinates)
+    // MultiPolygon: [[[[x, y], [x, y], ...], ...], ...]
+    // Polygon: [[[x, y], [x, y], ...], ...]
+    if (Array.isArray(geom)) {
+      return parseGeoArrowNative(geom);
+    }
+
+    // Handle flechette/arrow objects that have toArray() method
     if (
-      Array.isArray(coordinate) &&
-      coordinate.length >= 2 &&
-      typeof coordinate[0] === 'number' &&
-      typeof coordinate[1] === 'number'
+      typeof geom === 'object' &&
+      geom !== null &&
+      typeof (geom as { toArray?: () => unknown }).toArray === 'function'
     ) {
-      return [coordinate[0], coordinate[1]];
+      const arr = (geom as { toArray: () => unknown }).toArray();
+      if (arr instanceof Uint8Array) {
+        return parseWkbToGeoJson(arr);
+      }
+      if (ArrayBuffer.isView(arr)) {
+        const uint8 = new Uint8Array(
+          (arr as ArrayBufferView).buffer,
+          (arr as ArrayBufferView).byteOffset,
+          (arr as ArrayBufferView).byteLength
+        );
+        return parseWkbToGeoJson(uint8);
+      }
+      if (Array.isArray(arr)) {
+        // Check if it's an array of numbers (bytes) - convert to Uint8Array
+        if (arr.length > 0 && typeof arr[0] === 'number') {
+          const uint8 = new Uint8Array(arr as number[]);
+          // Check if it looks like WKB (first byte is 0 or 1)
+          if (uint8.length >= 5 && (uint8[0] === 0 || uint8[0] === 1)) {
+            return parseWkbToGeoJson(uint8);
+          }
+        }
+        return parseGeoArrowNative(arr);
+      }
     }
-    return undefined;
+
+    // Already an object
+    if (isGeoJsonGeometry(geom)) {
+      return geom;
+    }
+
+    return null;
   }
 
-  function handleDeckHover(pickingInfo: {
-    object?: unknown;
-    coordinate?: number[] | null;
-    x?: number;
-    y?: number;
-  }): void {
-    updateTooltip({
-      object: (pickingInfo.object as DeckDataRow) ?? null,
-      x: pickingInfo.x ?? 0,
-      y: pickingInfo.y ?? 0,
-      coordinate: normalizeTooltipCoordinate(pickingInfo.coordinate)
-    });
+  function parseGeoArrowNative(coords: unknown[]): GeoJSON.Geometry | null {
+    if (!Array.isArray(coords) || coords.length === 0) return null;
+
+    // Detect geometry type by nesting depth
+    // Point: [x, y]
+    // LineString: [[x, y], [x, y], ...]
+    // Polygon: [[[x, y], [x, y], ...], ...]
+    // MultiPolygon: [[[[x, y], [x, y], ...], ...], ...]
+
+    const first = coords[0];
+
+    // Check if it's a coordinate pair [x, y]
+    if (typeof first === 'number') {
+      return {
+        type: 'Point',
+        coordinates: coords as [number, number]
+      };
+    }
+
+    if (!Array.isArray(first)) return null;
+
+    const second = first[0];
+
+    // LineString: [[x, y], ...]
+    if (typeof second === 'number') {
+      return {
+        type: 'LineString',
+        coordinates: coords as [number, number][]
+      };
+    }
+
+    if (!Array.isArray(second)) return null;
+
+    const third = second[0];
+
+    // Polygon: [[[x, y], ...], ...]
+    if (typeof third === 'number') {
+      return {
+        type: 'Polygon',
+        coordinates: coords as [number, number][][]
+      };
+    }
+
+    if (!Array.isArray(third)) return null;
+
+    const fourth = third[0];
+
+    // MultiPolygon: [[[[x, y], ...], ...], ...]
+    if (typeof fourth === 'number') {
+      return {
+        type: 'MultiPolygon',
+        coordinates: coords as [number, number][][][]
+      };
+    }
+
+    // Could be MultiLineString or other - check deeper
+    if (Array.isArray(fourth)) {
+      const fifth = fourth[0];
+      if (typeof fifth === 'number') {
+        // This is MultiLineString: [[[x, y], ...], ...]
+        return {
+          type: 'MultiLineString',
+          coordinates: coords as [number, number][][]
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function parseWkbToGeoJson(wkb: Uint8Array): GeoJSON.Geometry | null {
+    if (wkb.length < 5) return null;
+
+    const littleEndian = wkb[0] === 1;
+    const view = new DataView(wkb.buffer, wkb.byteOffset, wkb.byteLength);
+    const geomType = view.getUint32(1, littleEndian);
+
+    let offset = 5;
+
+    const readDouble = (): number => {
+      const val = view.getFloat64(offset, littleEndian);
+      offset += 8;
+      return val;
+    };
+
+    const readUint32 = (): number => {
+      const val = view.getUint32(offset, littleEndian);
+      offset += 4;
+      return val;
+    };
+
+    const readPoint = (): [number, number] => {
+      return [readDouble(), readDouble()];
+    };
+
+    const readLinearRing = (): [number, number][] => {
+      const numPoints = readUint32();
+      const ring: [number, number][] = [];
+      for (let i = 0; i < numPoints; i++) {
+        ring.push(readPoint());
+      }
+      return ring;
+    };
+
+    const readPolygon = (): [number, number][][] => {
+      const numRings = readUint32();
+      const rings: [number, number][][] = [];
+      for (let i = 0; i < numRings; i++) {
+        rings.push(readLinearRing());
+      }
+      return rings;
+    };
+
+    try {
+      switch (geomType) {
+        case 1: // Point
+          return { type: 'Point', coordinates: readPoint() };
+        case 2: {
+          // LineString
+          const numPoints = readUint32();
+          const coords: [number, number][] = [];
+          for (let i = 0; i < numPoints; i++) {
+            coords.push(readPoint());
+          }
+          return { type: 'LineString', coordinates: coords };
+        }
+        case 3: // Polygon
+          return { type: 'Polygon', coordinates: readPolygon() };
+        case 4: {
+          // MultiPoint
+          const numPoints = readUint32();
+          const points: [number, number][] = [];
+          for (let i = 0; i < numPoints; i++) {
+            offset += 5; // Skip WKB header for each point
+            points.push(readPoint());
+          }
+          return { type: 'MultiPoint', coordinates: points };
+        }
+        case 5: {
+          // MultiLineString
+          const numLines = readUint32();
+          const lines: [number, number][][] = [];
+          for (let i = 0; i < numLines; i++) {
+            offset += 5; // Skip WKB header
+            const numPoints = readUint32();
+            const line: [number, number][] = [];
+            for (let j = 0; j < numPoints; j++) {
+              line.push(readPoint());
+            }
+            lines.push(line);
+          }
+          return { type: 'MultiLineString', coordinates: lines };
+        }
+        case 6: {
+          // MultiPolygon
+          const numPolygons = readUint32();
+          const polygons: [number, number][][][] = [];
+          for (let i = 0; i < numPolygons; i++) {
+            offset += 5; // Skip WKB header
+            polygons.push(readPolygon());
+          }
+          return { type: 'MultiPolygon', coordinates: polygons };
+        }
+        default:
+          logger.warn('Unsupported WKB geometry type', LogCategory.MAP, {
+            geomType
+          });
+          return null;
+      }
+    } catch (e) {
+      logger.warn('Failed to parse WKB geometry', LogCategory.MAP, {
+        error: e
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Convert Arrow table to GeoJSON for fallback rendering.
+   * Supports both GeoJSON objects and GeoJSON strings (from ST_AsGeoJSON).
+   */
+  function arrowTableToGeoJSON(
+    table: ArrowTable,
+    geoColumn: string
+  ): FeatureCollection | null {
+    try {
+      const features: FeatureCollection['features'] = [];
+      const geomVector = table.getChild(geoColumn);
+
+      if (!geomVector) {
+        logger.warn('No geometry vector found for fallback', LogCategory.MAP, {
+          geoColumn
+        });
+        return null;
+      }
+
+      // Check first geometry to see if it's parseable GeoJSON
+      const firstGeom = geomVector.get(0);
+      const parsedFirstGeom = parseGeoJsonGeometry(firstGeom);
+      if (!parsedFirstGeom) {
+        // Enhanced logging to understand the geometry format
+        let geomDetails: Record<string, unknown> = {
+          geoColumn,
+          sampleGeomType: typeof firstGeom,
+          isArray: Array.isArray(firstGeom),
+          isString: typeof firstGeom === 'string',
+          isUint8Array: firstGeom instanceof Uint8Array,
+          isArrayBufferView: ArrayBuffer.isView(firstGeom),
+          isArrayBuffer: firstGeom instanceof ArrayBuffer
+        };
+
+        if (firstGeom && typeof firstGeom === 'object') {
+          const obj = firstGeom as Record<string, unknown>;
+          geomDetails = {
+            ...geomDetails,
+            objectKeys: Object.keys(obj).slice(0, 10),
+            hasToArray: typeof obj.toArray === 'function',
+            hasValues: typeof obj.values === 'function',
+            constructorName: obj.constructor?.name
+          };
+
+          // Try to extract data if it has toArray method (flechette vectors)
+          if (typeof obj.toArray === 'function') {
+            try {
+              const arr = (obj as { toArray: () => unknown[] }).toArray();
+              geomDetails.toArrayResult = Array.isArray(arr)
+                ? `Array[${arr.length}]`
+                : typeof arr;
+              if (Array.isArray(arr) && arr.length > 0) {
+                geomDetails.firstElement = typeof arr[0];
+              }
+            } catch {
+              geomDetails.toArrayError = true;
+            }
+          }
+        }
+
+        logger.warn(
+          'Geometry is not in GeoJSON format, cannot use fallback',
+          LogCategory.MAP,
+          geomDetails
+        );
+        return null;
+      }
+
+      for (let i = 0; i < table.numRows; i++) {
+        const properties: Record<string, unknown> = {};
+
+        for (const field of table.schema.fields) {
+          if (
+            field.name === geoColumn ||
+            field.name === 'geom' ||
+            field.name === 'geometry'
+          )
+            continue;
+          const col = table.getChild(field.name);
+          if (col) {
+            const val = col.get(i);
+            properties[field.name] =
+              typeof val === 'bigint' ? Number(val) : val;
+          }
+        }
+
+        const geom = geomVector.get(i);
+        const parsedGeom = parseGeoJsonGeometry(geom);
+        if (parsedGeom) {
+          features.push({
+            type: 'Feature',
+            properties,
+            geometry: parsedGeom
+          });
+        }
+      }
+
+      return { type: 'FeatureCollection', features };
+    } catch (error) {
+      logger.error(
+        'Failed to convert Arrow table to GeoJSON',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
   }
 
   function createDeckLayers(jsTable: ArrowTable): Layer<DeckDataRow>[] {
@@ -497,18 +743,6 @@
         // falls through
 
         case 'MULTIPOINT': {
-          const pointVector = hasMatchingGeoExtension
-            ? null
-            : jsTable.getChild(geoColumn);
-          if (!hasMatchingGeoExtension && !pointVector) {
-            logger.error(
-              'Geometry column vector missing for point layer',
-              LogCategory.MAP,
-              { geoColumn }
-            );
-            return [];
-          }
-
           const useProportionalSymbols =
             viz && shouldApplyProportionalSymbols(viz);
           const useCategoricalColor = viz && shouldApplyCategorical(viz);
@@ -553,7 +787,7 @@
             lineWidthUnits: 'pixels',
             lineWidthScale: strokeWidth / 3,
             pickable: true,
-            autoHighlight: true,
+            autoHighlight: false,
             // OPTIMIZATION: Add updateTriggers to tell Deck.gl when to recompute accessors
             updateTriggers: {
               getFillColor: [
@@ -575,10 +809,6 @@
             }
           };
 
-          if (pointVector) {
-            scatterplotProps.getPosition = pointVector;
-          }
-
           deckLayer = new geodecklayers.GeoArrowScatterplotLayer(
             scatterplotProps
           );
@@ -589,21 +819,10 @@
         // falls through
 
         case 'MULTILINESTRING': {
-          const pathVector = hasMatchingGeoExtension
-            ? null
-            : jsTable.getChild(geoColumn);
-          if (!hasMatchingGeoExtension && !pathVector) {
-            logger.error(
-              'Geometry column vector missing for path layer',
-              LogCategory.MAP,
-              { geoColumn }
-            );
-            return [];
-          }
-
           // OPTIMIZATION: Use stable, deterministic layer ID
           const layerId = `line-layer-${datasetId ?? 'default'}`;
 
+          // Let the library auto-discover geometry from the table
           const pathProps: ConstructorParameters<
             typeof geodecklayers.GeoArrowPathLayer
           >[0] = {
@@ -616,17 +835,13 @@
             widthScale: 1 / 4,
             capRounded: true,
             pickable: true,
-            autoHighlight: true,
+            autoHighlight: false,
             // OPTIMIZATION: Add updateTriggers
             updateTriggers: {
               getColor: [fillColor],
               getWidth: [strokeWidth]
             }
           };
-
-          if (pathVector) {
-            pathProps.getPath = pathVector;
-          }
 
           deckLayer = new geodecklayers.GeoArrowPathLayer(pathProps);
           break;
@@ -636,56 +851,98 @@
         // falls through
 
         case 'MULTIPOLYGON': {
-          const polygonVector = hasMatchingGeoExtension
-            ? null
-            : jsTable.getChild(geoColumn);
-          if (!hasMatchingGeoExtension && !polygonVector) {
-            logger.error(
-              'Geometry column vector missing for polygon layer',
-              LogCategory.MAP,
-              { geoColumn }
-            );
-            return [];
-          }
-
-          // Additional validation: check if geometry data is compatible
-          if (!hasMatchingGeoExtension) {
-            logger.warn(
-              'Rendering polygon layer without proper GeoArrow extension metadata - using fallback extraction',
-              LogCategory.MAP,
-              {
-                geometryType: resolvedGeometryType,
-                geoColumn,
-                hasVector: !!polygonVector
-              }
-            );
-          }
+          // Debug: Log detailed geometry metadata for troubleshooting
+          const geometryFieldDebug = jsTable.schema.fields.find(
+            (f) => f.name === geoColumn
+          );
+          logger.info(
+            'Creating polygon layer - geometry details',
+            LogCategory.MAP,
+            {
+              geoColumn,
+              hasMatchingGeoExtension,
+              arrowExtension,
+              expectedExtension,
+              geometryType: resolvedGeometryType,
+              fieldMetadata: geometryFieldDebug?.metadata
+                ? Object.fromEntries(geometryFieldDebug.metadata.entries())
+                : null,
+              fieldType: geometryFieldDebug?.type?.toString()
+            }
+          );
 
           const useChoropleth = viz && shouldApplyChoropleth(viz);
 
           // OPTIMIZATION: Use stable, deterministic layer ID
           const layerId = `polygon-layer-${datasetId ?? 'default'}`;
 
-          const polygonProps: ConstructorParameters<
-            typeof geodecklayers.GeoArrowPolygonLayer
-          >[0] = {
-            id: layerId,
-            data: jsTable,
-            // OPTIMIZATION: Use extracted accessor function
-            getFillColor: useChoropleth
-              ? createChoroplethColorAccessor(
-                  viz.mapping.valueColumn!,
+          // Check if we have valid geometry extension metadata
+          const isNativeGeoArrow =
+            arrowExtension &&
+            (arrowExtension === 'geoarrow.polygon' ||
+              arrowExtension === 'geoarrow.multipolygon');
+
+          const isGeoJsonEncoded = arrowExtension === 'geojson';
+          const isWkbEncoded = arrowExtension === 'ogc.wkb';
+
+          if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
+            // Without proper extension metadata, the library cannot render the geometry
+            logger.info(
+              'Skipping polygon layer - missing geometry extension metadata',
+              LogCategory.MAP,
+              {
+                geoColumn,
+                arrowExtension,
+                note: 'Polygons require proper geometry metadata to render'
+              }
+            );
+            return [];
+          }
+
+          // Always use GeoJsonLayer for polygons - better tooltip support
+          // Supports: GeoJSON strings, WKB binary, and native GeoArrow (which is WKB under the hood)
+          const geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+          if (!geojsonData) {
+            logger.warn(
+              'Failed to convert geometry to GeoJSON',
+              LogCategory.MAP,
+              { encoding: arrowExtension }
+            );
+            return [];
+          }
+
+          logger.info('Using GeoJsonLayer for polygons', LogCategory.MAP, {
+            encoding: arrowExtension,
+            featureCount: geojsonData.features.length,
+            hasVisualization: Boolean(viz)
+          });
+
+          // Build fill color accessor for choropleth if needed
+          const geoJsonFillColor = useChoropleth
+            ? (feature: { properties?: Record<string, unknown> }) => {
+                const value = feature.properties?.[viz.mapping.valueColumn!];
+                if (value === null || value === undefined) return fillColor;
+                const numValue =
+                  typeof value === 'number' ? value : parseFloat(String(value));
+                if (isNaN(numValue)) return fillColor;
+                return getColorForValue(
+                  numValue,
                   viz.classification!.breaks!,
                   viz.classification!.colors!
-                )
-              : fillColor,
+                );
+              }
+            : fillColor;
+
+          deckLayer = new GeoJsonLayer({
+            id: layerId,
+            data: geojsonData,
+            getFillColor: geoJsonFillColor,
             getLineColor: withOpacity(strokeColor, strokeOpacity),
             opacity: fillOpacity,
             lineWidthUnits: 'pixels',
             lineWidthScale: strokeWidth / 4,
             pickable: true,
-            autoHighlight: true,
-            // OPTIMIZATION: Add updateTriggers
+            autoHighlight: false,
             updateTriggers: {
               getFillColor: [
                 useChoropleth,
@@ -695,17 +952,8 @@
                 fillColor
               ],
               getLineColor: [strokeColor, strokeOpacity]
-            },
-            onHover: (pickingInfo, _event) => {
-              handleDeckHover(pickingInfo);
             }
-          };
-
-          if (polygonVector) {
-            polygonProps.getPolygon = polygonVector;
-          }
-
-          deckLayer = new geodecklayers.GeoArrowPolygonLayer(polygonProps);
+          });
           break;
         }
 
@@ -748,15 +996,12 @@
       getLineWidth: strokeWidth,
       lineWidthMinPixels: strokeWidth,
       pickable: true,
-      autoHighlight: true,
+      autoHighlight: false,
       // OPTIMIZATION: Add updateTriggers
       updateTriggers: {
         getFillColor: [fillColor, fillOpacity],
         getLineColor: [strokeColor],
         getLineWidth: [strokeWidth]
-      },
-      onHover: (pickingInfo, _event) => {
-        handleDeckHover(pickingInfo);
       }
     });
 
@@ -982,22 +1227,6 @@
 
   onMount(() => {
     logger.info('Mounting Deck.gl map component', LogCategory.MAP);
-    tooltip = document.createElement('div');
-    tooltip.style.position = 'absolute';
-    tooltip.style.zIndex = '1';
-    tooltip.style.pointerEvents = 'none';
-    tooltip.style.display = 'none';
-    tooltip.style.background = 'white';
-    tooltip.style.border = '1px solid #161616';
-    tooltip.style.borderRadius = '4px';
-    tooltip.style.padding = '12px';
-    tooltip.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.25)';
-    tooltip.style.fontSize = '13px';
-    tooltip.style.lineHeight = '1.4';
-    tooltip.classList.add('deck-tooltip');
-    document.body.appendChild(tooltip);
-    const handleMouseLeave = () => hideTooltip();
-    mapContainer?.addEventListener('mouseleave', handleMouseLeave);
 
     map = new maplibregl.Map({
       container: mapContainer,
@@ -1019,7 +1248,104 @@
     map.on('load', () => {
       deckOverlay = new MapboxOverlay({
         interleaved: true,
-        layers: []
+        layers: [],
+        getTooltip: (info: {
+          object?: unknown;
+          index?: number;
+          layer?: { id?: string; props?: { data?: unknown } } | null;
+          picked?: boolean;
+        }) => {
+          if (!info.picked || info.index === undefined || info.index === -1) {
+            return null;
+          }
+
+          const rowIndex = info.index;
+          const entries: Array<{ key: string; value: string }> = [];
+
+          // Case 1: GeoJSON layer (including fallback polygon layers)
+          // Check if info.object has properties (GeoJSON feature format)
+          const isGeoJsonFeature =
+            info.object &&
+            typeof info.object === 'object' &&
+            'properties' in (info.object as Record<string, unknown>);
+
+          if (isGeoJsonFeature) {
+            const feature = info.object as {
+              properties?: Record<string, unknown>;
+            };
+            if (feature.properties) {
+              for (const key of Object.keys(feature.properties)) {
+                if (key === 'geom' || key === 'geometry' || key === '__id')
+                  continue;
+                const val = feature.properties[key];
+                entries.push({
+                  key,
+                  value: formatTooltipValue(val)
+                });
+              }
+            }
+          }
+          // Case 2: GeoArrow layer - access data from layer props (not closure)
+          else {
+            const layerData = info.layer?.props?.data as ArrowTable | null;
+            if (
+              layerData &&
+              'schema' in layerData &&
+              rowIndex >= 0 &&
+              rowIndex < layerData.numRows
+            ) {
+              for (const field of layerData.schema.fields) {
+                const colName = field.name;
+                if (
+                  colName === 'geom' ||
+                  colName === 'geometry' ||
+                  colName === '__id'
+                )
+                  continue;
+                const column = layerData.getChild(colName);
+                if (column) {
+                  const val = column.get(rowIndex);
+                  entries.push({
+                    key: colName,
+                    value: formatTooltipValue(val)
+                  });
+                }
+              }
+            }
+          }
+
+          if (entries.length === 0) return null;
+
+          // Build HTML for native Deck.gl tooltip
+          const maxEntries = 10;
+          const visibleEntries = entries.slice(0, maxEntries);
+          const hiddenCount = Math.max(0, entries.length - maxEntries);
+
+          let html =
+            '<div style="display:flex;flex-direction:column;gap:4px;">';
+          for (const entry of visibleEntries) {
+            html += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${entry.key}</span><span style="font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${entry.value}</span></div>`;
+          }
+          if (hiddenCount > 0) {
+            html += `<div style="color:#525252;font-style:italic;font-size:11px;margin-top:4px;">+${hiddenCount} more...</div>`;
+          }
+          html += '</div>';
+
+          return {
+            html,
+            style: {
+              backgroundColor: 'rgba(255, 255, 255, 0.95)',
+              color: '#161616',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontFamily: 'IBM Plex Sans, sans-serif',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+              border: '1px solid #8d8d8d',
+              maxWidth: '300px'
+            }
+          };
+        }
       } as DeckProps);
 
       if (map) {
@@ -1044,6 +1370,13 @@
       } else if (shouldRestorePosition) {
         setTimeout(() => restoreMapPosition(), 100);
       }
+
+      // Signal that the map is ready after the first render frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          onReady?.();
+        });
+      });
     });
 
     map.on('zoom', () => {
@@ -1064,10 +1397,6 @@
     });
 
     return () => {
-      mapContainer?.removeEventListener('mouseleave', handleMouseLeave);
-      if (tooltip && document.body.contains(tooltip)) {
-        document.body.removeChild(tooltip);
-      }
       if (map) {
         map.remove();
       }
@@ -1100,10 +1429,9 @@
     display: none;
   }
 
+  /* Deck.gl tooltip styling - ensure visibility and proper z-index */
   :global(.deck-tooltip) {
-    width: 280px;
-    max-width: 280px;
-    max-height: 220px;
-    overflow-y: auto;
+    z-index: 10000 !important;
+    pointer-events: none !important;
   }
 </style>
