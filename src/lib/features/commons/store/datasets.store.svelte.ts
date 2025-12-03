@@ -5,6 +5,7 @@ import { LogCategory, logger } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
 import { ProcessingSemaphore } from '../utils/processing-semaphore';
+import { projectStore } from './project.store.svelte';
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -419,7 +420,33 @@ class DatasetsStore {
     );
   }
 
-  renameDataset(datasetId: string, newName: string): boolean {
+  renameDatasetColumn(
+    datasetId: string,
+    oldName: string,
+    newName: string
+  ): void {
+    this._state.datasets = this._state.datasets.map((d) => {
+      if (d.id !== datasetId) return d;
+
+      const updatedColumns = d.columns.map((col) =>
+        col.name === oldName ? { ...col, name: newName } : col
+      );
+
+      const updatedAnalysisColumns = d.analysis?.columns?.map((col) =>
+        col.name === oldName ? { ...col, name: newName } : col
+      );
+
+      return {
+        ...d,
+        columns: updatedColumns,
+        analysis: d.analysis
+          ? { ...d.analysis, columns: updatedAnalysisColumns ?? [] }
+          : undefined
+      };
+    });
+  }
+
+  async renameDataset(datasetId: string, newName: string): Promise<boolean> {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     if (!dataset) {
       return false;
@@ -431,6 +458,11 @@ class DatasetsStore {
     }
 
     dataset.name = sanitizedName;
+
+    if (dataset.sourceFileId) {
+      await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
+    }
+
     return true;
   }
 

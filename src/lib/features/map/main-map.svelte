@@ -1,15 +1,19 @@
 <script lang="ts">
-  import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import { onMount } from 'svelte';
-  import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import type { DatasetResult } from '$lib/features/data-pipeline';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+  import { SkeletonPlaceholder } from 'carbon-components-svelte';
+  import type { FeatureCollection } from 'geojson';
+  import { onMount } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
+  import { fade } from 'svelte/transition';
+  import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
   import DeckMap from './components/deck-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
-  import type { FeatureCollection } from 'geojson';
-  import type { DatasetResult } from '$lib/features/data-pipeline';
 
   let isInitializing = $state(true);
+  let isMapReady = $state(false);
   let displayTable = $state<ArrowTable | null>(null);
   let displayGeoJSON = $state<FeatureCollection | null>(null);
 
@@ -150,43 +154,113 @@
       await loadFallbackBasemap();
     }
 
-    logger.success('Main map initialized', LogCategory.MAP, {
+    logger.success('Main map data ready', LogCategory.MAP, {
       durationMs: (performance.now() - start).toFixed(2)
     });
     isInitializing = false;
   });
+
+  function handleMapReady() {
+    logger.success('Map fully rendered', LogCategory.MAP);
+    isMapReady = true;
+  }
 </script>
 
 <div class="map-container">
-  {#if isInitializing}
-    <div class="loading-state">Initializing map...</div>
-  {:else if displayTable}
-    <DeckMap jsTable={displayTable} userGeoJSON={null} />
-  {:else if displayGeoJSON}
-    <DeckMap jsTable={null} userGeoJSON={displayGeoJSON} />
-  {:else}
-    <div class="empty-state">No data loaded</div>
+  <!-- Skeleton loader - stays visible until map is fully rendered -->
+  {#if !isMapReady}
+    <div class="skeleton-loader" out:fade={{ duration: 300, easing: cubicOut }}>
+      <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+    </div>
+  {/if}
+
+  <!-- Map wrapper - rendered once data is ready, visible when map is ready -->
+  {#if !isInitializing && displayTable}
+    <div class="map-wrapper" class:visible={isMapReady}>
+      <DeckMap
+        jsTable={displayTable}
+        userGeoJSON={null}
+        onReady={handleMapReady}
+      />
+    </div>
+  {:else if !isInitializing && displayGeoJSON}
+    <div class="map-wrapper" class:visible={isMapReady}>
+      <DeckMap
+        jsTable={null}
+        userGeoJSON={displayGeoJSON}
+        onReady={handleMapReady}
+      />
+    </div>
+  {:else if !isInitializing}
+    <div class="empty-state" in:fade={{ duration: 300 }}>
+      <div class="empty-icon">
+        <svg
+          viewBox="0 0 24 24"
+          width="48"
+          height="48"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+        >
+          <path
+            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+          />
+        </svg>
+      </div>
+      <span>Aucune donnee chargee</span>
+    </div>
   {/if}
 </div>
 
 <style>
   .map-container {
     width: 100%;
-    max-height: 500px;
-    height: 500px;
     background-color: white;
     position: relative;
-    overflow: hidden;
+    border-radius: 4px;
   }
 
-  .loading-state,
+  .map-wrapper {
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transform: scale(0.98);
+    transition:
+      opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .map-wrapper.visible {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .skeleton-loader {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    overflow: hidden;
+    border-radius: 4px;
+  }
+
+  .skeleton-loader :global(.bx--skeleton__placeholder) {
+    width: 100%;
+    height: 100%;
+  }
+
   .empty-state {
     width: 100%;
-    height: 500px;
+    height: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: var(--cds-text-secondary);
-    background-color: white;
+    gap: 16px;
+    color: var(--cds-text-secondary, #525252);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  }
+
+  .empty-icon {
+    opacity: 0.5;
   }
 </style>

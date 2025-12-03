@@ -1,22 +1,15 @@
 /**
  * Hook pour la gestion de la recherche et du remplacement dans le tableau
- * Permet de rechercher dans toutes les colonnes et de remplacer des valeurs
+ * Utilise DuckDB pour la recherche fuzzy avec Jaro-Winkler similarity
  */
 
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { logger, LogCategory } from '../../../utils/logger';
 import { debounce } from '../../../utils/debounce.utils';
-import type { TableRow } from '../types';
 
 export interface UseTableSearchProps {
-  /** Données du tableau */
-  tableData: TableRow[] | (() => TableRow[]);
-
-  /** Indices des lignes affichées */
-  rows: number[] | (() => number[]);
-
-  /** Nom de la table DuckDB (pour le remplacement) */
-  tableName?: string | (() => string | undefined);
+  /** Nom de la table DuckDB (requis pour la recherche) */
+  tableName: string | (() => string | undefined);
 
   /**
    * Callback pour naviguer vers une ligne spécifique
@@ -28,6 +21,16 @@ export interface UseTableSearchProps {
    * Callback après un remplacement (pour recharger les données)
    */
   onReplace: () => Promise<void>;
+
+  /**
+   * Seuil de similarité Jaro-Winkler (0-1, default: 0.6)
+   */
+  threshold?: number;
+
+  /**
+   * Colonne spécifique à rechercher (optionnel, null = toutes les colonnes)
+   */
+  column?: string | null | (() => string | null | undefined);
 }
 
 export interface UseTableSearchReturn {
@@ -43,6 +46,9 @@ export interface UseTableSearchReturn {
   /** Index actuel dans les résultats de recherche */
   currentSearchIndex: number;
 
+  /** Indique si une recherche est en cours */
+  isSearching: boolean;
+
   /**
    * Définit la requête de recherche
    */
@@ -54,9 +60,9 @@ export interface UseTableSearchReturn {
   setReplaceValue: (value: string) => void;
 
   /**
-   * Effectue la recherche dans les données
+   * Effectue la recherche dans les données via DuckDB
    */
-  performSearch: () => void;
+  performSearch: () => Promise<void>;
 
   /**
    * Navigue vers le résultat suivant
@@ -88,19 +94,20 @@ function getValue<T>(prop: T | (() => T)): T {
 }
 
 /**
- * Hook de gestion de la recherche et du remplacement
+ * Hook de gestion de la recherche et du remplacement via DuckDB
+ *
+ * Utilise la recherche fuzzy avec Jaro-Winkler similarity et LIKE fallback.
  *
  * @example
  * ```typescript
  * const search = useTableSearch({
- *   tableData: () => tableData.tableData,
- *   rows: () => virtualScroll.rows,
  *   tableName: 'my_table',
  *   onNavigate: virtualScroll.goToId,
  *   onReplace: async () => {
  *     await tableData.loadColumnsInfo();
  *     await virtualScroll.initializeRows(0);
- *   }
+ *   },
+ *   threshold: 0.6
  * });
  *
  * // Dans le template
@@ -115,9 +122,12 @@ export function useTableSearch(
   let replaceValue = $state<string>('');
   let searchResults = $state<number[]>([]);
   let currentSearchIndex = $state<number>(0);
+  let isSearching = $state<boolean>(false);
+
+  const threshold = props.threshold ?? 0.6;
 
   /**
-   * Effectue la recherche (debounced pour performance)
+   * Effectue la recherche via DuckDB (debounced pour performance)
    */
   const debouncedSearch = debounce(() => {
     performSearch();
@@ -139,43 +149,44 @@ export function useTableSearch(
   }
 
   /**
-   * Effectue une recherche case-insensitive dans toutes les colonnes
+   * Effectue une recherche fuzzy via DuckDB
+   * Utilise Jaro-Winkler similarity + LIKE fallback
    */
-  function performSearch(): void {
-    if (!searchQuery.trim()) {
+  async function performSearch(): Promise<void> {
+    const tableName = getValue(props.tableName);
+    const column = props.column ? getValue(props.column) : undefined;
+
+    if (!searchQuery.trim() || !tableName) {
       searchResults = [];
       currentSearchIndex = 0;
       return;
     }
 
-    const tableData = getValue(props.tableData);
-    const rows = getValue(props.rows);
-    const query = searchQuery.toLowerCase();
-    const results: number[] = [];
+    isSearching = true;
 
-    // Rechercher dans chaque ligne
-    tableData.forEach((row, index) => {
-      const rowIndex = rows[index];
-      const values = Object.values(row);
+    try {
+      const results = await duckDBOrchestrator.searchInTable(
+        tableName,
+        searchQuery,
+        {
+          threshold,
+          column: column ?? undefined
+        }
+      );
 
-      // Vérifier si au moins une valeur contient la recherche
-      const hasMatch = values.some((value) => {
-        if (value === null || value === undefined) return false;
-        return String(value).toLowerCase().includes(query);
-      });
+      searchResults = results;
+      currentSearchIndex = results.length > 0 ? 0 : -1;
 
-      if (hasMatch) {
-        // Ajouter l'ID de la ligne (1-based)
-        results.push(rowIndex + 1);
+      // Naviguer vers le premier résultat
+      if (results.length > 0) {
+        props.onNavigate(results[0]);
       }
-    });
-
-    searchResults = results;
-    currentSearchIndex = 0;
-
-    // Naviguer vers le premier résultat
-    if (results.length > 0) {
-      props.onNavigate(results[0]);
+    } catch (err) {
+      logger.error('Error searching in table', LogCategory.UI, err);
+      searchResults = [];
+      currentSearchIndex = 0;
+    } finally {
+      isSearching = false;
     }
   }
 
@@ -216,6 +227,7 @@ export function useTableSearch(
    */
   async function handleReplace(): Promise<void> {
     const tableName = getValue(props.tableName);
+    const column = props.column ? getValue(props.column) : '';
 
     if (!tableName || !searchQuery || !replaceValue) {
       return;
@@ -225,7 +237,7 @@ export function useTableSearch(
       // Effectuer le remplacement dans DuckDB
       await duckDBOrchestrator.replaceInColumn(
         tableName,
-        '', // Colonne vide = toutes les colonnes
+        column ?? '', // Colonne vide = toutes les colonnes
         searchQuery,
         replaceValue
       );
@@ -252,6 +264,9 @@ export function useTableSearch(
     },
     get currentSearchIndex() {
       return currentSearchIndex;
+    },
+    get isSearching() {
+      return isSearching;
     },
     setSearchQuery,
     setReplaceValue,

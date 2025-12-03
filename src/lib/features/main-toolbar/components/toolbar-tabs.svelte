@@ -14,6 +14,71 @@
   let tabsScroller: HTMLDivElement | null = $state(null);
   let lastSourceFilesCount = $state(0);
 
+  let editingTabId = $state<string | null>(null);
+  let editedName = $state('');
+  let nameInputRef = $state<HTMLInputElement | null>(null);
+
+  function startEditingTab(tabId: string, currentName: string) {
+    const fileInfo = getFileInfo(currentName);
+    editedName = fileInfo.name;
+    editingTabId = tabId;
+  }
+
+  async function saveTabRename() {
+    if (!editingTabId || !editedName.trim()) {
+      cancelTabEditing();
+      return;
+    }
+
+    const currentTab = globalState.dataButtons.find(
+      (b) => b.id === editingTabId
+    );
+    if (currentTab) {
+      const fileInfo = getFileInfo(currentTab.label);
+      const newFullName = fileInfo.extension
+        ? `${editedName.trim()}.${fileInfo.extension.toLowerCase()}`
+        : editedName.trim();
+      await projectStore.renameFile(editingTabId, newFullName);
+    }
+    editingTabId = null;
+    editedName = '';
+  }
+
+  function cancelTabEditing() {
+    editingTabId = null;
+    editedName = '';
+  }
+
+  function handleTabKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveTabRename();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelTabEditing();
+    }
+  }
+
+  function handleTabBlur() {
+    if (editedName.trim()) {
+      saveTabRename();
+    } else {
+      cancelTabEditing();
+    }
+  }
+
+  function handleTabDoubleClick(tabId: string, label: string, event: Event) {
+    event.stopPropagation();
+    startEditingTab(tabId, label);
+  }
+
+  $effect(() => {
+    if (editingTabId && nameInputRef) {
+      nameInputRef.focus();
+      nameInputRef.select();
+    }
+  });
+
   $effect(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
@@ -137,7 +202,28 @@
           title={dataButton.label}
         >
           <div class="tab-content">
-            <span class="tab-label">{truncateFileName(fileInfo.name)}</span>
+            {#if editingTabId === dataButton.id}
+              <!-- svelte-ignore a11y_autofocus -->
+              <input
+                type="text"
+                class="tab-name-input"
+                bind:value={editedName}
+                bind:this={nameInputRef}
+                onkeydown={handleTabKeyPress}
+                onblur={handleTabBlur}
+                onclick={(e: MouseEvent) => e.stopPropagation()}
+              />
+            {:else}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <span
+                class="tab-label"
+                ondblclick={(e: MouseEvent) =>
+                  handleTabDoubleClick(dataButton.id, dataButton.label, e)}
+                title="Double-cliquer pour renommer"
+              >
+                {truncateFileName(fileInfo.name)}
+              </span>
+            {/if}
             {#if fileInfo.extension}
               <Tag type={getExtensionColor(fileInfo.extension)} size="sm">
                 {fileInfo.extension}
@@ -253,6 +339,33 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 120px;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+  }
+
+  .tab-label:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .tab-name-input {
+    width: 100px;
+    max-width: 120px;
+    padding: 2px 4px;
+    font-size: inherit;
+    font-family: inherit;
+    font-weight: inherit;
+    color: var(--cds-text-on-color);
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .tab-name-input:focus {
+    outline: none;
+    box-shadow: none;
   }
 
   .tab-content :global(.bx--tag) {

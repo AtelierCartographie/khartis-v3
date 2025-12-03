@@ -128,8 +128,14 @@ export function totalEntities() {
 }
 
 export function isDataReady() {
+  const geo = dataTabState.geolocation;
+
+  if (geo.geoReference === 'coordinates') {
+    return !!geo.latitudeColumn && !!geo.longitudeColumn;
+  }
+
   return (
-    dataTabState.geolocation.linkedVariable !== null &&
+    geo.linkedVariable !== null &&
     dataTabState.basemapJoin.selectedBasemap !== ''
   );
 }

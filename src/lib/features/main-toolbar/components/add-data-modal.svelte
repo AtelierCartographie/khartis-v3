@@ -3,8 +3,15 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
-  import { globalActions } from '$lib/features/commons/store/global.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import {
+    dataTypeSelectionActions,
+    dataTypeSelectionStore
+  } from '$lib/features/commons/components/data-type-selection';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import { Modal } from 'carbon-components-svelte';
@@ -59,6 +66,15 @@
         if (lastFile?.id) {
           globalActions.selectDataButton(lastFile.id);
         }
+
+        // Check if we need to show data type selection modal
+        const shouldShowDataTypeModal =
+          dataTypeSelectionStore.shouldShowModal(validFiles);
+        if (shouldShowDataTypeModal) {
+          dataTypeSelectionActions.initializeFromFiles(validFiles);
+          globalState.isDataTypeSelectionModalOpen = true;
+        }
+
         closeModal();
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);
