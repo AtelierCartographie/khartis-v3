@@ -133,7 +133,12 @@
     </div>
 
     <div class="field-group">
-      <Select size="sm" labelText={m.search_source()} bind:selected={searchSource} on:change={handleSearch}>
+      <Select
+        size="sm"
+        labelText={m.search_source()}
+        bind:selected={searchSource}
+        on:change={handleSearch}
+      >
         <SelectItem value="all" text={m.search_all_variables()} />
         {#each columns as column (column.name)}
           <SelectItem value={column.name} text={column.name} />

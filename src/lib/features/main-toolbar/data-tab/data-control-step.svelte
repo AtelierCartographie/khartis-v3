@@ -43,8 +43,14 @@
   let resetModalOpen = $state(false);
   let isEditingName = $state(false);
   let editedName = $state('');
-  let typesNotificationDismissed = $state(false);
-  let missingValuesNotificationDismissed = $state(false);
+  let warningsNotificationDismissed = $state(false);
+
+  // Check if dataset has columns with null values
+  const hasNullableColumns = $derived(
+    processedDataset
+      ? processedDataset.columns.some((col) => col.nullable === true)
+      : false
+  );
 
   function startEditing() {
     if (!selectedDataset) return;
@@ -189,25 +195,14 @@
     </div>
   {/if}
 
-  {#if selectedDataset && !typesNotificationDismissed}
-    <InlineNotification
-      title="Types des variables"
-      subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
-      kind="info"
-      lowContrast
-      hideCloseButton={false}
-      on:close={() => (typesNotificationDismissed = true)}
-    />
-  {/if}
-
-  {#if processedDataset && processedDataset.columns.some((col) => col.nullable) && !missingValuesNotificationDismissed}
+  {#if hasNullableColumns && !warningsNotificationDismissed}
     <InlineNotification
       title="Attention"
-      subtitle="Plusieurs variables sont concernées par des avertissements indiqués dans l'en-tête du tableau."
+      subtitle="Plusieurs variables contiennent des valeurs manquantes. Vérifier les avertissements dans l'en-tête du tableau."
       kind="warning"
       lowContrast
       hideCloseButton={false}
-      on:close={() => (missingValuesNotificationDismissed = true)}
+      on:close={() => (warningsNotificationDismissed = true)}
     />
   {/if}
 </section>
