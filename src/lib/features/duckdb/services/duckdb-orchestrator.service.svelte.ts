@@ -1045,9 +1045,8 @@ class DuckDBOrchestratorService {
 
     try {
       // 1. Ensure basemap geometry is loaded in DuckDB
-      const geometryTable = await basemapService.loadGeometryIntoDuckDB(
-        basemapId
-      );
+      const geometryTable =
+        await basemapService.loadGeometryIntoDuckDB(basemapId);
 
       // 2. Create a joined view with dataset attributes + basemap geometry
       const joinedView = `joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;

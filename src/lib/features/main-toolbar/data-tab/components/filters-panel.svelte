@@ -178,7 +178,11 @@
 
     <form class="filter-form" onsubmit={addFilter}>
       <div class="field-group">
-        <Select size="sm" labelText={m.filter_column()} bind:selected={newFilter.column}>
+        <Select
+          size="sm"
+          labelText={m.filter_column()}
+          bind:selected={newFilter.column}
+        >
           <SelectItem value="" text={m.filter_select_column()} />
           {#each columns as column (column.name)}
             <SelectItem value={column.name} text={column.name} />
@@ -187,7 +191,11 @@
       </div>
 
       <div class="field-group">
-        <Select size="sm" labelText={m.filter_operator()} bind:selected={newFilter.operator}>
+        <Select
+          size="sm"
+          labelText={m.filter_operator()}
+          bind:selected={newFilter.operator}
+        >
           {#each FILTER_OPERATORS as op (op.value)}
             <SelectItem value={op.value} text={op.label} />
           {/each}
@@ -196,7 +204,12 @@
 
       {#if currentOperator.requiresRange}
         <div class="field-group">
-          <TextInput size="sm" labelText={m.filter_value_min()} placeholder="Min" bind:value={newFilter.value} />
+          <TextInput
+            size="sm"
+            labelText={m.filter_value_min()}
+            placeholder="Min"
+            bind:value={newFilter.value}
+          />
         </div>
         <div class="field-group">
           <TextInput
