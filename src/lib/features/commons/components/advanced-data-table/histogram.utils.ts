@@ -1,0 +1,89 @@
+import {
+  create_summary_plot,
+  type CategoricalHistogram,
+  type NumericHistogram,
+  type SummaryPlotData
+} from '$lib/features/duckdb/services/duckdb/summary-plot';
+import type { AnalysisResult } from '$lib/features/duckdb';
+import { LogCategory, logger } from '../../utils/logger';
+
+type HistogramLike = NumericHistogram | CategoricalHistogram;
+
+export function isHistogram(value: unknown): value is HistogramLike {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as HistogramLike).toArray === 'function'
+  );
+}
+
+export function isNumericHistogram(value: unknown): value is NumericHistogram {
+  if (!isHistogram(value)) return false;
+  const sample = value.toArray()[0];
+  return sample === undefined || 'bin' in sample;
+}
+
+export function isCategoricalHistogram(
+  value: unknown
+): value is CategoricalHistogram {
+  if (!isHistogram(value)) return false;
+  const sample = value.toArray()[0];
+  return sample === undefined || 'category' in sample;
+}
+
+const DEFAULT_PLOT_OPTIONS = {
+  width: 150,
+  height: 48,
+  main_color: '#a56eff',
+  nulls_color: '#ffd666',
+  bg_color: '#393939'
+};
+
+type PlotElement = ReturnType<typeof create_summary_plot>;
+
+export function getPlotForColumn(
+  columnName: string,
+  columnAnalysis: Map<string, AnalysisResult>
+): PlotElement | null {
+  const analysis = columnAnalysis.get(columnName);
+  if (!analysis) {
+    return null;
+  }
+
+  const histogramValue = analysis.histogram;
+
+  const renderPlot = (summaryData: SummaryPlotData): PlotElement | null => {
+    try {
+      return create_summary_plot(summaryData, DEFAULT_PLOT_OPTIONS);
+    } catch (err) {
+      logger.error('Error creating histogram', LogCategory.UI, err);
+      return null;
+    }
+  };
+
+  if (analysis.type_simple === 'string') {
+    if (!isCategoricalHistogram(histogramValue)) {
+      return null;
+    }
+    const summaryData: SummaryPlotData = {
+      ...(analysis as SummaryPlotData & { type_simple: 'string' }),
+      histogram: histogramValue
+    };
+    return renderPlot(summaryData);
+  }
+
+  if (analysis.type_simple === 'numeric' || analysis.type_simple === 'date') {
+    if (!isNumericHistogram(histogramValue)) {
+      return null;
+    }
+    const summaryData: SummaryPlotData = {
+      ...(analysis as SummaryPlotData & {
+        type_simple: 'numeric' | 'date';
+      }),
+      histogram: histogramValue
+    };
+    return renderPlot(summaryData);
+  }
+
+  return null;
+}

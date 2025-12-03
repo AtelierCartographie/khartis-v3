@@ -1,5 +1,6 @@
 <script lang="ts">
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
+  import DataTypeSelectionModal from '$lib/features/commons/components/data-type-selection/data-type-selection-modal.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
@@ -8,15 +9,14 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
-  import DataTypeSelectionModal from '$lib/features/commons/components/data-type-selection/data-type-selection-modal.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { onMount } from 'svelte';
   import { Theme } from 'carbon-components-svelte';
+  import { onMount } from 'svelte';
 
   import 'carbon-components-svelte/css/all.css';
 
