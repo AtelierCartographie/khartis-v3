@@ -298,9 +298,8 @@ export function createDataPipeline(): DataPipeline {
       });
 
       if (options.rawDataset) {
-        const rawColumns = convertRawColumnsToEnriched(options.rawDataset);
         dataset.originalData = {
-          columns: rawColumns,
+          columns: dataset.columns,
           data: options.rawDataset.rows.map((row) => {
             const record: Record<string, unknown> = {};
             options.rawDataset?.headers?.forEach((header, index) => {
@@ -555,39 +554,6 @@ function enrichColumns(columns: DuckAnalyticsColumn[]): EnrichedColumn[] {
       stdDev: column.stddev ? Number(column.stddev) : undefined
     }
   }));
-}
-
-function convertRawColumnsToEnriched(rawDataset: RawDataset): EnrichedColumn[] {
-  return rawDataset.columns.map((column) => {
-    const values = column.values ?? [];
-    const nonNullValues = values.filter(
-      (value) => value !== null && value !== undefined
-    );
-    const enrichedType = fromDuckDBType('text');
-    const uniques = new Set(
-      nonNullValues.map((value) =>
-        typeof value === 'object' ? JSON.stringify(value) : String(value)
-      )
-    ).size;
-
-    return {
-      name: column.name,
-      values,
-      type: enrichedType,
-      stats: {
-        name: column.name,
-        type: enrichedType,
-        count: values.length,
-        nulls: values.length - nonNullValues.length,
-        uniques,
-        min: undefined,
-        max: undefined,
-        mean: undefined,
-        median: undefined,
-        stdDev: undefined
-      }
-    };
-  });
 }
 
 function computeQualityWarnings(
