@@ -90,7 +90,7 @@
 <style>
   .file-role-card {
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     gap: var(--cds-spacing-04);
     padding: var(--cds-spacing-05);
     background-color: var(--cds-layer-01);

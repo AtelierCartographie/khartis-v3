@@ -1,3 +1,10 @@
+export enum DataToolType {
+  None = 'none',
+  Search = 'search',
+  Filters = 'filters',
+  Calculator = 'calculator'
+}
+
 export interface DataControlState {
   selectedRowIds: (string | number)[];
   expandedRowIds: (string | number)[];
