@@ -20,6 +20,7 @@ import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import {
   Field,
@@ -91,6 +92,8 @@ export interface DuckDBDataset {
   geoDetection?: GeoDetectionResult;
   arrowTableWithMetadata?: Table;
   geoArrowMetadata?: GeoArrowMetadata;
+  joinedBasemap?: string;
+  geoColumn?: string;
 }
 
 class DuckDBOrchestratorService {
@@ -970,6 +973,114 @@ class DuckDBOrchestratorService {
       if (ds) ds.columns = columns;
     });
     this.bumpDatasetsVersion();
+  }
+
+  async finalizeJoin(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    geoColumn: string
+  ): Promise<void> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this._state.datasets.get(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    const start = performance.now();
+    logger.info('Finalizing join for dataset', LogCategory.DATA, {
+      datasetId,
+      basemap: basemap.file,
+      geoColumn
+    });
+
+    try {
+      // 1. Load join macros
+      await Duck.query(join_macros);
+
+      // 2. Create join results table
+      await Duck.join_by_id(dataset.tableName, geoColumn, {
+        basemaps_table: 'basemap_attributes'
+      });
+
+      // 3. Apply join association (adds basemap_id column to dataset)
+      await Duck.apply_join_association(dataset.tableName, basemap.file);
+
+      // 4. Update dataset metadata
+      this.updateDatasets((d) => {
+        const ds = d.get(datasetId);
+        if (ds) {
+          ds.joinedBasemap = basemap.file;
+          ds.geoColumn = geoColumn;
+        }
+      });
+      this.bumpDatasetsVersion();
+
+      logger.success('Join finalized successfully', LogCategory.DATA, {
+        datasetId,
+        basemap: basemap.file,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+    } catch (error) {
+      logger.error('Failed to finalize join', LogCategory.DATA, {
+        datasetId,
+        basemap: basemap.file,
+        error
+      });
+      throw error;
+    }
+  }
+
+  async getJoinedArrowTable(
+    datasetTableName: string,
+    basemapId: string
+  ): Promise<Table> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const start = performance.now();
+    logger.info('Creating joined Arrow table for rendering', LogCategory.MAP, {
+      datasetTableName,
+      basemapId
+    });
+
+    try {
+      // 1. Ensure basemap geometry is loaded in DuckDB
+      const geometryTable = await basemapService.loadGeometryIntoDuckDB(
+        basemapId
+      );
+
+      // 2. Create a joined view with dataset attributes + basemap geometry
+      const joinedView = `joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+      const escapedDataset = escapeSqlString(datasetTableName);
+      const escapedGeometry = escapeSqlString(geometryTable);
+
+      await Duck.query(`
+        CREATE OR REPLACE VIEW "${joinedView}" AS
+        SELECT d.*, g.geom
+        FROM "${escapedDataset}" d
+        LEFT JOIN "${escapedGeometry}" g
+        ON d.basemap_id = g.id
+        WHERE g.geom IS NOT NULL
+      `);
+
+      // 3. Get Arrow table from the joined view
+      const arrowTable = await this.getArrowTableDirect(joinedView);
+
+      logger.success('Joined Arrow table created', LogCategory.MAP, {
+        joinedView,
+        rows: arrowTable.numRows,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return arrowTable;
+    } catch (error) {
+      logger.error('Failed to create joined Arrow table', LogCategory.MAP, {
+        datasetTableName,
+        basemapId,
+        error
+      });
+      throw error;
+    }
   }
 
   private convertToCSV(data: Record<string, unknown>[]): string {

@@ -30,6 +30,7 @@ interface SummaryPlotOptions {
   stroke_main?: string;
   stroke_nulls?: string;
   stroke_unique?: string;
+  bg_color?: string;
 }
 
 interface NumericData {
@@ -198,7 +199,8 @@ function create_plot_categorical(
     unique_color = 'grey',
     stroke_main = 'none',
     stroke_nulls = 'none',
-    stroke_unique = 'none'
+    stroke_unique = 'none',
+    bg_color = '#393939'
   } = options;
 
   const { uniques, histogram } = data;
@@ -330,8 +332,8 @@ function create_plot_categorical(
           text: (_d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
           frameAnchor: 'bottom-left',
           dy: 10,
-          fill: '#222',
-          stroke: '#222',
+          fill: bg_color,
+          stroke: bg_color,
           strokeWidth: 5
         } as never)
       ),
