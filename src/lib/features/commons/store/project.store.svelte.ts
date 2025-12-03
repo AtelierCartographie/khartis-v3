@@ -22,7 +22,10 @@ import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
-import type { UploadedFile } from './create-project.types';
+import type {
+  ColumnTransformation,
+  UploadedFile
+} from './create-project.types';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -135,7 +138,8 @@ class ProjectStore {
           relatedFileObjects: file.relatedFileObjects,
           originalFile: file.originalFile,
           relatedFiles: file.relatedFiles,
-          relatedFilesData: file.relatedFilesData
+          relatedFilesData: file.relatedFilesData,
+          columnTransformations: file.columnTransformations
         };
 
         // Force reactivity by reassigning currentProject with deep copy of data
@@ -196,6 +200,77 @@ class ProjectStore {
     };
 
     await dataOrchestratorService.onFileRemoved(fileId);
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async renameFile(fileId: string, newName: string): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...updatedFiles[fileIndex],
+      name: newName
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async addColumnTransformation(
+    fileId: string,
+    transformation: ColumnTransformation
+  ): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const file = this._state.currentProject.data.sourceFiles[fileIndex];
+    const updatedTransformations = [
+      ...(file.columnTransformations ?? []),
+      transformation
+    ];
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...file,
+      columnTransformations: updatedTransformations
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
 
     this._state.isDirty = true;
     await this.saveCurrentProject();

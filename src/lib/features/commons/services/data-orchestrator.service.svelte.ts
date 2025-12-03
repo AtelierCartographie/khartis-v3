@@ -480,6 +480,10 @@ class DataOrchestratorService {
     // Mark files as processing BEFORE starting to prevent race conditions
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
 
+    // Begin batch mode to suppress version bumps until all files AND transformations are applied
+    // This prevents UI flash (old column names → new column names)
+    duckDBOrchestrator.beginBatch();
+
     try {
       const concurrency = this.determineProjectConcurrency();
 
@@ -558,7 +562,15 @@ class DataOrchestratorService {
 
           try {
             await this.onFileAdded(file);
-          } catch (_) {
+
+            // Apply saved column transformations after file is loaded
+            if (
+              file.columnTransformations &&
+              file.columnTransformations.length > 0
+            ) {
+              await this.applyColumnTransformations(file);
+            }
+          } catch (err) {
             // Individual file failure shouldn't stop the whole batch
             // Error is already logged in onFileAdded
           }
@@ -569,6 +581,64 @@ class DataOrchestratorService {
     } finally {
       // Clear processing flags
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
+
+      // End batch mode - triggers a single UI update with final state (renamed columns)
+      duckDBOrchestrator.endBatch();
+    }
+  }
+
+  private async applyColumnTransformations(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.columnTransformations) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.columnTransformations.length} column transformations for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    for (const transformation of file.columnTransformations) {
+      try {
+        switch (transformation.type) {
+          case 'rename':
+            if (transformation.newValue) {
+              await duckDBOrchestrator.renameColumn(
+                dataset.tableName,
+                transformation.column,
+                transformation.newValue
+              );
+              datasetsStore.renameDatasetColumn(
+                dataset.id,
+                transformation.column,
+                transformation.newValue
+              );
+            }
+            break;
+          case 'drop':
+            await duckDBOrchestrator.dropColumn(
+              dataset.tableName,
+              transformation.column
+            );
+            break;
+          case 'type_change':
+            if (transformation.newValue) {
+              await duckDBOrchestrator.changeColumnType(
+                dataset.tableName,
+                transformation.column,
+                transformation.newValue
+              );
+            }
+            break;
+        }
+      } catch (err) {
+        logger.warn(
+          `Failed to apply transformation ${transformation.type} on column ${transformation.column}`,
+          LogCategory.DATA,
+          { error: err }
+        );
+      }
     }
   }
 
