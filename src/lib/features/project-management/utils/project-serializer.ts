@@ -8,6 +8,7 @@ function bigIntReplacer(_key: string, value: unknown): unknown {
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/services/duckdb-orchestrator.service.svelte';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
@@ -241,6 +242,23 @@ export const ProjectSerializer = {
       serialized.deletedRowIds = file.deletedRowIds;
     }
 
+    // Serialize join state from DuckDB orchestrator
+    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
+    if (duckDBDataset) {
+      if (duckDBDataset.joinedBasemap) {
+        serialized.joinedBasemap = duckDBDataset.joinedBasemap;
+      }
+      if (duckDBDataset.geoColumn) {
+        serialized.geoColumn = duckDBDataset.geoColumn;
+      }
+      if (duckDBDataset.gpsMode) {
+        serialized.gpsMode = duckDBDataset.gpsMode;
+      }
+      if (duckDBDataset.gpsColumns) {
+        serialized.gpsColumns = duckDBDataset.gpsColumns;
+      }
+    }
+
     return serialized;
   },
 
@@ -308,6 +326,20 @@ export const ProjectSerializer = {
 
     if (data.deletedRowIds) {
       file.deletedRowIds = data.deletedRowIds;
+    }
+
+    // Restore join state for later application by DuckDB orchestrator
+    if (data.joinedBasemap) {
+      file.joinedBasemap = data.joinedBasemap;
+    }
+    if (data.geoColumn) {
+      file.geoColumn = data.geoColumn;
+    }
+    if (data.gpsMode) {
+      file.gpsMode = data.gpsMode;
+    }
+    if (data.gpsColumns) {
+      file.gpsColumns = data.gpsColumns;
     }
 
     return file as UploadedFile;

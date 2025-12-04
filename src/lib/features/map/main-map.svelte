@@ -11,6 +11,7 @@
   import { LogCategory, logger } from '../commons/utils/logger';
   import DeckMap from './components/deck-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
+  import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
@@ -19,6 +20,7 @@
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+  const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
 
   async function convertDatasetToGeoJSON(
     dataset: DatasetResult
@@ -213,6 +215,27 @@
       }
     } else {
       loadFallbackBasemap();
+    }
+  });
+
+  // Effect to handle OSM basemap activation - load GPS data when OSM is selected
+  $effect(() => {
+    const osmBasemap = activeOSMBasemap;
+    if (isInitializing || !osmBasemap || !selectedDataset) {
+      return;
+    }
+
+    // When OSM basemap is activated, check if we need to load GPS data
+    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+      selectedDataset.sourceFileId
+    );
+
+    if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+      logger.info('OSM basemap activated, loading GPS data', LogCategory.MAP, {
+        datasetId: duckDBDataset.id,
+        osmBasemap: osmBasemap.file
+      });
+      loadGPSData(duckDBDataset.id);
     }
   });
 

@@ -140,7 +140,7 @@
 
     <footer
       class={clsx(
-        'sticky bottom-0 bg-white p-5 border-t z-1000',
+        'sticky bottom-0 bg-white p-5 border-t z-50',
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
