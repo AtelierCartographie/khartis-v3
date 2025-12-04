@@ -4,7 +4,6 @@ import {
   isGeographicFileType,
   isTabularFileType,
   type DataRole,
-  type DataRoleAssignment,
   type DataTypeSelectionState
 } from './types';
 

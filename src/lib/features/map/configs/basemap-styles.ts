@@ -23,7 +23,10 @@ export const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
   ]
 };
 
-export const BASEMAP_STYLES: Record<BasemapStyle, string | maplibregl.StyleSpecification> = {
+export const BASEMAP_STYLES: Record<
+  BasemapStyle,
+  string | maplibregl.StyleSpecification
+> = {
   [BasemapStyle.BLANK_WHITE]: BLANK_WHITE_STYLE,
   [BasemapStyle.CARTO_POSITRON]:
     'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json',
