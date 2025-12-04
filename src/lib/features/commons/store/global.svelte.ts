@@ -21,7 +21,6 @@ class GlobalStore {
     mainPanel: true,
     isSideNavOpen: false,
     isCreateProjectModalOpen: false,
-    isDataTypeSelectionModalOpen: false,
     selectedStep: ToolbarStep.Data,
     selectedTool: undefined,
     toolbarState: ToolbarState.Full,
@@ -192,14 +191,6 @@ class GlobalStore {
 
   set isCreateProjectModalOpen(value: boolean) {
     this._state.isCreateProjectModalOpen = value;
-  }
-
-  get isDataTypeSelectionModalOpen() {
-    return this._state.isDataTypeSelectionModalOpen;
-  }
-
-  set isDataTypeSelectionModalOpen(value: boolean) {
-    this._state.isDataTypeSelectionModalOpen = value;
   }
 
   get selectedStep() {
