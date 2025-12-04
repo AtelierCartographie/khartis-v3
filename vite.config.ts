@@ -33,14 +33,10 @@ export default defineConfig(({ mode }) => {
                 ]
               : [],
           globIgnores: ['**/node_modules/**/*'],
-          navigateFallback: basePath
-            ? `${basePath}/index.html`
-            : '/index.html',
+          navigateFallback: basePath ? `${basePath}/index.html` : '/index.html',
           navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
           maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
           cleanupOutdatedCaches: true,
-          skipWaiting: true,
-          clientsClaim: true,
           runtimeCaching: [
             {
               urlPattern: /.*duckdb.*\.wasm$/,
