@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import {
     EXAMPLE_CATEGORIES,
@@ -89,7 +90,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      await goto('/', { replaceState: true });
+      await goto(base || '/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to load example', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load example';

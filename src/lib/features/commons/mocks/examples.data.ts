@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import type { ExampleProject } from '../store/create-project.types';
 
 export interface ExampleCategory {
@@ -247,7 +248,10 @@ export async function loadExampleData(
     if (!example.dataUrl) {
       throw new Error('Example data URL is missing');
     }
-    const response = await fetch(example.dataUrl);
+    const url = example.dataUrl.startsWith('/')
+      ? `${base}${example.dataUrl}`
+      : example.dataUrl;
+    const response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`Failed to load example data: ${response.statusText}`);

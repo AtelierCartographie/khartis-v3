@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
@@ -70,7 +71,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      await goto('/', { replaceState: true });
+      await goto(base || '/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to load project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load project';
@@ -101,7 +102,7 @@
       globalState.isCreateProjectModalOpen = false;
       createProjectActions.resetAllTabs();
       onClose?.();
-      await goto('/', { replaceState: true });
+      await goto(base || '/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to import project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to import project';
