@@ -3,7 +3,6 @@ import {
   ParseError
 } from '$lib/features/commons/errors/pipeline.errors';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import { FileType } from '$lib/features/commons/store/create-project.types';
 import type {
   GeoColumnResult,
   GeoDetectionResult
@@ -30,71 +29,37 @@ import {
   insertArrowTableIntoDuckDB
 } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
-import { join_macros } from './duckdb/join';
+import { join_macros } from './duckdb/join-macros';
 import type {
   AnalysisResult,
   ArrowTableLike,
   SearchStats
 } from './duckdb/types';
+import {
+  buildFilterSQL,
+  buildFilterWhereClause,
+  createFilterRecord,
+  describeFilter,
+  formatFilterValue
+} from './orchestrator/filter-operations';
+import {
+  type DataTableFilter,
+  type DataTableFilterInput,
+  type DuckDBDataset,
+  type FilterOperator,
+  type FilterStats,
+  FileType,
+  RefineOperation
+} from './orchestrator/types';
 
-export enum RefineOperation {
-  UPPERCASE = 'uppercase',
-  LOWERCASE = 'lowercase',
-  TITLECASE = 'titlecase',
-  TRIM = 'trim',
-  TRIM_ALL = 'trim_all'
-}
-
-export type FilterOperator =
-  | 'gte'
-  | 'lte'
-  | 'contains'
-  | 'equals'
-  | 'not_equals'
-  | 'between'
-  | 'top_asc'
-  | 'top_desc'
-  | 'empty'
-  | 'not_empty';
-
-export interface DataTableFilterInput {
-  column: string;
-  operator: FilterOperator;
-  value?: string | number;
-  secondaryValue?: string | number;
-  limit?: number;
-}
-
-export interface DataTableFilter extends DataTableFilterInput {
-  id: string;
-  label: string;
-  sql: string;
-}
-
-export interface FilterStats {
-  total: number;
-  filtered: number;
-}
-
-export interface DuckDBDataset {
-  id: string;
-  tableName: string;
-  sourceFileId: string;
-  name: string;
-  columns: AnalysisResult[];
-  rowCount: number;
-  metadata: {
-    processedAt: Date;
-    fileType: FileType;
-  };
-  geoDetection?: GeoDetectionResult;
-  arrowTableWithMetadata?: Table;
-  geoArrowMetadata?: GeoArrowMetadata;
-  joinedBasemap?: string;
-  geoColumn?: string;
-  gpsMode?: boolean;
-  gpsColumns?: { lat: string; lon: string };
-}
+export {
+  type DataTableFilter,
+  type DataTableFilterInput,
+  type DuckDBDataset,
+  type FilterOperator,
+  type FilterStats,
+  RefineOperation
+};
 
 class DuckDBOrchestratorService {
   private initialized = false;
@@ -1335,7 +1300,7 @@ class DuckDBOrchestratorService {
 
     try {
       let query = `SELECT * FROM "${tableName}"`;
-      const whereClause = this.buildFilterWhereClause(tableName);
+      const whereClause = buildFilterWhereClause(this._filters.get(tableName));
       if (whereClause) {
         query += ` WHERE ${whereClause}`;
       }
@@ -1719,7 +1684,8 @@ class DuckDBOrchestratorService {
       await this.initialize();
     }
 
-    const filter = this.createFilterRecord(tableName, input);
+    const filterId = `${Date.now()}-${++this.filterIdCounter}`;
+    const filter = createFilterRecord(tableName, input, filterId);
     const filters = [...(this._filters.get(tableName) ?? []), filter];
     this.updateFilters((filterMap) => {
       filterMap.set(tableName, filters);
@@ -2627,7 +2593,7 @@ class DuckDBOrchestratorService {
 
     let query = `SELECT COUNT(*) as count FROM "${tableName}"`;
     const whereClause = applyFilters
-      ? this.buildFilterWhereClause(tableName)
+      ? buildFilterWhereClause(this._filters.get(tableName))
       : null;
     if (whereClause) {
       query += ` WHERE ${whereClause}`;
@@ -2636,178 +2602,6 @@ class DuckDBOrchestratorService {
     const result = (await Duck.query(query)) as ArrowTableLike;
     const row = result.get(0) as Record<string, unknown>;
     return Number(row?.count) || 0;
-  }
-
-  private createFilterRecord(
-    tableName: string,
-    input: DataTableFilterInput
-  ): DataTableFilter {
-    if (!input.column) {
-      throw new DuckDBError('Column is required for filters');
-    }
-
-    const sql = this.buildFilterSQL(tableName, input);
-    const label = this.describeFilter(input);
-    const id = `${Date.now()}-${++this.filterIdCounter}`;
-
-    return {
-      ...input,
-      id,
-      label,
-      sql
-    };
-  }
-
-  private buildFilterSQL(
-    tableName: string,
-    filter: DataTableFilterInput
-  ): string {
-    const columnRef = `"${filter.column}"`;
-    const value = this.formatFilterValue(filter.value);
-    const secondValue = this.formatFilterValue(filter.secondaryValue);
-    const buildTopFilter = (direction: 'ASC' | 'DESC'): string => {
-      const limit = Number(filter.limit ?? filter.value);
-      if (!Number.isFinite(limit) || limit <= 0) {
-        throw new DuckDBError(
-          'Veuillez préciser un nombre pour le filtre "top"'
-        );
-      }
-      return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
-    };
-
-    switch (filter.operator) {
-      case 'gte':
-        this.assertValue(filter.value, filter.operator);
-        return `${columnRef} >= ${value}`;
-
-      case 'lte':
-        this.assertValue(filter.value, filter.operator);
-        return `${columnRef} <= ${value}`;
-
-      case 'contains':
-        this.assertValue(filter.value, filter.operator);
-        return `${columnRef}::TEXT ILIKE '%' || ${value} || '%'`;
-
-      case 'equals':
-        this.assertValue(filter.value, filter.operator);
-        return `${columnRef} = ${value}`;
-
-      case 'not_equals':
-        this.assertValue(filter.value, filter.operator);
-        return `${columnRef} <> ${value}`;
-
-      case 'between':
-        if (filter.value === undefined || filter.secondaryValue === undefined) {
-          throw new DuckDBError(
-            'Deux valeurs sont nécessaires pour un filtre "compris entre"'
-          );
-        }
-        return `${columnRef} BETWEEN ${value} AND ${secondValue}`;
-
-      case 'top_asc':
-        return buildTopFilter('ASC');
-
-      case 'top_desc':
-        return buildTopFilter('DESC');
-
-      case 'empty':
-        return `(${columnRef} IS NULL OR TRIM(${columnRef}::TEXT) = '')`;
-
-      case 'not_empty':
-        return `(${columnRef} IS NOT NULL AND TRIM(${columnRef}::TEXT) <> '')`;
-
-      default:
-        throw new DuckDBError(
-          `Unsupported filter operator: ${filter.operator}`
-        );
-    }
-  }
-
-  private describeFilter(filter: DataTableFilterInput): string {
-    const column = filter.column;
-    const value = filter.value ?? '';
-    const valueLabel = typeof value === 'number' ? value : String(value).trim();
-    const betweenLabel =
-      filter.secondaryValue !== undefined
-        ? `${valueLabel} et ${filter.secondaryValue}`
-        : valueLabel;
-
-    switch (filter.operator) {
-      case 'gte':
-        return `${column} ≥ ${valueLabel}`;
-
-      case 'lte':
-        return `${column} ≤ ${valueLabel}`;
-
-      case 'contains':
-        return `${column} contient "${valueLabel}"`;
-
-      case 'equals':
-        return `${column} = ${valueLabel}`;
-
-      case 'not_equals':
-        return `${column} ≠ ${valueLabel}`;
-
-      case 'between':
-        return `${column} entre ${betweenLabel}`;
-
-      case 'top_asc':
-        return `Top ${filter.limit ?? filter.value} valeurs les plus basses de ${column}`;
-
-      case 'top_desc':
-        return `Top ${filter.limit ?? filter.value} valeurs les plus hautes de ${column}`;
-
-      case 'empty':
-        return `${column} vide`;
-
-      case 'not_empty':
-        return `${column} non vide`;
-
-      default:
-        return `${column} (${filter.operator})`;
-    }
-  }
-
-  private formatFilterValue(value: string | number | undefined): string {
-    if (value === undefined || value === null) {
-      return 'NULL';
-    }
-
-    if (typeof value === 'number') {
-      return String(value);
-    }
-
-    const trimmed = value.trim();
-    if (trimmed === '') {
-      return `''`;
-    }
-
-    const numericValue = Number(trimmed);
-    if (!Number.isNaN(numericValue) && trimmed === String(numericValue)) {
-      return trimmed;
-    }
-
-    return `'${escapeSqlString(trimmed)}'`;
-  }
-
-  private assertValue(
-    value: string | number | undefined,
-    operator: FilterOperator
-  ): void {
-    if (value === undefined || value === null || `${value}`.trim() === '') {
-      throw new DuckDBError(
-        `Une valeur est nécessaire pour l'opérateur "${operator}"`
-      );
-    }
-  }
-
-  private buildFilterWhereClause(tableName: string): string | null {
-    const filters = this._filters.get(tableName);
-    if (!filters || filters.length === 0) {
-      return null;
-    }
-
-    return filters.map((filter) => filter.sql).join(' AND ');
   }
 
   private async processShapefile(
