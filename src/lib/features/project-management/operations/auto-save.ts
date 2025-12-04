@@ -1,20 +1,19 @@
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import type { AutoSaveConfig } from '../types';
+import { PROJECT_CONST } from '../constants';
 
-export type AutoSaveConfig = {
-  enabled: boolean;
-  interval: number;
-};
-
-type SaveCallback = () => Promise<void>;
+export type SaveCallback = () => Promise<void>;
 
 export class AutoSaveController {
   private timer?: number;
-
   private config: AutoSaveConfig;
 
   constructor(
     private readonly save: SaveCallback,
-    initialConfig: AutoSaveConfig = { enabled: true, interval: 30000 }
+    initialConfig: AutoSaveConfig = {
+      enabled: true,
+      interval: PROJECT_CONST.TIMINGS.AUTO_SAVE_DELAY
+    }
   ) {
     this.config = initialConfig;
   }
