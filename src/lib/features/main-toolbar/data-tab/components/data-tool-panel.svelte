@@ -1,10 +1,10 @@
 <script lang="ts">
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarState } from '$lib/features/commons/types/global';
+  import * as m from '$lib/paraglide/messages';
   import { Button } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import * as m from '$lib/paraglide/messages';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
   import { dataToolsStore } from '../data-tools.store.svelte';
 
   interface Props {
@@ -49,7 +49,7 @@
     top: 50%;
     transform: translateY(-50%);
     width: 280px;
-    background: var(--cds-ui-01);
+    background: var(--cds-ui-02);
     border: 1px solid var(--cds-border-subtle);
     z-index: 100;
     display: flex;

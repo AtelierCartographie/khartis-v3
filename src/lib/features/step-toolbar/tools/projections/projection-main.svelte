@@ -166,8 +166,8 @@
   }
 
   .projection-cards {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--cds-spacing-03);
   }
 
