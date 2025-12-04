@@ -8,6 +8,7 @@
     InlineNotification
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
+  import { onMount } from 'svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -27,7 +28,7 @@
       searchValue: string,
       replaceValue: string,
       source: string
-    ) => void;
+    ) => void | Promise<void>;
   }
 
   let { tableName, onSearchResults, onReplace }: Props = $props();
@@ -103,8 +104,12 @@
 
   function handleReplace() {
     if (!searchQuery || !replaceValue) return;
-    onReplace?.(searchQuery, replaceValue, searchSource);
-    dataToolsStore.setReplaceValue(replaceValue);
+    const query = searchQuery;
+    const value = replaceValue;
+    const source = searchSource;
+    dataToolsStore.setReplaceValue(value);
+    handleClear();
+    onReplace?.(query, value, source);
   }
 
   function handlePrevResult() {
@@ -132,6 +137,10 @@
     dataToolsStore.setSearchQuery('');
     onSearchResults?.({ exactIds: [], partialIds: [], currentId: null });
   }
+
+  onMount(() => {
+    handleClear();
+  });
 
   const hasResults = $derived(searchStats.results.length > 0);
   const hasData = $derived(columns.length > 0);
