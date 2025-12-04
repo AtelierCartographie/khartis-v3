@@ -10,7 +10,7 @@
  * Based on the original algorithm from khartis-pipeline-old/src/lib/viz_suggestions.ts
  */
 
-import type { ColumnAnalysis } from '$lib/features/data-pipeline/models/column-analysis';
+import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 // ===========================

@@ -4,12 +4,12 @@ import {
   type CategoricalHistogram,
   type NumericHistogram,
   type SummaryPlotData
-} from '$lib/features/duckdb/services/duckdb/summary-plot';
+} from '$lib/features/commons/components/summary-plot/summary-plot';
 import { LogCategory, logger } from '../../utils/logger';
 
 type HistogramLike = NumericHistogram | CategoricalHistogram;
 
-export function isHistogram(value: unknown): value is HistogramLike {
+function isHistogram(value: unknown): value is HistogramLike {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -17,15 +17,13 @@ export function isHistogram(value: unknown): value is HistogramLike {
   );
 }
 
-export function isNumericHistogram(value: unknown): value is NumericHistogram {
+function isNumericHistogram(value: unknown): value is NumericHistogram {
   if (!isHistogram(value)) return false;
   const sample = value.toArray()[0];
   return sample === undefined || 'bin' in sample;
 }
 
-export function isCategoricalHistogram(
-  value: unknown
-): value is CategoricalHistogram {
+function isCategoricalHistogram(value: unknown): value is CategoricalHistogram {
   if (!isHistogram(value)) return false;
   const sample = value.toArray()[0];
   return sample === undefined || 'category' in sample;

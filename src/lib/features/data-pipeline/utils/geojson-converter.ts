@@ -7,9 +7,7 @@ import type {
   GeoJSONFeature as SharedGeoJSONFeature,
   GeoJSONFeatureCollection as SharedGeoJSONFeatureCollection
 } from '$lib/types/data';
-import type { GeometryInfo } from '../models/geometry-info';
-import type { RawColumn } from '../models/raw-column';
-import type { RawDataset } from '../models/raw-dataset';
+import type { GeometryInfo, RawColumn, RawDataset } from '../types';
 
 export type GeoJSONFeature = SharedGeoJSONFeature;
 export type GeoJSONFeatureCollection = SharedGeoJSONFeatureCollection;
