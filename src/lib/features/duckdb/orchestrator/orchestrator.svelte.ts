@@ -14,40 +14,37 @@ import type {
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type { Table } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
-import { Duck, initDuckDB } from './duckdb/duckdb';
-import type {
-  AnalysisResult,
-  ArrowTableLike,
-  SearchStats
-} from './duckdb/types';
+import { Duck, initDuckDB } from '../duck';
 import {
-  buildFilterWhereClause,
-  createFilterRecord
-} from './orchestrator/filter-operations';
-import {
+  FileType,
+  RefineOperation,
+  type AnalysisResult,
+  type ArrowTableLike,
   type DataTableFilter,
   type DataTableFilterInput,
   type DuckDBDataset,
   type FilterOperator,
   type FilterStats,
-  FileType,
-  RefineOperation
-} from './orchestrator/types';
+  type SearchStats
+} from '../types';
+import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 
-import * as columnOps from './orchestrator/column-operations';
-import * as gpsOps from './orchestrator/gps-operations';
-import * as arrowOps from './orchestrator/arrow-operations';
-import * as joinOps from './orchestrator/join-operations';
-import * as fileProcessors from './orchestrator/file-processors';
-import * as datasetState from './orchestrator/dataset-state';
+import * as columnOps from './column-ops';
+import * as gpsOps from './gps-ops';
+import * as arrowOps from './arrow-ops';
+import * as joinOps from './join-ops';
+import * as fileProcessors from './file-processors';
+import * as datasetState from './dataset-state';
 
 export {
+  FileType,
+  RefineOperation,
+  type AnalysisResult,
   type DataTableFilter,
   type DataTableFilterInput,
   type DuckDBDataset,
   type FilterOperator,
-  type FilterStats,
-  RefineOperation
+  type FilterStats
 };
 
 class DuckDBOrchestratorService {

@@ -2,8 +2,8 @@ import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detector.u
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types/AnalysisResult';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import type { DuckDBDataset } from './types';
-import { detectGPSColumns } from './gps-operations';
+import type { DuckDBDataset, AnalysisResult } from '../types';
+import { detectGPSColumns } from './gps-ops';
 
 export function restoreJoinStateFromFile(
   dataset: DuckDBDataset,
@@ -31,7 +31,7 @@ export function restoreJoinStateFromFile(
   if (file.gpsMode) {
     updates.gpsMode = file.gpsMode;
     if (!file.gpsColumns) {
-      const detected = detectGPSColumns(dataset.columns);
+      const detected = detectGPSColumns(dataset.columns as AnalysisResult[]);
       if (detected) {
         updates.gpsColumns = detected;
         logger.info('Re-detected GPS columns', LogCategory.DUCKDB, {

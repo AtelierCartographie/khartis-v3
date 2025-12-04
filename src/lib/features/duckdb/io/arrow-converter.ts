@@ -1,10 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
-import { Duck } from './duckdb';
+import { getContext, isInitialized } from '../core/engine';
 
-/**
- * Converts an array of objects (TabularData) to an Arrow Table.
- */
 export function convertTabularDataToArrow(
   data: Record<string, unknown>[],
   options: { addRowId?: boolean } = {}
@@ -28,9 +25,6 @@ export function convertTabularDataToArrow(
   return new Table(vectors);
 }
 
-/**
- * Insert an Arrow table into DuckDB using the IPC stream API so the data persists in WASM.
- */
 export async function insertArrowTableIntoDuckDB(
   table: Table,
   tableName: string
@@ -41,21 +35,22 @@ export async function insertArrowTableIntoDuckDB(
     rows: table.numRows
   });
 
-  if (!Duck) {
-    throw new Error('DuckDB not initialized - Duck instance is null');
+  if (!isInitialized()) {
+    throw new Error('DuckDB not initialized - call initDuckDB() first');
   }
 
-  if (!Duck.connection) {
+  const ctx = getContext();
+
+  if (!ctx.connection) {
     throw new Error('DuckDB connection not established - connection is null');
   }
 
   try {
-    // insertArrowTable is unreliable in DuckDB-WASM, so stream the IPC payload manually.
     const ipcStream = tableToIPC(table);
     const ipcBuffer =
       ipcStream instanceof Uint8Array ? ipcStream : new Uint8Array(ipcStream);
 
-    await Duck.connection.insertArrowFromIPCStream(ipcBuffer, {
+    await ctx.connection.insertArrowFromIPCStream(ipcBuffer, {
       name: tableName,
       schema: 'main'
     });

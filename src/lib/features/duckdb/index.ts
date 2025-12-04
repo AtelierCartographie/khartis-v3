@@ -1,32 +1,42 @@
+// Core
+export { Duck, initDuckDB } from './duck';
+
+// Orchestrator
+export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
+
+// Validator
+export { DuckDBValidatorService } from './validator.service';
+
+// Arrow converter
 export {
-  duckDBOrchestrator,
-  RefineOperation,
-  type FilterOperator,
-  type DataTableFilterInput,
-  type DataTableFilter,
-  type FilterStats,
-  type DuckDBDataset
-} from './services/duckdb-orchestrator.service.svelte';
+  insertArrowTableIntoDuckDB,
+  convertTabularDataToArrow
+} from './io/arrow-converter';
 
-export { DuckDBValidatorService } from './services/duckdb-validator.service';
-
-export { Duck, initDuckDB } from './services/duckdb/duckdb';
-export { insertArrowTableIntoDuckDB } from './services/duckdb/arrow-converter';
+// Types
+export { RefineOperation } from './types';
 export type {
   AnalysisResult,
+  AnalysisResults,
   ArrowTableLike,
   ColumnInfo,
   SearchResultWithScore,
-  SearchStats
-} from './services/duckdb/types';
+  SearchStats,
+  FilterOperator,
+  DataTableFilter,
+  DataTableFilterInput,
+  FilterStats,
+  DuckDBDataset,
+  DuckDBMetadata,
+  DuckDBContext,
+  TableMetadata,
+  QueryOptions,
+  ReadTabularOptions,
+  ReadGeofileOptions,
+  ReadLinkOptions,
+  JoinByIdOptions,
+  AnalyseOptions
+} from './types';
 
-export {
-  duckDB,
-  duckDbState,
-  dbError,
-  isDbInitializing,
-  isDbReady,
-  isQuerying,
-  queryError
-} from './db';
-export type { DuckDBState, QueryState } from './db';
+// Constants
+export { DUCK_CONST, CACHE_CONSTANTS } from './constants';

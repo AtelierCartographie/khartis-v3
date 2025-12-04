@@ -4,7 +4,7 @@ import type {
   DataTableFilter,
   DataTableFilterInput,
   FilterOperator
-} from './types';
+} from '../types';
 
 export function formatFilterValue(value: string | number | undefined): string {
   if (value === undefined || value === null) {
