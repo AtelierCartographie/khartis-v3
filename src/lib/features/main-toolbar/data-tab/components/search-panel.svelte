@@ -11,12 +11,18 @@
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
+
+  export interface SearchHighlightResult {
+    exactIds: number[];
+    partialIds: number[];
+    currentId: number | null;
+  }
 
   interface Props {
     tableName?: string;
-    onSearchResults?: (results: number[], currentIndex: number) => void;
+    onSearchResults?: (result: SearchHighlightResult) => void;
     onReplace?: (
       searchValue: string,
       replaceValue: string,
@@ -32,35 +38,63 @@
   let searchQuery = $state('');
   let searchSource = $state('all');
   let replaceValue = $state('');
-  let searchResults = $state<number[]>([]);
+  let searchStats = $state<SearchStats>({
+    exactCount: 0,
+    partialCount: 0,
+    results: []
+  });
   let currentResultIndex = $state(0);
   let isSearching = $state(false);
+
+  const searchResultIds = $derived(searchStats.results.map((r) => r.id));
+  const exactIds = $derived(
+    searchStats.results.filter((r) => r.score === 1).map((r) => r.id)
+  );
+  const partialIds = $derived(
+    searchStats.results.filter((r) => r.score < 1).map((r) => r.id)
+  );
+
+  function notifySearchResults() {
+    const currentId =
+      currentResultIndex >= 0 && currentResultIndex < searchResultIds.length
+        ? searchResultIds[currentResultIndex]
+        : null;
+    onSearchResults?.({ exactIds, partialIds, currentId });
+  }
 
   async function handleSearch() {
     dataToolsStore.setSearchQuery(searchQuery);
     dataToolsStore.setSearchSource(searchSource);
 
     if (!tableName || !searchQuery.trim()) {
-      searchResults = [];
+      searchStats = { exactCount: 0, partialCount: 0, results: [] };
       currentResultIndex = 0;
-      onSearchResults?.([], 0);
+      onSearchResults?.({ exactIds: [], partialIds: [], currentId: null });
       return;
     }
 
     isSearching = true;
     try {
       const columnFilter = searchSource === 'all' ? undefined : searchSource;
-      const results = await duckDBOrchestrator.searchInTable(
+      const stats = await duckDBOrchestrator.searchInTable(
         tableName,
         searchQuery,
         { threshold: 0.6, column: columnFilter }
       );
-      searchResults = results;
-      currentResultIndex = results.length > 0 ? 0 : -1;
-      onSearchResults?.(results, currentResultIndex);
+      searchStats = stats;
+      currentResultIndex = stats.results.length > 0 ? 0 : -1;
+
+      const exact = stats.results.filter((r) => r.score === 1).map((r) => r.id);
+      const partial = stats.results.filter((r) => r.score < 1).map((r) => r.id);
+      const firstId = stats.results.length > 0 ? stats.results[0].id : null;
+      onSearchResults?.({
+        exactIds: exact,
+        partialIds: partial,
+        currentId: firstId
+      });
     } catch (error) {
       logger.error('Search failed', LogCategory.UI, error);
-      searchResults = [];
+      searchStats = { exactCount: 0, partialCount: 0, results: [] };
       currentResultIndex = 0;
     } finally {
       isSearching = false;
@@ -74,41 +108,54 @@
   }
 
   function handlePrevResult() {
-    if (searchResults.length === 0) return;
+    if (searchResultIds.length === 0) return;
     currentResultIndex =
       currentResultIndex > 0
         ? currentResultIndex - 1
-        : searchResults.length - 1;
-    onSearchResults?.(searchResults, currentResultIndex);
+        : searchResultIds.length - 1;
+    notifySearchResults();
   }
 
   function handleNextResult() {
-    if (searchResults.length === 0) return;
+    if (searchResultIds.length === 0) return;
     currentResultIndex =
-      currentResultIndex < searchResults.length - 1
+      currentResultIndex < searchResultIds.length - 1
         ? currentResultIndex + 1
         : 0;
-    onSearchResults?.(searchResults, currentResultIndex);
+    notifySearchResults();
   }
 
   function handleClear() {
     searchQuery = '';
-    searchResults = [];
+    searchStats = { exactCount: 0, partialCount: 0, results: [] };
     currentResultIndex = 0;
     dataToolsStore.setSearchQuery('');
-    onSearchResults?.([], 0);
+    onSearchResults?.({ exactIds: [], partialIds: [], currentId: null });
   }
 
-  const hasResults = $derived(searchResults.length > 0);
+  const hasResults = $derived(searchStats.results.length > 0);
   const hasData = $derived(columns.length > 0);
-  const resultText = $derived(
-    isSearching
-      ? m.search_loading()
-      : hasResults
-        ? `${currentResultIndex + 1} / ${searchResults.length}`
-        : searchQuery.trim()
-          ? m.search_no_results()
-          : ''
+  const hasExactMatches = $derived(searchStats.exactCount > 0);
+
+  const resultCountText = $derived(() => {
+    if (isSearching) return m.search_loading();
+    if (!searchQuery.trim()) return '';
+    if (!hasResults) return m.search_no_results();
+
+    const parts: string[] = [];
+    if (searchStats.exactCount > 0) {
+      parts.push(m.search_exact_results({ count: searchStats.exactCount }));
+    }
+    if (searchStats.partialCount > 0) {
+      parts.push(m.search_partial_results({ count: searchStats.partialCount }));
+    }
+    return parts.join(', ');
+  });
+
+  const navigationText = $derived(
+    hasResults
+      ? `${currentResultIndex + 1} / ${searchStats.results.length}`
+      : ''
   );
 </script>
 
@@ -146,8 +193,12 @@
       </Select>
     </div>
 
+    <div class="results-info">
+      <span class="result-count">{resultCountText()}</span>
+    </div>
+
     <div class="results-navigation">
-      <span class="result-text">{resultText}</span>
+      <span class="result-text">{navigationText}</span>
       <div class="nav-buttons">
         <Button
           kind="ghost"
@@ -183,11 +234,12 @@
       <Button
         kind="secondary"
         size="small"
-        disabled={!searchQuery || !replaceValue}
+        disabled={!searchQuery || !replaceValue || !hasExactMatches}
         on:click={handleReplace}
       >
         {m.search_replace_button()}
       </Button>
+      <span class="replace-hint">{m.search_replace_exact_only()}</span>
     </div>
   {/if}
 </div>
@@ -203,6 +255,15 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .results-info {
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .result-count {
+    font-size: 0.875rem;
+    color: var(--cds-text-02);
   }
 
   .results-navigation {
@@ -222,6 +283,15 @@
   }
 
   .actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
     padding-top: var(--cds-spacing-03);
+  }
+
+  .replace-hint {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
+    font-style: italic;
   }
 </style>

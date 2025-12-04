@@ -31,7 +31,11 @@ import {
 } from './duckdb/arrow-converter';
 import { Duck, initDuckDB } from './duckdb/duckdb';
 import { join_macros } from './duckdb/join';
-import type { AnalysisResult, ArrowTableLike } from './duckdb/types';
+import type {
+  AnalysisResult,
+  ArrowTableLike,
+  SearchStats
+} from './duckdb/types';
 
 export enum RefineOperation {
   UPPERCASE = 'uppercase',
@@ -114,10 +118,15 @@ class DuckDBOrchestratorService {
   private metadataPrefetches = new SvelteMap<string, Promise<void>>();
 
   private _datasetsVersion = $state(0);
-  private _suppressVersionBump = false;
+
+  private _suppressVersionBump = $state(false);
 
   get datasetsVersion(): number {
     return this._datasetsVersion;
+  }
+
+  get isBatchProcessing(): boolean {
+    return this._suppressVersionBump;
   }
 
   bumpDatasetsVersion(): void {
@@ -1573,32 +1582,42 @@ class DuckDBOrchestratorService {
     const escapedSearchValue = escapeSqlString(searchValue);
     const escapedReplaceValue = escapeSqlString(replaceValue);
 
+    const exactMatchCondition = `jaro_winkler_similarity(normalize_text("${columnName}"::VARCHAR), normalize_text('${escapedSearchValue}')) = 1`;
+
     const countResult = (await Duck.query(
-      `SELECT COUNT(*) as count FROM "${tableName}" WHERE "${columnName}"::TEXT LIKE '%${escapedSearchValue}%'`
+      `SELECT COUNT(*) as count FROM "${tableName}" WHERE ${exactMatchCondition}`
     )) as ArrowTableLike;
 
     const countRow = countResult.get(0) as Record<string, unknown>;
     const count = Number(countRow?.count) || 0;
 
     if (count > 0) {
-      logger.info('Replacing values in DuckDB column', LogCategory.DUCKDB, {
-        tableName,
-        columnName,
-        count,
-        searchValue,
-        replaceValue
-      });
+      logger.info(
+        'Replacing exact matches in DuckDB column',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          columnName,
+          count,
+          searchValue,
+          replaceValue
+        }
+      );
       await Duck.query(
-        `UPDATE "${tableName}" SET "${columnName}" = REPLACE("${columnName}"::TEXT, '${escapedSearchValue}', '${escapedReplaceValue}')`
+        `UPDATE "${tableName}" SET "${columnName}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
       );
 
       await Duck.analyse(tableName, { force: true });
-      logger.success('Column values replaced', LogCategory.DUCKDB, {
-        tableName,
-        columnName,
-        count,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
+      logger.success(
+        'Column values replaced (exact matches)',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          columnName,
+          count,
+          durationMs: (performance.now() - start).toFixed(2)
+        }
+      );
     }
 
     return count;
@@ -2881,12 +2900,18 @@ class DuckDBOrchestratorService {
     tableName: string,
     query: string,
     options: { threshold?: number; column?: string } = {}
-  ): Promise<number[]> {
+  ): Promise<SearchStats> {
     await this.waitForInitialization();
+
+    const emptyResult: SearchStats = {
+      exactCount: 0,
+      partialCount: 0,
+      results: []
+    };
 
     if (!Duck) {
       logger.warn('DuckDB not initialized for search', LogCategory.DUCKDB);
-      return [];
+      return emptyResult;
     }
 
     return Duck.searchInTable(tableName, query, options);

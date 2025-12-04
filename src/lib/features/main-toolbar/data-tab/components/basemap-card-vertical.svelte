@@ -68,7 +68,7 @@
   <div class="content-section">
     <div class="title-row">
       <span class="card-title">{basemap.title}</span>
-      <div class="radio-indicator" class:selected>
+      <div class="radio-indicator" class:selected={selected}>
         {#if selected}
           <Checkmark size={16} />
         {/if}

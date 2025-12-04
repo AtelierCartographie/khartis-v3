@@ -42,10 +42,7 @@
         showError(m.reset_data_error_title(), m.reset_data_error_message());
       }
     } catch {
-      showError(
-        m.reset_data_error_title(),
-        m.reset_data_error_generic()
-      );
+      showError(m.reset_data_error_title(), m.reset_data_error_generic());
     } finally {
       isResetting = false;
     }
@@ -55,7 +52,9 @@
 <Modal
   bind:open={open}
   modalHeading={m.reset_data_modal_title()}
-  primaryButtonText={isResetting ? m.reset_data_modal_resetting() : m.reset_data_modal_button()}
+  primaryButtonText={isResetting
+    ? m.reset_data_modal_resetting()
+    : m.reset_data_modal_button()}
   primaryButtonDisabled={isResetting}
   secondaryButtonText={m.cancel()}
   danger
