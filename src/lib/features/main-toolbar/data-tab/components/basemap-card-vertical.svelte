@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import { m } from '$lib/paraglide/messages';
-  import { ProgressBar, RadioButton } from 'carbon-components-svelte';
-  import { Calendar, Earth } from 'carbon-icons-svelte';
+  import { ProgressBar } from 'carbon-components-svelte';
+  import { Calendar, Checkmark, Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
   interface BasemapCardVerticalProps {
@@ -32,10 +32,6 @@
       event.preventDefault();
       handleCardClick();
     }
-  }
-
-  function handleRadioClick(event: Event) {
-    event.stopPropagation();
   }
 
   const isGray = $derived(variant === 'gray');
@@ -72,8 +68,10 @@
   <div class="content-section">
     <div class="title-row">
       <span class="card-title">{basemap.title}</span>
-      <div class="radio-wrapper">
-        <RadioButton checked={selected} onclick={handleRadioClick} labelText="" />
+      <div class="radio-indicator" class:selected>
+        {#if selected}
+          <Checkmark size={16} />
+        {/if}
       </div>
     </div>
 
@@ -84,7 +82,7 @@
     <div class="metadata-row">
       <span class="source">{basemap.source}</span>
       <span class="date">
-        <Calendar size={14} />
+        <Calendar size={16} />
         {basemap.date}
       </span>
     </div>
@@ -94,11 +92,7 @@
   {#if showMatchScore && matchPercentage !== undefined}
     <div class="match-section">
       <span class="match-label">{m.basemap_match_score()}</span>
-      <ProgressBar
-        value={matchPercentage}
-        max={100}
-        size="sm"
-      />
+      <ProgressBar value={matchPercentage} max={100} size="sm" />
       <span class="match-value">{matchPercentage} %</span>
     </div>
   {/if}
@@ -232,9 +226,27 @@
     color: var(--cds-text-01);
   }
 
-  .radio-wrapper {
+  .radio-indicator {
     flex-shrink: 0;
-    margin-top: -0.25rem;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--cds-icon-02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .radio-indicator.selected {
+    border-color: var(--cds-interactive-01);
+    background-color: var(--cds-interactive-01);
+    color: white;
+  }
+
+  .variant-gray .radio-indicator.selected {
+    border-color: var(--cds-text-01);
+    background-color: var(--cds-text-01);
   }
 
   .card-description {

@@ -112,6 +112,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
 
     if (rowIndices.length === 0) {
       tableData = [];
+      initialLoadComplete = true;
       return;
     }
 

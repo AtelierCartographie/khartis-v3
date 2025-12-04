@@ -27,7 +27,11 @@ export interface FileValidation {
   warnings: string[];
 }
 
-export type ColumnTransformationType = 'rename' | 'drop' | 'type_change';
+export type ColumnTransformationType =
+  | 'rename'
+  | 'drop'
+  | 'type_change'
+  | 'refine';
 
 export interface ColumnTransformation {
   type: ColumnTransformationType;
@@ -66,7 +70,7 @@ export interface UploadedFile {
   deepAnalysis?: DataAnalysisResult;
   geoMatchResult?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];
-  // Cached dataset snapshots are no longer persisted – the pipeline reloads from DuckDB
+  deletedRowIds?: number[];
 }
 
 export interface ExampleProject {

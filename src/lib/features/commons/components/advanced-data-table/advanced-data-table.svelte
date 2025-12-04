@@ -10,14 +10,17 @@
   import ColumnRenameModal from '../column-rename-modal.svelte';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
+  import { useRowSelection } from './hooks/use-row-selection.svelte';
   import { useTableData } from './hooks/use-table-data.svelte';
   import { useTableFilters } from './hooks/use-table-filters.svelte';
   import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
+  import { TABLE_ROW_HEIGHT } from './types';
 
   import TableColumnHeader from './components/TableColumnHeader.svelte';
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
+  import TableSelectionHeader from './components/TableSelectionHeader.svelte';
 
   interface Props {
     dataset?: ProcessedDataset;
@@ -26,6 +29,8 @@
     showSummaryPlots?: boolean;
     maxRows?: number;
     isExpanded?: boolean;
+    isSelectable?: boolean;
+    onSelectionChange?: (selectedIds: number[], count: number) => void;
   }
 
   let {
@@ -34,7 +39,9 @@
     highlightIds = [],
     showSummaryPlots = true,
     maxRows,
-    isExpanded = false
+    isExpanded = false,
+    isSelectable = false,
+    onSelectionChange
   }: Props = $props();
 
   let tableContainer = $state<HTMLDivElement | undefined>(undefined);
@@ -42,7 +49,7 @@
     typeof window !== 'undefined' ? window.innerHeight : 800
   );
 
-  const rowHeight = 40;
+  const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
   const viewportHeightRatioExpanded = 0.65;
   const viewportHeightRatio = $derived(
@@ -71,7 +78,7 @@
   }
 
   async function recordProjectTransformation(
-    type: 'rename' | 'drop' | 'type_change',
+    type: 'rename' | 'drop' | 'type_change' | 'refine',
     column: string,
     newValue?: string
   ) {
@@ -136,8 +143,39 @@
     onRecordTransformation: recordTransformation
   });
 
+  const rowSelection = useRowSelection({
+    onSelectionChange: (ids, count) => {
+      onSelectionChange?.(ids, count);
+    }
+  });
+
+  const visibleRowIds = $derived(
+    tableData.tableData.map(
+      (row, i) =>
+        (row.__id as number | undefined) ?? virtualScroll.rows[i] ?? i + 1
+    )
+  );
+
+  const isAllVisibleSelected = $derived(
+    rowSelection.areAllSelected(visibleRowIds)
+  );
+
+  const hasSomeSelected = $derived(
+    rowSelection.hasSelection && !isAllVisibleSelected
+  );
+
+  function handleToggleAllVisible(): void {
+    rowSelection.toggleAllRows(visibleRowIds);
+  }
+
   const showEmptyState = $derived(
     !hasDataSource && tableData.columns.length === 0
+  );
+  const showFilteredEmptyState = $derived(
+    tableData.isFullyLoaded &&
+      hasDataSource &&
+      filters.numRows === 0 &&
+      filters.filterStats.total > 0
   );
 
   async function handleSort(column: string, order: 'ASC' | 'DESC') {
@@ -163,6 +201,7 @@
 
   async function handleRefine(columnName: string, operation: RefineOperation) {
     await columnOps.handleRefine(columnName, operation);
+    await recordProjectTransformation('refine', columnName, operation);
   }
 
   async function handleDrop(columnName: string) {
@@ -200,21 +239,25 @@
 
   let lastDatasetId: string | undefined = undefined;
   let lastTableName: string | undefined = undefined;
+  let lastColumnsRef: unknown[] | undefined = undefined;
 
   $effect(() => {
     const currentTableName = tableName;
     const currentDataset = dataset;
     const currentDatasetId = currentDataset?.id;
+    const currentColumnsRef = currentDataset?.columns;
 
     const datasetChanged = currentDatasetId !== lastDatasetId;
     const tableChanged = currentTableName !== lastTableName;
+    const columnsChanged = currentColumnsRef !== lastColumnsRef;
 
-    if (!datasetChanged && !tableChanged) {
+    if (!datasetChanged && !tableChanged && !columnsChanged) {
       return;
     }
 
     lastDatasetId = currentDatasetId;
     lastTableName = currentTableName;
+    lastColumnsRef = currentColumnsRef;
 
     if (currentDataset || currentTableName) {
       untrack(async () => {
@@ -243,6 +286,18 @@
     virtualScroll.setTableContainer(tableContainer);
   });
 
+  let expandEffectInitialized = $state(false);
+  $effect(() => {
+    const currentIsExpanded = isExpanded;
+    if (!expandEffectInitialized) {
+      expandEffectInitialized = true;
+      return;
+    }
+    untrack(async () => {
+      await virtualScroll.initializeRows(virtualScroll.startIndex);
+    });
+  });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getSkeletonProps = () =>
     ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
@@ -265,6 +320,10 @@
     <div class="empty-state">
       <p>Aucune donnée disponible</p>
     </div>
+  {:else if showFilteredEmptyState}
+    <div class="empty-state">
+      <p>{m.no_results_match_filters()}</p>
+    </div>
   {:else}
     <div class="table-wrapper">
       <div
@@ -276,6 +335,13 @@
         <table>
           <thead>
             <tr>
+              {#if isSelectable && isEditMode}
+                <TableSelectionHeader
+                  isAllSelected={isAllVisibleSelected}
+                  isIndeterminate={hasSomeSelected}
+                  onToggleAll={handleToggleAllVisible}
+                />
+              {/if}
               {#each columnOps.visibleColumns as column (column.name)}
                 <TableColumnHeader
                   column={column}
@@ -299,11 +365,15 @@
           <tbody>
             {#each tableData.tableData as row, i (virtualScroll.rows[i] ?? `row-${i}`)}
               {@const rowIndex = virtualScroll.rows[i] ?? i}
+              {@const rowId = (row.__id as number | undefined) ?? rowIndex + 1}
               <TableRow
                 row={row}
                 rowIndex={rowIndex}
                 visibleColumns={columnOps.visibleColumns}
                 isHighlighted={isRowHighlighted(rowIndex, row)}
+                isSelectable={isSelectable && isEditMode}
+                isSelected={rowSelection.isRowSelected(rowId)}
+                onToggleSelection={rowSelection.toggleRowSelection}
               />
             {/each}
           </tbody>

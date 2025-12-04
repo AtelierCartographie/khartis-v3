@@ -1,8 +1,13 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import {
+    showError,
+    showSuccess
+  } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator, Duck } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -12,10 +17,12 @@
   import CalculatorPanel from './components/calculator-panel.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
   import DataToolsBar from './components/data-tools-bar.svelte';
+  import DeleteRowsModal from './delete-rows-modal.svelte';
   import FiltersPanel from './components/filters-panel.svelte';
   import SearchPanel from './components/search-panel.svelte';
   import { DataToolType } from './data-tab.types';
   import { dataToolsStore } from './data-tools.store.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -41,10 +48,12 @@
   });
 
   let resetModalOpen = $state(false);
+  let deleteModalOpen = $state(false);
   let isEditingName = $state(false);
   let editedName = $state('');
   let warningsNotificationDismissed = $state(false);
   let isTableExpanded = $state(false);
+  let selectedRowIds = $state<number[]>([]);
 
   // Check if dataset has columns with null values
   const hasNullableColumns = $derived(
@@ -124,8 +133,64 @@
     currentSearchIndex = currentIndex;
   }
 
+  function handleSelectionChange(ids: number[], _count: number) {
+    selectedRowIds = ids;
+  }
+
+  function handleOpenDeleteModal() {
+    if (selectedRowIds.length > 0) {
+      deleteModalOpen = true;
+    }
+  }
+
+  async function handleDeleteRows() {
+    if (!currentDuckTable || selectedRowIds.length === 0 || !selectedDataset)
+      return;
+
+    const count = selectedRowIds.length;
+    const rowIdsToDelete = [...selectedRowIds];
+
+    try {
+      await duckDBOrchestrator.dropRows(currentDuckTable, rowIdsToDelete);
+
+      const newRowCount = Duck
+        ? await Duck.get_row_count(currentDuckTable)
+        : 0;
+
+      datasetsStore.recordTransformation(
+        selectedDataset.id,
+        `Deleted ${count} rows (new total: ${newRowCount})`
+      );
+      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+
+      await projectStore.addDeletedRows(
+        selectedDataset.sourceFileId,
+        rowIdsToDelete
+      );
+
+      selectedRowIds = [];
+      refreshTable();
+      showSuccess(
+        m.rows_deleted_success_title(),
+        m.rows_deleted_success_message({ count })
+      );
+    } catch (error) {
+      showError(
+        m.rows_deleted_error_title(),
+        error instanceof Error ? error.message : m.rows_deleted_error_message()
+      );
+    }
+  }
+
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
+
+  // Mark step 0 as complete when dataset is loaded
+  $effect(() => {
+    if (selectedDataset && currentDuckTable) {
+      dataTabStore.markStepComplete(0);
+    }
+  });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const skeletonProps = { columns: 5, rows: 12 } as any;
@@ -165,13 +230,22 @@
       <ResetDataModal
         bind:open={resetModalOpen}
         datasetId={selectedDataset.id}
+        onSuccess={refreshTable}
       />
     {/if}
 
+    <DeleteRowsModal
+      bind:open={deleteModalOpen}
+      rowCount={selectedRowIds.length}
+      onConfirm={handleDeleteRows}
+    />
+
     <!-- Barre d'outils -->
     <DataToolsBar
+      onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
       onExpand={() => (isTableExpanded = !isTableExpanded)}
+      selectionCount={selectedRowIds.length}
     />
   {/if}
 
@@ -183,6 +257,8 @@
         showSummaryPlots={true}
         highlightIds={searchResults}
         isExpanded={isTableExpanded}
+        isSelectable={true}
+        onSelectionChange={handleSelectionChange}
       />
     {/key}
   {:else if selectedDataset || isProcessingFiles}
@@ -192,18 +268,17 @@
     </div>
   {:else}
     <div class="empty-state">
-      <p class="empty-message">Aucune donnée chargée</p>
+      <p class="empty-message">{m.data_control_empty_title()}</p>
       <p class="empty-help">
-        Les outils de contrôle (tableau, filtres, calculatrice) apparaîtront ici
-        après l'import de vos données.
+        {m.data_control_empty_help()}
       </p>
     </div>
   {/if}
 
   {#if hasNullableColumns && !warningsNotificationDismissed}
     <InlineNotification
-      title="Attention"
-      subtitle="Plusieurs variables contiennent des valeurs manquantes. Vérifier les avertissements dans l'en-tête du tableau."
+      title={m.data_control_nullable_title()}
+      subtitle={m.data_control_nullable_subtitle()}
       kind="warning"
       lowContrast
       hideCloseButton={false}

@@ -32,8 +32,6 @@ interface SummaryPlotOptions {
   stroke_unique?: string;
   bg_color?: string;
   text_color?: string;
-  text_secondary_color?: string;
-  bar_text_color?: string;
 }
 
 interface NumericData {
@@ -41,12 +39,15 @@ interface NumericData {
   min: number | Date;
   max: number | Date;
   histogram: NumericHistogram;
+  nulls?: number;
 }
 
 interface CategoricalData {
   type_simple: 'string';
   histogram: CategoricalHistogram;
   uniques?: number;
+  nulls?: number;
+  duplicates?: number;
 }
 
 export type SummaryPlotData = NumericData | CategoricalData;
@@ -86,7 +87,6 @@ interface ObservablePlotStackOptions {
   textAnchor?: 'start' | 'middle' | 'end';
   strokeWidth?: number;
   fontVariant?: string;
-  fontSize?: number;
 }
 
 /**
@@ -124,23 +124,24 @@ function create_plot_numeric(
     nulls_color = 'gold',
     text_color = '#f4f4f4'
   } = options;
-  const { min, max, histogram, type_simple } = data;
+  const { min, max, histogram, type_simple, nulls } = data;
 
   const is_date = type_simple === 'date';
+
+  const nullCount =
+    nulls ?? histogram.toArray().find((d) => d.bin === null)?.count ?? 0;
 
   const text_options = {
     y: 0,
     dy: 8,
     fontVariant: 'tabular-nums',
-    fill: text_color,
-    fontSize: 9
+    fill: text_color
   };
 
   return Plot.plot({
     width,
     height,
-    marginBottom: 15,
-    style: { fontSize: '9px' },
+    marginBottom: nullCount > 0 ? 24 : 15,
     x: { axis: null, type: 'band' },
     y: { axis: null },
     marks: [
@@ -173,26 +174,20 @@ function create_plot_numeric(
           dx: width / 2,
           textAnchor: 'end'
         }
-      )
+      ),
+      nullCount > 0
+        ? Plot.text([`${nullCount.toLocaleString()} nulls`], {
+            frameAnchor: 'bottom',
+            dy: 18,
+            fill: nulls_color
+          })
+        : null
     ]
   });
 }
 
 /**
  * Creates a categorical plot using the provided data and options.
- *
- * @param {Object} data - The data to be plotted.
- * @param {Object} [options={}] - Configuration options for the plot.
- * @param {number} [options.width=144] - The width of the plot.
- * @param {number} [options.height=64] - The height of the plot.
- * @param {boolean} [options.geoid=false] - Whether to treat the data as geoid.
- * @param {string} [options.main_color='#fa4d56'] - The main color for the rectangles.
- * @param {string} [options.nulls_color='gold'] - The color for null values.
- * @param {string} [options.unique_color='grey'] - The color for unique values.
- * @param {string} [options.stroke_main='none'] - The stroke color for main values.
- * @param {string} [options.stroke_nulls='none'] - The stroke color for null values.
- * @param {string} [options.stroke_unique='none'] - The stroke color for unique values.
- * @returns {Object} The generated plot.
  */
 function create_plot_categorical(
   data: CategoricalData,
@@ -208,10 +203,8 @@ function create_plot_categorical(
     stroke_main = 'none',
     stroke_nulls = 'none',
     stroke_unique = 'none',
-    bg_color = '#393939',
-    text_color = '#f4f4f4',
-    text_secondary_color = '#c6c6c6',
-    bar_text_color = '#ffffff'
+    bg_color = '#222',
+    text_color = '#f4f4f4'
   } = options;
 
   const { uniques, histogram } = data;
@@ -246,9 +239,7 @@ function create_plot_categorical(
             : null,
         x: 'count',
         lineWidth,
-        textOverflow: 'clip-end',
-        fill: bar_text_color,
-        fontSize: 9
+        textOverflow: 'clip-end'
       } as ObservablePlotStackOptions)
     );
 
@@ -268,12 +259,9 @@ function create_plot_categorical(
     marginRight: 5,
     marginBottom: 15,
     marginTop: 10,
-    style: { fontSize: '9px', overflow: 'visible' },
+    style: 'overflow: visible;',
     x: { axis: null },
     marks: [
-      // Handle fix text with pointer and stack mark
-      // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
-
       // BARS
       Plot.barX(
         histogramData as CategoryHistogramItem[],
@@ -307,14 +295,12 @@ function create_plot_categorical(
                   : `${d.category}`,
               lineWidth: 12,
               x: 'count',
-              textOverflow: 'clip-end',
-              fill: bar_text_color,
-              fontSize: 9
+              textOverflow: 'clip-end'
             } as ObservablePlotStackOptions)
           )
         : null,
       // adapt label length on percent values
-      !has_one_category ? label_layer([0.8, 1], 12) : null,
+      !has_one_category ? label_layer([0.8, 1], 9) : null,
       label_layer([0.6, 0.8], 6),
       label_layer([0.4, 0.6], 5),
       label_layer([0.2, 0.4], 3),
@@ -325,8 +311,7 @@ function create_plot_categorical(
         : Plot.text([(uniques ?? 0).toLocaleString() + ' catégories'], {
             frameAnchor: 'bottom-left',
             dy: 10,
-            fill: text_secondary_color,
-            fontSize: 9
+            fill: text_color
           }),
 
       // INTERACTIVITY
@@ -351,8 +336,7 @@ function create_plot_categorical(
           dy: 10,
           fill: bg_color,
           stroke: bg_color,
-          strokeWidth: 5,
-          fontSize: 9
+          strokeWidth: 5
         } as never)
       ),
       // Show count and category in a fixed place
@@ -364,8 +348,7 @@ function create_plot_categorical(
             `${d.count.toLocaleString()} - ${d.category}`,
           frameAnchor: 'bottom-left',
           dy: 10,
-          fill: text_color,
-          fontSize: 9
+          fill: text_color
         } as never)
       )
     ]
