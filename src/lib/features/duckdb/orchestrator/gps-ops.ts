@@ -1,21 +1,16 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { Table } from 'apache-arrow/Arrow';
-import type { AnalysisResult, DuckDBDataset } from '../types';
+import type {
+  AnalysisResult,
+  DuckDBDataset,
+  GPSColumns,
+  GPSBounds
+} from '../types';
+
+export type { GPSColumns, GPSBounds };
 
 export interface DuckDBClientForGPS {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
-}
-
-export interface GPSColumns {
-  lat: string;
-  lon: string;
-}
-
-export interface GPSBounds {
-  minLon: number;
-  minLat: number;
-  maxLon: number;
-  maxLat: number;
 }
 
 export function detectGPSColumns(columns: AnalysisResult[]): GPSColumns | null {

@@ -7,8 +7,10 @@ import type {
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { Table } from 'apache-arrow/Arrow';
 import { join_macros } from '../macros/join';
-import type { DuckDBDataset } from '../types';
+import type { DuckDBDataset, FinalizeJoinResult } from '../types';
 import { detectGPSColumns } from './gps-ops';
+
+export type { FinalizeJoinResult };
 
 export interface DuckDBClientForJoin {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -141,13 +143,6 @@ export async function applyJoinCorrections(
   `);
 
   await Duck.query(`DROP TABLE "${correctionsTable}"`);
-}
-
-export interface FinalizeJoinResult {
-  joinedBasemap: string;
-  geoColumn?: string;
-  gpsMode?: boolean;
-  gpsColumns?: { lat: string; lon: string };
 }
 
 export async function finalizeJoin(

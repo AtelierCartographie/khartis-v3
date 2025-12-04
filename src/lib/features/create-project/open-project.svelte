@@ -5,12 +5,12 @@
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import type { SavedProjectMetadata } from '$lib/features/project-management';
   import {
     formatDate,
     formatFileSize
   } from '$lib/features/commons/utils/format.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
   import {
     FileUploaderDropContainer,

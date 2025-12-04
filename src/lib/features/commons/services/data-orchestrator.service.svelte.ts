@@ -1,6 +1,6 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
-import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
+import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
