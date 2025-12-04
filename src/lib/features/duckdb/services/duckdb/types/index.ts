@@ -67,6 +67,7 @@ export interface AnalysisResult {
   histogram?: unknown;
   uniques?: number;
   nulls?: number;
+  duplicates?: number;
   count?: number;
   [key: string]: unknown;
 }
@@ -124,4 +125,16 @@ export interface BreakInsideResult {
   is_inside: boolean;
   min?: number;
   max?: number;
+}
+
+export interface SearchResultWithScore {
+  id: number;
+  score: number;
+  column: string;
+}
+
+export interface SearchStats {
+  exactCount: number;
+  partialCount: number;
+  results: SearchResultWithScore[];
 }

@@ -5,7 +5,10 @@
  * replacing 'any' types throughout the codebase.
  */
 
-import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type {
+  ColumnTransformation,
+  UploadedFile
+} from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { KhartisProject } from '$lib/features/project-management/models/project';
@@ -56,8 +59,10 @@ export interface SerializedProjectData {
 /**
  * DatasetResult serialized for storage (Dates converted to ISO strings)
  */
-export interface SerializedDatasetResult
-  extends Omit<DatasetResult, 'metadata' | 'createdAt'> {
+export interface SerializedDatasetResult extends Omit<
+  DatasetResult,
+  'metadata' | 'createdAt'
+> {
   metadata: Omit<DatasetResult['metadata'], 'processedAt'> & {
     processedAt: string;
   };
@@ -87,9 +92,15 @@ export interface SerializedUploadedFile {
   duplicates?: UploadedFile['duplicates'];
   deepAnalysis?: UploadedFile['deepAnalysis'];
   geoMatchResult?: UploadedFile['geoMatchResult'];
-  // Cached dataset metadata removed – pipeline reloads from DuckDB
+  columnTransformations?: ColumnTransformation[];
+  deletedRowIds?: number[];
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
+  // Join state persistence
+  joinedBasemap?: string;
+  geoColumn?: string;
+  gpsMode?: boolean;
+  gpsColumns?: { lat: string; lon: string };
 }
 
 /**

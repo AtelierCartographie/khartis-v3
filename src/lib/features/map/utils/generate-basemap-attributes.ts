@@ -1,14 +1,11 @@
 import { Duck } from '$lib/features/duckdb';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { BasemapAttribute } from '../types/basemap.types';
 
 function escapeIdentifier(name: string): string {
   return name.replace(/"/g, '""');
-}
-
-function escapeLiteral(value: string): string {
-  return value.replace(/'/g, "''");
 }
 
 export async function generateCustomBasemapAttributes(
@@ -33,7 +30,7 @@ export async function generateCustomBasemapAttributes(
     `);
 
     const safeTableName = escapeIdentifier(tableName);
-    const safeBasemapId = escapeLiteral(basemapId);
+    const safeBasemapId = escapeSqlString(basemapId);
 
     const columns = await duck.analyse(tableName);
 
@@ -75,7 +72,7 @@ export async function generateCustomBasemapAttributes(
 
     const unionQueries = validColumns.map((col) => {
       const safeColName = escapeIdentifier(col.name);
-      const safeVariantName = escapeLiteral(col.name);
+      const safeVariantName = escapeSqlString(col.name);
 
       return `
         SELECT DISTINCT
@@ -121,7 +118,7 @@ export async function clearCustomBasemapAttributes(
   }
   try {
     if (basemapId) {
-      const safeBasemapId = escapeLiteral(basemapId);
+      const safeBasemapId = escapeSqlString(basemapId);
       await duck.query(`
         DELETE FROM custom_basemap_attributes
         WHERE basemap = '${safeBasemapId}'
@@ -146,7 +143,7 @@ export async function getBasemapAttributes(
     throw new DuckDBError('DuckDB not initialized');
   }
   try {
-    const safeBasemapId = escapeLiteral(basemapId);
+    const safeBasemapId = escapeSqlString(basemapId);
     const rows = (await duck.query(
       `
       SELECT *

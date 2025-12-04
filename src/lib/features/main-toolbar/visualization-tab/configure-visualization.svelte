@@ -30,7 +30,6 @@
 
   let selectedFieldId = $state<number>(0);
   let selectedColorFieldId = $state<number>(0);
-  let _selectedDiscretizationId = $state<number>(0);
   let symbolsType = $state<string>('proportionnels');
   let proportionalType = $state<string>('uniques');
   let fillType = $state<string>('classes');
