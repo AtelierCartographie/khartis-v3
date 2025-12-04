@@ -121,6 +121,24 @@
 
   let latitudeFieldId = $state<number | undefined>(undefined);
   let longitudeFieldId = $state<number | undefined>(undefined);
+  let previousDatasetId = $state<string | undefined>(undefined);
+
+  $effect(() => {
+    const currentDatasetId = selectedDataset?.id;
+    if (currentDatasetId !== previousDatasetId) {
+      previousDatasetId = currentDatasetId;
+      latitudeFieldId = undefined;
+      longitudeFieldId = undefined;
+      activeTabIndex = 0;
+      dataTabActions.setGeolocationState({
+        geoReference: 'entities',
+        linkedVariable: null,
+        linkedVariableName: '',
+        latitudeColumn: undefined,
+        longitudeColumn: undefined
+      });
+    }
+  });
 
   $effect(() => {
     if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {

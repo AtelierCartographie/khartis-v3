@@ -17,21 +17,32 @@
 <button
   type="button"
   class="simple-checkbox"
-  class:checked
+  class:checked={checked}
   class:indeterminate={indeterminate && !checked}
-  class:disabled
+  class:disabled={disabled}
   onclick={onchange}
-  {disabled}
+  disabled={disabled}
   aria-checked={indeterminate ? 'mixed' : checked}
   role="checkbox"
 >
   {#if checked}
     <svg class="checkmark" viewBox="0 0 12 12" fill="none">
-      <path d="M2 6L5 9L10 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      <path
+        d="M2 6L5 9L10 3"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </svg>
   {:else if indeterminate}
     <svg class="indeterminate-mark" viewBox="0 0 12 12" fill="none">
-      <path d="M2 6H10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+      <path
+        d="M2 6H10"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
     </svg>
   {/if}
 </button>
@@ -50,7 +61,9 @@
     align-items: center;
     justify-content: center;
     padding: 0;
-    transition: background-color 0.1s, border-color 0.1s;
+    transition:
+      background-color 0.1s,
+      border-color 0.1s;
   }
 
   .simple-checkbox:hover:not(.disabled) {
