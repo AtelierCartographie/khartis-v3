@@ -122,28 +122,41 @@ enum FileType {
 
 ### Validation & Sanitization
 
-| Function               | Purpose                      | Usage                           |
-| ---------------------- | ---------------------------- | ------------------------------- |
-| `validateProjectName`  | Name constraints             | Max 100 chars, no special chars |
-| `checkStorageQuota`    | Estimate remaining storage   | Before save                     |
-| `sanitizeFileName`     | Safe portable filename       | Export file names               |
-| `sanitizeCSVCell`      | Neutralize formula injection | Leading `=`, `+`, `-`, `@`      |
-| `sanitizeNumericInput` | Replace NaN/Infinity         | Numeric validation              |
-| `sanitizeTextInput`    | Trim + collapse whitespace   | Text inputs                     |
+Located in `src/lib/features/commons/utils/validation.utils.ts`:
+
+| Object/Function                       | Purpose                    | Usage                           |
+| ------------------------------------- | -------------------------- | ------------------------------- |
+| `ProjectValidator.validateProjectName` | Name constraints           | Max 255 chars, no special chars |
+| `ProjectValidator.validateFileSize`    | Check file size limit      | Before import                   |
+| `ProjectValidator.validateProjectSize` | Check project size limit   | Before save                     |
+| `ProjectValidator.sanitizeProjectName` | Safe project name          | Project creation                |
+| `ProjectValidator.checkStorageUsage`   | Estimate remaining storage | Before save                     |
+| `DataValidator.validateCSVData`        | CSV data validation        | After parsing                   |
+| `DataValidator.validateGeoData`        | GeoJSON validation         | After parsing                   |
 
 **Example:**
 
 ```ts
 import {
-  sanitizeFileName,
-  sanitizeCSVCell
+  ProjectValidator,
+  DataValidator
 } from '$lib/features/commons/utils/validation.utils';
 
-const safeFileName = sanitizeFileName('My Project! (2024).csv');
-// → 'My_Project_2024.csv'
+// Validate project name
+const nameResult = ProjectValidator.validateProjectName('My Project');
+if (!nameResult.isValid) {
+  console.error(nameResult.errors);
+}
 
-const safeCell = sanitizeCSVCell('=SUM(A1:A10)');
-// → '\'=SUM(A1:A10)' (escaped)
+// Sanitize project name
+const safeName = ProjectValidator.sanitizeProjectName('My Project! (2024)');
+// → 'My Project_ _2024_'
+
+// Validate CSV data
+const csvResult = DataValidator.validateCSVData(parsedRows);
+if (!csvResult.isValid) {
+  console.error(csvResult.errors);
+}
 ```
 
 ### Pipeline Helpers
@@ -209,111 +222,113 @@ try {
 
 ### Error Class Hierarchy
 
-Khartis v3 uses a hierarchical error system for precise error handling and recovery:
+Located in `src/lib/features/commons/errors/pipeline.errors.ts`:
 
 ```typescript
 // Base error class
-export class KhartisError extends Error {
+export class PipelineError extends Error {
   constructor(
     message: string,
-    public code: string,
-    public recoverable: boolean = false,
-    public details?: any
+    public readonly code: string,
+    public readonly details?: Record<string, unknown>
   ) {
     super(message);
     this.name = this.constructor.name;
   }
 }
 
-// Data processing errors
-export class DataError extends KhartisError {
-  constructor(message: string, details?: any) {
-    super(message, 'DATA_ERROR', true, details);
-  }
-}
-
-export class DataValidationError extends DataError {
+// Data validation errors
+export class DataValidationError extends PipelineError {
   constructor(
     message: string,
-    public errors: string[],
-    public warnings: string[]
+    public readonly field?: string,
+    details?: Record<string, unknown>
   ) {
-    super(message, { errors, warnings });
-    this.code = 'DATA_VALIDATION_ERROR';
+    super(message, 'DATA_VALIDATION_ERROR', { field, ...details });
   }
 }
 
-export class DataParseError extends DataError {
+// File grouping errors (e.g., incomplete shapefiles)
+export class FileGroupError extends PipelineError {
   constructor(
     message: string,
-    public line?: number,
-    public column?: string
+    public readonly missingFiles: string[],
+    details?: Record<string, unknown>
   ) {
-    super(message, { line, column });
-    this.code = 'DATA_PARSE_ERROR';
+    super(message, 'FILE_GROUP_ERROR', { missingFiles, ...details });
   }
 }
 
-// DuckDB errors
-export class DuckDBError extends KhartisError {
+// Size limit errors
+export class SizeLimitError extends PipelineError {
   constructor(
     message: string,
-    public query?: string
+    public readonly actualSize: number,
+    public readonly maxSize: number,
+    details?: Record<string, unknown>
   ) {
-    super(message, 'DUCKDB_ERROR', true, { query });
+    super(message, 'SIZE_LIMIT_ERROR', { actualSize, maxSize, ...details });
   }
 }
 
-export class DuckDBConnectionError extends DuckDBError {
-  constructor(message: string) {
-    super(message);
-    this.code = 'DUCKDB_CONNECTION_ERROR';
-    this.recoverable = false;
-  }
-}
-
-// Visualization errors
-export class VisualizationError extends KhartisError {
+// File parsing errors
+export class ParseError extends PipelineError {
   constructor(
     message: string,
-    public vizType?: string
+    public readonly fileType?: string,
+    details?: Record<string, unknown>
   ) {
-    super(message, 'VIZ_ERROR', true, { vizType });
+    super(message, 'PARSE_ERROR', { fileType, ...details });
   }
 }
 
-export class ClassificationError extends VisualizationError {
+// DuckDB operation errors
+export class DuckDBError extends PipelineError {
   constructor(
     message: string,
-    public method?: string,
-    public data?: any
+    public readonly query?: string,
+    details?: Record<string, unknown>
   ) {
-    super(message);
-    this.code = 'CLASSIFICATION_ERROR';
-    this.details = { method, data };
+    super(message, 'DUCKDB_ERROR', { query, ...details });
   }
 }
 
-// Storage errors
-export class StorageError extends KhartisError {
-  constructor(
-    message: string,
-    public operation?: string
-  ) {
-    super(message, 'STORAGE_ERROR', false, { operation });
+// Non-fatal errors (show toast but don't trigger rollback)
+export class NonFatalError extends PipelineError {
+  constructor(message: string, code: string, details?: Record<string, unknown>) {
+    super(message, code, details);
   }
 }
 
-export class QuotaExceededError extends StorageError {
-  constructor(
-    public used: number,
-    public quota: number
-  ) {
-    super(`Storage quota exceeded: ${used}/${quota} bytes`);
-    this.code = 'QUOTA_EXCEEDED';
-    this.recoverable = true; // Can recover by deleting old projects
+export class DuplicateFileError extends NonFatalError {
+  constructor(message: string, public readonly fileName: string) {
+    super(message, 'DUPLICATE_FILE', { fileName });
   }
 }
+```
+
+### Helper Functions
+
+```typescript
+import {
+  isPipelineError,
+  isFatalError,
+  getErrorCode,
+  formatError
+} from '$lib/features/commons/errors/pipeline.errors';
+
+// Check if error is a pipeline error
+if (isPipelineError(error)) {
+  console.log(error.code, error.details);
+}
+
+// Check if error requires rollback
+if (isFatalError(error)) {
+  await rollbackChanges();
+}
+
+// Format error for logging
+const logData = formatError(error);
 ```
 
 ### Error Handling Patterns
@@ -321,24 +336,30 @@ export class QuotaExceededError extends StorageError {
 #### 1. Try-Catch with Type Guards
 
 ```typescript
+import {
+  DataValidationError,
+  DuckDBError,
+  ParseError,
+  isPipelineError,
+  isFatalError
+} from '$lib/features/commons/errors/pipeline.errors';
+
 try {
   const dataset = await dataPipeline.processFile(file);
 } catch (error) {
   if (error instanceof DataValidationError) {
-    // Show validation errors to user
-    error.errors.forEach((e) => notificationStore.error(e));
-    error.warnings.forEach((w) => notificationStore.warning(w));
+    // Show validation error to user
+    notificationStore.error(error.message);
+  } else if (error instanceof ParseError) {
+    // Show parse error with file type context
+    notificationStore.error(`Failed to parse ${error.fileType}: ${error.message}`);
   } else if (error instanceof DuckDBError) {
     // Log technical error, show user-friendly message
     logger.error('DuckDB query failed', error);
     notificationStore.error('Failed to process data. Please try again.');
-  } else if (error instanceof QuotaExceededError) {
-    // Offer to clear old projects
-    const shouldClear = await confirm('Storage full. Delete old projects?');
-    if (shouldClear) {
-      await projectStore.deleteOldProjects(30);
-      // Retry operation
-    }
+  } else if (isPipelineError(error) && !isFatalError(error)) {
+    // Non-fatal error - show warning but continue
+    notificationStore.warning(error.message);
   } else {
     // Unknown error
     logger.error('Unexpected error', error);
