@@ -1,7 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { Table } from 'apache-arrow/Arrow';
-import type { AnalysisResult } from '../duckdb/types';
-import type { DuckDBDataset } from './types';
+import type { AnalysisResult, DuckDBDataset } from '../types';
 
 export interface DuckDBClientForGPS {
   query(sql: string, options?: { format?: string }): Promise<unknown>;

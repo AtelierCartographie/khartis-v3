@@ -1,8 +1,11 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import type { AnalysisResult, ArrowTableLike } from '../duckdb/types';
-import { RefineOperation } from './types';
+import {
+  RefineOperation,
+  type AnalysisResult,
+  type ArrowTableLike
+} from '../types';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;

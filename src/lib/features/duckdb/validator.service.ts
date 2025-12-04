@@ -1,4 +1,4 @@
-import { Duck } from './duckdb/duckdb';
+import { Duck } from './duck';
 import {
   DeepDataValidator,
   type DataAnalysisResult

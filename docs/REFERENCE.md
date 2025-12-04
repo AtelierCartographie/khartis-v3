@@ -124,8 +124,8 @@ enum FileType {
 
 Located in `src/lib/features/commons/utils/validation.utils.ts`:
 
-| Object/Function                       | Purpose                    | Usage                           |
-| ------------------------------------- | -------------------------- | ------------------------------- |
+| Object/Function                        | Purpose                    | Usage                           |
+| -------------------------------------- | -------------------------- | ------------------------------- |
 | `ProjectValidator.validateProjectName` | Name constraints           | Max 255 chars, no special chars |
 | `ProjectValidator.validateFileSize`    | Check file size limit      | Before import                   |
 | `ProjectValidator.validateProjectSize` | Check project size limit   | Before save                     |
@@ -295,13 +295,20 @@ export class DuckDBError extends PipelineError {
 
 // Non-fatal errors (show toast but don't trigger rollback)
 export class NonFatalError extends PipelineError {
-  constructor(message: string, code: string, details?: Record<string, unknown>) {
+  constructor(
+    message: string,
+    code: string,
+    details?: Record<string, unknown>
+  ) {
     super(message, code, details);
   }
 }
 
 export class DuplicateFileError extends NonFatalError {
-  constructor(message: string, public readonly fileName: string) {
+  constructor(
+    message: string,
+    public readonly fileName: string
+  ) {
     super(message, 'DUPLICATE_FILE', { fileName });
   }
 }
@@ -352,7 +359,9 @@ try {
     notificationStore.error(error.message);
   } else if (error instanceof ParseError) {
     // Show parse error with file type context
-    notificationStore.error(`Failed to parse ${error.fileType}: ${error.message}`);
+    notificationStore.error(
+      `Failed to parse ${error.fileType}: ${error.message}`
+    );
   } else if (error instanceof DuckDBError) {
     // Log technical error, show user-friendly message
     logger.error('DuckDB query failed', error);
