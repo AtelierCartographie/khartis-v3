@@ -1,6 +1,6 @@
 <script lang="ts">
   import { RefineOperation, type AnalysisResult } from '$lib/features/duckdb';
-  import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
+  import SummaryPlot from '$lib/features/commons/components/summary-plot/SummaryPlot.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import * as m from '$lib/paraglide/messages';

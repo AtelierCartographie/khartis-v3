@@ -22,6 +22,7 @@ Open http://localhost:5176/ and explore `src/lib/features/` to understand the st
 - **One store per domain** - single responsibility principle
 - **i18n everything** - use Paraglide messages for all visible text
 - **Client-only** - user data never leaves the browser
+- **Prefer functions over classes** - use pure functions + module-level state instead of classes (exceptions: Svelte stores, mutex patterns)
 
 ## 📂 Project Structure
 
@@ -31,7 +32,7 @@ src/lib/
 │   ├── commons/           # Shared components, utils, services
 │   ├── create-project/    # Project creation modal
 │   ├── data-pipeline/     # Data import pipeline (parsers, models)
-│   ├── duckdb/            # DuckDB WASM integration
+│   ├── duckdb/            # DuckDB WASM integration (modular functional)
 │   ├── header/            # Top navigation
 │   ├── main-toolbar/      # Left sidebar
 │   ├── map/               # Map visualization
@@ -132,7 +133,7 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 | What                   | How                                                     |
 | ---------------------- | ------------------------------------------------------- |
 | **New file format**    | Implement `IParser` in `data-pipeline/adapters/parsers` |
-| **New classification** | Add method in `duckdb/services/duckdb/breaks.ts`        |
+| **New classification** | Add method in `duckdb/macros/breaks.ts`                 |
 | **New tool**           | Store + component + toolbar registration                |
 
 ## ⚡ Performance Strategies

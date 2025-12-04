@@ -341,12 +341,12 @@ User Actions → Mutate Store → Derived Ripple → Update Layers/Layout
 
 ### State Guidelines
 
-| Rule                            | Reason                    |
-| ------------------------------- | ------------------------- |
-| **Ephemeral UI local**          | Reduce global state noise |
-| **Persist only domain state**   | Clean project JSON        |
-| **Heavy compute in $derived**   | Automatic memoization     |
-| **DuckDB for expensive queries**| Responsive UI             |
+| Rule                             | Reason                    |
+| -------------------------------- | ------------------------- |
+| **Ephemeral UI local**           | Reduce global state noise |
+| **Persist only domain state**    | Clean project JSON        |
+| **Heavy compute in $derived**    | Automatic memoization     |
+| **DuckDB for expensive queries** | Responsive UI             |
 
 ## Tool Implementations Reference
 
