@@ -96,6 +96,11 @@ export interface SerializedUploadedFile {
   deletedRowIds?: number[];
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
+  // Join state persistence
+  joinedBasemap?: string;
+  geoColumn?: string;
+  gpsMode?: boolean;
+  gpsColumns?: { lat: string; lon: string };
 }
 
 /**

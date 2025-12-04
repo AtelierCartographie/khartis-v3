@@ -574,9 +574,7 @@ export const FileValidator = {
           type: ''
         } as File);
       } else {
-        result.warnings.push(
-          'Cannot determine file type from URL'
-        );
+        result.warnings.push('Cannot determine file type from URL');
       }
 
       if (parsed.protocol === 'http:') {

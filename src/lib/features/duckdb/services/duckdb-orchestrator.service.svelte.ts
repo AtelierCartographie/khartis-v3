@@ -36,11 +36,8 @@ import type {
   SearchStats
 } from './duckdb/types';
 import {
-  buildFilterSQL,
   buildFilterWhereClause,
-  createFilterRecord,
-  describeFilter,
-  formatFilterValue
+  createFilterRecord
 } from './orchestrator/filter-operations';
 import {
   type DataTableFilter,
@@ -306,6 +303,11 @@ class DuckDBOrchestratorService {
         );
       }
 
+      // Restore join state from persisted file data
+      if (result) {
+        this.restoreJoinState(result, file);
+      }
+
       const totalDuration = performance.now() - startTime;
       if (result) {
         logger.success('File processed via DuckDB', LogCategory.DUCKDB, {
@@ -331,6 +333,51 @@ class DuckDBOrchestratorService {
       );
       return null;
     }
+  }
+
+  private restoreJoinState(dataset: DuckDBDataset, file: UploadedFile): void {
+    if (!file.joinedBasemap && !file.gpsMode) {
+      return;
+    }
+
+    logger.info(
+      'Restoring join state from persisted data',
+      LogCategory.DUCKDB,
+      {
+        datasetId: dataset.id,
+        joinedBasemap: file.joinedBasemap,
+        gpsMode: file.gpsMode,
+        gpsColumns: file.gpsColumns
+      }
+    );
+
+    this.updateDatasets((datasets) => {
+      const ds = datasets.get(dataset.id);
+      if (ds) {
+        if (file.joinedBasemap) {
+          ds.joinedBasemap = file.joinedBasemap;
+        }
+        if (file.geoColumn) {
+          ds.geoColumn = file.geoColumn;
+        }
+        if (file.gpsMode) {
+          ds.gpsMode = file.gpsMode;
+          // Re-detect GPS columns if not persisted
+          if (!file.gpsColumns) {
+            const detected = this.detectGPSColumns(ds);
+            if (detected) {
+              ds.gpsColumns = detected;
+              logger.info('Re-detected GPS columns', LogCategory.DUCKDB, {
+                detected
+              });
+            }
+          } else {
+            ds.gpsColumns = file.gpsColumns;
+          }
+        }
+      }
+    });
+    this.bumpDatasetsVersion();
   }
 
   private async processCSV(
@@ -854,6 +901,17 @@ class DuckDBOrchestratorService {
       WHERE basemap = '${escapedBasemapId}'
     `);
 
+    const attributeCount = (await Duck.query(
+      `SELECT COUNT(*) as cnt FROM "${joinTableView}"`,
+      { format: 'array' }
+    )) as Array<{ cnt: number }>;
+
+    if (!attributeCount?.[0]?.cnt || attributeCount[0].cnt === 0) {
+      throw new Error(
+        `No attributes found for basemap '${basemapId}'. The basemap may not be properly indexed in basemap_attributes.`
+      );
+    }
+
     const escapedTableName = escapeSqlString(dataset.tableName);
     const escapedGeoColumn = escapeSqlString(geoColumn);
     const result = (await Duck.query(
@@ -970,6 +1028,16 @@ class DuckDBOrchestratorService {
         return;
       }
 
+      // Validate geoColumn exists in dataset (skip for OSM which uses geoColumn='')
+      if (geoColumn) {
+        const columnExists = dataset.columns.some((c) => c.name === geoColumn);
+        if (!columnExists) {
+          throw new Error(
+            `Column '${geoColumn}' not found in dataset. Available columns: ${dataset.columns.map((c) => c.name).join(', ')}`
+          );
+        }
+      }
+
       // Standard basemap join flow
       // 1. Load join macros
       await Duck.query(join_macros);
@@ -982,7 +1050,28 @@ class DuckDBOrchestratorService {
       // 3. Apply join association (adds basemap_id column to dataset)
       await Duck.apply_join_association(dataset.tableName, basemap.file);
 
-      // 4. Update dataset metadata
+      // 4. Validate join produced results
+      const joinedCountResult = (await Duck.query(
+        `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE basemap_id IS NOT NULL`,
+        { format: 'array' }
+      )) as Array<{ cnt: number }>;
+
+      const joinedCount = joinedCountResult?.[0]?.cnt ?? 0;
+      if (joinedCount === 0) {
+        logger.warn('Join produced 0 matches', LogCategory.DATA, {
+          datasetId,
+          basemap: basemap.file,
+          geoColumn
+        });
+      } else {
+        logger.info('Join validation passed', LogCategory.DATA, {
+          joinedCount,
+          totalRows: dataset.rowCount,
+          matchPercentage: ((joinedCount / dataset.rowCount) * 100).toFixed(1)
+        });
+      }
+
+      // 5. Update dataset metadata
       this.updateDatasets((d) => {
         const ds = d.get(dataset.id);
         if (ds) {
@@ -995,6 +1084,7 @@ class DuckDBOrchestratorService {
       logger.success('Join finalized successfully', LogCategory.DATA, {
         datasetId,
         basemap: basemap.file,
+        joinedCount,
         durationMs: (performance.now() - start).toFixed(2)
       });
     } catch (error) {
@@ -1194,12 +1284,30 @@ class DuckDBOrchestratorService {
     if (!this.initialized) await this.initialize();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
+    const start = performance.now();
     const dataset = this.findDatasetByIdOrSourceFile(datasetId);
+
     if (!dataset?.gpsMode || !dataset.gpsColumns) {
+      logger.debug(
+        'GPS bounds skipped - dataset not in GPS mode',
+        LogCategory.MAP,
+        {
+          datasetId,
+          gpsMode: dataset?.gpsMode,
+          hasGpsColumns: !!dataset?.gpsColumns
+        }
+      );
       return null;
     }
 
     const { lat, lon } = dataset.gpsColumns;
+
+    logger.debug('Computing GPS bounds', LogCategory.MAP, {
+      datasetId,
+      tableName: dataset.tableName,
+      latColumn: lat,
+      lonColumn: lon
+    });
 
     try {
       const result = (await Duck.query(
@@ -1207,7 +1315,8 @@ class DuckDBOrchestratorService {
           MIN("${lon}") as min_lon,
           MIN("${lat}") as min_lat,
           MAX("${lon}") as max_lon,
-          MAX("${lat}") as max_lat
+          MAX("${lat}") as max_lat,
+          COUNT(*) as valid_count
         FROM "${dataset.tableName}"
         WHERE "${lat}" IS NOT NULL
           AND "${lon}" IS NOT NULL
@@ -1219,29 +1328,64 @@ class DuckDBOrchestratorService {
         min_lat: number;
         max_lon: number;
         max_lat: number;
+        valid_count: number;
       }>;
 
-      if (result.length === 0) return null;
+      if (result.length === 0) {
+        logger.warn('GPS bounds query returned no results', LogCategory.MAP, {
+          datasetId,
+          tableName: dataset.tableName
+        });
+        return null;
+      }
 
       const bounds = result[0];
+
+      if (bounds.valid_count === 0) {
+        logger.warn('No valid GPS coordinates found', LogCategory.MAP, {
+          datasetId,
+          tableName: dataset.tableName,
+          latColumn: lat,
+          lonColumn: lon
+        });
+        return null;
+      }
+
       if (
         bounds.min_lon === null ||
         bounds.min_lat === null ||
         bounds.max_lon === null ||
         bounds.max_lat === null
       ) {
+        logger.warn('GPS bounds contain null values', LogCategory.MAP, {
+          datasetId,
+          bounds,
+          validCount: bounds.valid_count
+        });
         return null;
       }
 
-      return {
+      const computedBounds = {
         minLon: bounds.min_lon,
         minLat: bounds.min_lat,
         maxLon: bounds.max_lon,
         maxLat: bounds.max_lat
       };
+
+      logger.success('GPS bounds computed', LogCategory.MAP, {
+        datasetId,
+        bounds: computedBounds,
+        validCoordinates: bounds.valid_count,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return computedBounds;
     } catch (error) {
       logger.error('Failed to get GPS bounds', LogCategory.MAP, {
         datasetId,
+        tableName: dataset.tableName,
+        latColumn: lat,
+        lonColumn: lon,
         error
       });
       return null;
