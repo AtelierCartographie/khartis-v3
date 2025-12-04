@@ -6,11 +6,12 @@
 
 ```bash
 git clone <repo-url>
-npm install
-npm run dev
+corepack enable          # Enable Yarn 4
+yarn install
+yarn dev
 ```
 
-Open http://localhost:5176/cartographie/khartisnewpprd/ and explore `src/lib/features/` to understand the structure.
+Open http://localhost:5176/ and explore `src/lib/features/` to understand the structure.
 
 ## 🎯 Golden Rules
 
@@ -26,15 +27,18 @@ Open http://localhost:5176/cartographie/khartisnewpprd/ and explore `src/lib/fea
 
 ```
 src/lib/
-├── features/           # Feature-based architecture
-│   ├── commons/        # Shared components, utils, services
-│   ├── create-project/ # Project creation modal
-│   ├── header/         # Top navigation
-│   ├── main-toolbar/   # Left sidebar
-│   ├── map/            # Map visualization
-│   └── step-toolbar/   # Right panel tools
-├── paraglide/          # i18n messages (en, fr)
-└── types/              # Shared TypeScript types
+├── features/              # Feature-based architecture
+│   ├── commons/           # Shared components, utils, services
+│   ├── create-project/    # Project creation modal
+│   ├── data-pipeline/     # Data import pipeline (parsers, models)
+│   ├── duckdb/            # DuckDB WASM integration
+│   ├── header/            # Top navigation
+│   ├── main-toolbar/      # Left sidebar
+│   ├── map/               # Map visualization
+│   ├── project-management/ # Project persistence & serialization
+│   └── step-toolbar/      # Right panel tools
+├── paraglide/             # i18n messages (en, fr)
+└── types/                 # Shared TypeScript types
 ```
 
 ## ➕ Adding a Feature
@@ -125,21 +129,19 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 
 ## 🎨 Extension Points
 
-| What                   | How                                      |
-| ---------------------- | ---------------------------------------- |
-| **New file format**    | Parser + validator + signature detection |
-| **New visualization**  | Registry + factory + layer builder       |
-| **New classification** | Strategy interface `compute(values, k)`  |
-| **New tool**           | Store + component + toolbar registration |
-| **New export format**  | `(project) => Blob` converter            |
+| What                   | How                                                     |
+| ---------------------- | ------------------------------------------------------- |
+| **New file format**    | Implement `IParser` in `data-pipeline/adapters/parsers` |
+| **New classification** | Add method in `duckdb/services/duckdb/breaks.ts`        |
+| **New tool**           | Store + component + toolbar registration                |
 
 ## ⚡ Performance Strategies
 
 - **Code splitting**: Lazy load heavy libraries
-- **Web Workers**: Offload classification, joins, simplification
+- **DuckDB WASM**: All data processing in main thread via DuckDB
 - **Throttling**: Debounce rapid edits, use preview LOD
 - **Geometry**: Pre-simplification tiers + dynamic simplification
-- **Caching**: Memoize classification and palettes
+- **Caching**: DuckDB query result caching with table versioning
 
 **Target**: <3s load, ~60fps pan/zoom (small-medium datasets)
 
@@ -150,7 +152,7 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 - **E2E**: Critical flows (import → visualize → export)
 - **Performance**: Synthetic dataset benchmarks
 
-Run tests: `npm test`
+Run tests: `yarn test:unit`
 
 ## 📝 Contribution Workflow
 
@@ -201,7 +203,7 @@ import * as m from '$paraglide/messages';
 
 ## ❓ Troubleshooting
 
-**Build fails**: Check `.svelte-kit/tsconfig.json` exists (run `npm run dev` once)
+**Build fails**: Check `.svelte-kit/tsconfig.json` exists (run `yarn dev` once)
 
 **Types not found**: Restart TypeScript server in IDE
 
@@ -215,9 +217,9 @@ import * as m from '$paraglide/messages';
 - **Projection**: Coordinate system transformation
 - **Simplification**: Geometry reduction for performance
 - **LOD**: Level of Detail (rendering optimization)
-- **Worker**: Web Worker for background processing
+- **DuckDB**: In-browser SQL analytics engine (WASM)
 
 ---
 
-**Documentation Version**: 3.1.0
-**Last Updated**: 2025-11-20
+**Documentation Version**: 3.2.0
+**Last Updated**: 2025-12-05
