@@ -1,4 +1,4 @@
-import type { KhartisProject } from '../models/project';
+import type { KhartisProject } from '../types';
 import { ProjectValidator } from '$lib/features/commons/utils/validation.utils';
 
 export function duplicateProject(

@@ -94,3 +94,8 @@ export enum ProjectStorageKey {
   AUTOSAVE = 'khartis_autosave',
   PREFERENCES = 'khartis_preferences'
 }
+
+export interface AutoSaveConfig {
+  enabled: boolean;
+  interval: number;
+}

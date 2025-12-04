@@ -5,7 +5,10 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { geoParquetReader, type GeoArrowMetadata } from '$lib/features/data-pipeline';
+import {
+  geoParquetReader,
+  type GeoArrowMetadata
+} from '$lib/features/data-pipeline';
 import type {
   BasemapMetadata,
   JoinQuality
