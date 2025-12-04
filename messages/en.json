@@ -550,7 +550,7 @@
   "date": "Date",
   "projection": "Projection",
   "loading_basemap_suggestions": "Loading basemap suggestions...",
-  "pwa_update_title": "Update available",
+  "pwa_update_title": "Click to update Khartis",
   "pwa_update_subtitle": "A new version of Khartis is available",
   "pwa_update_action": "Reload to update",
   "pwa_offline_ready_title": "Ready for offline use",
