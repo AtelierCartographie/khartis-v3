@@ -95,7 +95,7 @@
 
   const virtualScroll = useVirtualScroll({
     numRows: () => filters.numRows,
-    maxRows,
+    maxRows: () => maxRows,
     onLoadMore: async () => {
       await tableData.loadRowsData();
     }

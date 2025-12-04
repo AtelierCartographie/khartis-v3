@@ -24,7 +24,10 @@ export interface UseColumnOperationsReturn {
   toggleColumnVisibility: (columnName: string) => void;
   openRenameModal: (columnName: string) => void;
   handleRename: (newName: string) => Promise<void>;
-  handleRefine: (columnName: string, operation: RefineOperation) => Promise<void>;
+  handleRefine: (
+    columnName: string,
+    operation: RefineOperation
+  ) => Promise<void>;
   changeColumnType: (columnName: string, duckType: string) => Promise<void>;
 }
 
@@ -136,7 +139,9 @@ export function useColumnOperations(
     try {
       await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
       await props.onColumnsChange();
-      props.onRecordTransformation?.(`Affinage (${operation}) sur ${columnName}`);
+      props.onRecordTransformation?.(
+        `Affinage (${operation}) sur ${columnName}`
+      );
     } catch (err) {
       logger.error('Error refining column', LogCategory.UI, err);
     }
@@ -153,9 +158,15 @@ export function useColumnOperations(
     }
 
     try {
-      await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
+      await duckDBOrchestrator.changeColumnType(
+        tableName,
+        columnName,
+        duckType
+      );
       await props.onColumnsChange();
-      props.onRecordTransformation?.(`Type de ${columnName} converti en ${duckType}`);
+      props.onRecordTransformation?.(
+        `Type de ${columnName} converti en ${duckType}`
+      );
     } catch (err) {
       logger.error('Error changing column type', LogCategory.UI, err);
     }
