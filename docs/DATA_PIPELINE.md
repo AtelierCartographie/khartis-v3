@@ -12,25 +12,25 @@ The feature `src/lib/features/data-pipeline` embraces **SOLID**, **KISS**, and *
 src/lib/features/data-pipeline/
 ├── index.ts               # Public entry (pipeline, adapters, models, contracts)
 ├── pipeline/              # createDataPipeline + orchestration helpers
-├── adapters/              # Parsers, validators, type inferrer
+├── adapters/
+│   ├── parsers/           # CSVParser, GeoJSONParser
+│   └── readers/           # GeoParquetReader
 ├── models/                # DatasetResult, ColumnType, GeometryInfo, GeoArrow metadata…
-├── contracts/             # Interfaces IParser, IValidator, ITypeInferrer…
+├── contracts/             # Interfaces IParser, IColumnAnalyzer, IAnalyticsEngine…
 ├── types/                 # Core DTOs (ProcessedDataset, AnalysisResult…)
-└── utils/                 # Processed-dataset helpers, etc.
+└── utils/                 # Processed-dataset helpers, GeoJSON converter
 ```
 
-The default pipeline assembles the built-in adapters but you can supply custom lists (parsers, validators, type inferrers) when calling the factory.
+The default pipeline assembles the built-in parsers. You can supply custom parsers when calling the factory.
 
 ## Supported formats
 
-| Format         | Extensions             | Parser             | Notes                                             |
-| -------------- | ---------------------- | ------------------ | ------------------------------------------------- |
-| **CSV/TSV**    | `.csv`, `.tsv`, `.txt` | `CSVParser`        | Tabular data, uses DuckDB's `read_csv()`          |
-| **GeoJSON**    | `.geojson`, `.json`    | `GeoJSONParser`    | Spatial datasets, uses DuckDB's `ST_Read()`       |
-| **Shapefile**  | `.shp` + companions    | `ShapefileParser`  | Uses DuckDB's `ST_Read()`, handles zipped bundles |
-| **GeoParquet** | `.parquet`             | `GeoParquetParser` | Native DuckDB support with GeoArrow encoding      |
-| **KML**        | `.kml`                 | `KMLParser`        | Uses DuckDB's `ST_Read()`                         |
-| **GeoPackage** | `.gpkg`                | `GeoPackageParser` | Uses DuckDB's `ST_Read()`                         |
+| Format      | Extensions             | Parser          | Notes                                        |
+| ----------- | ---------------------- | --------------- | -------------------------------------------- |
+| **CSV/TSV** | `.csv`, `.tsv`, `.txt` | `CSVParser`     | Tabular data, uses DuckDB's `read_csv()`     |
+| **GeoJSON** | `.geojson`, `.json`    | `GeoJSONParser` | Spatial datasets, uses DuckDB's `ST_Read()`  |
+
+> **Note**: Additional formats (Shapefile, GeoParquet, KML, GeoPackage) are handled directly by DuckDB via the orchestrator service when files are registered.
 
 ## Processing flow
 
@@ -39,15 +39,11 @@ The default pipeline assembles the built-in adapters but you can supply custom l
         ↓
 2. findParser() → pick matching parser
         ↓
-3. parser.parse() → returns RawDataset
+3. parser.parse() → creates DuckDB table + returns DatasetResult
         ↓
-4. runValidators() → size, schema, quality
+4. DuckDB orchestrator → analysis + stats via Duck.analyse()
         ↓
-5. HeuristicTypeInferrer → column types
-        ↓
-6. DuckDB → tables + stats
-        ↓
-7. DatasetResult → final enriched payload
+5. DatasetResult → final enriched payload
 ```
 
 ## Public API
@@ -55,7 +51,7 @@ The default pipeline assembles the built-in adapters but you can supply custom l
 ### Default usage
 
 ```ts
-import { dataPipeline } from '$lib/features/data';
+import { dataPipeline } from '$lib/features/data-pipeline';
 
 await dataPipeline.initialize(); // once at startup
 const result = await dataPipeline.processFile(file);
@@ -70,26 +66,17 @@ console.log(result.geometry); // Geometry info if spatial
 ```ts
 import {
   createDataPipeline,
-  createParserList,
-  createValidatorList,
-  HeuristicTypeInferrer
-} from '$lib/features/data';
+  createParserList
+} from '$lib/features/data-pipeline';
 
 const parsers = createParserList();
-parsers.unshift(new ExcelParser()); // custom parser first
-
-const validators = createValidatorList();
-validators.push(new CustomValidator());
+// Add custom parser at the beginning of the list
+parsers.unshift(new MyCustomParser());
 
 const pipeline = createDataPipeline({
-  parsers,
-  validators,
-  typeInferrer: new HeuristicTypeInferrer(),
-  stopOnFirstValidationError: true
+  parsers
 });
 ```
-
-The factory mirrors the old khartis-pipeline-old flow but keeps extensions easy.
 
 ## DuckDB feature tie-in (`src/lib/features/duckdb`)
 
@@ -102,7 +89,7 @@ Key reminders:
 1. Always call `duckDBOrchestrator.initialize()` before running queries; it loads extensions and macros.
 2. `processGeoJSON` tries ST_Read, then Arrow ingestion, then the legacy JSON fallback based on the env flags.
 3. DuckDB queries drop GeoArrow metadata, so export to GeoParquet (`copy_to_geoparquet_as_buffer`) and re-read via `geoParquetReader` when metadata matters.
-4. The GeoParquet cache lives in memory (LRU ~100 MB). Clear it (`clearGeoParquetCache`) when dropping/recreating tables.
+4. The GeoParquet cache lives in memory (LRU ~100 MB). Clear it (`clearGeoParquetCache`) when dropping/recreating tables.
 
 ### DuckDB runtime optimizations
 
@@ -121,9 +108,6 @@ Thanks to these tweaks DuckDB stays the single source of truth (CDC §3.A) but a
 ```ts
 export type DataPipelineOptions = {
   parsers?: ParserList;
-  validators?: ValidatorList;
-  typeInferrer?: ITypeInferrer;
-  stopOnFirstValidationError?: boolean;
 };
 
 export type DataPipeline = {
@@ -133,10 +117,7 @@ export type DataPipeline = {
     uploadedFile: UploadedFilePayload,
     originalFile?: File
   ): Promise<DatasetResult>;
-  validateFile(file: File): Promise<ValidationResult>;
   destroy(): Promise<void>;
-  getParsers(): IParser[];
-  getValidators(): IValidator[];
 };
 ```
 
@@ -146,36 +127,22 @@ export type DataPipeline = {
 
 ### Facade
 
-The pipeline object is the facade: `initialize`, `processFile`, `processUploadedFile`, `validateFile`, `destroy`. Internals (validations, inference, DuckDB) stay hidden.
+The pipeline object is the facade: `initialize`, `processFile`, `processUploadedFile`, `destroy`. Internals (DuckDB operations, parsing) stay hidden.
 
 ### Strategy / Selector
 
-- Parsers implement `IParser` and are plugged via `createParserList` + `findParser`.
-- Validators implement `IValidator` and are executed via `runValidators`.
+Parsers implement `IParser` and are plugged via `createParserList` + `findParser`.
 
 ```ts
 const parsers = createParserList();
-parsers.unshift(new ExcelParser());
+parsers.unshift(new MyCustomParser());
 const parser = findParser(file, parsers);
 if (!parser) throw new Error('Unsupported format');
 ```
 
-### Chain of Responsibility
+## Type inference
 
-`runValidators(rawDataset, validators, stopOnFirstError)` chains the validators in order; set `stopOnFirstError` to short-circuit.
-
-```ts
-const validators = createValidatorList();
-validators.push(new CustomValidator());
-const result = runValidators(dataset, validators, true);
-if (!result.isValid) throw new Error(result.errors.join(', '));
-```
-
-## Type inference heuristics
-
-- 80 % of the sampled values must match to promote a type.
-- Only the first 100 non-null values are sampled.
-- Priority: boolean → date → number → geometry → text.
+Type inference is handled by DuckDB's native type detection during table creation. The `Duck.analyse()` function provides column statistics and type information.
 
 ## Performance checklist
 
@@ -186,7 +153,7 @@ if (!result.isValid) throw new Error(result.errors.join(', '));
 | Metadata preservation | GeoParquet with GeoArrow encoding       |
 | Memory management     | Processing semaphore (max 2 concurrent) |
 
-Target: <3 s load for “standard” datasets, smooth pan/zoom (~60 fps).
+Target: <3 s load for "standard" datasets, smooth pan/zoom (~60 fps).
 
 ## API Usage
 
@@ -204,19 +171,16 @@ export type {
   ProcessedDataset,
   ColumnInfo,
   AnalysisResult
-} from '$lib/features/data';
+} from '$lib/features/data-pipeline';
 
 // Facade + factory
-export { dataPipeline, createDataPipeline } from '$lib/features/data';
+export { dataPipeline, createDataPipeline } from '$lib/features/data-pipeline';
 
 // Extension helpers
 export {
   createParserList,
-  createValidatorList,
-  runValidators,
+  findParser,
   CSVParser,
-  GeoJSONParser,
-  ShapefileParser,
-  HeuristicTypeInferrer
-} from '$lib/features/data';
+  GeoJSONParser
+} from '$lib/features/data-pipeline';
 ```

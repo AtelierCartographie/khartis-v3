@@ -346,7 +346,7 @@ User Actions → Mutate Store → Derived Ripple → Update Layers/Layout
 | **Ephemeral UI local**          | Reduce global state noise |
 | **Persist only domain state**   | Clean project JSON        |
 | **Heavy compute in $derived**   | Automatic memoization     |
-| **Workers for expensive tasks** | Responsive UI             |
+| **DuckDB for expensive queries**| Responsive UI             |
 
 ## Tool Implementations Reference
 
