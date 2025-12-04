@@ -41,6 +41,10 @@ export interface DatasetResult {
   createdAt?: Date;
   bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
   geoDetection?: GeoDetectionResult;
+
+  // Join metadata for tabular datasets linked to basemaps
+  joinedBasemap?: string; // Basemap ID that this dataset is joined to
+  geoColumn?: string; // Column used for geographic matching
 }
 
 export interface EnrichedColumn extends InferredColumn {

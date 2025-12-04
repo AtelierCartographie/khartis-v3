@@ -58,17 +58,23 @@ class BasemapCatalogService {
 
   getSuggestions(
     dataset: ProcessedDataset,
-    limit: number = 3
+    limit: number = 3,
+    geoColumnName?: string
   ): BasemapSuggestion[] {
     if (!this._state.catalog) {
       return [];
     }
 
-    const geoColumn = dataset.columns.find(
-      (c) =>
-        c.type === 'string' &&
-        (c as { subtype?: string }).subtype === 'geographic'
-    );
+    let geoColumn;
+    if (geoColumnName) {
+      geoColumn = dataset.columns.find((c) => c.name === geoColumnName);
+    } else {
+      geoColumn = dataset.columns.find(
+        (c) =>
+          c.type === 'string' &&
+          (c as { subtype?: string }).subtype === 'geographic'
+      );
+    }
 
     if (!geoColumn) {
       return [];
@@ -127,6 +133,8 @@ class BasemapCatalogService {
 
     if (
       columnNameLower.includes('country') ||
+      columnNameLower.includes('iso') ||
+      columnNameLower.includes('adm0') ||
       (columnNameLower.includes('pays') &&
         (basemapTitleLower.includes('country') ||
           basemapTitleLower.includes('world') ||
@@ -134,6 +142,15 @@ class BasemapCatalogService {
     ) {
       score += 50;
       reasons.push('Country match');
+    }
+
+    if (
+      columnNameLower.includes('code') &&
+      (basemapTitleLower.includes('world') ||
+        basemapTitleLower.includes('monde'))
+    ) {
+      score += 30;
+      reasons.push('Code match');
     }
 
     if (

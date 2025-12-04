@@ -6,12 +6,13 @@
   } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
   interface GeoComboBoxItem {
     id: number;
@@ -26,24 +27,6 @@
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
   const geoDetection = $derived(selectedDataset?.geoDetection);
-
-  const hasTypeDetection = $derived(
-    !!selectedDataset && selectedDataset.columns.length > 0
-  );
-
-  const hasMissingValues = $derived(
-    processedDataset
-      ? processedDataset.columns.some((col) => col.nullable === true)
-      : false
-  );
-
-  const showVariableTypesNotification = $derived(
-    dataTabState.notifications.variableTypes && hasTypeDetection
-  );
-
-  const showWarningsNotification = $derived(
-    dataTabState.notifications.warnings && hasMissingValues
-  );
 
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
@@ -138,28 +121,42 @@
 
   let latitudeFieldId = $state<number | undefined>(undefined);
   let longitudeFieldId = $state<number | undefined>(undefined);
+  let previousDatasetId = $state<string | undefined>(undefined);
 
   $effect(() => {
-    if (latitudeColumns().length > 0) {
-      latitudeFieldId = latitudeColumns()[0].id;
+    const currentDatasetId = selectedDataset?.id;
+    if (currentDatasetId !== previousDatasetId) {
+      previousDatasetId = currentDatasetId;
+      latitudeFieldId = undefined;
+      longitudeFieldId = undefined;
+      activeTabIndex = 0;
+      dataTabActions.setGeolocationState({
+        geoReference: 'entities',
+        linkedVariable: null,
+        linkedVariableName: '',
+        latitudeColumn: undefined,
+        longitudeColumn: undefined
+      });
     }
   });
 
   $effect(() => {
-    if (longitudeColumns().length > 0) {
-      longitudeFieldId = longitudeColumns()[0].id;
+    if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {
+      const col = latitudeColumns()[0];
+      latitudeFieldId = col.id;
+      dataTabActions.setGeolocationState({
+        latitudeColumn: col.columnName
+      });
     }
   });
 
   $effect(() => {
-    if (selectedDataset) {
-      if (hasTypeDetection && !dataTabState.notifications.variableTypes) {
-        dataTabActions.toggleNotification('variableTypes');
-      }
-
-      if (hasMissingValues && !dataTabState.notifications.warnings) {
-        dataTabActions.toggleNotification('warnings');
-      }
+    if (longitudeColumns().length > 0 && longitudeFieldId === undefined) {
+      const col = longitudeColumns()[0];
+      longitudeFieldId = col.id;
+      dataTabActions.setGeolocationState({
+        longitudeColumn: col.columnName
+      });
     }
   });
 
@@ -193,8 +190,36 @@
 
   $effect(() => {
     const linkedVar = dataTabState.geolocation.linkedVariable;
+    const linkedName = dataTabState.geolocation.linkedVariableName;
+    const suggested = suggestedColumn();
+
+    if (linkedVar === null && !linkedName && suggested) {
+      dataTabActions.setGeolocationState({
+        linkedVariable: suggested.id,
+        linkedVariableName: suggested.columnName
+      });
+    }
+  });
+
+  $effect(() => {
+    const linkedVar = dataTabState.geolocation.linkedVariable;
     if (linkedVar !== undefined && linkedVar !== null && selectedDataset) {
       autoSelectBasemap();
+    }
+  });
+
+  // Mark step 1 as complete when geolocation is configured
+  $effect(() => {
+    const geo = dataTabState.geolocation;
+    const isEntityConfigured =
+      geo.linkedVariable !== null && geo.linkedVariable !== undefined;
+    const isCoordinatesConfigured =
+      geo.geoReference === 'coordinates' &&
+      geo.latitudeColumn &&
+      geo.longitudeColumn;
+
+    if (isEntityConfigured || isCoordinatesConfigured) {
+      dataTabStore.markStepComplete(1);
     }
   });
 </script>
@@ -206,21 +231,24 @@
     {m.geo_step_description()}
   </p>
 
-  <div class="form-field">
-    <div class="field-label">{m.geo_reference()}</div>
-    <div class="tab-container">
-      <ToggleTabs
-        bind:activeIndex={activeTabIndex}
-        items={tabItems}
-        onChange={handleTabChange}
-        className="geo-tabs"
-      />
-    </div>
-  </div>
-
-  {#if activeTabIndex === 0}
-    <div class="tab-content">
+  <div class="tab-content">
+    <div
+      class="geo-controls-grid"
+      class:coordinates-mode={activeTabIndex === 1}
+    >
       <div class="form-field">
+        <div class="field-label">{m.geo_reference()}</div>
+        <div class="tab-container">
+          <ToggleTabs
+            activeIndex={activeTabIndex}
+            items={tabItems}
+            onChange={handleTabChange}
+            className="geo-tabs"
+          />
+        </div>
+      </div>
+
+      <div class="form-field" class:hidden={activeTabIndex !== 0}>
         <div class="field-label">{m.geo_linked_variable()}</div>
         <ComboBox
           items={dataFieldItems()}
@@ -235,118 +263,73 @@
         />
       </div>
 
-      {#if suggestedColumn()}
-        <InlineNotification
-          title="Colonne géographique détectée"
-          subtitle={`La colonne "${suggestedColumn()!.columnName}" a été automatiquement sélectionnée (confiance: ${Math.round(suggestedColumn()!.confidence * 100)}%)`}
-          kind="success"
-          lowContrast
-          hideCloseButton={false}
+      <div class="form-field" class:hidden={activeTabIndex !== 1}>
+        <div class="field-label">{m.geo_longitude()}</div>
+        <ComboBox
+          items={longitudeColumns().length > 0
+            ? longitudeColumns()
+            : dataFieldItems()}
+          selectedId={longitudeFieldId}
+          on:select={(e) => {
+            longitudeFieldId = e.detail.selectedId;
+            dataTabActions.setGeolocationState({
+              longitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
+                ?.columnName
+            });
+          }}
+          placeholder={m.geo_select_longitude()}
+          labelText=""
         />
-      {/if}
-
-      {#if showVariableTypesNotification}
-        <InlineNotification
-          title={m.geo_notification_title()}
-          subtitle={m.geo_notification_subtitle()}
-          kind="info"
-          lowContrast
-          hideCloseButton={false}
-          on:close={() => dataTabActions.toggleNotification('variableTypes')}
-        />
-      {/if}
-
-      {#if showWarningsNotification}
-        <InlineNotification
-          title="Valeurs manquantes"
-          subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
-          kind="warning"
-          lowContrast
-          hideCloseButton={false}
-          on:close={() => dataTabActions.toggleNotification('warnings')}
-        />
-      {/if}
-    </div>
-  {:else}
-    <div class="tab-content">
-      <div class="form-row">
-        <div class="form-field flex-1">
-          <div class="field-label">{m.geo_longitude()}</div>
-          <ComboBox
-            items={longitudeColumns().length > 0
-              ? longitudeColumns()
-              : dataFieldItems()}
-            selectedId={longitudeFieldId}
-            on:select={(e) => {
-              longitudeFieldId = e.detail.selectedId;
-              dataTabActions.setGeolocationState({
-                longitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
-                  ?.columnName
-              });
-            }}
-            placeholder={m.geo_select_longitude()}
-            labelText=""
-          />
-        </div>
-
-        <div class="form-field flex-1">
-          <div class="field-label">{m.geo_latitude()}</div>
-          <ComboBox
-            items={latitudeColumns().length > 0
-              ? latitudeColumns()
-              : dataFieldItems()}
-            selectedId={latitudeFieldId}
-            on:select={(e) => {
-              latitudeFieldId = e.detail.selectedId;
-              dataTabActions.setGeolocationState({
-                latitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
-                  ?.columnName
-              });
-            }}
-            placeholder={m.geo_select_latitude()}
-            labelText=""
-          />
-        </div>
       </div>
 
-      {#if latitudeColumns().length > 0 && longitudeColumns().length > 0}
-        <InlineNotification
-          title="Colonnes de coordonnées détectées"
-          subtitle="Les colonnes de latitude et longitude ont été automatiquement sélectionnées"
-          kind="success"
-          lowContrast
-          hideCloseButton={false}
+      <div class="form-field" class:hidden={activeTabIndex !== 1}>
+        <div class="field-label">{m.geo_latitude()}</div>
+        <ComboBox
+          items={latitudeColumns().length > 0
+            ? latitudeColumns()
+            : dataFieldItems()}
+          selectedId={latitudeFieldId}
+          on:select={(e) => {
+            latitudeFieldId = e.detail.selectedId;
+            dataTabActions.setGeolocationState({
+              latitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
+                ?.columnName
+            });
+          }}
+          placeholder={m.geo_select_latitude()}
+          labelText=""
         />
-      {/if}
-
-      <Link href={GEO_LEARN_MORE_URL} target="_blank">
-        {m.geo_learn_more_geocoding()}
-        <Launch size={16} />
-      </Link>
-
-      {#if showVariableTypesNotification}
-        <InlineNotification
-          title={m.geo_notification_title()}
-          subtitle={m.geo_notification_subtitle()}
-          kind="info"
-          lowContrast
-          hideCloseButton={false}
-          on:close={() => dataTabActions.toggleNotification('variableTypes')}
-        />
-      {/if}
-
-      {#if showWarningsNotification}
-        <InlineNotification
-          title="Valeurs manquantes"
-          subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
-          kind="warning"
-          lowContrast
-          hideCloseButton={false}
-          on:close={() => dataTabActions.toggleNotification('warnings')}
-        />
-      {/if}
+      </div>
     </div>
-  {/if}
+
+    {#if activeTabIndex === 0 && suggestedColumn()}
+      <InlineNotification
+        title={m.geo_column_detected_title()}
+        subtitle={m.geo_column_detected_subtitle({
+          column: suggestedColumn()!.columnName,
+          confidence: Math.round(suggestedColumn()!.confidence * 100).toString()
+        })}
+        kind="success"
+        lowContrast
+        hideCloseButton={false}
+      />
+    {/if}
+
+    {#if activeTabIndex === 1 && latitudeColumns().length > 0 && longitudeColumns().length > 0}
+      <InlineNotification
+        title={m.geo_coords_detected_title()}
+        subtitle={m.geo_coords_detected_subtitle()}
+        kind="success"
+        lowContrast
+        hideCloseButton={false}
+      />
+    {/if}
+
+    <Link href={GEO_LEARN_MORE_URL} target="_blank">
+      {m.geo_learn_more_geocoding()}
+      <Launch size={16} />
+    </Link>
+  </div>
 </section>
 
 <style>
@@ -373,15 +356,6 @@
     margin-bottom: var(--cds-spacing-05);
   }
 
-  .form-row {
-    display: flex;
-    gap: var(--cds-spacing-05);
-  }
-
-  .flex-1 {
-    flex: 1;
-  }
-
   .field-label {
     margin-bottom: var(--cds-spacing-03);
     font-size: 0.875rem;
@@ -389,7 +363,28 @@
     font-weight: 500;
   }
 
+  .geo-controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--cds-spacing-05);
+    align-items: start;
+    margin-bottom: var(--cds-spacing-05);
+  }
+
+  .geo-controls-grid.coordinates-mode {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .geo-controls-grid .form-field.hidden {
+    display: none;
+  }
+
+  .tab-container {
+    margin-bottom: 0;
+  }
+
   :global(.geo-tabs) {
-    max-width: 500px;
+    width: 100%;
+    max-width: none;
   }
 </style>

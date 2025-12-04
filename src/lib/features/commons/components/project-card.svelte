@@ -46,7 +46,7 @@
   const isDefaultVariant = $derived(variant === 'default');
 
   const cardClasses = $derived(
-    clsx({
+    clsx('flex flex-col justify-between', {
       'border-2 border-dark-gray': selected && (disabled || isGrayVariant),
       'border-2 border-blue': selected && !disabled && isBlueVariant,
       'border-2 border-pale-blue': selected && !disabled && isDefaultVariant,
@@ -59,7 +59,7 @@
   );
 
   const topSectionClasses = $derived(
-    clsx('p-5 centered-flex-col top-section', {
+    clsx('p-5 centered-flex-col top-section flex-1', {
       'variant-gray': isGrayVariant,
       'color-text-01': disabled || isGrayVariant,
       'color-blue': !disabled && (isBlueVariant || isDefaultVariant)
@@ -146,9 +146,8 @@
 
 <style>
   #kh-card {
-    min-width: 184px;
-    max-width: 220px;
-    width: 100%;
+    min-width: 180px;
+    width: 180px;
     box-sizing: border-box;
     overflow: hidden;
   }

@@ -22,7 +22,10 @@ import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
-import type { UploadedFile } from './create-project.types';
+import type {
+  ColumnTransformation,
+  UploadedFile
+} from './create-project.types';
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -135,7 +138,8 @@ class ProjectStore {
           relatedFileObjects: file.relatedFileObjects,
           originalFile: file.originalFile,
           relatedFiles: file.relatedFiles,
-          relatedFilesData: file.relatedFilesData
+          relatedFilesData: file.relatedFilesData,
+          columnTransformations: file.columnTransformations
         };
 
         // Force reactivity by reassigning currentProject with deep copy of data
@@ -201,7 +205,169 @@ class ProjectStore {
     await this.saveCurrentProject();
   }
 
+  async renameFile(fileId: string, newName: string): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...updatedFiles[fileIndex],
+      name: newName
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async addColumnTransformation(
+    fileId: string,
+    transformation: ColumnTransformation
+  ): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const file = this._state.currentProject.data.sourceFiles[fileIndex];
+    const updatedTransformations = [
+      ...(file.columnTransformations ?? []),
+      transformation
+    ];
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...file,
+      columnTransformations: updatedTransformations
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async clearColumnTransformations(fileId: string): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...updatedFiles[fileIndex],
+      columnTransformations: [],
+      deletedRowIds: []
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async addDeletedRows(fileId: string, rowIds: number[]): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      logger.warn(
+        'No project or source files to add deleted rows',
+        LogCategory.PROJECT
+      );
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      logger.warn(
+        'File not found for adding deleted rows',
+        LogCategory.PROJECT,
+        {
+          fileId,
+          availableFileIds: this._state.currentProject.data.sourceFiles.map(
+            (f) => f.id
+          )
+        }
+      );
+      return;
+    }
+
+    const file = this._state.currentProject.data.sourceFiles[fileIndex];
+    const existingDeleted = file.deletedRowIds ?? [];
+    const newDeletedIds = [...new Set([...existingDeleted, ...rowIds])];
+
+    logger.info('Adding deleted rows to file', LogCategory.PROJECT, {
+      fileId,
+      newRowIds: rowIds.length,
+      totalDeleted: newDeletedIds.length
+    });
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...file,
+      deletedRowIds: newDeletedIds
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
+    if (this._state.currentProject) {
+      await this.saveCurrentProject();
+    }
+
     const nameValidation = ProjectValidator.validateProjectName(name);
     if (!nameValidation.isValid) {
       throw new Error(nameValidation.errors.join(', '));
@@ -237,6 +403,10 @@ class ProjectStore {
   }
 
   async loadProject(id: string): Promise<void> {
+    if (this._state.currentProject && this._state.isDirty) {
+      await this.saveCurrentProject();
+    }
+
     const project = await projectRepository.load(id);
 
     if (project) {
@@ -301,6 +471,7 @@ class ProjectStore {
       if (this._state.currentProject?.id === id) {
         this._state.currentProject = undefined;
         await projectStorage.remove(ProjectStorageKey.CURRENT);
+        await dataOrchestratorService.onProjectChanged();
       }
     } catch (error) {
       const message =
@@ -397,6 +568,10 @@ class ProjectStore {
   }
 
   async importProject(file: File): Promise<void> {
+    if (this._state.currentProject && this._state.isDirty) {
+      await this.saveCurrentProject();
+    }
+
     try {
       const project = await projectFiles.importProject(file);
 
@@ -407,6 +582,8 @@ class ProjectStore {
       this._state.historyIndex = -1;
 
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
+
+      await dataOrchestratorService.onProjectChanged();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to import project';

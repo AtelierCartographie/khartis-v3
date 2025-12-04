@@ -68,22 +68,12 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
+    // Only check duplicates within the current upload session
+    // Users should be able to create multiple projects with the same files
     const uploadingFiles = createProjectState.newProject.uploadedFiles;
-
-    const isInUploadingFiles = uploadingFiles.some(
+    return uploadingFiles.some(
       (f) => f.name === fileName && f.status !== 'error'
     );
-
-    if (isInUploadingFiles) {
-      return true;
-    }
-
-    const currentProject = projectStore.currentProject;
-    if (currentProject?.data?.sourceFiles) {
-      return currentProject.data.sourceFiles.some((f) => f.name === fileName);
-    }
-
-    return false;
   },
 
   async processFiles(
@@ -322,15 +312,21 @@ export const createProjectActions = {
   },
 
   async processPastedData(pastedText: string): Promise<void> {
-    const { fileType, validation } = extractDataFromPaste(pastedText);
+    const result = extractDataFromPaste(pastedText);
 
+    // If paste doesn't look like tabular data, show error
+    if (!result) {
+      showError(
+        'Invalid pasted data',
+        'Unable to detect tabular data. Please paste CSV or TSV content with delimiters.'
+      );
+      this.setPastedData('');
+      return;
+    }
+
+    const { fileType, content } = result;
     const baseName = 'pasted-data';
-    const extension =
-      fileType === FileType.CSV
-        ? 'csv'
-        : fileType === FileType.GEOJSON
-          ? 'geojson'
-          : 'txt';
+    const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
     let fileName = `${baseName}.${extension}`;
 
     let counter = 1;
@@ -339,30 +335,11 @@ export const createProjectActions = {
       counter++;
     }
 
-    const file = new File([pastedText], fileName, {
-      type: fileType === FileType.CSV ? 'text/csv' : 'application/json'
-    });
+    const mimeType =
+      fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
+    const file = new File([content], fileName, { type: mimeType });
 
-    // If validation fails, surface the error and add an errored entry for visibility.
-    if (!validation.isValid) {
-      const errorFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: fileName,
-        size: file.size,
-        type: file.type,
-        fileType,
-        status: 'error',
-        content: pastedText,
-        validation,
-        sourceType: DataSourceType.PASTE,
-        errorMessage: validation.errors[0]
-      };
-      this.addUploadedFile(errorFile);
-      showError('Invalid pasted data', validation.errors[0]);
-      this.setPastedData('');
-      return;
-    }
-
+    // DuckDB will handle validation during processing
     await this.processSingleFile(file, DataSourceType.PASTE);
     this.setPastedData('');
   },

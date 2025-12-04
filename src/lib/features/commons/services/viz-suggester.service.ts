@@ -1,13 +1,13 @@
 /**
  * @module VizSuggesterService
- * @description Service de suggestion de visualisations cartographiques basé sur l'analyse sémio du dataset
+ * @description Cartographic visualization suggestion service based on semio analysis of the dataset
  *
- * Algorithme en 3 étapes :
- * 1. Déterminer le typage sémiologique de chaque colonne (QTA, QTR, QL, QLO, geoid, geolat, geolon)
- * 2. Trier les colonnes par pertinence (score et absence de données)
- * 3. Appliquer les critères de viz compatibles avec le type de géométrie
+ * 3-step algorithm:
+ * 1. Determine the semiological type of each column (QTA, QTR, QL, QLO, geoid, geolat, geolon)
+ * 2. Sort columns by relevance (score and missing data)
+ * 3. Apply viz criteria compatible with the geometry type
  *
- * Basé sur l'algorithme original de khartis-pipeline-old/src/lib/viz_suggestions.ts
+ * Based on the original algorithm from khartis-pipeline-old/src/lib/viz_suggestions.ts
  */
 
 import type { ColumnAnalysis } from '$lib/features/data-pipeline/models/column-analysis';
@@ -59,15 +59,15 @@ const SEMIO_TYPES = {
   GEOID: 'geoid' as const,
   GEOLAT: 'geolat' as const,
   GEOLON: 'geolon' as const,
-  QTA: 'QTA' as const, // Quantitative Absolue
-  QTR: 'QTR' as const, // Quantitative Relative
+  QTA: 'QTA' as const, // Absolute Quantitative
+  QTR: 'QTR' as const, // Relative Quantitative
   QL: 'QL' as const, // Qualitative
-  QLO: 'QLO' as const // Qualitative Ordonnée
+  QLO: 'QLO' as const // Ordered Qualitative
 };
 
 /**
- * Critères de visualisations cartographiques
- * Basé sur https://docs.google.com/spreadsheets/d/1F6gk998PXV4FvPNRJZ59YPnmsXJ4h6BLyRZupvrRRdw/edit#gid=0
+ * Cartographic visualization criteria
+ * Based on https://docs.google.com/spreadsheets/d/1F6gk998PXV4FvPNRJZ59YPnmsXJ4h6BLyRZupvrRRdw/edit#gid=0
  */
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
@@ -220,12 +220,12 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
 ] as const;
 
 // ===========================
-// CLASSE SERVICE
+// SERVICE CLASS
 // ===========================
 
 export class VizSuggesterService {
   /**
-   * Suggère des visualisations adaptées au dataset
+   * Suggests visualizations adapted to the dataset
    */
   suggestVisualizations(
     columns: ColumnAnalysis[],
@@ -234,25 +234,25 @@ export class VizSuggesterService {
   ): VizSuggestion[] {
     const { maxSuggestions = 3, debug = false } = options;
 
-    // Pas de géométrie = pas de viz carto
+    // No geometry = no cartographic viz
     if (!geometryType) {
       return [];
     }
 
     const simplifiedGeomType = this.simplifyGeometryType(geometryType);
 
-    // Enrichir les colonnes avec typage sémiologique
+    // Enrich columns with semiological typing
     const enrichedColumns = columns
       .map((col) => this.getColumnSemioType(col))
       .sort((a, b) => {
-        // Tri par score décroissant, puis par nulls croissants
+        // Sort by descending score, then by ascending nulls
         if (b.score !== a.score) return b.score - a.score;
         const aNulls = this.getNullCount(a);
         const bNulls = this.getNullCount(b);
         return aNulls - bNulls;
       })
-      .filter((col) => col.semioType !== 'geoid') // Exclure les colonnes ID
-      .filter((col) => this.getUniqueCount(col) > 1); // Exclure colonnes avec 1 seule valeur
+      .filter((col) => col.semioType !== 'geoid') // Exclude ID columns
+      .filter((col) => this.getUniqueCount(col) > 1); // Exclude columns with only 1 value
 
     if (debug) {
       logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
@@ -265,13 +265,13 @@ export class VizSuggesterService {
       });
     }
 
-    // Générer suggestions
+    // Generate suggestions
     const suggestions = this.generateSuggestions(
       enrichedColumns,
       simplifiedGeomType
     );
 
-    // Limiter au nombre demandé
+    // Limit to requested number
     return suggestions.slice(0, maxSuggestions);
   }
 
@@ -282,16 +282,16 @@ export class VizSuggesterService {
     if (geomType.includes('Point')) return 'point';
     if (geomType.includes('Line')) return 'line';
     if (geomType.includes('Polygon')) return 'polygon';
-    return 'polygon'; // Défaut
+    return 'polygon'; // Default
   }
 
   /**
-   * Détermine le type sémiologique d'une colonne
+   * Determines the semiological type of a column
    */
   private getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     const results: Array<{ semioType: SemioType; score: number }> = [];
 
-    // Indicateurs calculés
+    // Calculated indicators
     const totalCount = this.getTotalCount(column);
     const uniqueCount = this.getUniqueCount(column);
     const shareUniques = totalCount > 0 ? uniqueCount / totalCount : 0;
@@ -303,7 +303,7 @@ export class VizSuggesterService {
     const max =
       typeof column.stats?.max === 'number' ? (column.stats?.max as number) : 0;
 
-    // Détection mots-clés dans le nom de colonne
+    // Keyword detection in column name
     const columnName = column.name ?? '';
     const lowerName = columnName.toLowerCase();
     const idWords = /\b(id|code|iso)\b/.test(lowerName);
@@ -314,7 +314,7 @@ export class VizSuggesterService {
     );
     const rankWords = /\b(rank|order|niveau|level)\b/.test(lowerName);
 
-    // Heuristiques simplifiées (pas d'accès aux share_integers/floats du DuckDB original)
+    // Simplified heuristics (no access to share_integers/floats from original DuckDB)
     const extentMagnitude = max > 0 ? Math.log10(max / Math.max(min, 1)) : 0;
 
     const columnType = (column.type ?? 'string').toString();
@@ -363,10 +363,10 @@ export class VizSuggesterService {
         results.push({ semioType: SEMIO_TYPES.QL, score: 0 });
     }
 
-    // Sélection du meilleur type sémiologique
+    // Selection of best semiological type
     const best = results.sort((a, b) => b.score - a.score)[0];
 
-    // Pénalité si colonne QL avec 1 seule valeur
+    // Penalty if QL column with only 1 value
     if (best.semioType === SEMIO_TYPES.QL && uniqueCount === 1) {
       best.score = 0;
     }
@@ -381,7 +381,7 @@ export class VizSuggesterService {
   }
 
   // ===========================
-  // HEURISTIQUES TYPAGE SÉMIO
+  // SEMIO TYPING HEURISTICS
   // ===========================
 
   private isQTA(indicators: { uniqueCount: number; extentMagnitude: number }): {
@@ -389,7 +389,7 @@ export class VizSuggesterService {
     score: number;
   } {
     let score = 0;
-    // Heuristique : beaucoup de valeurs uniques + grande étendue = QTA
+    // Heuristic: many unique values + large range = QTA
     if (indicators.uniqueCount > 20) score += 1;
     if (indicators.extentMagnitude >= 2) score += 2;
     return { semioType: SEMIO_TYPES.QTA, score };
@@ -464,11 +464,11 @@ export class VizSuggesterService {
   }
 
   // ===========================
-  // GÉNÉRATION SUGGESTIONS
+  // SUGGESTIONS GENERATION
   // ===========================
 
   /**
-   * Génère les suggestions de viz basées sur les colonnes enrichies
+   * Generates viz suggestions based on enriched columns
    */
   private generateSuggestions(
     columns: EnrichedColumn[],
@@ -477,7 +477,7 @@ export class VizSuggesterService {
     const results: VizSuggestion[] = [];
 
     if (columns.length === 0) {
-      // Aucune colonne pertinente = viz basique
+      // No relevant column = basic viz
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) && viz.semioTypes.length === 0
@@ -485,10 +485,10 @@ export class VizSuggesterService {
     }
 
     if (columns.length === 1) {
-      // 1 colonne
+      // 1 column
       results.push(...this.searchVizByType(columns[0], geometryType, 1));
     } else {
-      // 2+ colonnes : tester 1-var et 2-var
+      // 2+ columns: test 1-var and 2-var
       const first = columns[0];
       const second = columns[1];
 
@@ -496,7 +496,7 @@ export class VizSuggesterService {
       results.push(...this.searchVizByType(second, geometryType, 1));
       results.push(...this.searchVizByType([first, second], geometryType, 2));
 
-      // Si < 3 suggestions, essayer avec 3ème colonne
+      // If < 3 suggestions, try with 3rd column
       let third: EnrichedColumn | undefined;
       if (results.length < 3 && columns.length >= 3) {
         third = columns[2];
@@ -505,7 +505,7 @@ export class VizSuggesterService {
         results.push(...this.searchVizByType([second, third], geometryType, 2));
       }
 
-      // Si < 3 suggestions, essayer avec 4ème colonne
+      // If < 3 suggestions, try with 4th column
       if (results.length < 3 && columns.length >= 4) {
         const fourth = columns[3];
         const fallbackThird = third ?? columns[2];
@@ -520,7 +520,7 @@ export class VizSuggesterService {
       }
     }
 
-    // Dédupliquer par ID
+    // Deduplicate by ID
     const unique = results.filter(
       (viz, index, self) => index === self.findIndex((v) => v.id === viz.id)
     );
@@ -529,7 +529,7 @@ export class VizSuggesterService {
   }
 
   /**
-   * Recherche viz compatibles avec le type sémio des colonnes
+   * Search viz compatible with the semio type of columns
    */
   private searchVizByType(
     dataset: EnrichedColumn | EnrichedColumn[],
@@ -537,7 +537,7 @@ export class VizSuggesterService {
     nbColumns: 1 | 2
   ): VizSuggestion[] {
     if (nbColumns === 1 && !Array.isArray(dataset)) {
-      // 1 colonne
+      // 1 column
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&
@@ -547,7 +547,7 @@ export class VizSuggesterService {
     }
 
     if (nbColumns === 2 && Array.isArray(dataset) && dataset.length === 2) {
-      // 2 colonnes
+      // 2 columns
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&

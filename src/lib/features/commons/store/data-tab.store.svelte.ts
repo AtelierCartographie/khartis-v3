@@ -1,3 +1,4 @@
+import type { JoinQuality } from '$lib/features/map/types/basemap.types';
 import type { DataTabState } from './data-tab.types';
 
 const DEFAULT_STATE: DataTabState = {
@@ -10,34 +11,18 @@ const DEFAULT_STATE: DataTabState = {
   },
   geolocation: {
     geoReference: 'entities',
-    linkedVariable: 0,
-    linkedVariableName: 'Nom pays',
+    linkedVariable: null,
+    linkedVariableName: '',
     autoDetected: true
   },
   basemapJoin: {
-    selectedBasemap: 'world-admin',
+    selectedBasemap: '',
     basemapSource: 'catalog',
-    joinedEntities: 24,
-    entitiesToVerify: 3,
-    duplicateEntities: ['Congo', 'Guinée'],
-    unrecognizedEntities: ['Abcdland', 'Foo Republic'],
-    joinMappings: [
-      {
-        dataValue: 'Beglique',
-        basemapOptions: ['Belgique', 'Belize', 'Bénin'],
-        selectedMapping: 'Belgique'
-      },
-      {
-        dataValue: 'Epsagne',
-        basemapOptions: ['Espagne', 'Estonie'],
-        selectedMapping: 'Espagne'
-      },
-      {
-        dataValue: 'Lux.',
-        basemapOptions: ['Luxembourg'],
-        selectedMapping: 'Luxembourg'
-      }
-    ],
+    joinedEntities: 0,
+    entitiesToVerify: 0,
+    duplicateEntities: [],
+    unrecognizedEntities: [],
+    joinMappings: [],
     correctionEnabled: false
   },
   notifications: {
@@ -59,6 +44,27 @@ export const dataTabActions = {
 
   setBasemapJoinState(updates: Partial<DataTabState['basemapJoin']>): void {
     Object.assign(dataTabState.basemapJoin, updates);
+  },
+
+  setJoinStats(stats: JoinQuality): void {
+    dataTabState.basemapJoin.joinedEntities = stats.joinedCount;
+    dataTabState.basemapJoin.entitiesToVerify = stats.toVerifyCount;
+
+    dataTabState.basemapJoin.duplicateEntities = stats.entities
+      .filter((e) => e.status === 'duplicate')
+      .map((e) => e.dataValue);
+
+    dataTabState.basemapJoin.unrecognizedEntities = stats.entities
+      .filter((e) => e.status === 'unrecognized')
+      .map((e) => e.dataValue);
+
+    dataTabState.basemapJoin.joinMappings = stats.entities
+      .filter((e) => e.status === 'to_verify')
+      .map((e) => ({
+        dataValue: e.dataValue,
+        basemapOptions: e.matches || [],
+        selectedMapping: e.matches && e.matches.length > 0 ? e.matches[0] : ''
+      }));
   },
 
   updateJoinMapping(index: number, selectedMapping: string): void {
@@ -122,8 +128,14 @@ export function totalEntities() {
 }
 
 export function isDataReady() {
+  const geo = dataTabState.geolocation;
+
+  if (geo.geoReference === 'coordinates') {
+    return !!geo.latitudeColumn && !!geo.longitudeColumn;
+  }
+
   return (
-    dataTabState.geolocation.linkedVariable !== null &&
+    geo.linkedVariable !== null &&
     dataTabState.basemapJoin.selectedBasemap !== ''
   );
 }

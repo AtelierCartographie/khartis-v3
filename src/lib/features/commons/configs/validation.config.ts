@@ -1,6 +1,6 @@
 /**
- * Configuration centralisée pour les limites de validation
- * Évite la duplication des constantes entre validation.utils.ts et file-validator.utils.ts
+ * Centralized configuration for validation limits
+ * Avoids duplication of constants between validation.utils.ts and file-validator.utils.ts
  */
 
 export interface StorageLimits {
@@ -13,32 +13,32 @@ export interface StorageLimits {
 }
 
 /**
- * Limites de stockage et de fichiers pour l'application
- * Tous les fichiers de validation doivent utiliser ces constantes
+ * Storage and file limits for the application
+ * All validation files should use these constants
  */
 export const STORAGE_LIMITS: StorageLimits = {
-  /** Taille maximale d'un fichier individuel: 50 MB */
+  /** Maximum size of an individual file: 50 MB */
   maxFileSize: 50 * 1024 * 1024,
 
-  /** Taille maximale d'un projet complet: 100 MB */
+  /** Maximum size of a complete project: 100 MB */
   maxProjectSize: 100 * 1024 * 1024,
 
-  /** Nombre maximal de projets stockés */
+  /** Maximum number of stored projects */
   maxProjectCount: 50,
 
-  /** Taille maximale du stockage total: 500 MB */
+  /** Maximum total storage size: 500 MB */
   maxStorageSize: 500 * 1024 * 1024,
 
-  /** Taille maximale totale de tous les fichiers importés: 100 MB */
+  /** Maximum total size of all imported files: 100 MB */
   maxTotalFileSize: 100 * 1024 * 1024,
 
-  /** Nombre maximal de fichiers dans une importation */
+  /** Maximum number of files in an import */
   maxFileCount: 20
 };
 
 /**
- * Interface de base pour les résultats de validation
- * À utiliser comme base pour toutes les validations
+ * Base interface for validation results
+ * To be used as base for all validations
  */
 export interface ValidationResult {
   isValid: boolean;

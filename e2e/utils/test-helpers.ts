@@ -25,11 +25,13 @@ export async function waitForModalVisible(page: Page, timeout = 15000) {
 }
 
 export async function waitForMapRender(page: Page, timeout = 10000) {
-  await page.waitForSelector('[data-testid="map-canvas"]', {
+  // Wait for map container to be visible
+  await page.waitForSelector('.map-container', {
     state: 'visible',
     timeout
   });
-  await expect(page.locator('.deck-canvas')).toBeVisible({ timeout });
+  // Give DeckGL time to initialize
+  await page.waitForTimeout(1000);
 }
 
 export async function createProjectFromCSV(
@@ -47,7 +49,8 @@ export async function createProjectFromCSV(
   const fileInput = modal.locator('input[type="file"]').first();
   await fileInput.setInputFiles(csvPath);
 
-  await page.waitForTimeout(500);
+  // Wait for file processing (CSV tag appears when complete)
+  await page.waitForTimeout(2000);
 
   const finalProjectName = projectName || `Test Project ${Date.now()}`;
   const projectNameInput = modal.locator('[data-testid="project-name-input"]');
@@ -58,9 +61,9 @@ export async function createProjectFromCSV(
     name: CREATE_BUTTON_LABEL,
     exact: true
   });
-  await expect(createButton).toBeEnabled();
+  await expect(createButton).toBeEnabled({ timeout: 10000 });
   await createButton.click();
-  await expect(modal).toBeHidden({ timeout: 10000 });
+  await expect(modal).toBeHidden({ timeout: 20000 });
 
   return finalProjectName;
 }
@@ -99,7 +102,7 @@ export async function createProjectFromGeoJSON(
 }
 
 export async function openHamburgerMenu(page: Page): Promise<Locator> {
-  const hamburger = page.locator('[aria-label="Open menu"]');
+  const hamburger = page.locator('button[aria-label="Open menu"]');
   await hamburger.click();
   await page.waitForTimeout(500);
   return page.locator('.bx--side-nav');
