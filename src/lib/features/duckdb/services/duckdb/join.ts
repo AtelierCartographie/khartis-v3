@@ -81,8 +81,8 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
  * @description SQL macro for creating a join table from a basemap.
  */
 const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_table_from_basemap
--- ATTENTION : basemap_table doit être fourni sous forme d'une chaîne de caractères. ex : 'nom_table'
--- VERSION À DEUX ARGUMENTS = une unique colonne d'identifiant
+-- WARNING: basemap_table must be provided as a string. e.g.: 'table_name'
+-- TWO ARGUMENTS VERSION = a single identifier column
 (basemap_table, main_id) AS TABLE (
   WITH t1 AS (
       FROM query_table(basemap_table)
@@ -96,7 +96,7 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         basemap_table as basemap,
         t1.count as basemap_count
     ),
--- VERSION À TROIS ARGUMENTS = un id principal et un ou plusieurs secondaires
+-- THREE ARGUMENTS VERSION = one main id and one or more secondary ids
 (basemap_table, main_id, others_id) AS TABLE (
   WITH t1 AS (
     FROM query_table(basemap_table)

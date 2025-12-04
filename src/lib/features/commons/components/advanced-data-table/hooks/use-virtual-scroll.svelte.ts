@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { TABLE_ROW_HEIGHT } from '../types';
 
 export interface UseVirtualScrollProps {
@@ -89,8 +90,10 @@ export function useVirtualScroll(
     if (index !== -1) {
       const newStartIndex = Math.max(0, index - offsetRows);
       await initializeRows(newStartIndex);
+      await tick();
 
-      const scrollPosition = offsetRows * rowHeight;
+      const targetRowPosition = index - newStartIndex;
+      const scrollPosition = Math.max(0, (targetRowPosition - 3) * rowHeight);
       if (tableContainer) {
         tableContainer.scrollTop = scrollPosition;
       }

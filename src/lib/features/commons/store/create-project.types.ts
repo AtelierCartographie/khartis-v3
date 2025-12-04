@@ -31,12 +31,14 @@ export type ColumnTransformationType =
   | 'rename'
   | 'drop'
   | 'type_change'
-  | 'refine';
+  | 'refine'
+  | 'replace';
 
 export interface ColumnTransformation {
   type: ColumnTransformationType;
   column: string;
-  newValue?: string; // For rename: new name, for type_change: new type
+  newValue?: string; // For rename: new name, for type_change: new type, for replace: replace value
+  searchValue?: string; // For replace: search value
   timestamp: string;
 }
 
