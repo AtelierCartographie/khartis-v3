@@ -59,6 +59,7 @@
         if (lastFile?.id) {
           globalActions.selectDataButton(lastFile.id);
         }
+
         closeModal();
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);

@@ -7,5 +7,11 @@
 </script>
 
 {#key svgElement}
-  <div use:myplot {...rest}></div>
+  <div class="summary-plot-container" use:myplot {...rest}></div>
 {/key}
+
+<style>
+  .summary-plot-container {
+    overflow: visible;
+  }
+</style>

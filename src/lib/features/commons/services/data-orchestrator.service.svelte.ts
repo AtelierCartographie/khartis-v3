@@ -1,7 +1,7 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -281,28 +281,6 @@ class DataOrchestratorService {
     }
   }
 
-  private async ensureFileObject(
-    file: UploadedFile,
-    fallbackMime: string
-  ): Promise<File> {
-    if (file.originalFile) {
-      return file.originalFile;
-    }
-
-    if (file.content instanceof ArrayBuffer) {
-      return new File([file.content], file.name, { type: fallbackMime });
-    }
-
-    if (typeof file.content === 'string') {
-      return new File([file.content], file.name, { type: fallbackMime });
-    }
-
-    throw new ParseError('Missing original file content', file.fileType, {
-      fileId: file.id,
-      fileName: file.name
-    });
-  }
-
   private async processFileInDuckDB(
     file: UploadedFile,
     datasetOverride?: DatasetResult
@@ -480,6 +458,10 @@ class DataOrchestratorService {
     // Mark files as processing BEFORE starting to prevent race conditions
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
 
+    // Begin batch mode to suppress version bumps until all files AND transformations are applied
+    // This prevents UI flash (old column names → new column names)
+    duckDBOrchestrator.beginBatch();
+
     try {
       const concurrency = this.determineProjectConcurrency();
 
@@ -558,7 +540,24 @@ class DataOrchestratorService {
 
           try {
             await this.onFileAdded(file);
-          } catch (_) {
+
+            // Apply saved column transformations after file is loaded
+            if (
+              file.columnTransformations &&
+              file.columnTransformations.length > 0
+            ) {
+              await this.applyColumnTransformations(file);
+            }
+
+            // Apply saved row deletions after file is loaded
+            if (file.deletedRowIds && file.deletedRowIds.length > 0) {
+              logger.info(
+                `[DataOrchestrator] Found ${file.deletedRowIds.length} deleted rows to apply for ${file.name}`,
+                LogCategory.DATA
+              );
+              await this.applyRowDeletions(file);
+            }
+          } catch (_err) {
             // Individual file failure shouldn't stop the whole batch
             // Error is already logged in onFileAdded
           }
@@ -569,6 +568,133 @@ class DataOrchestratorService {
     } finally {
       // Clear processing flags
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
+
+      // End batch mode - triggers a single UI update with final state (renamed columns)
+      duckDBOrchestrator.endBatch();
+    }
+  }
+
+  private async applyColumnTransformations(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.columnTransformations) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.columnTransformations.length} column transformations for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    for (const transformation of file.columnTransformations) {
+      try {
+        switch (transformation.type) {
+          case 'rename':
+            if (transformation.newValue) {
+              await duckDBOrchestrator.renameColumn(
+                dataset.tableName,
+                transformation.column,
+                transformation.newValue
+              );
+              datasetsStore.renameDatasetColumn(
+                dataset.id,
+                transformation.column,
+                transformation.newValue
+              );
+            }
+            break;
+
+          case 'drop':
+            await duckDBOrchestrator.dropColumn(
+              dataset.tableName,
+              transformation.column
+            );
+            break;
+
+          case 'type_change':
+            if (transformation.newValue) {
+              await duckDBOrchestrator.changeColumnType(
+                dataset.tableName,
+                transformation.column,
+                transformation.newValue
+              );
+            }
+            break;
+
+          case 'refine':
+            if (transformation.newValue) {
+              const operationMap: Record<string, RefineOperation> = {
+                uppercase: RefineOperation.UPPERCASE,
+                lowercase: RefineOperation.LOWERCASE,
+                titlecase: RefineOperation.TITLECASE,
+                trim: RefineOperation.TRIM,
+                trim_all: RefineOperation.TRIM_ALL
+              };
+              const refineOp = operationMap[transformation.newValue];
+              if (refineOp) {
+                await duckDBOrchestrator.refineColumn(
+                  dataset.tableName,
+                  transformation.column,
+                  refineOp
+                );
+              }
+            }
+            break;
+
+          case 'replace':
+            if (transformation.searchValue && transformation.newValue) {
+              await duckDBOrchestrator.replaceInColumn(
+                dataset.tableName,
+                transformation.column,
+                transformation.searchValue,
+                transformation.newValue
+              );
+            }
+            break;
+        }
+      } catch (err) {
+        logger.warn(
+          `Failed to apply transformation ${transformation.type} on column ${transformation.column}`,
+          LogCategory.DATA,
+          { error: err }
+        );
+      }
+    }
+
+    duckDBOrchestrator.bumpDatasetsVersion();
+  }
+
+  private async applyRowDeletions(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.deletedRowIds) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.deletedRowIds.length} row deletions for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    try {
+      await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
+
+      const { Duck } = await import('$lib/features/duckdb');
+      const newRowCount = Duck
+        ? await Duck.get_row_count(dataset.tableName)
+        : 0;
+      datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
+
+      logger.debug(
+        `[DataOrchestrator] Applied row deletions, new row count: ${newRowCount}`,
+        LogCategory.DATA
+      );
+    } catch (err) {
+      logger.warn(
+        `Failed to apply row deletions for ${file.name}`,
+        LogCategory.DATA,
+        { error: err }
+      );
     }
   }
 

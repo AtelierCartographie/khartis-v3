@@ -7,7 +7,7 @@ import {
 import { logger, LogCategory } from './logger';
 import * as m from '$lib/paraglide/messages';
 
-// Re-export pour compatibilité avec le code existant
+// Re-export for compatibility with existing code
 export { STORAGE_LIMITS, type StorageLimits, type ValidationResult };
 
 function bigIntReplacer(_key: string, value: unknown): unknown {

@@ -57,18 +57,18 @@ export function normalizeForMatching(
 
   let normalized = value.toString().trim();
 
-  // Enlever les accents en utilisant NFD + suppression des diacritiques
+  // Remove accents using NFD + diacritics removal
   normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Appliquer la casse si nécessaire
+  // Apply case if necessary
   if (!caseSensitive) {
     normalized = normalized.toLowerCase();
   }
 
-  // Enlever la ponctuation et caractères spéciaux (garder lettres, chiffres et espaces)
+  // Remove punctuation and special characters (keep letters, digits and spaces)
   normalized = normalized.replace(/[^a-z0-9\s]/gi, '');
 
-  // Normaliser les espaces multiples en un seul
+  // Normalize multiple spaces into one
   normalized = normalized.replace(/\s+/g, ' ').trim();
 
   return normalized;

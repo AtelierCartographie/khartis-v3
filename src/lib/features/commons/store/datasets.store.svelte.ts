@@ -5,6 +5,7 @@ import { LogCategory, logger } from '../utils/logger';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
 import { ProcessingSemaphore } from '../utils/processing-semaphore';
+import { projectStore } from './project.store.svelte';
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -338,39 +339,83 @@ class DatasetsStore {
       : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
-  resetDataset(datasetId: string): boolean {
-    const datasetIndex = this._state.datasets.findIndex(
-      (d) => d.id === datasetId
+  async resetDataset(datasetId: string): Promise<boolean> {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      logger.warn('Dataset not found for reset', LogCategory.STORE, {
+        datasetId
+      });
+      return false;
+    }
+
+    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+      (f) => f.id === dataset.sourceFileId
     );
 
-    if (datasetIndex === -1) {
+    if (!sourceFile) {
+      logger.warn('Source file not found for reset', LogCategory.STORE, {
+        datasetId,
+        sourceFileId: dataset.sourceFileId
+      });
       return false;
     }
 
-    const dataset = this._state.datasets[datasetIndex];
-
-    if (!dataset.originalData) {
+    if (!sourceFile.content && !sourceFile.originalFile) {
+      logger.warn('Source file has no content for reset', LogCategory.STORE, {
+        datasetId,
+        fileName: sourceFile.name
+      });
       return false;
     }
 
-    const resetDataset = {
-      ...dataset,
-      columns: structuredClone(dataset.originalData.columns),
-      data: structuredClone(dataset.originalData.data),
-      rowCount: dataset.originalData.rowCount,
-      metadata: {
-        ...dataset.metadata,
-        transformations: []
-      }
-    };
+    try {
+      this.startProcessing();
 
-    this._state.datasets = [
-      ...this._state.datasets.slice(0, datasetIndex),
-      resetDataset,
-      ...this._state.datasets.slice(datasetIndex + 1)
-    ];
+      const { duckDBOrchestrator } = await import('$lib/features/duckdb');
+      await duckDBOrchestrator.dropTable(dataset.tableName);
+      duckDBOrchestrator.clearFilters(dataset.tableName);
 
-    return true;
+      this._state.datasets = this._state.datasets.filter(
+        (d) => d.id !== datasetId
+      );
+
+      const newDataset = await dataPipeline.processUploadedFile(
+        sourceFile,
+        sourceFile.originalFile
+      );
+
+      const resetDataset = {
+        ...newDataset,
+        id: datasetId
+      };
+
+      this._state.datasets = [...this._state.datasets, resetDataset];
+
+      await duckDBOrchestrator.registerExistingTable(
+        resetDataset.tableName,
+        resetDataset.sourceFileId,
+        resetDataset.name,
+        {
+          geoDetection: resetDataset.geoDetection
+        }
+      );
+
+      await projectStore.clearColumnTransformations(sourceFile.id);
+
+      duckDBOrchestrator.bumpDatasetsVersion();
+
+      logger.success('Dataset reset successfully', LogCategory.STORE, {
+        datasetId: resetDataset.id,
+        tableName: resetDataset.tableName
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to reset dataset', LogCategory.STORE, error);
+      return false;
+    } finally {
+      this.endProcessing();
+    }
   }
 
   hasModifications(datasetId: string): boolean {
@@ -419,7 +464,33 @@ class DatasetsStore {
     );
   }
 
-  renameDataset(datasetId: string, newName: string): boolean {
+  renameDatasetColumn(
+    datasetId: string,
+    oldName: string,
+    newName: string
+  ): void {
+    this._state.datasets = this._state.datasets.map((d) => {
+      if (d.id !== datasetId) return d;
+
+      const updatedColumns = d.columns.map((col) =>
+        col.name === oldName ? { ...col, name: newName } : col
+      );
+
+      const updatedAnalysisColumns = d.analysis?.columns?.map((col) =>
+        col.name === oldName ? { ...col, name: newName } : col
+      );
+
+      return {
+        ...d,
+        columns: updatedColumns,
+        analysis: d.analysis
+          ? { ...d.analysis, columns: updatedAnalysisColumns ?? [] }
+          : undefined
+      };
+    });
+  }
+
+  async renameDataset(datasetId: string, newName: string): Promise<boolean> {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
     if (!dataset) {
       return false;
@@ -431,6 +502,11 @@ class DatasetsStore {
     }
 
     dataset.name = sanitizedName;
+
+    if (dataset.sourceFileId) {
+      await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
+    }
+
     return true;
   }
 

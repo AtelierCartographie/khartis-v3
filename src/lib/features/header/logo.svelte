@@ -56,7 +56,8 @@
     height: 100%;
   }
 
-  #khartis-logo :global(html[theme='g100'] .khartis-logo) {
+  :global(html[theme='g100']) .khartis-logo,
+  :global(html[theme='g100']) .sciences-po-logo:not(.preprod) {
     filter: invert(1);
   }
 </style>

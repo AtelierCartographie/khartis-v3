@@ -1,3 +1,4 @@
+import type maplibregl from 'maplibre-gl';
 import {
   BasemapStyle,
   BASEMAP_STYLES,
@@ -13,7 +14,7 @@ class BasemapStyleStore {
     return this._state.selectedStyle;
   }
 
-  get selectedStyleUrl(): string {
+  get selectedStyleUrl(): string | maplibregl.StyleSpecification {
     return BASEMAP_STYLES[this._state.selectedStyle];
   }
 
