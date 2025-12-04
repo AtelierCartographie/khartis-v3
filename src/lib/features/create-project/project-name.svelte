@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import {
     createProjectActions,
     createProjectState
@@ -82,7 +83,7 @@
 
       createProjectActions.resetAllTabs();
 
-      await goto('/', { replaceState: true });
+      await goto(base || '/', { replaceState: true });
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error('Failed to create project', LogCategory.PROJECT, {

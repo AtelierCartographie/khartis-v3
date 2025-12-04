@@ -23,8 +23,9 @@ This documentation is organized into focused guides covering different aspects o
 ```bash
 git clone <repo-url>
 cd khartis-v3
-npm install
-npm run dev
+corepack enable          # Enable Yarn 4
+yarn install
+yarn dev
 ```
 
 Open http://localhost:5176/
@@ -76,15 +77,18 @@ Start here:
 
 ```
 src/lib/
-├── features/           # Feature-based architecture
-│   ├── commons/        # Shared components, utils, services
-│   ├── create-project/ # Project creation modal
-│   ├── header/         # Top navigation
-│   ├── main-toolbar/   # Left sidebar
-│   ├── map/            # Map visualization
-│   └── step-toolbar/   # Right panel tools
-├── paraglide/          # i18n messages (en, fr)
-└── types/              # Shared TypeScript types
+├── features/              # Feature-based architecture
+│   ├── commons/           # Shared components, utils, services
+│   ├── create-project/    # Project creation modal
+│   ├── data-pipeline/     # Data import pipeline (parsers, models)
+│   ├── duckdb/            # DuckDB WASM integration
+│   ├── header/            # Top navigation
+│   ├── main-toolbar/      # Left sidebar
+│   ├── map/               # Map visualization
+│   ├── project-management/ # Project persistence & serialization
+│   └── step-toolbar/      # Right panel tools
+├── paraglide/             # i18n messages (en, fr)
+└── types/                 # Shared TypeScript types
 ```
 
 ## 📊 Tech Stack
@@ -134,9 +138,9 @@ src/lib/
 ## 🧪 Testing
 
 ```bash
-npm test              # Unit tests
-npm run test:e2e      # E2E tests
-npm run test:coverage # Coverage report
+yarn test:unit        # Unit tests
+yarn test:e2e         # E2E tests
+yarn test:coverage    # Coverage report
 ```
 
 ## 📝 Contributing
@@ -155,6 +159,6 @@ npm run test:coverage # Coverage report
 
 ---
 
-**Documentation Version**: 3.1.0
-**Last Updated**: 2025-11-20
+**Documentation Version**: 3.2.0
+**Last Updated**: 2025-12-05
 **Codebase**: Khartis v3

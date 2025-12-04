@@ -941,5 +941,5 @@ it('should debounce search input', async () => {
 
 ---
 
-**Last Updated**: 2025-11-20
-**Version**: 3.1.0
+**Last Updated**: 2025-12-05
+**Version**: 3.2.0
