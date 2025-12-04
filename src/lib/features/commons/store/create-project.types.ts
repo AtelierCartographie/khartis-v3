@@ -27,6 +27,21 @@ export interface FileValidation {
   warnings: string[];
 }
 
+export type ColumnTransformationType =
+  | 'rename'
+  | 'drop'
+  | 'type_change'
+  | 'refine'
+  | 'replace';
+
+export interface ColumnTransformation {
+  type: ColumnTransformationType;
+  column: string;
+  newValue?: string; // For rename: new name, for type_change: new type, for replace: replace value
+  searchValue?: string; // For replace: search value
+  timestamp: string;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -56,7 +71,13 @@ export interface UploadedFile {
   };
   deepAnalysis?: DataAnalysisResult;
   geoMatchResult?: Record<string, unknown>;
-  // Cached dataset snapshots are no longer persisted – the pipeline reloads from DuckDB
+  columnTransformations?: ColumnTransformation[];
+  deletedRowIds?: number[];
+  // Join state for project persistence
+  joinedBasemap?: string;
+  geoColumn?: string;
+  gpsMode?: boolean;
+  gpsColumns?: { lat: string; lon: string };
 }
 
 export interface ExampleProject {

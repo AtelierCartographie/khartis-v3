@@ -123,15 +123,15 @@ function createGeoMatcher() {
 
     let normalized = value.trim();
 
-    // Normalisation des quotes et espaces avant l'appel à normalizeForMatching
+    // Normalize quotes and spaces before calling normalizeForMatching
     normalized = normalized
       .replace(/[''`]/g, "'")
       .replace(/[""«»]/g, '"')
       .replace(/\s+/g, ' ')
       .replace(/^(LE|LA|LES|L'|THE)\s+/i, '');
 
-    // Utiliser la fonction de normalisation centralisée pour enlever les accents
-    // et normaliser la casse de manière efficace (remplace ~40 lignes de code manuel)
+    // Use the centralized normalization function to remove accents
+    // and normalize case efficiently (replaces ~40 lines of manual code)
     normalized = normalizeForMatching(normalized, caseSensitive);
 
     return normalized;
@@ -178,11 +178,11 @@ function createGeoMatcher() {
   }
 
   /**
-   * Calcule la distance de Levenshtein entre deux chaînes
-   * Optimisé pour utiliser O(min(m,n)) en espace au lieu de O(m×n)
-   * @param str1 Première chaîne
-   * @param str2 Deuxième chaîne
-   * @returns Distance de Levenshtein
+   * Calculates the Levenshtein distance between two strings
+   * Optimized to use O(min(m,n)) space instead of O(m×n)
+   * @param str1 First string
+   * @param str2 Second string
+   * @returns Levenshtein distance
    */
   function levenshteinDistance(str1: string, str2: string): number {
     const m = str1.length;
@@ -191,24 +191,24 @@ function createGeoMatcher() {
     if (m === 0) return n;
     if (n === 0) return m;
 
-    // Limiter la taille pour éviter des calculs trop coûteux
+    // Limit size to avoid expensive computations
     const MAX_LENGTH = 1000;
     if (m > MAX_LENGTH || n > MAX_LENGTH) {
-      // Pour les très longues chaînes, utiliser une heuristique simple
+      // For very long strings, use a simple heuristic
       return Math.max(m, n);
     }
 
-    // Optimisation : utiliser seulement deux lignes au lieu d'une matrice complète
-    // Complexité spatiale O(min(m,n)) au lieu de O(m×n)
+    // Optimization: use only two rows instead of a full matrix
+    // Space complexity O(min(m,n)) instead of O(m×n)
     let prevRow = new Array(n + 1);
     let currRow = new Array(n + 1);
 
-    // Initialiser la première ligne
+    // Initialize the first row
     for (let j = 0; j <= n; j++) {
       prevRow[j] = j;
     }
 
-    // Calculer les lignes suivantes
+    // Calculate subsequent rows
     for (let i = 1; i <= m; i++) {
       currRow[0] = i;
 
@@ -221,7 +221,7 @@ function createGeoMatcher() {
         );
       }
 
-      // Échanger les lignes
+      // Swap rows
       [prevRow, currRow] = [currRow, prevRow];
     }
 

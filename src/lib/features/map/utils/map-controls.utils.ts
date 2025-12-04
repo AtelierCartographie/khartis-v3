@@ -71,27 +71,27 @@ export function calculateBoundsFromGeoArrow(
 function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
   if (!geometry) return [];
 
-  switch (geometry.type) {
-    case 'Point':
-      return [geometry.coordinates];
-
-    case 'MultiPoint':
-    case 'LineString':
-      return geometry.coordinates;
-
-    case 'MultiLineString':
-    case 'Polygon':
-      return geometry.coordinates.flat();
-
-    case 'MultiPolygon':
-      return geometry.coordinates.flat(2);
-
-    case 'GeometryCollection':
-      return geometry.geometries.flatMap(extractCoordsFromGeometry);
-
-    default:
-      return [];
+  if (geometry.type === 'Point') {
+    return [geometry.coordinates];
   }
+
+  if (geometry.type === 'MultiPoint' || geometry.type === 'LineString') {
+    return geometry.coordinates;
+  }
+
+  if (geometry.type === 'MultiLineString' || geometry.type === 'Polygon') {
+    return geometry.coordinates.flat();
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.flat(2);
+  }
+
+  if (geometry.type === 'GeometryCollection') {
+    return geometry.geometries.flatMap(extractCoordsFromGeometry);
+  }
+
+  return [];
 }
 
 export function calculateBoundsFromGeoJSON(

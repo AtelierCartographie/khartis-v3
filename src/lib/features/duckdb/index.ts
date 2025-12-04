@@ -15,7 +15,9 @@ export { insertArrowTableIntoDuckDB } from './services/duckdb/arrow-converter';
 export type {
   AnalysisResult,
   ArrowTableLike,
-  ColumnInfo
+  ColumnInfo,
+  SearchResultWithScore,
+  SearchStats
 } from './services/duckdb/types';
 
 export {

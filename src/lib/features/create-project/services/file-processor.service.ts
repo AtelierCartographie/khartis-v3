@@ -148,6 +148,11 @@ class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
+    // Read original file content for persistence (needed for project restore)
+    const originalContent = await readFileContent(file, (progress) => {
+      this.callbacks.onProgress(uploadedFile.id, progress);
+    });
+
     // Use dataPipeline directly - DuckDB handles everything
     const { dataPipeline } = await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
@@ -197,11 +202,9 @@ class CsvProcessor extends FileProcessor {
       return tabularRow;
     });
 
-    const content = await this.stringifyInChunks(tabularData);
-
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
-      content,
+      content: originalContent,
       duplicates: {
         hasDuplicates: duplicateCount > 0,
         duplicateCount
