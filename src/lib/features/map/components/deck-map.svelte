@@ -213,7 +213,7 @@
     };
   }
 
-  function createChoroplethColorAccessor(
+  function _createChoroplethColorAccessor(
     valueColumn: string,
     breaks: number[],
     colors: string[]
@@ -472,6 +472,7 @@
       switch (geomType) {
         case 1: // Point
           return { type: 'Point', coordinates: readPoint() };
+
         case 2: {
           // LineString
           const numPoints = readUint32();
@@ -481,8 +482,10 @@
           }
           return { type: 'LineString', coordinates: coords };
         }
+
         case 3: // Polygon
           return { type: 'Polygon', coordinates: readPolygon() };
+
         case 4: {
           // MultiPoint
           const numPoints = readUint32();
@@ -493,6 +496,7 @@
           }
           return { type: 'MultiPoint', coordinates: points };
         }
+
         case 5: {
           // MultiLineString
           const numLines = readUint32();
@@ -508,6 +512,7 @@
           }
           return { type: 'MultiLineString', coordinates: lines };
         }
+
         case 6: {
           // MultiPolygon
           const numPolygons = readUint32();
@@ -518,6 +523,7 @@
           }
           return { type: 'MultiPolygon', coordinates: polygons };
         }
+
         default:
           logger.warn('Unsupported WKB geometry type', LogCategory.MAP, {
             geomType

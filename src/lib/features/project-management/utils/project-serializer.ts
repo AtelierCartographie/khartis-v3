@@ -4,6 +4,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
 }
+
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';

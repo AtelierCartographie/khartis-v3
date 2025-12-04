@@ -126,3 +126,15 @@ export interface BreakInsideResult {
   min?: number;
   max?: number;
 }
+
+export interface SearchResultWithScore {
+  id: number;
+  score: number;
+  column: string;
+}
+
+export interface SearchStats {
+  exactCount: number;
+  partialCount: number;
+  results: SearchResultWithScore[];
+}

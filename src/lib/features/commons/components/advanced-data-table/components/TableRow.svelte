@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { Checkbox } from 'carbon-components-svelte';
+  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import type { HighlightType } from '../advanced-data-table.svelte';
   import type { ColumnInfo, TableRow } from '../types';
 
   interface Props {
     row: TableRow;
     rowIndex: number;
     visibleColumns: ColumnInfo[];
-    isHighlighted: boolean;
+    highlightType?: HighlightType;
     isSelectable?: boolean;
     isSelected?: boolean;
     onToggleSelection?: (rowId: number) => void;
@@ -15,7 +16,7 @@
   const {
     row,
     visibleColumns,
-    isHighlighted,
+    highlightType = null,
     isSelectable = false,
     isSelected = false,
     onToggleSelection
@@ -55,15 +56,15 @@
   }
 </script>
 
-<tr class:highlight={isHighlighted} class:selected={isSelected}>
+<tr
+  class:highlight-current={highlightType === 'current'}
+  class:highlight-exact={highlightType === 'exact'}
+  class:highlight-partial={highlightType === 'partial'}
+  class:selected={isSelected}
+>
   {#if isSelectable}
     <td class="checkbox-cell">
-      <Checkbox
-        hideLabel
-        checked={isSelected}
-        on:change={handleCheckboxChange}
-        labelText=""
-      />
+      <SimpleCheckbox checked={isSelected} onchange={handleCheckboxChange} />
     </td>
   {/if}
   {#each visibleColumns as col (col.name)}
@@ -82,6 +83,7 @@
 
 <style>
   tr {
+    height: 30px;
     border-bottom: 1px solid var(--cds-ui-03);
     transition: background-color 0.15s;
   }
@@ -90,16 +92,32 @@
     background-color: var(--cds-hover-ui);
   }
 
-  tr.highlight {
+  tr.highlight-current {
     background-color: #a56eff;
   }
 
-  tr.highlight td {
+  tr.highlight-current td {
     color: white;
   }
 
-  tr.highlight .null-value {
+  tr.highlight-current .null-value {
     color: rgba(255, 255, 255, 0.7);
+  }
+
+  tr.highlight-exact {
+    background-color: #d4b9ff;
+  }
+
+  tr.highlight-exact td {
+    color: var(--cds-text-01);
+  }
+
+  tr.highlight-partial {
+    background-color: #ece0ff;
+  }
+
+  tr.highlight-partial td {
+    color: var(--cds-text-01);
   }
 
   tr.selected {
@@ -111,32 +129,18 @@
   }
 
   .checkbox-cell {
-    width: 52px;
-    min-width: 52px;
-    max-width: 52px;
-    padding: 0 var(--cds-spacing-03);
-    text-align: center;
-    vertical-align: middle;
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 30px;
+    padding: 0;
     position: sticky;
     left: 0;
     background-color: var(--cds-ui-01);
     z-index: 1;
-  }
-
-  .checkbox-cell :global(.bx--form-item) {
-    margin: 0;
-  }
-
-  .checkbox-cell :global(.bx--checkbox-wrapper) {
     display: flex;
-    justify-content: center;
     align-items: center;
-    margin: 0 !important;
-  }
-
-  .checkbox-cell :global(.bx--checkbox-label) {
-    padding: 0;
-    min-height: 20px;
+    justify-content: center;
   }
 
   td {
@@ -146,6 +150,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
+    vertical-align: middle;
+    height: 30px;
+    font-size: 0.875rem;
   }
 
   td.numeric {

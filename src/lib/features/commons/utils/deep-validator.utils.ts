@@ -370,9 +370,9 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'warning',
           column: column.name,
-          message: `${column.nullPercentage.toFixed(1)}% de valeurs manquantes`,
+          message: `${column.nullPercentage.toFixed(1)}% missing values`,
           suggestion:
-            'Vérifiez si cette colonne est nécessaire ou complétez les données manquantes'
+            'Check if this column is needed or fill in the missing data'
         });
       }
 
@@ -380,8 +380,8 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'info',
           column: column.name,
-          message: 'Toutes les valeurs sont uniques',
-          suggestion: 'Cette colonne pourrait être un identifiant'
+          message: 'All values are unique',
+          suggestion: 'This column could be an identifier'
         });
       }
 
@@ -389,9 +389,9 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'warning',
           column: column.name,
-          message: 'Une seule valeur unique dans toute la colonne',
+          message: 'Only one unique value in the entire column',
           suggestion:
-            "Cette colonne peut être supprimée car elle n'apporte pas d'information"
+            'This column can be removed as it provides no information'
         });
       }
 
@@ -405,8 +405,8 @@ export const DeepDataValidator = {
           issues.push({
             severity: 'warning',
             column: column.name,
-            message: 'Toutes les valeurs numériques sont identiques',
-            suggestion: 'Vérifiez si cette colonne est correcte'
+            message: 'All numeric values are identical',
+            suggestion: 'Check if this column is correct'
           });
         }
       }
@@ -436,10 +436,10 @@ export const DeepDataValidator = {
             issues.push({
               severity: 'warning',
               column: columns[cellIndex]?.name,
-              message: `Cellule avec ${cell.length} caractères détectée`,
+              message: `Cell with ${cell.length} characters detected`,
               affectedRows: [currentRow],
               suggestion:
-                'Les cellules très longues peuvent affecter les performances'
+                'Very long cells may affect performance'
             });
             break;
           }
@@ -459,28 +459,28 @@ export const DeepDataValidator = {
 
     if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
       warnings.push(
-        `Fichier volumineux: ${rowCount} lignes. Le traitement sera limité aux ${PERFORMANCE_THRESHOLDS.maxRows} premières lignes.`
+        `Large file: ${rowCount} rows. Processing will be limited to the first ${PERFORMANCE_THRESHOLDS.maxRows} rows.`
       );
     } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
       warnings.push(
-        `Fichier important: ${rowCount} lignes. Le traitement pourrait prendre du temps.`
+        `Important file: ${rowCount} rows. Processing may take some time.`
       );
     }
 
     if (columnCount > PERFORMANCE_THRESHOLDS.maxColumns) {
       warnings.push(
-        `Trop de colonnes: ${columnCount}. Maximum supporté: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
+        `Too many columns: ${columnCount}. Maximum supported: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
       );
     } else if (columnCount > PERFORMANCE_THRESHOLDS.warningColumns) {
       warnings.push(
-        `Nombreuses colonnes: ${columnCount}. Considérez de sélectionner uniquement les colonnes nécessaires.`
+        `Many columns: ${columnCount}. Consider selecting only necessary columns.`
       );
     }
 
     const estimatedSize = rowCount * columnCount * 50;
     if (estimatedSize > PERFORMANCE_THRESHOLDS.maxFileSize) {
       warnings.push(
-        'Taille estimée du fichier très importante. Considérez de diviser vos données.'
+        'Estimated file size very large. Consider splitting your data.'
       );
     }
 
@@ -497,39 +497,39 @@ export const DeepDataValidator = {
 
     if (!geoDetection.hasGeoColumns) {
       suggestions.push(
-        "Aucune colonne géographique détectée. Assurez-vous d'avoir une colonne avec des noms de lieux, codes ISO ou coordonnées."
+        'No geographic column detected. Make sure you have a column with place names, ISO codes, or coordinates.'
       );
     } else if (geoDetection.suggestedPrimaryGeoColumn) {
       const geoCol = geoDetection.suggestedPrimaryGeoColumn;
       suggestions.push(
-        `Colonne géographique principale suggérée: "${geoCol.columnName}" (${geoCol.type}, confiance: ${(geoCol.confidence * 100).toFixed(0)}%)`
+        `Suggested primary geographic column: "${geoCol.columnName}" (${geoCol.type}, confidence: ${(geoCol.confidence * 100).toFixed(0)}%)`
       );
     }
 
     const numericColumns = columns.filter((c) => c.type === 'numeric');
     if (numericColumns.length === 0) {
       suggestions.push(
-        'Aucune colonne numérique détectée. Les visualisations quantitatives nécessitent des données numériques.'
+        'No numeric column detected. Quantitative visualizations require numeric data.'
       );
     }
 
     const highNullColumns = columns.filter((c) => c.nullPercentage > 30);
     if (highNullColumns.length > 0) {
       suggestions.push(
-        `${highNullColumns.length} colonne(s) avec beaucoup de valeurs manquantes. Considérez de les exclure ou compléter.`
+        `${highNullColumns.length} column(s) with many missing values. Consider excluding or completing them.`
       );
     }
 
     if (performanceWarnings.length > 0) {
       suggestions.push(
-        'Des problèmes de performance potentiels ont été détectés. Considérez de filtrer ou échantillonner vos données.'
+        'Potential performance issues detected. Consider filtering or sampling your data.'
       );
     }
 
     const severeIssues = qualityIssues.filter((i) => i.severity === 'error');
     if (severeIssues.length > 0) {
       suggestions.push(
-        `${severeIssues.length} problème(s) critique(s) détecté(s). Corrigez-les avant de continuer.`
+        `${severeIssues.length} critical issue(s) detected. Fix them before continuing.`
       );
     }
 

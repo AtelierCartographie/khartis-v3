@@ -20,12 +20,15 @@
   import TableColumnHeader from './components/TableColumnHeader.svelte';
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
-  import TableSelectionHeader from './components/TableSelectionHeader.svelte';
+
+  export type HighlightType = 'exact' | 'partial' | 'current' | null;
 
   interface Props {
     dataset?: ProcessedDataset;
     tableName?: string;
-    highlightIds?: number[];
+    exactHighlightIds?: number[];
+    partialHighlightIds?: number[];
+    currentHighlightId?: number | null;
     showSummaryPlots?: boolean;
     maxRows?: number;
     isExpanded?: boolean;
@@ -36,7 +39,9 @@
   let {
     dataset,
     tableName,
-    highlightIds = [],
+    exactHighlightIds = [],
+    partialHighlightIds = [],
+    currentHighlightId = null,
     showSummaryPlots = true,
     maxRows,
     isExpanded = false,
@@ -149,25 +154,6 @@
     }
   });
 
-  const visibleRowIds = $derived(
-    tableData.tableData.map(
-      (row, i) =>
-        (row.__id as number | undefined) ?? virtualScroll.rows[i] ?? i + 1
-    )
-  );
-
-  const isAllVisibleSelected = $derived(
-    rowSelection.areAllSelected(visibleRowIds)
-  );
-
-  const hasSomeSelected = $derived(
-    rowSelection.hasSelection && !isAllVisibleSelected
-  );
-
-  function handleToggleAllVisible(): void {
-    rowSelection.toggleAllRows(visibleRowIds);
-  }
-
   const showEmptyState = $derived(
     !hasDataSource && tableData.columns.length === 0
   );
@@ -209,12 +195,15 @@
     await recordProjectTransformation('drop', columnName);
   }
 
-  function isRowHighlighted(
+  function getRowHighlightType(
     rowIndex: number,
     row: Record<string, unknown>
-  ): boolean {
+  ): HighlightType {
     const rowId = (row.__id as number | undefined) ?? rowIndex + 1;
-    return highlightIds.includes(rowId);
+    if (currentHighlightId === rowId) return 'current';
+    if (exactHighlightIds.includes(rowId)) return 'exact';
+    if (partialHighlightIds.includes(rowId)) return 'partial';
+    return null;
   }
 
   onMount(() => {
@@ -232,8 +221,8 @@
   });
 
   $effect(() => {
-    if (highlightIds.length > 0 && filters.numRows > 0) {
-      untrack(() => virtualScroll.goToId(highlightIds[0]));
+    if (currentHighlightId && filters.numRows > 0) {
+      untrack(() => virtualScroll.goToId(currentHighlightId));
     }
   });
 
@@ -288,7 +277,7 @@
 
   let expandEffectInitialized = $state(false);
   $effect(() => {
-    const currentIsExpanded = isExpanded;
+    const _currentIsExpanded = isExpanded;
     if (!expandEffectInitialized) {
       expandEffectInitialized = true;
       return;
@@ -298,7 +287,6 @@
     });
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getSkeletonProps = () =>
     ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
 </script>
@@ -336,11 +324,7 @@
           <thead>
             <tr>
               {#if isSelectable && isEditMode}
-                <TableSelectionHeader
-                  isAllSelected={isAllVisibleSelected}
-                  isIndeterminate={hasSomeSelected}
-                  onToggleAll={handleToggleAllVisible}
-                />
+                <th class="selection-header-spacer"></th>
               {/if}
               {#each columnOps.visibleColumns as column (column.name)}
                 <TableColumnHeader
@@ -370,7 +354,7 @@
                 row={row}
                 rowIndex={rowIndex}
                 visibleColumns={columnOps.visibleColumns}
-                isHighlighted={isRowHighlighted(rowIndex, row)}
+                highlightType={getRowHighlightType(rowIndex, row)}
                 isSelectable={isSelectable && isEditMode}
                 isSelected={rowSelection.isRowSelected(rowId)}
                 onToggleSelection={rowSelection.toggleRowSelection}
@@ -435,6 +419,19 @@
     top: 0;
     z-index: 10;
     background-color: var(--cds-ui-02);
+  }
+
+  .selection-header-spacer {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 30px;
+    padding: 0;
+    border-bottom: 2px solid var(--cds-ui-03);
+    background-color: var(--cds-ui-02);
+    position: sticky;
+    left: 0;
+    z-index: 1;
   }
 
   .skeleton-overlay {

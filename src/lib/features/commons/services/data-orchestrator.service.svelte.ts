@@ -557,7 +557,7 @@ class DataOrchestratorService {
               );
               await this.applyRowDeletions(file);
             }
-          } catch (err) {
+          } catch (_err) {
             // Individual file failure shouldn't stop the whole batch
             // Error is already logged in onFileAdded
           }
@@ -603,12 +603,14 @@ class DataOrchestratorService {
               );
             }
             break;
+
           case 'drop':
             await duckDBOrchestrator.dropColumn(
               dataset.tableName,
               transformation.column
             );
             break;
+
           case 'type_change':
             if (transformation.newValue) {
               await duckDBOrchestrator.changeColumnType(
@@ -618,6 +620,7 @@ class DataOrchestratorService {
               );
             }
             break;
+
           case 'refine':
             if (transformation.newValue) {
               const operationMap: Record<string, RefineOperation> = {
@@ -637,6 +640,17 @@ class DataOrchestratorService {
               }
             }
             break;
+
+          case 'replace':
+            if (transformation.searchValue && transformation.newValue) {
+              await duckDBOrchestrator.replaceInColumn(
+                dataset.tableName,
+                transformation.column,
+                transformation.searchValue,
+                transformation.newValue
+              );
+            }
+            break;
         }
       } catch (err) {
         logger.warn(
@@ -646,6 +660,8 @@ class DataOrchestratorService {
         );
       }
     }
+
+    duckDBOrchestrator.bumpDatasetsVersion();
   }
 
   private async applyRowDeletions(file: UploadedFile): Promise<void> {

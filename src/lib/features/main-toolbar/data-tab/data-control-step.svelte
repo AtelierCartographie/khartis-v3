@@ -19,7 +19,9 @@
   import DataToolsBar from './components/data-tools-bar.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import FiltersPanel from './components/filters-panel.svelte';
-  import SearchPanel from './components/search-panel.svelte';
+  import SearchPanel, {
+    type SearchHighlightResult
+  } from './components/search-panel.svelte';
   import { DataToolType } from './data-tab.types';
   import { dataToolsStore } from './data-tools.store.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
@@ -35,6 +37,7 @@
   const isProcessingFiles = $derived(datasetsStore.isProcessing);
 
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+  const isBatchProcessing = $derived(duckDBOrchestrator.isBatchProcessing);
 
   const currentDuckTable = $derived.by(() => {
     const _version = duckDBDatasetsVersion;
@@ -49,8 +52,6 @@
 
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
-  let isEditingName = $state(false);
-  let editedName = $state('');
   let warningsNotificationDismissed = $state(false);
   let isTableExpanded = $state(false);
   let selectedRowIds = $state<number[]>([]);
@@ -61,56 +62,6 @@
       ? processedDataset.columns.some((col) => col.nullable === true)
       : false
   );
-
-  function startEditing() {
-    if (!selectedDataset) return;
-    editedName = selectedDataset.name;
-    isEditingName = true;
-  }
-
-  async function saveRename() {
-    if (!selectedDataset || !editedName.trim()) {
-      cancelEditing();
-      return;
-    }
-
-    await datasetsStore.renameDataset(selectedDataset.id, editedName);
-    isEditingName = false;
-  }
-
-  function cancelEditing() {
-    isEditingName = false;
-    editedName = '';
-  }
-
-  function handleKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      saveRename();
-    } else if (event.key === 'Escape') {
-      cancelEditing();
-    }
-  }
-
-  function handleBlur() {
-    if (editedName.trim()) {
-      saveRename();
-    } else {
-      cancelEditing();
-    }
-  }
-
-  function handleDoubleClick() {
-    startEditing();
-  }
-
-  let nameInputRef = $state<HTMLInputElement | null>(null);
-
-  $effect(() => {
-    if (isEditingName && nameInputRef) {
-      nameInputRef.focus();
-      nameInputRef.select();
-    }
-  });
 
   // Use a separate key that only increments on explicit refresh calls
   // This avoids unnecessary remounts during initial batch load
@@ -125,12 +76,98 @@
     resetModalOpen = true;
   }
 
-  let searchResults = $state<number[]>([]);
-  let currentSearchIndex = $state(0);
+  let searchHighlight = $state<SearchHighlightResult>({
+    exactIds: [],
+    partialIds: [],
+    currentId: null
+  });
 
-  function handleSearchResults(results: number[], currentIndex: number) {
-    searchResults = results;
-    currentSearchIndex = currentIndex;
+  function handleSearchResults(result: SearchHighlightResult) {
+    searchHighlight = result;
+  }
+
+  async function handleReplace(
+    searchValue: string,
+    replaceValue: string,
+    source: string
+  ) {
+    if (!currentDuckTable || !selectedDataset) return;
+
+    try {
+      let totalReplaced = 0;
+
+      if (source === 'all') {
+        const textColumns =
+          selectedDataset.columns?.filter((col) => {
+            const type = String(col.type).toLowerCase();
+            return type === 'text' || type === 'varchar' || type === 'string';
+          }) ?? [];
+
+        for (const col of textColumns) {
+          const count = await duckDBOrchestrator.replaceInColumn(
+            currentDuckTable,
+            col.name,
+            searchValue,
+            replaceValue
+          );
+          totalReplaced += count;
+        }
+      } else {
+        totalReplaced = await duckDBOrchestrator.replaceInColumn(
+          currentDuckTable,
+          source,
+          searchValue,
+          replaceValue
+        );
+      }
+
+      if (totalReplaced > 0) {
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
+        );
+
+        if (source === 'all') {
+          const textColumns =
+            selectedDataset.columns?.filter((col) => {
+              const type = String(col.type).toLowerCase();
+              return type === 'text' || type === 'varchar' || type === 'string';
+            }) ?? [];
+          for (const col of textColumns) {
+            await projectStore.addColumnTransformation(
+              selectedDataset.sourceFileId,
+              {
+                type: 'replace',
+                column: col.name,
+                searchValue,
+                newValue: replaceValue,
+                timestamp: new Date().toISOString()
+              }
+            );
+          }
+        } else {
+          await projectStore.addColumnTransformation(
+            selectedDataset.sourceFileId,
+            {
+              type: 'replace',
+              column: source,
+              searchValue,
+              newValue: replaceValue,
+              timestamp: new Date().toISOString()
+            }
+          );
+        }
+
+        duckDBOrchestrator.bumpDatasetsVersion();
+      } else {
+        showError(m.replace_no_match_title(), m.replace_no_match_message());
+      }
+    } catch (error) {
+      showError(
+        m.replace_error_title(),
+        error instanceof Error ? error.message : m.replace_error_message()
+      );
+    }
   }
 
   function handleSelectionChange(ids: number[], _count: number) {
@@ -153,9 +190,7 @@
     try {
       await duckDBOrchestrator.dropRows(currentDuckTable, rowIdsToDelete);
 
-      const newRowCount = Duck
-        ? await Duck.get_row_count(currentDuckTable)
-        : 0;
+      const newRowCount = Duck ? await Duck.get_row_count(currentDuckTable) : 0;
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
@@ -185,6 +220,12 @@
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
 
+  $effect(() => {
+    if (activeTool !== DataToolType.Search) {
+      searchHighlight = { exactIds: [], partialIds: [], currentId: null };
+    }
+  });
+
   // Mark step 0 as complete when dataset is loaded
   $effect(() => {
     if (selectedDataset && currentDuckTable) {
@@ -206,6 +247,7 @@
         <SearchPanel
           tableName={currentDuckTable || undefined}
           onSearchResults={handleSearchResults}
+          onReplace={handleReplace}
         />
       </DataToolPanel>
     {:else if activeTool === DataToolType.Calculator}
@@ -249,20 +291,22 @@
     />
   {/if}
 
-  {#if processedDataset}
-    {#key forceRefreshKey}
+  {#if processedDataset && !isBatchProcessing}
+    {#key `${forceRefreshKey}-${duckDBDatasetsVersion}`}
       <AdvancedDataTable
         dataset={processedDataset}
         tableName={currentDuckTable || undefined}
         showSummaryPlots={true}
-        highlightIds={searchResults}
+        exactHighlightIds={searchHighlight.exactIds}
+        partialHighlightIds={searchHighlight.partialIds}
+        currentHighlightId={searchHighlight.currentId}
         isExpanded={isTableExpanded}
         isSelectable={true}
         onSelectionChange={handleSelectionChange}
       />
     {/key}
-  {:else if selectedDataset || isProcessingFiles}
-    <!-- Skeleton loader pendant le chargement -->
+  {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
+    <!-- Skeleton loader pendant le chargement ou batch processing -->
     <div class="table-skeleton-wrapper">
       <DataTableSkeleton {...skeletonProps} />
     </div>

@@ -16,6 +16,7 @@ import { analyse } from './analyse';
 import { breaks } from './breaks';
 import { join_macros } from './join';
 import { search_macros } from './search';
+import type { SearchResultWithScore, SearchStats } from './types';
 
 // --- Transaction Mutex ---
 class TransactionMutex {
@@ -452,6 +453,8 @@ class DuckDB {
     size: 0,
     accessOrder: []
   };
+
+  private localExtensionRepositoryConfigured = false;
 
   private extensionsLoaded = {
     spatial: false,
@@ -969,7 +972,7 @@ class DuckDB {
       useDate: true,
       useDecimalInt: false,
       useMap: true,
-      useProxy // Le véritable gain de performance se fait avec l'utilisation de Proxy
+      useProxy // The real performance gain comes from using Proxy
     });
     if (format === DUCK_CONST.QUERY_FORMAT.ARROW_TABLE) return table;
 
@@ -2129,7 +2132,7 @@ class DuckDB {
       if (isSampled) {
         try {
           await this.query(`DROP VIEW IF EXISTS "${sampleViewName}"`);
-        } catch (e) {
+        } catch (_e) {
           // ignore
         }
       }
@@ -2147,20 +2150,26 @@ class DuckDB {
    * @param options - Search options
    * @param options.threshold - Minimum similarity score (0-1), default 0.6
    * @param options.column - Optional column name to restrict search
-   * @returns Array of row IDs matching the search
+   * @returns SearchStats with exact/partial counts and results with scores
    */
   async searchInTable(
     table: string,
     query: string,
     options: { threshold?: number; column?: string } = {}
-  ): Promise<number[]> {
+  ): Promise<SearchStats> {
     const { threshold = 0.6, column = null } = options;
+    const emptyResult: SearchStats = {
+      exactCount: 0,
+      partialCount: 0,
+      results: []
+    };
 
     if (!query || query.trim() === '') {
-      return [];
+      return emptyResult;
     }
 
     const escapedQuery = escapeSqlString(query.trim());
+    const excludedColumns = ['geom', 'geometry'];
 
     try {
       const describeResult = (await this.query(`DESCRIBE "${table}"`, {
@@ -2168,7 +2177,11 @@ class DuckDB {
       })) as Array<{ column_name: string; column_type: string }>;
 
       const allColumns = describeResult
-        .filter((c) => !c.column_name.startsWith('__'))
+        .filter(
+          (c) =>
+            !c.column_name.startsWith('__') &&
+            !excludedColumns.includes(c.column_name.toLowerCase())
+        )
         .map((c) => ({
           column_name: c.column_name,
           data_type: c.column_type
@@ -2187,43 +2200,67 @@ class DuckDB {
       }
 
       if (textColumns.length === 0) {
-        return [];
+        return emptyResult;
       }
 
-      const conditions = textColumns
+      const scoreExpressions = textColumns.map(
+        ({ column_name }) =>
+          `jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}'))`
+      );
+
+      const greatestExpr = `GREATEST(${scoreExpressions.join(', ')})`;
+
+      const columnCases = textColumns
         .map(
-          ({ column_name }) => `(
-          jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}')) > ${threshold}
-          OR normalize_text("${column_name}"::VARCHAR) LIKE '%' || normalize_text('${escapedQuery}') || '%'
-        )`
+          ({ column_name }, idx) =>
+            `WHEN ${scoreExpressions[idx]} = ${greatestExpr} THEN '${column_name}'`
         )
-        .join('\n        OR ');
+        .join('\n            ');
 
       const sql = `
-        SELECT __id
+        SELECT
+          __id AS id,
+          ${greatestExpr} AS score,
+          CASE
+            ${columnCases}
+            ELSE '${textColumns[0].column_name}'
+          END AS matched_column
         FROM "${table}"
-        WHERE ${conditions}
-        ORDER BY __id
+        WHERE ${greatestExpr} >= ${threshold}
+        ORDER BY score DESC, id ASC
       `;
 
       const result = (await this.query(sql, {
         format: DUCK_CONST.QUERY_FORMAT.ARRAY
-      })) as Array<{ __id: number }>;
+      })) as Array<{ id: number; score: number; matched_column: string }>;
 
-      return result.map((r) => r.__id);
+      const results: SearchResultWithScore[] = result.map((r) => ({
+        id: r.id,
+        score: r.score,
+        column: r.matched_column
+      }));
+
+      const exactCount = results.filter((r) => r.score === 1).length;
+      const partialCount = results.filter((r) => r.score < 1).length;
+
+      return {
+        exactCount,
+        partialCount,
+        results
+      };
     } catch {
-      return [];
+      return emptyResult;
     }
   }
 
   /**
-   * JOINTURES
+   * JOINS
    * - ✅ join_by_id
-   *   - ATTENTION : si basemap importé, besoin de l'analyser pour des stats à la colonne et un typage sémio.
-   *    Par défaut conserver les colonnes qui ont un typage sémio égale à 'geoid' et trié par "score" et "share_uniques".
-   * - join_by_bbox (test vers tous les fonds de carte de Khartis via Bbox)
-   * - ✅ apply_join_association (joint l'id du fond de carte sélectionné au jeu de données + la typologie de match)
-   *   /!\ L'association manuelle par l'utilisateur est gérée par la méthode update_cell
+   *   - WARNING: if basemap is imported, need to analyze it for column stats and semio typing.
+   *    By default, keep columns that have semio type equal to 'geoid' and sorted by "score" and "share_uniques".
+   * - join_by_bbox (test against all Khartis basemaps via Bbox)
+   * - ✅ apply_join_association (joins selected basemap id to dataset + match typology)
+   *   /!\ Manual association by user is handled by update_cell method
    */
 
   /**
