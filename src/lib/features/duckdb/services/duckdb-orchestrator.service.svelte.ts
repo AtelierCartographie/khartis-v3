@@ -21,6 +21,7 @@ import type {
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
@@ -87,6 +88,8 @@ export interface DuckDBDataset {
   geoArrowMetadata?: GeoArrowMetadata;
   joinedBasemap?: string;
   geoColumn?: string;
+  gpsMode?: boolean;
+  gpsColumns?: { lat: string; lon: string };
 }
 
 class DuckDBOrchestratorService {
@@ -850,7 +853,7 @@ class DuckDBOrchestratorService {
     if (!this.initialized) await this.initialize();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    const dataset = this._state.datasets.get(datasetId);
+    const dataset = this.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) throw new Error('Dataset not found');
 
     await Duck.query(join_macros);
@@ -926,7 +929,7 @@ class DuckDBOrchestratorService {
     if (!this.initialized) await this.initialize();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    const dataset = this._state.datasets.get(datasetId);
+    const dataset = this.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) throw new Error('Dataset not found');
 
     const correctionsTable = `corrections_${crypto.randomUUID().replace(/-/g, '_')}`;
@@ -962,7 +965,7 @@ class DuckDBOrchestratorService {
 
     const columns = await Duck.analyse(dataset.tableName);
     this.updateDatasets((d) => {
-      const ds = d.get(datasetId);
+      const ds = d.get(dataset.id);
       if (ds) ds.columns = columns;
     });
     this.bumpDatasetsVersion();
@@ -976,7 +979,7 @@ class DuckDBOrchestratorService {
     if (!this.initialized) await this.initialize();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    const dataset = this._state.datasets.get(datasetId);
+    const dataset = this.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) throw new Error('Dataset not found');
 
     const start = performance.now();
@@ -987,6 +990,13 @@ class DuckDBOrchestratorService {
     });
 
     try {
+      // Check if this is an OSM basemap - special handling for GPS mode
+      if (isOSMBasemap(basemap)) {
+        await this.finalizeOSMJoin(datasetId, basemap, dataset);
+        return;
+      }
+
+      // Standard basemap join flow
       // 1. Load join macros
       await Duck.query(join_macros);
 
@@ -1000,7 +1010,7 @@ class DuckDBOrchestratorService {
 
       // 4. Update dataset metadata
       this.updateDatasets((d) => {
-        const ds = d.get(datasetId);
+        const ds = d.get(dataset.id);
         if (ds) {
           ds.joinedBasemap = basemap.file;
           ds.geoColumn = geoColumn;
@@ -1021,6 +1031,65 @@ class DuckDBOrchestratorService {
       });
       throw error;
     }
+  }
+
+  private async finalizeOSMJoin(
+    datasetId: string,
+    basemap: BasemapMetadata,
+    dataset: DuckDBDataset
+  ): Promise<void> {
+    const start = performance.now();
+    logger.info('Finalizing OSM join (GPS mode)', LogCategory.DATA, {
+      datasetId,
+      basemap: basemap.file
+    });
+
+    // Detect GPS columns from dataset
+    const gpsColumns = this.detectGPSColumns(dataset);
+    if (!gpsColumns) {
+      throw new Error(
+        'GPS columns (latitude/longitude) not found in dataset for OSM basemap'
+      );
+    }
+
+    // Update dataset metadata for GPS mode
+    this.updateDatasets((d) => {
+      const ds = d.get(dataset.id);
+      if (ds) {
+        ds.joinedBasemap = basemap.file;
+        ds.gpsMode = true;
+        ds.gpsColumns = gpsColumns;
+      }
+    });
+    this.bumpDatasetsVersion();
+
+    logger.success('OSM join finalized (GPS mode)', LogCategory.DATA, {
+      datasetId,
+      basemap: basemap.file,
+      gpsColumns,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
+  }
+
+  private detectGPSColumns(
+    dataset: DuckDBDataset
+  ): { lat: string; lon: string } | null {
+    const columns = dataset.columns || [];
+
+    const latColumn = columns.find((col) =>
+      /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i.test(col.name)
+    );
+    const lonColumn = columns.find((col) =>
+      /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i.test(
+        col.name
+      )
+    );
+
+    if (latColumn && lonColumn) {
+      return { lat: latColumn.name, lon: lonColumn.name };
+    }
+
+    return null;
   }
 
   async getJoinedArrowTable(
@@ -1072,6 +1141,136 @@ class DuckDBOrchestratorService {
         error
       });
       throw error;
+    }
+  }
+
+  async getGPSArrowTable(datasetId: string): Promise<{
+    table: Table;
+    latColumn: string;
+    lonColumn: string;
+  }> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const start = performance.now();
+    const dataset = this.findDatasetByIdOrSourceFile(datasetId);
+
+    if (!dataset) {
+      throw new Error(`Dataset ${datasetId} not found`);
+    }
+
+    if (!dataset.gpsMode || !dataset.gpsColumns) {
+      throw new Error(`Dataset ${datasetId} is not in GPS mode`);
+    }
+
+    const { lat, lon } = dataset.gpsColumns;
+
+    logger.info('Creating GPS Arrow table for rendering', LogCategory.MAP, {
+      datasetId,
+      tableName: dataset.tableName,
+      latColumn: lat,
+      lonColumn: lon
+    });
+
+    try {
+      const gpsView = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+      await Duck.query(`
+        CREATE OR REPLACE VIEW "${gpsView}" AS
+        SELECT
+          *,
+          ST_Point("${lon}", "${lat}") AS geom
+        FROM "${dataset.tableName}"
+        WHERE "${lat}" IS NOT NULL
+          AND "${lon}" IS NOT NULL
+          AND "${lat}" BETWEEN -90 AND 90
+          AND "${lon}" BETWEEN -180 AND 180
+      `);
+
+      const arrowTable = await this.getArrowTableDirect(gpsView);
+
+      logger.success('GPS Arrow table created', LogCategory.MAP, {
+        gpsView,
+        rows: arrowTable.numRows,
+        latColumn: lat,
+        lonColumn: lon,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return {
+        table: arrowTable,
+        latColumn: lat,
+        lonColumn: lon
+      };
+    } catch (error) {
+      logger.error('Failed to create GPS Arrow table', LogCategory.MAP, {
+        datasetId,
+        error
+      });
+      throw error;
+    }
+  }
+
+  async getGPSBounds(datasetId: string): Promise<{
+    minLon: number;
+    minLat: number;
+    maxLon: number;
+    maxLat: number;
+  } | null> {
+    if (!this.initialized) await this.initialize();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = this.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset?.gpsMode || !dataset.gpsColumns) {
+      return null;
+    }
+
+    const { lat, lon } = dataset.gpsColumns;
+
+    try {
+      const result = (await Duck.query(
+        `SELECT
+          MIN("${lon}") as min_lon,
+          MIN("${lat}") as min_lat,
+          MAX("${lon}") as max_lon,
+          MAX("${lat}") as max_lat
+        FROM "${dataset.tableName}"
+        WHERE "${lat}" IS NOT NULL
+          AND "${lon}" IS NOT NULL
+          AND "${lat}" BETWEEN -90 AND 90
+          AND "${lon}" BETWEEN -180 AND 180`,
+        { format: 'array' }
+      )) as Array<{
+        min_lon: number;
+        min_lat: number;
+        max_lon: number;
+        max_lat: number;
+      }>;
+
+      if (result.length === 0) return null;
+
+      const bounds = result[0];
+      if (
+        bounds.min_lon === null ||
+        bounds.min_lat === null ||
+        bounds.max_lon === null ||
+        bounds.max_lat === null
+      ) {
+        return null;
+      }
+
+      return {
+        minLon: bounds.min_lon,
+        minLat: bounds.min_lat,
+        maxLon: bounds.max_lon,
+        maxLat: bounds.max_lat
+      };
+    } catch (error) {
+      logger.error('Failed to get GPS bounds', LogCategory.MAP, {
+        datasetId,
+        error
+      });
+      return null;
     }
   }
 
@@ -2089,6 +2288,14 @@ class DuckDBOrchestratorService {
       }
     }
     return undefined;
+  }
+
+  private findDatasetByIdOrSourceFile(
+    idOrSourceFileId: string
+  ): DuckDBDataset | undefined {
+    const direct = this._state.datasets.get(idOrSourceFileId);
+    if (direct) return direct;
+    return this.getDatasetBySourceFile(idOrSourceFileId);
   }
 
   getAllDatasets(): DuckDBDataset[] {

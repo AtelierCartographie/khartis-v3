@@ -5,12 +5,12 @@
     SelectItem,
     TextInput,
     Tag,
-    InlineNotification,
-    Modal
+    InlineNotification
   } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { ColumnType } from '$lib/features/data-pipeline';
   import {
     duckDBOrchestrator,
     type DataTableFilter,
@@ -35,7 +35,6 @@
 
   let filters = $state<DataTableFilter[]>([]);
   let filterStats = $state<FilterStats>({ total: 0, filtered: 0 });
-  let showClearConfirm = $state(false);
 
   let newFilter = $state({
     column: '',
@@ -47,30 +46,79 @@
 
   const hasData = $derived(columns.length > 0);
 
-  const FILTER_OPERATORS = $derived<
-    Array<{
-      value: FilterOperator;
-      label: string;
-      requiresValue?: boolean;
-      requiresRange?: boolean;
-      requiresLimit?: boolean;
-    }>
-  >([
-    { value: 'gte', label: m.filter_op_gte(), requiresValue: true },
-    { value: 'lte', label: m.filter_op_lte(), requiresValue: true },
-    { value: 'contains', label: m.filter_op_contains(), requiresValue: true },
-    { value: 'equals', label: m.filter_op_equals(), requiresValue: true },
+  interface FilterOperatorDef {
+    value: FilterOperator;
+    label: string;
+    requiresValue?: boolean;
+    requiresRange?: boolean;
+    requiresLimit?: boolean;
+    allowedTypes?: ColumnType[];
+  }
+
+  const ALL_FILTER_OPERATORS = $derived<FilterOperatorDef[]>([
+    {
+      value: 'gte',
+      label: m.filter_op_gte(),
+      requiresValue: true,
+      allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
+    },
+    {
+      value: 'lte',
+      label: m.filter_op_lte(),
+      requiresValue: true,
+      allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
+    },
+    {
+      value: 'contains',
+      label: m.filter_op_contains(),
+      requiresValue: true,
+      allowedTypes: [ColumnType.TEXT]
+    },
+    {
+      value: 'equals',
+      label: m.filter_op_equals(),
+      requiresValue: true
+    },
     {
       value: 'not_equals',
       label: m.filter_op_not_equals(),
       requiresValue: true
     },
-    { value: 'between', label: m.filter_op_between(), requiresRange: true },
-    { value: 'top_asc', label: m.filter_op_top_asc(), requiresLimit: true },
-    { value: 'top_desc', label: m.filter_op_top_desc(), requiresLimit: true },
+    {
+      value: 'between',
+      label: m.filter_op_between(),
+      requiresRange: true,
+      allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
+    },
+    {
+      value: 'top_asc',
+      label: m.filter_op_top_asc(),
+      requiresLimit: true,
+      allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
+    },
+    {
+      value: 'top_desc',
+      label: m.filter_op_top_desc(),
+      requiresLimit: true,
+      allowedTypes: [ColumnType.NUMBER, ColumnType.DATE]
+    },
     { value: 'empty', label: m.filter_op_empty() },
     { value: 'not_empty', label: m.filter_op_not_empty() }
   ]);
+
+  const selectedColumnType = $derived.by(() => {
+    if (!newFilter.column) return null;
+    const column = columns.find((c) => c.name === newFilter.column);
+    return column?.type ?? null;
+  });
+
+  const FILTER_OPERATORS = $derived.by(() => {
+    const colType = selectedColumnType;
+    if (!colType) return ALL_FILTER_OPERATORS;
+    return ALL_FILTER_OPERATORS.filter(
+      (op) => !op.allowedTypes || op.allowedTypes.includes(colType)
+    );
+  });
 
   const currentOperator = $derived(
     FILTER_OPERATORS.find((op) => op.value === newFilter.operator) ??
@@ -127,14 +175,9 @@
     }
   }
 
-  function openClearConfirm() {
-    showClearConfirm = true;
-  }
-
   async function clearAllFilters() {
     if (!tableName || filters.length === 0) return;
 
-    showClearConfirm = false;
     duckDBOrchestrator.clearFilters(tableName);
     filters = [];
     await refreshFilters();
@@ -154,6 +197,16 @@
   $effect(() => {
     if (tableName) {
       refreshFilters();
+    }
+  });
+
+  $effect(() => {
+    const validOperators = FILTER_OPERATORS;
+    const isCurrentOperatorValid = validOperators.some(
+      (op) => op.value === newFilter.operator
+    );
+    if (!isCurrentOperatorValid && validOperators.length > 0) {
+      newFilter.operator = validOperators[0].value;
     }
   });
 </script>
@@ -258,7 +311,7 @@
           <span class="filters-title"
             >{m.filter_active()} ({filters.length})</span
           >
-          <Button kind="ghost" size="small" on:click={openClearConfirm}
+          <Button kind="ghost" size="small" on:click={clearAllFilters}
             >{m.filter_clear_all()}</Button
           >
         </div>
@@ -280,20 +333,6 @@
     {/if}
   {/if}
 </div>
-
-<Modal
-  bind:open={showClearConfirm}
-  modalHeading={m.filter_clear_confirm_title()}
-  primaryButtonText={m.filter_clear_confirm_button()}
-  secondaryButtonText={m.filter_clear_cancel_button()}
-  on:click:button--primary={clearAllFilters}
-  on:click:button--secondary={() => (showClearConfirm = false)}
-  on:close={() => (showClearConfirm = false)}
-  danger
-  size="xs"
->
-  <p>{m.filter_clear_confirm_message()}</p>
-</Modal>
 
 <style>
   .filters-panel {
