@@ -1,5 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
+import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 

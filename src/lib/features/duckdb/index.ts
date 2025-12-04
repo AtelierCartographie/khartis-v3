@@ -19,7 +19,6 @@ export type {
   AnalysisResult,
   AnalysisResults,
   ArrowTableLike,
-  ColumnInfo,
   SearchResultWithScore,
   SearchStats,
   FilterOperator,
@@ -35,7 +34,10 @@ export type {
   ReadGeofileOptions,
   ReadLinkOptions,
   JoinByIdOptions,
-  AnalyseOptions
+  AnalyseOptions,
+  GPSColumns,
+  GPSBounds,
+  FinalizeJoinResult
 } from './types';
 
 // Constants
