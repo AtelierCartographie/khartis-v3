@@ -574,15 +574,17 @@
             Elles s'appuient sur les dimensions géographiques détectées dans les
             données chargées.
           </p>
-          <div class="basemap-cards-grid">
-            {#each suggestedBasemaps() as { basemap, score } (basemap.file)}
-              <BasemapCardVertical
-                basemap={basemap}
-                matchScore={score}
-                selected={basemap.file === basemapSelected}
-                onclick={() => handleSelectBasemap(basemap)}
-              />
-            {/each}
+          <div class="suggestions-scroll-container">
+            <div class="suggestions-scroll">
+              {#each suggestedBasemaps() as { basemap, score } (basemap.file)}
+                <BasemapCardVertical
+                  basemap={basemap}
+                  matchScore={score}
+                  selected={basemap.file === basemapSelected}
+                  onclick={() => handleSelectBasemap(basemap)}
+                />
+              {/each}
+            </div>
           </div>
         {:else}
           <InlineNotification
@@ -640,6 +642,7 @@
                 selected={basemap.file === basemapSelected}
                 onclick={() => handleSelectBasemap(basemap)}
                 showMatchScore={false}
+                variant="gray"
               />
             {/each}
           </div>
@@ -1032,17 +1035,41 @@
     gap: var(--cds-spacing-05);
   }
 
-  .basemap-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: var(--cds-spacing-05);
+  .suggestions-scroll-container {
     margin-top: var(--cds-spacing-04);
+    margin-left: calc(-1 * var(--cds-spacing-05));
+    margin-right: calc(-1 * var(--cds-spacing-05));
+    padding-left: var(--cds-spacing-05);
+    padding-right: var(--cds-spacing-05);
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--cds-border-subtle) transparent;
   }
 
-  @media (max-width: 768px) {
-    .basemap-cards-grid {
-      grid-template-columns: 1fr;
-    }
+  .suggestions-scroll-container::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .suggestions-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .suggestions-scroll-container::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-subtle);
+    border-radius: 3px;
+  }
+
+  .suggestions-scroll {
+    display: flex;
+    gap: var(--cds-spacing-04);
+    padding-bottom: var(--cds-spacing-03);
+  }
+
+  .basemap-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--cds-spacing-03);
+    margin-top: var(--cds-spacing-04);
   }
 
   /* Catalogue filters */

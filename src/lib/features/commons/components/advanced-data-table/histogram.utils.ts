@@ -1,10 +1,10 @@
+import type { AnalysisResult } from '$lib/features/duckdb';
 import {
   create_summary_plot,
   type CategoricalHistogram,
   type NumericHistogram,
   type SummaryPlotData
 } from '$lib/features/duckdb/services/duckdb/summary-plot';
-import type { AnalysisResult } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../utils/logger';
 
 type HistogramLike = NumericHistogram | CategoricalHistogram;
@@ -31,13 +31,27 @@ export function isCategoricalHistogram(
   return sample === undefined || 'category' in sample;
 }
 
-const DEFAULT_PLOT_OPTIONS = {
-  width: 150,
-  height: 48,
-  main_color: '#a56eff',
-  nulls_color: '#ffd666',
-  bg_color: '#393939'
-};
+function getCSSVariable(name: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+
+function getPlotOptions() {
+  return {
+    width: 150,
+    height: 48,
+    main_color: '#a56eff',
+    nulls_color: '#ffd666',
+    unique_color: getCSSVariable('--cds-ui-03', '#525252'),
+    bg_color: getCSSVariable('--cds-ui-02', '#393939'),
+    text_color: getCSSVariable('--cds-text-01', '#f4f4f4'),
+    text_secondary_color: getCSSVariable('--cds-text-02', '#c6c6c6'),
+    bar_text_color: '#000'
+  };
+}
 
 type PlotElement = ReturnType<typeof create_summary_plot>;
 
@@ -54,7 +68,7 @@ export function getPlotForColumn(
 
   const renderPlot = (summaryData: SummaryPlotData): PlotElement | null => {
     try {
-      return create_summary_plot(summaryData, DEFAULT_PLOT_OPTIONS);
+      return create_summary_plot(summaryData, getPlotOptions());
     } catch (err) {
       logger.error('Error creating histogram', LogCategory.UI, err);
       return null;

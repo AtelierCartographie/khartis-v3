@@ -9,14 +9,14 @@
   import { LogCategory, logger } from '../../utils/logger';
   import ColumnRenameModal from '../column-rename-modal.svelte';
 
-  import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
-  import { useTableData } from './hooks/use-table-data.svelte';
-  import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
+  import { useTableData } from './hooks/use-table-data.svelte';
   import { useTableFilters } from './hooks/use-table-filters.svelte';
+  import { useTableSort } from './hooks/use-table-sort.svelte';
+  import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
 
-  import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableColumnHeader from './components/TableColumnHeader.svelte';
+  import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
 
   interface Props {
@@ -25,6 +25,7 @@
     highlightIds?: number[];
     showSummaryPlots?: boolean;
     maxRows?: number;
+    isExpanded?: boolean;
   }
 
   let {
@@ -32,13 +33,27 @@
     tableName,
     highlightIds = [],
     showSummaryPlots = true,
-    maxRows = 12.5
+    maxRows,
+    isExpanded = false
   }: Props = $props();
 
   let tableContainer = $state<HTMLDivElement | undefined>(undefined);
+  let viewportHeight = $state(
+    typeof window !== 'undefined' ? window.innerHeight : 800
+  );
 
-  const rowHeight = 32;
-  const maxHeight = $derived((maxRows + 1) * rowHeight);
+  const rowHeight = 40;
+  const viewportHeightRatioNormal = 0.4;
+  const viewportHeightRatioExpanded = 0.65;
+  const viewportHeightRatio = $derived(
+    isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
+  );
+  const maxViewportHeight = $derived(
+    Math.floor(viewportHeight * viewportHeightRatio)
+  );
+  const computedMaxRows = $derived(Math.floor(maxViewportHeight / rowHeight));
+  const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
+  const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
   const isEditMode = $derived(!!tableName);
 
@@ -95,7 +110,7 @@
 
   const virtualScroll = useVirtualScroll({
     numRows: () => filters.numRows,
-    maxRows: () => maxRows,
+    maxRows: () => effectiveMaxRows,
     onLoadMore: async () => {
       await tableData.loadRowsData();
     }
@@ -121,10 +136,6 @@
     onRecordTransformation: recordTransformation
   });
 
-  const showSkeleton = $derived(
-    tableData.isLoading ||
-      (hasDataSource && tableData.columns.length === 0 && !tableData.error)
-  );
   const showEmptyState = $derived(
     !hasDataSource && tableData.columns.length === 0
   );
@@ -172,6 +183,13 @@
       tableName,
       datasetId: dataset?.id
     });
+
+    const handleResize = () => {
+      viewportHeight = window.innerHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   });
 
   $effect(() => {
@@ -227,11 +245,11 @@
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getSkeletonProps = () =>
-    ({ columns: 5, rows: Math.floor(maxRows) }) as any;
+    ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
 </script>
 
 <div class="advanced-data-table">
-  {#if filters.numRows > 0}
+  {#if tableData.isFullyLoaded && filters.numRows > 0}
     <TableHeaderInfo
       filterStats={filters.filterStats}
       hiddenColumns={columnOps.hiddenColumns}
@@ -239,54 +257,46 @@
     />
   {/if}
 
-  {#if showSkeleton}
-    <div class="skeleton-wrapper" style="max-height: {maxHeight}px;">
-      <DataTableSkeleton {...getSkeletonProps()} />
-    </div>
-  {:else if tableData.error}
+  {#if tableData.error}
     <div class="error-message">
       <p>Erreur: {tableData.error}</p>
     </div>
-  {:else if tableData.columns.length > 0}
-    <div
-      class="table-container"
-      style="max-height: {maxHeight}px;"
-      bind:this={tableContainer}
-      onscroll={virtualScroll.handleScroll}
-    >
-      <table>
-        <thead>
-          <tr>
-            {#each columnOps.visibleColumns as column (column.name)}
-              <TableColumnHeader
-                column={column}
-                analysis={tableData.columnAnalysis.get(column.name)}
-                columnAnalysis={tableData.columnAnalysis}
-                sortColumn={sort.sortColumn}
-                sortOrder={sort.sortOrder}
-                showSummaryPlots={showSummaryPlots}
-                isEditMode={isEditMode}
-                columnTypeOptions={COLUMN_TYPE_OPTIONS}
-                onSort={handleSort}
-                onRename={handleRename}
-                onChangeType={handleChangeType}
-                onRefine={handleRefine}
-                onToggleVisibility={columnOps.toggleColumnVisibility}
-                onDrop={handleDrop}
-              />
-            {/each}
-          </tr>
-        </thead>
-        <tbody>
-          {#if tableData.tableData.length === 0}
-            {#each virtualScroll.rows as _row, idx (idx)}
-              <tr>
-                {#each columnOps.visibleColumns as _col, colIdx (colIdx)}
-                  <td><div class="skeleton-cell"></div></td>
-                {/each}
-              </tr>
-            {/each}
-          {:else}
+  {:else if showEmptyState}
+    <div class="empty-state">
+      <p>Aucune donnée disponible</p>
+    </div>
+  {:else}
+    <div class="table-wrapper">
+      <div
+        class="table-container"
+        style="max-height: {maxHeight}px;"
+        bind:this={tableContainer}
+        onscroll={virtualScroll.handleScroll}
+      >
+        <table>
+          <thead>
+            <tr>
+              {#each columnOps.visibleColumns as column (column.name)}
+                <TableColumnHeader
+                  column={column}
+                  analysis={tableData.columnAnalysis.get(column.name)}
+                  columnAnalysis={tableData.columnAnalysis}
+                  sortColumn={sort.sortColumn}
+                  sortOrder={sort.sortOrder}
+                  showSummaryPlots={showSummaryPlots}
+                  isEditMode={isEditMode}
+                  columnTypeOptions={COLUMN_TYPE_OPTIONS}
+                  onSort={handleSort}
+                  onRename={handleRename}
+                  onChangeType={handleChangeType}
+                  onRefine={handleRefine}
+                  onToggleVisibility={columnOps.toggleColumnVisibility}
+                  onDrop={handleDrop}
+                />
+              {/each}
+            </tr>
+          </thead>
+          <tbody>
             {#each tableData.tableData as row, i (virtualScroll.rows[i] ?? `row-${i}`)}
               {@const rowIndex = virtualScroll.rows[i] ?? i}
               <TableRow
@@ -296,13 +306,15 @@
                 isHighlighted={isRowHighlighted(rowIndex, row)}
               />
             {/each}
-          {/if}
-        </tbody>
-      </table>
-    </div>
-  {:else if showEmptyState}
-    <div class="empty-state">
-      <p>Aucune donnée disponible</p>
+          </tbody>
+        </table>
+      </div>
+
+      {#if !tableData.isFullyLoaded}
+        <div class="skeleton-overlay">
+          <DataTableSkeleton {...getSkeletonProps()} />
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -328,15 +340,16 @@
     flex-direction: column;
   }
 
+  .table-wrapper {
+    position: relative;
+  }
+
   .table-container {
-    flex: 1;
-    min-height: 0;
     overflow-y: auto;
     overflow-x: auto;
     background-color: var(--cds-ui-01);
     border: 1px solid var(--cds-ui-03);
     border-radius: 4px;
-    position: relative;
   }
 
   table {
@@ -354,39 +367,17 @@
     background-color: var(--cds-ui-02);
   }
 
-  tbody td {
-    padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    color: var(--cds-text-01);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 200px;
-  }
-
-  .skeleton-wrapper {
+  .skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: var(--cds-ui-background);
+    z-index: 20;
     overflow: hidden;
   }
 
-  .skeleton-wrapper :global(.bx--data-table-header),
-  .skeleton-wrapper :global(.bx--table-toolbar) {
+  .skeleton-overlay :global(.bx--data-table-header),
+  .skeleton-overlay :global(.bx--table-toolbar) {
     display: none;
-  }
-
-  .skeleton-cell {
-    height: 16px;
-    background-color: var(--cds-ui-03);
-    border-radius: 2px;
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 0.4;
-    }
-    50% {
-      opacity: 0.7;
-    }
   }
 
   .empty-state,

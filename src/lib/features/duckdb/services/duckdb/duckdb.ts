@@ -2156,54 +2156,29 @@ class DuckDB {
   ): Promise<number[]> {
     const { threshold = 0.6, column = null } = options;
 
-    logger.debug('searchInTable called', LogCategory.DUCKDB, {
-      table,
-      query,
-      options
-    });
-
     if (!query || query.trim() === '') {
-      logger.debug(
-        'searchInTable: empty query, returning []',
-        LogCategory.DUCKDB
-      );
       return [];
     }
 
-    const escapedTable = escapeSqlString(table);
     const escapedQuery = escapeSqlString(query.trim());
 
     try {
-      // 1. Récupérer TOUTES les colonnes de la table via information_schema.columns
-      // Note: information_schema.columns avec COLLATE NOCASE fonctionne (comme dans la fonction à la ligne 1370)
-      // duckdb_columns() ne trouve pas la table sans COLLATE NOCASE
-      const allColumnsSql = `
-        SELECT column_name, data_type
-        FROM information_schema.columns
-        WHERE table_name = '${escapedTable}' COLLATE NOCASE
-        AND column_name NOT LIKE '__%'
-      `;
-
-      logger.debug('searchInTable: querying all columns', LogCategory.DUCKDB, {
-        allColumnsSql
-      });
-
-      const allColumns = (await this.query(allColumnsSql, {
+      const describeResult = (await this.query(`DESCRIBE "${table}"`, {
         format: DUCK_CONST.QUERY_FORMAT.ARRAY
-      })) as Array<{ column_name: string; data_type: string }>;
+      })) as Array<{ column_name: string; column_type: string }>;
 
-      logger.debug('searchInTable: all columns found', LogCategory.DUCKDB, {
-        columnsCount: allColumns.length,
-        columns: allColumns.map((c) => `${c.column_name}:${c.data_type}`)
-      });
+      const allColumns = describeResult
+        .filter((c) => !c.column_name.startsWith('__'))
+        .map((c) => ({
+          column_name: c.column_name,
+          data_type: c.column_type
+        }));
 
-      // Filtrer les colonnes texte en JavaScript (VARCHAR, TEXT, STRING)
       const textTypes = ['VARCHAR', 'TEXT', 'STRING'];
       let textColumns = allColumns.filter((c) =>
         textTypes.includes(c.data_type.toUpperCase())
       );
 
-      // Si une colonne spécifique est demandée, filtrer davantage
       if (column) {
         const escapedColumn = escapeSqlString(column);
         textColumns = textColumns.filter(
@@ -2211,31 +2186,11 @@ class DuckDB {
         );
       }
 
-      logger.debug('searchInTable: text columns filtered', LogCategory.DUCKDB, {
-        textColumnsCount: textColumns.length,
-        textColumns: textColumns.map((c) => c.column_name)
-      });
-
       if (textColumns.length === 0) {
-        logger.warn(
-          'searchInTable: no text columns found',
-          LogCategory.DUCKDB,
-          {
-            table: escapedTable,
-            availableTypes: allColumns.map(
-              (c) => `${c.column_name}:${c.data_type}`
-            )
-          }
-        );
         return [];
       }
 
-      const columnsResult = textColumns.map((c) => ({
-        column_name: c.column_name
-      }));
-
-      // 2. Générer les conditions de recherche pour chaque colonne
-      const conditions = columnsResult
+      const conditions = textColumns
         .map(
           ({ column_name }) => `(
           jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}')) > ${threshold}
@@ -2244,7 +2199,6 @@ class DuckDB {
         )
         .join('\n        OR ');
 
-      // 3. Exécuter la recherche avec les conditions générées
       const sql = `
         SELECT __id
         FROM "${table}"
@@ -2252,31 +2206,12 @@ class DuckDB {
         ORDER BY __id
       `;
 
-      logger.debug(
-        'searchInTable: executing search query',
-        LogCategory.DUCKDB,
-        {
-          sql: sql.substring(0, 500) + (sql.length > 500 ? '...' : '')
-        }
-      );
-
       const result = (await this.query(sql, {
         format: DUCK_CONST.QUERY_FORMAT.ARRAY
       })) as Array<{ __id: number }>;
 
-      const ids = result.map((r) => r.__id);
-      logger.debug('searchInTable: results', LogCategory.DUCKDB, {
-        count: ids.length,
-        firstIds: ids.slice(0, 10)
-      });
-
-      return ids;
-    } catch (error) {
-      logger.error('Search in table failed', LogCategory.DUCKDB, {
-        table,
-        query,
-        error
-      });
+      return result.map((r) => r.__id);
+    } catch {
       return [];
     }
   }
