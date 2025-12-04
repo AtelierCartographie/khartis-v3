@@ -5,8 +5,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { geoParquetReader } from '$lib/features/data-pipeline/adapters/readers/GeoParquetReader';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
+import { geoParquetReader, type GeoArrowMetadata } from '$lib/features/data-pipeline';
 import type {
   BasemapMetadata,
   JoinQuality
@@ -1109,7 +1108,7 @@ class DuckDBOrchestratorService {
         })),
         geoColumns: mappedGeoColumns,
         hasGeoData: duckDataset.geoDetection?.hasGeoColumns ?? false,
-        suggestedGeoColumn: mappedSuggestedGeoColumn,
+        suggestedGeoColumn: mappedSuggestedGeoColumn?.columnName,
         rowCount: duckDataset.rowCount,
         warnings: duckDataset.geoDetection?.warnings ?? []
       },

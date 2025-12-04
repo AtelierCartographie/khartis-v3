@@ -1,45 +1,12 @@
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline/models/geo-arrow-metadata';
+import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { Table } from 'apache-arrow/Arrow';
 
 export { FileType };
 
-// --- Geometry & Dataset Types ---
-
-export type GeometryType = 'point' | 'line' | 'polygon';
-
-export interface Dataset {
-  tablename: string;
-  filename: string;
-  columns?: ColumnInfo[];
-}
-
-export interface ColumnInfo {
-  name: string;
-  type: string;
-  type_js: string;
-  type_semio?: string;
-  score?: number;
-}
-
-// --- DuckDB Value Types ---
-
-export type DuckDBValue =
-  | string
-  | number
-  | boolean
-  | Date
-  | null
-  | ArrayBuffer
-  | Uint8Array;
-
-export interface DuckDBColumn {
-  name: string;
-  type: string;
-  type_js: string;
-}
+// --- DuckDB Metadata Types ---
 
 export interface DuckDBMetadata {
   name: string;
@@ -75,32 +42,11 @@ export interface QueryOptions {
   useProxy?: boolean;
 }
 
-export interface QueryResult<T = unknown> {
-  data: T[];
-  columns: DuckDBColumn[];
-}
-
-export interface ValidationResult<T = DuckDBValue> {
-  isValid: boolean;
-  value: T;
-}
-
 export type DuckDBUnsafeBindings = {
   runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
 };
 
 // --- Table Types ---
-
-export type TableName = string;
-export type ColumnName = string;
-export type SQLQuery = string;
-
-export interface TableData {
-  tablename: string;
-  filename: string;
-  columns: DuckDBColumn[];
-  analysis?: AnalysisResults | null;
-}
 
 export interface TableMetadata {
   analysis?: AnalysisResults | null;
@@ -119,15 +65,6 @@ export type DescribeResult = {
   name: string[];
   type: string[];
 };
-
-export interface TableDescribeResult {
-  column_name: string;
-  column_type: string;
-}
-
-export interface CountResult {
-  num_rows: number;
-}
 
 // --- File Types ---
 
@@ -156,37 +93,6 @@ export interface RegisterFilesOptions {
   shapefile?: boolean;
 }
 
-export interface GetDataOptions {
-  geometry?: boolean;
-  columns?: string[];
-  limit?: number;
-  format?: QueryFormat;
-}
-
-// --- Breaks Types ---
-
-export interface CalculateBreaksOptions {
-  method?: string;
-  nclass?: number;
-  nclass_right?: number;
-  round?: boolean;
-  break_value?: number | null;
-}
-
-export interface BreaksResult {
-  breaks: number[];
-}
-
-export interface BreaksRoundedResult {
-  breaks_rounded: number[];
-}
-
-export interface BreakInsideResult {
-  is_inside: boolean;
-  min?: number;
-  max?: number;
-}
-
 // --- Analysis Options ---
 
 export interface AnalyseOptions {
@@ -200,6 +106,13 @@ export interface JoinByIdOptions {
   basemap_table?: string;
   basemap_id?: string;
   basemap_others_id?: string;
+}
+
+export interface FinalizeJoinResult {
+  joinedBasemap: string;
+  geoColumn?: string;
+  gpsMode?: boolean;
+  gpsColumns?: GPSColumns;
 }
 
 // --- Search Types ---
@@ -282,6 +195,20 @@ export interface FilterStats {
   filtered: number;
 }
 
+// --- GPS Types ---
+
+export interface GPSColumns {
+  lat: string;
+  lon: string;
+}
+
+export interface GPSBounds {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+}
+
 // --- Dataset Types ---
 
 export interface DuckDBDataset {
@@ -301,29 +228,7 @@ export interface DuckDBDataset {
   joinedBasemap?: string;
   geoColumn?: string;
   gpsMode?: boolean;
-  gpsColumns?: { lat: string; lon: string };
-}
-
-export interface OrchestratorState {
-  datasets: Map<string, DuckDBDataset>;
-  currentTableName: string | null;
-}
-
-// --- Visualization Types ---
-
-export interface UIState {
-  selected_dataset: string;
-  current_page: string;
-  loading: boolean;
-}
-
-export interface VisualizationCriteria {
-  id: string;
-  label_fr: string;
-  nb_column: number;
-  type_semio: string[];
-  geometry: GeometryType[];
-  columns?: string[];
+  gpsColumns?: GPSColumns;
 }
 
 // --- DuckDB Context (shared state for modules) ---
@@ -352,14 +257,4 @@ export interface ArrowTableLike {
   get(index: number): Record<string, unknown>;
   numRows: number;
   toArray(): Record<string, unknown>[];
-}
-
-export interface DuckDBBindings {
-  [key: string]: unknown;
-}
-
-export interface DuckDBConnection {
-  useUnsafe<T>(
-    callback: (bindings: DuckDBBindings, conn: unknown) => Promise<T>
-  ): Promise<T>;
 }
