@@ -429,10 +429,6 @@ class DuckDB {
     }
   >();
 
-  private readonly CACHE_MAX_AGE = 60000; // ms TTL for query cache
-
-  private readonly CACHE_MAX_SIZE = 100;
-
   public table_metadata: Map<string, TableMetadata> = new Map();
 
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
@@ -471,8 +467,6 @@ class DuckDB {
 
   private bundleVariant: 'eh' | 'mvp' = 'eh';
 
-  private localExtensionRepositoryConfigured = false;
-
   private transactionMutex = new TransactionMutex();
 
   constructor() {}
@@ -503,61 +497,6 @@ class DuckDB {
     this.invalidateTableCache(table);
     this.evictGeoParquetEntry(table);
     this.invalidateCacheForTable(table);
-  }
-
-  private getCachedQuery(sql: string, tables: string[] = []): unknown | null {
-    const cacheKey = this.generateCacheKey(sql);
-    const cached = this.queryCache.get(cacheKey);
-
-    if (!cached) return null;
-
-    if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
-      this.queryCache.delete(cacheKey);
-      return null;
-    }
-
-    for (const table of tables) {
-      const currentVersion = this.table_metadata.get(table)?.version || 0;
-      const cachedVersion = cached.tableVersions.get(table) || 0;
-      if (currentVersion !== cachedVersion) {
-        this.queryCache.delete(cacheKey);
-        return null;
-      }
-    }
-
-    logger.debug('Cache hit for query', LogCategory.DUCKDB, {
-      sql: sql.substring(0, 100)
-    });
-    return cached.result;
-  }
-
-  private setCachedQuery(
-    sql: string,
-    result: unknown,
-    tables: string[] = []
-  ): void {
-    const cacheKey = this.generateCacheKey(sql);
-
-    if (this.queryCache.size >= this.CACHE_MAX_SIZE) {
-      const firstKey = this.queryCache.keys().next().value;
-      if (firstKey) this.queryCache.delete(firstKey);
-    }
-
-    const tableVersions = new Map<string, number>();
-    for (const table of tables) {
-      const version = this.table_metadata.get(table)?.version || 0;
-      tableVersions.set(table, version);
-    }
-
-    this.queryCache.set(cacheKey, {
-      result,
-      timestamp: Date.now(),
-      tableVersions
-    });
-  }
-
-  private generateCacheKey(sql: string): string {
-    return sql.trim().toLowerCase();
   }
 
   private invalidateCacheForTable(table: string): void {
@@ -1862,7 +1801,6 @@ class DuckDB {
     table: string,
     format: string = DUCK_CONST.DEFAULT.FORMAT_TABULAR
   ): Promise<Uint8Array> {
-    const escapedTableForFilename = escapeSqlString(table);
     const filename = table + '.' + format;
     const escapedFilename = escapeSqlString(filename);
     await this.query(

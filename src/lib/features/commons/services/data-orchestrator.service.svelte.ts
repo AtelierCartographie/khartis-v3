@@ -281,28 +281,6 @@ class DataOrchestratorService {
     }
   }
 
-  private async ensureFileObject(
-    file: UploadedFile,
-    fallbackMime: string
-  ): Promise<File> {
-    if (file.originalFile) {
-      return file.originalFile;
-    }
-
-    if (file.content instanceof ArrayBuffer) {
-      return new File([file.content], file.name, { type: fallbackMime });
-    }
-
-    if (typeof file.content === 'string') {
-      return new File([file.content], file.name, { type: fallbackMime });
-    }
-
-    throw new ParseError('Missing original file content', file.fileType, {
-      fileId: file.id,
-      fileName: file.name
-    });
-  }
-
   private async processFileInDuckDB(
     file: UploadedFile,
     datasetOverride?: DatasetResult

@@ -22,15 +22,8 @@ import type {
 } from '$lib/features/map/types/basemap.types';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
-import {
-  Field,
-  Schema,
-  Table,
-  Type,
-  Utf8,
-  tableFromIPC
-} from 'apache-arrow/Arrow';
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
+import { SvelteMap } from 'svelte/reactivity';
 import {
   convertTabularDataToArrow,
   insertArrowTableIntoDuckDB
