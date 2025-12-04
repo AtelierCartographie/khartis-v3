@@ -100,7 +100,9 @@ const summary_general_macro = `CREATE OR REPLACE MACRO summary_general(tabname, 
 		count(DISTINCT "colname") as uniques,
 		uniques / length as share_uniques,
 		length - COUNT("colname") as nulls,
-		nulls / length as share_nulls
+		nulls / length as share_nulls,
+		count - uniques as duplicates,
+		duplicates / length as share_duplicates
 );`;
 
 const summary_numeric_macro = `CREATE OR REPLACE MACRO summary_numeric(tabname, colname) AS TABLE (

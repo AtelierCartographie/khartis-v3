@@ -2,6 +2,7 @@
   import { RefineOperation, type AnalysisResult } from '$lib/features/duckdb';
   import SummaryPlot from '$lib/features/duckdb/services/duckdb/SummaryPlot.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
+  import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
@@ -52,6 +53,46 @@
       : null
   );
 
+  interface ColumnWarning {
+    type: 'nulls' | 'duplicates' | 'low_uniques';
+    message: string;
+    severity: 'warning' | 'info';
+  }
+
+  const columnWarnings = $derived.by((): ColumnWarning[] => {
+    if (!analysis) return [];
+    const warnings: ColumnWarning[] = [];
+
+    const shareNulls = analysis.share_nulls as number | undefined;
+    const shareDuplicates = analysis.share_duplicates as number | undefined;
+    const shareUniques = analysis.share_uniques as number | undefined;
+    const nulls = analysis.nulls as number | undefined;
+    const duplicates = analysis.duplicates as number | undefined;
+
+    if (shareNulls !== undefined && shareNulls > 0.5) {
+      warnings.push({
+        type: 'nulls',
+        message: `${Math.round(shareNulls * 100)}% de valeurs nulles (${nulls ?? 0})`,
+        severity: 'warning'
+      });
+    }
+
+    const isLikelyIdentifier = shareUniques !== undefined && shareUniques > 0.8;
+    if (
+      isLikelyIdentifier &&
+      shareDuplicates !== undefined &&
+      shareDuplicates > 0.01
+    ) {
+      warnings.push({
+        type: 'duplicates',
+        message: `${Math.round(shareDuplicates * 100)}% de doublons (${duplicates ?? 0}) - colonne identifiant?`,
+        severity: 'warning'
+      });
+    }
+
+    return warnings;
+  });
+
   let menuOpen = $state(false);
   let menuButton = $state<HTMLButtonElement | null>(null);
   let menuPosition = $state({ top: 0, left: 0 });
@@ -98,6 +139,14 @@
   <div class="col-header">
     <div class="col-title-row">
       <span class="col-name" title={column.name}>{column.name}</span>
+      {#if columnWarnings.length > 0}
+        <span
+          class="warning-badge"
+          title={columnWarnings.map((w) => w.message).join('\n')}
+        >
+          <WarningAlt size={16} />
+        </span>
+      {/if}
       <div class="col-actions">
         {#if isEditMode}
           <button
@@ -116,38 +165,84 @@
                 style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
                 role="menu"
               >
-                <button class="menu-item" onclick={() => handleMenuAction(() => onRename(column.name))}>
+                <button
+                  class="menu-item"
+                  onclick={() => handleMenuAction(() => onRename(column.name))}
+                >
                   Renommer
                 </button>
                 <div class="menu-divider"></div>
                 <span class="menu-label">{m.column_type_change()}</span>
                 {#each columnTypeOptions as typeOption (typeOption.value)}
-                  <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onChangeType(column.name, typeOption.value))}>
+                  <button
+                    class="menu-item menu-item-indent"
+                    onclick={() =>
+                      handleMenuAction(() =>
+                        onChangeType(column.name, typeOption.value)
+                      )}
+                  >
                     → {typeOption.label}
                   </button>
                 {/each}
                 <div class="menu-divider"></div>
                 <span class="menu-label">Affiner...</span>
-                <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onRefine(column.name, RefineOperation.UPPERCASE))}>
+                <button
+                  class="menu-item menu-item-indent"
+                  onclick={() =>
+                    handleMenuAction(() =>
+                      onRefine(column.name, RefineOperation.UPPERCASE)
+                    )}
+                >
                   → MAJUSCULES
                 </button>
-                <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onRefine(column.name, RefineOperation.LOWERCASE))}>
+                <button
+                  class="menu-item menu-item-indent"
+                  onclick={() =>
+                    handleMenuAction(() =>
+                      onRefine(column.name, RefineOperation.LOWERCASE)
+                    )}
+                >
                   → minuscules
                 </button>
-                <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onRefine(column.name, RefineOperation.TITLECASE))}>
+                <button
+                  class="menu-item menu-item-indent"
+                  onclick={() =>
+                    handleMenuAction(() =>
+                      onRefine(column.name, RefineOperation.TITLECASE)
+                    )}
+                >
                   → Casse Titre
                 </button>
-                <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onRefine(column.name, RefineOperation.TRIM))}>
+                <button
+                  class="menu-item menu-item-indent"
+                  onclick={() =>
+                    handleMenuAction(() =>
+                      onRefine(column.name, RefineOperation.TRIM)
+                    )}
+                >
                   → Supprimer espaces
                 </button>
-                <button class="menu-item menu-item-indent" onclick={() => handleMenuAction(() => onRefine(column.name, RefineOperation.TRIM_ALL))}>
+                <button
+                  class="menu-item menu-item-indent"
+                  onclick={() =>
+                    handleMenuAction(() =>
+                      onRefine(column.name, RefineOperation.TRIM_ALL)
+                    )}
+                >
                   → Espaces multiples
                 </button>
                 <div class="menu-divider"></div>
-                <button class="menu-item" onclick={() => handleMenuAction(() => onToggleVisibility(column.name))}>
+                <button
+                  class="menu-item"
+                  onclick={() =>
+                    handleMenuAction(() => onToggleVisibility(column.name))}
+                >
                   Masquer
                 </button>
-                <button class="menu-item menu-item-danger" onclick={() => handleMenuAction(() => onDrop(column.name))}>
+                <button
+                  class="menu-item menu-item-danger"
+                  onclick={() => handleMenuAction(() => onDrop(column.name))}
+                >
                   Supprimer
                 </button>
               </div>
@@ -334,5 +429,18 @@
     border-radius: 12px;
     font-size: 9px;
     font-weight: 500;
+  }
+
+  .warning-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cds-support-03);
+    cursor: help;
+    flex-shrink: 0;
+  }
+
+  .warning-badge:hover {
+    color: var(--cds-support-01);
   }
 </style>
