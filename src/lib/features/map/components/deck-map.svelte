@@ -1270,14 +1270,18 @@
 
     if (isMapLoaded && map) {
       const OSM_SOURCE_ID = 'osm-raster-source';
-      const OSM_LAYER_ID = 'osm-raster-layer';
+      const OSM_LAYER_ID = `${OSM_SOURCE_ID}-layer`; // Must match createOSMRasterLayer() pattern
 
       // Remove existing OSM layer and source if present
-      if (map.getLayer(OSM_LAYER_ID)) {
-        map.removeLayer(OSM_LAYER_ID);
-      }
-      if (map.getSource(OSM_SOURCE_ID)) {
-        map.removeSource(OSM_SOURCE_ID);
+      try {
+        if (map.getLayer(OSM_LAYER_ID)) {
+          map.removeLayer(OSM_LAYER_ID);
+        }
+        if (map.getSource(OSM_SOURCE_ID)) {
+          map.removeSource(OSM_SOURCE_ID);
+        }
+      } catch {
+        // Ignore errors during cleanup - layer/source may already be removed
       }
 
       // Add new OSM raster layer if active
@@ -1285,8 +1289,16 @@
         const rasterSource = createOSMRasterSource(tileConfig);
         const rasterLayer = createOSMRasterLayer(OSM_SOURCE_ID);
 
-        map.addSource(OSM_SOURCE_ID, rasterSource);
-        map.addLayer(rasterLayer);
+        try {
+          if (!map.getSource(OSM_SOURCE_ID)) {
+            map.addSource(OSM_SOURCE_ID, rasterSource);
+          }
+          if (!map.getLayer(OSM_LAYER_ID)) {
+            map.addLayer(rasterLayer);
+          }
+        } catch (error) {
+          logger.warn('Failed to add OSM raster layer', LogCategory.MAP, error);
+        }
 
         logger.debug('OSM raster basemap applied', LogCategory.MAP, {
           basemap: osmBasemap.file,

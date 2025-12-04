@@ -50,9 +50,7 @@ export function buildFilterSQL(
   const buildTopFilter = (direction: 'ASC' | 'DESC'): string => {
     const limit = Number(filter.limit ?? filter.value);
     if (!Number.isFinite(limit) || limit <= 0) {
-      throw new DuckDBError(
-        'Veuillez préciser un nombre pour le filtre "top"'
-      );
+      throw new DuckDBError('Veuillez préciser un nombre pour le filtre "top"');
     }
     return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };

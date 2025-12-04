@@ -110,6 +110,9 @@
   let searchQuery = $state('');
   let selectedYear = $state('all');
 
+  // AbortController for cancelling pending join computations
+  let currentJoinAbortController: AbortController | null = null;
+
   const hasGPSCoordinates = $derived(() => {
     if (!selectedDataset) return false;
 
@@ -190,6 +193,13 @@
 
   // Handlers
   async function handleSelectBasemap(basemap: BasemapMetadata) {
+    // Cancel any pending join computation
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
     osmBasemapStore.clear();
     dataTabActions.selectBasemap(basemap.file);
 
@@ -208,8 +218,57 @@
           basemap,
           dataTabState.geolocation.linkedVariableName
         );
+
+        // Check if request was cancelled
+        if (abortSignal.aborted) {
+          logger.debug(
+            'Join computation cancelled (basemap changed)',
+            LogCategory.MAP
+          );
+          return;
+        }
+
         dataTabActions.setJoinStats(stats);
+
+        // Auto-finalize join if there are no errors (all entities joined perfectly)
+        const hasErrors =
+          stats.toVerifyCount > 0 ||
+          stats.entities.filter((e) => e.status === 'duplicate').length > 0 ||
+          stats.entities.filter((e) => e.status === 'unrecognized').length > 0;
+
+        if (!hasErrors && stats.joinedCount > 0) {
+          logger.info(
+            'Auto-finalizing join - no errors detected',
+            LogCategory.MAP,
+            { joinedCount: stats.joinedCount }
+          );
+
+          try {
+            await duckDBOrchestrator.finalizeJoin(
+              selectedDataset.id,
+              basemap,
+              dataTabState.geolocation.linkedVariableName
+            );
+            // Only mark step complete if finalization succeeded
+            dataTabStore.markStepComplete(2);
+            logger.success(
+              'Join auto-finalized, map should update',
+              LogCategory.MAP
+            );
+          } catch (finalizeError) {
+            logger.error(
+              'Failed to auto-finalize join',
+              LogCategory.MAP,
+              finalizeError
+            );
+            showError(m.join_error_title(), m.join_error_message());
+          }
+        }
       } catch (error) {
+        // Ignore abort errors
+        if (error instanceof Error && error.name === 'AbortError') {
+          return;
+        }
         logger.error('Failed to compute join stats', LogCategory.MAP, error);
         showError(m.join_error_title(), m.join_error_message());
       }
@@ -399,8 +458,13 @@
     }
   }
 
-  function handleSelectOSM() {
+  async function handleSelectOSM() {
     if (!hasGPSCoordinates()) {
+      return;
+    }
+
+    if (!selectedDataset) {
+      logger.warn('No dataset selected for OSM basemap', LogCategory.MAP);
       return;
     }
 
@@ -427,6 +491,20 @@
         data: { ...osmBasemap }
       }
     });
+
+    // Finalize OSM join to activate GPS mode for point rendering
+    try {
+      await duckDBOrchestrator.finalizeJoin(
+        selectedDataset.id,
+        osmBasemap,
+        '' // geoColumn not used for OSM - GPS columns are auto-detected
+      );
+      dataTabStore.markStepComplete(2);
+      logger.success('OSM basemap activated with GPS mode', LogCategory.MAP);
+    } catch (error) {
+      logger.error('Failed to activate OSM GPS mode', LogCategory.MAP, error);
+      showError(m.join_error_title(), m.join_error_message());
+    }
   }
 
   function handleSuggestBasemap() {
@@ -593,6 +671,32 @@
     if (dataset) {
       loadSuggestions();
     }
+  });
+
+  // Effect to clear OSM basemap when dataset changes
+  // This prevents OSM from persisting when switching to a different file
+  let previousDatasetId: string | null = null;
+  $effect(() => {
+    const currentDatasetId = selectedDataset?.id ?? null;
+
+    if (previousDatasetId !== null && currentDatasetId !== previousDatasetId) {
+      // Dataset changed - clear OSM basemap state
+      if (osmBasemapStore.isActive) {
+        logger.info(
+          'Clearing OSM basemap due to dataset change',
+          LogCategory.MAP,
+          {
+            previousDatasetId,
+            newDatasetId: currentDatasetId
+          }
+        );
+        osmBasemapStore.clear();
+        // Also reset the basemap selection
+        dataTabActions.selectBasemap('');
+      }
+    }
+
+    previousDatasetId = currentDatasetId;
   });
 </script>
 
@@ -1008,15 +1112,10 @@
   <!-- Tab 2: OSM -->
   {#if activeTabIndex === 2}
     <div class="tab-content">
-      <p class="kh-help osm-description">
-        {m.osm_description()}
-      </p>
+      <h4 class="osm-title">{m.osm_modal_title()}</h4>
 
-      <p class="kh-note">
-        {m.osm_customization_note()}
-        <button type="button" class="link-text" onclick={handleGoToVisualize}
-          >{m.step_visualize()}</button
-        >.
+      <p class="kh-help osm-description">
+        {m.osm_modal_description()}
       </p>
 
       {#if !hasGPSCoordinates()}
@@ -1027,12 +1126,32 @@
           hideCloseButton={true}
           lowContrast
         />
+      {:else if osmBasemapStore.isActive}
+        <InlineNotification
+          kind="success"
+          title={m.osm_basemap_title({ style: 'OpenStreetMap' })}
+          subtitle={m.osm_modal_description()}
+          hideCloseButton={true}
+          lowContrast
+        />
+        <p class="kh-note">
+          {m.osm_customization_note()}
+          <button type="button" class="link-text" onclick={handleGoToVisualize}
+            >{m.step_visualize()}</button
+          >.
+        </p>
       {:else}
         <div class="osm-action">
           <Button kind="primary" on:click={handleSelectOSM}>
             {m.osm_modal_button_add()}
           </Button>
         </div>
+        <p class="kh-note osm-note">
+          {m.osm_customization_note()}
+          <button type="button" class="link-text" onclick={handleGoToVisualize}
+            >{m.step_visualize()}</button
+          >.
+        </p>
       {/if}
 
       <Button
@@ -1167,11 +1286,16 @@
   }
 
   /* Import tab */
-  .import-title {
+  .import-title,
+  .osm-title {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 1rem;
     font-weight: 600;
     color: var(--cds-text-01);
+  }
+
+  .osm-note {
+    margin-top: var(--cds-spacing-04);
   }
 
   .dropzone {
