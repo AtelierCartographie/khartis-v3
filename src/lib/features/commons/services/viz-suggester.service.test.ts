@@ -1,4 +1,4 @@
-import type { ColumnAnalysis } from '$lib/features/data-pipeline/models/column-analysis';
+import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 import { describe, expect, it } from 'vitest';
 import {
   VizSuggesterService,

@@ -18,11 +18,15 @@
           60 * 60 * 1000
         );
       }
+    },
+    onRegisterError(error) {
+      console.error('SW registration error:', error);
     }
   });
 
-  function handleUpdate() {
-    updateServiceWorker(true);
+  async function handleUpdate() {
+    await updateServiceWorker(true);
+    window.location.reload();
   }
 
   function closeUpdateNotification() {
@@ -38,17 +42,14 @@
   <div class="pwa-notification-container">
     <InlineNotification
       kind="info"
-      title={m.pwa_update_title()}
       subtitle={m.pwa_update_subtitle()}
       hideCloseButton={false}
       lowContrast={false}
       on:close={closeUpdateNotification}
     >
-      <svelte:fragment slot="actions">
-        <NotificationActionButton on:click={handleUpdate}>
-          {m.pwa_update_action()}
-        </NotificationActionButton>
-      </svelte:fragment>
+      <NotificationActionButton kind="ghost" on:click={handleUpdate}>
+        {m.pwa_update_title()}
+      </NotificationActionButton>
     </InlineNotification>
   </div>
 {/if}
@@ -74,6 +75,5 @@
     right: 1rem;
     z-index: 9999;
     max-width: 400px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
   }
 </style>

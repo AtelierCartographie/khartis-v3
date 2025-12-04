@@ -12,53 +12,6 @@ export function sanitizeProjectName(name: string): string {
   return sanitized;
 }
 
-export function sanitizeFileName(fileName: string): string {
-  if (!fileName || typeof fileName !== 'string') {
-    return '';
-  }
-
-  let sanitized = fileName.replace(/[<>:"/\\|?*]/g, '_');
-
-  sanitized = sanitized.replace(/^\.+/, '');
-
-  sanitized = sanitized.substring(0, 255);
-
-  return sanitized;
-}
-
-export function sanitizeNumericInput(input: string | number): number {
-  if (typeof input === 'number') {
-    if (!isFinite(input) || isNaN(input)) {
-      return 0;
-    }
-    return input;
-  }
-
-  if (typeof input === 'string') {
-    const parsed = parseFloat(input);
-    if (isNaN(parsed) || !isFinite(parsed)) {
-      return 0;
-    }
-    return parsed;
-  }
-
-  return 0;
-}
-
-export function sanitizeCSVCell(value: string): string {
-  if (!value || typeof value !== 'string') {
-    return '';
-  }
-
-  const dangerousStarts = ['=', '+', '-', '@', '\t', '\r'];
-
-  if (dangerousStarts.some((char) => value.startsWith(char))) {
-    return "'" + value;
-  }
-
-  return value;
-}
-
 export function sanitizeTextInput(input: string): string {
   if (!input || typeof input !== 'string') {
     return '';

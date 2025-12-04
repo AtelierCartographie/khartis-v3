@@ -17,7 +17,7 @@
     SideNavItems,
     Theme
   } from 'carbon-components-svelte';
-  import { CopyFile, Launch, TrashCan } from 'carbon-icons-svelte';
+  import { CopyFile, Launch, Save, TrashCan } from 'carbon-icons-svelte';
   import DuplicateProjectModal from './commons/components/duplicate-project-modal.svelte';
   import Separator from './commons/components/separator.svelte';
 
@@ -70,6 +70,12 @@
 
   function handleDeleteProject() {
     isDeleteModalOpen = true;
+    globalState.isSideNavOpen = false;
+  }
+
+  async function handleSaveProject() {
+    if (!projectStore.currentProject) return;
+    await projectStore.saveCurrentProject();
     globalState.isSideNavOpen = false;
   }
 
@@ -155,6 +161,19 @@
               disabled={!projectStore.currentProject}
               on:click={handleDeleteProject}
               >{m.sidenav_delete_project()}
+            </Button>
+
+            <Button
+              size="small"
+              kind="ghost"
+              icon={Save}
+              class="menu-bar-item"
+              data-testid="sidenav-save-project"
+              disabled={!projectStore.currentProject}
+              on:click={handleSaveProject}
+            >
+              {m.sidenav_save_project()}
+              <span class="shortcut-icon">⌘S</span>
             </Button>
 
             <Button
@@ -298,6 +317,7 @@
   secondaryButtonText={m.open_project_cancel()}
   on:click:button--primary={handleDeleteConfirm}
   on:click:button--secondary={() => (isDeleteModalOpen = false)}
+  size="sm"
 >
   <p>{m.sidenav_delete_confirm_message({ name: projectStore.projectName })}</p>
 </Modal>
