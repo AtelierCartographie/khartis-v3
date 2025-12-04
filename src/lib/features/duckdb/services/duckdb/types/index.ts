@@ -67,6 +67,7 @@ export interface AnalysisResult {
   histogram?: unknown;
   uniques?: number;
   nulls?: number;
+  duplicates?: number;
   count?: number;
   [key: string]: unknown;
 }

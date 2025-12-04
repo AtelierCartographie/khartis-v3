@@ -1,3 +1,5 @@
+import { TABLE_ROW_HEIGHT } from '../types';
+
 export interface UseVirtualScrollProps {
   numRows: number | (() => number);
   maxRows: number | (() => number);
@@ -26,7 +28,7 @@ export function useVirtualScroll(
   let startIndex = $state<number>(0);
   let tableContainer = $state<HTMLDivElement | undefined>(props.tableContainer);
 
-  const rowHeight = 32;
+  const rowHeight = TABLE_ROW_HEIGHT;
   const offsetRows = 5;
   const scrollIncrement = 13;
 

@@ -1,7 +1,7 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
 import type { GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection } from '$lib/features/data-pipeline/adapters/parsers/geojson.parser';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -548,6 +548,15 @@ class DataOrchestratorService {
             ) {
               await this.applyColumnTransformations(file);
             }
+
+            // Apply saved row deletions after file is loaded
+            if (file.deletedRowIds && file.deletedRowIds.length > 0) {
+              logger.info(
+                `[DataOrchestrator] Found ${file.deletedRowIds.length} deleted rows to apply for ${file.name}`,
+                LogCategory.DATA
+              );
+              await this.applyRowDeletions(file);
+            }
           } catch (err) {
             // Individual file failure shouldn't stop the whole batch
             // Error is already logged in onFileAdded
@@ -609,6 +618,25 @@ class DataOrchestratorService {
               );
             }
             break;
+          case 'refine':
+            if (transformation.newValue) {
+              const operationMap: Record<string, RefineOperation> = {
+                uppercase: RefineOperation.UPPERCASE,
+                lowercase: RefineOperation.LOWERCASE,
+                titlecase: RefineOperation.TITLECASE,
+                trim: RefineOperation.TRIM,
+                trim_all: RefineOperation.TRIM_ALL
+              };
+              const refineOp = operationMap[transformation.newValue];
+              if (refineOp) {
+                await duckDBOrchestrator.refineColumn(
+                  dataset.tableName,
+                  transformation.column,
+                  refineOp
+                );
+              }
+            }
+            break;
         }
       } catch (err) {
         logger.warn(
@@ -617,6 +645,40 @@ class DataOrchestratorService {
           { error: err }
         );
       }
+    }
+  }
+
+  private async applyRowDeletions(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.deletedRowIds) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.deletedRowIds.length} row deletions for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    try {
+      await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
+
+      const { Duck } = await import('$lib/features/duckdb');
+      const newRowCount = Duck
+        ? await Duck.get_row_count(dataset.tableName)
+        : 0;
+      datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
+
+      logger.debug(
+        `[DataOrchestrator] Applied row deletions, new row count: ${newRowCount}`,
+        LogCategory.DATA
+      );
+    } catch (err) {
+      logger.warn(
+        `Failed to apply row deletions for ${file.name}`,
+        LogCategory.DATA,
+        { error: err }
+      );
     }
   }
 

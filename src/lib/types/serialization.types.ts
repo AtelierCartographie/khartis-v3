@@ -93,7 +93,7 @@ export interface SerializedUploadedFile {
   deepAnalysis?: UploadedFile['deepAnalysis'];
   geoMatchResult?: UploadedFile['geoMatchResult'];
   columnTransformations?: ColumnTransformation[];
-  // Cached dataset metadata removed – pipeline reloads from DuckDB
+  deletedRowIds?: number[];
   content?: string | number[]; // string or ArrayBuffer as number[]
   contentType?: 'string' | 'arraybuffer';
 }

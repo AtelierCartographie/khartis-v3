@@ -127,6 +127,35 @@
     }
   }
 
+  async function loadGPSData(datasetId: string): Promise<void> {
+    const start = performance.now();
+    logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
+      datasetId
+    });
+
+    try {
+      const { table } = await duckDBOrchestrator.getGPSArrowTable(datasetId);
+
+      if (table) {
+        displayTable = table;
+        displayGeoJSON = null;
+        logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
+          rows: table.numRows,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+      } else {
+        logger.warn(
+          'No GPS data returned, falling back to basemap',
+          LogCategory.MAP
+        );
+        await loadFallbackBasemap();
+      }
+    } catch (error) {
+      logger.error('Failed to load GPS data', LogCategory.MAP, error);
+      await loadFallbackBasemap();
+    }
+  }
+
   $effect(() => {
     const _version = duckDBDatasetsVersion;
     if (isInitializing) {
@@ -169,7 +198,10 @@
           selectedDataset.sourceFileId
         );
 
-        if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+        // GPS mode - render points on OSM basemap
+        if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+          loadGPSData(duckDBDataset.id);
+        } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
           loadJoinedBasemap(
             selectedDataset,
             duckDBDataset.joinedBasemap,
@@ -210,7 +242,10 @@
         selectedDataset.sourceFileId
       );
 
-      if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+      // GPS mode - render points on OSM basemap
+      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+        await loadGPSData(duckDBDataset.id);
+      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
         await loadJoinedBasemap(
           selectedDataset,
           duckDBDataset.joinedBasemap,
