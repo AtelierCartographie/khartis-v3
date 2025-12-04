@@ -236,6 +236,10 @@ export const ProjectSerializer = {
       serialized.columnTransformations = file.columnTransformations;
     }
 
+    if (file.deletedRowIds && file.deletedRowIds.length > 0) {
+      serialized.deletedRowIds = file.deletedRowIds;
+    }
+
     return serialized;
   },
 
@@ -299,6 +303,10 @@ export const ProjectSerializer = {
 
     if (data.columnTransformations) {
       file.columnTransformations = data.columnTransformations;
+    }
+
+    if (data.deletedRowIds) {
+      file.deletedRowIds = data.deletedRowIds;
     }
 
     return file as UploadedFile;

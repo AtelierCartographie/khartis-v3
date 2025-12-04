@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Checkbox } from 'carbon-components-svelte';
   import type { ColumnInfo, TableRow } from '../types';
 
   interface Props {
@@ -6,9 +7,27 @@
     rowIndex: number;
     visibleColumns: ColumnInfo[];
     isHighlighted: boolean;
+    isSelectable?: boolean;
+    isSelected?: boolean;
+    onToggleSelection?: (rowId: number) => void;
   }
 
-  const { row, visibleColumns, isHighlighted }: Props = $props();
+  const {
+    row,
+    visibleColumns,
+    isHighlighted,
+    isSelectable = false,
+    isSelected = false,
+    onToggleSelection
+  }: Props = $props();
+
+  const rowId = $derived((row.__id as number | undefined) ?? -1);
+
+  function handleCheckboxChange() {
+    if (rowId !== -1) {
+      onToggleSelection?.(rowId);
+    }
+  }
 
   function isNumericType(type: string): boolean {
     return (
@@ -36,7 +55,17 @@
   }
 </script>
 
-<tr class:highlight={isHighlighted}>
+<tr class:highlight={isHighlighted} class:selected={isSelected}>
+  {#if isSelectable}
+    <td class="checkbox-cell">
+      <Checkbox
+        hideLabel
+        checked={isSelected}
+        on:change={handleCheckboxChange}
+        labelText=""
+      />
+    </td>
+  {/if}
   {#each visibleColumns as col (col.name)}
     {@const value = row[col.name]}
     {@const isNumeric = isNumericType(col.type)}
@@ -71,6 +100,43 @@
 
   tr.highlight .null-value {
     color: rgba(255, 255, 255, 0.7);
+  }
+
+  tr.selected {
+    background-color: var(--cds-selected-ui);
+  }
+
+  tr.selected:hover {
+    background-color: var(--cds-selected-ui-hover, var(--cds-selected-ui));
+  }
+
+  .checkbox-cell {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    padding: 0 var(--cds-spacing-03);
+    text-align: center;
+    vertical-align: middle;
+    position: sticky;
+    left: 0;
+    background-color: var(--cds-ui-01);
+    z-index: 1;
+  }
+
+  .checkbox-cell :global(.bx--form-item) {
+    margin: 0;
+  }
+
+  .checkbox-cell :global(.bx--checkbox-wrapper) {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 !important;
+  }
+
+  .checkbox-cell :global(.bx--checkbox-label) {
+    padding: 0;
+    min-height: 20px;
   }
 
   td {

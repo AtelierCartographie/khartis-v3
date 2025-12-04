@@ -276,6 +276,84 @@ class ProjectStore {
     await this.saveCurrentProject();
   }
 
+  async clearColumnTransformations(fileId: string): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      return;
+    }
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...updatedFiles[fileIndex],
+      columnTransformations: [],
+      deletedRowIds: []
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
+  async addDeletedRows(fileId: string, rowIds: number[]): Promise<void> {
+    if (!this._state.currentProject?.data?.sourceFiles) {
+      logger.warn('No project or source files to add deleted rows', LogCategory.PROJECT);
+      return;
+    }
+
+    const fileIndex = this._state.currentProject.data.sourceFiles.findIndex(
+      (f) => f.id === fileId
+    );
+
+    if (fileIndex === -1) {
+      logger.warn('File not found for adding deleted rows', LogCategory.PROJECT, {
+        fileId,
+        availableFileIds: this._state.currentProject.data.sourceFiles.map(f => f.id)
+      });
+      return;
+    }
+
+    const file = this._state.currentProject.data.sourceFiles[fileIndex];
+    const existingDeleted = file.deletedRowIds ?? [];
+    const newDeletedIds = [...new Set([...existingDeleted, ...rowIds])];
+
+    logger.info('Adding deleted rows to file', LogCategory.PROJECT, {
+      fileId,
+      newRowIds: rowIds.length,
+      totalDeleted: newDeletedIds.length
+    });
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    updatedFiles[fileIndex] = {
+      ...file,
+      deletedRowIds: newDeletedIds
+    };
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: updatedFiles
+      }
+    };
+
+    this._state.isDirty = true;
+    await this.saveCurrentProject();
+  }
+
   async createProject(name: string, files: UploadedFile[]): Promise<void> {
     if (this._state.currentProject) {
       await this.saveCurrentProject();

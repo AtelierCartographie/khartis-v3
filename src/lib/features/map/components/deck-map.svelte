@@ -1061,15 +1061,19 @@
       return;
     }
 
+    const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
+
     logger.debug('Updating Deck.gl layers', LogCategory.MAP, {
       hasArrowTable: Boolean(jsTable),
       hasGeoJSON: Boolean(geojson),
-      hasWorldBase: Boolean(worldBaseTable)
+      hasWorldBase: Boolean(worldBaseTable),
+      isOSMActive
     });
 
     const layers: Layer<DeckDataRow>[] = [];
 
-    if (worldBaseTable) {
+    // Don't add world base layer when OSM raster is active (OSM provides the base)
+    if (worldBaseTable && !isOSMActive) {
       const baseLayer = createWorldBaseLayer(worldBaseTable);
       if (baseLayer) {
         layers.push(baseLayer);
@@ -1102,7 +1106,8 @@
 
     deckOverlay.setProps({ layers });
     logger.success('Deck.gl layers applied', LogCategory.MAP, {
-      layerCount: layers.length
+      layerCount: layers.length,
+      isOSMActive
     });
   }
 
@@ -1175,6 +1180,7 @@
 
   $effect(() => {
     const _worldBase = worldBaseTable;
+    const _osmActive = osmBasemapStore.activeOSMBasemap;
     if (isMapLoaded && deckOverlay) {
       updateMapLayers(jsTable, userGeoJSON);
     }

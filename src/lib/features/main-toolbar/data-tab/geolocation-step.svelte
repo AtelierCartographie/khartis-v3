@@ -10,6 +10,7 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
@@ -188,6 +189,18 @@
       autoSelectBasemap();
     }
   });
+
+  // Mark step 1 as complete when geolocation is configured
+  $effect(() => {
+    const geo = dataTabState.geolocation;
+    const isEntityConfigured = geo.linkedVariable !== null && geo.linkedVariable !== undefined;
+    const isCoordinatesConfigured = geo.geoReference === 'coordinates' &&
+      geo.latitudeColumn && geo.longitudeColumn;
+
+    if (isEntityConfigured || isCoordinatesConfigured) {
+      dataTabStore.markStepComplete(1);
+    }
+  });
 </script>
 
 <section id="geolocation-step">
@@ -270,8 +283,8 @@
 
     {#if activeTabIndex === 0 && suggestedColumn()}
       <InlineNotification
-        title="Colonne géographique détectée"
-        subtitle={`La colonne "${suggestedColumn()!.columnName}" a été automatiquement sélectionnée (confiance: ${Math.round(suggestedColumn()!.confidence * 100)}%)`}
+        title={m.geo_column_detected_title()}
+        subtitle={m.geo_column_detected_subtitle({ column: suggestedColumn()!.columnName, confidence: Math.round(suggestedColumn()!.confidence * 100).toString() })}
         kind="success"
         lowContrast
         hideCloseButton={false}
@@ -280,8 +293,8 @@
 
     {#if activeTabIndex === 1 && latitudeColumns().length > 0 && longitudeColumns().length > 0}
       <InlineNotification
-        title="Colonnes de coordonnées détectées"
-        subtitle="Les colonnes de latitude et longitude ont été automatiquement sélectionnées"
+        title={m.geo_coords_detected_title()}
+        subtitle={m.geo_coords_detected_subtitle()}
         kind="success"
         lowContrast
         hideCloseButton={false}
