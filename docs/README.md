@@ -81,7 +81,7 @@ src/lib/
 │   ├── commons/           # Shared components, utils, services
 │   ├── create-project/    # Project creation modal
 │   ├── data-pipeline/     # Data import pipeline (parsers, models)
-│   ├── duckdb/            # DuckDB WASM integration
+│   ├── duckdb/            # DuckDB WASM integration (modular functional)
 │   ├── header/            # Top navigation
 │   ├── main-toolbar/      # Left sidebar
 │   ├── map/               # Map visualization

@@ -1,12 +1,13 @@
-import type { DatasetResult, EnrichedColumn } from '../models';
-import type { ProcessedDataset } from '../types/ProcessedDataset';
 import type {
-  AnalysisResult,
   ColumnInfo,
-  GeoColumnInfo
-} from '../types/AnalysisResult';
-import { ColumnType, isNumericType } from '../models/column-type';
-import type { ColumnStats } from '../models/column-stats';
+  ColumnStats,
+  DatasetResult,
+  EnrichedColumn,
+  GeoColumnInfo,
+  ProcessedDataset,
+  ProcessedDatasetAnalysisResult
+} from '../types';
+import { ColumnType, isNumericType } from '../types';
 import type {
   GeoColumnResult,
   GeoDetectionResult
@@ -155,7 +156,7 @@ function mapLegacyGeoColumns(columns?: unknown[]): GeoColumnInfo[] {
 function buildAnalysis(
   dataset: DatasetResult,
   columns: ColumnInfo[]
-): AnalysisResult {
+): ProcessedDatasetAnalysisResult {
   const { geoColumns, suggested } = mapGeoColumns(dataset.geoDetection);
 
   const legacyGeoColumns =
@@ -178,7 +179,7 @@ function buildAnalysis(
       dataset.geoDetection?.hasGeoColumns ??
       dataset.analysis?.hasGeoData ??
       false,
-    suggestedGeoColumn: suggestedFromLegacy,
+    suggestedGeoColumn: suggestedFromLegacy?.columnName,
     rowCount: dataset.analysis?.rowCount ?? dataset.rowCount,
     warnings: [
       ...(dataset.analysis?.warnings ?? []),

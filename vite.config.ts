@@ -25,13 +25,36 @@ export default defineConfig(({ mode }) => {
           sourcemap: false,
           globPatterns:
             process.env.NODE_ENV === 'production'
-              ? ['**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}']
+              ? [
+                  '**/*.{js,css,html,ico,png,svg,woff2,woff,ttf,eot,otf}',
+                  'duckdb-extensions/**/*.wasm',
+                  'basemaps/all-basemaps-metadata.json',
+                  'basemaps/all-basemaps-attributes.parquet'
+                ]
               : [],
-          globIgnores: ['**/node_modules/**/*', '**/*.wasm'],
-          navigateFallback: basePath ? `${basePath}/index.html` : null,
-          maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
+          globIgnores: ['**/node_modules/**/*'],
+          navigateFallback: basePath ? `${basePath}/index.html` : '/index.html',
+          navigateFallbackDenylist: [/^\/api\//, /\.[^/]+$/],
+          maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
           cleanupOutdatedCaches: true,
           runtimeCaching: [
+            {
+              urlPattern: /.*duckdb.*\.wasm$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'duckdb-wasm-core',
+                expiration: {
+                  maxEntries: 5,
+                  maxAgeSeconds: 60 * 60 * 24 * 365
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                },
+                matchOptions: {
+                  ignoreSearch: true
+                }
+              }
+            },
             {
               urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/,
               handler: 'CacheFirst',
@@ -39,7 +62,7 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'duckdb-extensions-cdn',
                 expiration: {
                   maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year (extensions are versioned in URL)
+                  maxAgeSeconds: 60 * 60 * 24 * 365
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
@@ -53,7 +76,7 @@ export default defineConfig(({ mode }) => {
                 cacheName: 'duckdb-extensions-local',
                 expiration: {
                   maxEntries: 10,
-                  maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year (local bundled extensions)
+                  maxAgeSeconds: 60 * 60 * 24 * 365
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
@@ -75,10 +98,10 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
-              urlPattern: /.*\.(wasm|worker\.js)$/,
+              urlPattern: /.*\.worker\.js$/,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'wasm-workers',
+                cacheName: 'workers',
                 expiration: {
                   maxEntries: 20,
                   maxAgeSeconds: 60 * 60 * 24 * 90
@@ -125,6 +148,34 @@ export default defineConfig(({ mode }) => {
                 expiration: {
                   maxEntries: 500,
                   maxAgeSeconds: 60 * 60 * 24 * 90
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts',
+                expiration: {
+                  maxEntries: 30,
+                  maxAgeSeconds: 60 * 60 * 24 * 365
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                }
+              }
+            },
+            {
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 30
                 },
                 cacheableResponse: {
                   statuses: [0, 200]
