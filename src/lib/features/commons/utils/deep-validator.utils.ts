@@ -390,8 +390,7 @@ export const DeepDataValidator = {
           severity: 'warning',
           column: column.name,
           message: 'Only one unique value in the entire column',
-          suggestion:
-            'This column can be removed as it provides no information'
+          suggestion: 'This column can be removed as it provides no information'
         });
       }
 
@@ -438,8 +437,7 @@ export const DeepDataValidator = {
               column: columns[cellIndex]?.name,
               message: `Cell with ${cell.length} characters detected`,
               affectedRows: [currentRow],
-              suggestion:
-                'Very long cells may affect performance'
+              suggestion: 'Very long cells may affect performance'
             });
             break;
           }

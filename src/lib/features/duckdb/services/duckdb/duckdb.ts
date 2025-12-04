@@ -1,7 +1,6 @@
 import {
   DataValidationError,
-  DuckDBError,
-  TypeInferenceError
+  DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
@@ -28,7 +27,6 @@ import {
   type AnalyseOptions,
   type CalculateBreaksOptions,
   type DescribeResult,
-  type FileType,
   type FileWithId,
   type GetDataOptions,
   type JoinByIdOptions,
@@ -77,8 +75,7 @@ import type {
   BreaksResult,
   BreaksRoundedResult,
   DuckDBMetadata,
-  DuckDBValue,
-  ValidationResult
+  DuckDBValue
 } from './types/index.js';
 
 type DuckDBUnsafeBindings = {
@@ -817,10 +814,7 @@ class DuckDB {
       // input = COPY-PASTE
       if (typeof input === 'string') {
         if (!tablename)
-          tablename = generateUniqueTableName(
-            'data_paste',
-            this.loaded_files
-          );
+          tablename = generateUniqueTableName('data_paste', this.loaded_files);
         filename = tablename;
         fileid = tablename;
         await this.db!.registerFileText(fileid, input);
