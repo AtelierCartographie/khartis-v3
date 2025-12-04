@@ -348,12 +348,68 @@ class DuckDB {
     }
   }
 
+  /**
+   * Preload WASM modules into Cache API before Worker initialization.
+   * This ensures the files are available for the Service Worker and Worker threads.
+   * Uses Cache API directly for reliable caching independent of HTTP cache headers.
+   */
+  private async preloadWasmModules(): Promise<void> {
+    const CACHE_NAME = 'duckdb-wasm-core';
+    const wasmUrls = [duckdb_wasm_eh, duckdb_wasm];
+    const workerUrls = [eh_worker, mvp_worker];
+    const allUrls = [...wasmUrls, ...workerUrls];
+
+    try {
+      const cache = await caches.open(CACHE_NAME);
+
+      const preloadPromises = allUrls.map(async (url) => {
+        try {
+          const cached = await cache.match(url);
+          if (cached) {
+            logger.debug('Asset already in cache', LogCategory.DUCKDB, { url });
+            return;
+          }
+
+          const response = await fetch(url);
+          if (response.ok) {
+            await cache.put(url, response.clone());
+            logger.debug('Asset cached successfully', LogCategory.DUCKDB, {
+              url
+            });
+          } else {
+            logger.warn('Failed to fetch asset for caching', LogCategory.DUCKDB, {
+              url,
+              status: response.status
+            });
+          }
+        } catch (error) {
+          logger.warn('Error caching asset', LogCategory.DUCKDB, {
+            url,
+            error
+          });
+        }
+      });
+
+      await Promise.all(preloadPromises);
+      logger.debug('WASM modules preloaded into Cache API', LogCategory.DUCKDB);
+    } catch (error) {
+      logger.warn(
+        'Cache API not available, falling back to normal loading',
+        LogCategory.DUCKDB,
+        { error }
+      );
+    }
+  }
+
   // New DuckDb instance + spatial extension
   async init(): Promise<void> {
     const startTime = performance.now();
     logger.info('DuckDB initialization started', LogCategory.DUCKDB);
 
     try {
+      // Preload WASM into browser/SW cache from main thread
+      await this.preloadWasmModules();
+
       const bundleStart = performance.now();
       // Select a bundle based on browser checks
       const MANUAL_BUNDLES: DuckDBBundles = {
