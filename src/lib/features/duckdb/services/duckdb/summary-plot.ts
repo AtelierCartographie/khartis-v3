@@ -31,6 +31,9 @@ interface SummaryPlotOptions {
   stroke_nulls?: string;
   stroke_unique?: string;
   bg_color?: string;
+  text_color?: string;
+  text_secondary_color?: string;
+  bar_text_color?: string;
 }
 
 interface NumericData {
@@ -83,6 +86,7 @@ interface ObservablePlotStackOptions {
   textAnchor?: 'start' | 'middle' | 'end';
   strokeWidth?: number;
   fontVariant?: string;
+  fontSize?: number;
 }
 
 /**
@@ -117,7 +121,8 @@ function create_plot_numeric(
     width = 144,
     height = 64,
     main_color = '#a56eff',
-    nulls_color = 'gold'
+    nulls_color = 'gold',
+    text_color = '#f4f4f4'
   } = options;
   const { min, max, histogram, type_simple } = data;
 
@@ -126,13 +131,16 @@ function create_plot_numeric(
   const text_options = {
     y: 0,
     dy: 8,
-    fontVariant: 'tabular-nums'
+    fontVariant: 'tabular-nums',
+    fill: text_color,
+    fontSize: 9
   };
 
   return Plot.plot({
     width,
     height,
     marginBottom: 15,
+    style: { fontSize: '9px' },
     x: { axis: null, type: 'band' },
     y: { axis: null },
     marks: [
@@ -141,7 +149,7 @@ function create_plot_numeric(
         y: 'count',
         fill: (d) => (d.bin !== null ? main_color : nulls_color)
       }),
-      Plot.ruleY([0]),
+      Plot.ruleY([0], { stroke: text_color }),
       Plot.text(
         [
           is_date
@@ -200,7 +208,10 @@ function create_plot_categorical(
     stroke_main = 'none',
     stroke_nulls = 'none',
     stroke_unique = 'none',
-    bg_color = '#393939'
+    bg_color = '#393939',
+    text_color = '#f4f4f4',
+    text_secondary_color = '#c6c6c6',
+    bar_text_color = '#ffffff'
   } = options;
 
   const { uniques, histogram } = data;
@@ -235,7 +246,9 @@ function create_plot_categorical(
             : null,
         x: 'count',
         lineWidth,
-        textOverflow: 'clip-end'
+        textOverflow: 'clip-end',
+        fill: bar_text_color,
+        fontSize: 9
       } as ObservablePlotStackOptions)
     );
 
@@ -255,7 +268,7 @@ function create_plot_categorical(
     marginRight: 5,
     marginBottom: 15,
     marginTop: 10,
-    style: 'overflow: visible;',
+    style: { fontSize: '9px', overflow: 'visible' },
     x: { axis: null },
     marks: [
       // Handle fix text with pointer and stack mark
@@ -294,12 +307,14 @@ function create_plot_categorical(
                   : `${d.category}`,
               lineWidth: 12,
               x: 'count',
-              textOverflow: 'clip-end'
+              textOverflow: 'clip-end',
+              fill: bar_text_color,
+              fontSize: 9
             } as ObservablePlotStackOptions)
           )
         : null,
       // adapt label length on percent values
-      !has_one_category ? label_layer([0.8, 1], 9) : null,
+      !has_one_category ? label_layer([0.8, 1], 12) : null,
       label_layer([0.6, 0.8], 6),
       label_layer([0.4, 0.6], 5),
       label_layer([0.2, 0.4], 3),
@@ -309,7 +324,9 @@ function create_plot_categorical(
         ? null
         : Plot.text([(uniques ?? 0).toLocaleString() + ' catégories'], {
             frameAnchor: 'bottom-left',
-            dy: 10
+            dy: 10,
+            fill: text_secondary_color,
+            fontSize: 9
           }),
 
       // INTERACTIVITY
@@ -334,7 +351,8 @@ function create_plot_categorical(
           dy: 10,
           fill: bg_color,
           stroke: bg_color,
-          strokeWidth: 5
+          strokeWidth: 5,
+          fontSize: 9
         } as never)
       ),
       // Show count and category in a fixed place
@@ -345,7 +363,9 @@ function create_plot_categorical(
           text: (d: CategoryHistogramItem) =>
             `${d.count.toLocaleString()} - ${d.category}`,
           frameAnchor: 'bottom-left',
-          dy: 10
+          dy: 10,
+          fill: text_color,
+          fontSize: 9
         } as never)
       )
     ]

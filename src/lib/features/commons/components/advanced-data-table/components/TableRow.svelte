@@ -62,7 +62,15 @@
   }
 
   tr.highlight {
-    background-color: var(--cds-support-03);
+    background-color: #a56eff;
+  }
+
+  tr.highlight td {
+    color: white;
+  }
+
+  tr.highlight .null-value {
+    color: rgba(255, 255, 255, 0.7);
   }
 
   td {

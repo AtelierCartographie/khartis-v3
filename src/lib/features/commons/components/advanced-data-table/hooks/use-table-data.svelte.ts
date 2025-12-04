@@ -19,6 +19,8 @@ export interface UseTableDataReturn {
   tableData: TableRow[];
   numRows: number;
   isLoading: boolean;
+  isLoadingRows: boolean;
+  isFullyLoaded: boolean;
   error: string | null;
   loadColumnsInfo: () => Promise<void>;
   loadRowsData: () => Promise<void>;
@@ -40,6 +42,8 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
   let tableData = $state<TableRow[]>([]);
   let numRows = $state<number>(0);
   let isLoading = $state<boolean>(false);
+  let isLoadingRows = $state<boolean>(false);
+  let initialLoadComplete = $state<boolean>(false);
   let error = $state<string | null>(null);
 
   async function loadColumnsInfo(): Promise<void> {
@@ -48,6 +52,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
 
     try {
       isLoading = true;
+      initialLoadComplete = false;
       error = null;
 
       if (tableName) {
@@ -111,6 +116,8 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     }
 
     try {
+      isLoadingRows = true;
+
       if (tableName) {
         const data = await duckDBOrchestrator.getTableData(tableName, {
           offset: rowIndices[0],
@@ -137,6 +144,11 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       logger.error('Error loading row data', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to load data';
       tableData = [];
+    } finally {
+      isLoadingRows = false;
+      if (tableData.length > 0 && !initialLoadComplete) {
+        initialLoadComplete = true;
+      }
     }
   }
 
@@ -167,6 +179,12 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     },
     get isLoading() {
       return isLoading;
+    },
+    get isLoadingRows() {
+      return isLoadingRows;
+    },
+    get isFullyLoaded() {
+      return initialLoadComplete;
     },
     get error() {
       return error;
