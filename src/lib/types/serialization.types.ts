@@ -9,9 +9,7 @@ import type {
   ColumnTransformation,
   UploadedFile
 } from '$lib/features/commons/store/create-project.types';
-import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { KhartisProject } from '$lib/features/project-management/models/project';
 
 /**
  * Serialized project data structure (JSON-safe)
@@ -57,19 +55,6 @@ export interface SerializedProjectData {
 }
 
 /**
- * DatasetResult serialized for storage (Dates converted to ISO strings)
- */
-export interface SerializedDatasetResult extends Omit<
-  DatasetResult,
-  'metadata' | 'createdAt'
-> {
-  metadata: Omit<DatasetResult['metadata'], 'processedAt'> & {
-    processedAt: string;
-  };
-  createdAt?: string;
-}
-
-/**
  * Serialized uploaded file structure
  * ArrayBuffer content is converted to number array for JSON serialization
  */
@@ -102,47 +87,3 @@ export interface SerializedUploadedFile {
   gpsMode?: boolean;
   gpsColumns?: { lat: string; lon: string };
 }
-
-/**
- * Type guards for serialized data
- */
-export function isSerializedProject(data: unknown): data is SerializedProject {
-  if (typeof data !== 'object' || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj.id === 'string' &&
-    typeof obj.manifest === 'object' &&
-    obj.manifest !== null
-  );
-}
-
-export function isSerializedUploadedFile(
-  data: unknown
-): data is SerializedUploadedFile {
-  if (typeof data !== 'object' || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    typeof obj.size === 'number' &&
-    typeof obj.type === 'string'
-  );
-}
-
-/**
- * Serializer interface for type-safe serialization
- */
-export interface ISerializer<TSource, TSerialized> {
-  serialize(source: TSource): TSerialized;
-  deserialize(serialized: TSerialized): TSource;
-}
-
-/**
- * Project serializer interface
- */
-export type ProjectSerializer = ISerializer<KhartisProject, SerializedProject>;
-
-/**
- * File serializer interface
- */
-export type FileSerializer = ISerializer<UploadedFile, SerializedUploadedFile>;

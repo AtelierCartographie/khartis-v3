@@ -25,10 +25,10 @@ The default pipeline assembles the built-in parsers. You can supply custom parse
 
 ## Supported formats
 
-| Format      | Extensions             | Parser          | Notes                                        |
-| ----------- | ---------------------- | --------------- | -------------------------------------------- |
-| **CSV/TSV** | `.csv`, `.tsv`, `.txt` | `CSVParser`     | Tabular data, uses DuckDB's `read_csv()`     |
-| **GeoJSON** | `.geojson`, `.json`    | `GeoJSONParser` | Spatial datasets, uses DuckDB's `ST_Read()`  |
+| Format      | Extensions             | Parser          | Notes                                       |
+| ----------- | ---------------------- | --------------- | ------------------------------------------- |
+| **CSV/TSV** | `.csv`, `.tsv`, `.txt` | `CSVParser`     | Tabular data, uses DuckDB's `read_csv()`    |
+| **GeoJSON** | `.geojson`, `.json`    | `GeoJSONParser` | Spatial datasets, uses DuckDB's `ST_Read()` |
 
 > **Note**: Additional formats (Shapefile, GeoParquet, KML, GeoPackage) are handled directly by DuckDB via the orchestrator service when files are registered.
 
@@ -80,28 +80,49 @@ const pipeline = createDataPipeline({
 
 ## DuckDB feature tie-in (`src/lib/features/duckdb`)
 
-- `duckdb-orchestrator.service.svelte.ts`: manages registered datasets, chooses the GeoJSON path (ST_Read → Arrow → Legacy) based on `VITE_USE_ST_READ` and `VITE_USE_ARROW_GEOJSON`, and exposes tables to the UI.
-- `duckdb/duckdb.ts`: wraps DuckDB-WASM, installs macros (`analyse`, `breaks`, `join`), maintains the GeoParquet LRU cache, and offers helpers (`read_geofile`, `copy_to_geoparquet_as_buffer`, `insertArrowFromIPCStream`).
-- `duckdb-validator.service.ts`: leverages the macros to produce describe/summary/histogram diagnostics and suggest geocatalog matches.
+The DuckDB feature uses a **modular functional architecture** (NO classes, pure functions + module-level state):
+
+```
+src/lib/features/duckdb/
+├── duck.ts                  # Duck facade object (singleton)
+├── types.ts                 # ALL consolidated types
+├── constants.ts             # DUCK_CONST, CACHE_CONSTANTS
+├── validator.service.ts     # Validation diagnostics
+├── core/                    # Low-level engine
+│   ├── engine.ts            # WASM init, extensions
+│   ├── query.ts             # SQL execution + Arrow conversion
+│   └── transaction.ts       # TransactionMutex
+├── io/                      # File I/O
+│   ├── readers.ts           # read_tabular, read_geofile, read_link
+│   ├── exporters.ts         # CSV, GeoParquet export
+│   └── arrow-converter.ts   # Arrow ↔ DuckDB conversion
+├── cache/                   # Unified cache
+│   └── cache-manager.ts     # describe, rowcount, geoparquet
+├── operations/              # Data operations
+│   ├── analysis.ts          # analyse, describeColumns
+│   ├── search.ts            # searchInTable
+│   ├── join.ts              # join_by_id, apply_join_association
+│   └── filters.ts           # add_filter, apply_filters
+├── macros/                  # SQL macros
+│   ├── analyse.ts, breaks.ts, join.ts, search.ts
+└── orchestrator/            # Reactive Svelte 5 service
+    ├── orchestrator.svelte.ts
+    └── (sub-modules: column-ops, filter-ops, join-ops, etc.)
+```
 
 Key reminders:
 
 1. Always call `duckDBOrchestrator.initialize()` before running queries; it loads extensions and macros.
-2. `processGeoJSON` tries ST_Read, then Arrow ingestion, then the legacy JSON fallback based on the env flags.
-3. DuckDB queries drop GeoArrow metadata, so export to GeoParquet (`copy_to_geoparquet_as_buffer`) and re-read via `geoParquetReader` when metadata matters.
-4. The GeoParquet cache lives in memory (LRU ~100 MB). Clear it (`clearGeoParquetCache`) when dropping/recreating tables.
+2. `processGeoJSON` tries ST_Read, then Arrow ingestion, then the legacy JSON fallback.
+3. DuckDB queries drop GeoArrow metadata, so export to GeoParquet and re-read when metadata matters.
+4. The GeoParquet cache lives in memory (LRU ~100 MB). Use `invalidateTableCache()` when dropping/recreating tables.
 
 ### DuckDB runtime optimizations
 
-`src/lib/features/duckdb/services/duckdb/duckdb.ts` now squeezes more out of DuckDB-WASM:
-
-- **Pragma bootstrap** – `configureRuntimeSettings()` pins thread count, memory limit, disables the progress bar, and attempts to load `httpfs` so remote basemaps can be streamed without temporary files.
-- **Transactional ingestion** – `read_tabular`, `read_geofile`, and `read_link` wrap `CREATE TABLE` + `ST_Read` + `add_row_id` inside `runInTransaction`, so partially-created tables cannot leak when a conversion fails midway.
-- **Prepared statements** – frequently executed queries (`describe_table`, `get_row_count`) now rely on cached `AsyncPreparedStatement`s with parameter binding (`query_table(?)`). This avoids re-parsing SQL and makes metadata lookups immune to identifier injection.
-- **Targeted cache invalidation** – every mutation funnels through `markTableMutated()`, which clears the describe/row-count caches and evicts any GeoParquet buffer for the affected table. Joins, column edits, and even Arrow inserts automatically invalidate their caches.
-- **Ephemeral file cleanup** – inline uploads registered via `registerFileText` are dropped via `dropRegisteredFile` once the table exists, preventing the WASM FS from holding on to large pasted datasets.
-
-Thanks to these tweaks DuckDB stays the single source of truth (CDC §3.A) but avoids the previous round-trips through GeoParquet for metadata, and deck.gl pulls Arrow IPC directly from DuckDB.
+- **Pragma bootstrap** – `configureRuntimeSettings()` pins thread count, memory limit, disables the progress bar, and loads `httpfs`.
+- **Transactional ingestion** – `read_tabular`, `read_geofile`, and `read_link` wrap operations inside `runInTransaction`.
+- **Targeted cache invalidation** – mutations invalidate the describe/row-count caches and evict GeoParquet buffers.
+- **Ephemeral file cleanup** – inline uploads are dropped via `dropRegisteredFile` once the table exists.
 
 ## Core interfaces
 

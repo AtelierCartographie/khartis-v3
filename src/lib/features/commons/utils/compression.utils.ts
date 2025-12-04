@@ -91,7 +91,3 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
   const decoder = new TextDecoder();
   return decoder.decode(data);
 }
-
-export function isCompressionSupported(): boolean {
-  return 'CompressionStream' in window && 'DecompressionStream' in window;
-}
