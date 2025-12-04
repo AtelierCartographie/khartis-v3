@@ -40,6 +40,7 @@
   on:click:button--secondary={onClose}
   on:submit={handleSubmit}
   on:close={onClose}
+  size="sm"
 >
   <TextInput
     labelText="Nouveau nom"

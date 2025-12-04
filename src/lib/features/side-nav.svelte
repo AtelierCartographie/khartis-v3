@@ -298,6 +298,7 @@
   secondaryButtonText={m.open_project_cancel()}
   on:click:button--primary={handleDeleteConfirm}
   on:click:button--secondary={() => (isDeleteModalOpen = false)}
+  size="sm"
 >
   <p>{m.sidenav_delete_confirm_message({ name: projectStore.projectName })}</p>
 </Modal>
