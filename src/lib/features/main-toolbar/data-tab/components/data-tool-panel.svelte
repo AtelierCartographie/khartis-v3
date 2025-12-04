@@ -18,8 +18,10 @@
     switch (globalState.toolbarState) {
       case ToolbarState.Collapsed:
         return '50px';
+
       case ToolbarState.Compact:
         return '400px';
+
       default:
         return '50vw';
     }

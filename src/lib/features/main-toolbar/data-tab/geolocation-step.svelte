@@ -193,9 +193,12 @@
   // Mark step 1 as complete when geolocation is configured
   $effect(() => {
     const geo = dataTabState.geolocation;
-    const isEntityConfigured = geo.linkedVariable !== null && geo.linkedVariable !== undefined;
-    const isCoordinatesConfigured = geo.geoReference === 'coordinates' &&
-      geo.latitudeColumn && geo.longitudeColumn;
+    const isEntityConfigured =
+      geo.linkedVariable !== null && geo.linkedVariable !== undefined;
+    const isCoordinatesConfigured =
+      geo.geoReference === 'coordinates' &&
+      geo.latitudeColumn &&
+      geo.longitudeColumn;
 
     if (isEntityConfigured || isCoordinatesConfigured) {
       dataTabStore.markStepComplete(1);
@@ -284,7 +287,10 @@
     {#if activeTabIndex === 0 && suggestedColumn()}
       <InlineNotification
         title={m.geo_column_detected_title()}
-        subtitle={m.geo_column_detected_subtitle({ column: suggestedColumn()!.columnName, confidence: Math.round(suggestedColumn()!.confidence * 100).toString() })}
+        subtitle={m.geo_column_detected_subtitle({
+          column: suggestedColumn()!.columnName,
+          confidence: Math.round(suggestedColumn()!.confidence * 100).toString()
+        })}
         kind="success"
         lowContrast
         hideCloseButton={false}

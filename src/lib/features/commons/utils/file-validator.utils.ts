@@ -15,8 +15,8 @@ export interface FileValidationConfig {
 }
 
 /**
- * Résultat de validation détaillé, hérite de ValidationResult
- * et ajoute des informations spécifiques aux fichiers
+ * Detailed validation result, inherits from ValidationResult
+ * and adds file-specific information
  */
 export interface DetailedValidationResult extends ValidationResult {
   fileType: FileType;
@@ -153,7 +153,7 @@ export const FileValidator = {
 
     if (files.length > config.maxFileCount) {
       globalErrors.push(
-        `Nombre maximum de fichiers dépassé (${config.maxFileCount})`
+        `Maximum number of files exceeded (${config.maxFileCount})`
       );
     }
 
@@ -165,7 +165,7 @@ export const FileValidator = {
 
     if (totalSize > config.maxTotalSize) {
       globalErrors.push(
-        `Taille totale des fichiers dépasse ${config.maxTotalSize / (1024 * 1024)} MB`
+        `Total file size exceeds ${config.maxTotalSize / (1024 * 1024)} MB`
       );
     }
 
@@ -182,19 +182,17 @@ export const FileValidator = {
 
   validateBasicProperties(file: File, result: DetailedValidationResult): void {
     if (file.size === 0) {
-      result.errors.push('Le fichier est vide');
+      result.errors.push('File is empty');
     } else if (file.size > config.maxFileSize) {
       result.errors.push(
-        `Le fichier dépasse la limite de ${config.maxFileSize / (1024 * 1024)} MB`
+        `File exceeds the limit of ${config.maxFileSize / (1024 * 1024)} MB`
       );
     } else if (file.size > config.maxFileSize * 0.8) {
-      result.warnings.push(
-        'Fichier volumineux, le traitement pourrait être lent'
-      );
+      result.warnings.push('Large file, processing may be slow');
     }
 
     if (!file.name || file.name.length === 0) {
-      result.errors.push('Nom de fichier invalide');
+      result.errors.push('Invalid file name');
     }
 
     const suspiciousPatterns = [
@@ -207,30 +205,26 @@ export const FileValidator = {
 
     for (const pattern of suspiciousPatterns) {
       if (pattern.test(file.name)) {
-        result.warnings.push(
-          'Le nom du fichier contient des caractères inhabituels'
-        );
+        result.warnings.push('File name contains unusual characters');
         break;
       }
     }
 
     const extension = FileValidator.getFileExtension(file.name);
     if (!extension) {
-      result.warnings.push('Fichier sans extension');
+      result.warnings.push('File without extension');
     } else if (!config.allowedExtensions.includes(extension)) {
       if (config.strictMode) {
-        result.errors.push(`Extension .${extension} non supportée`);
+        result.errors.push(`Extension .${extension} not supported`);
       } else {
-        result.warnings.push(
-          `Extension .${extension} pourrait ne pas être supportée`
-        );
+        result.warnings.push(`Extension .${extension} may not be supported`);
       }
     }
 
     if (file.type) {
       result.metadata!.actualMimeType = file.type;
       if (!config.allowedMimeTypes.includes(file.type.toLowerCase())) {
-        result.warnings.push(`Type MIME ${file.type} non reconnu`);
+        result.warnings.push(`MIME type ${file.type} not recognized`);
       }
     }
   },
@@ -292,42 +286,40 @@ export const FileValidator = {
       // fallthrough
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
-          result.warnings.push(
-            'Fichier CSV/TSV volumineux, le parsing pourrait être lent'
-          );
+          result.warnings.push('Large CSV/TSV file, parsing may be slow');
         }
         break;
 
       case FileType.SHAPEFILE: {
         const ext = FileValidator.getFileExtension(file.name);
         if (ext === 'shp' && file.size < 100) {
-          result.warnings.push('Fichier SHP suspicieusement petit');
+          result.warnings.push('SHP file suspiciously small');
         }
         break;
       }
 
       case FileType.GEOPACKAGE:
         if (file.size < 1024) {
-          result.errors.push('Fichier GeoPackage trop petit pour être valide');
+          result.errors.push('GeoPackage file too small to be valid');
         }
         break;
 
       case FileType.GEOPARQUET:
         if (file.size < 1024) {
-          result.errors.push('Fichier GeoParquet trop petit pour être valide');
+          result.errors.push('GeoParquet file too small to be valid');
         }
         break;
 
       case FileType.GEOJSON:
         if (file.size > 20 * 1024 * 1024) {
           result.warnings.push(
-            'GeoJSON volumineux, considérez un format plus efficace comme GeoPackage'
+            'Large GeoJSON, consider a more efficient format like GeoPackage'
           );
         }
         break;
 
       case FileType.UNKNOWN:
-        result.errors.push('Type de fichier non reconnu');
+        result.errors.push('File type not recognized');
         break;
     }
   },
@@ -341,7 +333,7 @@ export const FileValidator = {
     const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
     if (lines.length === 0) {
-      result.errors.push('Fichier CSV vide');
+      result.errors.push('Empty CSV file');
       return;
     }
 
@@ -359,7 +351,7 @@ export const FileValidator = {
 
     if (maxCount === 0) {
       result.warnings.push(
-        'Aucun séparateur détecté, le fichier pourrait ne pas être un CSV valide'
+        'No separator detected, file may not be a valid CSV'
       );
     }
 
@@ -373,9 +365,7 @@ export const FileValidator = {
     }
 
     if (inconsistentLines > 0) {
-      result.warnings.push(
-        'Nombre de colonnes incohérent dans les premières lignes'
-      );
+      result.warnings.push('Inconsistent column count in first rows');
     }
 
     const hasBOM =
@@ -401,7 +391,7 @@ export const FileValidator = {
     try {
       const trimmed = text.trim();
       if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-        result.errors.push('Le fichier ne commence pas par { ou [');
+        result.errors.push('File does not start with { or [');
         return;
       }
 
@@ -410,7 +400,7 @@ export const FileValidator = {
 
         if (!parsed.type) {
           result.warnings.push(
-            'Propriété "type" manquante, pourrait ne pas être un GeoJSON valide'
+            'Missing "type" property, may not be a valid GeoJSON'
           );
         } else if (
           ![
@@ -425,11 +415,11 @@ export const FileValidator = {
             'GeometryCollection'
           ].includes(parsed.type)
         ) {
-          result.errors.push(`Type GeoJSON invalide: ${parsed.type}`);
+          result.errors.push(`Invalid GeoJSON type: ${parsed.type}`);
         }
 
         if (parsed.type === 'FeatureCollection' && !parsed.features) {
-          result.errors.push('FeatureCollection sans propriété "features"');
+          result.errors.push('FeatureCollection without "features" property');
         }
       }
     } catch (error) {
@@ -439,11 +429,9 @@ export const FileValidator = {
         error
       );
       if (file.size < 1024 * 1024) {
-        result.errors.push('JSON invalide');
+        result.errors.push('Invalid JSON');
       } else {
-        result.warnings.push(
-          'Impossible de valider complètement le JSON (fichier trop gros)'
-        );
+        result.warnings.push('Cannot fully validate JSON (file too large)');
       }
     }
   },
@@ -459,7 +447,7 @@ export const FileValidator = {
     if (ext === 'shp' && buffer.byteLength >= 4) {
       const magic = view.getUint32(0, false);
       if (magic !== 0x0000270a) {
-        result.errors.push('Signature de fichier SHP invalide');
+        result.errors.push('Invalid SHP file signature');
       }
     }
 
@@ -467,7 +455,7 @@ export const FileValidator = {
       const version = view.getUint8(0);
       const validVersions = [0x03, 0x83, 0x8b, 0xcb, 0xf5, 0xfb];
       if (!validVersions.includes(version)) {
-        result.warnings.push('Version DBF non standard');
+        result.warnings.push('Non-standard DBF version');
       }
     }
   },
@@ -481,12 +469,12 @@ export const FileValidator = {
     const sqliteSignature = new TextDecoder('ascii').decode(signature);
 
     if (!sqliteSignature.startsWith('SQLite format 3')) {
-      result.errors.push('Fichier GeoPackage invalide (pas un fichier SQLite)');
+      result.errors.push('Invalid GeoPackage file (not a SQLite file)');
       return;
     }
 
     if (file.size < 10 * 1024) {
-      result.warnings.push('Fichier GeoPackage suspicieusement petit');
+      result.warnings.push('GeoPackage file suspiciously small');
     }
   },
 
@@ -516,7 +504,7 @@ export const FileValidator = {
 
       if (missing.length > 0) {
         globalErrors.push(
-          `Shapefile "${baseName}" incomplet. Fichiers manquants: ${missing.map((e) => `.${e}`).join(', ')}`
+          `Incomplete shapefile "${baseName}". Missing files: ${missing.map((e) => `.${e}`).join(', ')}`
         );
       }
     }
@@ -569,12 +557,12 @@ export const FileValidator = {
       const parsed = new URL(url);
 
       if (!['http:', 'https:'].includes(parsed.protocol)) {
-        result.errors.push('Seuls les protocoles HTTP et HTTPS sont autorisés');
+        result.errors.push('Only HTTP and HTTPS protocols are allowed');
       }
 
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
       if (blockedDomains.includes(parsed.hostname)) {
-        result.errors.push('Domaine non autorisé');
+        result.errors.push('Domain not allowed');
       }
 
       const pathname = parsed.pathname;
@@ -587,16 +575,16 @@ export const FileValidator = {
         } as File);
       } else {
         result.warnings.push(
-          "Impossible de déterminer le type de fichier depuis l'URL"
+          'Cannot determine file type from URL'
         );
       }
 
       if (parsed.protocol === 'http:') {
-        result.warnings.push('Utilisation de HTTP non sécurisé');
+        result.warnings.push('Using insecure HTTP');
       }
     } catch (error) {
       logger.error('URL validation failed', LogCategory.FILE, error);
-      result.errors.push('URL invalide');
+      result.errors.push('Invalid URL');
     }
 
     result.isValid = result.errors.length === 0;
@@ -608,7 +596,7 @@ export const SUPPORTED_FILE_TYPES = {
   tabular: {
     extensions: ['.csv', '.tsv', '.txt'],
     mimeTypes: ['text/csv', 'text/tab-separated-values', 'text/plain'],
-    description: 'Données tabulaires (CSV, TSV)'
+    description: 'Tabular data (CSV, TSV)'
   },
   geojson: {
     extensions: ['.geojson', '.json'],
@@ -618,7 +606,7 @@ export const SUPPORTED_FILE_TYPES = {
   shapefile: {
     extensions: ['.shp', '.shx', '.dbf', '.prj', '.cpg'],
     mimeTypes: ['application/x-shapefile', 'application/octet-stream'],
-    description: 'Shapefile (tous les composants)'
+    description: 'Shapefile (all components)'
   },
   geopackage: {
     extensions: ['.gpkg'],

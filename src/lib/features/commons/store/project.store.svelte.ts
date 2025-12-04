@@ -310,7 +310,10 @@ class ProjectStore {
 
   async addDeletedRows(fileId: string, rowIds: number[]): Promise<void> {
     if (!this._state.currentProject?.data?.sourceFiles) {
-      logger.warn('No project or source files to add deleted rows', LogCategory.PROJECT);
+      logger.warn(
+        'No project or source files to add deleted rows',
+        LogCategory.PROJECT
+      );
       return;
     }
 
@@ -319,10 +322,16 @@ class ProjectStore {
     );
 
     if (fileIndex === -1) {
-      logger.warn('File not found for adding deleted rows', LogCategory.PROJECT, {
-        fileId,
-        availableFileIds: this._state.currentProject.data.sourceFiles.map(f => f.id)
-      });
+      logger.warn(
+        'File not found for adding deleted rows',
+        LogCategory.PROJECT,
+        {
+          fileId,
+          availableFileIds: this._state.currentProject.data.sourceFiles.map(
+            (f) => f.id
+          )
+        }
+      );
       return;
     }
 
