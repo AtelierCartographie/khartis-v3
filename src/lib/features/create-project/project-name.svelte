@@ -81,6 +81,7 @@
       await projectsStore.refresh();
 
       createProjectActions.resetAllTabs();
+
       await goto('/', { replaceState: true });
     } catch (error) {
       const duration = performance.now() - startTime;

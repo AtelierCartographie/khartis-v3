@@ -84,15 +84,6 @@
   function handleSmoothnessChange(e: CustomEvent<number>) {
     annotationsActions.updateDefaultStyle({ smoothness: e.detail });
   }
-
-  function _handleColorChange(color: string) {
-    strokeColor = color;
-    const hsl = hexToHsl(color);
-    hue = hsl.hue;
-    saturation = hsl.saturation;
-    lightness = hsl.lightness;
-    annotationsActions.updateDefaultStyle({ strokeColor: color });
-  }
 </script>
 
 <Grid noGutter fullWidth>
@@ -163,7 +154,7 @@
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent<boolean>) => {
+            ontoggle={(e: CustomEvent) => {
               const nextStyle: 'dotted' | 'solid' = e.detail
                 ? 'dotted'
                 : 'solid';

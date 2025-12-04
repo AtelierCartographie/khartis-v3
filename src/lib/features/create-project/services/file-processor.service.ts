@@ -2,8 +2,7 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import {
-  detectDuplicateRows,
-  getDataStatistics,
+  type ColumnStatSummary,
   readFileContent,
   validateGeospatialFile
 } from '$lib/features/commons/utils/file-import.utils';
@@ -23,10 +22,9 @@ const ERROR_NO_GEO_COLUMN_MESSAGE = () => m.error_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
-import type { JsonValue, TabularData } from '$lib/types/data';
+import type { JsonValue } from '$lib/types/data';
 
 type CsvPrimitive = string | number | boolean | null | Date;
-type CsvRow = Record<string, CsvPrimitive>;
 type CsvMatrix = CsvPrimitive[][];
 
 export interface ProcessingCallbacks {
@@ -150,68 +148,81 @@ class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    const { CSVParser } = await import('$lib/features/data-pipeline');
-    const csvParser = new CSVParser();
-    const rawDataset = await csvParser.parse(file);
-
-    const headers = rawDataset.columns.map((col) => col.name);
-    const csvRows = rawDataset.columns[0].values.map((_, rowIndex) => {
-      const row: Record<string, unknown> = {};
-      rawDataset.columns.forEach((col) => {
-        row[col.name] = col.values[rowIndex];
-      });
-      return normalizeCsvRow(row, headers);
+    // Read original file content for persistence (needed for project restore)
+    const originalContent = await readFileContent(file, (progress) => {
+      this.callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    const csvValidation = DataValidator.validateCSVData(csvRows);
-    if (!csvValidation.isValid) {
-      this.callbacks.onStatusChange(
-        uploadedFile.id,
-        'error',
-        csvValidation.errors.join(', ')
-      );
-      return;
+    // Use dataPipeline directly - DuckDB handles everything
+    const { dataPipeline } = await import('$lib/features/data-pipeline');
+    const { Duck } = await import('$lib/features/duckdb');
+
+    const dataset = await dataPipeline.processFile(file);
+    const { tableName, columns, rowCount } = dataset;
+    const headers = columns.map((col) => col.name);
+
+    // Convert DuckDB stats to the expected statistics format
+    const statistics: Record<string, ColumnStatSummary> = {};
+    for (const col of columns) {
+      statistics[col.name] = {
+        type: col.type,
+        count: col.stats.count ?? rowCount,
+        nullCount: col.stats.nulls ?? 0,
+        unique: col.stats.uniques ?? 0,
+        min: col.stats.min as number | undefined,
+        max: col.stats.max as number | undefined,
+        mean: col.stats.mean
+      };
     }
 
-    if (csvValidation.warnings.length > 0) {
-      csvValidation.warnings.forEach((warning) => {
-        logger.warn(`[CSV validation warning] ${warning}`, LogCategory.FILE, {
-          fileId: uploadedFile.id,
-          fileName: file.name
-        });
-      });
-    }
+    // Detect duplicates using SQL (much faster than JS for large datasets)
+    // Note: COUNT(DISTINCT *) is not supported in DuckDB, use subquery instead
+    const duplicateResult = (await Duck!.query(
+      `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
+      { format: 'array' }
+    )) as Array<{ duplicate_count: number }>;
+    const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
 
-    const duplicates = await detectDuplicateRows(csvRows);
+    // Get sample data for deep analysis (limit to 100 rows for geo detection)
+    const sampleData = (await Duck!.query(
+      `SELECT * FROM "${tableName}" LIMIT 100`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
 
-    const statistics = await getDataStatistics(csvRows, headers);
-
-    const tabularData = csvRowsToTabularData(csvRows);
-
-    await new Promise((resolve) => setTimeout(resolve, 0)); // yield before serialization
-
-    const content = await this.stringifyInChunks(tabularData);
+    // Convert to tabular data format
+    const tabularData = sampleData.map((row) => {
+      const tabularRow: Record<string, JsonValue> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (value instanceof Date) {
+          tabularRow[key] = value.toISOString();
+        } else {
+          tabularRow[key] = value as JsonValue;
+        }
+      }
+      return tabularRow;
+    });
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
-      content,
+      content: originalContent,
       duplicates: {
-        hasDuplicates: duplicates.hasDuplicates,
-        duplicateCount: duplicates.duplicateCount
+        hasDuplicates: duplicateCount > 0,
+        duplicateCount
       },
       statistics
     });
 
-    if (duplicates.hasDuplicates) {
+    if (duplicateCount > 0) {
       showWarning(
         WARNING_DUPLICATE_ROWS_TITLE(),
-        `Found ${duplicates.duplicateCount} duplicate rows`
+        `Found ${duplicateCount} duplicate rows`
       );
     }
 
+    // Perform deep analysis for geo column detection
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
-      csvRows,
+      sampleData,
       headers
     );
 
@@ -224,11 +235,24 @@ class CsvProcessor extends FileProcessor {
 
   private async performDeepAnalysis(
     uploadedFile: UploadedFile,
-    rows: CsvRow[],
+    sampleData: Array<Record<string, unknown>>,
     headers: string[]
   ): Promise<boolean> {
-    const dataMatrix: CsvMatrix = rows.map((row) =>
-      headers.map((header) => row[header] ?? null)
+    // Convert sample data to matrix format for DeepDataValidator
+    const dataMatrix: CsvMatrix = sampleData.map((row) =>
+      headers.map((header) => {
+        const value = row[header];
+        if (value === null || value === undefined) return null;
+        if (value instanceof Date) return value;
+        if (
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean'
+        ) {
+          return value;
+        }
+        return String(value);
+      })
     );
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
@@ -339,52 +363,4 @@ class GenericProcessor extends FileProcessor {
       status: 'complete'
     });
   }
-}
-
-function csvRowsToTabularData(csvRows: CsvRow[]): TabularData {
-  return csvRows.map((row) => {
-    const tabularRow: Record<string, JsonValue> = {};
-    for (const [key, value] of Object.entries(row)) {
-      if (value instanceof Date) {
-        tabularRow[key] = value.toISOString();
-      } else {
-        tabularRow[key] = value;
-      }
-    }
-    return tabularRow;
-  });
-}
-
-function normalizeCsvRow(
-  row: Record<string, unknown>,
-  headers: readonly string[]
-): CsvRow {
-  return headers.reduce<CsvRow>((accumulator, header) => {
-    accumulator[header] = normalizeCsvValue(row[header]);
-    return accumulator;
-  }, {} as CsvRow);
-}
-
-function normalizeCsvValue(value: unknown): CsvPrimitive {
-  if (value === null || value === undefined) {
-    return null;
-  }
-
-  if (value instanceof Date) {
-    return value;
-  }
-
-  if (
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-
-  if (typeof value === 'object') {
-    return JSON.stringify(value);
-  }
-
-  return String(value);
 }

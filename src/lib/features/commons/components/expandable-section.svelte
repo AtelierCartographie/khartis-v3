@@ -3,7 +3,7 @@
   import { Toggle } from 'carbon-components-svelte';
   import { ChevronDown, ChevronRight } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, untrack } from 'svelte';
 
   interface Props {
     title: string;
@@ -27,7 +27,7 @@
     onToggleChange
   }: Props = $props();
 
-  let expanded = $state<boolean>(defaultOpen);
+  let expanded = $state<boolean>(untrack(() => defaultOpen));
 
   const dispatch = createEventDispatcher<{ toggle: { expanded: boolean } }>();
 

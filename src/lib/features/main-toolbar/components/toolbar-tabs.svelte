@@ -14,12 +14,102 @@
   let tabsScroller: HTMLDivElement | null = $state(null);
   let lastSourceFilesCount = $state(0);
 
+  let editingTabId = $state<string | null>(null);
+  let editedName = $state('');
+  let nameInputRef = $state<HTMLInputElement | null>(null);
+  let tabRefs = $state<Map<string, HTMLDivElement>>(new Map());
+
+  function registerTab(node: HTMLDivElement, id: string) {
+    tabRefs.set(id, node);
+
+    return {
+      destroy() {
+        tabRefs.delete(id);
+      }
+    };
+  }
+
+  function startEditingTab(tabId: string, currentName: string) {
+    const fileInfo = getFileInfo(currentName);
+    editedName = fileInfo.name;
+    editingTabId = tabId;
+  }
+
+  async function saveTabRename() {
+    if (!editingTabId || !editedName.trim()) {
+      cancelTabEditing();
+      return;
+    }
+
+    const currentTab = globalState.dataButtons.find(
+      (b) => b.id === editingTabId
+    );
+    if (currentTab) {
+      const fileInfo = getFileInfo(currentTab.label);
+      const newFullName = fileInfo.extension
+        ? `${editedName.trim()}.${fileInfo.extension.toLowerCase()}`
+        : editedName.trim();
+      await projectStore.renameFile(editingTabId, newFullName);
+    }
+    editingTabId = null;
+    editedName = '';
+  }
+
+  function cancelTabEditing() {
+    editingTabId = null;
+    editedName = '';
+  }
+
+  function handleTabKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveTabRename();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelTabEditing();
+    }
+  }
+
+  function handleTabBlur() {
+    if (editedName.trim()) {
+      saveTabRename();
+    } else {
+      cancelTabEditing();
+    }
+  }
+
+  function handleTabDoubleClick(tabId: string, label: string, event: Event) {
+    event.stopPropagation();
+    startEditingTab(tabId, label);
+  }
+
+  $effect(() => {
+    if (editingTabId && nameInputRef) {
+      nameInputRef.focus();
+      nameInputRef.select();
+    }
+  });
+
   $effect(() => {
     const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
 
     if (sourceFiles.length !== lastSourceFilesCount) {
       lastSourceFilesCount = sourceFiles.length;
       globalActions.ensureTabSelected();
+    }
+  });
+
+  $effect(() => {
+    const selectedButton = globalState.dataButtons.find((b) => b.isSelected);
+    if (selectedButton) {
+      const element = tabRefs.get(selectedButton.id);
+      if (element) {
+        element.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'nearest'
+        });
+      }
     }
   });
 
@@ -83,31 +173,26 @@
     return name.slice(0, maxLength - 3) + '...';
   };
 
+  const EXTENSION_COLORS: Record<string, 'blue' | 'green' | 'purple'> = {
+    csv: 'blue',
+    tsv: 'blue',
+    txt: 'blue',
+    json: 'green',
+    geojson: 'green',
+    shp: 'purple',
+    gpkg: 'purple',
+    kml: 'purple',
+    kmz: 'purple',
+    geoparquet: 'purple',
+    gpq: 'purple'
+  };
+
   const getExtensionColor = (
     extension: string
   ): 'blue' | 'green' | 'purple' | 'gray' => {
     const ext = extension.toLowerCase();
-    switch (ext) {
-      case 'csv':
-      case 'tsv':
-      case 'txt':
-        return 'blue';
 
-      case 'json':
-      case 'geojson':
-        return 'green';
-
-      case 'shp':
-      case 'gpkg':
-      case 'kml':
-      case 'kmz':
-      case 'geoparquet':
-      case 'gpq':
-        return 'purple';
-
-      default:
-        return 'gray';
-    }
+    return EXTENSION_COLORS[ext] ?? 'gray';
   };
 </script>
 
@@ -124,7 +209,7 @@
   >
     {#each globalState.dataButtons as dataButton (dataButton.id)}
       {@const fileInfo = getFileInfo(dataButton.label)}
-      <div class="tab-button-wrapper">
+      <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
         <Button
           isSelected={dataButton.isSelected}
           kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
@@ -137,7 +222,28 @@
           title={dataButton.label}
         >
           <div class="tab-content">
-            <span class="tab-label">{truncateFileName(fileInfo.name)}</span>
+            {#if editingTabId === dataButton.id}
+              <input
+                type="text"
+                class="tab-name-input"
+                bind:value={editedName}
+                bind:this={nameInputRef}
+                onkeydown={handleTabKeyPress}
+                onblur={handleTabBlur}
+                onclick={(e: MouseEvent) => e.stopPropagation()}
+              />
+            {:else}
+              <span
+                class="tab-label"
+                role="button"
+                tabindex="0"
+                ondblclick={(e: MouseEvent) =>
+                  handleTabDoubleClick(dataButton.id, dataButton.label, e)}
+                title="Double-cliquer pour renommer"
+              >
+                {truncateFileName(fileInfo.name)}
+              </span>
+            {/if}
             {#if fileInfo.extension}
               <Tag type={getExtensionColor(fileInfo.extension)} size="sm">
                 {fileInfo.extension}
@@ -253,6 +359,33 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 120px;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 2px;
+    transition: background-color 0.15s;
+  }
+
+  .tab-label:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .tab-name-input {
+    width: 100px;
+    max-width: 120px;
+    padding: 2px 4px;
+    font-size: inherit;
+    font-family: inherit;
+    font-weight: inherit;
+    color: var(--cds-text-on-color);
+    background: transparent;
+    border: none;
+    border-radius: 2px;
+    outline: none;
+  }
+
+  .tab-name-input:focus {
+    outline: none;
+    box-shadow: none;
   }
 
   .tab-content :global(.bx--tag) {

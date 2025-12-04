@@ -376,7 +376,7 @@
     min-width: unset;
     padding: 0 var(--cds-spacing-03);
     border: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--cds-border-strong);
     background: var(--cds-ui-02);
     color: var(--cds-text-01);
     font-weight: normal;
@@ -389,7 +389,7 @@
 
   .input-wrapper .number:focus {
     outline: none;
-    border-bottom-color: #000;
+    border-bottom-color: var(--cds-border-strong);
   }
 
   .input-wrapper .number:disabled {
@@ -413,7 +413,7 @@
     width: 100%;
     height: 2.5rem;
     border: none;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px solid var(--cds-border-strong);
     padding: 0 var(--cds-spacing-03);
     background: var(--cds-field-02);
     color: var(--cds-text-01);

@@ -1,0 +1,463 @@
+<script lang="ts">
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import type { ProcessedDataset } from '$lib/features/data-pipeline';
+  import { RefineOperation } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
+  import { DataTableSkeleton } from 'carbon-components-svelte';
+  import { onMount, untrack } from 'svelte';
+  import { LogCategory, logger } from '../../utils/logger';
+  import ColumnRenameModal from '../column-rename-modal.svelte';
+
+  import { useColumnOperations } from './hooks/use-column-operations.svelte';
+  import { useRowSelection } from './hooks/use-row-selection.svelte';
+  import { useTableData } from './hooks/use-table-data.svelte';
+  import { useTableFilters } from './hooks/use-table-filters.svelte';
+  import { useTableSort } from './hooks/use-table-sort.svelte';
+  import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
+  import { TABLE_ROW_HEIGHT } from './types';
+
+  import TableColumnHeader from './components/TableColumnHeader.svelte';
+  import TableHeaderInfo from './components/TableHeaderInfo.svelte';
+  import TableRow from './components/TableRow.svelte';
+
+  export type HighlightType = 'exact' | 'partial' | 'current' | null;
+
+  interface Props {
+    dataset?: ProcessedDataset;
+    tableName?: string;
+    exactHighlightIds?: number[];
+    partialHighlightIds?: number[];
+    currentHighlightId?: number | null;
+    showSummaryPlots?: boolean;
+    maxRows?: number;
+    isExpanded?: boolean;
+    isSelectable?: boolean;
+    onSelectionChange?: (selectedIds: number[], count: number) => void;
+  }
+
+  let {
+    dataset,
+    tableName,
+    exactHighlightIds = [],
+    partialHighlightIds = [],
+    currentHighlightId = null,
+    showSummaryPlots = true,
+    maxRows,
+    isExpanded = false,
+    isSelectable = false,
+    onSelectionChange
+  }: Props = $props();
+
+  let tableContainer = $state<HTMLDivElement | undefined>(undefined);
+  let viewportHeight = $state(
+    typeof window !== 'undefined' ? window.innerHeight : 800
+  );
+
+  const rowHeight = TABLE_ROW_HEIGHT;
+  const viewportHeightRatioNormal = 0.4;
+  const viewportHeightRatioExpanded = 0.65;
+  const viewportHeightRatio = $derived(
+    isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
+  );
+  const maxViewportHeight = $derived(
+    Math.floor(viewportHeight * viewportHeightRatio)
+  );
+  const computedMaxRows = $derived(Math.floor(maxViewportHeight / rowHeight));
+  const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
+  const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
+  const hasDataSource = $derived(!!dataset || !!tableName);
+  const isEditMode = $derived(!!tableName);
+
+  const COLUMN_TYPE_OPTIONS = $derived([
+    { label: m.column_type_text(), value: 'VARCHAR' },
+    { label: m.column_type_number(), value: 'DOUBLE' },
+    { label: m.column_type_integer(), value: 'BIGINT' },
+    { label: m.column_type_date(), value: 'DATE' },
+    { label: m.column_type_boolean(), value: 'BOOLEAN' }
+  ]);
+
+  function recordTransformation(summary: string) {
+    if (!dataset?.id) return;
+    datasetsStore.recordTransformation(dataset.id, summary);
+  }
+
+  async function recordProjectTransformation(
+    type: 'rename' | 'drop' | 'type_change' | 'refine',
+    column: string,
+    newValue?: string
+  ) {
+    if (!dataset?.sourceFileId) return;
+    await projectStore.addColumnTransformation(dataset.sourceFileId, {
+      type,
+      column,
+      newValue,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  const sort = useTableSort({
+    onSortChange: async () => {
+      await virtualScroll.initializeRows(0);
+      if (tableContainer) {
+        tableContainer.scrollTop = 0;
+      }
+    }
+  });
+
+  const tableData = useTableData({
+    tableName: () => tableName,
+    dataset: () => dataset,
+    startIndex: () => virtualScroll.startIndex,
+    rowIndices: () => virtualScroll.rows,
+    sortColumn: () => sort.sortColumn,
+    sortOrder: () => sort.sortOrder
+  });
+
+  const filters = useTableFilters({
+    tableName: () => tableName,
+    dataset: () => dataset,
+    onRecordTransformation: recordTransformation
+  });
+
+  const virtualScroll = useVirtualScroll({
+    numRows: () => filters.numRows,
+    maxRows: () => effectiveMaxRows,
+    onLoadMore: async () => {
+      await tableData.loadRowsData();
+    }
+  });
+
+  const columnOps = useColumnOperations({
+    tableName: () => tableName,
+    columns: () => tableData.columns,
+    onColumnsChange: async () => {
+      await tableData.loadColumnsInfo();
+      await virtualScroll.initializeRows(virtualScroll.startIndex);
+    },
+    onSortColumnRenamed: (oldName, newName) => {
+      if (sort.sortColumn === oldName) {
+        sort.sortTable(newName, sort.sortOrder ?? 'ASC');
+      }
+    },
+    onSortColumnDeleted: (columnName) => {
+      if (sort.sortColumn === columnName) {
+        sort.sortTable(columnName, 'ASC');
+      }
+    },
+    onRecordTransformation: recordTransformation
+  });
+
+  const rowSelection = useRowSelection({
+    onSelectionChange: (ids, count) => {
+      onSelectionChange?.(ids, count);
+    }
+  });
+
+  const showEmptyState = $derived(
+    !hasDataSource && tableData.columns.length === 0
+  );
+  const showFilteredEmptyState = $derived(
+    tableData.isFullyLoaded &&
+      hasDataSource &&
+      filters.numRows === 0 &&
+      filters.filterStats.total > 0
+  );
+
+  async function handleSort(column: string, order: 'ASC' | 'DESC') {
+    sort.sortTable(column, order);
+  }
+
+  async function handleRename(columnName: string) {
+    columnOps.openRenameModal(columnName);
+  }
+
+  async function handleRenameConfirm(newName: string) {
+    if (columnOps.columnToRename) {
+      const oldName = columnOps.columnToRename;
+      await columnOps.handleRename(newName);
+      await recordProjectTransformation('rename', oldName, newName);
+    }
+  }
+
+  async function handleChangeType(columnName: string, duckType: string) {
+    await columnOps.changeColumnType(columnName, duckType);
+    await recordProjectTransformation('type_change', columnName, duckType);
+  }
+
+  async function handleRefine(columnName: string, operation: RefineOperation) {
+    await columnOps.handleRefine(columnName, operation);
+    await recordProjectTransformation('refine', columnName, operation);
+  }
+
+  async function handleDrop(columnName: string) {
+    await columnOps.dropColumn(columnName);
+    await recordProjectTransformation('drop', columnName);
+  }
+
+  function getRowHighlightType(
+    rowIndex: number,
+    row: Record<string, unknown>
+  ): HighlightType {
+    const rowId = (row.__id as number | undefined) ?? rowIndex + 1;
+    if (currentHighlightId === rowId) return 'current';
+    if (exactHighlightIds.includes(rowId)) return 'exact';
+    if (partialHighlightIds.includes(rowId)) return 'partial';
+    return null;
+  }
+
+  onMount(() => {
+    logger.debug('AdvancedDataTable mounted', LogCategory.UI, {
+      tableName,
+      datasetId: dataset?.id
+    });
+
+    const handleResize = () => {
+      viewportHeight = window.innerHeight;
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  });
+
+  $effect(() => {
+    if (currentHighlightId && filters.numRows > 0) {
+      untrack(() => virtualScroll.goToId(currentHighlightId));
+    }
+  });
+
+  let lastDatasetId: string | undefined = undefined;
+  let lastTableName: string | undefined = undefined;
+  let lastColumnsRef: unknown[] | undefined = undefined;
+
+  $effect(() => {
+    const currentTableName = tableName;
+    const currentDataset = dataset;
+    const currentDatasetId = currentDataset?.id;
+    const currentColumnsRef = currentDataset?.columns;
+
+    const datasetChanged = currentDatasetId !== lastDatasetId;
+    const tableChanged = currentTableName !== lastTableName;
+    const columnsChanged = currentColumnsRef !== lastColumnsRef;
+
+    if (!datasetChanged && !tableChanged && !columnsChanged) {
+      return;
+    }
+
+    lastDatasetId = currentDatasetId;
+    lastTableName = currentTableName;
+    lastColumnsRef = currentColumnsRef;
+
+    if (currentDataset || currentTableName) {
+      untrack(async () => {
+        logger.debug('$effect: reloading table data', LogCategory.UI, {
+          tableName: currentTableName,
+          datasetId: currentDataset?.id
+        });
+
+        try {
+          await tableData.loadColumnsInfo();
+          await filters.refreshFiltersState();
+          await virtualScroll.initializeRows(0);
+
+          logger.debug('$effect: table data reloaded', LogCategory.UI, {
+            rowCount: virtualScroll.rows.length,
+            tableDataLength: tableData.tableData.length
+          });
+        } catch (err) {
+          logger.error('Error reloading table data', LogCategory.UI, err);
+        }
+      });
+    }
+  });
+
+  $effect(() => {
+    virtualScroll.setTableContainer(tableContainer);
+  });
+
+  let expandEffectInitialized = $state(false);
+  $effect(() => {
+    const _currentIsExpanded = isExpanded;
+    if (!expandEffectInitialized) {
+      expandEffectInitialized = true;
+      return;
+    }
+    untrack(async () => {
+      await virtualScroll.initializeRows(virtualScroll.startIndex);
+    });
+  });
+
+  const getSkeletonProps = () =>
+    ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
+</script>
+
+<div class="advanced-data-table">
+  {#if tableData.isFullyLoaded && filters.numRows > 0}
+    <TableHeaderInfo
+      filterStats={filters.filterStats}
+      hiddenColumns={columnOps.hiddenColumns}
+      onShowColumn={columnOps.toggleColumnVisibility}
+    />
+  {/if}
+
+  {#if tableData.error}
+    <div class="error-message">
+      <p>Erreur: {tableData.error}</p>
+    </div>
+  {:else if showEmptyState}
+    <div class="empty-state">
+      <p>Aucune donnée disponible</p>
+    </div>
+  {:else if showFilteredEmptyState}
+    <div class="empty-state">
+      <p>{m.no_results_match_filters()}</p>
+    </div>
+  {:else}
+    <div class="table-wrapper">
+      <div
+        class="table-container"
+        style="max-height: {maxHeight}px;"
+        bind:this={tableContainer}
+        onscroll={virtualScroll.handleScroll}
+      >
+        <table>
+          <thead>
+            <tr>
+              {#if isSelectable && isEditMode}
+                <th class="selection-header-spacer"></th>
+              {/if}
+              {#each columnOps.visibleColumns as column (column.name)}
+                <TableColumnHeader
+                  column={column}
+                  analysis={tableData.columnAnalysis.get(column.name)}
+                  columnAnalysis={tableData.columnAnalysis}
+                  sortColumn={sort.sortColumn}
+                  sortOrder={sort.sortOrder}
+                  showSummaryPlots={showSummaryPlots}
+                  isEditMode={isEditMode}
+                  columnTypeOptions={COLUMN_TYPE_OPTIONS}
+                  onSort={handleSort}
+                  onRename={handleRename}
+                  onChangeType={handleChangeType}
+                  onRefine={handleRefine}
+                  onToggleVisibility={columnOps.toggleColumnVisibility}
+                  onDrop={handleDrop}
+                />
+              {/each}
+            </tr>
+          </thead>
+          <tbody>
+            {#each tableData.tableData as row, i (virtualScroll.rows[i] ?? `row-${i}`)}
+              {@const rowIndex = virtualScroll.rows[i] ?? i}
+              {@const rowId = (row.__id as number | undefined) ?? rowIndex + 1}
+              <TableRow
+                row={row}
+                rowIndex={rowIndex}
+                visibleColumns={columnOps.visibleColumns}
+                highlightType={getRowHighlightType(rowIndex, row)}
+                isSelectable={isSelectable && isEditMode}
+                isSelected={rowSelection.isRowSelected(rowId)}
+                onToggleSelection={rowSelection.toggleRowSelection}
+              />
+            {/each}
+          </tbody>
+        </table>
+      </div>
+
+      {#if !tableData.isFullyLoaded}
+        <div class="skeleton-overlay">
+          <DataTableSkeleton {...getSkeletonProps()} />
+        </div>
+      {/if}
+    </div>
+  {/if}
+</div>
+
+{#if columnOps.columnToRename}
+  <ColumnRenameModal
+    bind:open={columnOps.renameModalOpen}
+    columnName={columnOps.columnToRename}
+    onClose={() => {
+      columnOps.setRenameModalOpen(false);
+      columnOps.setColumnToRename(null);
+    }}
+    onRename={handleRenameConfirm}
+  />
+{/if}
+
+<style>
+  .advanced-data-table {
+    background-color: var(--cds-ui-background);
+    padding: var(--cds-spacing-05);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .table-wrapper {
+    position: relative;
+  }
+
+  .table-container {
+    overflow-y: auto;
+    overflow-x: auto;
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-03);
+    border-radius: 4px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: var(--cds-ui-02);
+  }
+
+  .selection-header-spacer {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 30px;
+    padding: 0;
+    border-bottom: 2px solid var(--cds-ui-03);
+    background-color: var(--cds-ui-02);
+    position: sticky;
+    left: 0;
+    z-index: 1;
+  }
+
+  .skeleton-overlay {
+    position: absolute;
+    inset: 0;
+    background-color: var(--cds-ui-background);
+    z-index: 20;
+    overflow: hidden;
+  }
+
+  .skeleton-overlay :global(.bx--data-table-header),
+  .skeleton-overlay :global(.bx--table-toolbar) {
+    display: none;
+  }
+
+  .empty-state,
+  .error-message {
+    padding: var(--cds-spacing-07);
+    text-align: center;
+    color: var(--cds-text-02);
+    background-color: var(--cds-ui-01);
+    border-radius: 4px;
+  }
+
+  .error-message {
+    color: var(--cds-text-error);
+    border: 1px solid var(--cds-support-01);
+  }
+</style>

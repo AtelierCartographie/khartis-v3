@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Component } from 'svelte';
+  import { untrack } from 'svelte';
 
   interface SectionHeaderWithIconProps {
     title: string;
@@ -18,7 +19,7 @@
     defaultOpen = true
   }: SectionHeaderWithIconProps = $props();
 
-  let expanded = $state(defaultOpen);
+  let expanded = $state(untrack(() => defaultOpen));
 
   function toggleExpanded() {
     if (collapsible) {

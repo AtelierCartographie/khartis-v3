@@ -1,10 +1,6 @@
 export type { IParser } from './parser';
 export { ParserError } from './parser';
 
-export type { IValidator } from './validator';
-
-export type { ITypeInferrer } from './type-inferrer';
-
 export type { IAnalyticsEngine } from './analytics-engine';
 export { AnalyticsEngineError } from './analytics-engine';
 
