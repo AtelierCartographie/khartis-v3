@@ -1,10 +1,10 @@
-// ToDo :
-// - vérifier la gestion des valeurs manquantes dans chaque méthode = ne doit pas être prise en compte
-// - vérifier la gestion des séries temporelles
-// - vérifier la gestion des valeurs négatives
-// - comment gérer les séries à double signes (positive et négative) ?
-//   - détecter le double signe
-//   - appliquer la méthode indépendemment sur chaque signe
+// ToDo:
+// - verify handling of missing values in each method = should not be taken into account
+// - verify handling of time series
+// - verify handling of negative values
+// - how to handle series with both signs (positive and negative)?
+//   - detect dual sign
+//   - apply the method independently on each sign
 
 /**
  * A SQL macro for calculating quantiles.
@@ -24,7 +24,7 @@ const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb :=
   SELECT quantile_disc("colname", list_transform(range(1, nb), c -> c / nb))
 );`;
 
-// nb n'est pas utilisé, juste pour harmoniser avec les autres macros
+// nb is not used, just to harmonize with other macros
 const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
     FROM query(tabname)
     SELECT quantile_disc("colname", [0.05,0.275,0.5,0.725,0.95])
@@ -32,7 +32,7 @@ const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
 
 /**
  * SQL macro for creating equal-width bins.
- * Intervalles égaux avec option de "nice" breaks
+ * Equal intervals with "nice" breaks option
  *
  * This macro generates SQL code to create equal-width bins for a specified column in a table.
  * It calculates the minimum and maximum values of the column and divides the range into
@@ -62,14 +62,14 @@ const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, n
  */
 const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colname, nb := 4) AS (
 
-    -- breaks est la liste des seuils, qui à chaque itération s'augmente des moyennes interstitielles nouvelles
-    -- breaks comprend le min et le max, qu'on retirera au besoin en fin de macro
+    -- breaks is the list of thresholds, which at each iteration grows with new interstitial means
+    -- breaks includes min and max, which will be removed if needed at the end of the macro
 
 
     WITH RECURSIVE means(iter, breaks) AS (
 
       FROM query(tabname)
-      SELECT 1, [min("colname"), avg("colname"), max("colname")]     -- première ligne : [min, moyenne, max]
+      SELECT 1, [min("colname"), avg("colname"), max("colname")]     -- first row: [min, average, max]
 
       UNION ALL (
 
@@ -97,20 +97,20 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
     )
 
     FROM means
-    SELECT last(breaks)[2:-2] breaks      -- retrait min et max
+    SELECT last(breaks)[2:-2] breaks      -- remove min and max
 );`;
 
-// Par Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
+// By Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
 const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb := 10, threshold := 0.4) AS (
               WITH RECURSIVE headtail(break, values_count) AS (
-                    -- Initialisation avec break = moyenne, values_count = nb d'observations
+                    -- Initialization with break = average, values_count = number of observations
                     FROM query(tabname)
                     SELECT avg("colname"),   -- break
                     count(*)              -- values_count
 
                     UNION ALL
 
-                    -- headtail suivant se réfère à la dernière ligne de la table en cours de croissance
+                    -- next headtail refers to the last row of the growing table
                     FROM query(tabname), headtail
                     SELECT avg("colname"),    -- next break
                     count(*) head_count    -- next values_count
@@ -149,8 +149,8 @@ const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, 
               SELECT list(break)[1:nb - 1] AS breaks
         );`;
 
-// Par Éric Mauvière,
-// pour une explication visuelle de la méthode : https://www.youtube.com/watch?v=5I3Ei69I40s
+// By Éric Mauvière,
+// for a visual explanation of the method: https://www.youtube.com/watch?v=5I3Ei69I40s
 const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, maxiter := 30) AS (
   WITH RECURSIVE clusters(iter, cid, x) AS (
     WITH t1 AS (
@@ -172,7 +172,7 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
   SELECT list(x)
 );`;
 
-// Appartenance à une classe pour chaque valeur
+// Class membership for each value
 /**
  * SQL macro to classify a column value based on specified breaks.
  *
@@ -196,7 +196,7 @@ const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
 	SELECT IF("colname" IS NULL, NULL, class)
 );`;
 
-// Arrondi les seuils sans trahir leurs positions relatives dans la série
+// Rounds thresholds without betraying their relative positions in the series
 /**
  * A macro script for rounding thresholds and generating rounded values within specified limits.
  *

@@ -149,9 +149,9 @@ export const GeoColumnDetector = {
     const latColumn = results.find((r) => r.type === 'latitude');
     const lonColumn = results.find((r) => r.type === 'longitude');
     if (latColumn && !lonColumn) {
-      warnings.push('Colonne latitude détectée sans longitude correspondante');
+      warnings.push('Latitude column detected without corresponding longitude');
     } else if (!latColumn && lonColumn) {
-      warnings.push('Colonne longitude détectée sans latitude correspondante');
+      warnings.push('Longitude column detected without corresponding latitude');
     }
 
     const hasGeoColumns = results.length > 0;

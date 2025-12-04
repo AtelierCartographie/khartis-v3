@@ -103,7 +103,7 @@
     '.parquet'
   ];
 
-  // OSM tab state - style par défaut, personnalisable dans l'étape Visualiser
+  // OSM tab state - default style, customizable in the Visualize step
   const DEFAULT_OSM_STYLE = 'osm-standard';
 
   // Catalogue tab state
@@ -379,7 +379,9 @@
     try {
       const response = await fetch(importUrl);
       if (!response.ok) {
-        throw new Error(m.basemap_url_error_load({ status: response.status.toString() }));
+        throw new Error(
+          m.basemap_url_error_load({ status: response.status.toString() })
+        );
       }
 
       const blob = await response.blob();
@@ -391,9 +393,7 @@
     } catch (err) {
       logger.error('Error loading URL', LogCategory.MAP, err);
       importError =
-        err instanceof Error
-          ? err.message
-          : m.basemap_url_error_generic();
+        err instanceof Error ? err.message : m.basemap_url_error_generic();
     } finally {
       importUploading = false;
     }
@@ -588,7 +588,7 @@
   // Consolidated effect for loading suggestions - avoid race conditions
   $effect(() => {
     const dataset = selectedDataset;
-    const linkedVar = dataTabState.geolocation.linkedVariableName;
+    const _linkedVar = dataTabState.geolocation.linkedVariableName;
     // Track both dependencies, only call loadSuggestions once
     if (dataset) {
       loadSuggestions();
@@ -614,7 +614,9 @@
             <div class="status-icon">
               <CheckmarkFilled size={20} class="icon-success" />
             </div>
-            <span class="status-text">{m.join_entities_joined({ count: joinedCount })}</span>
+            <span class="status-text"
+              >{m.join_entities_joined({ count: joinedCount })}</span
+            >
             <div class="expand-icon">
               {#if joinedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
             </div>
@@ -637,7 +639,9 @@
             <div class="status-icon">
               <WarningFilled size={20} class="icon-warning" />
             </div>
-            <span class="status-text">{m.join_entities_to_verify({ count: toVerifyCount })}</span>
+            <span class="status-text"
+              >{m.join_entities_to_verify({ count: toVerifyCount })}</span
+            >
             <div class="expand-icon">
               {#if toVerifyExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
             </div>
@@ -694,7 +698,9 @@
             <div class="status-icon">
               <WarningAltFilled size={20} class="icon-error" />
             </div>
-            <span class="status-text">{m.join_entities_duplicate({ count: duplicateCount })}</span>
+            <span class="status-text"
+              >{m.join_entities_duplicate({ count: duplicateCount })}</span
+            >
             <div class="expand-icon">
               {#if duplicatesExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
             </div>
@@ -720,7 +726,9 @@
               <ErrorFilled size={20} class="icon-error" />
             </div>
             <span class="status-text"
-              >{m.join_entities_unrecognized({ count: unrecognizedCount })}</span
+              >{m.join_entities_unrecognized({
+                count: unrecognizedCount
+              })}</span
             >
             <div class="expand-icon">
               {#if unrecognizedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
@@ -757,7 +765,8 @@
           <Button
             kind="secondary"
             size="small"
-            on:click={handleApplyCorrections}>{m.join_correction_button()}</Button
+            on:click={handleApplyCorrections}
+            >{m.join_correction_button()}</Button
           >
         </div>
       {:else if joinedCount > 0 && basemapSelected}

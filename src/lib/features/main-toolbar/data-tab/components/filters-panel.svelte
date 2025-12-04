@@ -7,7 +7,6 @@
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
-  import { Close } from 'carbon-icons-svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { ColumnType } from '$lib/features/data-pipeline';

@@ -173,31 +173,26 @@
     return name.slice(0, maxLength - 3) + '...';
   };
 
+  const EXTENSION_COLORS: Record<string, 'blue' | 'green' | 'purple'> = {
+    csv: 'blue',
+    tsv: 'blue',
+    txt: 'blue',
+    json: 'green',
+    geojson: 'green',
+    shp: 'purple',
+    gpkg: 'purple',
+    kml: 'purple',
+    kmz: 'purple',
+    geoparquet: 'purple',
+    gpq: 'purple'
+  };
+
   const getExtensionColor = (
     extension: string
   ): 'blue' | 'green' | 'purple' | 'gray' => {
     const ext = extension.toLowerCase();
-    switch (ext) {
-      case 'csv':
-      case 'tsv':
-      case 'txt':
-        return 'blue';
 
-      case 'json':
-      case 'geojson':
-        return 'green';
-
-      case 'shp':
-      case 'gpkg':
-      case 'kml':
-      case 'kmz':
-      case 'geoparquet':
-      case 'gpq':
-        return 'purple';
-
-      default:
-        return 'gray';
-    }
+    return EXTENSION_COLORS[ext] ?? 'gray';
   };
 </script>
 
@@ -240,6 +235,8 @@
             {:else}
               <span
                 class="tab-label"
+                role="button"
+                tabindex="0"
                 ondblclick={(e: MouseEvent) =>
                   handleTabDoubleClick(dataButton.id, dataButton.label, e)}
                 title="Double-cliquer pour renommer"

@@ -134,7 +134,7 @@ class BasemapService {
     // Try GeoJSON first (more compatible than GeoArrow struct encoding in parquet)
     let url = `${GEOMETRY_BASE_PATH}${filename}.geojson`;
     let response = await fetch(url);
-    let isGeoJSON = response.ok;
+    const isGeoJSON = response.ok;
 
     if (!isGeoJSON) {
       // Fall back to parquet if GeoJSON doesn't exist
@@ -221,7 +221,7 @@ class BasemapService {
       // Try GeoJSON first, fall back to parquet
       let url = `${GEOMETRY_BASE_PATH}${basemapId}.geojson`;
       let response = await fetch(url);
-      let isGeoJSON = response.ok;
+      const isGeoJSON = response.ok;
 
       if (!isGeoJSON) {
         url = `${GEOMETRY_BASE_PATH}${basemapId}.parquet`;

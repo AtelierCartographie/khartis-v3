@@ -139,9 +139,9 @@ const summary_date_macro = `CREATE OR REPLACE MACRO summary_date(tabname, colnam
 );`;
 
 // HISTOGRAM NUMERIC
-// /!\ la macro histogram_values() incorporée à DuckDB génère une erreur dans cet usage.
-// En remplacement, une nouvelle macro qui n'utilise que les morceaux dont on a besoin pour Khartis
-// cf https://github.com/duckdb/duckdb/pull/12590
+// /!\ the built-in histogram_values() macro in DuckDB generates an error in this usage.
+// As a replacement, a new macro that only uses the parts needed for Khartis
+// see https://github.com/duckdb/duckdb/pull/12590
 const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabname, colname) AS TABLE(
 	WITH bins AS (
 		FROM query_table(tabname::VARCHAR)

@@ -66,7 +66,7 @@ describe('VizSuggesterService', () => {
             uniqueCount: 90,
             nullCount: 0,
             min: 1000,
-            max: 10000000 // Grande étendue
+            max: 10000000 // Large range
           }
         }
       ];
@@ -129,7 +129,7 @@ describe('VizSuggesterService', () => {
       const suggestions = service.suggestVisualizations(columns, 'Point');
 
       expect(suggestions.length).toBeGreaterThan(0);
-      // Devrait suggérer à la fois des viz 1-var et 2-var
+      // Should suggest both 1-var and 2-var viz
       expect(suggestions.some((s) => s.nbColumns === 2)).toBe(true);
     });
 
@@ -152,7 +152,7 @@ describe('VizSuggesterService', () => {
         debug: true
       });
 
-      // La colonne latitude devrait être détectée comme geolat et exclue des suggestions
+      // The latitude column should be detected as geolat and excluded from suggestions
       expect(suggestions.length).toBeGreaterThan(0);
     });
 
@@ -175,7 +175,7 @@ describe('VizSuggesterService', () => {
         debug: true
       });
 
-      // La colonne longitude devrait être détectée comme geolon et exclue des suggestions
+      // The longitude column should be detected as geolon and excluded from suggestions
       expect(suggestions.length).toBeGreaterThan(0);
     });
 
@@ -205,7 +205,7 @@ describe('VizSuggesterService', () => {
 
       const suggestions = service.suggestVisualizations(columns, 'Polygon');
 
-      // La colonne ID devrait être exclue, seule population devrait être utilisée
+      // The ID column should be excluded, only population should be used
       expect(suggestions.length).toBeGreaterThan(0);
       expect(suggestions.every((s) => !s.columns?.includes('id_region'))).toBe(
         true
@@ -270,7 +270,7 @@ describe('VizSuggesterService', () => {
       const suggestions = service.suggestVisualizations(columns, 'Polygon');
 
       expect(suggestions.length).toBeGreaterThan(0);
-      // Avec 50 valeurs uniques, devrait être traité comme QTR
+      // With 50 unique values, should be treated as QTR
     });
 
     it('should handle boolean columns as categorical', () => {
@@ -289,7 +289,7 @@ describe('VizSuggesterService', () => {
       const suggestions = service.suggestVisualizations(columns, 'Point');
 
       expect(suggestions.length).toBeGreaterThan(0);
-      // Boolean devrait être traité comme QL (qualitatif)
+      // Boolean should be treated as QL (qualitative)
       expect(suggestions.some((s) => s.semioTypes.includes('QL'))).toBe(true);
     });
 
@@ -319,7 +319,7 @@ describe('VizSuggesterService', () => {
 
       const suggestions = service.suggestVisualizations(columns, 'Polygon');
 
-      // Devrait ignorer la colonne constante
+      // Should ignore the constant column
       expect(
         suggestions.every((s) => !s.columns?.includes('constant_column'))
       ).toBe(true);
