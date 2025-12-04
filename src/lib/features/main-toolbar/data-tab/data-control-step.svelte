@@ -44,6 +44,7 @@
   let isEditingName = $state(false);
   let editedName = $state('');
   let warningsNotificationDismissed = $state(false);
+  let isTableExpanded = $state(false);
 
   // Check if dataset has columns with null values
   const hasNullableColumns = $derived(
@@ -168,7 +169,10 @@
     {/if}
 
     <!-- Barre d'outils -->
-    <DataToolsBar onReset={handleOpenReset} />
+    <DataToolsBar
+      onReset={handleOpenReset}
+      onExpand={() => (isTableExpanded = !isTableExpanded)}
+    />
   {/if}
 
   {#if processedDataset}
@@ -178,6 +182,7 @@
         tableName={currentDuckTable || undefined}
         showSummaryPlots={true}
         highlightIds={searchResults}
+        isExpanded={isTableExpanded}
       />
     {/key}
   {:else if selectedDataset || isProcessingFiles}
