@@ -1,17 +1,30 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import {
+    showError,
+    showSuccess
+  } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator, Duck } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
-    Button,
-    InlineNotification,
-    TextInput
+    DataTableSkeleton,
+    InlineNotification
   } from 'carbon-components-svelte';
-  import { Checkmark, Close, Edit, Reset } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import CalculatorPanel from './components/calculator-panel.svelte';
+  import DataToolPanel from './components/data-tool-panel.svelte';
+  import DataToolsBar from './components/data-tools-bar.svelte';
+  import DeleteRowsModal from './delete-rows-modal.svelte';
+  import FiltersPanel from './components/filters-panel.svelte';
+  import SearchPanel, {
+    type SearchHighlightResult
+  } from './components/search-panel.svelte';
+  import { DataToolType } from './data-tab.types';
+  import { dataToolsStore } from './data-tools.store.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -21,8 +34,10 @@
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
+  const isProcessingFiles = $derived(datasetsStore.isProcessing);
 
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
+  const isBatchProcessing = $derived(duckDBOrchestrator.isBatchProcessing);
 
   const currentDuckTable = $derived.by(() => {
     const _version = duckDBDatasetsVersion;
@@ -36,143 +51,283 @@
   });
 
   let resetModalOpen = $state(false);
-  let isEditingName = $state(false);
-  let editedName = $state('');
+  let deleteModalOpen = $state(false);
+  let warningsNotificationDismissed = $state(false);
+  let isTableExpanded = $state(false);
+  let selectedRowIds = $state<number[]>([]);
 
-  function startEditing() {
-    if (!selectedDataset) return;
-    editedName = selectedDataset.name;
-    isEditingName = true;
+  // Check if dataset has columns with null values
+  const hasNullableColumns = $derived(
+    processedDataset
+      ? processedDataset.columns.some((col) => col.nullable === true)
+      : false
+  );
+
+  // Use a separate key that only increments on explicit refresh calls
+  // This avoids unnecessary remounts during initial batch load
+  let forceRefreshKey = $state(0);
+
+  function refreshTable() {
+    // Increment the key to force a table remount
+    forceRefreshKey++;
   }
 
-  function saveRename() {
-    if (!selectedDataset || !editedName.trim()) {
-      cancelEditing();
+  function handleOpenReset() {
+    resetModalOpen = true;
+  }
+
+  let searchHighlight = $state<SearchHighlightResult>({
+    exactIds: [],
+    partialIds: [],
+    currentId: null
+  });
+
+  function handleSearchResults(result: SearchHighlightResult) {
+    searchHighlight = result;
+  }
+
+  async function handleReplace(
+    searchValue: string,
+    replaceValue: string,
+    source: string
+  ) {
+    if (!currentDuckTable || !selectedDataset) return;
+
+    try {
+      let totalReplaced = 0;
+
+      if (source === 'all') {
+        const textColumns =
+          selectedDataset.columns?.filter((col) => {
+            const type = String(col.type).toLowerCase();
+            return type === 'text' || type === 'varchar' || type === 'string';
+          }) ?? [];
+
+        for (const col of textColumns) {
+          const count = await duckDBOrchestrator.replaceInColumn(
+            currentDuckTable,
+            col.name,
+            searchValue,
+            replaceValue
+          );
+          totalReplaced += count;
+        }
+      } else {
+        totalReplaced = await duckDBOrchestrator.replaceInColumn(
+          currentDuckTable,
+          source,
+          searchValue,
+          replaceValue
+        );
+      }
+
+      if (totalReplaced > 0) {
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
+        );
+
+        if (source === 'all') {
+          const textColumns =
+            selectedDataset.columns?.filter((col) => {
+              const type = String(col.type).toLowerCase();
+              return type === 'text' || type === 'varchar' || type === 'string';
+            }) ?? [];
+          for (const col of textColumns) {
+            await projectStore.addColumnTransformation(
+              selectedDataset.sourceFileId,
+              {
+                type: 'replace',
+                column: col.name,
+                searchValue,
+                newValue: replaceValue,
+                timestamp: new Date().toISOString()
+              }
+            );
+          }
+        } else {
+          await projectStore.addColumnTransformation(
+            selectedDataset.sourceFileId,
+            {
+              type: 'replace',
+              column: source,
+              searchValue,
+              newValue: replaceValue,
+              timestamp: new Date().toISOString()
+            }
+          );
+        }
+
+        duckDBOrchestrator.bumpDatasetsVersion();
+      } else {
+        showError(m.replace_no_match_title(), m.replace_no_match_message());
+      }
+    } catch (error) {
+      showError(
+        m.replace_error_title(),
+        error instanceof Error ? error.message : m.replace_error_message()
+      );
+    }
+  }
+
+  function handleSelectionChange(ids: number[], _count: number) {
+    selectedRowIds = ids;
+  }
+
+  function handleOpenDeleteModal() {
+    if (selectedRowIds.length > 0) {
+      deleteModalOpen = true;
+    }
+  }
+
+  async function handleDeleteRows() {
+    if (!currentDuckTable || selectedRowIds.length === 0 || !selectedDataset)
       return;
+
+    const count = selectedRowIds.length;
+    const rowIdsToDelete = [...selectedRowIds];
+
+    try {
+      await duckDBOrchestrator.dropRows(currentDuckTable, rowIdsToDelete);
+
+      const newRowCount = Duck ? await Duck.get_row_count(currentDuckTable) : 0;
+
+      datasetsStore.recordTransformation(
+        selectedDataset.id,
+        `Deleted ${count} rows (new total: ${newRowCount})`
+      );
+      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+
+      await projectStore.addDeletedRows(
+        selectedDataset.sourceFileId,
+        rowIdsToDelete
+      );
+
+      selectedRowIds = [];
+      refreshTable();
+      showSuccess(
+        m.rows_deleted_success_title(),
+        m.rows_deleted_success_message({ count })
+      );
+    } catch (error) {
+      showError(
+        m.rows_deleted_error_title(),
+        error instanceof Error ? error.message : m.rows_deleted_error_message()
+      );
     }
-
-    datasetsStore.renameDataset(selectedDataset.id, editedName);
-    isEditingName = false;
   }
 
-  function cancelEditing() {
-    isEditingName = false;
-    editedName = '';
-  }
+  const isToolOpen = $derived(dataToolsStore.isOpen);
+  const activeTool = $derived(dataToolsStore.activeTool);
 
-  function handleKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      saveRename();
-    } else if (event.key === 'Escape') {
-      cancelEditing();
+  $effect(() => {
+    if (activeTool !== DataToolType.Search) {
+      searchHighlight = { exactIds: [], partialIds: [], currentId: null };
     }
-  }
+  });
+
+  // Mark step 0 as complete when dataset is loaded
+  $effect(() => {
+    if (selectedDataset && currentDuckTable) {
+      dataTabStore.markStepComplete(0);
+    }
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const skeletonProps = { columns: 5, rows: 12 } as any;
 </script>
 
 <section id="data-control-step">
   <MainToolBarHeader title={m.data_control_step_title()} />
 
-  {#if selectedDataset}
-    <div class="dataset-info">
-      <div class="dataset-meta">
-        {#if isEditingName}
-          <div class="dataset-name-edit">
-            <TextInput
-              size="sm"
-              bind:value={editedName}
-              on:keydown={handleKeyPress}
-              placeholder="Nom du jeu de données"
-            />
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Checkmark}
-              iconDescription="Valider"
-              tooltipPosition="bottom"
-              on:click={saveRename}
-            />
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Close}
-              iconDescription="Annuler"
-              tooltipPosition="bottom"
-              on:click={cancelEditing}
-            />
-          </div>
-        {:else}
-          <div class="dataset-name-display">
-            <span class="dataset-name">{selectedDataset.name}</span>
-            <Button
-              kind="ghost"
-              size="small"
-              icon={Edit}
-              iconDescription="Renommer"
-              tooltipPosition="bottom"
-              on:click={startEditing}
-            />
-          </div>
-        {/if}
-        <span class="row-count">{selectedDataset.rowCount} lignes</span>
-        {#if currentDuckTable}
-          <span class="duck-badge">DuckDB ✓</span>
-        {/if}
-      </div>
-      <Button
-        kind="danger-tertiary"
-        size="small"
-        icon={Reset}
-        tooltipPosition="left"
-        iconDescription="Réinitialiser les données"
-        on:click={() => (resetModalOpen = true)}
-      >
-        Réinitialiser
-      </Button>
-    </div>
+  <!-- Panneaux flottants -->
+  {#if isToolOpen}
+    {#if activeTool === DataToolType.Search}
+      <DataToolPanel title={m.data_tool_search()}>
+        <SearchPanel
+          tableName={currentDuckTable || undefined}
+          onSearchResults={handleSearchResults}
+          onReplace={handleReplace}
+        />
+      </DataToolPanel>
+    {:else if activeTool === DataToolType.Calculator}
+      <DataToolPanel title={m.data_tool_calculator()}>
+        <CalculatorPanel
+          tableName={currentDuckTable || undefined}
+          onColumnCreated={refreshTable}
+        />
+      </DataToolPanel>
+    {:else if activeTool === DataToolType.Filters}
+      <DataToolPanel title={m.data_tool_filters()}>
+        <FiltersPanel
+          tableName={currentDuckTable || undefined}
+          onFilterChange={refreshTable}
+        />
+      </DataToolPanel>
+    {/if}
+  {/if}
 
+  {#if selectedDataset}
     {#if selectedDataset.id}
       <ResetDataModal
         bind:open={resetModalOpen}
         datasetId={selectedDataset.id}
+        onSuccess={refreshTable}
       />
     {/if}
+
+    <DeleteRowsModal
+      bind:open={deleteModalOpen}
+      rowCount={selectedRowIds.length}
+      onConfirm={handleDeleteRows}
+    />
+
+    <!-- Barre d'outils -->
+    <DataToolsBar
+      onDelete={handleOpenDeleteModal}
+      onReset={handleOpenReset}
+      onExpand={() => (isTableExpanded = !isTableExpanded)}
+      selectionCount={selectedRowIds.length}
+    />
   {/if}
 
-  {#if processedDataset}
-    <AdvancedDataTable
-      dataset={processedDataset}
-      tableName={currentDuckTable || undefined}
-      showSummaryPlots={true}
-      bind:searchQuery={dataTabState.dataControl.searchQuery}
-    />
+  {#if processedDataset && !isBatchProcessing}
+    {#key `${forceRefreshKey}-${duckDBDatasetsVersion}`}
+      <AdvancedDataTable
+        dataset={processedDataset}
+        tableName={currentDuckTable || undefined}
+        showSummaryPlots={true}
+        exactHighlightIds={searchHighlight.exactIds}
+        partialHighlightIds={searchHighlight.partialIds}
+        currentHighlightId={searchHighlight.currentId}
+        isExpanded={isTableExpanded}
+        isSelectable={true}
+        onSelectionChange={handleSelectionChange}
+      />
+    {/key}
+  {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
+    <!-- Skeleton loader pendant le chargement ou batch processing -->
+    <div class="table-skeleton-wrapper">
+      <DataTableSkeleton {...skeletonProps} />
+    </div>
   {:else}
     <div class="empty-state">
-      <p class="empty-message">Aucune donnée chargée</p>
+      <p class="empty-message">{m.data_control_empty_title()}</p>
       <p class="empty-help">
-        Les outils de contrôle (tableau, filtres, calculatrice) apparaîtront ici
-        après l'import de vos données.
+        {m.data_control_empty_help()}
       </p>
     </div>
   {/if}
 
-  {#if selectedDataset}
+  {#if hasNullableColumns && !warningsNotificationDismissed}
     <InlineNotification
-      title="Types des variables"
-      subtitle="Khartis a détecté le type de chaque variable. Il apporte ensuite des suggestions de visualisations plus pertinentes."
-      kind="info"
+      title={m.data_control_nullable_title()}
+      subtitle={m.data_control_nullable_subtitle()}
+      kind="warning"
       lowContrast
       hideCloseButton={false}
+      on:close={() => (warningsNotificationDismissed = true)}
     />
-
-    {#if processedDataset && processedDataset.columns.some((col) => col.nullable)}
-      <InlineNotification
-        title="Valeurs manquantes"
-        subtitle="Certaines colonnes contiennent des valeurs manquantes qui pourraient affecter les visualisations."
-        kind="warning"
-        lowContrast
-        hideCloseButton={false}
-      />
-    {/if}
   {/if}
 </section>
 
@@ -181,58 +336,10 @@
     background-color: var(--cds-ui-02);
     padding: var(--cds-spacing-05);
     height: 100%;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
     position: relative;
     min-height: 0;
-  }
-
-  .dataset-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--cds-spacing-03) 0;
-    margin-bottom: var(--cds-spacing-03);
-    flex-shrink: 0;
-  }
-
-  .dataset-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .dataset-name-display {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .dataset-name-edit {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .dataset-name {
-    font-weight: 600;
-    color: var(--cds-text-01);
-  }
-
-  .row-count {
-    color: var(--cds-text-02);
-    font-size: 0.875rem;
-  }
-
-  .duck-badge {
-    background-color: var(--cds-support-02);
-    color: white;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    margin-left: var(--cds-spacing-03);
   }
 
   .empty-state {
@@ -255,5 +362,17 @@
     margin: 0;
     font-size: 0.875rem;
     color: var(--cds-text-02);
+  }
+
+  .table-skeleton-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Cache le header et la toolbar du DataTableSkeleton */
+  .table-skeleton-wrapper :global(.bx--data-table-header),
+  .table-skeleton-wrapper :global(.bx--table-toolbar) {
+    display: none;
   }
 </style>

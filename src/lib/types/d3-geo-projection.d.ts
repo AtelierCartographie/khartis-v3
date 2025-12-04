@@ -3,7 +3,7 @@ declare module 'd3-geo-projection' {
 
   export function geoNaturalEarth1(): GeoProjection;
   export function geoRobinson(): GeoProjection;
-  export function geoWinkelTriple(): GeoProjection;
+  export function geoWinkel3(): GeoProjection;
   export function geoAitoff(): GeoProjection;
   export function geoMollweide(): GeoProjection;
 }

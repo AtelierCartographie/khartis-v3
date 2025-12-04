@@ -1,7 +1,6 @@
 import {
   DataValidationError,
-  DuckDBError,
-  TypeInferenceError
+  DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
@@ -14,7 +13,32 @@ import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { tableFromIPC, type Table } from '@uwdata/flechette';
 import { analyse } from './analyse';
 import { breaks } from './breaks';
-import { join_macros } from './join';
+import { join_macros } from './join-macros';
+import {
+  addFileId,
+  extractFilename,
+  generateUniqueTableName,
+  getFileType,
+  normalizeName,
+  validateAndCastValue
+} from './modules/file-io.module';
+import {
+  DUCK_CONST,
+  type AnalyseOptions,
+  type CalculateBreaksOptions,
+  type DescribeResult,
+  type FileWithId,
+  type GetDataOptions,
+  type JoinByIdOptions,
+  type QueryOptions,
+  type ReadGeofileOptions,
+  type ReadLinkOptions,
+  type ReadTabularOptions,
+  type RegisterFilesOptions,
+  type TableMetadata
+} from './modules/types';
+import { search_macros } from './search-macros';
+import type { SearchResultWithScore, SearchStats } from './types';
 
 // --- Transaction Mutex ---
 class TransactionMutex {
@@ -42,55 +66,7 @@ class TransactionMutex {
   }
 }
 
-// --- Constants used by Duck class ---
-const DUCK_CONST = {
-  DEFAULT: {
-    DECIMAL_SEPARATOR: '.',
-    FORMAT_TABULAR: 'csv',
-    NULL_VALUES: `['', ':', 'null', 'NULL', 'NA', 'NaN', 'none']`,
-    SOURCE: 'user'
-  },
-  QUERY_FORMAT: {
-    ARROW_TABLE: 'arrow-table' as const,
-    ARROW_IPC: 'arrow-ipc' as const,
-    ARRAY: 'array' as const
-  },
-  TYPE: {
-    TABULAR: 'tabular' as const,
-    GEOFILE: 'geofile' as const,
-    PARQUET: 'parquet' as const
-  },
-  REGEX: {
-    TABULAR: /\.(csv|tsv|text|txt)/i,
-    GEO: /\.(geojson|json|gpkg|kml)/i,
-    PARQUET: /\.(parquet|geoparquet)/i,
-    COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
-    COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
-    COLUMN_VALIDATION_BOOLEAN_NUMBER: /[0-1]/,
-    COLUMN_VALIDATION_BOOLEAN_STRING: /^(true|false)$/i,
-    COLUMN_VALIDATION_DATE:
-      /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})([+-]\d{2}:\d{2})?$/
-  }
-};
-
-// --- HELPER FUNCTIONS ---
-type QueryFormat =
-  (typeof DUCK_CONST.QUERY_FORMAT)[keyof typeof DUCK_CONST.QUERY_FORMAT];
-type FileType = (typeof DUCK_CONST.TYPE)[keyof typeof DUCK_CONST.TYPE];
-
-interface FileWithId extends File {
-  id: string;
-}
-
-interface QueryOptions {
-  format?: QueryFormat;
-  useProxy?: boolean;
-}
-
-type DuckDBUnsafeBindings = {
-  runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
-};
-
+// Types imported from modules
 import type {
   AnalysisResult,
   AnalysisResults,
@@ -99,267 +75,12 @@ import type {
   BreaksResult,
   BreaksRoundedResult,
   DuckDBMetadata,
-  DuckDBValue,
-  ValidationResult
+  DuckDBValue
 } from './types/index.js';
 
-interface TableMetadata {
-  analysis?: AnalysisResults | null;
-  join: JoinInfo | null;
-  filters: Map<number, string>;
-  version?: number; // Used to invalidate cached queries when tables change
-}
-
-interface JoinInfo {
-  id: string;
-  join_results_name: string;
-  basemap_join_ref: string | null;
-}
-
-interface ReadTabularOptions {
-  tablename?: string;
-  decimal_separator?: string;
-  format?: string;
-}
-
-interface ReadGeofileOptions {
-  tablename?: string;
-  meta?: boolean;
-  shapefile?: boolean;
-}
-
-interface ReadLinkOptions {
-  tablename?: string;
-  decimal_separator?: string;
-}
-
-interface GetDataOptions {
-  geometry?: boolean;
-  columns?: string[];
-  limit?: number;
-  format?: QueryFormat;
-}
-
-interface CalculateBreaksOptions {
-  method?: string;
-  nclass?: number;
-  nclass_right?: number;
-  round?: boolean;
-  break_value?: number | null;
-}
-
-interface AnalyseOptions {
-  force?: boolean;
-}
-
-interface JoinByIdOptions {
-  basemaps_table?: string;
-  basemap_table?: string;
-  basemap_id?: string;
-  basemap_others_id?: string;
-}
-
-interface RegisterFilesOptions {
-  shapefile?: boolean;
-}
-
-type DescribeResult = {
-  name: string[];
-  type: string[];
+type DuckDBUnsafeBindings = {
+  runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
 };
-
-/**
- * Normalizes a string by removing accents, special characters, etc.
- * @param {string} str The string to normalize.
- * @returns {string} The normalized string.
- */
-function normalize_name(str: string): string {
-  let normalized = str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/(\.\.|[/\\\\])/g, '')
-    .replace(/[^a-zA-Z0-9_.]/g, '_');
-
-  if (/^[0-9]/.test(normalized)) {
-    normalized = 'a_' + normalized;
-  }
-
-  const maxLength = 150;
-  if (normalized.length > maxLength) {
-    normalized = normalized.substring(0, maxLength);
-  }
-
-  return normalized;
-}
-
-/**
- * Extract the filename from an url.
- * @param {string} url The url.
- * @returns {string} filename The filename.
- */
-function extract_filename(url: string): string {
-  return url.split('/').pop() || '';
-}
-
-/**
- * Get the type of file.
- * @param {string} filename The filename.
- * @returns {string} The type of file.
- */
-function get_file_type(filename: string): FileType {
-  if (DUCK_CONST.REGEX.TABULAR.test(filename)) return DUCK_CONST.TYPE.TABULAR;
-  if (DUCK_CONST.REGEX.GEO.test(filename)) return DUCK_CONST.TYPE.GEOFILE;
-  if (DUCK_CONST.REGEX.PARQUET.test(filename)) return DUCK_CONST.TYPE.PARQUET;
-  return DUCK_CONST.TYPE.TABULAR;
-}
-
-/**
- * Generates a unique table name from a filename.
- * @param {string} filename The original filename.
- * @param {Map<string, string>} existingNames A Map where keys are existing table names.
- * @returns {string} A unique table name.
- */
-function generate_unique_table_name(
-  filename: string,
-  existingNames: Map<string, string>
-): string {
-  const split_filename = (name: string): string => {
-    const index = name.indexOf('.');
-    if (index === -1) return name;
-    return name.slice(0, index);
-  };
-  let tablename = normalize_name(filename);
-  let counter = 1;
-  tablename = split_filename(tablename);
-  while (existingNames.has(tablename)) {
-    tablename = `${tablename}_${counter}`;
-    counter++;
-  }
-  return tablename;
-}
-
-/**
- * Adds a unique identifier to a file object.
- * The ID is a combination of the file's last modified timestamp and a normalized version of its name.
- * This ensures each file has a distinct identifier, even if multiple files share the same name.
- *
- * @param {Object} file - The file object to which the ID will be added.
- * @param {number} file.lastModified - The last modified time of the file.
- * @param {string} file.name - The name of the file.
- */
-function add_file_id(file: FileWithId): void {
-  file.id = file.lastModified + '-' + normalize_name(file.name);
-}
-
-/**
- * Check if the value is an integer.
- * @param {number|string} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid integer, otherwise false.
- */
-const isValidInteger = (value: number | string): boolean =>
-  (typeof value === 'number' && Number.isInteger(value)) ||
-  (typeof value === 'string' &&
-    DUCK_CONST.REGEX.COLUMN_VALIDATION_INTEGER.test(value));
-
-/**
- * Check if the value is a float.
- * @param {number|string} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid float, otherwise false.
- */
-const isValidFloat = (value: number | string): boolean =>
-  typeof value === 'number' ||
-  (typeof value === 'string' &&
-    DUCK_CONST.REGEX.COLUMN_VALIDATION_DOUBLE.test(value));
-
-/**
- * Check if the value is a boolean.
- * @param {number|string|boolean} value - The value to validate.
- * @returns {boolean} - Returns true if the value is a valid boolean, otherwise false.
- */
-const isValidBoolean = (value: number | string | boolean): boolean =>
-  typeof value === 'boolean' ||
-  typeof value === 'number' ||
-  (typeof value === 'string' &&
-    (DUCK_CONST.REGEX.COLUMN_VALIDATION_BOOLEAN_STRING.test(value) ||
-      DUCK_CONST.REGEX.COLUMN_VALIDATION_BOOLEAN_NUMBER.test(value)));
-
-/**
- * Validates and potentially casts a value based on a specified column type.
- * @param {*} new_value The value to validate.
- * @param {string} column_type The type of the column.
- * @returns {{isValid: boolean, value: *}} An object with isValid and the potentially cast value.
- */
-function validate_and_cast_value(
-  new_value: unknown,
-  column_type: string
-): ValidationResult {
-  let isValid = false;
-  let value: DuckDBValue = new_value as DuckDBValue;
-
-  switch (column_type.toLowerCase()) {
-    case 'integer':
-
-    /* falls through */
-    case 'bigint':
-      isValid = isValidInteger(new_value as string | number);
-      value =
-        typeof new_value === 'string'
-          ? parseInt(new_value, 10)
-          : (new_value as number);
-      break;
-
-    case 'number':
-      isValid = isValidFloat(new_value as string | number);
-      value =
-        typeof new_value === 'string'
-          ? parseFloat(new_value)
-          : (new_value as number);
-      break;
-
-    case 'string':
-      isValid = true;
-      value = String(new_value);
-      break;
-
-    case 'boolean':
-      isValid = isValidBoolean(new_value as string | number | boolean);
-      if (typeof new_value === 'number' || typeof new_value === 'boolean')
-        value = Boolean(new_value);
-      else if (typeof new_value === 'string') {
-        if (new_value.toLowerCase() === 'true' || new_value === '1')
-          value = true;
-        if (new_value.toLowerCase() === 'false' || new_value === '0')
-          value = false;
-      }
-      break;
-
-    case 'date':
-      if (
-        new_value instanceof Date ||
-        (typeof new_value === 'string' && !isNaN(Date.parse(new_value)))
-      ) {
-        isValid = true;
-        if (!(new_value instanceof Date)) value = new Date(new_value);
-      }
-      break;
-
-    case 'geometry':
-
-    /* falls through */
-    case 'other':
-
-    /* falls through */
-    default:
-      throw new TypeInferenceError(
-        `Unsupported column type: ${column_type}.`,
-        undefined,
-        {
-          columnType: column_type
-        }
-      );
-  }
-  return { isValid, value };
-}
 
 // --- DuckDB Class ---
 /**
@@ -428,10 +149,6 @@ class DuckDB {
     }
   >();
 
-  private readonly CACHE_MAX_AGE = 60000; // ms TTL for query cache
-
-  private readonly CACHE_MAX_SIZE = 100;
-
   public table_metadata: Map<string, TableMetadata> = new Map();
 
   public table_geoparquet_cache: Map<string, Uint8Array> = new Map();
@@ -456,6 +173,8 @@ class DuckDB {
     accessOrder: []
   };
 
+  private localExtensionRepositoryConfigured = false;
+
   private extensionsLoaded = {
     spatial: false,
     httpfs: false
@@ -469,8 +188,6 @@ class DuckDB {
   private threadsSupported = false;
 
   private bundleVariant: 'eh' | 'mvp' = 'eh';
-
-  private localExtensionRepositoryConfigured = false;
 
   private transactionMutex = new TransactionMutex();
 
@@ -502,61 +219,6 @@ class DuckDB {
     this.invalidateTableCache(table);
     this.evictGeoParquetEntry(table);
     this.invalidateCacheForTable(table);
-  }
-
-  private getCachedQuery(sql: string, tables: string[] = []): unknown | null {
-    const cacheKey = this.generateCacheKey(sql);
-    const cached = this.queryCache.get(cacheKey);
-
-    if (!cached) return null;
-
-    if (Date.now() - cached.timestamp > this.CACHE_MAX_AGE) {
-      this.queryCache.delete(cacheKey);
-      return null;
-    }
-
-    for (const table of tables) {
-      const currentVersion = this.table_metadata.get(table)?.version || 0;
-      const cachedVersion = cached.tableVersions.get(table) || 0;
-      if (currentVersion !== cachedVersion) {
-        this.queryCache.delete(cacheKey);
-        return null;
-      }
-    }
-
-    logger.debug('Cache hit for query', LogCategory.DUCKDB, {
-      sql: sql.substring(0, 100)
-    });
-    return cached.result;
-  }
-
-  private setCachedQuery(
-    sql: string,
-    result: unknown,
-    tables: string[] = []
-  ): void {
-    const cacheKey = this.generateCacheKey(sql);
-
-    if (this.queryCache.size >= this.CACHE_MAX_SIZE) {
-      const firstKey = this.queryCache.keys().next().value;
-      if (firstKey) this.queryCache.delete(firstKey);
-    }
-
-    const tableVersions = new Map<string, number>();
-    for (const table of tables) {
-      const version = this.table_metadata.get(table)?.version || 0;
-      tableVersions.set(table, version);
-    }
-
-    this.queryCache.set(cacheKey, {
-      result,
-      timestamp: Date.now(),
-      tableVersions
-    });
-  }
-
-  private generateCacheKey(sql: string): string {
-    return sql.trim().toLowerCase();
   }
 
   private invalidateCacheForTable(table: string): void {
@@ -748,8 +410,8 @@ class DuckDB {
       });
 
       const macrosStart = performance.now();
-      // load all macro for discretization, data analysis and join operations
-      await this.query(breaks + analyse + join_macros, {
+      // load all macro for discretization, data analysis, join and search operations
+      await this.query(breaks + analyse + join_macros + search_macros, {
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
       logger.debug('Custom macros registered', LogCategory.DUCKDB, {
@@ -1029,7 +691,7 @@ class DuckDB {
       useDate: true,
       useDecimalInt: false,
       useMap: true,
-      useProxy // Le véritable gain de performance se fait avec l'utilisation de Proxy
+      useProxy // The real performance gain comes from using Proxy
     });
     if (format === DUCK_CONST.QUERY_FORMAT.ARROW_TABLE) return table;
 
@@ -1062,9 +724,9 @@ class DuckDB {
     for (const file of files) {
       const fileWithId = file as FileWithId;
       if (shapefile && shape_date) {
-        fileWithId.id = shape_date + '-' + normalize_name(file.name);
+        fileWithId.id = shape_date + '-' + normalizeName(file.name);
       } else {
-        add_file_id(fileWithId);
+        addFileId(fileWithId);
       }
       if (this.registered_files.has(fileWithId.id)) {
         continue;
@@ -1152,10 +814,7 @@ class DuckDB {
       // input = COPY-PASTE
       if (typeof input === 'string') {
         if (!tablename)
-          tablename = generate_unique_table_name(
-            'data_paste',
-            this.loaded_files
-          );
+          tablename = generateUniqueTableName('data_paste', this.loaded_files);
         filename = tablename;
         fileid = tablename;
         await this.db!.registerFileText(fileid, input);
@@ -1166,7 +825,7 @@ class DuckDB {
         filename = input.name;
 
         if (!tablename)
-          tablename = generate_unique_table_name(filename, this.loaded_files);
+          tablename = generateUniqueTableName(filename, this.loaded_files);
 
         await this.register_files([input]);
         fileid = (input as FileWithId).id;
@@ -1248,7 +907,7 @@ class DuckDB {
         return result as DuckDBMetadata;
       }
       if (!tablename) {
-        tablename = generate_unique_table_name(geofile.name, this.loaded_files);
+        tablename = generateUniqueTableName(geofile.name, this.loaded_files);
       }
 
       await this.runInTransaction(async () => {
@@ -1286,11 +945,11 @@ class DuckDB {
     const decimal_separator =
       options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
 
-    const filename = extract_filename(url);
-    const file_type = get_file_type(filename);
+    const filename = extractFilename(url);
+    const file_type = getFileType(filename);
 
     if (!tablename)
-      tablename = generate_unique_table_name(filename, this.loaded_files);
+      tablename = generateUniqueTableName(filename, this.loaded_files);
     logger.info('Ingesting remote file into DuckDB', LogCategory.DUCKDB, {
       url,
       filename,
@@ -1550,7 +1209,7 @@ class DuckDB {
       );
     }
 
-    const validationResult = validate_and_cast_value(
+    const validationResult = validateAndCastValue(
       new_value,
       column_info.type_js as string
     );
@@ -1861,7 +1520,6 @@ class DuckDB {
     table: string,
     format: string = DUCK_CONST.DEFAULT.FORMAT_TABULAR
   ): Promise<Uint8Array> {
-    const escapedTableForFilename = escapeSqlString(table);
     const filename = table + '.' + format;
     const escapedFilename = escapeSqlString(filename);
     await this.query(
@@ -2190,7 +1848,7 @@ class DuckDB {
       if (isSampled) {
         try {
           await this.query(`DROP VIEW IF EXISTS "${sampleViewName}"`);
-        } catch (e) {
+        } catch (_e) {
           // ignore
         }
       }
@@ -2198,13 +1856,127 @@ class DuckDB {
   }
 
   /**
-   * JOINTURES
+   * Searches for rows in a table using fuzzy text matching.
+   *
+   * Uses Jaro-Winkler similarity for fuzzy matching combined with
+   * LIKE pattern matching for partial/contains matches.
+   *
+   * @param table - The name of the table to search in
+   * @param query - The search term
+   * @param options - Search options
+   * @param options.threshold - Minimum similarity score (0-1), default 0.6
+   * @param options.column - Optional column name to restrict search
+   * @returns SearchStats with exact/partial counts and results with scores
+   */
+  async searchInTable(
+    table: string,
+    query: string,
+    options: { threshold?: number; column?: string } = {}
+  ): Promise<SearchStats> {
+    const { threshold = 0.6, column = null } = options;
+    const emptyResult: SearchStats = {
+      exactCount: 0,
+      partialCount: 0,
+      results: []
+    };
+
+    if (!query || query.trim() === '') {
+      return emptyResult;
+    }
+
+    const escapedQuery = escapeSqlString(query.trim());
+    const excludedColumns = ['geom', 'geometry'];
+
+    try {
+      const describeResult = (await this.query(`DESCRIBE "${table}"`, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      })) as Array<{ column_name: string; column_type: string }>;
+
+      const allColumns = describeResult
+        .filter(
+          (c) =>
+            !c.column_name.startsWith('__') &&
+            !excludedColumns.includes(c.column_name.toLowerCase())
+        )
+        .map((c) => ({
+          column_name: c.column_name,
+          data_type: c.column_type
+        }));
+
+      const textTypes = ['VARCHAR', 'TEXT', 'STRING'];
+      let textColumns = allColumns.filter((c) =>
+        textTypes.includes(c.data_type.toUpperCase())
+      );
+
+      if (column) {
+        const escapedColumn = escapeSqlString(column);
+        textColumns = textColumns.filter(
+          (c) => c.column_name === escapedColumn
+        );
+      }
+
+      if (textColumns.length === 0) {
+        return emptyResult;
+      }
+
+      const scoreExpressions = textColumns.map(
+        ({ column_name }) =>
+          `jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}'))`
+      );
+
+      const greatestExpr = `GREATEST(${scoreExpressions.join(', ')})`;
+
+      const columnCases = textColumns
+        .map(
+          ({ column_name }, idx) =>
+            `WHEN ${scoreExpressions[idx]} = ${greatestExpr} THEN '${column_name}'`
+        )
+        .join('\n            ');
+
+      const sql = `
+        SELECT
+          __id AS id,
+          ${greatestExpr} AS score,
+          CASE
+            ${columnCases}
+            ELSE '${textColumns[0].column_name}'
+          END AS matched_column
+        FROM "${table}"
+        WHERE ${greatestExpr} >= ${threshold}
+        ORDER BY score DESC, id ASC
+      `;
+
+      const result = (await this.query(sql, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      })) as Array<{ id: number; score: number; matched_column: string }>;
+
+      const results: SearchResultWithScore[] = result.map((r) => ({
+        id: r.id,
+        score: r.score,
+        column: r.matched_column
+      }));
+
+      const exactCount = results.filter((r) => r.score === 1).length;
+      const partialCount = results.filter((r) => r.score < 1).length;
+
+      return {
+        exactCount,
+        partialCount,
+        results
+      };
+    } catch {
+      return emptyResult;
+    }
+  }
+
+  /**
+   * JOINS
    * - ✅ join_by_id
-   *   - ATTENTION : si basemap importé, besoin de l'analyser pour des stats à la colonne et un typage sémio.
-   *    Par défaut conserver les colonnes qui ont un typage sémio égale à 'geoid' et trié par "score" et "share_uniques".
-   * - join_by_bbox (test vers tous les fonds de carte de Khartis via Bbox)
-   * - ✅ apply_join_association (joint l'id du fond de carte sélectionné au jeu de données + la typologie de match)
-   *   /!\ L'association manuelle par l'utilisateur est gérée par la méthode update_cell
+   *   - WARNING: if basemap is imported, need to analyze it for column stats and semio typing.
+   *    By default, keep columns that have semio type equal to 'geoid' and sorted by "score" and "share_uniques".
+   * - join_by_bbox (test against all Khartis basemaps via Bbox)
+   * - ✅ apply_join_association (joins selected basemap id to dataset + match typology)
+   *   /!\ Manual association by user is handled by update_cell method
    */
 
   /**
