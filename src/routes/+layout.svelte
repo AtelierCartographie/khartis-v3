@@ -1,6 +1,5 @@
 <script lang="ts">
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
-  import DataTypeSelectionModal from '$lib/features/commons/components/data-type-selection/data-type-selection-modal.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
@@ -115,8 +114,6 @@
       open={!isLoading && globalState.isCreateProjectModalOpen}
       onClose={handleCloseModal}
     />
-
-    <DataTypeSelectionModal />
 
     <MainToolbar />
     <NotificationContainer />
