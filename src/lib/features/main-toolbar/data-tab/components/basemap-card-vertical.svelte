@@ -1,14 +1,16 @@
 <script lang="ts">
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import { m } from '$lib/paraglide/messages';
-  import { ProgressBar, RadioButton } from 'carbon-components-svelte';
-  import { Calendar, Map } from 'carbon-icons-svelte';
+  import { ProgressBar } from 'carbon-components-svelte';
+  import { Calendar, Checkmark, Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
   interface BasemapCardVerticalProps {
     basemap: BasemapMetadata;
     selected?: boolean;
     matchScore?: number;
+    showMatchScore?: boolean;
+    variant?: 'blue' | 'gray';
     onclick?: () => void;
   }
 
@@ -16,6 +18,8 @@
     basemap,
     selected = false,
     matchScore,
+    showMatchScore = true,
+    variant = 'blue',
     onclick
   }: BasemapCardVerticalProps = $props();
 
@@ -30,21 +34,19 @@
     }
   }
 
-  function handleRadioClick(event: Event) {
-    event.stopPropagation();
-  }
+  const isGray = $derived(variant === 'gray');
 
   const cardClasses = $derived(
-    clsx('basemap-card-vertical', {
-      selected: selected
+    clsx('basemap-card', {
+      'variant-gray': isGray,
+      'border-2 border-selected': selected,
+      'border-default': !selected
     })
   );
 
   const matchPercentage = $derived(
-    matchScore !== undefined ? Math.round(matchScore) : 75 // Default for demo
+    matchScore !== undefined ? Math.round(matchScore) : undefined
   );
-
-  const matchHelperText = $derived(`${matchPercentage}%`);
 </script>
 
 <div
@@ -53,223 +55,287 @@
   tabindex={0}
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
-  aria-label={`${basemap.title} - ${matchPercentage}% ${m.basemap_match()}`}
+  aria-label={basemap.title}
 >
-  <!-- Preview Image 16:9 -->
-  <div class="preview-container">
-    <div class="preview-placeholder">
-      <Map size={32} />
-      <span class="aspect-ratio-label">16:9</span>
-      <span class="preview-label">Basemap preview</span>
+  <!-- Top Section - Preview -->
+  <div class="top-section">
+    <Earth size={32} />
+    <h4 class="ratio-label">16:9</h4>
+    <span class="preview-label">{m.basemap_preview()}</span>
+  </div>
+
+  <!-- Content Section -->
+  <div class="content-section">
+    <div class="title-row">
+      <span class="card-title">{basemap.title}</span>
+      <div class="radio-indicator" class:selected={selected}>
+        {#if selected}
+          <Checkmark size={16} />
+        {/if}
+      </div>
     </div>
-  </div>
 
-  <!-- Radio Button (Top Right) -->
-  <div class="radio-container">
-    <RadioButton checked={selected} onclick={handleRadioClick} labelText="" />
-  </div>
-
-  <!-- Card Content -->
-  <div class="card-content">
-    <!-- Title -->
-    <h4 class="card-title">{basemap.title}</h4>
-
-    <!-- Description -->
     {#if basemap.description}
       <p class="card-description">{basemap.description}</p>
     {/if}
 
-    <!-- Metadata Row -->
     <div class="metadata-row">
-      <span class="metadata-item">{basemap.source}</span>
-      <span class="metadata-separator">•</span>
-      <span class="metadata-item metadata-date">
+      <span class="source">{basemap.source}</span>
+      <span class="date">
         <Calendar size={16} />
         {basemap.date}
       </span>
     </div>
-
-    <!-- Match Score Progress Bar -->
-    <div class="match-score-section">
-      <span class="match-score-label">{m.basemap_match_score()}</span>
-      <ProgressBar
-        value={matchPercentage}
-        max={100}
-        helperText={matchHelperText}
-        size="sm"
-      />
-    </div>
   </div>
+
+  <!-- Match Section -->
+  {#if showMatchScore && matchPercentage !== undefined}
+    <div class="match-section">
+      <span class="match-label">{m.basemap_match_score()}</span>
+      <ProgressBar value={matchPercentage} max={100} size="sm" />
+      <span class="match-value">{matchPercentage} %</span>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .basemap-card-vertical {
-    position: relative;
+  .basemap-card {
     display: flex;
     flex-direction: column;
-    background-color: var(--cds-layer-01);
-    border: 2px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    min-width: 220px;
+    width: 220px;
+    flex-shrink: 0;
     overflow: hidden;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
   }
 
-  .basemap-card-vertical:hover {
-    border-color: var(--cds-border-interactive);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  /* Border styles */
+  .basemap-card.border-default {
+    border: 1px solid var(--cds-pale-blue);
   }
 
-  .basemap-card-vertical.selected {
-    border-color: var(--cds-interactive-01);
-    border-width: 2px;
-    box-shadow: 0 0 0 2px var(--cds-focus);
-    background-color: #e5f6ff; /* Light blue background for selected */
+  .basemap-card.variant-gray.border-default {
+    border: 1px solid var(--cds-medium-gray);
   }
 
-  .basemap-card-vertical:focus {
+  .basemap-card.border-2.border-selected {
+    border: 2px solid var(--cds-blue);
+  }
+
+  .basemap-card.variant-gray.border-2.border-selected {
+    border: 2px solid var(--cds-dark-gray);
+  }
+
+  /* Hover states - Blue variant */
+  .basemap-card:not(.variant-gray):hover .top-section {
+    background-color: var(--cds-pale-blue);
+  }
+
+  .basemap-card:not(.variant-gray):hover .content-section {
+    background-color: var(--cds-pale-blue);
+  }
+
+  /* Hover states - Gray variant */
+  .basemap-card.variant-gray:hover .top-section {
+    background-color: var(--cds-light-gray);
+  }
+
+  .basemap-card.variant-gray:hover .content-section {
+    background-color: var(--cds-light-gray);
+  }
+
+  .basemap-card:focus {
     outline: 2px solid var(--cds-focus);
     outline-offset: 2px;
   }
 
-  /* Preview Container 16:9 */
-  .preview-container {
-    position: relative;
-    width: 100%;
-    padding-top: 56.25%; /* 16:9 aspect ratio */
-    background-color: var(--cds-layer-accent-01);
-    overflow: hidden;
-  }
-
-  .preview-placeholder {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+  /* Top Section - White background */
+  .top-section {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--cds-spacing-03);
-    color: var(--cds-icon-secondary);
+    padding: 1.25rem 1rem;
+    background-color: var(--cds-ui-02);
+    gap: 0.25rem;
   }
 
-  .aspect-ratio-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary);
-    font-weight: 500;
+  .top-section :global(svg) {
+    color: var(--cds-blue);
+  }
+
+  .variant-gray .top-section :global(svg) {
+    color: var(--cds-text-01);
+  }
+
+  .ratio-label {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0.25rem 0 0;
+    color: var(--cds-blue);
+  }
+
+  .variant-gray .ratio-label {
+    color: var(--cds-text-01);
   }
 
   .preview-label {
     font-size: 0.75rem;
-    color: var(--cds-link-01);
-    margin-top: var(--cds-spacing-02);
+    color: var(--cds-blue);
   }
 
-  /* Radio Button */
-  .radio-container {
-    position: absolute;
-    top: var(--cds-spacing-04);
-    right: var(--cds-spacing-04);
-    z-index: 10;
-    background-color: var(--cds-layer-01);
-    border-radius: 50%;
-    padding: var(--cds-spacing-02);
+  .variant-gray .preview-label {
+    color: var(--cds-text-02);
   }
 
-  /* Card Content */
-  .card-content {
-    padding: var(--cds-spacing-05);
+  /* Content Section - Blue variant */
+  .content-section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    padding: 1rem;
+    background-color: var(--cds-pale-blue);
+    gap: 0.375rem;
+    flex: 1;
+  }
+
+  /* Content Section - Gray variant */
+  .variant-gray .content-section {
+    background-color: var(--cds-light-gray);
+  }
+
+  .title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 
   .card-title {
     margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--cds-text-primary);
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--cds-dark-blue);
     line-height: 1.3;
+    flex: 1;
+  }
+
+  .variant-gray .card-title {
+    color: var(--cds-text-01);
+  }
+
+  .radio-indicator {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid var(--cds-icon-02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+  }
+
+  .radio-indicator.selected {
+    border-color: var(--cds-interactive-01);
+    background-color: var(--cds-interactive-01);
+    color: white;
+  }
+
+  .variant-gray .radio-indicator.selected {
+    border-color: var(--cds-text-01);
+    background-color: var(--cds-text-01);
   }
 
   .card-description {
     margin: 0;
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
+    font-size: 0.75rem;
+    color: var(--cds-dark-blue);
     line-height: 1.4;
   }
 
-  /* Metadata Row */
+  .variant-gray .card-description {
+    color: var(--cds-text-02);
+  }
+
   .metadata-row {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: var(--cds-spacing-03);
     font-size: 0.75rem;
-    color: var(--cds-text-secondary);
+    color: var(--cds-dark-blue);
+    margin-top: 0.5rem;
   }
 
-  .metadata-item {
+  .variant-gray .metadata-row {
+    color: var(--cds-text-02);
+  }
+
+  .source {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .date {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
+    gap: 0.25rem;
   }
 
-  .metadata-separator {
-    color: var(--cds-text-disabled);
-  }
-
-  .metadata-date {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  /* Match Score Section */
-  .match-score-section {
+  /* Match Section - Blue variant */
+  .match-section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: 0.375rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--cds-pale-blue);
+    border-top: 1px solid var(--cds-dark-blue);
   }
 
-  .match-score-label {
+  /* Match Section - Gray variant */
+  .variant-gray .match-section {
+    background-color: var(--cds-light-gray);
+    border-top: 1px solid var(--cds-dark-gray);
+  }
+
+  .match-label {
     font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--cds-text-secondary);
-  }
-
-  .match-score-section :global(.bx--progress-bar) {
-    margin-top: 0;
-  }
-
-  .match-score-section :global(.bx--progress-bar__label) {
-    display: none; /* Hide default label, we have custom one */
-  }
-
-  .match-score-section :global(.bx--progress-bar__helper-text) {
     font-weight: 600;
-    text-align: right;
-    margin-top: var(--cds-spacing-02);
+    color: var(--cds-dark-blue);
   }
 
-  /* Progress bar color based on score */
-  .basemap-card-vertical :global(.bx--progress-bar__bar) {
-    background-color: var(--cds-support-success);
+  .variant-gray .match-label {
+    color: var(--cds-text-01);
   }
 
-  /* Responsive */
-  @media (max-width: 768px) {
-    .card-content {
-      padding: var(--cds-spacing-04);
-    }
+  .match-value {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--cds-dark-blue);
+  }
 
-    .card-title {
-      font-size: 0.875rem;
-    }
+  .variant-gray .match-value {
+    color: var(--cds-text-01);
+  }
 
-    .card-description {
-      font-size: 0.8125rem;
-    }
+  .match-section :global(.bx--progress-bar) {
+    margin: 0;
+  }
+
+  .match-section :global(.bx--progress-bar__label),
+  .match-section :global(.bx--progress-bar__helper-text) {
+    display: none;
+  }
+
+  /* Progress bar - Blue variant */
+  .match-section :global(.bx--progress-bar__bar) {
+    background-color: var(--cds-blue);
+  }
+
+  /* Progress bar - Gray variant */
+  .variant-gray .match-section :global(.bx--progress-bar__bar) {
+    background-color: var(--cds-dark-gray);
   }
 </style>

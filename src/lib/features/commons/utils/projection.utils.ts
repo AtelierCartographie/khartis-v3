@@ -33,7 +33,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     name: 'Natural Earth',
     category: 'other',
     description: 'Bon compromis pour les cartes mondiales',
-    projection: () => d3geoProjection.geoNaturalEarth1(),
+    projection: () => d3geo.geoNaturalEarth1(),
     recommended: true
   },
   {
@@ -77,7 +77,7 @@ export const PROJECTIONS: ProjectionInfo[] = [
     name: 'Winkel Tripel',
     category: 'other',
     description: 'Minimise les distorsions',
-    projection: () => d3geoProjection.geoWinkelTriple(),
+    projection: () => d3geoProjection.geoWinkel3(),
     recommended: true
   },
   {
