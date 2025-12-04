@@ -1014,7 +1014,9 @@
     return [layer];
   }
 
-  function createWorldBaseLayer(baseTable: ArrowTable): Layer<DeckDataRow> | null {
+  function createWorldBaseLayer(
+    baseTable: ArrowTable
+  ): Layer<DeckDataRow> | null {
     const geoMetadata = baseTable.schema.metadata?.get('geo');
     if (!geoMetadata) {
       logger.warn('World base table missing geo metadata', LogCategory.MAP);
@@ -1027,7 +1029,10 @@
       const geojsonData = arrowTableToGeoJSON(baseTable, geoColumn);
 
       if (!geojsonData) {
-        logger.warn('Failed to convert world base table to GeoJSON', LogCategory.MAP);
+        logger.warn(
+          'Failed to convert world base table to GeoJSON',
+          LogCategory.MAP
+        );
         return null;
       }
 

@@ -1,6 +1,6 @@
 export interface UseVirtualScrollProps {
   numRows: number | (() => number);
-  maxRows: number;
+  maxRows: number | (() => number);
   onLoadMore: () => Promise<void>;
   tableContainer?: HTMLDivElement;
 }
@@ -36,10 +36,17 @@ export function useVirtualScroll(
       : props.numRows;
   }
 
+  function getMaxRows(): number {
+    return typeof props.maxRows === 'function'
+      ? props.maxRows()
+      : props.maxRows;
+  }
+
   async function initializeRows(start: number): Promise<void> {
     const numRows = getNumRows();
+    const maxRows = getMaxRows();
     const end = numRows - start;
-    const length = Math.min(end, props.maxRows * 2);
+    const length = Math.min(end, maxRows * 2);
     rows = createIndexArray(length, start);
     startIndex = start;
     await props.onLoadMore();
