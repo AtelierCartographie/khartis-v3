@@ -1,3 +1,4 @@
+import { base } from '$app/paths';
 import {
   DataValidationError,
   DuckDBError
@@ -484,8 +485,8 @@ class DuckDB {
       return;
     }
 
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const repositoryUrl = `${baseUrl}/duckdb-extensions`;
+    const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const repositoryUrl = `${originUrl}${base}/duckdb-extensions`;
 
     try {
       await this.query(`SET custom_extension_repository = '${repositoryUrl}'`, {
