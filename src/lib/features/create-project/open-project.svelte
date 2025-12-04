@@ -294,7 +294,7 @@
     secondaryButtonText={m.open_project_cancel()}
     on:click:button--primary={handleDeleteProject}
     on:click:button--secondary={cancelDelete}
-    size="xs"
+    size="sm"
   >
     <p>
       {m.open_project_delete_confirm_message()}
