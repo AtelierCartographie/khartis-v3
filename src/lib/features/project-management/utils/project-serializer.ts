@@ -7,8 +7,7 @@ function bigIntReplacer(_key: string, value: unknown): unknown {
 
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { Duck } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb/services/duckdb-orchestrator.service.svelte';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type { KhartisProject } from '$lib/features/project-management/models/project';

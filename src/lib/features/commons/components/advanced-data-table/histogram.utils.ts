@@ -4,7 +4,7 @@ import {
   type CategoricalHistogram,
   type NumericHistogram,
   type SummaryPlotData
-} from '$lib/features/duckdb/services/duckdb/summary-plot';
+} from '$lib/features/commons/components/summary-plot/summary-plot';
 import { LogCategory, logger } from '../../utils/logger';
 
 type HistogramLike = NumericHistogram | CategoricalHistogram;

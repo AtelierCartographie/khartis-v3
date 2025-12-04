@@ -81,12 +81,12 @@ interface Project {
 
 ## Performance Strategy
 
-| Challenge          | Solution                                            |
-| ------------------ | --------------------------------------------------- |
-| Large file imports | DuckDB native parsing + TABLESAMPLE for preview     |
-| Heavy computations | DuckDB WASM (main thread)                           |
-| Complex geometry   | Pre-simplified tiers + dynamic LOD                  |
-| Rapid edits        | `$derived` memoization + debounced recompute        |
+| Challenge          | Solution                                        |
+| ------------------ | ----------------------------------------------- |
+| Large file imports | DuckDB native parsing + TABLESAMPLE for preview |
+| Heavy computations | DuckDB WASM (main thread)                       |
+| Complex geometry   | Pre-simplified tiers + dynamic LOD              |
+| Rapid edits        | `$derived` memoization + debounced recompute    |
 
 **Target**: <3s load, ~60fps rendering (small-medium datasets)
 
@@ -149,12 +149,12 @@ Not applicable: CSRF, server auth, multi-tenant isolation
 
 ## Extension Points Quick Reference
 
-| Task               | Entry Point                                           |
-| ------------------ | ----------------------------------------------------- |
-| New file format    | `src/lib/features/data-pipeline/adapters/parsers/`    |
-| New visualization  | `src/lib/features/map/`                               |
-| New classification | `src/lib/features/duckdb/services/duckdb/breaks.ts`   |
-| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>`     |
+| Task               | Entry Point                                        |
+| ------------------ | -------------------------------------------------- |
+| New file format    | `src/lib/features/data-pipeline/adapters/parsers/` |
+| New visualization  | `src/lib/features/map/`                            |
+| New classification | `src/lib/features/duckdb/macros/breaks.ts`         |
+| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>`  |
 
 ---
 

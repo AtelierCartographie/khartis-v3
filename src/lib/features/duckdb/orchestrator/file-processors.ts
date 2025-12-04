@@ -9,10 +9,8 @@ import type { Table } from 'apache-arrow/Arrow';
 import {
   convertTabularDataToArrow,
   insertArrowTableIntoDuckDB
-} from '../duckdb/arrow-converter';
-import type { AnalysisResult } from '../duckdb/types';
-import { FileType } from './types';
-import type { DuckDBDataset } from './types';
+} from '../io/arrow-converter';
+import { FileType, type AnalysisResult, type DuckDBDataset } from '../types';
 
 export interface DuckDBClientForFileProcessing {
   query(sql: string, options?: { format?: string }): Promise<unknown>;

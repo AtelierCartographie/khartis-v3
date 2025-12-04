@@ -6,9 +6,9 @@ import type {
 } from '$lib/features/map/types/basemap.types';
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { Table } from 'apache-arrow/Arrow';
-import { join_macros } from '../duckdb/join-macros';
-import type { DuckDBDataset } from './types';
-import { detectGPSColumns } from './gps-operations';
+import { join_macros } from '../macros/join';
+import type { DuckDBDataset } from '../types';
+import { detectGPSColumns } from './gps-ops';
 
 export interface DuckDBClientForJoin {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
