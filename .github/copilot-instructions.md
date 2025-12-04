@@ -59,10 +59,12 @@ src/lib/
 │   │   ├── models/         # Domain entities (RawDataset, DatasetResult, ColumnType)
 │   │   ├── pipeline/       # Pipeline factory & orchestration
 │   │   └── types/          # TypeScript type definitions
-│   ├── duckdb/         # DuckDB WASM integration (analytics engine)
-│   │   ├── db/             # Database client & state management
-│   │   ├── services/       # DuckDB services (analyse, breaks, joins, etc.)
-│   │   └── components/     # DuckDB UI components
+│   ├── duckdb/     # DuckDB WASM integration (modular functional)
+│   │   ├── core/           # Engine, query, transaction
+│   │   ├── io/             # File I/O (readers, exporters)
+│   │   ├── cache/          # Unified cache manager
+│   │   ├── operations/     # Analysis, search, join, filters
+│   │   └── orchestrator/   # Reactive Svelte 5 service
 │   ├── create-project/ # Project creation modal
 │   ├── header/         # Top navigation
 │   ├── main-toolbar/   # Left sidebar (data/viz/styling tabs)
@@ -217,7 +219,7 @@ await Duck.read_tabular(file, { tablename: 'my_table' });
 const tableName = await Duck.read_geofile(file, { tablename: 'geo_table' });
 ```
 
-**DuckDB Service Location**: `src/lib/features/duckdb/` (separate feature, not in commons)
+**DuckDB Service Location**: `src/lib/features/duckdb/` (modular functional architecture)
 
 #### DuckDB Orchestrator (Advanced)
 
@@ -425,6 +427,7 @@ try {
 7. **Use Carbon Design System** - import from `carbon-components-svelte`
 8. **Use Paraglide i18n** - all visible text must use `m.key()` messages
 9. **Client-only** - user data never leaves the browser
+10. **Prefer functions over classes** - use pure functions + module-level state. Exceptions: Svelte stores (need `$state`) and mutex patterns. Never use classes just for namespacing.
 
 ## Testing
 

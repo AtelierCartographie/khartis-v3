@@ -10,8 +10,7 @@
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { Duck } from '$lib/features/duckdb';
-  import { duckDBOrchestrator } from '$lib/features/duckdb/services/duckdb-orchestrator.service.svelte';
+  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';

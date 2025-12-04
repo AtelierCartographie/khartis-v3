@@ -66,11 +66,11 @@
         ? 'application/json'
         : 'text/csv';
 
-      const file = new File(
-        [typeof data === 'string' ? data : JSON.stringify(data)],
-        fileName || 'example-data.csv',
-        { type: fileType }
-      );
+      const fileContent =
+        typeof data === 'string' ? data : JSON.stringify(data);
+      const file = new File([fileContent], fileName || 'example-data.csv', {
+        type: fileType
+      });
 
       const uploadedFile: UploadedFile = {
         id: crypto.randomUUID(),
@@ -78,6 +78,8 @@
         size: file.size,
         type: file.type,
         fileType: file.type.includes('json') ? FType.GEOJSON : FType.CSV,
+        content: fileContent,
+        originalFile: file,
         status: 'complete',
         sourceType: DataSource.FILE_UPLOAD
       };

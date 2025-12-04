@@ -17,10 +17,10 @@ export const EnvironmentUtils = {
     }
 
     if (pathname.startsWith('/cartographie/khartisnewpprd')) {
-      return Environment.PRODUCTION;
+      return Environment.PREPRODUCTION;
     }
 
-    return Environment.PREPRODUCTION;
+    return Environment.PRODUCTION;
   },
 
   isProduction(): boolean {
