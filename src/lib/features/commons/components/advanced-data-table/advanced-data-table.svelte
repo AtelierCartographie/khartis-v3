@@ -33,6 +33,7 @@
     maxRows?: number;
     isExpanded?: boolean;
     isSelectable?: boolean;
+    isReadOnly?: boolean;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
   }
 
@@ -46,6 +47,7 @@
     maxRows,
     isExpanded = false,
     isSelectable = false,
+    isReadOnly = false,
     onSelectionChange
   }: Props = $props();
 
@@ -67,7 +69,7 @@
   const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
   const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
-  const isEditMode = $derived(!!tableName);
+  const isEditMode = $derived(!!tableName && !isReadOnly);
 
   const COLUMN_TYPE_OPTIONS = $derived([
     { label: m.column_type_text(), value: 'VARCHAR' },
@@ -292,7 +294,7 @@
 </script>
 
 <div class="advanced-data-table">
-  {#if tableData.isFullyLoaded && filters.numRows > 0}
+  {#if tableData.isFullyLoaded && filters.numRows > 0 && !isReadOnly}
     <TableHeaderInfo
       filterStats={filters.filterStats}
       hiddenColumns={columnOps.hiddenColumns}

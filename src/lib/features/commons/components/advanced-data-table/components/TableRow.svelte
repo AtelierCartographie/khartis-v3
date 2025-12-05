@@ -83,7 +83,7 @@
 
 <style>
   tr {
-    height: 30px;
+    height: 26px;
     border-bottom: 1px solid var(--cds-ui-03);
     transition: background-color 0.15s;
   }
@@ -132,7 +132,7 @@
     width: 40px;
     min-width: 40px;
     max-width: 40px;
-    height: 30px;
+    height: 26px;
     padding: 0;
     position: sticky;
     left: 0;
@@ -144,15 +144,15 @@
   }
 
   td {
-    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    padding: var(--cds-spacing-01) var(--cds-spacing-03);
     color: var(--cds-text-01);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
     vertical-align: middle;
-    height: 30px;
-    font-size: 0.875rem;
+    height: 26px;
+    font-size: 0.75rem;
   }
 
   td.numeric {

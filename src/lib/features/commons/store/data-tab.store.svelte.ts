@@ -25,6 +25,12 @@ const DEFAULT_STATE: DataTabState = {
     joinMappings: [],
     correctionEnabled: false
   },
+  enrichData: {
+    enrichmentDatasetId: undefined,
+    enrichmentColumn: undefined,
+    targetColumn: undefined,
+    isEnrichmentActive: false
+  },
   notifications: {
     variableTypes: false,
     warnings: false
@@ -44,6 +50,10 @@ export const dataTabActions = {
 
   setBasemapJoinState(updates: Partial<DataTabState['basemapJoin']>): void {
     Object.assign(dataTabState.basemapJoin, updates);
+  },
+
+  setEnrichDataState(updates: Partial<DataTabState['enrichData']>): void {
+    Object.assign(dataTabState.enrichData, updates);
   },
 
   setJoinStats(stats: JoinQuality): void {

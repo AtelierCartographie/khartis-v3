@@ -6,9 +6,11 @@ import {
 } from '../configs/validation.config';
 import { logger, LogCategory } from './logger';
 import * as m from '$lib/paraglide/messages';
+import { sanitizeProjectName } from './sanitize.utils';
 
 // Re-export for compatibility with existing code
 export { STORAGE_LIMITS, type StorageLimits, type ValidationResult };
+export { sanitizeProjectName };
 
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
@@ -158,13 +160,6 @@ export const ProjectValidator = {
     }
 
     return result;
-  },
-
-  sanitizeProjectName(name: string): string {
-    return name
-      .trim()
-      .replace(/[<>:"/\\|?*]/g, '_')
-      .substring(0, 255);
   }
 } as const;
 
