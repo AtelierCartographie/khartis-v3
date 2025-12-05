@@ -287,7 +287,7 @@
   th {
     text-align: left;
     vertical-align: top;
-    padding: var(--cds-spacing-03);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
     border-bottom: 2px solid var(--cds-ui-03);
     min-width: 150px;
   }
@@ -295,7 +295,7 @@
   .col-header {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-01);
   }
 
   .col-title-row {
@@ -308,7 +308,7 @@
   .col-name {
     font-weight: 600;
     color: var(--cds-text-01);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     flex: 1;
   }
 

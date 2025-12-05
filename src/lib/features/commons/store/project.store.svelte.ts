@@ -22,6 +22,7 @@ import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
+import { sanitizeProjectName } from '../utils/sanitize.utils';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -373,7 +374,7 @@ class ProjectStore {
       throw new Error(nameValidation.errors.join(', '));
     }
 
-    const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+    const sanitizedName = sanitizeProjectName(name);
 
     const project: KhartisProject = {
       id: crypto.randomUUID(),
@@ -511,7 +512,7 @@ class ProjectStore {
 
       const duplicatedProject = duplicateProjectEntity(
         originalProject,
-        ProjectValidator.sanitizeProjectName(duplicatedName)
+        sanitizeProjectName(duplicatedName)
       );
 
       await projectRepository.save(duplicatedProject);

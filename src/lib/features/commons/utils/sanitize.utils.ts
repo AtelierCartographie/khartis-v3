@@ -5,7 +5,7 @@ export function sanitizeProjectName(name: string): string {
 
   let sanitized = name.replace(/[<>:"/\\|?*]/g, '');
 
-  sanitized = sanitized.substring(0, 100);
+  sanitized = sanitized.substring(0, 255);
 
   sanitized = sanitized.replace(/\s+/g, ' ').trim();
 

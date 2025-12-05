@@ -26,7 +26,7 @@
 Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client‑side to keep your data private.
 
 - Website (coming soon)
-- Documentation: see the `docs/` folder (entry: `docs/summary.md`)
+- Documentation: see the `docs/` folder (entry: `docs/README.md`)
 
 ## Features
 
@@ -172,16 +172,16 @@ e2e/
 
 ## Documentation
 
-- Start here: `docs/summary.md`
-- Highlights:
-  - Data management: `docs/01-data-management.md`
-  - Visualization engine: `docs/02-visualization-engine.md`
-  - Layout system: `docs/03-layout-system.md`
-  - Export system: `docs/04-export-system.md`
-  - Technical architecture: `docs/05-technical-architecture.md`
-  - Performance optimization: `docs/06-performance-optimization.md`
-  - Accessibility and security: `docs/07-accessibility-security.md`
-  - Keyboard shortcuts: `docs/08-keyboard-shortcuts.md`
+- Start here: `docs/README.md`
+- Key documentation:
+  - Architecture: `docs/ARCHITECTURE.md`
+  - Data Pipeline: `docs/DATA_PIPELINE.md`
+  - State & Features: `docs/STATE_AND_FEATURES.md`
+  - Developer Guide: `docs/DEVELOPER_GUIDE.md`
+  - Visualization: `docs/VISUALIZATION.md`
+  - Basemaps: `docs/BASEMAPS.md`
+  - Testing: `docs/TESTING.md`
+  - Reference: `docs/REFERENCE.md`
 
 ## Privacy, security, and data
 

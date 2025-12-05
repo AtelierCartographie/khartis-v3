@@ -1,6 +1,6 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
-export type DataTabStep = 'control' | 'geolocate' | 'join';
+export type DataTabStep = 'control' | 'geolocate' | 'join' | 'enrich';
 export type WorkflowMode = 'tabular' | 'geographic' | 'auto';
 
 export class DataTabStore {
@@ -26,8 +26,7 @@ export class DataTabStore {
   }
 
   get currentStepName(): DataTabStep {
-    const steps: DataTabStep[] = ['control', 'geolocate', 'join'];
-    return steps[this._state.activeStepIndex];
+    return this.stepNames[this._state.activeStepIndex];
   }
 
   get canVisualize() {
@@ -36,6 +35,38 @@ export class DataTabStore {
 
   get workflowMode() {
     return this._state.workflowMode;
+  }
+
+  get effectiveWorkflowMode(): WorkflowMode {
+    const selectedDataset = datasetsStore.selectedDataset;
+    if (!selectedDataset) return 'auto';
+
+    if (selectedDataset.geometry) {
+      return 'geographic';
+    }
+    return 'tabular';
+  }
+
+  get isGeographicMode(): boolean {
+    return this.effectiveWorkflowMode === 'geographic';
+  }
+
+  get stepCount(): number {
+    return this.isGeographicMode ? 2 : 3;
+  }
+
+  get stepNames(): DataTabStep[] {
+    if (this.isGeographicMode) {
+      return ['control', 'enrich'];
+    }
+    return ['control', 'geolocate', 'join'];
+  }
+
+  get isReadyForVisualization(): boolean {
+    if (this.isGeographicMode) {
+      return this._state.hasCompletedStep[0];
+    }
+    return this._state.hasCompletedStep[2];
   }
 
   get primaryDatasetId() {
@@ -59,7 +90,8 @@ export class DataTabStore {
   }
 
   setActiveStep(index: number) {
-    if (index < 0 || index > 2) {
+    const maxIndex = this.stepCount - 1;
+    if (index < 0 || index > maxIndex) {
       return;
     }
 
@@ -71,11 +103,12 @@ export class DataTabStore {
   }
 
   markStepComplete(index: number) {
-    if (index < 0 || index > 2) return;
+    const maxIndex = this.stepCount - 1;
+    if (index < 0 || index > maxIndex) return;
 
     this._state.hasCompletedStep[index] = true;
 
-    if (index < 2) {
+    if (index < maxIndex) {
       this._state.canNavigateToStep[index + 1] = true;
     }
   }
@@ -97,7 +130,8 @@ export class DataTabStore {
 
   nextStep() {
     const nextIndex = this._state.activeStepIndex + 1;
-    if (nextIndex <= 2 && this._state.canNavigateToStep[nextIndex]) {
+    const maxIndex = this.stepCount - 1;
+    if (nextIndex <= maxIndex && this._state.canNavigateToStep[nextIndex]) {
       this.setActiveStep(nextIndex);
     }
   }

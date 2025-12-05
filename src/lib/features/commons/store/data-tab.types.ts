@@ -30,10 +30,18 @@ export interface BasemapJoinState {
   correctionEnabled: boolean;
 }
 
+export interface EnrichDataState {
+  enrichmentDatasetId?: string;
+  enrichmentColumn?: string;
+  targetColumn?: string;
+  isEnrichmentActive: boolean;
+}
+
 export interface DataTabState {
   dataControl: DataControlState;
   geolocation: GeolocationState;
   basemapJoin: BasemapJoinState;
+  enrichData: EnrichDataState;
   notifications: {
     variableTypes: boolean;
     warnings: boolean;
