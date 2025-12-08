@@ -1,5 +1,5 @@
-import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
@@ -28,6 +28,7 @@ export interface UseTableDataReturn {
     currentSortColumn: string | null,
     onReset: () => void
   ) => void;
+  renameColumnInCache: (oldName: string, newName: string) => void;
 }
 
 const EXCLUDED_COLUMNS = ['geom', 'geometry', '__id'];
@@ -130,7 +131,24 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         if (data && data.numRows > 0) {
           const rows: TableRow[] = [];
           for (let i = 0; i < data.numRows; i++) {
-            rows.push(data.get(i));
+            const rowProxy = data.get(i);
+            // Manually construct plain object to ensure we get all properties
+            // Spread {...rowProxy} doesn't work reliably with Arrow proxies
+            const row: Record<string, unknown> = {};
+
+            // Copy all known columns
+            for (const col of columns) {
+              row[col.name] = rowProxy[col.name];
+            }
+
+            // Always try to preserve __id
+            if (rowProxy.__id !== undefined) {
+              row.__id = rowProxy.__id;
+            } else if (rowProxy['__id'] !== undefined) {
+              row.__id = rowProxy['__id'];
+            }
+
+            rows.push(row);
           }
           tableData = rows;
         } else {
@@ -165,6 +183,25 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     }
   }
 
+  function renameColumnInCache(oldName: string, newName: string): void {
+    // Update columns
+    columns = columns.map((c) =>
+      c.name === oldName ? { ...c, name: newName } : c
+    );
+
+    // Update columnAnalysis
+    if (columnAnalysis.has(oldName)) {
+      const analysis = columnAnalysis.get(oldName)!;
+      columnAnalysis.delete(oldName);
+      const newAnalysis = { ...analysis, name: newName };
+      columnAnalysis.set(newName, newAnalysis);
+    }
+
+    // We do NOT update tableData here anymore.
+    // We rely on loadRowsData() being called immediately after to fetch fresh data from DuckDB.
+    // This avoids complex object patching and ensures data consistency.
+  }
+
   return {
     get columns() {
       return columns;
@@ -192,6 +229,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     },
     loadColumnsInfo,
     loadRowsData,
-    validateSortColumn
+    validateSortColumn,
+    renameColumnInCache
   };
 }

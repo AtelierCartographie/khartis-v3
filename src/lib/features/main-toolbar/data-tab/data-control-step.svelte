@@ -7,7 +7,7 @@
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator, Duck } from '$lib/features/duckdb';
+  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -17,14 +17,14 @@
   import CalculatorPanel from './components/calculator-panel.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
   import DataToolsBar from './components/data-tools-bar.svelte';
-  import DeleteRowsModal from './delete-rows-modal.svelte';
   import FiltersPanel from './components/filters-panel.svelte';
   import SearchPanel, {
     type SearchHighlightResult
   } from './components/search-panel.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import { DataToolType } from './data-tab.types';
   import { dataToolsStore } from './data-tools.store.svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
+  import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -292,10 +292,11 @@
   {/if}
 
   {#if processedDataset && !isBatchProcessing}
-    {#key `${forceRefreshKey}-${duckDBDatasetsVersion}`}
+    {#key forceRefreshKey}
       <AdvancedDataTable
         dataset={processedDataset}
         tableName={currentDuckTable || undefined}
+        datasetVersion={duckDBDatasetsVersion}
         showSummaryPlots={true}
         exactHighlightIds={searchHighlight.exactIds}
         partialHighlightIds={searchHighlight.partialIds}

@@ -16,6 +16,7 @@ export interface UseVirtualScrollReturn {
   goToId: (id: number) => Promise<void>;
   initializeRows: (start: number) => Promise<void>;
   setTableContainer: (container: HTMLDivElement | undefined) => void;
+  setRows: (newRows: number[]) => void;
 }
 
 function createIndexArray(length: number, start = 0): number[] {
@@ -100,6 +101,10 @@ export function useVirtualScroll(
     }
   }
 
+  function setRows(newRows: number[]): void {
+    rows = newRows;
+  }
+
   function setTableContainer(container: HTMLDivElement | undefined): void {
     tableContainer = container;
   }
@@ -117,6 +122,7 @@ export function useVirtualScroll(
     handleScroll,
     goToId,
     initializeRows,
-    setTableContainer
+    setTableContainer,
+    setRows
   };
 }
