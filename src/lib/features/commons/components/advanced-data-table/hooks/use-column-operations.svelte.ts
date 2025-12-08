@@ -1,12 +1,13 @@
-import { SvelteSet } from 'svelte/reactivity';
 import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
-import { logger, LogCategory } from '../../../utils/logger';
+import { SvelteSet } from 'svelte/reactivity';
+import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo } from '../types';
 
 export interface UseColumnOperationsProps {
   tableName?: string | (() => string | undefined);
   columns: ColumnInfo[] | (() => ColumnInfo[]);
   onColumnsChange: () => Promise<void>;
+  onColumnRenamed?: (oldName: string, newName: string) => Promise<void>;
   onSortColumnRenamed?: (oldName: string, newName: string) => void;
   onSortColumnDeleted?: (columnName: string) => void;
   onRecordTransformation?: (summary: string) => void;
@@ -73,7 +74,12 @@ export function useColumnOperations(
         hiddenColumns = new SvelteSet(hiddenColumns);
       }
 
-      await props.onColumnsChange();
+      if (props.onColumnRenamed) {
+        await props.onColumnRenamed(oldName, newName);
+      } else {
+        await props.onColumnsChange();
+      }
+
       props.onRecordTransformation?.(`Renommage de ${oldName} en ${newName}`);
     } catch (err) {
       logger.error('Error renaming column', LogCategory.UI, err);

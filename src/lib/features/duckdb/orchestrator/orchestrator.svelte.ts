@@ -9,11 +9,11 @@ import {
   geoParquetReader,
   type GeoArrowMetadata
 } from '$lib/features/data-pipeline';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
-import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type { Table } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { Duck, initDuckDB } from '../duck';
@@ -31,12 +31,12 @@ import {
 } from '../types';
 import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 
-import * as columnOps from './column-ops';
-import * as gpsOps from './gps-ops';
 import * as arrowOps from './arrow-ops';
-import * as joinOps from './join-ops';
-import * as fileProcessors from './file-processors';
+import * as columnOps from './column-ops';
 import * as datasetState from './dataset-state';
+import * as fileProcessors from './file-processors';
+import * as gpsOps from './gps-ops';
+import * as joinOps from './join-ops';
 
 export {
   FileType,
@@ -605,6 +605,15 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.renameColumn(tableName, oldName, newName, Duck);
+
+    const filters = this._filters.get(tableName);
+    if (filters) {
+      const updatedFilters = filters.map((f) =>
+        f.column === oldName ? { ...f, column: newName } : f
+      );
+      this._filters.set(tableName, updatedFilters);
+    }
+
     this.bumpDatasetsVersion();
   }
 
