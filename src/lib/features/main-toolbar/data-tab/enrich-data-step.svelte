@@ -35,7 +35,12 @@
   import { generateCustomBasemapAttributes } from '$lib/features/map/utils/generate-basemap-attributes';
   import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
   import BasemapCardVertical from './components/basemap-card-vertical.svelte';
-  import { JoinAccordion, BasemapImportDropzone, OSMSelector, type JoinStats } from './components';
+  import {
+    JoinAccordion,
+    BasemapImportDropzone,
+    OSMSelector,
+    type JoinStats
+  } from './components';
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
   import { computeDatasetJoinStats } from './services/join-stats.service';
@@ -76,7 +81,14 @@
   let basemapImportUploading = $state(false);
   let importedCustomBasemap = $state<BasemapMetadata | null>(null);
 
-  const acceptedBasemapExtensions = ['.geojson', '.json', '.shp', '.gpkg', '.kml', '.parquet'];
+  const acceptedBasemapExtensions = [
+    '.geojson',
+    '.json',
+    '.shp',
+    '.gpkg',
+    '.kml',
+    '.parquet'
+  ];
 
   // Join assisted state
   let joinStats = $state<JoinStats | null>(null);
@@ -262,9 +274,7 @@
     const enrichCol = enrichDataFieldItems().find(
       (item) => item.id === enrichLinkedVariableId
     );
-    const geoCol = geoFileColumns().find(
-      (item) => item.id === geoFileColumnId
-    );
+    const geoCol = geoFileColumns().find((item) => item.id === geoFileColumnId);
 
     if (!enrichCol || !geoCol) {
       joinStats = null;
@@ -274,7 +284,9 @@
     isComputingJoin = true;
 
     try {
-      const geoTableName = (selectedDataset as { duckdbTableName?: string; tableName?: string }).duckdbTableName ||
+      const geoTableName =
+        (selectedDataset as { duckdbTableName?: string; tableName?: string })
+          .duckdbTableName ||
         (selectedDataset as { tableName?: string }).tableName ||
         selectedDataset.id;
 
@@ -285,7 +297,11 @@
         targetColumn: geoCol.columnName
       });
     } catch (error) {
-      logger.error('Failed to compute enrichment join stats', LogCategory.DATA, error);
+      logger.error(
+        'Failed to compute enrichment join stats',
+        LogCategory.DATA,
+        error
+      );
       joinStats = null;
     } finally {
       isComputingJoin = false;
@@ -313,7 +329,8 @@
       const tableName =
         typeof tableNameResult === 'string'
           ? tableNameResult
-          : (tableNameResult?.name ?? `custom_basemap_${Date.now().toString(36)}`);
+          : (tableNameResult?.name ??
+            `custom_basemap_${Date.now().toString(36)}`);
 
       const analysis = await Duck.analyse(tableName);
 
@@ -325,10 +342,21 @@
           ST_YMax(ST_Extent(geom)) as maxY
         FROM "${tableName}"`,
         { format: 'array' }
-      )) as Array<{ minX: number | null; minY: number | null; maxX: number | null; maxY: number | null }>;
+      )) as Array<{
+        minX: number | null;
+        minY: number | null;
+        maxX: number | null;
+        maxY: number | null;
+      }>;
       const bounds = bboxQuery[0];
 
-      if (!bounds || bounds.minX === null || bounds.minY === null || bounds.maxX === null || bounds.maxY === null) {
+      if (
+        !bounds ||
+        bounds.minX === null ||
+        bounds.minY === null ||
+        bounds.maxX === null ||
+        bounds.maxY === null
+      ) {
         throw new Error(m.basemap_import_modal_error_invalid_geometry());
       }
 
@@ -338,7 +366,11 @@
       )) as Array<{ geom_type?: string }>;
       const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
 
-      const layerType = geomType.includes('point') ? 'point' : geomType.includes('line') ? 'line' : 'polygon';
+      const layerType = geomType.includes('point')
+        ? 'point'
+        : geomType.includes('line')
+          ? 'line'
+          : 'polygon';
 
       const customBasemap: BasemapMetadata = {
         file: tableName,
@@ -348,7 +380,14 @@
         date: new Date().getFullYear().toString(),
         bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
         projection: 'EPSG:4326',
-        layers: [{ name: 'geom', type: layerType, count: Number(analysis.find((col) => col.name === 'geom')?.count) || 0 }],
+        layers: [
+          {
+            name: 'geom',
+            type: layerType,
+            count:
+              Number(analysis.find((col) => col.name === 'geom')?.count) || 0
+          }
+        ],
         isCustom: true
       };
 
@@ -359,10 +398,13 @@
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;
 
-      logger.success('Custom basemap imported', LogCategory.MAP, { title: customBasemap.title });
+      logger.success('Custom basemap imported', LogCategory.MAP, {
+        title: customBasemap.title
+      });
     } catch (error) {
       logger.error('Failed to import custom basemap', LogCategory.MAP, error);
-      basemapImportError = error instanceof Error ? error.message : 'Erreur lors de l\'import';
+      basemapImportError =
+        error instanceof Error ? error.message : "Erreur lors de l'import";
     } finally {
       basemapImportUploading = false;
     }
@@ -378,11 +420,14 @@
       const blob = await response.blob();
       const urlParts = url.split('/');
       const fileName = urlParts[urlParts.length - 1] || 'basemap.geojson';
-      const file = new File([blob], fileName, { type: blob.type || 'application/geo+json' });
+      const file = new File([blob], fileName, {
+        type: blob.type || 'application/geo+json'
+      });
       await handleBasemapImportFile(file);
     } catch (err) {
       logger.error('Error loading basemap URL', LogCategory.MAP, err);
-      basemapImportError = err instanceof Error ? err.message : 'Erreur lors du chargement';
+      basemapImportError =
+        err instanceof Error ? err.message : 'Erreur lors du chargement';
     } finally {
       basemapImportUploading = false;
     }
@@ -524,7 +569,9 @@
               title={m.geo_column_detected_title()}
               subtitle={m.geo_column_detected_subtitle({
                 column: enrichSuggestedColumn()!.columnName,
-                confidence: Math.round(enrichSuggestedColumn()!.confidence * 100).toString()
+                confidence: Math.round(
+                  enrichSuggestedColumn()!.confidence * 100
+                ).toString()
               })}
               kind="success"
               lowContrast
@@ -545,7 +592,9 @@
                   on:select={(e) => {
                     geoFileColumnId = e.detail.selectedId;
                     dataTabActions.setEnrichDataState({
-                      targetColumn: (e.detail.selectedItem as { columnName: string })?.columnName
+                      targetColumn: (
+                        e.detail.selectedItem as { columnName: string }
+                      )?.columnName
                     });
                   }}
                   placeholder={m.enrich_select_column()}
@@ -563,13 +612,16 @@
                   on:select={(e) => {
                     enrichLinkedVariableId = e.detail.selectedId;
                     dataTabActions.setEnrichDataState({
-                      enrichmentColumn: (e.detail.selectedItem as GeoComboBoxItem)?.columnName
+                      enrichmentColumn: (
+                        e.detail.selectedItem as GeoComboBoxItem
+                      )?.columnName
                     });
                   }}
                   placeholder={m.enrich_select_column()}
                   size="sm"
                 />
-                <span class="column-label">{m.enrich_tabular_data_label()}</span>
+                <span class="column-label">{m.enrich_tabular_data_label()}</span
+                >
               </div>
             </div>
           </div>

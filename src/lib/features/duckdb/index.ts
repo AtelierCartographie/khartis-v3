@@ -19,6 +19,7 @@ export type {
   AnalysisResult,
   AnalysisResults,
   ArrowTableLike,
+  CellSearchResult,
   SearchResultWithScore,
   SearchStats,
   FilterOperator,

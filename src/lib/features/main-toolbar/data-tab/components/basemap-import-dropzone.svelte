@@ -1,6 +1,15 @@
 <script lang="ts">
-  import { Button, InlineNotification, TextInput } from 'carbon-components-svelte';
-  import { CheckmarkFilled, CloudUpload, Launch, Upload } from 'carbon-icons-svelte';
+  import {
+    Button,
+    InlineNotification,
+    TextInput
+  } from 'carbon-components-svelte';
+  import {
+    CheckmarkFilled,
+    CloudUpload,
+    Launch,
+    Upload
+  } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
@@ -15,7 +24,14 @@
   }
 
   const {
-    acceptedExtensions = ['.geojson', '.json', '.shp', '.gpkg', '.kml', '.parquet'],
+    acceptedExtensions = [
+      '.geojson',
+      '.json',
+      '.shp',
+      '.gpkg',
+      '.kml',
+      '.parquet'
+    ],
     isUploading = false,
     error = null,
     importedBasemap = null,

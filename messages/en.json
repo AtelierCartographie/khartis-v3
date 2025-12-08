@@ -726,6 +726,7 @@
   "search_replace_button": "Replace",
   "search_replace_placeholder": "No value",
   "search_exact_results": "{count} exact result(s)",
+  "search_contains_results": "{count} substring match(es)",
   "search_partial_results": "{count} partial result(s)",
   "search_replace_exact_only": "Replaces exact matches only",
   "replace_success_title": "Replacement done",

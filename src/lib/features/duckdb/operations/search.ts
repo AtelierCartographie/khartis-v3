@@ -1,11 +1,7 @@
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import type {
-  DuckDBContext,
-  SearchResultWithScore,
-  SearchStats
-} from '../types';
+import type { DuckDBContext, CellSearchResult, SearchStats } from '../types';
 
 export async function searchInTable(
   ctx: DuckDBContext,
@@ -13,10 +9,12 @@ export async function searchInTable(
   searchQuery: string,
   options: { threshold?: number; column?: string } = {}
 ): Promise<SearchStats> {
-  const { threshold = 0.6, column = null } = options;
+  const { threshold = 0.85, column = null } = options;
   const emptyResult: SearchStats = {
     exactCount: 0,
-    partialCount: 0,
+    containsCount: 0,
+    fuzzyCount: 0,
+    totalCount: 0,
     results: []
   };
 
@@ -25,86 +23,67 @@ export async function searchInTable(
   }
 
   const escapedQuery = escapeSqlString(searchQuery.trim());
-  const excludedColumns = ['geom', 'geometry'];
 
   try {
-    const describeResult = (await executeQuery(
+    // 1. Execute macro and store results in temp table
+    await executeQuery(
       ctx.connection,
-      `DESCRIBE "${table}"`,
-      {
-        format: DUCK_CONST.QUERY_FORMAT.ARRAY
-      }
-    )) as Array<{ column_name: string; column_type: string }>;
-
-    const allColumns = describeResult
-      .filter(
-        (c) =>
-          !c.column_name.startsWith('__') &&
-          !excludedColumns.includes(c.column_name.toLowerCase())
-      )
-      .map((c) => ({
-        column_name: c.column_name,
-        data_type: c.column_type
-      }));
-
-    const textTypes = ['VARCHAR', 'TEXT', 'STRING'];
-    let textColumns = allColumns.filter((c) =>
-      textTypes.includes(c.data_type.toUpperCase())
+      `CREATE OR REPLACE TEMP TABLE __search_results AS
+       FROM searchInTable('${table}', '${escapedQuery}', ${threshold})`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     );
 
+    // 2. Build WHERE clause for column filter
+    let whereClause = '';
     if (column) {
       const escapedColumn = escapeSqlString(column);
-      textColumns = textColumns.filter((c) => c.column_name === escapedColumn);
+      whereClause = ` WHERE column_name = '${escapedColumn}'`;
     }
 
-    if (textColumns.length === 0) {
-      return emptyResult;
-    }
+    // 3. Retrieve results
+    const results = (await executeQuery(
+      ctx.connection,
+      `SELECT __id, column_name, column_value, score
+       FROM __search_results${whereClause}
+       ORDER BY score DESC, __id ASC`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    )) as Array<{
+      __id: number;
+      column_name: string;
+      column_value: string;
+      score: number;
+    }>;
 
-    const scoreExpressions = textColumns.map(
-      ({ column_name }) =>
-        `jaro_winkler_similarity(normalize_text("${column_name}"::VARCHAR), normalize_text('${escapedQuery}'))`
-    );
+    // 4. Calculate counts
+    const counts = (await executeQuery(
+      ctx.connection,
+      `SELECT
+        count(*) FILTER (WHERE score = 1.0) as exact,
+        count(*) FILTER (WHERE score = 0.99) as contains,
+        count(*) FILTER (WHERE score < 0.99 AND score > ${threshold}) as fuzzy,
+        count(*) as total
+       FROM __search_results${whereClause}`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    )) as Array<{
+      exact: number;
+      contains: number;
+      fuzzy: number;
+      total: number;
+    }>;
 
-    const greatestExpr = `GREATEST(${scoreExpressions.join(', ')})`;
-
-    const columnCases = textColumns
-      .map(
-        ({ column_name }, idx) =>
-          `WHEN ${scoreExpressions[idx]} = ${greatestExpr} THEN '${column_name}'`
-      )
-      .join('\n            ');
-
-    const sql = `
-      SELECT
-        __id AS id,
-        ${greatestExpr} AS score,
-        CASE
-          ${columnCases}
-          ELSE '${textColumns[0].column_name}'
-        END AS matched_column
-      FROM "${table}"
-      WHERE ${greatestExpr} >= ${threshold}
-      ORDER BY score DESC, id ASC
-    `;
-
-    const result = (await executeQuery(ctx.connection, sql, {
-      format: DUCK_CONST.QUERY_FORMAT.ARRAY
-    })) as Array<{ id: number; score: number; matched_column: string }>;
-
-    const results: SearchResultWithScore[] = result.map((r) => ({
-      id: r.id,
-      score: r.score,
-      column: r.matched_column
+    const cellResults: CellSearchResult[] = results.map((r) => ({
+      rowId: r.__id,
+      columnName: r.column_name,
+      value: r.column_value,
+      score: r.score
     }));
 
-    const exactCount = results.filter((r) => r.score === 1).length;
-    const partialCount = results.filter((r) => r.score < 1).length;
-
     return {
-      exactCount,
-      partialCount,
-      results
+      exactCount: Number(counts[0]?.exact ?? 0),
+      containsCount: Number(counts[0]?.contains ?? 0),
+      fuzzyCount: Number(counts[0]?.fuzzy ?? 0),
+      totalCount: Number(counts[0]?.total ?? 0),
+      results: cellResults
     };
   } catch {
     return emptyResult;
