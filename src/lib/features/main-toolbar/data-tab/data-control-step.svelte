@@ -77,9 +77,9 @@
   }
 
   let searchHighlight = $state<SearchHighlightResult>({
-    exactIds: [],
-    partialIds: [],
-    currentId: null
+    cellHighlights: [],
+    currentCell: null,
+    highlightedRowIds: []
   });
 
   function handleSearchResults(result: SearchHighlightResult) {
@@ -222,7 +222,11 @@
 
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
-      searchHighlight = { exactIds: [], partialIds: [], currentId: null };
+      searchHighlight = {
+        cellHighlights: [],
+        currentCell: null,
+        highlightedRowIds: []
+      };
     }
   });
 
@@ -298,9 +302,9 @@
         tableName={currentDuckTable || undefined}
         datasetVersion={duckDBDatasetsVersion}
         showSummaryPlots={true}
-        exactHighlightIds={searchHighlight.exactIds}
-        partialHighlightIds={searchHighlight.partialIds}
-        currentHighlightId={searchHighlight.currentId}
+        cellHighlights={searchHighlight.cellHighlights}
+        currentCell={searchHighlight.currentCell}
+        highlightedRowIds={searchHighlight.highlightedRowIds}
         isExpanded={isTableExpanded}
         isSelectable={true}
         onSelectionChange={handleSelectionChange}

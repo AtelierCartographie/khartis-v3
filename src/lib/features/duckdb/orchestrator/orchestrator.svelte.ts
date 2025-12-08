@@ -1233,7 +1233,9 @@ class DuckDBOrchestratorService {
 
     const emptyResult: SearchStats = {
       exactCount: 0,
-      partialCount: 0,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 0,
       results: []
     };
 

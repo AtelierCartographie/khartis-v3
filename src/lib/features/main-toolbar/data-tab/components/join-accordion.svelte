@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { Button, InlineNotification, Select, SelectItem, Tag } from 'carbon-components-svelte';
+  import {
+    Button,
+    InlineNotification,
+    Select,
+    SelectItem,
+    Tag
+  } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
     ChevronDown,
@@ -50,13 +56,23 @@
   let duplicatesExpanded = $state(false);
   let unrecognizedExpanded = $state(false);
 
-  const joinedEntities = $derived(stats.entities.filter((e) => e.status === 'joined'));
-  const toVerifyEntities = $derived(stats.entities.filter((e) => e.status === 'to_verify'));
-  const duplicateEntities = $derived(stats.entities.filter((e) => e.status === 'duplicate'));
-  const unrecognizedEntities = $derived(stats.entities.filter((e) => e.status === 'unrecognized'));
+  const joinedEntities = $derived(
+    stats.entities.filter((e) => e.status === 'joined')
+  );
+  const toVerifyEntities = $derived(
+    stats.entities.filter((e) => e.status === 'to_verify')
+  );
+  const duplicateEntities = $derived(
+    stats.entities.filter((e) => e.status === 'duplicate')
+  );
+  const unrecognizedEntities = $derived(
+    stats.entities.filter((e) => e.status === 'unrecognized')
+  );
 
   const hasErrors = $derived(
-    stats.toVerifyCount > 0 || stats.duplicateCount > 0 || stats.unrecognizedCount > 0
+    stats.toVerifyCount > 0 ||
+      stats.duplicateCount > 0 ||
+      stats.unrecognizedCount > 0
   );
 
   const canFinalize = $derived(
@@ -74,7 +90,9 @@
       <div class="status-icon">
         <CheckmarkFilled size={20} class="icon-success" />
       </div>
-      <span class="status-text">{m.join_entities_joined({ count: stats.joinedCount })}</span>
+      <span class="status-text"
+        >{m.join_entities_joined({ count: stats.joinedCount })}</span
+      >
       <div class="expand-icon">
         {#if joinedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
       </div>
@@ -103,7 +121,9 @@
       <div class="status-icon">
         <WarningFilled size={20} class="icon-warning" />
       </div>
-      <span class="status-text">{m.join_entities_to_verify({ count: stats.toVerifyCount })}</span>
+      <span class="status-text"
+        >{m.join_entities_to_verify({ count: stats.toVerifyCount })}</span
+      >
       <div class="expand-icon">
         {#if toVerifyExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
       </div>
@@ -133,7 +153,10 @@
                       selected={entity.selectedMapping}
                       on:change={(e) => {
                         const target = e.target as HTMLSelectElement;
-                        onMappingChange?.(i, target?.value || entity.selectedMapping || '');
+                        onMappingChange?.(
+                          i,
+                          target?.value || entity.selectedMapping || ''
+                        );
                       }}
                       size="xl"
                     >
@@ -152,7 +175,9 @@
               <li>
                 <span class="entity-value">{entity.dataValue}</span>
                 {#if entity.matches && entity.matches.length > 0}
-                  <span class="entity-matches">→ {entity.matches.join(', ')}</span>
+                  <span class="entity-matches"
+                    >→ {entity.matches.join(', ')}</span
+                  >
                 {/if}
               </li>
             {/each}
@@ -171,7 +196,9 @@
       <div class="status-icon">
         <WarningAltFilled size={20} class="icon-error" />
       </div>
-      <span class="status-text">{m.join_entities_duplicate({ count: stats.duplicateCount })}</span>
+      <span class="status-text"
+        >{m.join_entities_duplicate({ count: stats.duplicateCount })}</span
+      >
       <div class="expand-icon">
         {#if duplicatesExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
       </div>
@@ -196,7 +223,11 @@
       <div class="status-icon">
         <ErrorFilled size={20} class="icon-error" />
       </div>
-      <span class="status-text">{m.join_entities_unrecognized({ count: stats.unrecognizedCount })}</span>
+      <span class="status-text"
+        >{m.join_entities_unrecognized({
+          count: stats.unrecognizedCount
+        })}</span
+      >
       <div class="expand-icon">
         {#if unrecognizedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
       </div>
