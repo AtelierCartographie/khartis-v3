@@ -8,6 +8,12 @@ export interface UseColumnOperationsProps {
   columns: ColumnInfo[] | (() => ColumnInfo[]);
   onColumnsChange: () => Promise<void>;
   onColumnRenamed?: (oldName: string, newName: string) => Promise<void>;
+  onColumnRefined?: (
+    columnName: string,
+    operation: RefineOperation
+  ) => Promise<void>;
+  onColumnTypeChanged?: (columnName: string, newType: string) => Promise<void>;
+  onColumnDropped?: (columnName: string) => Promise<void>;
   onSortColumnRenamed?: (oldName: string, newName: string) => void;
   onSortColumnDeleted?: (columnName: string) => void;
   onRecordTransformation?: (summary: string) => void;
@@ -102,7 +108,12 @@ export function useColumnOperations(
         hiddenColumns = new SvelteSet(hiddenColumns);
       }
 
-      await props.onColumnsChange();
+      if (props.onColumnDropped) {
+        await props.onColumnDropped(columnName);
+      } else {
+        await props.onColumnsChange();
+      }
+
       props.onRecordTransformation?.(`Suppression de la colonne ${columnName}`);
     } catch (err) {
       logger.error('Error dropping column', LogCategory.UI, err);
@@ -144,7 +155,13 @@ export function useColumnOperations(
 
     try {
       await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
-      await props.onColumnsChange();
+
+      if (props.onColumnRefined) {
+        await props.onColumnRefined(columnName, operation);
+      } else {
+        await props.onColumnsChange();
+      }
+
       props.onRecordTransformation?.(
         `Affinage (${operation}) sur ${columnName}`
       );
@@ -169,7 +186,13 @@ export function useColumnOperations(
         columnName,
         duckType
       );
-      await props.onColumnsChange();
+
+      if (props.onColumnTypeChanged) {
+        await props.onColumnTypeChanged(columnName, duckType);
+      } else {
+        await props.onColumnsChange();
+      }
+
       props.onRecordTransformation?.(
         `Type de ${columnName} converti en ${duckType}`
       );

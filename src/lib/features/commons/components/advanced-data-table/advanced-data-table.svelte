@@ -150,6 +150,23 @@
       // This ensures we have the correct data structure without manual patching
       await tableData.loadRowsData();
     },
+    onColumnRefined: async (columnName, operation) => {
+      // For refine, we just need to reload the data as the column structure doesn't change
+      await filters.refreshFiltersState();
+      await tableData.loadRowsData();
+    },
+    onColumnTypeChanged: async (columnName, newType) => {
+      tableData.changeColumnTypeInCache(columnName, newType);
+      await filters.refreshFiltersState();
+      await tableData.loadRowsData();
+    },
+    onColumnDropped: async (columnName) => {
+      tableData.dropColumnInCache(columnName);
+      await filters.refreshFiltersState();
+      // No need to reload rows for drop, as we just hide the column
+      // But if we want to be safe we can reload
+      // await tableData.loadRowsData();
+    },
     onSortColumnRenamed: (oldName, newName) => {
       if (sort.sortColumn === oldName) {
         sort.sortTable(newName, sort.sortOrder ?? 'ASC');
@@ -190,35 +207,65 @@
   async function handleRenameConfirm(newName: string) {
     if (columnOps.columnToRename) {
       const oldName = columnOps.columnToRename;
-      isRenaming = true;
+      isLocalUpdate = true;
       try {
         await columnOps.handleRename(newName);
         await recordProjectTransformation('rename', oldName, newName);
       } catch (e) {
-        isRenaming = false;
+        isLocalUpdate = false;
         throw e;
       } finally {
         // Allow some time for store updates to propagate before re-enabling updates
         setTimeout(() => {
-          isRenaming = false;
+          isLocalUpdate = false;
         }, 100);
       }
     }
   }
 
   async function handleChangeType(columnName: string, duckType: string) {
-    await columnOps.changeColumnType(columnName, duckType);
-    await recordProjectTransformation('type_change', columnName, duckType);
+    isLocalUpdate = true;
+    try {
+      await columnOps.changeColumnType(columnName, duckType);
+      await recordProjectTransformation('type_change', columnName, duckType);
+    } catch (e) {
+      isLocalUpdate = false;
+      throw e;
+    } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
   }
 
   async function handleRefine(columnName: string, operation: RefineOperation) {
-    await columnOps.handleRefine(columnName, operation);
-    await recordProjectTransformation('refine', columnName, operation);
+    isLocalUpdate = true;
+    try {
+      await columnOps.handleRefine(columnName, operation);
+      await recordProjectTransformation('refine', columnName, operation);
+    } catch (e) {
+      isLocalUpdate = false;
+      throw e;
+    } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
   }
 
   async function handleDrop(columnName: string) {
-    await columnOps.dropColumn(columnName);
-    await recordProjectTransformation('drop', columnName);
+    isLocalUpdate = true;
+    try {
+      await columnOps.dropColumn(columnName);
+      await recordProjectTransformation('drop', columnName);
+    } catch (e) {
+      isLocalUpdate = false;
+      throw e;
+    } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
   }
 
   function getRowHighlightType(
@@ -256,7 +303,7 @@
   let lastTableName: string | undefined = undefined;
   let lastColumnsRef: unknown[] | undefined = undefined;
   let lastDatasetVersion: number | undefined = undefined;
-  let isRenaming = false;
+  let isLocalUpdate = false;
 
   $effect(() => {
     const currentTableName = tableName;
@@ -284,8 +331,8 @@
     lastColumnsRef = currentColumnsRef;
     lastDatasetVersion = currentDatasetVersion;
 
-    if (isRenaming) {
-      logger.debug('Ignoring update due to local rename', LogCategory.UI);
+    if (isLocalUpdate) {
+      logger.debug('Ignoring update due to local update', LogCategory.UI);
       return;
     }
 

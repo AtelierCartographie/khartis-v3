@@ -202,6 +202,30 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     // This avoids complex object patching and ensures data consistency.
   }
 
+  function dropColumnInCache(columnName: string): void {
+    // Update columns
+    columns = columns.filter((c) => c.name !== columnName);
+
+    // Update columnAnalysis
+    if (columnAnalysis.has(columnName)) {
+      columnAnalysis.delete(columnName);
+    }
+  }
+
+  function changeColumnTypeInCache(columnName: string, newType: string): void {
+    // Update columns
+    columns = columns.map((c) =>
+      c.name === columnName ? { ...c, type: newType } : c
+    );
+
+    // Update columnAnalysis
+    if (columnAnalysis.has(columnName)) {
+      const analysis = columnAnalysis.get(columnName)!;
+      const newAnalysis = { ...analysis, type_simple: newType };
+      columnAnalysis.set(columnName, newAnalysis);
+    }
+  }
+
   return {
     get columns() {
       return columns;
@@ -230,6 +254,8 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     loadColumnsInfo,
     loadRowsData,
     validateSortColumn,
-    renameColumnInCache
+    renameColumnInCache,
+    dropColumnInCache,
+    changeColumnTypeInCache
   };
 }
