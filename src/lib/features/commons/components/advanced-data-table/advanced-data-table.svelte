@@ -34,6 +34,7 @@
     isExpanded?: boolean;
     isSelectable?: boolean;
     isReadOnly?: boolean;
+    datasetVersion?: number;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
   }
 
@@ -48,6 +49,7 @@
     isExpanded = false,
     isSelectable = false,
     isReadOnly = false,
+    datasetVersion,
     onSelectionChange
   }: Props = $props();
 
@@ -137,6 +139,17 @@
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
     },
+    onColumnRenamed: async (oldName, newName) => {
+      // 1. Update columns metadata locally (instant header update)
+      tableData.renameColumnInCache(oldName, newName);
+
+      // 2. Refresh filters (they might depend on the renamed column)
+      await filters.refreshFiltersState();
+
+      // 3. Fetch fresh rows from DuckDB (instant data update)
+      // This ensures we have the correct data structure without manual patching
+      await tableData.loadRowsData();
+    },
     onSortColumnRenamed: (oldName, newName) => {
       if (sort.sortColumn === oldName) {
         sort.sortTable(newName, sort.sortOrder ?? 'ASC');
@@ -177,8 +190,19 @@
   async function handleRenameConfirm(newName: string) {
     if (columnOps.columnToRename) {
       const oldName = columnOps.columnToRename;
-      await columnOps.handleRename(newName);
-      await recordProjectTransformation('rename', oldName, newName);
+      isRenaming = true;
+      try {
+        await columnOps.handleRename(newName);
+        await recordProjectTransformation('rename', oldName, newName);
+      } catch (e) {
+        isRenaming = false;
+        throw e;
+      } finally {
+        // Allow some time for store updates to propagate before re-enabling updates
+        setTimeout(() => {
+          isRenaming = false;
+        }, 100);
+      }
     }
   }
 
@@ -231,24 +255,39 @@
   let lastDatasetId: string | undefined = undefined;
   let lastTableName: string | undefined = undefined;
   let lastColumnsRef: unknown[] | undefined = undefined;
+  let lastDatasetVersion: number | undefined = undefined;
+  let isRenaming = false;
 
   $effect(() => {
     const currentTableName = tableName;
     const currentDataset = dataset;
     const currentDatasetId = currentDataset?.id;
     const currentColumnsRef = currentDataset?.columns;
+    const currentDatasetVersion = datasetVersion;
 
     const datasetChanged = currentDatasetId !== lastDatasetId;
     const tableChanged = currentTableName !== lastTableName;
     const columnsChanged = currentColumnsRef !== lastColumnsRef;
+    const versionChanged = currentDatasetVersion !== lastDatasetVersion;
 
-    if (!datasetChanged && !tableChanged && !columnsChanged) {
+    if (
+      !datasetChanged &&
+      !tableChanged &&
+      !columnsChanged &&
+      !versionChanged
+    ) {
       return;
     }
 
     lastDatasetId = currentDatasetId;
     lastTableName = currentTableName;
     lastColumnsRef = currentColumnsRef;
+    lastDatasetVersion = currentDatasetVersion;
+
+    if (isRenaming) {
+      logger.debug('Ignoring update due to local rename', LogCategory.UI);
+      return;
+    }
 
     if (currentDataset || currentTableName) {
       untrack(async () => {
