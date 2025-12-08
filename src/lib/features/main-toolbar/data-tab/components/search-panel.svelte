@@ -116,7 +116,11 @@
     }
 
     const trimmedQuery = searchQuery.trim();
-    if (!tableName || !trimmedQuery || trimmedQuery.length < MIN_SEARCH_LENGTH) {
+    if (
+      !tableName ||
+      !trimmedQuery ||
+      trimmedQuery.length < MIN_SEARCH_LENGTH
+    ) {
       clearSearchResults();
       isSearching = false;
       return;
@@ -130,7 +134,11 @@
 
   async function executeSearch() {
     const trimmedQuery = searchQuery.trim();
-    if (!tableName || !trimmedQuery || trimmedQuery.length < MIN_SEARCH_LENGTH) {
+    if (
+      !tableName ||
+      !trimmedQuery ||
+      trimmedQuery.length < MIN_SEARCH_LENGTH
+    ) {
       clearSearchResults();
       isSearching = false;
       return;

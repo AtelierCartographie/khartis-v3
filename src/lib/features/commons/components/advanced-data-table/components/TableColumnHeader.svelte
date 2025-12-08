@@ -3,9 +3,11 @@
   import SummaryPlot from '$lib/features/commons/components/summary-plot/SummaryPlot.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
+  import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
+  import { getColumnTypeStyle } from '../column-type-styles';
   import Portal from './Portal.svelte';
 
   interface ColumnTypeOption {
@@ -52,6 +54,8 @@
       ? getPlotForColumn(column.name, columnAnalysis)
       : null
   );
+
+  const typeStyle = $derived(getColumnTypeStyle(analysis?.type_simple));
 
   interface ColumnWarning {
     type: 'nulls' | 'duplicates' | 'low_uniques';
@@ -138,6 +142,13 @@
 <th>
   <div class="col-header">
     <div class="col-title-row">
+      <span class="type-badge" style="--badge-color: {typeStyle.color}">
+        {#if analysis?.type_simple === 'date'}
+          <Calendar size={16} />
+        {:else if typeStyle.label}
+          {typeStyle.label}
+        {/if}
+      </span>
       <span class="col-name" title={column.name}>{column.name}</span>
       {#if columnWarnings.length > 0}
         <span
@@ -303,6 +314,21 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--cds-spacing-02);
+  }
+
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background-color: var(--badge-color);
+    color: #fff;
+    flex-shrink: 0;
   }
 
   .col-name {
