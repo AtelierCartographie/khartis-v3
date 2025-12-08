@@ -726,6 +726,7 @@
   "search_replace_button": "Remplacer",
   "search_replace_placeholder": "Aucune valeur",
   "search_exact_results": "{count} résultat(s) exact(s)",
+  "search_contains_results": "{count} correspondance(s) partielle(s)",
   "search_partial_results": "{count} résultat(s) partiel(s)",
   "search_replace_exact_only": "Remplace uniquement les correspondances exactes",
   "replace_success_title": "Remplacement effectué",

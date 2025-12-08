@@ -21,14 +21,25 @@
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
 
-  export type HighlightType = 'exact' | 'partial' | 'current' | null;
+  export type HighlightType =
+    | 'exact'
+    | 'contains'
+    | 'partial'
+    | 'current'
+    | null;
+
+  export interface CellHighlight {
+    rowId: number;
+    columnName: string;
+    type: 'exact' | 'contains' | 'partial';
+  }
 
   interface Props {
     dataset?: ProcessedDataset;
     tableName?: string;
-    exactHighlightIds?: number[];
-    partialHighlightIds?: number[];
-    currentHighlightId?: number | null;
+    cellHighlights?: CellHighlight[];
+    currentCell?: { rowId: number; columnName: string } | null;
+    highlightedRowIds?: number[];
     showSummaryPlots?: boolean;
     maxRows?: number;
     isExpanded?: boolean;
@@ -41,9 +52,9 @@
   let {
     dataset,
     tableName,
-    exactHighlightIds = [],
-    partialHighlightIds = [],
-    currentHighlightId = null,
+    cellHighlights = [],
+    currentCell = null,
+    highlightedRowIds = [],
     showSummaryPlots = true,
     maxRows,
     isExpanded = false,
@@ -268,14 +279,29 @@
     }
   }
 
+  function getCellHighlightType(
+    rowId: number,
+    columnName: string
+  ): HighlightType {
+    if (
+      currentCell?.rowId === rowId &&
+      currentCell?.columnName === columnName
+    ) {
+      return 'current';
+    }
+    const highlight = cellHighlights.find(
+      (h) => h.rowId === rowId && h.columnName === columnName
+    );
+    return highlight?.type ?? null;
+  }
+
   function getRowHighlightType(
     rowIndex: number,
     row: Record<string, unknown>
   ): HighlightType {
     const rowId = (row.__id as number | undefined) ?? rowIndex + 1;
-    if (currentHighlightId === rowId) return 'current';
-    if (exactHighlightIds.includes(rowId)) return 'exact';
-    if (partialHighlightIds.includes(rowId)) return 'partial';
+    if (currentCell?.rowId === rowId) return 'current';
+    if (highlightedRowIds.includes(rowId)) return 'partial';
     return null;
   }
 
@@ -294,8 +320,22 @@
   });
 
   $effect(() => {
-    if (currentHighlightId && filters.numRows > 0) {
-      untrack(() => virtualScroll.goToId(currentHighlightId));
+    if (currentCell && filters.numRows > 0) {
+      untrack(() => {
+        // Scroll vertical to the row
+        virtualScroll.goToId(currentCell.rowId);
+
+        // Scroll horizontal to the column after DOM update
+        setTimeout(() => {
+          const cellSelector = `td[data-column="${currentCell.columnName}"]`;
+          const cell = tableContainer?.querySelector(cellSelector);
+          cell?.scrollIntoView({
+            behavior: 'smooth',
+            inline: 'center',
+            block: 'nearest'
+          });
+        }, 50);
+      });
     }
   });
 
@@ -443,6 +483,8 @@
                 rowIndex={rowIndex}
                 visibleColumns={columnOps.visibleColumns}
                 highlightType={getRowHighlightType(rowIndex, row)}
+                getCellHighlight={(colName) =>
+                  getCellHighlightType(rowId, colName)}
                 isSelectable={isSelectable && isEditMode}
                 isSelected={rowSelection.isRowSelected(rowId)}
                 onToggleSelection={rowSelection.toggleRowSelection}

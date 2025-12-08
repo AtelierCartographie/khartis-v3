@@ -43,7 +43,8 @@ function levenshteinDistance(a: string, b: string): number {
 export async function computeDatasetJoinStats(
   options: ComputeJoinStatsOptions
 ): Promise<JoinStats> {
-  const { sourceTableName, sourceColumn, targetTableName, targetColumn } = options;
+  const { sourceTableName, sourceColumn, targetTableName, targetColumn } =
+    options;
 
   logger.info('Computing dataset join stats', LogCategory.DATA, {
     sourceTableName,
@@ -62,7 +63,9 @@ export async function computeDatasetJoinStats(
     { format: 'array' }
   )) as Array<{ val: string }>;
 
-  const targetSet = new Set(targetValues.map((v) => v.val?.toLowerCase?.() || ''));
+  const targetSet = new Set(
+    targetValues.map((v) => v.val?.toLowerCase?.() || '')
+  );
 
   const entities: JoinEntity[] = [];
   const duplicateCheck: globalThis.Map<string, number> = new globalThis.Map();
@@ -70,7 +73,10 @@ export async function computeDatasetJoinStats(
   for (const row of sourceValues) {
     const val = row.val;
     const normalizedVal = val?.toLowerCase?.() || '';
-    duplicateCheck.set(normalizedVal, (duplicateCheck.get(normalizedVal) || 0) + 1);
+    duplicateCheck.set(
+      normalizedVal,
+      (duplicateCheck.get(normalizedVal) || 0) + 1
+    );
   }
 
   for (const row of sourceValues) {
@@ -119,7 +125,8 @@ export async function computeDatasetJoinStats(
     joinedCount: entities.filter((e) => e.status === 'joined').length,
     toVerifyCount: entities.filter((e) => e.status === 'to_verify').length,
     duplicateCount: entities.filter((e) => e.status === 'duplicate').length,
-    unrecognizedCount: entities.filter((e) => e.status === 'unrecognized').length,
+    unrecognizedCount: entities.filter((e) => e.status === 'unrecognized')
+      .length,
     entities
   };
 
