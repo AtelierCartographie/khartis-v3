@@ -315,15 +315,37 @@ function create_plot_categorical(
           }),
 
       // INTERACTIVITY
-      // Highlight bar
+      // Highlight bar with fixed pointer-events
       Plot.barX(
         histogramData as CategoryHistogramItem[],
         Plot.pointerX(
           Plot.stackX({
             x: 'count',
             stroke: 'currentColor',
-            inset
-          } as ObservablePlotStackOptions)
+            inset,
+            render: (
+              index: number[],
+              scales: unknown,
+              values: unknown,
+              dimensions: unknown,
+              context: unknown,
+              next: (
+                i: number[],
+                s: unknown,
+                v: unknown,
+                d: unknown,
+                c: unknown
+              ) => SVGGElement | null
+            ) => {
+              const g = next(index, scales, values, dimensions, context);
+              if (g) {
+                for (const rect of g.querySelectorAll('rect')) {
+                  (rect as SVGElement).style.pointerEvents = 'all';
+                }
+              }
+              return g;
+            }
+          } as ObservablePlotStackOptions & { render: unknown })
         )
       ),
       // Mask the count of all categories
