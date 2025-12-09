@@ -24,9 +24,10 @@
     MagicWand,
     Renew
   } from 'carbon-icons-svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { dataPipeline } from '$lib/features/data-pipeline';
+  import { dataPipeline, ColumnType } from '$lib/features/data-pipeline';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { Duck } from '$lib/features/duckdb';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
@@ -93,9 +94,34 @@
   // Join assisted state
   let joinStats = $state<JoinStats | null>(null);
   let isComputingJoin = $state(false);
+  let isFinalizingJoin = $state(false);
+
+  // State for join mappings (corrections)
+  let joinMappings = $state(new SvelteMap<number, string>());
 
   // Geo detection for enrichment dataset
   const enrichGeoDetection = $derived(enrichmentDataset?.geoDetection);
+
+  // Check if enrichment file has only coordinates (no entity columns)
+  const hasOnlyCoordinates = $derived(() => {
+    if (!enrichGeoDetection) return false;
+
+    const geoColumns = enrichGeoDetection.geoColumns || [];
+    if (geoColumns.length === 0) return false;
+
+    // Entity types that can be used for joining
+    const entityTypes = ['country_name', 'iso2', 'iso3', 'region', 'city'];
+    const hasEntityColumn = geoColumns.some((gc) =>
+      entityTypes.includes(gc.type)
+    );
+
+    // Check if we only have coordinates (lat/lon)
+    const hasCoordinates = geoColumns.some(
+      (gc) => gc.type === 'latitude' || gc.type === 'longitude'
+    );
+
+    return hasCoordinates && !hasEntityColumn;
+  });
 
   // Columns from the geographic file (target)
   const geoFileColumns = $derived(() => {
@@ -290,12 +316,39 @@
         (selectedDataset as { tableName?: string }).tableName ||
         selectedDataset.id;
 
-      joinStats = await computeDatasetJoinStats({
+      const stats = await computeDatasetJoinStats({
         sourceTableName: enrichmentDataset.tableName,
         sourceColumn: enrichCol.columnName,
         targetTableName: geoTableName,
         targetColumn: geoCol.columnName
       });
+
+      // Get all target values for basemapOptions (correction dropdown)
+      const targetValues = (await Duck.query(
+        `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
+         FROM "${geoTableName}"
+         WHERE "${geoCol.columnName}" IS NOT NULL
+         ORDER BY val`,
+        { format: 'array' }
+      )) as Array<{ val: string }>;
+
+      const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
+
+      // Add basemapOptions to to_verify entities
+      stats.entities = stats.entities.map((entity) => {
+        if (entity.status === 'to_verify') {
+          return {
+            ...entity,
+            basemapOptions: entity.matches?.length
+              ? entity.matches
+              : allTargetOptions.slice(0, 20),
+            selectedMapping: entity.matches?.[0] || undefined
+          };
+        }
+        return entity;
+      });
+
+      joinStats = stats;
     } catch (error) {
       logger.error(
         'Failed to compute enrichment join stats',
@@ -453,6 +506,239 @@
     selectedBasemapId = osmBasemap.file;
     logger.success('OSM basemap selected', LogCategory.MAP);
   }
+
+  // Handler for join mapping changes (correction dropdown)
+  function handleMappingChange(index: number, value: string) {
+    joinMappings.set(index, value);
+
+    // Update the entity's selectedMapping in joinStats
+    if (joinStats) {
+      // Find the nth to_verify entity
+      let toVerifyIndex = 0;
+      const updatedEntities = joinStats.entities.map((entity) => {
+        if (entity.status === 'to_verify') {
+          if (toVerifyIndex === index) {
+            toVerifyIndex++;
+            return { ...entity, selectedMapping: value };
+          }
+          toVerifyIndex++;
+        }
+        return entity;
+      });
+
+      joinStats = {
+        ...joinStats,
+        entities: updatedEntities
+      };
+    }
+  }
+
+  // Handler to apply corrections
+  async function handleApplyCorrections() {
+    if (!enrichmentDataset || !selectedDataset || !joinStats) return;
+
+    const enrichCol = enrichDataFieldItems().find(
+      (item) => item.id === enrichLinkedVariableId
+    );
+    const geoCol = geoFileColumns().find((item) => item.id === geoFileColumnId);
+
+    if (!enrichCol || !geoCol) return;
+
+    try {
+      // Build corrections map from the to_verify entities with selected mappings
+      const corrections: Record<string, string> = {};
+      joinStats.entities
+        .filter((e) => e.status === 'to_verify' && e.selectedMapping)
+        .forEach((entity) => {
+          corrections[entity.dataValue] = entity.selectedMapping!;
+        });
+
+      logger.info('Applying enrichment corrections', LogCategory.DATA, {
+        corrections
+      });
+
+      // Apply corrections by updating the enrichment table values
+      const geoTableName =
+        (selectedDataset as { duckdbTableName?: string; tableName?: string })
+          .duckdbTableName ||
+        (selectedDataset as { tableName?: string }).tableName ||
+        selectedDataset.id;
+
+      for (const [oldValue, newValue] of Object.entries(corrections)) {
+        await Duck.query(
+          `UPDATE "${enrichmentDataset.tableName}" SET "${enrichCol.columnName}" = '${newValue.replace(/'/g, "''")}' WHERE "${enrichCol.columnName}" = '${oldValue.replace(/'/g, "''")}'`,
+          { format: 'array' }
+        );
+      }
+
+      // Recompute join stats
+      const stats = await computeDatasetJoinStats({
+        sourceTableName: enrichmentDataset.tableName,
+        sourceColumn: enrichCol.columnName,
+        targetTableName: geoTableName,
+        targetColumn: geoCol.columnName
+      });
+
+      // Add basemapOptions to to_verify entities (same logic as computeEnrichmentJoinStats)
+      const targetValues = (await Duck.query(
+        `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
+         FROM "${geoTableName}"
+         WHERE "${geoCol.columnName}" IS NOT NULL
+         ORDER BY val`,
+        { format: 'array' }
+      )) as Array<{ val: string }>;
+
+      const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
+
+      stats.entities = stats.entities.map((entity) => {
+        if (entity.status === 'to_verify') {
+          return {
+            ...entity,
+            basemapOptions: entity.matches?.length
+              ? entity.matches
+              : allTargetOptions.slice(0, 20),
+            selectedMapping: entity.matches?.[0] || undefined
+          };
+        }
+        return entity;
+      });
+
+      joinStats = stats;
+
+      // Reset mappings
+      joinMappings = new SvelteMap<number, string>();
+
+      logger.success('Corrections applied', LogCategory.DATA);
+
+      // Auto-finalize if no more errors
+      if (
+        joinStats.toVerifyCount === 0 &&
+        joinStats.duplicateCount === 0 &&
+        joinStats.unrecognizedCount === 0 &&
+        joinStats.joinedCount > 0
+      ) {
+        await handleFinalizeEnrichment();
+      }
+    } catch (error) {
+      logger.error('Failed to apply corrections', LogCategory.DATA, error);
+    }
+  }
+
+  // Handler to finalize the enrichment join
+  async function handleFinalizeEnrichment() {
+    if (!enrichmentDataset || !selectedDataset) return;
+
+    const enrichCol = enrichDataFieldItems().find(
+      (item) => item.id === enrichLinkedVariableId
+    );
+    const geoCol = geoFileColumns().find((item) => item.id === geoFileColumnId);
+
+    if (!enrichCol || !geoCol) return;
+
+    isFinalizingJoin = true;
+
+    try {
+      const geoTableName =
+        (selectedDataset as { duckdbTableName?: string; tableName?: string })
+          .duckdbTableName ||
+        (selectedDataset as { tableName?: string }).tableName ||
+        selectedDataset.id;
+
+      // Get enrichment columns (excluding the join column and __id)
+      const enrichmentColumns = enrichmentDataset.columns
+        .filter(
+          (col) => col.name !== enrichCol.columnName && col.name !== '__id'
+        )
+        .map((col) => col.name);
+
+      if (enrichmentColumns.length === 0) {
+        logger.warn('No columns to enrich with', LogCategory.DATA);
+        isFinalizingJoin = false;
+        return;
+      }
+
+      logger.info('Finalizing enrichment join', LogCategory.DATA, {
+        geoTable: geoTableName,
+        enrichTable: enrichmentDataset.tableName,
+        enrichColumns: enrichmentColumns
+      });
+
+      // Build the SQL JOIN to add enrichment columns
+      const enrichColsSelect = enrichmentColumns
+        .map((col) => `e."${col}"`)
+        .join(', ');
+
+      // Create a new table with the joined data
+      const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
+
+      await Duck.query(
+        `CREATE TABLE "${enrichedTableName}" AS
+         SELECT g.*, ${enrichColsSelect}
+         FROM "${geoTableName}" g
+         LEFT JOIN "${enrichmentDataset.tableName}" e
+         ON LOWER(CAST(g."${geoCol.columnName}" AS VARCHAR)) = LOWER(CAST(e."${enrichCol.columnName}" AS VARCHAR))`,
+        { format: 'array' }
+      );
+
+      // Update the dataset to use the new enriched table
+      const newColumns = await Duck.analyse(enrichedTableName);
+
+      // Update the datasets store with the new table and columns
+      const toColumnType = (type: string): ColumnType => {
+        if (type === 'numeric' || type === 'number') return ColumnType.NUMBER;
+        if (type === 'date') return ColumnType.DATE;
+        if (type === 'boolean') return ColumnType.BOOLEAN;
+        if (type === 'geometry') return ColumnType.GEOMETRY;
+        return ColumnType.TEXT;
+      };
+
+      datasetsStore.updateDataset(selectedDataset.id, {
+        tableName: enrichedTableName,
+        columns: newColumns.map((col) => ({
+          name: col.name,
+          type: toColumnType(col.type_simple || 'text'),
+          values: [],
+          stats: {
+            name: col.name,
+            type: toColumnType(col.type_simple || 'text'),
+            count: col.count ?? 0,
+            nulls: col.nulls ?? 0,
+            uniques: col.uniques ?? 0,
+            min: col.min,
+            max: col.max,
+            mean: typeof col.mean === 'number' ? col.mean : undefined,
+            median: typeof col.median === 'number' ? col.median : undefined,
+            stdDev: typeof col.stddev === 'number' ? col.stddev : undefined
+          }
+        }))
+      });
+
+      logger.success('Enrichment finalized', LogCategory.DATA, {
+        newTable: enrichedTableName,
+        addedColumns: enrichmentColumns
+      });
+
+      // Reset enrichment state
+      joinTabularEnabled = false;
+      enrichmentDataset = null;
+      enrichmentFile = null;
+      enrichLinkedVariableId = undefined;
+      geoFileColumnId = undefined;
+      joinStats = null;
+      joinMappings = new SvelteMap<number, string>();
+
+      dataTabActions.setEnrichDataState({
+        enrichmentDatasetId: undefined,
+        enrichmentColumn: undefined,
+        targetColumn: undefined,
+        isEnrichmentActive: false
+      });
+    } catch (error) {
+      logger.error('Failed to finalize enrichment', LogCategory.DATA, error);
+    } finally {
+      isFinalizingJoin = false;
+    }
+  }
 </script>
 
 <section id="enrich-data-step">
@@ -556,6 +842,17 @@
             </div>
           </div>
 
+          <!-- Warning for coordinate-only files -->
+          {#if hasOnlyCoordinates()}
+            <InlineNotification
+              title="Fichier de coordonnées uniquement"
+              subtitle="Ce fichier ne contient que des coordonnées GPS (latitude/longitude). Pour enrichir un fichier géographique, utilisez un fichier avec des identifiants géographiques (pays, régions, codes ISO, etc.)."
+              kind="warning"
+              lowContrast
+              hideCloseButton={false}
+            />
+          {/if}
+
           <!-- Section 2: Géolocaliser les données -->
           <h4 class="section-title">{m.enrich_geolocate_section_title()}</h4>
 
@@ -639,7 +936,22 @@
                   <span>Calcul de la jointure en cours...</span>
                 </div>
               {:else if joinStats}
-                <JoinAccordion stats={joinStats} />
+                <JoinAccordion
+                  stats={joinStats}
+                  showCorrectionTable={true}
+                  linkedVariableName={enrichDataFieldItems().find(
+                    (i) => i.id === enrichLinkedVariableId
+                  )?.columnName}
+                  onMappingChange={handleMappingChange}
+                  onApplyCorrections={handleApplyCorrections}
+                  onFinalizeJoin={handleFinalizeEnrichment}
+                />
+
+                {#if isFinalizingJoin}
+                  <div class="finalizing-join">
+                    <span>Fusion des données en cours...</span>
+                  </div>
+                {/if}
               {/if}
             </div>
           {:else}
@@ -728,7 +1040,7 @@
                 <div class="expandable-content">
                   <p class="suggestions-help">{m.basemap_suggestions_desc()}</p>
                   <div class="basemap-grid">
-                    {#each basemaps.slice(0, 3) as basemap}
+                    {#each basemaps.slice(0, 3) as basemap (basemap.file)}
                       <BasemapCardVertical
                         basemap={basemap}
                         selected={selectedBasemapId === basemap.file}
@@ -1047,5 +1359,15 @@
     text-align: center;
     color: var(--cds-text-02);
     font-style: italic;
+  }
+
+  .finalizing-join {
+    padding: var(--cds-spacing-05);
+    text-align: center;
+    color: var(--cds-support-success);
+    font-weight: 500;
+    background-color: var(--cds-layer-01);
+    border-radius: 4px;
+    margin-top: var(--cds-spacing-04);
   }
 </style>
