@@ -259,6 +259,38 @@ class DatasetsStore {
     this._state.datasets = filteredDatasets;
   }
 
+  updateDataset(
+    datasetId: string,
+    updates: Partial<Pick<DatasetResult, 'tableName' | 'columns'>>
+  ): void {
+    const datasetIndex = this._state.datasets.findIndex(
+      (d) => d.id === datasetId
+    );
+
+    if (datasetIndex === -1) {
+      logger.warn('Dataset not found for update', LogCategory.STORE, {
+        datasetId
+      });
+      return;
+    }
+
+    const updatedDataset = {
+      ...this._state.datasets[datasetIndex],
+      ...updates
+    };
+
+    this._state.datasets = [
+      ...this._state.datasets.slice(0, datasetIndex),
+      updatedDataset,
+      ...this._state.datasets.slice(datasetIndex + 1)
+    ];
+
+    logger.debug('Dataset updated', LogCategory.STORE, {
+      datasetId,
+      updates: Object.keys(updates)
+    });
+  }
+
   getAllDatasets(): DatasetResult[] {
     return this._state.datasets;
   }

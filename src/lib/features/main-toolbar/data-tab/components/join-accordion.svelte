@@ -15,23 +15,7 @@
     WarningFilled
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-
-  export interface JoinEntity {
-    dataValue: string;
-    geoValue?: string;
-    status: 'joined' | 'to_verify' | 'duplicate' | 'unrecognized';
-    matches?: string[];
-    basemapOptions?: string[];
-    selectedMapping?: string;
-  }
-
-  export interface JoinStats {
-    joinedCount: number;
-    toVerifyCount: number;
-    duplicateCount: number;
-    unrecognizedCount: number;
-    entities: JoinEntity[];
-  }
+  import type { JoinStats } from './join-accordion.types';
 
   interface Props {
     stats: JoinStats;
