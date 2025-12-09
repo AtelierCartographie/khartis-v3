@@ -25,6 +25,7 @@
   import { DataToolType } from './data-tab.types';
   import { dataToolsStore } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
+  import ExpandedTableModal from './components/expanded-table-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -53,7 +54,7 @@
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
   let warningsNotificationDismissed = $state(false);
-  let isTableExpanded = $state(false);
+  let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
 
   // Check if dataset has columns with null values
@@ -290,7 +291,7 @@
     <DataToolsBar
       onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
-      onExpand={() => (isTableExpanded = !isTableExpanded)}
+      onExpand={() => (isModalOpen = true)}
       selectionCount={selectedRowIds.length}
     />
   {/if}
@@ -305,7 +306,7 @@
         cellHighlights={searchHighlight.cellHighlights}
         currentCell={searchHighlight.currentCell}
         highlightedRowIds={searchHighlight.highlightedRowIds}
-        isExpanded={isTableExpanded}
+        isExpanded={false}
         isSelectable={true}
         onSelectionChange={handleSelectionChange}
       />
@@ -334,6 +335,17 @@
       on:close={() => (warningsNotificationDismissed = true)}
     />
   {/if}
+
+  <ExpandedTableModal
+    bind:open={isModalOpen}
+    dataset={processedDataset || undefined}
+    tableName={currentDuckTable || undefined}
+    datasetVersion={duckDBDatasetsVersion}
+    cellHighlights={searchHighlight.cellHighlights}
+    currentCell={searchHighlight.currentCell}
+    highlightedRowIds={searchHighlight.highlightedRowIds}
+    onClose={() => (isModalOpen = false)}
+  />
 </section>
 
 <style>

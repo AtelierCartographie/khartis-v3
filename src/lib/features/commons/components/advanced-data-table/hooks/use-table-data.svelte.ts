@@ -28,7 +28,6 @@ export interface UseTableDataReturn {
     currentSortColumn: string | null,
     onReset: () => void
   ) => void;
-  renameColumnInCache: (oldName: string, newName: string) => void;
 }
 
 const EXCLUDED_COLUMNS = ['geom', 'geometry', '__id'];
@@ -165,7 +164,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       tableData = [];
     } finally {
       isLoadingRows = false;
-      if (tableData.length > 0 && !initialLoadComplete) {
+      if (!initialLoadComplete) {
         initialLoadComplete = true;
       }
     }
@@ -180,49 +179,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       !columns.some((c) => c.name === currentSortColumn)
     ) {
       onReset();
-    }
-  }
-
-  function renameColumnInCache(oldName: string, newName: string): void {
-    // Update columns
-    columns = columns.map((c) =>
-      c.name === oldName ? { ...c, name: newName } : c
-    );
-
-    // Update columnAnalysis
-    if (columnAnalysis.has(oldName)) {
-      const analysis = columnAnalysis.get(oldName)!;
-      columnAnalysis.delete(oldName);
-      const newAnalysis = { ...analysis, name: newName };
-      columnAnalysis.set(newName, newAnalysis);
-    }
-
-    // We do NOT update tableData here anymore.
-    // We rely on loadRowsData() being called immediately after to fetch fresh data from DuckDB.
-    // This avoids complex object patching and ensures data consistency.
-  }
-
-  function dropColumnInCache(columnName: string): void {
-    // Update columns
-    columns = columns.filter((c) => c.name !== columnName);
-
-    // Update columnAnalysis
-    if (columnAnalysis.has(columnName)) {
-      columnAnalysis.delete(columnName);
-    }
-  }
-
-  function changeColumnTypeInCache(columnName: string, newType: string): void {
-    // Update columns
-    columns = columns.map((c) =>
-      c.name === columnName ? { ...c, type: newType } : c
-    );
-
-    // Update columnAnalysis
-    if (columnAnalysis.has(columnName)) {
-      const analysis = columnAnalysis.get(columnName)!;
-      const newAnalysis = { ...analysis, type_simple: newType };
-      columnAnalysis.set(columnName, newAnalysis);
     }
   }
 
@@ -253,9 +209,6 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
     },
     loadColumnsInfo,
     loadRowsData,
-    validateSortColumn,
-    renameColumnInCache,
-    dropColumnInCache,
-    changeColumnTypeInCache
+    validateSortColumn
   };
 }
