@@ -108,7 +108,13 @@
   });
 </script>
 
-<Modal bind:open passiveModal modalHeading="" size="lg" on:close={onClose}>
+<Modal
+  bind:open={open}
+  passiveModal
+  modalHeading=""
+  size="lg"
+  on:close={onClose}
+>
   <div class="custom-header" slot="heading">
     {#if isEditing}
       <input
@@ -138,13 +144,13 @@
 
   <div class="modal-table-container">
     <AdvancedDataTable
-      {dataset}
-      {tableName}
-      {datasetVersion}
+      dataset={dataset}
+      tableName={tableName}
+      datasetVersion={datasetVersion}
       showSummaryPlots={true}
-      {cellHighlights}
-      {currentCell}
-      {highlightedRowIds}
+      cellHighlights={cellHighlights}
+      currentCell={currentCell}
+      highlightedRowIds={highlightedRowIds}
       isExpanded={true}
       maxRows={25}
     />
