@@ -7,7 +7,6 @@
   import { DataTableSkeleton } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import { LogCategory, logger } from '../../utils/logger';
-  import ColumnRenameModal from '../column-rename-modal.svelte';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
   import { useRowSelection } from './hooks/use-row-selection.svelte';
@@ -84,21 +83,13 @@
   const hasDataSource = $derived(!!dataset || !!tableName);
   const isEditMode = $derived(!!tableName && !isReadOnly);
 
-  const COLUMN_TYPE_OPTIONS = $derived([
-    { label: m.column_type_text(), value: 'VARCHAR' },
-    { label: m.column_type_number(), value: 'DOUBLE' },
-    { label: m.column_type_integer(), value: 'BIGINT' },
-    { label: m.column_type_date(), value: 'DATE' },
-    { label: m.column_type_boolean(), value: 'BOOLEAN' }
-  ]);
-
   function recordTransformation(summary: string) {
     if (!dataset?.id) return;
     datasetsStore.recordTransformation(dataset.id, summary);
   }
 
   async function recordProjectTransformation(
-    type: 'rename' | 'drop' | 'type_change' | 'refine',
+    type: 'refine',
     column: string,
     newValue?: string
   ) {
@@ -150,43 +141,9 @@
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
     },
-    onColumnRenamed: async (oldName, newName) => {
-      // 1. Update columns metadata locally (instant header update)
-      tableData.renameColumnInCache(oldName, newName);
-
-      // 2. Refresh filters (they might depend on the renamed column)
-      await filters.refreshFiltersState();
-
-      // 3. Fetch fresh rows from DuckDB (instant data update)
-      // This ensures we have the correct data structure without manual patching
-      await tableData.loadRowsData();
-    },
-    onColumnRefined: async (columnName, operation) => {
-      // For refine, we just need to reload the data as the column structure doesn't change
+    onColumnRefined: async () => {
       await filters.refreshFiltersState();
       await tableData.loadRowsData();
-    },
-    onColumnTypeChanged: async (columnName, newType) => {
-      tableData.changeColumnTypeInCache(columnName, newType);
-      await filters.refreshFiltersState();
-      await tableData.loadRowsData();
-    },
-    onColumnDropped: async (columnName) => {
-      tableData.dropColumnInCache(columnName);
-      await filters.refreshFiltersState();
-      // No need to reload rows for drop, as we just hide the column
-      // But if we want to be safe we can reload
-      // await tableData.loadRowsData();
-    },
-    onSortColumnRenamed: (oldName, newName) => {
-      if (sort.sortColumn === oldName) {
-        sort.sortTable(newName, sort.sortOrder ?? 'ASC');
-      }
-    },
-    onSortColumnDeleted: (columnName) => {
-      if (sort.sortColumn === columnName) {
-        sort.sortTable(columnName, 'ASC');
-      }
     },
     onRecordTransformation: recordTransformation
   });
@@ -211,64 +168,11 @@
     sort.sortTable(column, order);
   }
 
-  async function handleRename(columnName: string) {
-    columnOps.openRenameModal(columnName);
-  }
-
-  async function handleRenameConfirm(newName: string) {
-    if (columnOps.columnToRename) {
-      const oldName = columnOps.columnToRename;
-      isLocalUpdate = true;
-      try {
-        await columnOps.handleRename(newName);
-        await recordProjectTransformation('rename', oldName, newName);
-      } catch (e) {
-        isLocalUpdate = false;
-        throw e;
-      } finally {
-        // Allow some time for store updates to propagate before re-enabling updates
-        setTimeout(() => {
-          isLocalUpdate = false;
-        }, 100);
-      }
-    }
-  }
-
-  async function handleChangeType(columnName: string, duckType: string) {
-    isLocalUpdate = true;
-    try {
-      await columnOps.changeColumnType(columnName, duckType);
-      await recordProjectTransformation('type_change', columnName, duckType);
-    } catch (e) {
-      isLocalUpdate = false;
-      throw e;
-    } finally {
-      setTimeout(() => {
-        isLocalUpdate = false;
-      }, 100);
-    }
-  }
-
   async function handleRefine(columnName: string, operation: RefineOperation) {
     isLocalUpdate = true;
     try {
       await columnOps.handleRefine(columnName, operation);
       await recordProjectTransformation('refine', columnName, operation);
-    } catch (e) {
-      isLocalUpdate = false;
-      throw e;
-    } finally {
-      setTimeout(() => {
-        isLocalUpdate = false;
-      }, 100);
-    }
-  }
-
-  async function handleDrop(columnName: string) {
-    isLocalUpdate = true;
-    try {
-      await columnOps.dropColumn(columnName);
-      await recordProjectTransformation('drop', columnName);
     } catch (e) {
       isLocalUpdate = false;
       throw e;
@@ -415,17 +319,24 @@
     });
   });
 
+  const skeletonRowHeight = 32;
+  const skeletonRows = $derived(
+    Math.floor((effectiveMaxRows * rowHeight) / skeletonRowHeight)
+  );
+
   const getSkeletonProps = () =>
-    ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
+    ({
+      columns: 5,
+      rows: skeletonRows,
+      size: 'compact',
+      showHeader: false,
+      showToolbar: false
+    }) as any;
 </script>
 
 <div class="advanced-data-table">
   {#if tableData.isFullyLoaded && filters.numRows > 0 && !isReadOnly}
-    <TableHeaderInfo
-      filterStats={filters.filterStats}
-      hiddenColumns={columnOps.hiddenColumns}
-      onShowColumn={columnOps.toggleColumnVisibility}
-    />
+    <TableHeaderInfo filterStats={filters.filterStats} />
   {/if}
 
   {#if tableData.error}
@@ -463,13 +374,8 @@
                   sortOrder={sort.sortOrder}
                   showSummaryPlots={showSummaryPlots}
                   isEditMode={isEditMode}
-                  columnTypeOptions={COLUMN_TYPE_OPTIONS}
                   onSort={handleSort}
-                  onRename={handleRename}
-                  onChangeType={handleChangeType}
                   onRefine={handleRefine}
-                  onToggleVisibility={columnOps.toggleColumnVisibility}
-                  onDrop={handleDrop}
                 />
               {/each}
             </tr>
@@ -495,25 +401,13 @@
       </div>
 
       {#if !tableData.isFullyLoaded}
-        <div class="skeleton-overlay">
+        <div class="skeleton-overlay" style="max-height: {maxHeight}px;">
           <DataTableSkeleton {...getSkeletonProps()} />
         </div>
       {/if}
     </div>
   {/if}
 </div>
-
-{#if columnOps.columnToRename}
-  <ColumnRenameModal
-    bind:open={columnOps.renameModalOpen}
-    columnName={columnOps.columnToRename}
-    onClose={() => {
-      columnOps.setRenameModalOpen(false);
-      columnOps.setColumnToRename(null);
-    }}
-    onRename={handleRenameConfirm}
-  />
-{/if}
 
 <style>
   .advanced-data-table {
@@ -570,11 +464,6 @@
     background-color: var(--cds-ui-background);
     z-index: 20;
     overflow: hidden;
-  }
-
-  .skeleton-overlay :global(.bx--data-table-header),
-  .skeleton-overlay :global(.bx--table-toolbar) {
-    display: none;
   }
 
   .empty-state,

@@ -4,16 +4,10 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
-  import * as m from '$lib/paraglide/messages';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
   import { getColumnTypeStyle } from '../column-type-styles';
   import Portal from './Portal.svelte';
-
-  interface ColumnTypeOption {
-    label: string;
-    value: string;
-  }
 
   interface Props {
     column: ColumnInfo;
@@ -23,13 +17,8 @@
     sortOrder: 'ASC' | 'DESC' | null;
     showSummaryPlots: boolean;
     isEditMode: boolean;
-    columnTypeOptions: ColumnTypeOption[];
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
-    onRename: (columnName: string) => void;
-    onChangeType: (columnName: string, type: string) => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
-    onToggleVisibility: (columnName: string) => void;
-    onDrop: (columnName: string) => void;
   }
 
   const {
@@ -40,13 +29,8 @@
     sortOrder,
     showSummaryPlots,
     isEditMode,
-    columnTypeOptions,
     onSort,
-    onRename,
-    onChangeType,
-    onRefine,
-    onToggleVisibility,
-    onDrop
+    onRefine
   }: Props = $props();
 
   const plotElement = $derived(
@@ -149,7 +133,11 @@
           {typeStyle.label}
         {/if}
       </span>
-      <span class="col-name" title={column.name}>{column.name}</span>
+      <span
+        class="col-name"
+        style="color: {typeStyle.color}"
+        title={column.name}>{column.name}</span
+      >
       {#if columnWarnings.length > 0}
         <span
           class="warning-badge"
@@ -176,85 +164,51 @@
                 style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
                 role="menu"
               >
-                <button
-                  class="menu-item"
-                  onclick={() => handleMenuAction(() => onRename(column.name))}
-                >
-                  Renommer
-                </button>
-                <div class="menu-divider"></div>
-                <span class="menu-label">{m.column_type_change()}</span>
-                {#each columnTypeOptions as typeOption (typeOption.value)}
-                  <button
-                    class="menu-item menu-item-indent"
-                    onclick={() =>
-                      handleMenuAction(() =>
-                        onChangeType(column.name, typeOption.value)
-                      )}
-                  >
-                    → {typeOption.label}
-                  </button>
-                {/each}
-                <div class="menu-divider"></div>
                 <span class="menu-label">Affiner...</span>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.UPPERCASE)
                     )}
                 >
-                  → MAJUSCULES
+                  MAJUSCULES
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.LOWERCASE)
                     )}
                 >
-                  → minuscules
+                  minuscules
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TITLECASE)
                     )}
                 >
-                  → Casse Titre
+                  Casse Titre
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TRIM)
                     )}
                 >
-                  → Supprimer espaces
+                  Supprimer espaces
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TRIM_ALL)
                     )}
                 >
-                  → Espaces multiples
-                </button>
-                <div class="menu-divider"></div>
-                <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() => onToggleVisibility(column.name))}
-                >
-                  Masquer
-                </button>
-                <button
-                  class="menu-item menu-item-danger"
-                  onclick={() => handleMenuAction(() => onDrop(column.name))}
-                >
-                  Supprimer
+                  Espaces multiples
                 </button>
               </div>
             </Portal>
@@ -285,8 +239,8 @@
         {#if plotElement}
           <SummaryPlot svgElement={plotElement} />
         {:else if analysis.type_simple === 'string'}
-          <span class="unique-count"
-            >{analysis.uniques ?? 0} valeurs uniques</span
+          <span class="unique-count" style="background-color: {typeStyle.color}"
+            >{analysis.uniques ?? 0} uniques</span
           >
         {/if}
       </div>
