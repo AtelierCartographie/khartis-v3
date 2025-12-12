@@ -52,7 +52,9 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'sbx',
     'gpkg',
     'kml',
-    'kmz'
+    'kmz',
+    'gpx',
+    'zip'
   ],
   allowedMimeTypes: [
     'text/csv',
@@ -72,7 +74,10 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'application/geopackage+sqlite3',
     'application/x-sqlite3',
     'application/vnd.google-earth.kml+xml',
-    'application/vnd.google-earth.kmz'
+    'application/vnd.google-earth.kmz',
+    'application/gpx+xml',
+    'application/zip',
+    'application/x-zip-compressed'
   ],
   strictMode: true
 };
@@ -280,6 +285,12 @@ export const FileValidator = {
     }
     if (extension === 'kmz' || mimeType.includes('kmz')) {
       return FileType.KMZ;
+    }
+    if (extension === 'gpx' || mimeType.includes('gpx')) {
+      return FileType.GPX;
+    }
+    if (extension === 'zip' || mimeType.includes('zip')) {
+      return FileType.ZIP;
     }
 
     return FileType.UNKNOWN;
@@ -633,5 +644,10 @@ export const SUPPORTED_FILE_TYPES = {
       'application/vnd.google-earth.kmz'
     ],
     description: 'KML / KMZ'
+  },
+  zip: {
+    extensions: ['.zip'],
+    mimeTypes: ['application/zip', 'application/x-zip-compressed'],
+    description: 'ZIP archive'
   }
 };

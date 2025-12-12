@@ -22,11 +22,17 @@
     position: relative;
     pointer-events: auto;
     isolation: isolate;
+    color: var(--cds-text-01);
   }
 
   .summary-plot-container :global(svg) {
     pointer-events: auto;
     touch-action: none;
+  }
+
+  /* Override text colors for theme compatibility - except white text on bars */
+  .summary-plot-container :global(svg text:not([fill='#ffffff']):not([fill='gold']):not([fill='#ffd666'])) {
+    fill: var(--cds-text-01) !important;
   }
 
   .summary-plot-container :global(rect),
