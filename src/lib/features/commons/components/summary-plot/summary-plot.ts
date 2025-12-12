@@ -120,7 +120,7 @@ function create_plot_numeric(
   const {
     width = 144,
     height = 64,
-    main_color = '#a56eff',
+    main_color = '#ff7f00',
     nulls_color = 'gold',
     text_color = '#f4f4f4'
   } = options;
@@ -144,6 +144,7 @@ function create_plot_numeric(
     marginBottom: nullCount > 0 ? 24 : 15,
     x: { axis: null, type: 'band' },
     y: { axis: null },
+    style: { color: text_color },
     marks: [
       Plot.rectY(histogram.toArray(), {
         x: 'bin',
@@ -187,15 +188,6 @@ function create_plot_numeric(
 }
 
 /**
- * Extended category item with pre-calculated stacked positions
- */
-interface StackedCategoryItem extends CategoryHistogramItem {
-  x1: number;
-  x2: number;
-  xMid: number;
-}
-
-/**
  * Creates a categorical plot using the provided data and options.
  */
 function create_plot_categorical(
@@ -206,7 +198,7 @@ function create_plot_categorical(
     width = 144,
     height = 64,
     geoid = false,
-    main_color = '#fa4d56',
+    main_color = '#a56eff',
     nulls_color = 'gold',
     unique_color = 'grey',
     stroke_main = 'none',
@@ -234,22 +226,7 @@ function create_plot_categorical(
       ];
   }
 
-  // Pre-calculate stacked positions for proper hover detection
-  const totalCount = histogramArray.reduce((sum, d) => sum + d.count, 0);
-  let cumulative = 0;
-  const stackedData: StackedCategoryItem[] = histogramArray.map((d) => {
-    const x1 = cumulative;
-    cumulative += d.count;
-    const x2 = cumulative;
-    return {
-      ...d,
-      x1,
-      x2,
-      xMid: (x1 + x2) / 2
-    };
-  });
-
-  const histogramData = stackedData;
+  const histogramData = histogramArray;
 
   // Handle null category => show "nulls"
   const get_label: LabelFunction = (label) =>
@@ -266,7 +243,8 @@ function create_plot_categorical(
             : null,
         x: 'count',
         lineWidth,
-        textOverflow: 'clip-end'
+        textOverflow: 'clip-end',
+        fill: '#ffffff'
       } as ObservablePlotStackOptions)
     );
 
@@ -286,7 +264,7 @@ function create_plot_categorical(
     marginRight: 5,
     marginBottom: 15,
     marginTop: 10,
-    style: 'overflow: visible;',
+    style: { overflow: 'visible', color: text_color },
     x: { axis: null },
     marks: [
       // BARS
@@ -322,7 +300,8 @@ function create_plot_categorical(
                   : `${d.category}`,
               lineWidth: 12,
               x: 'count',
-              textOverflow: 'clip-end'
+              textOverflow: 'clip-end',
+              fill: '#ffffff'
             } as ObservablePlotStackOptions)
           )
         : null,
@@ -376,11 +355,13 @@ function create_plot_categorical(
         )
       ),
       // Mask the count of all categories
+      // Fix: use px: 'count' to align with Plot.stackX
+      // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
       Plot.text(
-        histogramData as StackedCategoryItem[],
+        histogramData as CategoryHistogramItem[],
         Plot.pointerX({
-          px: 'xMid',
-          text: (_d: StackedCategoryItem) => 'XXXXXXXXXXXXXXXXXXX',
+          px: 'count',
+          text: (_d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
           frameAnchor: 'bottom-left',
           dy: 10,
           fill: bg_color,
@@ -390,10 +371,10 @@ function create_plot_categorical(
       ),
       // Show count and category in a fixed place
       Plot.text(
-        histogramData as StackedCategoryItem[],
+        histogramData as CategoryHistogramItem[],
         Plot.pointerX({
-          px: 'xMid',
-          text: (d: StackedCategoryItem) =>
+          px: 'count',
+          text: (d: CategoryHistogramItem) =>
             `${d.count.toLocaleString()} - ${d.category}`,
           frameAnchor: 'bottom-left',
           dy: 10,

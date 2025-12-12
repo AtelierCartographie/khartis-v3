@@ -13,6 +13,8 @@ export enum FileType {
   ARROW = 'arrow',
   KML = 'kml',
   KMZ = 'kmz',
+  GPX = 'gpx',
+  ZIP = 'zip',
   UNKNOWN = 'unknown'
 }
 
