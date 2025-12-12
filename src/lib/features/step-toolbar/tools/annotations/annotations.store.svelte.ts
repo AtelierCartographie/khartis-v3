@@ -1,5 +1,5 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import { TextAlign } from '$lib/features/commons/types/enums';
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type {
   AnnotationsState,
   AnnotationStyle,

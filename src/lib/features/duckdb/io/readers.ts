@@ -1,11 +1,11 @@
-import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
-import * as duckdb from '@duckdb/duckdb-wasm';
 import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
+import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
@@ -18,11 +18,11 @@ import type {
   ReadTabularOptions
 } from '../types';
 import {
+  dropRegisteredFile,
   extractFilename,
   generateUniqueTableName,
   getFileType,
-  registerFiles,
-  dropRegisteredFile
+  registerFiles
 } from './file-registry';
 
 async function addRowId(
@@ -101,11 +101,14 @@ export async function readTabular(
             format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
           });
         }
-        if (format === DUCK_CONST.TYPE.PARQUET) {
-          const escapedFileIdParquet = escapeSqlString(fileid);
+        if (
+          format === DUCK_CONST.TYPE.PARQUET ||
+          format === DUCK_CONST.TYPE.ARROW
+        ) {
+          const escapedFileIdBinary = escapeSqlString(fileid);
           await executeQuery(
             ctx.connection,
-            `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFileIdParquet}');`,
+            `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFileIdBinary}');`,
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
         }
@@ -252,6 +255,9 @@ export async function readLink(
             break;
 
           case DUCK_CONST.TYPE.PARQUET:
+          // falls through
+
+          case DUCK_CONST.TYPE.ARROW:
             await executeQuery(
               ctx.connection,
               `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFilename}');`,

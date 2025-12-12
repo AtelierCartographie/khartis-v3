@@ -1,14 +1,14 @@
 import { base } from '$app/paths';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
-import { logger, LogCategory } from '../../commons/utils/logger';
-import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { SvelteMap } from 'svelte/reactivity';
+import { LogCategory, logger } from '../../commons/utils/logger';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
+import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
 import {
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
-import { SvelteMap } from 'svelte/reactivity';
 
 const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;

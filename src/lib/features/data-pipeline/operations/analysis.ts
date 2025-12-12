@@ -1,12 +1,12 @@
 import { Duck } from '$lib/features/duckdb';
 import type {
-  PipelineContext,
-  EnrichedColumn,
-  DuckAnalyticsColumn,
   DatasetResult,
+  DuckAnalyticsColumn,
+  EnrichedColumn,
+  FileFormat,
   FileInfo,
   GeometryInfo,
-  FileFormat
+  PipelineContext
 } from '../types';
 import { fromDuckDBType } from '../types';
 import { extractGeometryInfo } from './geometry';

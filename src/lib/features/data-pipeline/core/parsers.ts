@@ -1,8 +1,8 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
-import type { PipelineContext, FileFormat } from '../types';
 import { isGeospatialFile, isTabularFile } from '../constants';
+import type { FileFormat, PipelineContext } from '../types';
 
 export class ParserError extends Error {
   constructor(

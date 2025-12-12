@@ -42,6 +42,7 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'geoparquet',
     'gpq',
     'parquet',
+    'arrow',
     'shp',
     'shx',
     'dbf',
@@ -64,6 +65,7 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'application/geoparquet',
     'application/x-parquet',
     'application/parquet',
+    'application/vnd.apache.arrow.file',
     'application/x-shapefile',
     'application/x-dbf',
     'application/octet-stream',
@@ -267,6 +269,10 @@ export const FileValidator = {
       mimeType.includes('parquet')
     ) {
       return FileType.GEOPARQUET;
+    }
+
+    if (extension === 'arrow' || mimeType.includes('arrow')) {
+      return FileType.ARROW;
     }
 
     if (extension === 'kml' || mimeType.includes('kml')) {

@@ -1,10 +1,12 @@
 import { duckDBOrchestrator } from '$lib/features/duckdb';
+import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
 import {
   FileProcessorService,
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
+import { STORAGE_LIMITS } from '../configs/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -15,6 +17,7 @@ import {
   isShapefileComponent,
   isValidUrl
 } from '../utils/file-import.utils';
+import { formatFileSize } from '../utils/format.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
@@ -68,12 +71,15 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
-    // Only check duplicates within the current upload session
-    // Users should be able to create multiple projects with the same files
     const uploadingFiles = createProjectState.newProject.uploadedFiles;
-    return uploadingFiles.some(
+    const existsInSession = uploadingFiles.some(
       (f) => f.name === fileName && f.status !== 'error'
     );
+
+    if (existsInSession) return true;
+
+    const projectFiles = projectStore.currentProject?.data?.sourceFiles ?? [];
+    return projectFiles.some((f) => f.name === fileName);
   },
 
   async processFiles(
@@ -158,8 +164,8 @@ export const createProjectActions = {
 
     if (duplicates.length > 0) {
       showWarning(
-        'Fichiers déjà importés',
-        `Les fichiers suivants existent déjà : ${duplicates.join(', ')}`
+        m.warning_files_duplicate_title(),
+        m.warning_files_duplicate_message({ files: duplicates.join(', ') })
       );
     }
 
@@ -181,8 +187,8 @@ export const createProjectActions = {
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
       showWarning(
-        'Fichier déjà importé',
-        `Le fichier "${file.name}" existe déjà dans le projet`
+        m.warning_files_duplicate_title(),
+        m.warning_files_duplicate_message({ files: file.name })
       );
       return;
     }
@@ -213,6 +219,19 @@ export const createProjectActions = {
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
+    // Validate total shapefile group size
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > STORAGE_LIMITS.maxFileSize) {
+      showError(
+        m.error_shapefile_too_large_title(),
+        m.error_shapefile_too_large_message({
+          size: formatFileSize(totalSize),
+          max: formatFileSize(STORAGE_LIMITS.maxFileSize)
+        })
+      );
+      return;
+    }
+
     const mainFile = files.find((f) => f.name.endsWith('.shp'));
     if (!mainFile) {
       const errorFile: UploadedFile = {
@@ -325,7 +344,7 @@ export const createProjectActions = {
     }
 
     const { fileType, content } = result;
-    const baseName = 'pasted-data';
+    const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
     let fileName = `${baseName}.${extension}`;
 
@@ -349,6 +368,14 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
+      // Clean up File object references to prevent memory leaks
+      const fileToRemove = createProjectState.newProject.uploadedFiles[index];
+      if (fileToRemove) {
+        fileToRemove.originalFile = undefined;
+        fileToRemove.relatedFileObjects = undefined;
+        fileToRemove.content = undefined;
+        fileToRemove.relatedFilesData = undefined;
+      }
       createProjectState.newProject.uploadedFiles.splice(index, 1);
     }
   },
@@ -456,28 +483,77 @@ export const createProjectActions = {
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `HTTP ${response.status} (${response.statusText}) for ${url}`
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status} (${response.statusText}) for ${url}`
+        );
+      }
+
+      // Validate Content-Type
+      const contentType = response.headers.get('content-type') || '';
+      const allowedTypes = [
+        'text/csv',
+        'text/plain',
+        'text/tab-separated-values',
+        'application/json',
+        'application/geo+json',
+        'application/vnd.geo+json',
+        'application/octet-stream',
+        'application/x-shapefile',
+        'application/geopackage+sqlite3',
+        'application/x-sqlite3',
+        'application/zip',
+        'application/x-zip-compressed',
+        'application/geoparquet',
+        'application/parquet'
+      ];
+
+      const isAllowed =
+        allowedTypes.some((t) => contentType.includes(t)) ||
+        contentType.includes('octet-stream') ||
+        contentType === '';
+      if (!isAllowed) {
+        throw new Error(m.error_invalid_content_type({ type: contentType }));
+      }
+
+      const blob = await response.blob();
+      const headerFilename = getFilenameFromContentDisposition(
+        response.headers
       );
+      const urlFilename = getFilenameFromUrl(url);
+      const safeName = ensureFilenameHasExtension(
+        headerFilename || urlFilename,
+        blob.type,
+        index
+      );
+
+      return new File([blob], safeName, {
+        type: blob.type || 'application/octet-stream'
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(m.error_download_timeout());
+      }
+      throw error;
     }
-
-    const blob = await response.blob();
-    const headerFilename = getFilenameFromContentDisposition(response.headers);
-    const urlFilename = getFilenameFromUrl(url);
-    const safeName = ensureFilenameHasExtension(
-      headerFilename || urlFilename,
-      blob.type,
-      index
-    );
-
-    return new File([blob], safeName, {
-      type: blob.type || 'application/octet-stream'
-    });
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
+    // Clean up File object references to prevent memory leaks
+    for (const file of createProjectState.newProject.uploadedFiles) {
+      file.originalFile = undefined;
+      file.relatedFileObjects = undefined;
+      file.content = undefined;
+      file.relatedFilesData = undefined;
+    }
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
 

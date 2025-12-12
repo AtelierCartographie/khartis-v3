@@ -1,9 +1,9 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import wasmInit, {
   readGeoParquet as readGeoParquetWasm
 } from '@geoarrow/geoparquet-wasm/esm/index.js';
 import geoParquetWasmUrl from '@geoarrow/geoparquet-wasm/esm/index_bg.wasm?url';
 import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoArrowMetadata } from '../types';
 import { isGeoArrowMetadata } from '../types';
 

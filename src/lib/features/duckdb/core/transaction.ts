@@ -1,6 +1,6 @@
-import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 
 class TransactionMutex {
   private queue: Array<() => void> = [];

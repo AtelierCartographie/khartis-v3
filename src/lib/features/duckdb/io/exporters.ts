@@ -1,7 +1,7 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { DUCK_CONST, CACHE_CONSTANTS } from '../constants';
+import { CACHE_CONSTANTS, DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 

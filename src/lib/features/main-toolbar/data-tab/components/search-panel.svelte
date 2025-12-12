@@ -8,17 +8,28 @@
     InlineNotification
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
 
+  const SEARCH_DEBOUNCE_MS = 300;
+  const MIN_SEARCH_LENGTH = 2;
+
+  export type CellHighlightType = 'exact' | 'contains' | 'partial';
+
+  export interface CellHighlight {
+    rowId: number;
+    columnName: string;
+    type: CellHighlightType;
+  }
+
   export interface SearchHighlightResult {
-    exactIds: number[];
-    partialIds: number[];
-    currentId: number | null;
+    cellHighlights: CellHighlight[];
+    currentCell: { rowId: number; columnName: string } | null;
+    highlightedRowIds: number[];
   }
 
   interface Props {
@@ -41,64 +52,140 @@
   let replaceValue = $state('');
   let searchStats = $state<SearchStats>({
     exactCount: 0,
-    partialCount: 0,
+    containsCount: 0,
+    fuzzyCount: 0,
+    totalCount: 0,
     results: []
   });
   let currentResultIndex = $state(0);
   let isSearching = $state(false);
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const searchResultIds = $derived(searchStats.results.map((r) => r.id));
-  const exactIds = $derived(
-    searchStats.results.filter((r) => r.score === 1).map((r) => r.id)
+  onDestroy(() => {
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+  });
+
+  const cellHighlights = $derived(
+    searchStats.results.map((r) => ({
+      rowId: r.rowId,
+      columnName: r.columnName,
+      type: (r.score === 1.0
+        ? 'exact'
+        : r.score === 0.99
+          ? 'contains'
+          : 'partial') as CellHighlightType
+    }))
   );
-  const partialIds = $derived(
-    searchStats.results.filter((r) => r.score < 1).map((r) => r.id)
-  );
+
+  const highlightedRowIds = $derived([
+    ...new Set(searchStats.results.map((r) => r.rowId))
+  ]);
 
   function notifySearchResults() {
-    const currentId =
-      currentResultIndex >= 0 && currentResultIndex < searchResultIds.length
-        ? searchResultIds[currentResultIndex]
-        : null;
-    onSearchResults?.({ exactIds, partialIds, currentId });
+    const currentResult = searchStats.results[currentResultIndex];
+    onSearchResults?.({
+      cellHighlights,
+      currentCell: currentResult
+        ? { rowId: currentResult.rowId, columnName: currentResult.columnName }
+        : null,
+      highlightedRowIds
+    });
   }
 
-  async function handleSearch() {
-    dataToolsStore.setSearchQuery(searchQuery);
-    dataToolsStore.setSearchSource(searchSource);
+  function clearSearchResults() {
+    searchStats = {
+      exactCount: 0,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 0,
+      results: []
+    };
+    currentResultIndex = 0;
+    onSearchResults?.({
+      cellHighlights: [],
+      currentCell: null,
+      highlightedRowIds: []
+    });
+  }
 
-    if (!tableName || !searchQuery.trim()) {
-      searchStats = { exactCount: 0, partialCount: 0, results: [] };
-      currentResultIndex = 0;
-      onSearchResults?.({ exactIds: [], partialIds: [], currentId: null });
+  function handleSearchInput() {
+    dataToolsStore.setSearchQuery(searchQuery);
+
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+
+    const trimmedQuery = searchQuery.trim();
+    if (
+      !tableName ||
+      !trimmedQuery ||
+      trimmedQuery.length < MIN_SEARCH_LENGTH
+    ) {
+      clearSearchResults();
+      isSearching = false;
       return;
     }
 
     isSearching = true;
+    searchDebounceTimer = setTimeout(() => {
+      executeSearch();
+    }, SEARCH_DEBOUNCE_MS);
+  }
+
+  async function executeSearch() {
+    const trimmedQuery = searchQuery.trim();
+    if (
+      !tableName ||
+      !trimmedQuery ||
+      trimmedQuery.length < MIN_SEARCH_LENGTH
+    ) {
+      clearSearchResults();
+      isSearching = false;
+      return;
+    }
+
     try {
       const columnFilter = searchSource === 'all' ? undefined : searchSource;
       const stats = await duckDBOrchestrator.searchInTable(
         tableName,
-        searchQuery,
-        { threshold: 0.6, column: columnFilter }
+        trimmedQuery,
+        { threshold: 0.85, column: columnFilter }
       );
       searchStats = stats;
       currentResultIndex = stats.results.length > 0 ? 0 : -1;
 
-      const exact = stats.results.filter((r) => r.score === 1).map((r) => r.id);
-      const partial = stats.results.filter((r) => r.score < 1).map((r) => r.id);
-      const firstId = stats.results.length > 0 ? stats.results[0].id : null;
+      const highlights = stats.results.map((r) => ({
+        rowId: r.rowId,
+        columnName: r.columnName,
+        type: (r.score === 1.0
+          ? 'exact'
+          : r.score === 0.99
+            ? 'contains'
+            : 'partial') as CellHighlightType
+      }));
+      const rowIds = [...new Set(stats.results.map((r) => r.rowId))];
+      const firstResult = stats.results[0];
+
       onSearchResults?.({
-        exactIds: exact,
-        partialIds: partial,
-        currentId: firstId
+        cellHighlights: highlights,
+        currentCell: firstResult
+          ? { rowId: firstResult.rowId, columnName: firstResult.columnName }
+          : null,
+        highlightedRowIds: rowIds
       });
     } catch (error) {
       logger.error('Search failed', LogCategory.UI, error);
-      searchStats = { exactCount: 0, partialCount: 0, results: [] };
-      currentResultIndex = 0;
+      clearSearchResults();
     } finally {
       isSearching = false;
+    }
+  }
+
+  function handleSourceChange() {
+    dataToolsStore.setSearchSource(searchSource);
+    if (searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
+      isSearching = true;
+      executeSearch();
     }
   }
 
@@ -113,36 +200,37 @@
   }
 
   function handlePrevResult() {
-    if (searchResultIds.length === 0) return;
+    if (searchStats.results.length === 0) return;
     currentResultIndex =
       currentResultIndex > 0
         ? currentResultIndex - 1
-        : searchResultIds.length - 1;
+        : searchStats.results.length - 1;
     notifySearchResults();
   }
 
   function handleNextResult() {
-    if (searchResultIds.length === 0) return;
+    if (searchStats.results.length === 0) return;
     currentResultIndex =
-      currentResultIndex < searchResultIds.length - 1
+      currentResultIndex < searchStats.results.length - 1
         ? currentResultIndex + 1
         : 0;
     notifySearchResults();
   }
 
   function handleClear() {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
     searchQuery = '';
-    searchStats = { exactCount: 0, partialCount: 0, results: [] };
-    currentResultIndex = 0;
     dataToolsStore.setSearchQuery('');
-    onSearchResults?.({ exactIds: [], partialIds: [], currentId: null });
+    clearSearchResults();
   }
 
   onMount(() => {
     handleClear();
   });
 
-  const hasResults = $derived(searchStats.results.length > 0);
+  const hasResults = $derived(searchStats.totalCount > 0);
   const hasData = $derived(columns.length > 0);
   const hasExactMatches = $derived(searchStats.exactCount > 0);
 
@@ -155,16 +243,19 @@
     if (searchStats.exactCount > 0) {
       parts.push(m.search_exact_results({ count: searchStats.exactCount }));
     }
-    if (searchStats.partialCount > 0) {
-      parts.push(m.search_partial_results({ count: searchStats.partialCount }));
+    if (searchStats.containsCount > 0) {
+      parts.push(
+        m.search_contains_results({ count: searchStats.containsCount })
+      );
+    }
+    if (searchStats.fuzzyCount > 0) {
+      parts.push(m.search_partial_results({ count: searchStats.fuzzyCount }));
     }
     return parts.join(', ');
   });
 
   const navigationText = $derived(
-    hasResults
-      ? `${currentResultIndex + 1} / ${searchStats.results.length}`
-      : ''
+    hasResults ? `${currentResultIndex + 1} / ${searchStats.totalCount}` : ''
   );
 </script>
 
@@ -183,7 +274,7 @@
         size="sm"
         placeholder={m.search_placeholder()}
         bind:value={searchQuery}
-        on:input={handleSearch}
+        on:input={handleSearchInput}
         on:clear={handleClear}
       />
     </div>
@@ -193,7 +284,7 @@
         size="sm"
         labelText={m.search_source()}
         bind:selected={searchSource}
-        on:change={handleSearch}
+        on:change={handleSourceChange}
       >
         <SelectItem value="all" text={m.search_all_variables()} />
         {#each columns as column (column.name)}
