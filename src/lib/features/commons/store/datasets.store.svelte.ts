@@ -2,9 +2,9 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline } from '$lib/features/data-pipeline';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
+import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
-import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { projectStore } from './project.store.svelte';
 
 interface DatasetsState {

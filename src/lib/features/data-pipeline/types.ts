@@ -1,6 +1,6 @@
-import type { Duck } from '$lib/features/duckdb';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { Duck } from '$lib/features/duckdb';
 
 // --- Column Types ---
 

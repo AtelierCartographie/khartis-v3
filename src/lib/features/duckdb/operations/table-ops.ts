@@ -1,14 +1,14 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  getDescribe,
+  getRowCountFromCache,
+  markTableMutated,
+  setDescribe,
+  setRowCountCache
+} from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import {
-  markTableMutated,
-  getDescribe,
-  setDescribe,
-  setRowCountCache,
-  getRowCountFromCache
-} from '../cache/cache-manager';
 import type { DescribeResult, DuckDBContext } from '../types';
 
 export async function describeTable(

@@ -1,5 +1,5 @@
-import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 
 class MapInstanceStore {
   private _state = $state<{

@@ -1,5 +1,5 @@
-import { Duck } from '$lib/features/duckdb';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Duck } from '$lib/features/duckdb';
 import type { JoinEntity, JoinStats } from '../components';
 
 export interface ComputeJoinStatsOptions {

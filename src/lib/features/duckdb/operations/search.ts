@@ -1,7 +1,7 @@
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import type { DuckDBContext, CellSearchResult, SearchStats } from '../types';
+import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
 
 export async function searchInTable(
   ctx: DuckDBContext,

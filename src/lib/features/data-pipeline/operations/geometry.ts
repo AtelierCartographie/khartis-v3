@@ -92,14 +92,19 @@ function normalizeGeometryType(type?: string | null): GeometryInfo['type'] {
   switch (normalized) {
     case 'point':
       return 'Point';
+
     case 'multipoint':
       return 'MultiPoint';
+
     case 'linestring':
       return 'LineString';
+
     case 'multilinestring':
       return 'MultiLineString';
+
     case 'multipolygon':
       return 'MultiPolygon';
+
     default:
       return 'Polygon';
   }

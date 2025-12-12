@@ -187,6 +187,15 @@ function create_plot_numeric(
 }
 
 /**
+ * Extended category item with pre-calculated stacked positions
+ */
+interface StackedCategoryItem extends CategoryHistogramItem {
+  x1: number;
+  x2: number;
+  xMid: number;
+}
+
+/**
  * Creates a categorical plot using the provided data and options.
  */
 function create_plot_categorical(
@@ -208,21 +217,39 @@ function create_plot_categorical(
   } = options;
 
   const { uniques, histogram } = data;
-  let histogramData: CategoricalHistogram | CategoryHistogramItem[] = histogram;
+  let histogramArray = histogram.toArray();
 
   // .toArray() to keep null at the end
   if (geoid) {
-    const array = histogram.toArray();
-    const has_unique = array.find(
+    const has_unique = histogramArray.find(
       (d: CategoryHistogramItem) => d.category === 'unique'
     );
     // If for geoid, category unique has to appear first
     if (has_unique)
-      histogramData = [
+      histogramArray = [
         has_unique,
-        ...array.filter((d: CategoryHistogramItem) => d.category !== 'unique')
+        ...histogramArray.filter(
+          (d: CategoryHistogramItem) => d.category !== 'unique'
+        )
       ];
   }
+
+  // Pre-calculate stacked positions for proper hover detection
+  const totalCount = histogramArray.reduce((sum, d) => sum + d.count, 0);
+  let cumulative = 0;
+  const stackedData: StackedCategoryItem[] = histogramArray.map((d) => {
+    const x1 = cumulative;
+    cumulative += d.count;
+    const x2 = cumulative;
+    return {
+      ...d,
+      x1,
+      x2,
+      xMid: (x1 + x2) / 2
+    };
+  });
+
+  const histogramData = stackedData;
 
   // Handle null category => show "nulls"
   const get_label: LabelFunction = (label) =>
@@ -350,10 +377,10 @@ function create_plot_categorical(
       ),
       // Mask the count of all categories
       Plot.text(
-        histogramData as CategoryHistogramItem[],
+        histogramData as StackedCategoryItem[],
         Plot.pointerX({
-          px: 'count',
-          text: (_d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
+          px: 'xMid',
+          text: (_d: StackedCategoryItem) => 'XXXXXXXXXXXXXXXXXXX',
           frameAnchor: 'bottom-left',
           dy: 10,
           fill: bg_color,
@@ -363,10 +390,10 @@ function create_plot_categorical(
       ),
       // Show count and category in a fixed place
       Plot.text(
-        histogramData as CategoryHistogramItem[],
+        histogramData as StackedCategoryItem[],
         Plot.pointerX({
-          px: 'count',
-          text: (d: CategoryHistogramItem) =>
+          px: 'xMid',
+          text: (d: StackedCategoryItem) =>
             `${d.count.toLocaleString()} - ${d.category}`,
           frameAnchor: 'bottom-left',
           dy: 10,

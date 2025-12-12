@@ -1,5 +1,5 @@
-import type { DescribeResult, DuckDBContext, TableMetadata } from '../types';
 import { CACHE_CONSTANTS } from '../constants';
+import type { DescribeResult, DuckDBContext, TableMetadata } from '../types';
 
 export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.describeCache.delete(table);

@@ -10,8 +10,8 @@
  * Based on the original algorithm from khartis-pipeline-old/src/lib/viz_suggestions.ts
  */
 
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 // ===========================
 // TYPES

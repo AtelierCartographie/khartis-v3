@@ -1,14 +1,14 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { GeoJSONFeature } from '$lib/types/data';
 import {
   isGeoJSONFeature,
   isGeoJSONFeatureCollection,
   isTabularData
 } from '$lib/types/data';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
-import { generateFilename } from './string.utils';
 import { escapeSqlString } from './sanitize.utils';
+import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
 

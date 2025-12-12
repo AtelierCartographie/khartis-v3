@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
-  ensureFreshStart,
   createProjectFromCSV,
-  waitForMapRender,
+  ensureFreshStart,
+  MODAL_CONTAINER_SELECTOR,
   openHamburgerMenu,
-  waitForModalVisible,
-  MODAL_CONTAINER_SELECTOR
+  waitForMapRender,
+  waitForModalVisible
 } from '../utils/test-helpers';
 
 const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';

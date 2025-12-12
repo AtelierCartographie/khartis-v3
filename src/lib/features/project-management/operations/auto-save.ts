@@ -1,11 +1,12 @@
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import type { AutoSaveConfig } from '../types';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PROJECT_CONST } from '../constants';
+import type { AutoSaveConfig } from '../types';
 
 export type SaveCallback = () => Promise<void>;
 
 export class AutoSaveController {
   private timer?: number;
+
   private config: AutoSaveConfig;
 
   constructor(

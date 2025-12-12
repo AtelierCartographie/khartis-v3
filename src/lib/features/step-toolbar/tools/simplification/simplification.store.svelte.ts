@@ -1,11 +1,11 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import {
   SimplificationLevel,
   SimplificationSource
 } from '$lib/features/commons/types/enums';
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type {
-  SimplificationState,
-  SimplificationResult
+  SimplificationResult,
+  SimplificationState
 } from './simplification.types';
 
 const DEFAULT_SIMPLIFICATION_STATE: SimplificationState = {
