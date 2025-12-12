@@ -1,7 +1,7 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
-import type { Layer, LayersState } from './layers.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import { SvelteSet } from 'svelte/reactivity';
+import type { Layer, LayersState } from './layers.types';
 
 const FIXTURE_LAYERS = [
   {

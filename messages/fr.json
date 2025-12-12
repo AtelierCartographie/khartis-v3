@@ -804,5 +804,22 @@
   "data_tool_calculator_icon": "Calculatrice",
   "data_tool_reset_icon": "Réinitialiser",
   "data_tool_expand_label": "Agrandir",
-  "data_tool_expand_icon": "Agrandir le tableau"
+  "data_tool_expand_icon": "Agrandir le tableau",
+  "warning_files_duplicate_title": "Fichiers déjà importés",
+  "warning_files_duplicate_message": "Les fichiers suivants existent déjà : {files}",
+  "warning_processing_in_progress": "Un traitement est déjà en cours. Veuillez patienter.",
+  "warning_no_geo_column_title": "Aucune colonne géographique détectée",
+  "warning_no_geo_column_message": "Le fichier ne contient pas de colonne géographique identifiable. Vous pourrez le joindre manuellement à un fond de carte.",
+  "error_invalid_content_type": "Type de contenu non supporté : {type}",
+  "error_download_timeout": "Le téléchargement a expiré. Veuillez réessayer.",
+  "error_shapefile_too_large_title": "Shapefile trop volumineux",
+  "error_shapefile_too_large_message": "La taille totale du shapefile ({size}) dépasse la limite de {max}",
+  "dataset_pasted_name": "Tableau collé",
+  "create_project_type_selector": "Sélection du type de projet",
+  "create_project_processing_file": "Traitement du fichier {name} en cours...",
+  "import_decimal_european_detected": "Format de nombre européen détecté (virgule décimale)",
+  "import_decimal_standard_detected": "Format de nombre standard détecté (point décimal)",
+  "warning_mixed_decimal_formats": "Formats de nombres mixtes détectés",
+  "error_arrow_read_failed": "Échec de lecture du fichier Arrow",
+  "import_format_detected": "Format détecté : {format}"
 }

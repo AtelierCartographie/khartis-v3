@@ -1,5 +1,5 @@
+import { LogCategory, logger } from './logger';
 import { normalizeForMatching } from './string.utils';
-import { logger, LogCategory } from './logger';
 
 export interface MatchResult {
   matched: string[];

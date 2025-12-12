@@ -230,7 +230,7 @@
     }
   }
 
-  async function handlePasteData() {
+  async function _handlePasteData() {
     if (!pastedDataValue.trim()) return;
 
     isUploading = true;

@@ -1,5 +1,5 @@
-import type { KhartisProject } from '../types';
 import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+import type { KhartisProject } from '../types';
 
 export function duplicateProject(
   original: KhartisProject,

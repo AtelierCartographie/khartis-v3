@@ -1,7 +1,7 @@
 import type maplibregl from 'maplibre-gl';
 import {
-  BasemapStyle,
   BASEMAP_STYLES,
+  BasemapStyle,
   DEFAULT_BASEMAP_STYLE
 } from '../../map/configs/basemap-styles';
 

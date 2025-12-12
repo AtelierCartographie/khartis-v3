@@ -10,6 +10,7 @@ export enum FileType {
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
   GEOPARQUET = 'geoparquet',
+  ARROW = 'arrow',
   KML = 'kml',
   KMZ = 'kmz',
   UNKNOWN = 'unknown'

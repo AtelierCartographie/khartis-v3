@@ -399,6 +399,9 @@
   .summary-plot {
     height: 64px;
     margin-top: var(--cds-spacing-02);
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
   }
 
   .unique-count {

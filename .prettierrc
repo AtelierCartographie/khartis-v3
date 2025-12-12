@@ -8,7 +8,7 @@
   "bracketSpacing": true,
   "arrowParens": "always",
   "endOfLine": "lf",
-  "plugins": ["prettier-plugin-svelte"],
+  "plugins": ["prettier-plugin-svelte", "prettier-plugin-organize-imports"],
   "overrides": [
     {
       "files": "*.svelte",

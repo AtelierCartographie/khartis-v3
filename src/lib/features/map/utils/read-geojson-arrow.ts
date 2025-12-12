@@ -1,12 +1,12 @@
-import {
-  tableFromIPC,
-  type Table as ArrowTable,
-  Table,
-  Schema,
-  Field
-} from 'apache-arrow/Arrow';
-import { Duck } from '$lib/features/duckdb';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { Duck } from '$lib/features/duckdb';
+import {
+  Field,
+  Schema,
+  Table,
+  tableFromIPC,
+  type Table as ArrowTable
+} from 'apache-arrow/Arrow';
 
 function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(

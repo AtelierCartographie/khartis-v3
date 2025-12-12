@@ -138,7 +138,7 @@
         invalidText={nameErrors[0] || ''}
         maxlength={100}
       />
-      {#if hasValidName && !hasTriedSubmit}
+      {#if hasValidName && !hasTriedSubmit && projectName.trim().length > 0}
         <div class="character-count">
           {projectName.trim().length} / 100
         </div>

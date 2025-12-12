@@ -1,6 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { executeQuery } from '../core/query';
 import { getTableMetadata } from '../cache/cache-manager';
+import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 
 export function addFilter(
