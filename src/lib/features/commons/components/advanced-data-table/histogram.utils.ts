@@ -40,6 +40,7 @@ function getCSSVariable(name: string, fallback: string): string {
 
 function getPlotOptions(typeSimple?: string) {
   const typeStyle = getColumnTypeStyle(typeSimple);
+  const textColor = getCSSVariable('--cds-text-01', '');
   return {
     width: 150,
     height: 48,
@@ -47,9 +48,8 @@ function getPlotOptions(typeSimple?: string) {
     nulls_color: '#ffd666',
     unique_color: getCSSVariable('--cds-ui-03', '#525252'),
     bg_color: getCSSVariable('--cds-ui-02', '#393939'),
-    text_color: getCSSVariable('--cds-text-01', '#f4f4f4'),
-    text_secondary_color: getCSSVariable('--cds-text-02', '#c6c6c6'),
-    bar_text_color: '#000'
+    text_color: textColor || 'currentColor',
+    text_secondary_color: getCSSVariable('--cds-text-02', '#c6c6c6')
   };
 }
 

@@ -5,6 +5,7 @@
 
 export interface StorageLimits {
   maxFileSize: number;
+  warningFileSize: number;
   maxProjectSize: number;
   maxProjectCount: number;
   maxStorageSize: number;
@@ -17,11 +18,14 @@ export interface StorageLimits {
  * All validation files should use these constants
  */
 export const STORAGE_LIMITS: StorageLimits = {
-  /** Maximum size of an individual file: 50 MB */
-  maxFileSize: 50 * 1024 * 1024,
+  /** Maximum size of an individual file: 100 MB */
+  maxFileSize: 100 * 1024 * 1024,
 
-  /** Maximum size of a complete project: 100 MB */
-  maxProjectSize: 100 * 1024 * 1024,
+  /** Warning threshold for large files: 50 MB */
+  warningFileSize: 50 * 1024 * 1024,
+
+  /** Maximum size of a complete project: 150 MB */
+  maxProjectSize: 150 * 1024 * 1024,
 
   /** Maximum number of stored projects */
   maxProjectCount: 50,
