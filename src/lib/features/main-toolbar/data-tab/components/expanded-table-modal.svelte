@@ -108,54 +108,56 @@
   });
 </script>
 
-<Modal
-  bind:open={open}
-  passiveModal
-  modalHeading=""
-  size="lg"
-  on:close={onClose}
->
-  <div class="custom-header" slot="heading">
-    {#if isEditing}
-      <input
-        type="text"
-        class="title-input"
-        style="width: {inputWidth}px"
-        bind:value={editedName}
-        bind:this={inputRef}
-        onkeydown={handleKeydown}
-        onblur={handleBlur}
-      />
-      {#if fileInfo.extension}
-        <span class="extension">.{fileInfo.extension}</span>
+<div id="khartis-expanded-table-modal">
+  <Modal
+    bind:open={open}
+    passiveModal
+    modalHeading=""
+    size="lg"
+    on:close={onClose}
+  >
+    <div class="custom-header" slot="heading">
+      {#if isEditing}
+        <input
+          type="text"
+          class="title-input"
+          style="width: {inputWidth}px"
+          bind:value={editedName}
+          bind:this={inputRef}
+          onkeydown={handleKeydown}
+          onblur={handleBlur}
+        />
+        {#if fileInfo.extension}
+          <span class="extension">.{fileInfo.extension}</span>
+        {/if}
+      {:else}
+        <button
+          type="button"
+          class="title-button"
+          bind:this={titleButtonRef}
+          onclick={startEditing}
+          title="Cliquer pour renommer"
+        >
+          {displayName}
+        </button>
       {/if}
-    {:else}
-      <button
-        type="button"
-        class="title-button"
-        bind:this={titleButtonRef}
-        onclick={startEditing}
-        title="Cliquer pour renommer"
-      >
-        {displayName}
-      </button>
-    {/if}
-  </div>
+    </div>
 
-  <div class="modal-table-container">
-    <AdvancedDataTable
-      dataset={dataset}
-      tableName={tableName}
-      datasetVersion={datasetVersion}
-      showSummaryPlots={true}
-      cellHighlights={cellHighlights}
-      currentCell={currentCell}
-      highlightedRowIds={highlightedRowIds}
-      isExpanded={true}
-      maxRows={25}
-    />
-  </div>
-</Modal>
+    <div class="modal-table-container">
+      <AdvancedDataTable
+        dataset={dataset}
+        tableName={tableName}
+        datasetVersion={datasetVersion}
+        showSummaryPlots={true}
+        cellHighlights={cellHighlights}
+        currentCell={currentCell}
+        highlightedRowIds={highlightedRowIds}
+        isExpanded={true}
+        maxRows={25}
+      />
+    </div>
+  </Modal>
+</div>
 
 <style>
   .modal-table-container {
@@ -163,12 +165,12 @@
     overflow: hidden;
   }
 
-  :global(.bx--modal-container--lg) {
+  #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
     max-width: 95vw !important;
     width: 95vw !important;
   }
 
-  :global(.bx--modal-content) {
+  #khartis-expanded-table-modal :global(.bx--modal-content) {
     padding: 0 !important;
     overflow: hidden;
   }

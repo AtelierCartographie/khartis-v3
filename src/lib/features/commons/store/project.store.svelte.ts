@@ -20,9 +20,9 @@ import { dataOrchestratorService } from '../services/data-orchestrator.service.s
 import { downloadFile } from '../utils/file-export.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
+import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
-import { sanitizeProjectName } from '../utils/sanitize.utils';
 import type {
   ColumnTransformation,
   UploadedFile

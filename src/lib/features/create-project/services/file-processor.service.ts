@@ -8,17 +8,14 @@ import {
 } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  showError,
-  showWarning
-} from '$lib/features/commons/utils/notification.utils.svelte';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
 const ERROR_FILE_PROCESSING = () => m.error_file_processing();
 const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
-const ERROR_NO_GEO_COLUMN_TITLE = () => m.error_no_geo_column_title();
-const ERROR_NO_GEO_COLUMN_MESSAGE = () => m.error_no_geo_column_message();
+const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
+const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
@@ -262,13 +259,12 @@ class CsvProcessor extends FileProcessor {
     );
 
     if (!deepAnalysis.geoDetection.hasGeoColumns) {
-      showError(ERROR_NO_GEO_COLUMN_TITLE(), ERROR_NO_GEO_COLUMN_MESSAGE());
-      this.callbacks.onStatusChange(
-        uploadedFile.id,
-        'error',
-        ERROR_NO_GEO_COLUMN_TITLE()
+      // Show warning instead of blocking - user can still manually join to a basemap
+      showWarning(
+        WARNING_NO_GEO_COLUMN_TITLE(),
+        WARNING_NO_GEO_COLUMN_MESSAGE()
       );
-      return false;
+      // Continue processing - don't block the import
     }
 
     if (deepAnalysis.performanceWarnings.length > 0) {
@@ -346,9 +342,43 @@ class GeoPackageProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    throw new Error(
-      'GeoPackage files should be processed by the data pipeline, not here'
-    );
+    // Read original file content for persistence
+    const content = await readFileContent(file, (progress) => {
+      this.callbacks.onProgress(uploadedFile.id, progress);
+    });
+
+    // Delegate to dataPipeline for proper GeoPackage processing
+    const { dataPipeline } = await import('$lib/features/data-pipeline');
+    const { Duck } = await import('$lib/features/duckdb');
+
+    const dataset = await dataPipeline.processFile(file);
+    const { tableName } = dataset;
+
+    // Get sample data for preview (similar to CsvProcessor)
+    const sampleData = (await Duck!.query(
+      `SELECT * FROM "${tableName}" LIMIT 100`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
+
+    // Convert to tabular data format
+    const tabularData = sampleData.map((row) => {
+      const tabularRow: Record<string, JsonValue> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (value instanceof Date) {
+          tabularRow[key] = value.toISOString();
+        } else {
+          tabularRow[key] = value as JsonValue;
+        }
+      }
+      return tabularRow;
+    });
+
+    this.callbacks.onDataUpdate(uploadedFile.id, {
+      content,
+      parsedData: tabularData
+    });
+
+    this.callbacks.onStatusChange(uploadedFile.id, 'complete');
   }
 }
 

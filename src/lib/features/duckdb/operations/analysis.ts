@@ -1,8 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { getTableMetadata } from '../cache/cache-manager';
 import type {
   AnalyseOptions,
   AnalysisResult,
@@ -121,47 +121,71 @@ export async function analyse(
 
           switch (type) {
             case 'numeric': {
-              const [numeric, hist] = await Promise.all([
-                executeQuery(
-                  ctx.connection,
-                  `FROM summary_numeric(${analysisTable}, "${d.name}")`,
-                  { useProxy: false }
-                ) as Promise<ArrowTableLike>,
-                executeQuery(
-                  ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${d.name}")`
-                )
-              ]);
-              summary_numeric = numeric;
-              histogram = hist;
+              try {
+                const [numeric, hist] = await Promise.all([
+                  executeQuery(
+                    ctx.connection,
+                    `FROM summary_numeric(${analysisTable}, "${d.name}")`,
+                    { useProxy: false }
+                  ) as Promise<ArrowTableLike>,
+                  executeQuery(
+                    ctx.connection,
+                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                summary_numeric = numeric;
+                histogram = hist;
+              } catch (e) {
+                logger.warn(
+                  `Failed numeric analysis for ${d.name}`,
+                  LogCategory.DUCKDB,
+                  e
+                );
+              }
               break;
             }
 
             case 'date': {
-              const [dateSum, histDate] = await Promise.all([
-                executeQuery(
-                  ctx.connection,
-                  `FROM summary_date(${analysisTable}, "${d.name}")`,
-                  { useProxy: false }
-                ) as Promise<ArrowTableLike>,
-                executeQuery(
-                  ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${d.name}")`
-                )
-              ]);
-              summary_date = dateSum;
-              histogram = histDate;
+              try {
+                const [dateSum, histDate] = await Promise.all([
+                  executeQuery(
+                    ctx.connection,
+                    `FROM summary_date(${analysisTable}, "${d.name}")`,
+                    { useProxy: false }
+                  ) as Promise<ArrowTableLike>,
+                  executeQuery(
+                    ctx.connection,
+                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                summary_date = dateSum;
+                histogram = histDate;
+              } catch (e) {
+                logger.warn(
+                  `Failed date analysis for ${d.name}`,
+                  LogCategory.DUCKDB,
+                  e
+                );
+              }
               break;
             }
 
             case 'string': {
-              const [histStr] = await Promise.all([
-                executeQuery(
-                  ctx.connection,
-                  `FROM histogram_categorical(${analysisTable}, "${d.name}")`
-                )
-              ]);
-              histogram = histStr;
+              try {
+                const [histStr] = await Promise.all([
+                  executeQuery(
+                    ctx.connection,
+                    `FROM histogram_categorical(${analysisTable}, "${d.name}")`
+                  )
+                ]);
+                histogram = histStr;
+              } catch (e) {
+                logger.warn(
+                  `Failed histogram_categorical for ${d.name}`,
+                  LogCategory.DUCKDB,
+                  e
+                );
+              }
               break;
             }
           }

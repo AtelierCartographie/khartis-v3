@@ -804,5 +804,22 @@
   "data_tool_calculator_icon": "Calculator",
   "data_tool_reset_icon": "Reset",
   "data_tool_expand_label": "Expand",
-  "data_tool_expand_icon": "Expand table"
+  "data_tool_expand_icon": "Expand table",
+  "warning_files_duplicate_title": "Files already imported",
+  "warning_files_duplicate_message": "The following files already exist: {files}",
+  "warning_processing_in_progress": "Processing is already in progress. Please wait.",
+  "warning_no_geo_column_title": "No geographic column detected",
+  "warning_no_geo_column_message": "The file does not contain an identifiable geographic column. You can manually join it to a basemap.",
+  "error_invalid_content_type": "Unsupported content type: {type}",
+  "error_download_timeout": "Download timed out. Please try again.",
+  "error_shapefile_too_large_title": "Shapefile too large",
+  "error_shapefile_too_large_message": "Total shapefile size ({size}) exceeds the {max} limit",
+  "dataset_pasted_name": "Pasted table",
+  "create_project_type_selector": "Project type selection",
+  "create_project_processing_file": "Processing file {name}...",
+  "import_decimal_european_detected": "European number format detected (comma decimal)",
+  "import_decimal_standard_detected": "Standard number format detected (dot decimal)",
+  "warning_mixed_decimal_formats": "Mixed number formats detected",
+  "error_arrow_read_failed": "Failed to read Arrow file",
+  "import_format_detected": "Detected format: {format}"
 }

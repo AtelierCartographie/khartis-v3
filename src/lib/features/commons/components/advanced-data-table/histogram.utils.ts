@@ -1,10 +1,10 @@
-import type { AnalysisResult } from '$lib/features/duckdb';
 import {
   create_summary_plot,
   type CategoricalHistogram,
   type NumericHistogram,
   type SummaryPlotData
 } from '$lib/features/commons/components/summary-plot/summary-plot';
+import type { AnalysisResult } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../utils/logger';
 import { getColumnTypeStyle } from './column-type-styles';
 

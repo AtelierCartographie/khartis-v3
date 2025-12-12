@@ -1,6 +1,6 @@
-import { hexToRgb } from '../../commons/utils/color-utils';
 import type { VisualizationConfig } from '../../commons/store/visualization.store.svelte';
 import { VisualizationType } from '../../commons/store/visualization.store.svelte';
+import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
   value: number,

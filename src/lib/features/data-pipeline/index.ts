@@ -1,5 +1,5 @@
 // Pipeline facade
-export { createFileFromUpload, dataPipeline, Pipeline } from './pipeline';
+export { Pipeline, createFileFromUpload, dataPipeline } from './pipeline';
 export type { DataPipeline } from './pipeline';
 
 // Types (consolidated)
@@ -35,8 +35,8 @@ export type {
   EnrichedColumn,
   FileFormat,
   FileInfo,
-  GeoArrowColumnMetadata,
   GeoArrowCRS,
+  GeoArrowColumnMetadata,
   GeoArrowMetadata,
   GeoColumnInfo,
   GeometryInfo,
@@ -51,19 +51,19 @@ export type {
 
 // Constants
 export {
+  PIPELINE_CONST,
   getSupportedExtensions,
   getSupportedMimeTypes,
   isGeospatialFile,
-  isTabularFile,
-  PIPELINE_CONST
+  isTabularFile
 } from './constants';
 
 // Parsers
 export {
+  ParserError,
   canParseFile,
   parseFile,
   parseGeoFile,
-  ParserError,
   parseTabular
 } from './core/parsers';
 

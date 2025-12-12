@@ -1,5 +1,5 @@
-import * as d3geo from 'd3-geo';
 import type { GeoProjection } from 'd3-geo';
+import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
 import type { Feature, FeatureCollection } from 'geojson';
 

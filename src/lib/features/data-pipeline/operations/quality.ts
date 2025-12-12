@@ -1,5 +1,5 @@
-import type { EnrichedColumn } from '../types';
 import { PIPELINE_CONST } from '../constants';
+import type { EnrichedColumn } from '../types';
 
 export function computeQualityWarnings(
   columns: EnrichedColumn[],

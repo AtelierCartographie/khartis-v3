@@ -1,8 +1,8 @@
+import type { SavedProjectMetadata } from '$lib/features/project-management';
+import { projectRepository } from '$lib/features/project-management';
 import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import { projectStore } from './project.store.svelte';
-import { projectRepository } from '$lib/features/project-management';
-import type { SavedProjectMetadata } from '$lib/features/project-management';
 
 interface ProjectsState {
   projects: SavedProjectMetadata[];

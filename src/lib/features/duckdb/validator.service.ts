@@ -1,4 +1,4 @@
-import { Duck } from './duck';
+import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   DeepDataValidator,
   type DataAnalysisResult
@@ -7,9 +7,9 @@ import {
   GeoMatcher,
   type MatchResult
 } from '$lib/features/commons/utils/geo-matcher.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { Duck } from './duck';
 
 interface DuckDBAnalysisColumn {
   name: string;

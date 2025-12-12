@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { FileValidator, FILE_VALIDATION_CONFIG } from './file-validator.utils';
-import { FileType } from '../store/create-project.types';
+import { describe, expect, it } from 'vitest';
 import { STORAGE_LIMITS } from '../configs/validation.config';
+import { FileType } from '../store/create-project.types';
+import { FILE_VALIDATION_CONFIG, FileValidator } from './file-validator.utils';
 
 // Mock FileReader for Node environment
 if (typeof FileReader === 'undefined') {

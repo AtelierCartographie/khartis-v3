@@ -1,5 +1,5 @@
-import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 

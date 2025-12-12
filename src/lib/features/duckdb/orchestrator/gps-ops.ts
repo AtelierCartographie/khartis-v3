@@ -3,11 +3,11 @@ import type { Table } from 'apache-arrow/Arrow';
 import type {
   AnalysisResult,
   DuckDBDataset,
-  GPSColumns,
-  GPSBounds
+  GPSBounds,
+  GPSColumns
 } from '../types';
 
-export type { GPSColumns, GPSBounds };
+export type { GPSBounds, GPSColumns };
 
 export interface DuckDBClientForGPS {
   query(sql: string, options?: { format?: string }): Promise<unknown>;

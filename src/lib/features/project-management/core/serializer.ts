@@ -4,13 +4,13 @@ import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { KhartisProject } from '../types';
 import type {
   SerializedBasemapAttribute,
   SerializedProject,
   SerializedProjectData,
   SerializedUploadedFile
 } from '$lib/types/serialization.types';
+import type { KhartisProject } from '../types';
 import { bigIntReplacer } from '../utils/json-helpers';
 
 export async function serialize(

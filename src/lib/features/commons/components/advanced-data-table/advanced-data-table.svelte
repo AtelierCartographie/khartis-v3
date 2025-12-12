@@ -331,6 +331,7 @@
       size: 'compact',
       showHeader: false,
       showToolbar: false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
     }) as any;
 </script>
 
