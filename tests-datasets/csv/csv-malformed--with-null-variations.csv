@@ -1,0 +1,13 @@
+id,name,value,status,date,country
+1,Paris,1000,active,2024-01-15,France
+2,Berlin,null,inactive,2024-02-20,Germany
+3,Madrid,NULL,active,,Spain
+4,Rome,NA,N/A,2024-04-10,Italy
+5,London,N/A,active,2024-05-05,
+6,Vienna,n/a,null,NULL,Austria
+7,Brussels,-,active,2024-07-01,Belgium
+8,Amsterdam,#N/A,#N/A,2024-08-15,Netherlands
+9,Lisbon,NaN,active,2024-09-20,Portugal
+10,Athens,,,-,Greece
+11,Dublin,nil,NIL,nil,Ireland
+12,Warsaw,none,NONE,None,Poland
