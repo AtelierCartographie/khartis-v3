@@ -1,7 +1,7 @@
-import type * as duckdb from '@duckdb/duckdb-wasm';
+import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
-import { FileType } from '$lib/features/commons/store/create-project.types';
+import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { Table } from 'apache-arrow/Arrow';
 
 export { FileType };
@@ -117,17 +117,23 @@ export interface FinalizeJoinResult {
 
 // --- Search Types ---
 
-export interface SearchResultWithScore {
-  id: number;
-  score: number;
-  column: string;
+export interface CellSearchResult {
+  rowId: number;
+  columnName: string;
+  value: string;
+  score: number; // 1.0=exact, 0.99=contains, <0.99=fuzzy
 }
 
 export interface SearchStats {
-  exactCount: number;
-  partialCount: number;
-  results: SearchResultWithScore[];
+  exactCount: number; // score === 1.0
+  containsCount: number; // score === 0.99
+  fuzzyCount: number; // score > threshold && score < 0.99
+  totalCount: number;
+  results: CellSearchResult[];
 }
+
+// Alias for backwards compatibility
+export type SearchResultWithScore = CellSearchResult;
 
 // --- Cache Types ---
 

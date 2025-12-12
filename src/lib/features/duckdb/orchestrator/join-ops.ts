@@ -1,10 +1,10 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
-import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { Table } from 'apache-arrow/Arrow';
 import { join_macros } from '../macros/join';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';

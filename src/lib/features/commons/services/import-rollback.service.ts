@@ -1,9 +1,9 @@
-import { projectStore } from '../store/project.store.svelte';
-import { datasetsStore } from '../store/datasets.store.svelte';
-import { visualizationStore } from '../store/visualization.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
-import { logger, LogCategory } from '../utils/logger';
 import type { UploadedFile } from '../store/create-project.types';
+import { datasetsStore } from '../store/datasets.store.svelte';
+import { projectStore } from '../store/project.store.svelte';
+import { visualizationStore } from '../store/visualization.store.svelte';
+import { LogCategory, logger } from '../utils/logger';
 
 /**
  * Snapshot of the state before import attempt

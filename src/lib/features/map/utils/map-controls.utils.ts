@@ -1,7 +1,7 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 export function calculateBoundsFromGeoArrow(
   jsTable: ArrowTable

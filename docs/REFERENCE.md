@@ -129,10 +129,17 @@ Located in `src/lib/features/commons/utils/validation.utils.ts`:
 | `ProjectValidator.validateProjectName` | Name constraints           | Max 255 chars, no special chars |
 | `ProjectValidator.validateFileSize`    | Check file size limit      | Before import                   |
 | `ProjectValidator.validateProjectSize` | Check project size limit   | Before save                     |
-| `ProjectValidator.sanitizeProjectName` | Safe project name          | Project creation                |
 | `ProjectValidator.checkStorageUsage`   | Estimate remaining storage | Before save                     |
 | `DataValidator.validateCSVData`        | CSV data validation        | After parsing                   |
 | `DataValidator.validateGeoData`        | GeoJSON validation         | After parsing                   |
+
+Located in `src/lib/features/commons/utils/sanitize.utils.ts`:
+
+| Function              | Purpose           | Usage            |
+| --------------------- | ----------------- | ---------------- |
+| `sanitizeProjectName` | Safe project name | Project creation |
+| `sanitizeTextInput`   | Safe text input   | User inputs      |
+| `escapeSqlString`     | SQL string escape | DuckDB queries   |
 
 **Example:**
 
@@ -141,6 +148,7 @@ import {
   ProjectValidator,
   DataValidator
 } from '$lib/features/commons/utils/validation.utils';
+import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
 
 // Validate project name
 const nameResult = ProjectValidator.validateProjectName('My Project');
@@ -148,9 +156,9 @@ if (!nameResult.isValid) {
   console.error(nameResult.errors);
 }
 
-// Sanitize project name
-const safeName = ProjectValidator.sanitizeProjectName('My Project! (2024)');
-// → 'My Project_ _2024_'
+// Sanitize project name (removes invalid chars, limits to 255 chars)
+const safeName = sanitizeProjectName('My Project! (2024)');
+// → 'My Project 2024'
 
 // Validate CSV data
 const csvResult = DataValidator.validateCSVData(parsedRows);

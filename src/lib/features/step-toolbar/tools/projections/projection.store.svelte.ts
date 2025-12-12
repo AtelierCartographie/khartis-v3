@@ -1,14 +1,14 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
-import type { ProjectionState } from './projections.types';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
-  getProjectionById,
-  suggestProjection,
   fitProjectionToGeoJSON,
+  getProjectionById,
   projectGeoJSON,
+  suggestProjection,
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import type { ProjectionState } from './projections.types';
 
 const DEFAULT_PROJECTION_STATE: ProjectionState = {
   selected: 'mercator',

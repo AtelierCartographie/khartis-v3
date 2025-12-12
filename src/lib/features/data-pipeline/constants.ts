@@ -1,6 +1,6 @@
 export const PIPELINE_CONST = {
   EXTENSIONS: {
-    TABULAR: ['.csv', '.tsv', '.txt', '.parquet'] as const,
+    TABULAR: ['.csv', '.tsv', '.txt', '.parquet', '.arrow'] as const,
     GEO: [
       '.geojson',
       '.json',
@@ -15,6 +15,7 @@ export const PIPELINE_CONST = {
       '.tsv',
       '.txt',
       '.parquet',
+      '.arrow',
       '.geojson',
       '.json',
       '.shp',
@@ -28,6 +29,10 @@ export const PIPELINE_CONST = {
     CSV: ['text/csv', 'text/plain', 'application/csv'] as const,
     JSON: ['application/json', 'application/geo+json'] as const,
     PARQUET: ['application/octet-stream', 'application/x-parquet'] as const,
+    ARROW: [
+      'application/vnd.apache.arrow.file',
+      'application/octet-stream'
+    ] as const,
     SHAPEFILE: ['application/x-shapefile', 'application/octet-stream'] as const
   },
   LIMITS: {
@@ -60,6 +65,7 @@ export function getSupportedMimeTypes(): string[] {
     ...PIPELINE_CONST.MIME_TYPES.CSV,
     ...PIPELINE_CONST.MIME_TYPES.JSON,
     ...PIPELINE_CONST.MIME_TYPES.PARQUET,
+    ...PIPELINE_CONST.MIME_TYPES.ARROW,
     ...PIPELINE_CONST.MIME_TYPES.SHAPEFILE
   ];
 }

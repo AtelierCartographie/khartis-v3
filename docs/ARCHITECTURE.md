@@ -149,12 +149,12 @@ Not applicable: CSRF, server auth, multi-tenant isolation
 
 ## Extension Points Quick Reference
 
-| Task               | Entry Point                                        |
-| ------------------ | -------------------------------------------------- |
-| New file format    | `src/lib/features/data-pipeline/adapters/parsers/` |
-| New visualization  | `src/lib/features/map/`                            |
-| New classification | `src/lib/features/duckdb/macros/breaks.ts`         |
-| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>`  |
+| Task               | Entry Point                                       |
+| ------------------ | ------------------------------------------------- |
+| New file format    | `src/lib/features/data-pipeline/core/parsers.ts`  |
+| New visualization  | `src/lib/features/map/`                           |
+| New classification | `src/lib/features/duckdb/macros/breaks.ts`        |
+| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>` |
 
 ---
 

@@ -1,7 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { ValidationResult } from '../types';
-import { validationSuccess, validationFailure } from '../types';
 import { PIPELINE_CONST } from '../constants';
+import type { ValidationResult } from '../types';
+import { validationFailure, validationSuccess } from '../types';
 
 export async function validateFile(file: File): Promise<ValidationResult> {
   const { MAX_FILE_SIZE } = PIPELINE_CONST.LIMITS;

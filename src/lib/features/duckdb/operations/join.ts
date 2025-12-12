@@ -3,9 +3,9 @@ import {
   DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import type { AnalysisResults, DuckDBContext, JoinByIdOptions } from '../types';
 
 export async function joinById(

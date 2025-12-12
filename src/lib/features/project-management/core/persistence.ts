@@ -1,9 +1,9 @@
+import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
-import { PROJECT_CONST } from '../constants';
-import { saveToStorage, loadFromStorage } from './storage';
-import { prepareForIndexedDB, deserialize } from './serializer';
 import { bigIntReplacer } from '../utils/json-helpers';
+import { deserialize, prepareForIndexedDB } from './serializer';
+import { loadFromStorage, saveToStorage } from './storage';
 
 let db: IDBDatabase | null = null;
 
