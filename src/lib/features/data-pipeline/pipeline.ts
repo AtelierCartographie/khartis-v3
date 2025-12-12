@@ -14,6 +14,7 @@ import type {
   UploadedFilePayload,
   ValidationResult
 } from './types';
+import { detectDecimalSeparator } from './utils/decimal-detector';
 import { convertGeoJSONToRawDataset } from './utils/geojson-converter';
 import {
   describeGeojsonStructure,
@@ -150,7 +151,27 @@ export const Pipeline = {
       if (isGeoFile) {
         await Duck.read_geofile(file, { tablename: tableName });
       } else {
-        await Duck.read_tabular(file, { tablename: tableName });
+        const isParquet = file.name.toLowerCase().endsWith('.parquet');
+        const isArrow = file.name.toLowerCase().endsWith('.arrow');
+
+        if (isParquet || isArrow) {
+          await Duck.read_tabular(file, {
+            tablename: tableName,
+            format: 'parquet'
+          });
+        } else {
+          const detection = await detectDecimalSeparator(file);
+          if (detection.separator === ',') {
+            logger.info('European decimal format detected', LogCategory.DATA, {
+              confidence: detection.confidence,
+              sampleSize: detection.sampleSize
+            });
+          }
+          await Duck.read_tabular(file, {
+            tablename: tableName,
+            decimal_separator: detection.separator
+          });
+        }
       }
 
       const dataset = await buildDatasetFromDuckTable(ctx, {
@@ -372,7 +393,27 @@ async function processFileInternal(
       shapefile: isShapefile
     });
   } else {
-    await Duck.read_tabular(file, { tablename: tableName });
+    const isParquet = fileInfo.name.toLowerCase().endsWith('.parquet');
+    const isArrow = fileInfo.name.toLowerCase().endsWith('.arrow');
+
+    if (isParquet || isArrow) {
+      await Duck.read_tabular(file, {
+        tablename: tableName,
+        format: 'parquet'
+      });
+    } else {
+      const detection = await detectDecimalSeparator(file);
+      if (detection.separator === ',') {
+        logger.info('European decimal format detected', LogCategory.DATA, {
+          confidence: detection.confidence,
+          sampleSize: detection.sampleSize
+        });
+      }
+      await Duck.read_tabular(file, {
+        tablename: tableName,
+        decimal_separator: detection.separator
+      });
+    }
   }
 
   const dataset = await buildDatasetFromDuckTable(ctx, {

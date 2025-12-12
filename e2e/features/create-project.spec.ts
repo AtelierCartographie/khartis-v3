@@ -1,11 +1,11 @@
-import { test, expect } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import {
+  CSV_MOCKS_PATH,
   ensureFreshStart,
-  waitForModalVisible,
-  waitForMapRender,
   MODAL_CONTAINER_SELECTOR,
-  CSV_MOCKS_PATH
+  waitForMapRender,
+  waitForModalVisible
 } from '../utils/test-helpers';
 
 test.describe('Create Project', () => {

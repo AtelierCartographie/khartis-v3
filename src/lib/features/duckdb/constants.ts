@@ -13,12 +13,14 @@ export const DUCK_CONST = {
   TYPE: {
     TABULAR: 'tabular' as const,
     GEOFILE: 'geofile' as const,
-    PARQUET: 'parquet' as const
+    PARQUET: 'parquet' as const,
+    ARROW: 'arrow' as const
   },
   REGEX: {
     TABULAR: /\.(csv|tsv|text|txt)/i,
     GEO: /\.(geojson|json|gpkg|kml)/i,
     PARQUET: /\.(parquet|geoparquet)/i,
+    ARROW: /\.arrow$/i,
     COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
     COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
     COLUMN_VALIDATION_BOOLEAN_NUMBER: /[0-1]/,

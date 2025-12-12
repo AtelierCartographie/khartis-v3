@@ -8,6 +8,7 @@
     rowIndex: number;
     visibleColumns: ColumnInfo[];
     highlightType?: HighlightType;
+    getCellHighlight?: (columnName: string) => HighlightType;
     isSelectable?: boolean;
     isSelected?: boolean;
     onToggleSelection?: (rowId: number) => void;
@@ -17,6 +18,7 @@
     row,
     visibleColumns,
     highlightType = null,
+    getCellHighlight,
     isSelectable = false,
     isSelected = false,
     onToggleSelection
@@ -71,7 +73,15 @@
     {@const value = row[col.name]}
     {@const isNumeric = isNumericType(col.type)}
     {@const isNull = value === null || value === undefined}
-    <td class:numeric={isNumeric}>
+    {@const cellHighlight = getCellHighlight?.(col.name)}
+    <td
+      class:numeric={isNumeric}
+      class:cell-highlight-current={cellHighlight === 'current'}
+      class:cell-highlight-exact={cellHighlight === 'exact'}
+      class:cell-highlight-contains={cellHighlight === 'contains'}
+      class:cell-highlight-partial={cellHighlight === 'partial'}
+      data-column={col.name}
+    >
       {#if isNull}
         <span class="null-value">—</span>
       {:else}
@@ -83,7 +93,7 @@
 
 <style>
   tr {
-    height: 30px;
+    height: 26px;
     border-bottom: 1px solid var(--cds-ui-03);
     transition: background-color 0.15s;
   }
@@ -132,7 +142,7 @@
     width: 40px;
     min-width: 40px;
     max-width: 40px;
-    height: 30px;
+    height: 26px;
     padding: 0;
     position: sticky;
     left: 0;
@@ -144,15 +154,15 @@
   }
 
   td {
-    padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    padding: var(--cds-spacing-01) var(--cds-spacing-03);
     color: var(--cds-text-01);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
     vertical-align: middle;
-    height: 30px;
-    font-size: 0.875rem;
+    height: 26px;
+    font-size: 0.75rem;
   }
 
   td.numeric {
@@ -163,5 +173,31 @@
   .null-value {
     color: var(--cds-text-03);
     font-style: italic;
+  }
+
+  /* Cell-level highlights (takes priority over row highlight) */
+  td.cell-highlight-current {
+    background-color: #a56eff !important;
+    color: white !important;
+    font-weight: 600;
+  }
+
+  td.cell-highlight-current .null-value {
+    color: rgba(255, 255, 255, 0.7) !important;
+  }
+
+  td.cell-highlight-exact {
+    background-color: #c8a8ff !important;
+    color: var(--cds-text-01);
+  }
+
+  td.cell-highlight-contains {
+    background-color: #d4b9ff !important;
+    color: var(--cds-text-01);
+  }
+
+  td.cell-highlight-partial {
+    background-color: #e8d9ff !important;
+    color: var(--cds-text-01);
   }
 </style>

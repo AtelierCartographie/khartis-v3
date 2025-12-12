@@ -1,3 +1,4 @@
+import { getTableMetadata, invalidateTableCache } from './cache/cache-manager';
 import {
   getContext,
   initEngine,
@@ -5,15 +6,14 @@ import {
   loadMacros
 } from './core/engine';
 import { executeQuery } from './core/query';
-import { registerFiles } from './io/file-registry';
-import { readTabular, readGeofile, readLink } from './io/readers';
 import { exportToCsv, exportToGeoparquet } from './io/exporters';
-import { getTableMetadata, invalidateTableCache } from './cache/cache-manager';
+import { registerFiles } from './io/file-registry';
+import { readGeofile, readLink, readTabular } from './io/readers';
 import { analyse, describeColumns } from './operations/analysis';
-import { searchInTable } from './operations/search';
-import { joinById, applyJoinAssociation } from './operations/join';
 import { addFilter, applyFilters } from './operations/filters';
-import { describeTable, getRowCount, dropRows } from './operations/table-ops';
+import { applyJoinAssociation, joinById } from './operations/join';
+import { searchInTable } from './operations/search';
+import { describeTable, dropRows, getRowCount } from './operations/table-ops';
 
 import { analyse as analyseMacros } from './macros/analyse';
 import { breaks as breaksMacros } from './macros/breaks';

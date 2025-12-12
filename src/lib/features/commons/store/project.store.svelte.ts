@@ -20,6 +20,7 @@ import { dataOrchestratorService } from '../services/data-orchestrator.service.s
 import { downloadFile } from '../utils/file-export.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
+import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import type {
@@ -218,11 +219,48 @@ class ProjectStore {
       return;
     }
 
-    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
-    updatedFiles[fileIndex] = {
-      ...updatedFiles[fileIndex],
-      name: newName
+    const currentFile = this._state.currentProject.data.sourceFiles[fileIndex];
+    const oldName = currentFile.name;
+
+    const getBaseName = (fileName: string) => {
+      const lastDot = fileName.lastIndexOf('.');
+      return lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
     };
+
+    const oldBaseName = getBaseName(oldName);
+    const newBaseName = getBaseName(newName);
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    const updatedFile = { ...updatedFiles[fileIndex], name: newName };
+
+    if (updatedFile.relatedFilesData && oldBaseName !== newBaseName) {
+      const renamedData: Record<string, ArrayBuffer> = {};
+      for (const [fileName, buffer] of Object.entries(
+        updatedFile.relatedFilesData
+      )) {
+        const fileBaseName = getBaseName(fileName);
+        const fileExt = fileName.slice(fileBaseName.length);
+        if (fileBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
+          renamedData[newBaseName + fileExt] = buffer;
+        } else {
+          renamedData[fileName] = buffer;
+        }
+      }
+      updatedFile.relatedFilesData = renamedData;
+    }
+
+    if (updatedFile.relatedFiles && oldBaseName !== newBaseName) {
+      updatedFile.relatedFiles = updatedFile.relatedFiles.map((fileName) => {
+        const fileBaseName = getBaseName(fileName);
+        const fileExt = fileName.slice(fileBaseName.length);
+        if (fileBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
+          return newBaseName + fileExt;
+        }
+        return fileName;
+      });
+    }
+
+    updatedFiles[fileIndex] = updatedFile;
 
     this._state.currentProject = {
       ...this._state.currentProject,
@@ -373,7 +411,7 @@ class ProjectStore {
       throw new Error(nameValidation.errors.join(', '));
     }
 
-    const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+    const sanitizedName = sanitizeProjectName(name);
 
     const project: KhartisProject = {
       id: crypto.randomUUID(),
@@ -511,7 +549,7 @@ class ProjectStore {
 
       const duplicatedProject = duplicateProjectEntity(
         originalProject,
-        ProjectValidator.sanitizeProjectName(duplicatedName)
+        sanitizeProjectName(duplicatedName)
       );
 
       await projectRepository.save(duplicatedProject);

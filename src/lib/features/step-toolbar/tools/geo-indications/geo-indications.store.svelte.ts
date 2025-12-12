@@ -1,5 +1,5 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { ColorState, GeoIndicationsState } from './geo-indications.types';
 
 const DEFAULT_STATE: GeoIndicationsState = {

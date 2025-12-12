@@ -1,5 +1,5 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { createResetFunction } from '$lib/features/commons/utils/store.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import type { SearchState } from './search.types';
 
 const FIXTURE_RESULTS = [

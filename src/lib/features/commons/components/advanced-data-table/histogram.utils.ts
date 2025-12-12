@@ -1,11 +1,12 @@
-import type { AnalysisResult } from '$lib/features/duckdb';
 import {
   create_summary_plot,
   type CategoricalHistogram,
   type NumericHistogram,
   type SummaryPlotData
 } from '$lib/features/commons/components/summary-plot/summary-plot';
+import type { AnalysisResult } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../utils/logger';
+import { getColumnTypeStyle } from './column-type-styles';
 
 type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -37,11 +38,12 @@ function getCSSVariable(name: string, fallback: string): string {
   return value || fallback;
 }
 
-function getPlotOptions() {
+function getPlotOptions(typeSimple?: string) {
+  const typeStyle = getColumnTypeStyle(typeSimple);
   return {
     width: 150,
     height: 48,
-    main_color: '#a56eff',
+    main_color: typeStyle.color,
     nulls_color: '#ffd666',
     unique_color: getCSSVariable('--cds-ui-03', '#525252'),
     bg_color: getCSSVariable('--cds-ui-02', '#393939'),
@@ -63,10 +65,11 @@ export function getPlotForColumn(
   }
 
   const histogramValue = analysis.histogram;
+  const typeSimple = analysis.type_simple;
 
   const renderPlot = (summaryData: SummaryPlotData): PlotElement | null => {
     try {
-      return create_summary_plot(summaryData, getPlotOptions());
+      return create_summary_plot(summaryData, getPlotOptions(typeSimple));
     } catch (err) {
       logger.error('Error creating histogram', LogCategory.UI, err);
       return null;

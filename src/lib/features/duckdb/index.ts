@@ -9,36 +9,37 @@ export { DuckDBValidatorService } from './validator.service';
 
 // Arrow converter
 export {
-  insertArrowTableIntoDuckDB,
-  convertTabularDataToArrow
+  convertTabularDataToArrow,
+  insertArrowTableIntoDuckDB
 } from './io/arrow-converter';
 
 // Types
 export { RefineOperation } from './types';
 export type {
+  AnalyseOptions,
   AnalysisResult,
   AnalysisResults,
   ArrowTableLike,
-  SearchResultWithScore,
-  SearchStats,
-  FilterOperator,
+  CellSearchResult,
   DataTableFilter,
   DataTableFilterInput,
-  FilterStats,
+  DuckDBContext,
   DuckDBDataset,
   DuckDBMetadata,
-  DuckDBContext,
-  TableMetadata,
+  FilterOperator,
+  FilterStats,
+  FinalizeJoinResult,
+  GPSBounds,
+  GPSColumns,
+  JoinByIdOptions,
   QueryOptions,
-  ReadTabularOptions,
   ReadGeofileOptions,
   ReadLinkOptions,
-  JoinByIdOptions,
-  AnalyseOptions,
-  GPSColumns,
-  GPSBounds,
-  FinalizeJoinResult
+  ReadTabularOptions,
+  SearchResultWithScore,
+  SearchStats,
+  TableMetadata
 } from './types';
 
 // Constants
-export { DUCK_CONST, CACHE_CONSTANTS } from './constants';
+export { CACHE_CONSTANTS, DUCK_CONST } from './constants';

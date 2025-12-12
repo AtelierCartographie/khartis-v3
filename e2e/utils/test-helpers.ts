@@ -1,4 +1,4 @@
-import { expect, type Page, type Locator } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { join } from 'node:path';
 
 export const MOCKS_PATH = join(process.cwd(), 'e2e', 'mocks');
