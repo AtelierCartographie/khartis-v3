@@ -187,15 +187,6 @@ function create_plot_numeric(
 }
 
 /**
- * Extended category item with pre-calculated stacked positions
- */
-interface StackedCategoryItem extends CategoryHistogramItem {
-  x1: number;
-  x2: number;
-  xMid: number;
-}
-
-/**
  * Creates a categorical plot using the provided data and options.
  */
 function create_plot_categorical(
@@ -234,23 +225,6 @@ function create_plot_categorical(
       ];
   }
 
-  // Pre-calculate stacked positions for proper hover detection
-  const totalCount = histogramArray.reduce((sum, d) => sum + d.count, 0);
-  let cumulative = 0;
-  const stackedData: StackedCategoryItem[] = histogramArray.map((d) => {
-    const x1 = cumulative;
-    cumulative += d.count;
-    const x2 = cumulative;
-    return {
-      ...d,
-      x1,
-      x2,
-      xMid: (x1 + x2) / 2
-    };
-  });
-
-  const histogramData = stackedData;
-
   // Handle null category => show "nulls"
   const get_label: LabelFunction = (label) =>
     label === null ? 'nulls' : label;
@@ -258,7 +232,7 @@ function create_plot_categorical(
   // filter : [low_limit, high limit]
   const label_layer = (filter: PercentRange, lineWidth: number) =>
     Plot.textX(
-      histogramData as CategoryHistogramItem[],
+      histogramArray as CategoryHistogramItem[],
       Plot.stackX({
         text: (d: CategoryHistogramItem) =>
           d.percent >= filter[0] && d.percent < filter[1]
@@ -279,6 +253,13 @@ function create_plot_categorical(
   // Intercept case when only one category.
   const has_one_category = numRows === 1 ? true : false;
 
+  // Handle fix text with pointer and stack mark
+	// https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
+	function renameXYPxPy(options: Record<string, unknown>): Record<string, unknown> {
+		const { x, y, ...rest } = options;
+		return { ...rest, px: x, py: y };
+	}
+
   const plot = Plot.plot({
     width,
     height,
@@ -291,7 +272,7 @@ function create_plot_categorical(
     marks: [
       // BARS
       Plot.barX(
-        histogramData as CategoryHistogramItem[],
+        histogramArray as CategoryHistogramItem[],
         Plot.stackX({
           x: 'count',
           fill: (d: CategoryHistogramItem) =>
@@ -314,7 +295,7 @@ function create_plot_categorical(
       // special case all uniques values
       has_one_category
         ? Plot.textX(
-            histogramData as CategoryHistogramItem[],
+            histogramArray as CategoryHistogramItem[],
             Plot.stackX({
               text: (d: CategoryHistogramItem) =>
                 d.category === 'unique'
@@ -344,62 +325,48 @@ function create_plot_categorical(
       // INTERACTIVITY
       // Highlight bar with fixed pointer-events
       Plot.barX(
-        histogramData as CategoryHistogramItem[],
+        histogramArray as CategoryHistogramItem[],
         Plot.pointerX(
           Plot.stackX({
             x: 'count',
             stroke: 'currentColor',
             inset,
-            render: (
-              index: number[],
-              scales: unknown,
-              values: unknown,
-              dimensions: unknown,
-              context: unknown,
-              next: (
-                i: number[],
-                s: unknown,
-                v: unknown,
-                d: unknown,
-                c: unknown
-              ) => SVGGElement | null
-            ) => {
-              const g = next(index, scales, values, dimensions, context);
-              if (g) {
-                for (const rect of g.querySelectorAll('rect')) {
-                  (rect as SVGElement).style.pointerEvents = 'all';
-                }
-              }
-              return g;
-            }
-          } as ObservablePlotStackOptions & { render: unknown })
+          } as ObservablePlotStackOptions)
         )
       ),
       // Mask the count of all categories
       Plot.text(
-        histogramData as StackedCategoryItem[],
-        Plot.pointerX({
-          px: 'xMid',
-          text: (_d: StackedCategoryItem) => 'XXXXXXXXXXXXXXXXXXX',
-          frameAnchor: 'bottom-left',
-          dy: 10,
-          fill: bg_color,
-          stroke: bg_color,
-          strokeWidth: 5
-        } as never)
+        histogramArray as CategoryHistogramItem[],
+        Plot.pointerX(
+          renameXYPxPy(
+            Plot.stackX({
+              x: 'count',
+              text: (_d: CategoryHistogramItem) => 'XXXXXXXXXXXXXXXXXXX',
+              frameAnchor: 'bottom-left',
+              dy: 10,
+              fill: bg_color,
+              stroke: bg_color,
+              strokeWidth: 5
+            } as never)
+          )
+        )
       ),
       // Show count and category in a fixed place
       Plot.text(
-        histogramData as StackedCategoryItem[],
-        Plot.pointerX({
-          px: 'xMid',
-          text: (d: StackedCategoryItem) =>
-            `${d.count.toLocaleString()} - ${d.category}`,
-          frameAnchor: 'bottom-left',
-          dy: 10,
-          fill: text_color
-        } as never)
+        histogramArray as CategoryHistogramItem[],
+        Plot.pointerX(
+          renameXYPxPy(
+            Plot.stackX({
+            x: 'count',
+            text: (d: CategoryHistogramItem) =>
+              `${d.count?.toLocaleString()} - ${d.category}`,
+            frameAnchor: 'bottom-left',
+            dy: 10,
+            fill: text_color
+          } as never)
+        )
       )
+    )
     ]
   });
 
