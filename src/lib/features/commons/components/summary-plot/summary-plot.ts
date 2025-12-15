@@ -118,11 +118,12 @@ function create_plot_numeric(
   options: SummaryPlotOptions = {}
 ) {
   const {
-    width = 144,
+    width = 150,
     height = 64,
     main_color = '#a56eff',
     nulls_color = 'gold',
-    text_color = '#f4f4f4'
+    text_color = '#f4f4f4',
+    bg_color = '#222'
   } = options;
   const { min, max, histogram, type_simple, nulls } = data;
 
@@ -141,7 +142,8 @@ function create_plot_numeric(
   return Plot.plot({
     width,
     height,
-    marginBottom: nullCount > 0 ? 24 : 15,
+    marginBottom: 8,
+    style: 'overflow: visible;',
     x: { axis: null, type: 'band' },
     y: { axis: null },
     marks: [
@@ -160,7 +162,7 @@ function create_plot_numeric(
         {
           ...text_options,
           dx: -(width / 2),
-          textAnchor: 'start'
+          textAnchor: 'start',
         }
       ),
       Plot.text(
@@ -172,16 +174,48 @@ function create_plot_numeric(
         {
           ...text_options,
           dx: width / 2,
-          textAnchor: 'end'
+          textAnchor: 'end',
         }
       ),
+      // Interactive null count (only on hover)
       nullCount > 0
-        ? Plot.text([`${nullCount.toLocaleString()} nulls`], {
-            frameAnchor: 'bottom',
-            dy: 18,
-            fill: nulls_color
-          })
-        : null
+        ? [
+          Plot.rectY(
+            histogram.toArray().filter((d) => d.bin === null),
+            Plot.pointerX({
+              x: 'bin',
+              y: 'count',
+              stroke: 'currentColor',
+            })
+          ),
+          // Null count text background (mask)
+          Plot.text(
+            histogram.toArray().filter((d) => d.bin === null),
+            Plot.pointerX({
+              x: 'bin',
+              y: 0,
+              text: () => 'XXXXXXXXXXXXXXX',
+              dy: 8,
+              fill: bg_color,
+              stroke: bg_color,
+              strokeWidth: 5,
+            })
+          ),
+          // Null count text (appears on hover)
+          Plot.text(
+            histogram.toArray().filter((d) => d.bin === null),
+            Plot.pointerX({
+              x: 'bin',
+              y: 0,
+              text: () => `${nullCount.toLocaleString()} nulls`,
+              dx: 8,
+              dy: 8,
+              fill: "grey",
+              textAnchor: 'end'
+            })
+          )
+        ]
+        : null,
     ]
   });
 }
@@ -194,7 +228,7 @@ function create_plot_categorical(
   options: SummaryPlotOptions = {}
 ) {
   const {
-    width = 144,
+    width = 150,
     height = 64,
     geoid = false,
     main_color = '#fa4d56',
@@ -265,8 +299,8 @@ function create_plot_categorical(
     height,
     marginLeft: 5,
     marginRight: 5,
-    marginBottom: 15,
-    marginTop: 10,
+    marginBottom: 8,
+    marginTop: 5,
     style: 'overflow: visible;',
     x: { axis: null },
     marks: [
