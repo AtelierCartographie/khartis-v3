@@ -439,6 +439,16 @@
     font-variant-numeric: tabular-nums;
   }
 
+  table :global {
+    td,
+    th {
+      text-overflow: ellipsis;
+      min-width: 150px;
+      max-width: 150px;
+      overflow: hidden;
+    }
+  }
+
   thead {
     position: sticky;
     top: 0;
