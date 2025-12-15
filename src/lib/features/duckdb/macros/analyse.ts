@@ -162,6 +162,32 @@ const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabna
 	FROM nulls_count
 );`;
 
+// HISTOGRAM DATE
+// Converts date/timestamp values to epoch (seconds since 1970) for numeric binning
+// Bins are returned as epoch values, histogram counts per bin
+const histogram_date_macro = `CREATE OR REPLACE MACRO histogram_date(tabname, colname) AS TABLE(
+	WITH epoch_values AS (
+		FROM query_table(tabname::VARCHAR)
+		SELECT epoch("colname"::TIMESTAMP) AS epoch_val
+	), bins AS (
+		FROM epoch_values
+		SELECT equi_width_bins(MIN(epoch_val), MAX(epoch_val), 15, true) AS bins
+	), agg AS (
+		SELECT list_sort(list_distinct(FIRST(bins))) AS bins, histogram(epoch_val, bins) AS histogram
+		FROM epoch_values, bins
+	), histo AS (
+		FROM agg, UNNEST(agg.bins) AS u(bin)
+		SELECT bin, histogram[bin]::DOUBLE AS count
+	), nulls_count AS (
+		FROM query_table(tabname)
+		SELECT NULL AS bin, (COUNT(*) - COUNT("colname")::DOUBLE) AS count
+		HAVING (COUNT(*) - COUNT("colname")::DOUBLE) <> 0
+	)
+	FROM histo
+	UNION ALL
+	FROM nulls_count
+);`;
+
 // HISTOGRAM CATEGORICAL
 const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categorical(tabname, colname) AS TABLE (
 	WITH nrow AS (
@@ -193,4 +219,5 @@ export const analyse =
   summary_numeric_macro +
   summary_date_macro +
   histogram_numeric_macro +
+  histogram_date_macro +
   histogram_categorical_macro;
