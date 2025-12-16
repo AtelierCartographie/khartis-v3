@@ -52,7 +52,9 @@ describe('File Validators', () => {
 
     it('should accept file exactly at WARNING_FILE_SIZE without warning', async () => {
       // Create a mock File with size property without allocating actual memory
-      const mockFile = new File(['test'], 'exact50mb.csv', { type: 'text/csv' });
+      const mockFile = new File(['test'], 'exact50mb.csv', {
+        type: 'text/csv'
+      });
       Object.defineProperty(mockFile, 'size', {
         value: 50 * 1024 * 1024,
         writable: false
