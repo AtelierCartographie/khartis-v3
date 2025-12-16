@@ -105,5 +105,8 @@
       "esbuild"
     ]
   },
+  "resolutions": {
+    "apache-arrow": "^21.1.0"
+  },
   "packageManager": "yarn@4.9.4"
 }
