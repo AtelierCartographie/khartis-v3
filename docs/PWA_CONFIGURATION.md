@@ -280,7 +280,7 @@ manifest: {
 **Generating icons**: Use `@vite-pwa/assets-generator`:
 
 ```bash
-yarn generate-pwa-assets
+pnpm generate-pwa-assets
 ```
 
 ## Update Prompt Component
@@ -581,8 +581,8 @@ Currently using `vite-plugin-pwa` (generic). For better SvelteKit integration, c
 1. Install `@vite-pwa/sveltekit`:
 
 ```bash
-yarn add @vite-pwa/sveltekit -D
-yarn remove vite-plugin-pwa
+pnpm add @vite-pwa/sveltekit -D
+pnpm remove vite-plugin-pwa
 ```
 
 2. Update `vite.config.ts`:
@@ -624,8 +624,8 @@ import { useRegisterSW } from 'virtual:pwa-register/svelte';
 1. **Build production version**:
 
 ```bash
-yarn build
-yarn preview
+pnpm build
+pnpm preview
 ```
 
 2. **Open Chrome DevTools** > Application tab:

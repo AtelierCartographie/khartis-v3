@@ -7,20 +7,20 @@ Thank you for your interest in improving Khartis v3. This guide explains how to 
 ### Prerequisites
 
 - Node.js ≥ 18
-- Yarn 4 (via Corepack)
+- pnpm 9 (via Corepack)
 - Git and a modern browser (Chrome, Firefox, Safari, Edge)
 
 ### Setup
 
 ```bash
 # Clone and setup
-corepack enable
+corepack enable pnpm
 git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
-yarn init:project    # Install deps + setup Husky hooks
+pnpm init:project    # Install deps + setup Husky hooks
 
 # Start development
-yarn dev             # → http://localhost:5176
+pnpm dev             # → http://localhost:5176
 ```
 
 **Development URLs:**
@@ -116,15 +116,15 @@ BREAKING CHANGE: Legacy authentication method removed
 
 ### Code quality
 
-- [ ] `yarn lint` passes
-- [ ] `yarn format` applied
-- [ ] `yarn check` passes (TypeScript + Svelte)
-- [ ] `yarn build` succeeds (no blocking warnings)
+- [ ] `pnpm lint` passes
+- [ ] `pnpm format` applied
+- [ ] `pnpm check` passes (TypeScript + Svelte)
+- [ ] `pnpm build` succeeds (no blocking warnings)
 - [ ] No console errors/warnings in browser
 
 ### Testing
 
-- [ ] `yarn test` passes (unit + e2e as applicable)
+- [ ] `pnpm test` passes (unit + e2e as applicable)
 - [ ] New features include tests; bug fixes include regression tests
 - [ ] Manual validation on dev build
 - [ ] Cross‑browser spot‑check (Chrome, Firefox, Safari)
@@ -132,7 +132,7 @@ BREAKING CHANGE: Legacy authentication method removed
 ### Internationalization
 
 - [ ] No hardcoded user‑facing text; keys added/updated in Paraglide messages
-- [ ] `yarn machine-translate` run for new keys (then review)
+- [ ] `pnpm machine-translate` run for new keys (then review)
 
 ### Documentation
 
@@ -245,10 +245,10 @@ try {
 ### Running tests
 
 ```bash
-yarn test          # All tests (unit + E2E)
-yarn test:unit     # Unit tests only
-yarn test:e2e      # E2E tests only
-yarn build         # Ensure production build works
+pnpm test          # All tests (unit + E2E)
+pnpm test:unit     # Unit tests only
+pnpm test:e2e      # E2E tests only
+pnpm build         # Ensure production build works
 ```
 
 ### Writing tests
@@ -268,7 +268,7 @@ yarn build         # Ensure production build works
 ## 7) Internationalization
 
 - Use Paraglide‑JS for strings; add keys to messages
-- Run `yarn machine-translate` to generate missing translations and review
+- Run `pnpm machine-translate` to generate missing translations and review
 - Prefer descriptive hierarchical keys (e.g., `legend.title`, `format.page.size`)
 
 ## 8) Accessibility & responsiveness
