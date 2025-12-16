@@ -1,8 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { getTableMetadata } from '../cache/cache-manager';
 import type {
   AnalyseOptions,
   AnalysisResult,
@@ -146,7 +146,7 @@ export async function analyse(
                 ) as Promise<ArrowTableLike>,
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  `FROM histogram_date(${analysisTable}, "${d.name}")`
                 )
               ]);
               summary_date = dateSum;
