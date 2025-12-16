@@ -252,6 +252,8 @@ export class VizSuggesterService {
         return aNulls - bNulls;
       })
       .filter((col) => col.semioType !== 'geoid') // Exclude ID columns
+      .filter((col) => col.semioType !== 'geolat') // Exclude lat coordinate columns
+      .filter((col) => col.semioType !== 'geolon') // Exclude lon coordinate columns
       .filter((col) => this.getUniqueCount(col) > 1); // Exclude columns with only 1 value
 
     if (debug) {
@@ -304,15 +306,24 @@ export class VizSuggesterService {
       typeof column.stats?.max === 'number' ? (column.stats?.max as number) : 0;
 
     // Keyword detection in column name
+    // Split by non-alphanumeric characters to properly detect keywords separated by underscores
     const columnName = column.name ?? '';
     const lowerName = columnName.toLowerCase();
-    const idWords = /\b(id|code|iso)\b/.test(lowerName);
-    const latWords = /\b(lat|latitude)\b/.test(lowerName);
-    const lonWords = /\b(lon|lng|longitude)\b/.test(lowerName);
-    const ratioWords = /\b(ratio|rate|percent|pct|%|pour|taux)\b/.test(
-      lowerName
+    const nameParts = lowerName.split(/[^a-zA-Z0-9%]/);
+
+    const idWords = nameParts.some((p) =>
+      ['id', 'code', 'iso'].includes(p)
     );
-    const rankWords = /\b(rank|order|niveau|level)\b/.test(lowerName);
+    const latWords = nameParts.some((p) => ['lat', 'latitude'].includes(p));
+    const lonWords = nameParts.some((p) =>
+      ['lon', 'lng', 'longitude'].includes(p)
+    );
+    const ratioWords = nameParts.some((p) =>
+      ['ratio', 'rate', 'percent', 'pct', '%', 'pour', 'taux'].includes(p)
+    );
+    const rankWords = nameParts.some((p) =>
+      ['rank', 'order', 'niveau', 'level'].includes(p)
+    );
 
     // Simplified heuristics (no access to share_integers/floats from original DuckDB)
     const extentMagnitude = max > 0 ? Math.log10(max / Math.max(min, 1)) : 0;
@@ -321,11 +332,7 @@ export class VizSuggesterService {
 
     switch (columnType) {
       case 'number':
-        break;
-
       case 'integer':
-        break;
-
       case 'bigint':
         results.push(
           this.isQTA({ uniqueCount, extentMagnitude }),
@@ -343,8 +350,6 @@ export class VizSuggesterService {
         break;
 
       case 'string':
-        break;
-
       case 'text':
         results.push(
           this.isQL({ shareUniques, uniqueCount }),
