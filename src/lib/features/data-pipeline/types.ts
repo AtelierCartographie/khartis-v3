@@ -12,6 +12,40 @@ export enum ColumnType {
   TEXT = 'text'
 }
 
+export enum GeometryTypeEnum {
+  POINT = 'Point',
+  MULTIPOINT = 'MultiPoint',
+  LINESTRING = 'LineString',
+  MULTILINESTRING = 'MultiLineString',
+  POLYGON = 'Polygon',
+  MULTIPOLYGON = 'MultiPolygon'
+}
+
+export enum GeoLocationType {
+  LATITUDE = 'latitude',
+  LONGITUDE = 'longitude',
+  COUNTRY_NAME = 'country_name',
+  ISO2 = 'iso2',
+  ISO3 = 'iso3',
+  REGION = 'region',
+  CITY = 'city',
+  COORDINATES = 'coordinates',
+  LOCATION_NAME = 'location_name',
+  UNKNOWN = 'unknown'
+}
+
+export enum FileFormatEnum {
+  CSV = 'csv',
+  GEOJSON = 'geojson',
+  SHAPEFILE = 'shapefile',
+  GEOPACKAGE = 'geopackage',
+  GEOPARQUET = 'geoparquet',
+  KML = 'kml',
+  KMZ = 'kmz',
+  GPX = 'gpx',
+  UNKNOWN = 'unknown'
+}
+
 export function isNumericType(type: ColumnType): boolean {
   return type === ColumnType.NUMBER;
 }
@@ -266,17 +300,7 @@ export interface ColumnInfo {
 export interface GeoColumnInfo {
   index: number;
   columnName: string;
-  type:
-    | 'latitude'
-    | 'longitude'
-    | 'country_name'
-    | 'iso2'
-    | 'iso3'
-    | 'region'
-    | 'city'
-    | 'coordinates'
-    | 'location_name'
-    | 'unknown';
+  type: `${GeoLocationType}`;
   confidence: number;
   isValid?: boolean;
 }
@@ -292,15 +316,8 @@ export interface AnalysisResult {
 
 // --- Dataset Result (main output) ---
 
-export type FileFormat =
-  | 'csv'
-  | 'geojson'
-  | 'shapefile'
-  | 'geopackage'
-  | 'geoparquet'
-  | 'kml'
-  | 'kmz'
-  | 'unknown';
+// Use FileFormatEnum values instead of string literals
+export type FileFormat = `${FileFormatEnum}`;
 
 export interface DatasetMetadata {
   processedAt: Date;
@@ -356,13 +373,7 @@ export interface ProcessedDataset {
   rowCount: number;
   columns: ColumnInfo[];
   analysis: ProcessedDatasetAnalysisResult;
-  geometry?:
-    | 'Point'
-    | 'LineString'
-    | 'Polygon'
-    | 'MultiPoint'
-    | 'MultiLineString'
-    | 'MultiPolygon';
+  geometry?: `${GeometryTypeEnum}`;
   bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
   duckdbTableName?: string;
   createdAt: Date;

@@ -1,5 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import { isGeospatialFile, isTabularFile } from '../constants';
 import type { FileFormat, PipelineContext } from '../types';
@@ -56,7 +57,10 @@ function handleParserError(
     error
   });
   throw new ParserError(
-    `Failed to parse ${parserType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    m.pipeline_error_parse_failed({
+      format: parserType,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }),
     error,
     parserType
   );
@@ -183,7 +187,7 @@ export async function parseFile(
   }
 
   throw new ParserError(
-    `Unsupported file type: ${file.name}`,
+    m.pipeline_error_unsupported_file({ name: file.name }),
     undefined,
     'unknown'
   );

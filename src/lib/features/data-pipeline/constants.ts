@@ -8,8 +8,10 @@ export const PIPELINE_CONST = {
       '.gpkg',
       '.kml',
       '.kmz',
-      '.geoparquet'
+      '.gpx'
     ] as const,
+    PARQUET: ['.parquet', '.geoparquet'] as const,
+    ZIP: ['.zip'] as const,
     ALL: [
       '.csv',
       '.tsv',
@@ -22,7 +24,9 @@ export const PIPELINE_CONST = {
       '.gpkg',
       '.kml',
       '.kmz',
-      '.geoparquet'
+      '.gpx',
+      '.geoparquet',
+      '.zip'
     ] as const
   },
   MIME_TYPES: {
@@ -36,7 +40,8 @@ export const PIPELINE_CONST = {
     SHAPEFILE: ['application/x-shapefile', 'application/octet-stream'] as const
   },
   LIMITS: {
-    MAX_FILE_SIZE: 50 * 1024 * 1024,
+    MAX_FILE_SIZE: 100 * 1024 * 1024,
+    WARNING_FILE_SIZE: 50 * 1024 * 1024,
     SAMPLE_ROWS: 100,
     TYPE_THRESHOLD: 0.8
   },
@@ -54,6 +59,11 @@ export function isGeospatialFile(name: string): boolean {
 export function isTabularFile(name: string): boolean {
   const lower = name.toLowerCase();
   return PIPELINE_CONST.EXTENSIONS.TABULAR.some((ext) => lower.endsWith(ext));
+}
+
+export function isParquetFile(name: string): boolean {
+  const lower = name.toLowerCase();
+  return PIPELINE_CONST.EXTENSIONS.PARQUET.some((ext) => lower.endsWith(ext));
 }
 
 export function getSupportedExtensions(): string[] {
