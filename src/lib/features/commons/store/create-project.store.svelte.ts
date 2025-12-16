@@ -346,11 +346,12 @@ export const createProjectActions = {
     const { fileType, content } = result;
     const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
-    let fileName = `${baseName}.${extension}`;
+    const timestamp = Date.now();
+    let fileName = `${baseName}-${timestamp}.${extension}`;
 
     let counter = 1;
     while (this.isFileDuplicate(fileName)) {
-      fileName = `${baseName}-${counter}.${extension}`;
+      fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
       counter++;
     }
 
