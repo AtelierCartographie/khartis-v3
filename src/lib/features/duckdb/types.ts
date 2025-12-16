@@ -6,6 +6,35 @@ import type { Table } from 'apache-arrow/Arrow';
 
 export { FileType };
 
+// --- Enums ---
+
+export enum DuckDBSimplifiedType {
+  NUMERIC = 'numeric',
+  DATE = 'date',
+  STRING = 'string',
+  GEOMETRY = 'geometry',
+  OTHER = 'other'
+}
+
+export enum QueryFormatEnum {
+  ARROW_TABLE = 'arrow-table',
+  ARROW_IPC = 'arrow-ipc',
+  ARRAY = 'array'
+}
+
+export enum FilterOperatorEnum {
+  GTE = 'gte',
+  LTE = 'lte',
+  CONTAINS = 'contains',
+  EQUALS = 'equals',
+  NOT_EQUALS = 'not_equals',
+  BETWEEN = 'between',
+  TOP_ASC = 'top_asc',
+  TOP_DESC = 'top_desc',
+  EMPTY = 'empty',
+  NOT_EMPTY = 'not_empty'
+}
+
 // --- DuckDB Metadata Types ---
 
 export interface DuckDBMetadata {
@@ -20,7 +49,7 @@ export interface DuckDBMetadata {
 
 export interface AnalysisResult {
   name: string;
-  type_simple: 'numeric' | 'date' | 'string';
+  type_simple: DuckDBSimplifiedType | 'numeric' | 'date' | 'string';
   min?: number | Date;
   max?: number | Date;
   histogram?: unknown;
@@ -35,7 +64,8 @@ export type AnalysisResults = AnalysisResult[];
 
 // --- Query Types ---
 
-export type QueryFormat = 'arrow-table' | 'arrow-ipc' | 'array';
+// Use QueryFormatEnum values instead of string literals
+export type QueryFormat = `${QueryFormatEnum}`;
 
 export interface QueryOptions {
   format?: QueryFormat;
@@ -170,17 +200,8 @@ export enum RefineOperation {
   TRIM_ALL = 'trim_all'
 }
 
-export type FilterOperator =
-  | 'gte'
-  | 'lte'
-  | 'contains'
-  | 'equals'
-  | 'not_equals'
-  | 'between'
-  | 'top_asc'
-  | 'top_desc'
-  | 'empty'
-  | 'not_empty';
+// Use FilterOperatorEnum values instead of string literals
+export type FilterOperator = `${FilterOperatorEnum}`;
 
 export interface DataTableFilterInput {
   column: string;

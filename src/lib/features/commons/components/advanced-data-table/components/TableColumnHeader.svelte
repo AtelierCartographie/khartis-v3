@@ -407,7 +407,7 @@
   .unique-count {
     display: inline-block;
     background-color: var(--cds-ui-03);
-    color: var(--cds-text-01);
+    color: #ffffff;
     padding: 4px 12px;
     border-radius: 12px;
     font-size: 9px;
