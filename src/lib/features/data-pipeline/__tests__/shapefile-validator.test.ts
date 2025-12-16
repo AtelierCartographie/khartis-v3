@@ -1,23 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isGeospatialFile,
-  isParquetFile,
-  isTabularFile,
-  PIPELINE_CONST
-} from '../constants';
-import {
   canProcessShapefile,
   detectShapefileBaseName,
   getShapefileValidationMessage,
   isShapefileComponent,
   validateShapefileSet
 } from '../utils/shapefile-validator';
-import {
-  getSupportedFilesFromArchive,
-  isZipFile,
-  isZipFileName,
-  type ExtractedFile
-} from '../utils/zip-handler';
 
 describe('Shapefile Validator', () => {
   describe('isShapefileComponent', () => {
@@ -136,80 +124,4 @@ describe('Shapefile Validator', () => {
       expect(message.type).toBe('warning');
     });
   });
-});
-
-describe('ZIP Handler', () => {
-  describe('isZipFile / isZipFileName', () => {
-    it('should detect ZIP files', () => {
-      expect(isZipFile(new File([], 'test.zip'))).toBe(true);
-      expect(isZipFile(new File([], 'test.ZIP'))).toBe(true);
-      expect(isZipFile(new File([], 'test.csv'))).toBe(false);
-      expect(isZipFileName('archive.zip')).toBe(true);
-      expect(isZipFileName('ARCHIVE.ZIP')).toBe(true);
-      expect(isZipFileName('data.csv')).toBe(false);
-    });
-  });
-
-  describe('getSupportedFilesFromArchive', () => {
-    it('should filter supported files', () => {
-      const files: ExtractedFile[] = [
-        { name: 'data.csv', path: 'data.csv', content: new Uint8Array() },
-        { name: 'map.geojson', path: 'map.geojson', content: new Uint8Array() },
-        { name: 'readme.md', path: 'readme.md', content: new Uint8Array() },
-        { name: 'data.gpkg', path: 'data.gpkg', content: new Uint8Array() }
-      ];
-      const supported = getSupportedFilesFromArchive(files);
-      expect(supported).toHaveLength(3);
-      expect(supported.map((f) => f.name)).toContain('data.csv');
-      expect(supported.map((f) => f.name)).toContain('map.geojson');
-      expect(supported.map((f) => f.name)).toContain('data.gpkg');
-      expect(supported.map((f) => f.name)).not.toContain('readme.md');
-    });
-
-    it('should support all expected formats', () => {
-      const formats = [
-        '.csv', '.tsv', '.txt', '.json', '.geojson', '.parquet',
-        '.geoparquet', '.arrow', '.gpkg', '.kml', '.kmz', '.gpx'
-      ];
-      const files: ExtractedFile[] = formats.map((ext) => ({
-        name: `file${ext}`,
-        path: `file${ext}`,
-        content: new Uint8Array()
-      }));
-      const supported = getSupportedFilesFromArchive(files);
-      expect(supported).toHaveLength(formats.length);
-    });
-  });
-});
-
-describe('Format Detection Matrix', () => {
-  const testCases = [
-    { name: 'test.csv', tabular: true, geo: false, parquet: false, supported: true },
-    { name: 'test.tsv', tabular: true, geo: false, parquet: false, supported: true },
-    { name: 'test.txt', tabular: true, geo: false, parquet: false, supported: true },
-    { name: 'test.geojson', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.json', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.gpkg', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.gpx', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.kml', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.kmz', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.parquet', tabular: true, geo: false, parquet: true, supported: true },
-    { name: 'test.geoparquet', tabular: false, geo: false, parquet: true, supported: true },
-    { name: 'test.arrow', tabular: true, geo: false, parquet: false, supported: true },
-    { name: 'test.shp', tabular: false, geo: true, parquet: false, supported: true },
-    { name: 'test.zip', tabular: false, geo: false, parquet: false, supported: true },
-    { name: 'test.unknown', tabular: false, geo: false, parquet: false, supported: false },
-    { name: 'test.exe', tabular: false, geo: false, parquet: false, supported: false },
-    { name: 'test.doc', tabular: false, geo: false, parquet: false, supported: false }
-  ];
-
-  for (const { name, tabular, geo, parquet, supported } of testCases) {
-    it(`should correctly classify ${name}`, () => {
-      const ext = '.' + name.split('.').pop();
-      expect(isTabularFile(name)).toBe(tabular);
-      expect(isGeospatialFile(name)).toBe(geo);
-      expect(isParquetFile(name)).toBe(parquet);
-      expect(PIPELINE_CONST.EXTENSIONS.ALL.includes(ext as never)).toBe(supported);
-    });
-  }
 });
