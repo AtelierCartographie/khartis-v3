@@ -22,10 +22,6 @@ export function isZipFile(file: File): boolean {
   return file.name.toLowerCase().endsWith('.zip');
 }
 
-export function isZipFileName(name: string): boolean {
-  return name.toLowerCase().endsWith('.zip');
-}
-
 function shouldIgnoreFile(path: string): boolean {
   const pathParts = path.split('/');
   return (

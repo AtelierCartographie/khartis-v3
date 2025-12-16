@@ -1,6 +1,6 @@
 export type ColumnTypeSimple = 'string' | 'numeric' | 'date';
 
-interface ColumnTypeStyle {
+export interface ColumnTypeStyle {
   color: string;
   label: string | null;
 }

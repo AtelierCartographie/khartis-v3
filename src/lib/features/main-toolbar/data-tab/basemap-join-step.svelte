@@ -665,10 +665,8 @@
 
   // Consolidated effect for loading suggestions - avoid race conditions
   $effect(() => {
-    const dataset = selectedDataset;
-    const _linkedVar = dataTabState.geolocation.linkedVariableName;
-    // Track both dependencies, only call loadSuggestions once
-    if (dataset) {
+    void dataTabState.geolocation.linkedVariableName;
+    if (selectedDataset) {
       loadSuggestions();
     }
   });

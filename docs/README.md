@@ -140,7 +140,7 @@ src/lib/
 ```bash
 pnpm test:unit        # Unit tests
 pnpm test:e2e         # E2E tests
-pnpm test:coverage    # Coverage report
+pnpm test             # Run all tests
 ```
 
 ## 📝 Contributing

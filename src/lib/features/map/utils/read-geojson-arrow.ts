@@ -7,10 +7,17 @@ import {
   tableFromIPC,
   type Table as ArrowTable
 } from 'apache-arrow/Arrow';
+import {
+  ArrowExtension,
+  GeoArrowMetadataKey,
+  GeoColumnName,
+  GeoJsonGeometryType,
+  GeometryEncoding
+} from '../constants';
 
 function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === 'geom' || f.name === 'geometry'
+    (f) => f.name === GeoColumnName.GEOM || f.name === GeoColumnName.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -19,22 +26,22 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
 
   const geoColumnName = geomColumn.name;
 
-  const extensionName = geomColumn.metadata?.get('ARROW:extension:name');
-  let encoding = 'WKB';
-  let geometryTypes = ['Polygon', 'MultiPolygon'];
+  const extensionName = geomColumn.metadata?.get(GeoArrowMetadataKey.EXTENSION_NAME);
+  let encoding: string = GeometryEncoding.WKB;
+  let geometryTypes = [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon];
 
   if (extensionName) {
     if (extensionName.includes('geoarrow')) {
       encoding = extensionName;
       if (extensionName.includes('point')) {
-        geometryTypes = ['Point', 'MultiPoint'];
+        geometryTypes = [GeoJsonGeometryType.Point, GeoJsonGeometryType.MultiPoint];
       } else if (extensionName.includes('line')) {
-        geometryTypes = ['LineString', 'MultiLineString'];
+        geometryTypes = [GeoJsonGeometryType.LineString, GeoJsonGeometryType.MultiLineString];
       } else if (extensionName.includes('polygon')) {
-        geometryTypes = ['Polygon', 'MultiPolygon'];
+        geometryTypes = [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon];
       }
-    } else if (extensionName === 'ogc.wkb') {
-      encoding = 'WKB';
+    } else if (extensionName === ArrowExtension.OGC_WKB) {
+      encoding = GeometryEncoding.WKB;
     }
   }
 
@@ -59,13 +66,13 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   };
 
   const newSchemaMetadata = new Map(table.schema.metadata);
-  newSchemaMetadata.set('geo', JSON.stringify(geoMetadata));
+  newSchemaMetadata.set(GeoArrowMetadataKey.GEO, JSON.stringify(geoMetadata));
 
   const newFields = table.schema.fields.map((field) => {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
-      if (!fieldMetadata.has('ARROW:extension:name')) {
-        fieldMetadata.set('ARROW:extension:name', 'ogc.wkb');
+      if (!fieldMetadata.has(GeoArrowMetadataKey.EXTENSION_NAME)) {
+        fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, ArrowExtension.OGC_WKB);
       }
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
@@ -122,7 +129,7 @@ export async function readGeoJSONAsArrow(
 
 function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === 'geom' || f.name === 'geometry'
+    (f) => f.name === GeoColumnName.GEOM || f.name === GeoColumnName.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -136,8 +143,8 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
     primary_column: geoColumnName,
     columns: {
       [geoColumnName]: {
-        encoding: 'geojson',
-        geometry_types: ['Polygon', 'MultiPolygon'],
+        encoding: GeometryEncoding.GEOJSON,
+        geometry_types: [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon],
         crs: {
           type: 'name',
           properties: {
@@ -150,12 +157,12 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   };
 
   const newSchemaMetadata = new Map(table.schema.metadata);
-  newSchemaMetadata.set('geo', JSON.stringify(geoMetadata));
+  newSchemaMetadata.set(GeoArrowMetadataKey.GEO, JSON.stringify(geoMetadata));
 
   const newFields = table.schema.fields.map((field) => {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
-      fieldMetadata.set('ARROW:extension:name', 'geojson');
+      fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, ArrowExtension.GEOJSON);
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
     return new Field(field.name, field.type, field.nullable, field.metadata);
@@ -215,7 +222,7 @@ export async function readGeoParquetViaDuckDB(
 
   let table = tableFromIPC(result as Uint8Array);
 
-  if (!table.schema.metadata.has('geo')) {
+  if (!table.schema.metadata.has(GeoArrowMetadataKey.GEO)) {
     table = addGeoArrowMetadata(table);
   }
 

@@ -41,7 +41,7 @@
   const isBatchProcessing = $derived(duckDBOrchestrator.isBatchProcessing);
 
   const currentDuckTable = $derived.by(() => {
-    const _version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
     const tableName = selectedDataset?.sourceFileId
       ? allDuckDatasets.find(

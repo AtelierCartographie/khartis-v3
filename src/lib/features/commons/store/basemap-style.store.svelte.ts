@@ -3,7 +3,7 @@ import {
   BASEMAP_STYLES,
   BasemapStyle,
   DEFAULT_BASEMAP_STYLE
-} from '../../map/configs/basemap-styles';
+} from '../../map/constants/basemap-styles';
 
 class BasemapStyleStore {
   private _state = $state({

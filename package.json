@@ -84,11 +84,9 @@
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.2.5",
     "@deck.gl/core": "^9.2.5",
-    "@deck.gl/extensions": "^9.2.5",
     "@deck.gl/geo-layers": "^9.2.5",
     "@deck.gl/layers": "^9.2.5",
     "@deck.gl/mapbox": "^9.2.5",
-    "@deck.gl/mesh-layers": "^9.2.5",
     "@duckdb/duckdb-wasm": "1.31.0",
     "@geoarrow/deck.gl-layers": "^0.3.1",
     "@geoarrow/geoparquet-wasm": "0.2.0-beta.5",
@@ -104,6 +102,7 @@
     "fflate": "^0.8.2",
     "localforage": "^1.10.0",
     "maplibre-gl": "^5.14.0",
+    "proj4": "^2.20.2",
     "vite-plugin-pwa": "^1.2.0"
   },
   "pnpm": {

@@ -2,12 +2,85 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
+import { GeoArrowMetadataKey, GeoJsonGeometryType } from '../constants';
+
+const MIN_LAT = -90;
+const MAX_LAT = 90;
+const MIN_LNG = -180;
+const MAX_LNG = 180;
+
+function isValidBbox(
+  minLng: number,
+  minLat: number,
+  maxLng: number,
+  maxLat: number
+): boolean {
+  if (
+    typeof minLng !== 'number' ||
+    typeof minLat !== 'number' ||
+    typeof maxLng !== 'number' ||
+    typeof maxLat !== 'number'
+  ) {
+    return false;
+  }
+
+  if (
+    minLat < MIN_LAT ||
+    minLat > MAX_LAT ||
+    maxLat < MIN_LAT ||
+    maxLat > MAX_LAT ||
+    minLng < MIN_LNG ||
+    minLng > MAX_LNG ||
+    maxLng < MIN_LNG ||
+    maxLng > MAX_LNG
+  ) {
+    return false;
+  }
+
+  if (minLat >= maxLat || minLng >= maxLng) {
+    return false;
+  }
+
+  return true;
+}
+
+function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
+  if (!geometry) return [];
+
+  if (geometry.type === GeoJsonGeometryType.Point) {
+    return [geometry.coordinates];
+  }
+
+  if (
+    geometry.type === GeoJsonGeometryType.MultiPoint ||
+    geometry.type === GeoJsonGeometryType.LineString
+  ) {
+    return geometry.coordinates;
+  }
+
+  if (
+    geometry.type === GeoJsonGeometryType.MultiLineString ||
+    geometry.type === GeoJsonGeometryType.Polygon
+  ) {
+    return geometry.coordinates.flat();
+  }
+
+  if (geometry.type === GeoJsonGeometryType.MultiPolygon) {
+    return geometry.coordinates.flat(2);
+  }
+
+  if (geometry.type === GeoJsonGeometryType.GeometryCollection) {
+    return geometry.geometries.flatMap(extractCoordsFromGeometry);
+  }
+
+  return [];
+}
 
 export function calculateBoundsFromGeoArrow(
   jsTable: ArrowTable
 ): LngLatBoundsLike | null {
   try {
-    const geoMetadata = jsTable.schema.metadata.get('geo');
+    const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
     if (!geoMetadata) {
       return null;
     }
@@ -28,29 +101,7 @@ export function calculateBoundsFromGeoArrow(
 
     const [minLng, minLat, maxLng, maxLat] = bbox;
 
-    if (
-      typeof minLng !== 'number' ||
-      typeof minLat !== 'number' ||
-      typeof maxLng !== 'number' ||
-      typeof maxLat !== 'number'
-    ) {
-      return null;
-    }
-
-    if (
-      minLat < -90 ||
-      minLat > 90 ||
-      maxLat < -90 ||
-      maxLat > 90 ||
-      minLng < -180 ||
-      minLng > 180 ||
-      maxLng < -180 ||
-      maxLng > 180
-    ) {
-      return null;
-    }
-
-    if (minLat >= maxLat || minLng >= maxLng) {
+    if (!isValidBbox(minLng, minLat, maxLng, maxLat)) {
       return null;
     }
 
@@ -66,32 +117,6 @@ export function calculateBoundsFromGeoArrow(
     );
     return null;
   }
-}
-
-function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
-  if (!geometry) return [];
-
-  if (geometry.type === 'Point') {
-    return [geometry.coordinates];
-  }
-
-  if (geometry.type === 'MultiPoint' || geometry.type === 'LineString') {
-    return geometry.coordinates;
-  }
-
-  if (geometry.type === 'MultiLineString' || geometry.type === 'Polygon') {
-    return geometry.coordinates.flat();
-  }
-
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.flat(2);
-  }
-
-  if (geometry.type === 'GeometryCollection') {
-    return geometry.geometries.flatMap(extractCoordsFromGeometry);
-  }
-
-  return [];
 }
 
 export function calculateBoundsFromGeoJSON(
@@ -129,20 +154,7 @@ export function calculateBoundsFromGeoJSON(
       return null;
     }
 
-    if (
-      minLat < -90 ||
-      minLat > 90 ||
-      maxLat < -90 ||
-      maxLat > 90 ||
-      minLng < -180 ||
-      minLng > 180 ||
-      maxLng < -180 ||
-      maxLng > 180
-    ) {
-      return null;
-    }
-
-    if (minLat >= maxLat || minLng >= maxLng) {
+    if (!isValidBbox(minLng, minLat, maxLng, maxLat)) {
       return null;
     }
 
@@ -159,3 +171,4 @@ export function calculateBoundsFromGeoJSON(
     return null;
   }
 }
+

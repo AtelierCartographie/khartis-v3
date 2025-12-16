@@ -1,4 +1,5 @@
 import type maplibregl from 'maplibre-gl';
+import { MapLibreLayerType } from './map.constants';
 
 export enum BasemapStyle {
   BLANK_WHITE = 'blank-white',
@@ -8,14 +9,14 @@ export enum BasemapStyle {
   OSM_LIBERTY = 'osm-liberty'
 }
 
-export const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
+const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
-  name: 'blank-white',
+  name: BasemapStyle.BLANK_WHITE,
   sources: {},
   layers: [
     {
-      id: 'background',
-      type: 'background',
+      id: MapLibreLayerType.BACKGROUND,
+      type: MapLibreLayerType.BACKGROUND,
       paint: {
         'background-color': '#ffffff'
       }

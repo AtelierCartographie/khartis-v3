@@ -4,43 +4,94 @@
 
 ## Overview
 
-Khartis v3 uses a multi-layered testing approach to ensure reliability and maintainability. This guide covers unit tests, integration tests, end-to-end tests, and performance testing.
+Khartis v3 uses a multi-layered testing approach to ensure reliability and maintainability. This guide covers unit tests, integration tests, and end-to-end tests.
 
 ## Test Stack
 
 - **Unit Tests**: Vitest
 - **Component Tests**: @testing-library/svelte
 - **E2E Tests**: Playwright
-- **Performance**: Lighthouse CI
-- **Visual Regression**: Percy (optional)
+
+### DuckDB Testing Strategy
+
+The application uses **DuckDB WASM** (`@duckdb/duckdb-wasm`) which runs in the browser.
+
+**Testing approach:**
+
+- **Unit tests**: Test validation, format detection, and utility functions (mock DuckDB)
+- **E2E tests**: Test the **real DuckDB WASM pipeline** in a browser with Playwright
+- **Component tests**: Mock DuckDB entirely (see `vitest-setup-client.ts`)
+
+The E2E tests are the authoritative tests for the data pipeline - they test the actual DuckDB WASM processing with real files.
 
 ## Test Structure
 
 ```
-tests/
-├── unit/                 # Unit tests for utilities and logic
-├── integration/          # Integration tests for features
-└── e2e/                  # End-to-end user flows
+src/lib/features/
+├── data-pipeline/__tests__/     # Data pipeline unit tests
+│   ├── validators.test.ts       # File validation logic
+│   ├── format-detection.test.ts # Format detection
+│   ├── quality.test.ts          # Quality warnings
+│   ├── types.test.ts            # Type utilities
+│   ├── geojson-guards.test.ts   # GeoJSON validation
+│   ├── shapefile-validator.test.ts # Shapefile validation
+│   ├── zip-handler.test.ts      # ZIP extraction
+│   └── test-file-loader.ts      # Test file loader utilities
+├── commons/
+│   ├── services/*.test.ts       # Service unit tests
+│   └── utils/*.test.ts          # Utility unit tests
+└── duckdb/__tests__/            # DuckDB unit tests
 
-src/
-└── lib/
-    └── features/
-        └── feature-name/
-            ├── *.test.ts        # Unit tests
-            └── *.svelte.test.ts # Component tests
+e2e/
+├── imports/                     # File import E2E tests (by format)
+│   ├── csv.spec.ts              # CSV import tests
+│   ├── geojson.spec.ts          # GeoJSON import tests
+│   ├── geopackage.spec.ts       # GeoPackage import tests
+│   ├── gpx.spec.ts              # GPX import tests
+│   ├── kml.spec.ts              # KML import tests
+│   ├── shapefile.spec.ts        # Shapefile import tests
+│   └── zip.spec.ts              # ZIP archive tests
+├── project-modal.spec.ts        # Project creation modal tests
+├── side-nav.spec.ts             # Side navigation tests
+├── helpers.ts                   # E2E utilities (paths, selectors, helpers)
+└── global-setup.ts              # Playwright setup
+
+tests-datasets/                  # Test fixtures
+├── csv/                         # CSV files (valid + malformed)
+├── geojson/                     # GeoJSON files
+├── gpkg/                        # GeoPackage files
+├── gpx/                         # GPX files
+├── kml-kmz/                     # KML/KMZ files
+├── shp/                         # Shapefiles
+└── zip/                         # ZIP archives
 ```
+
+### E2E Pipeline Tests
+
+The E2E tests in `e2e/imports/` test the **real DuckDB WASM pipeline** with all supported file formats:
+
+| File Format | Test                                    |
+| ----------- | --------------------------------------- |
+| CSV         | `should create project from CSV`        |
+| GeoJSON     | `should create project from GeoJSON`    |
+| GeoPackage  | `should create project from GeoPackage` |
+| GPX         | `should create project from GPX`        |
+| KML         | `should create project from KML`        |
+| ZIP         | `should upload ZIP archive`             |
+
+These tests verify that files are uploaded, parsed by DuckDB WASM, and the project is created successfully.
 
 ## Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (unit + E2E)
 pnpm test
 
 # Unit tests only
 pnpm test:unit
 
-# Unit tests in watch mode
-pnpm test:unit:watch
+# Unit tests with UI
+pnpm test:unit:ui
 
 # E2E tests
 pnpm test:e2e
@@ -48,11 +99,51 @@ pnpm test:e2e
 # E2E tests with UI
 pnpm test:e2e:ui
 
-# Coverage report
-pnpm test:coverage
+# Run specific test file
+pnpm test:unit src/lib/features/data-pipeline/__tests__/validators.test.ts
+
+# Run tests matching pattern
+pnpm test:unit -t "should reject empty file"
 
 # Type checking
 pnpm check
+```
+
+## Vitest Configuration
+
+Vitest is configured in `vite.config.ts` with two test projects:
+
+```typescript
+// vite.config.ts
+test: {
+  projects: [
+    {
+      // Client tests (Svelte components)
+      extends: './vite.config.ts',
+      plugins: [svelteTesting()],
+      test: {
+        name: 'client',
+        environment: 'jsdom',
+        clearMocks: true,
+        include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+        exclude: ['src/lib/server/**'],
+        setupFiles: ['./vitest-setup-client.ts']
+      }
+    },
+    {
+      // Server tests (pure functions)
+      extends: './vite.config.ts',
+      test: {
+        name: 'server',
+        environment: 'node',
+        include: ['src/**/*.{test,spec}.{js,ts}'],
+        exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+        pool: 'threads',
+        fileParallelism: false
+      }
+    }
+  ];
+}
 ```
 
 ## Unit Testing
@@ -79,48 +170,138 @@ describe('FeatureName', () => {
 });
 ```
 
-### Testing Data Pipeline
+### Testing Data Pipeline (Functional Pattern)
+
+The data pipeline uses pure functions, not classes:
 
 ```typescript
-// parsers/csv.parser.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import { CSVParser } from './csv.parser';
-import { Duck } from '$lib/features/duckdb';
+// validators.test.ts
+import { describe, it, expect } from 'vitest';
+import { PIPELINE_CONST } from '../constants';
+import {
+  validateFile,
+  validateFileExtension,
+  validateMimeType
+} from '../core/validators';
 
-// Mock DuckDB
+describe('File Validators', () => {
+  describe('validateFile', () => {
+    it('should reject empty file (size === 0)', async () => {
+      const emptyFile = new File([], 'empty.csv', { type: 'text/csv' });
+      const result = await validateFile(emptyFile);
+      expect(result.isValid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    it('should accept valid file under limits', async () => {
+      const validContent = 'id,name,value\n1,test,100\n2,test2,200';
+      const validFile = new File([validContent], 'valid.csv', {
+        type: 'text/csv'
+      });
+      const result = await validateFile(validFile);
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should warn for file above WARNING_FILE_SIZE (50MB)', async () => {
+      const mockFile = new File(['test'], 'medium.csv', { type: 'text/csv' });
+      Object.defineProperty(mockFile, 'size', {
+        value: 51 * 1024 * 1024,
+        writable: false
+      });
+      const result = await validateFile(mockFile);
+      expect(result.isValid).toBe(true);
+      expect(result.warnings.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('validateFileExtension', () => {
+    const allowedExtensions = PIPELINE_CONST.EXTENSIONS.ALL as string[];
+
+    it('should accept supported CSV extension', () => {
+      const file = new File(['data'], 'test.csv', { type: 'text/csv' });
+      const result = validateFileExtension(file, allowedExtensions);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should reject unsupported extension', () => {
+      const file = new File(['data'], 'test.xlsx', {
+        type: 'application/vnd.openxmlformats'
+      });
+      const result = validateFileExtension(file, allowedExtensions);
+      expect(result.isValid).toBe(false);
+      expect(result.errors[0]).toContain('.xlsx');
+    });
+  });
+});
+```
+
+### Testing with Mocked DuckDB
+
+DuckDB is mocked globally in `vitest-setup-client.ts`:
+
+```typescript
+// vitest-setup-client.ts
+import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
+
+// Mock matchMedia for JSDOM
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  enumerable: true,
+  value: vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn()
+  }))
+});
+
+// Mock DuckDB orchestrator
 vi.mock('$lib/features/duckdb', () => ({
-  Duck: {
-    read_csv: vi.fn(),
-    query: vi.fn()
+  duckDBOrchestrator: {
+    initialize: vi.fn().mockResolvedValue(undefined),
+    executeQuery: vi.fn().mockResolvedValue([]),
+    getConnection: vi.fn().mockResolvedValue(null)
   }
 }));
 
-describe('CSVParser', () => {
-  const parser = new CSVParser();
+vi.mock(
+  '$lib/features/commons/services/data-orchestrator.service.svelte',
+  () => ({
+    dataOrchestratorService: {
+      initialize: vi.fn().mockResolvedValue(undefined),
+      processData: vi.fn().mockResolvedValue(null)
+    }
+  })
+);
+```
 
-  it('should parse CSV file', async () => {
-    // Arrange
-    const file = new File(['col1,col2\n1,2'], 'test.csv');
-    const mockTable = 'test_table_123';
+For specific tests, override mocks locally:
 
-    Duck.read_csv.mockResolvedValue(mockTable);
-    Duck.query.mockResolvedValue([{ col1: 1, col2: 2 }]);
+```typescript
+// specific.test.ts
+import { vi } from 'vitest';
+import { Duck } from '$lib/features/duckdb';
 
-    // Act
-    const result = await parser.parse(file);
+vi.mock('$lib/features/duckdb', () => ({
+  Duck: {
+    query: vi.fn(),
+    analyse: vi.fn(),
+    get_row_count: vi.fn()
+  }
+}));
 
-    // Assert
-    expect(result.tableName).toBe(mockTable);
-    expect(Duck.read_csv).toHaveBeenCalledWith(file);
-  });
+describe('MyFeature', () => {
+  it('should query DuckDB', async () => {
+    vi.mocked(Duck.query).mockResolvedValue([{ id: 1, name: 'test' }]);
 
-  it('should handle parsing errors', async () => {
-    // Arrange
-    const file = new File(['invalid'], 'bad.csv');
-    Duck.read_csv.mockRejectedValue(new Error('Parse error'));
+    const result = await myFunction();
 
-    // Act & Assert
-    await expect(parser.parse(file)).rejects.toThrow('Parse error');
+    expect(Duck.query).toHaveBeenCalledWith(expect.stringContaining('SELECT'));
+    expect(result).toHaveLength(1);
   });
 });
 ```
@@ -128,84 +309,23 @@ describe('CSVParser', () => {
 ### Testing Stores (Svelte 5 Runes)
 
 ```typescript
-// visualization.store.test.ts
+// store.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
-import { visualizationStore } from './visualization.store.svelte';
+import { myStore } from './my.store.svelte';
 
-describe('VisualizationStore', () => {
+describe('MyStore', () => {
   beforeEach(() => {
-    visualizationStore.reset();
+    myStore.reset();
   });
 
-  it('should create visualization', () => {
-    // Arrange
-    const config = {
-      type: 'choropleth',
-      datasetId: 'dataset-1',
-      column: 'population'
-    };
-
-    // Act
-    const viz = visualizationStore.create(config);
-
-    // Assert
-    expect(viz.id).toBeDefined();
-    expect(viz.type).toBe('choropleth');
-    expect(visualizationStore.visualizations).toHaveLength(1);
+  it('should update state', () => {
+    myStore.setValue('test');
+    expect(myStore.value).toBe('test');
   });
 
-  it('should update visualization', () => {
-    // Arrange
-    const viz = visualizationStore.create({ type: 'choropleth' });
-
-    // Act
-    visualizationStore.update(viz.id, { type: 'proportional' });
-
-    // Assert
-    const updated = visualizationStore.getById(viz.id);
-    expect(updated.type).toBe('proportional');
-  });
-});
-```
-
-### Testing Async Operations
-
-```typescript
-// duckdb.service.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import { Duck } from './duck.service';
-
-describe('DuckDB Service', () => {
-  it('should execute query with timeout', async () => {
-    // Use fake timers
-    vi.useFakeTimers();
-
-    // Start async operation
-    const queryPromise = Duck.query('SELECT * FROM large_table');
-
-    // Fast-forward time
-    vi.advanceTimersByTime(5000);
-
-    // Assert timeout
-    await expect(queryPromise).rejects.toThrow('Query timeout');
-
-    vi.useRealTimers();
-  });
-
-  it('should cache query results', async () => {
-    // Arrange
-    const sql = 'SELECT COUNT(*) FROM table';
-    const spy = vi.spyOn(Duck, '_executeQuery');
-
-    // Act - first call
-    const result1 = await Duck.query(sql);
-
-    // Act - second call (should use cache)
-    const result2 = await Duck.query(sql);
-
-    // Assert
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(result1).toEqual(result2);
+  it('should compute derived values', () => {
+    myStore.setItems([1, 2, 3]);
+    expect(myStore.count).toBe(3);
   });
 });
 ```
@@ -222,19 +342,14 @@ import Button from './Button.svelte';
 
 describe('Button Component', () => {
   it('should render with label', () => {
-    // Arrange & Act
     render(Button, {
-      props: {
-        label: 'Click me'
-      }
+      props: { label: 'Click me' }
     });
 
-    // Assert
     expect(screen.getByText('Click me')).toBeInTheDocument();
   });
 
   it('should handle click events', async () => {
-    // Arrange
     const handleClick = vi.fn();
     render(Button, {
       props: {
@@ -243,15 +358,12 @@ describe('Button Component', () => {
       }
     });
 
-    // Act
     await fireEvent.click(screen.getByText('Click'));
 
-    // Assert
     expect(handleClick).toHaveBeenCalledOnce();
   });
 
   it('should be disabled when loading', () => {
-    // Arrange & Act
     render(Button, {
       props: {
         label: 'Submit',
@@ -259,200 +371,185 @@ describe('Button Component', () => {
       }
     });
 
-    // Assert
     const button = screen.getByRole('button');
     expect(button).toBeDisabled();
-    expect(button).toHaveClass('loading');
-  });
-});
-```
-
-### Testing Reactive State (Svelte 5)
-
-```typescript
-// DataTable.svelte.test.ts
-import { render, screen, waitFor } from '@testing-library/svelte';
-import { describe, it, expect } from 'vitest';
-import DataTable from './DataTable.svelte';
-
-describe('DataTable with $state', () => {
-  it('should update when data changes', async () => {
-    // Arrange
-    const { component } = render(DataTable, {
-      props: {
-        data: [{ id: 1, name: 'Item 1' }]
-      }
-    });
-
-    // Assert initial state
-    expect(screen.getByText('Item 1')).toBeInTheDocument();
-
-    // Act - update props
-    component.$set({
-      data: [
-        { id: 1, name: 'Item 1' },
-        { id: 2, name: 'Item 2' }
-      ]
-    });
-
-    // Assert updated state
-    await waitFor(() => {
-      expect(screen.getByText('Item 2')).toBeInTheDocument();
-    });
-  });
-});
-```
-
-## Integration Testing
-
-### Testing Feature Flows
-
-```typescript
-// import-flow.test.ts
-import { describe, it, expect, beforeEach } from 'vitest';
-import { dataPipeline } from '$lib/features/data-pipeline';
-import { datasetsStore } from '$lib/features/commons/store';
-
-describe('Data Import Flow', () => {
-  beforeEach(() => {
-    datasetsStore.clear();
-  });
-
-  it('should import and process CSV file', async () => {
-    // Arrange
-    const csvContent = 'name,value\nParis,100\nLyon,50';
-    const file = new File([csvContent], 'cities.csv');
-
-    // Act
-    const dataset = await dataPipeline.processFile(file);
-    datasetsStore.add(dataset);
-
-    // Assert
-    expect(dataset.rowCount).toBe(2);
-    expect(dataset.columns).toHaveLength(2);
-    expect(dataset.columns[0].name).toBe('name');
-    expect(dataset.columns[0].type).toBe('text');
-    expect(dataset.columns[1].name).toBe('value');
-    expect(dataset.columns[1].type).toBe('numeric');
-    expect(datasetsStore.datasets).toHaveLength(1);
-  });
-
-  it('should handle invalid files', async () => {
-    // Arrange
-    const file = new File(['binary content'], 'invalid.xyz');
-
-    // Act & Assert
-    await expect(dataPipeline.processFile(file)).rejects.toThrow(
-      'Unsupported file type'
-    );
-    expect(datasetsStore.datasets).toHaveLength(0);
-  });
-});
-```
-
-### Testing Store Interactions
-
-```typescript
-// project-flow.test.ts
-import { describe, it, expect } from 'vitest';
-import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-
-describe('Project Management', () => {
-  it('should create project with dataset', async () => {
-    // Arrange
-    const dataset = await createTestDataset();
-    datasetsStore.add(dataset);
-
-    // Act
-    const project = projectStore.create({
-      name: 'Test Project',
-      datasets: [dataset.id]
-    });
-
-    // Assert
-    expect(project.id).toBeDefined();
-    expect(project.datasets).toContain(dataset.id);
-    expect(projectStore.current?.id).toBe(project.id);
-  });
-
-  it('should auto-save project changes', async () => {
-    // Arrange
-    const project = projectStore.create({ name: 'Test' });
-    const saveSpy = vi.spyOn(projectStore, 'save');
-
-    // Act
-    projectStore.updateName('Updated Name');
-
-    // Wait for debounced save (30s in prod, mocked to instant in tests)
-    await vi.advanceTimersByTime(30000);
-
-    // Assert
-    expect(saveSpy).toHaveBeenCalled();
-    expect(projectStore.current?.name).toBe('Updated Name');
   });
 });
 ```
 
 ## End-to-End Testing
 
+### Playwright Configuration
+
+```typescript
+// playwright.config.ts
+import { defineConfig, devices } from '@playwright/test';
+
+const isCI = !!process.env.CI;
+
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: false,
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
+  workers: 1,
+  reporter: isCI ? [['html'], ['github']] : 'html',
+  globalSetup: './e2e/global-setup.ts',
+  timeout: isCI ? 90000 : 45000,
+  expect: {
+    timeout: isCI ? 30000 : 15000
+  },
+  use: {
+    baseURL: 'http://localhost:4173',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
+    locale: 'fr-FR',
+    timezoneId: 'Europe/Paris'
+  },
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'], headless: true }
+    }
+  ],
+  webServer: {
+    command: 'pnpm build && pnpm preview',
+    port: 4173,
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 180000 : 120000
+  }
+});
+```
+
+### E2E Helpers
+
+The project provides reusable helpers in `e2e/helpers.ts`:
+
+```typescript
+// e2e/helpers.ts
+import { expect, type Locator, type Page } from '@playwright/test';
+import { join } from 'node:path';
+
+// Paths to test datasets
+export const TEST_DATASETS = join(process.cwd(), 'tests-datasets');
+export const CSV_PATH = join(TEST_DATASETS, 'csv');
+export const GEOJSON_PATH = join(TEST_DATASETS, 'geojson');
+export const GPKG_PATH = join(TEST_DATASETS, 'gpkg');
+export const GPX_PATH = join(TEST_DATASETS, 'gpx');
+export const KML_PATH = join(TEST_DATASETS, 'kml-kmz');
+export const SHP_PATH = join(TEST_DATASETS, 'shp');
+export const ZIP_PATH = join(TEST_DATASETS, 'zip');
+
+// Selectors
+export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
+export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
+
+// CI-aware timeout configuration
+export const TIMEOUTS = {
+  modal: isCI ? 30000 : 15000,
+  map: isCI ? 60000 : 30000,
+  action: isCI ? 30000 : 15000
+};
+
+// Wait for modal to be visible
+export async function waitForModal(
+  page: Page,
+  timeout?: number
+): Promise<Locator>;
+
+// Wait for map container to be visible and stabilize
+export async function waitForMap(page: Page, timeout?: number): Promise<void>;
+
+// Create a new project with file upload
+export async function createProject(
+  page: Page,
+  filePath: string,
+  projectName?: string
+): Promise<void>;
+
+// Create project from shapefile bundle
+export async function createShapefileProject(
+  page: Page,
+  shpFolder: string,
+  projectName?: string
+): Promise<void>;
+
+// Open the side navigation menu
+export async function openSideNav(page: Page): Promise<Locator>;
+
+// Clear all storage and start fresh
+export async function freshStart(page: Page): Promise<void>;
+
+// Console error tracking for test validation
+export class ConsoleErrorTracker {
+  private errors: string[] = [];
+  start(page: Page): void;
+  getErrors(): string[];
+  clear(): void;
+}
+
+// Assert no console errors during test
+export async function assertNoConsoleErrors(tracker: ConsoleErrorTracker): void;
+```
+
 ### Basic E2E Test
 
 ```typescript
-// e2e/import-visualize.spec.ts
-import { test, expect } from '@playwright/test';
+// e2e/project-modal.spec.ts
+import { expect, test } from '@playwright/test';
+import { join } from 'node:path';
+import {
+  CSV_PATH,
+  MODAL_SELECTOR,
+  waitForModal,
+  waitForMap,
+  createProject,
+  freshStart
+} from './helpers';
 
-test.describe('Import and Visualize', () => {
-  test('should import CSV and create choropleth', async ({ page }) => {
-    // Navigate to app
-    await page.goto('/');
+test.describe('Create Project Modal', () => {
+  test('should display modal with all tabs', async ({ page }) => {
+    await freshStart(page);
 
-    // Click create project
-    await page.click('button:has-text("Create New Project")');
-    await page.fill('input[name="projectName"]', 'E2E Test Project');
-    await page.click('button:has-text("Create")');
+    const modal = page.locator(MODAL_SELECTOR);
+    await expect(modal).toBeVisible({ timeout: 15000 });
 
-    // Upload file
-    const fileInput = page.locator('input[type="file"]');
-    await fileInput.setInputFiles('tests/fixtures/sample.csv');
-
-    // Wait for processing
-    await expect(page.locator('.dataset-card')).toBeVisible();
-
-    // Select visualization type
-    await page.click('button:has-text("Choropleth")');
-
-    // Configure visualization
-    await page.selectOption('select[name="column"]', 'population');
-    await page.selectOption('select[name="classification"]', 'quantile');
-    await page.fill('input[name="classes"]', '5');
-
-    // Apply visualization
-    await page.click('button:has-text("Apply")');
-
-    // Verify map is rendered
-    await expect(page.locator('#map canvas')).toBeVisible();
-    await expect(page.locator('.legend')).toBeVisible();
+    await expect(modal.locator('[data-testid="tab-create-new"]')).toBeVisible();
+    await expect(
+      modal.locator('[data-testid="tab-open-project"]')
+    ).toBeVisible();
+    await expect(
+      modal.locator('[data-testid="tab-try-example"]')
+    ).toBeVisible();
   });
 
-  test('should handle large file', async ({ page }) => {
-    await page.goto('/');
+  test('should upload CSV and create project', async ({ page }) => {
+    test.slow();
+    await freshStart(page);
 
-    // Set up file upload listener
-    page.on('filechooser', async (fileChooser) => {
-      await fileChooser.setFiles('tests/fixtures/large-dataset.csv');
+    const csvPath = join(CSV_PATH, 'fossil-fuel-subsidies-gdp-2021.csv');
+    await createProject(page, csvPath, `Test Project ${Date.now()}`);
+    await waitForMap(page);
+
+    await expect(page.locator('.map-container').first()).toBeVisible();
+  });
+
+  test('should create project from example', async ({ page }) => {
+    test.slow();
+    await freshStart(page);
+
+    const modal = await waitForModal(page);
+    await modal.locator('[data-testid="tab-try-example"]').click();
+
+    const exampleCard = page.getByRole('button', {
+      name: /Population Europe 2023/i
     });
+    await expect(exampleCard).toBeVisible({ timeout: 10000 });
+    await exampleCard.click();
 
-    // Trigger file chooser
-    await page.click('button:has-text("Import Data")');
-
-    // Verify progress bar
-    await expect(page.locator('.progress-bar')).toBeVisible();
-
-    // Wait for completion (with timeout)
-    await expect(page.locator('.dataset-card')).toBeVisible({
-      timeout: 30000
-    });
+    await waitForMap(page, 45000);
+    await expect(page.locator('.map-container').first()).toBeVisible();
   });
 });
 ```
@@ -460,244 +557,135 @@ test.describe('Import and Visualize', () => {
 ### Testing User Interactions
 
 ```typescript
-// e2e/map-interactions.spec.ts
-import { test, expect } from '@playwright/test';
+// e2e/side-nav.spec.ts
+test.describe('Side Navigation', () => {
+  test('should open/close side nav and change language', async ({ page }) => {
+    test.slow();
+    await freshStart(page);
 
-test.describe('Map Interactions', () => {
-  test.beforeEach(async ({ page }) => {
-    // Setup: Create project with dataset
-    await page.goto('/');
-    await setupTestProject(page);
-  });
+    const csvPath = join(CSV_PATH, 'fossil-fuel-subsidies-gdp-2021.csv');
+    await createProject(page, csvPath);
+    await waitForMap(page);
 
-  test('should pan and zoom', async ({ page }) => {
-    // Get initial viewport
-    const initialView = await page.evaluate(() => {
-      return window.map.getCenter();
-    });
+    const sideNav = await openSideNav(page);
+    await expect(sideNav).toBeVisible();
 
-    // Pan map
-    await page.mouse.move(400, 300);
-    await page.mouse.down();
-    await page.mouse.move(500, 400);
-    await page.mouse.up();
+    await expect(
+      page.locator('[data-testid="sidenav-new-project"]')
+    ).toBeVisible();
 
-    // Verify pan
-    const newView = await page.evaluate(() => {
-      return window.map.getCenter();
-    });
-    expect(newView.lat).not.toBe(initialView.lat);
-
-    // Zoom in
-    await page.mouse.wheel(0, -100);
+    // Change language
+    await page.locator('#khartis-side-nav select').selectOption('en');
     await page.waitForTimeout(500);
+    await expect(
+      page.locator('[data-testid="sidenav-new-project"]')
+    ).toContainText('New project');
 
-    // Verify zoom
-    const zoomLevel = await page.evaluate(() => {
-      return window.map.getZoom();
-    });
-    expect(zoomLevel).toBeGreaterThan(1);
-  });
-
-  test('should show feature popup on click', async ({ page }) => {
-    // Click on a feature
-    await page.click('#map canvas', { position: { x: 400, y: 300 } });
-
-    // Verify popup
-    await expect(page.locator('.maplibregl-popup')).toBeVisible();
-    await expect(page.locator('.popup-content')).toContainText('Population');
+    // Close with Escape
+    await page.keyboard.press('Escape');
+    await expect(page.locator(SIDENAV_SELECTOR)).toBeHidden();
   });
 });
 ```
 
-## Performance Testing
+## Test Datasets
 
-### Unit Performance Tests
+The `tests-datasets/` folder contains real and malformed files for testing:
 
-```typescript
-// performance.test.ts
-import { describe, it, expect } from 'vitest';
-import { classifyQuantile } from '$lib/features/map/utils/classification';
+### CSV Files (`tests-datasets/csv/`)
 
-describe('Performance: Classification', () => {
-  it('should classify 100k values in <100ms', () => {
-    // Arrange
-    const values = Array.from({ length: 100000 }, () => Math.random() * 1000);
+**Valid files:**
 
-    // Act
-    const start = performance.now();
-    const breaks = classifyQuantile(values, 5);
-    const duration = performance.now() - start;
+- `fossil-fuel-subsidies-gdp-2021.csv` - World data with numeric values
+- `naissances-par-commune-departement-et-region-2018.csv` - French communes
+- `sites-seveso-idf.csv` - GPS coordinates
+- `world-bank-rural-pop.csv` - World Bank data
 
-    // Assert
-    expect(duration).toBeLessThan(100);
-    expect(breaks).toHaveLength(6); // n+1 breaks
-  });
-});
-```
+**Malformed files (for edge case testing):**
 
-### E2E Performance Tests
+- `csv-malformed--with-nothing.csv` - Empty file
+- `csv-malformed--with-header-only.csv` - Header without data
+- `csv-malformed--with-no-header.csv` - Data without header
+- `csv-malformed--with-empty-columns.csv` - Columns with no values
+- `csv-malformed--with-empty-lines.csv` - Contains blank lines
+- `csv-malformed--with-100-columns.csv` - Wide dataset
+- `csv-malformed--with-duplicated-column-name.csv` - Duplicate headers
+- `csv-malformed--with-special-characters.csv` - Unicode, quotes, etc.
+- `csv-malformed--with-european-numeric-format.csv` - Comma as decimal
+- `csv-malformed--with-null-variations.csv` - NA, N/A, null, etc.
+- `csv-malformed--with-numeric-formats-mixed.csv` - Mixed number formats
+- `csv-malformed--with-numeric-all-edge-cases.csv` - Infinity, NaN, etc.
 
-```typescript
-// e2e/performance.spec.ts
-import { test, expect } from '@playwright/test';
+### Geospatial Files
 
-test.describe('Performance Metrics', () => {
-  test('should load page within 3 seconds', async ({ page }) => {
-    // Start measuring
-    const startTime = Date.now();
+**GeoJSON (`tests-datasets/geojson/`):**
 
-    // Navigate
-    await page.goto('/');
+- `lignes-du-reseau-star-de-rennes-metropole.geojson` - LineString features
+- `nuts2_data.geojson` - European NUTS2 regions with attributes
 
-    // Wait for app ready
-    await page.waitForSelector('[data-app-ready]');
+**GeoPackage (`tests-datasets/gpkg/`):**
 
-    // Calculate load time
-    const loadTime = Date.now() - startTime;
+- `compagnies-herault-l93.gpkg` - French data in Lambert-93 projection
+- `ADMIN-EXPRESS_4-0__GPKG.../ADE_4-0_GPKG...gpkg` - IGN Admin Express Guadeloupe
 
-    // Assert
-    expect(loadTime).toBeLessThan(3000);
-  });
+**GPX (`tests-datasets/gpx/`):**
 
-  test('should maintain 60fps during map interactions', async ({ page }) => {
-    await page.goto('/');
-    await setupTestVisualization(page);
+- `star_arrets_physiques_actifs/star_arrets_physiques_actifs.gpx` - Public transit stops (Point)
 
-    // Measure frame rate
-    const metrics = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        let frames = 0;
-        const startTime = performance.now();
+**KML (`tests-datasets/kml-kmz/`):**
 
-        function countFrame() {
-          frames++;
-          if (performance.now() - startTime < 1000) {
-            requestAnimationFrame(countFrame);
-          } else {
-            resolve(frames);
-          }
-        }
+- `aires-covoiturage/aires-covoiturage.kml` - Carpooling areas
 
-        // Trigger animation
-        window.map.flyTo({ center: [0, 0], zoom: 2 });
-        countFrame();
-      });
-    });
+**Shapefiles (`tests-datasets/shp/`):**
 
-    // Assert ~60fps
-    expect(metrics).toBeGreaterThan(50);
-  });
-});
-```
+- `ne_50m/` - Natural Earth 50m countries
+- `mos_foncier_agrege_com/` - French land use data
+- `lignes-du-reseau-star-de-rennes-metropole/` - Transit lines
+- `Marines-regionsEEZ_land_union_v3_202003/` - Marine EEZ regions
 
-## Test Data Management
+**ZIP Archives (`tests-datasets/zip/`):**
 
-### Creating Test Fixtures
+- `single-csv.zip` - Single CSV in archive
+- `multiple-csv.zip` - Multiple CSV files
+- `shapefile-complete.zip` - Complete shapefile bundle
+
+### Using Test Datasets
+
+**Test File Loader (`test-file-loader.ts`):**
 
 ```typescript
-// tests/fixtures/data-factory.ts
-export function createTestCSV(rows = 100): File {
-  const headers = ['id', 'name', 'value', 'category'];
-  const data = [headers.join(',')];
+// Unit tests: Use the test file loader for structured access
+import {
+  CSV_TEST_FILES,
+  GEOJSON_TEST_FILES,
+  GPKG_TEST_FILES,
+  GPX_TEST_FILES,
+  KML_TEST_FILES,
+  ZIP_TEST_FILES,
+  loadTestFile
+} from '../__tests__/test-file-loader';
 
-  for (let i = 0; i < rows; i++) {
-    data.push(
-      [i, `Item ${i}`, Math.random() * 1000, ['A', 'B', 'C'][i % 3]].join(',')
-    );
-  }
+// Load a test file as File object
+const file = loadTestFile(CSV_TEST_FILES.VALID.FOSSIL_FUEL);
+const result = await validateFile(file);
 
-  return new File([data.join('\n')], 'test.csv', {
-    type: 'text/csv'
-  });
-}
-
-export function createTestGeoJSON(): object {
-  return {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        geometry: {
-          type: 'Point',
-          coordinates: [2.3522, 48.8566]
-        },
-        properties: {
-          name: 'Paris',
-          population: 2161000
-        }
-      }
-    ]
-  };
-}
+// Available test file constants:
+CSV_TEST_FILES.VALID.FOSSIL_FUEL; // csv/fossil-fuel-subsidies-gdp-2021.csv
+CSV_TEST_FILES.VALID.NAISSANCES; // csv/naissances-par-commune-...csv
+CSV_TEST_FILES.MALFORMED.NOTHING; // csv/csv-malformed--with-nothing.csv
+GEOJSON_TEST_FILES.STAR_LINES; // geojson/lignes-du-reseau-star...geojson
+GPKG_TEST_FILES.COMPAGNIES_HERAULT; // gpkg/compagnies-herault-l93.gpkg
+GPX_TEST_FILES.STAR_ARRETS; // gpx/star_arrets.../star_arrets...gpx
+KML_TEST_FILES.AIRES_COVOITURAGE; // kml-kmz/aires-covoiturage/...kml
+ZIP_TEST_FILES.SHAPEFILE; // zip/shapefile-complete.zip
 ```
 
-### Mock Data for DuckDB
+**E2E tests: Use path helpers:**
 
 ```typescript
-// tests/mocks/duckdb.mock.ts
-import { vi } from 'vitest';
-
-export const mockDuckDB = {
-  query: vi.fn((sql: string) => {
-    if (sql.includes('COUNT(*)')) {
-      return [{ count: 100 }];
-    }
-    if (sql.includes('SELECT *')) {
-      return generateMockRows(10);
-    }
-    return [];
-  }),
-
-  breaks: vi.fn(() => [0, 20, 40, 60, 80, 100]),
-
-  analyse: vi.fn(() => ({
-    min: 0,
-    max: 100,
-    mean: 50,
-    median: 50,
-    stddev: 15
-  }))
-};
-```
-
-## Test Coverage
-
-### Coverage Configuration
-
-```javascript
-// vitest.config.ts
-export default {
-  test: {
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: [
-        'node_modules/',
-        'tests/',
-        '*.config.js',
-        '**/*.spec.ts',
-        '**/*.test.ts'
-      ],
-      thresholds: {
-        statements: 80,
-        branches: 70,
-        functions: 80,
-        lines: 80
-      }
-    }
-  }
-};
-```
-
-### Running Coverage
-
-```bash
-# Generate coverage report
-pnpm test:coverage
-
-# Open HTML report
-open coverage/index.html
+import { CSV_PATH, GEOJSON_PATH, ZIP_PATH } from './helpers';
+const csvPath = join(CSV_PATH, 'fossil-fuel-subsidies-gdp-2021.csv');
+await modal.locator('input[type="file"]').setInputFiles(csvPath);
 ```
 
 ## Testing Best Practices
@@ -713,7 +701,6 @@ open coverage/index.html
 ```typescript
 // Good: Each test is independent
 beforeEach(() => {
-  // Fresh setup for each test
   store.reset();
   vi.clearAllMocks();
 });
@@ -728,11 +715,6 @@ it('test 1', () => {
 ### 3. Mock External Dependencies
 
 ```typescript
-// Mock file system
-vi.mock('fs', () => ({
-  readFile: vi.fn()
-}));
-
 // Mock network requests
 vi.mock('fetch', () => ({
   default: vi.fn(() =>
@@ -772,102 +754,38 @@ it('should call validateFile method', () => {
 await page.click('[data-testid="submit-button"]');
 ```
 
-## Continuous Integration
-
-### GitHub Actions Configuration
-
-```yaml
-# .github/workflows/test.yml
-name: Tests
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: |
-          corepack enable pnpm
-          pnpm install
-
-      - name: Run unit tests
-        run: pnpm test:unit
-
-      - name: Run E2E tests
-        run: |
-          npx playwright install
-          pnpm test:e2e
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-        with:
-          files: ./coverage/coverage-final.json
-```
-
 ## Debugging Tests
 
 ### Debug Unit Tests
 
 ```bash
 # Run specific test file
-pnpm test:unit src/lib/features/data-pipeline/parsers/csv.parser.test.ts
+pnpm test:unit src/lib/features/data-pipeline/__tests__/validators.test.ts
 
 # Run tests matching pattern
 pnpm test:unit -t "should parse CSV"
 
-# Run with debugging
-node --inspect-brk ./node_modules/.bin/vitest
+# Run with UI for debugging
+pnpm test:unit:ui
 ```
 
 ### Debug E2E Tests
 
 ```bash
-# Run in headed mode
+# Run in headed mode (see browser)
 pnpm test:e2e --headed
 
-# Run with debug mode
+# Run with Playwright debug mode
 PWDEBUG=1 pnpm test:e2e
 
-# Generate trace
+# Generate trace for failed tests
 pnpm test:e2e --trace on
 
-# View trace
+# View trace file
 npx playwright show-trace trace.zip
-```
 
-### Visual Debugging in VS Code
-
-```json
-// .vscode/launch.json
-{
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug Unit Tests",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["test:unit", "--run"],
-      "console": "integratedTerminal"
-    },
-    {
-      "type": "node",
-      "request": "launch",
-      "name": "Debug E2E Tests",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["test:e2e", "--headed"],
-      "console": "integratedTerminal"
-    }
-  ]
-}
+# Run with UI for step-by-step debugging
+pnpm test:e2e:ui
 ```
 
 ## Common Test Patterns
@@ -876,16 +794,12 @@ npx playwright show-trace trace.zip
 
 ```typescript
 it('should handle network errors gracefully', async () => {
-  // Simulate network failure
   vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'));
 
-  // Attempt operation
   const result = await fetchData();
 
-  // Verify error handling
   expect(result).toBeNull();
   expect(errorStore.hasError).toBe(true);
-  expect(errorStore.message).toContain('Network error');
 });
 ```
 
@@ -895,18 +809,14 @@ it('should handle network errors gracefully', async () => {
 it('should update loading state during async operation', async () => {
   const { getByText, queryByText } = render(AsyncComponent);
 
-  // Initial state
   expect(queryByText('Loading...')).not.toBeInTheDocument();
 
-  // Trigger async operation
   fireEvent.click(getByText('Load Data'));
 
-  // Loading state
   await waitFor(() => {
     expect(getByText('Loading...')).toBeInTheDocument();
   });
 
-  // Completed state
   await waitFor(() => {
     expect(queryByText('Loading...')).not.toBeInTheDocument();
     expect(getByText('Data loaded')).toBeInTheDocument();
@@ -914,32 +824,25 @@ it('should update loading state during async operation', async () => {
 });
 ```
 
-### Testing Time-Dependent Code
+### Testing File Validation Edge Cases
 
 ```typescript
-it('should debounce search input', async () => {
-  vi.useFakeTimers();
-  const searchFn = vi.fn();
+it('should reject file exceeding MAX_FILE_SIZE', async () => {
+  // Mock file size without allocating memory
+  const mockFile = new File(['test'], 'large.csv', { type: 'text/csv' });
+  Object.defineProperty(mockFile, 'size', {
+    value: 101 * 1024 * 1024, // 101MB
+    writable: false
+  });
 
-  const input = screen.getByRole('searchbox');
+  const result = await validateFile(mockFile);
 
-  // Type quickly
-  await userEvent.type(input, 'test');
-
-  // Function not called immediately
-  expect(searchFn).not.toHaveBeenCalled();
-
-  // Fast-forward past debounce delay
-  vi.advanceTimersByTime(300);
-
-  // Now it should be called
-  expect(searchFn).toHaveBeenCalledWith('test');
-
-  vi.useRealTimers();
+  expect(result.isValid).toBe(false);
+  expect(result.errors[0]).toContain('size');
 });
 ```
 
 ---
 
-**Last Updated**: 2025-12-05
-**Version**: 3.2.0
+**Last Updated**: 2025-12-17
+**Version**: 3.3.0

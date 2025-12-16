@@ -186,7 +186,9 @@
             ...SUPPORTED_FILE_TYPES.shapefile.extensions,
             ...SUPPORTED_FILE_TYPES.geopackage.extensions,
             ...SUPPORTED_FILE_TYPES.geoparquet.extensions,
-            ...SUPPORTED_FILE_TYPES.kml.extensions
+            ...SUPPORTED_FILE_TYPES.kml.extensions,
+            ...SUPPORTED_FILE_TYPES.gpx.extensions,
+            ...SUPPORTED_FILE_TYPES.zip.extensions
           ]}
           validateFiles={(files) => {
             const validationResult =
