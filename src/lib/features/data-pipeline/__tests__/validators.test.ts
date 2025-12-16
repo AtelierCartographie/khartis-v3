@@ -58,7 +58,8 @@ describe('File Validators', () => {
   });
 
   describe('validateFileExtension', () => {
-    const allowedExtensions = PIPELINE_CONST.EXTENSIONS.ALL as unknown as string[];
+    const allowedExtensions = PIPELINE_CONST.EXTENSIONS
+      .ALL as unknown as string[];
 
     it('should accept supported CSV extension', () => {
       const file = new File(['data'], 'test.csv', { type: 'text/csv' });

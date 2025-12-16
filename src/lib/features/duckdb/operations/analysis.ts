@@ -4,11 +4,11 @@ import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type {
-    AnalyseOptions,
-    AnalysisResult,
-    AnalysisResults,
-    ArrowTableLike,
-    DuckDBContext
+  AnalyseOptions,
+  AnalysisResult,
+  AnalysisResults,
+  ArrowTableLike,
+  DuckDBContext
 } from '../types';
 
 export async function describeColumns(

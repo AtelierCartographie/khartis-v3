@@ -1,6 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
-import { unzip } from 'fflate';
+import { unzip, type Unzipped, type FlateError } from 'fflate';
 
 export interface ExtractedFile {
   name: string;
@@ -61,14 +61,15 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
 
   try {
     const buffer = await file.arrayBuffer();
-    const unzipped = await new Promise<Record<string, Uint8Array>>(
-      (resolve, reject) => {
-        unzip(new Uint8Array(buffer), (err, data) => {
+    const unzipped = await new Promise<Unzipped>((resolve, reject) => {
+      unzip(
+        new Uint8Array(buffer),
+        (err: FlateError | null, data: Unzipped) => {
           if (err) reject(err);
           else resolve(data);
-        });
-      }
-    );
+        }
+      );
+    });
 
     const files: ExtractedFile[] = Object.entries(unzipped)
       .filter(([path]) => !shouldIgnoreFile(path))

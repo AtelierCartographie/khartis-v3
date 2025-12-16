@@ -310,22 +310,30 @@ export const Pipeline = {
     await this.initialize();
     const start = performance.now();
 
-    logger.info('Downloading and processing remote ZIP archive', LogCategory.DATA, {
-      url
-    });
+    logger.info(
+      'Downloading and processing remote ZIP archive',
+      LogCategory.DATA,
+      {
+        url
+      }
+    );
 
     try {
       const response = await fetch(url);
       if (!response.ok) {
-        throw new Error(m.pipeline_error_fetch_failed({
-          status: String(response.status),
-          statusText: response.statusText
-        }));
+        throw new Error(
+          m.pipeline_error_fetch_failed({
+            status: String(response.status),
+            statusText: response.statusText
+          })
+        );
       }
 
       const arrayBuffer = await response.arrayBuffer();
       const filename = url.split('/').pop() || 'remote.zip';
-      const file = new File([arrayBuffer], filename, { type: 'application/zip' });
+      const file = new File([arrayBuffer], filename, {
+        type: 'application/zip'
+      });
 
       const dataset = await this.processZipFile(file);
       dataset.sourceFileId = url;

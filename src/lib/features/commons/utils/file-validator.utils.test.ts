@@ -473,9 +473,9 @@ describe('FileValidator', () => {
         const initialResult = FileValidator.validate(file);
 
         expect(initialResult.isValid).toBe(false);
-        expect(
-          initialResult.errors.some((e) => e.includes('too small'))
-        ).toBe(true);
+        expect(initialResult.errors.some((e) => e.includes('too small'))).toBe(
+          true
+        );
       });
     });
 
