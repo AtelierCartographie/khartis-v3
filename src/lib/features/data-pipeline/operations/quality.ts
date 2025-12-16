@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '../constants';
 import type { EnrichedColumn } from '../types';
 
@@ -5,11 +6,22 @@ export function computeQualityWarnings(
   columns: EnrichedColumn[],
   rowCount: number
 ): string[] {
-  if (rowCount === 0) return [];
-
   const { HIGH_NULL_RATIO_THRESHOLD, LOW_CARDINALITY_THRESHOLD } =
     PIPELINE_CONST.QUALITY;
   const warnings: string[] = [];
+
+  if (rowCount === 0) {
+    warnings.push(m.pipeline_warning_no_data_rows());
+    return warnings;
+  }
+
+  if (rowCount === 1) {
+    warnings.push(m.pipeline_warning_single_row());
+  }
+
+  if (rowCount < 5) {
+    warnings.push(m.pipeline_warning_small_dataset({ count: String(rowCount) }));
+  }
 
   for (const column of columns) {
     const nullRatio =
@@ -19,7 +31,10 @@ export function computeQualityWarnings(
 
     if (nullRatio > HIGH_NULL_RATIO_THRESHOLD) {
       warnings.push(
-        `Column "${column.name}" contains ${(nullRatio * 100).toFixed(1)}% missing values`
+        m.pipeline_warning_high_nulls({
+          column: column.name,
+          percent: (nullRatio * 100).toFixed(1)
+        })
       );
     }
 
@@ -29,7 +44,11 @@ export function computeQualityWarnings(
       const uniquenessRatio = (column.stats?.uniques ?? 0) / nonNullCount;
       if (uniquenessRatio < LOW_CARDINALITY_THRESHOLD) {
         warnings.push(
-          `Column "${column.name}" has very low cardinality (${column.stats?.uniques ?? 0} unique values out of ${nonNullCount})`
+          m.pipeline_warning_low_cardinality({
+            column: column.name,
+            uniques: String(column.stats?.uniques ?? 0),
+            total: String(nonNullCount)
+          })
         );
       }
     }

@@ -120,7 +120,7 @@ function create_plot_numeric(
   const {
     width = 150,
     height = 64,
-    main_color = '#a56eff',
+    main_color = '#ff7f00',
     nulls_color = 'gold',
     text_color = '#f4f4f4',
     bg_color = '#222'
@@ -146,6 +146,7 @@ function create_plot_numeric(
     style: 'overflow: visible;',
     x: { axis: null, type: 'band' },
     y: { axis: null },
+    style: { color: text_color },
     marks: [
       Plot.rectY(histogram.toArray(), {
         x: 'bin',
@@ -231,7 +232,7 @@ function create_plot_categorical(
     width = 150,
     height = 64,
     geoid = false,
-    main_color = '#fa4d56',
+    main_color = '#a56eff',
     nulls_color = 'gold',
     unique_color = 'grey',
     stroke_main = 'none',
@@ -274,7 +275,8 @@ function create_plot_categorical(
             : null,
         x: 'count',
         lineWidth,
-        textOverflow: 'clip-end'
+        textOverflow: 'clip-end',
+        fill: '#ffffff'
       } as ObservablePlotStackOptions)
     );
 
@@ -337,7 +339,8 @@ function create_plot_categorical(
                   : `${d.category}`,
               lineWidth: 12,
               x: 'count',
-              textOverflow: 'clip-end'
+              textOverflow: 'clip-end',
+              fill: '#ffffff'
             } as ObservablePlotStackOptions)
           )
         : null,
@@ -369,6 +372,8 @@ function create_plot_categorical(
         )
       ),
       // Mask the count of all categories
+      // Fix: use px: 'count' to align with Plot.stackX
+      // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
       Plot.text(
         histogramArray as CategoryHistogramItem[],
         Plot.pointerX(

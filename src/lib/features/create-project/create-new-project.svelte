@@ -126,6 +126,8 @@
     [FileType.ARROW]: { label: 'Arrow', color: 'teal' },
     [FileType.KML]: { label: 'KML', color: 'magenta' },
     [FileType.KMZ]: { label: 'KMZ', color: 'magenta' },
+    [FileType.GPX]: { label: 'GPX', color: 'magenta' },
+    [FileType.ZIP]: { label: 'ZIP', color: 'gray' },
     [FileType.UNKNOWN]: {
       label: m.create_project_file_type_unknown(),
       color: 'gray'
