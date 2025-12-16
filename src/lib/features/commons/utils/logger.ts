@@ -58,7 +58,9 @@ class Logger {
   private readonly LOOP_DETECTION_THRESHOLD = 10; // occurrences
 
   constructor() {
-    const isTest = import.meta.env.MODE === 'test' || typeof import.meta.env.VITEST !== 'undefined';
+    const isTest =
+      import.meta.env.MODE === 'test' ||
+      typeof import.meta.env.VITEST !== 'undefined';
     const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
     const debugEnabled =
       import.meta.env.VITE_DEBUG === 'true' ||
