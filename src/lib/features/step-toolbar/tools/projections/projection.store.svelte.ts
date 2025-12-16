@@ -1,3 +1,4 @@
+import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
   fitProjectionToGeoJSON,
@@ -12,7 +13,7 @@ import type { ProjectionState } from './projections.types';
 
 const DEFAULT_PROJECTION_STATE: ProjectionState = {
   selected: 'mercator',
-  viewMode: 'list',
+  viewMode: ViewMode.LIST,
   longitude: 0,
   latitude: 0,
   rotation: 0,
@@ -37,7 +38,7 @@ export const projectionActions = {
     projectionState.selected = projectionId;
   },
 
-  setViewMode(mode: 'list' | 'grid'): void {
+  setViewMode(mode: ViewMode): void {
     projectionState.viewMode = mode;
   },
 

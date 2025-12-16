@@ -1,3 +1,7 @@
+import {
+  ExampleCategory,
+  FileStatus
+} from '$lib/features/commons/constants/ui.constants';
 import type { ParsedData } from '$lib/types/data';
 import type { DataAnalysisResult } from '../utils/deep-validator.utils';
 
@@ -60,7 +64,7 @@ export interface UploadedFile {
    * so downstream services (DuckDB) can reuse it without re-stringifying.
    */
   preparedGeoJSON?: string;
-  status: 'uploading' | 'processing' | 'complete' | 'edit' | 'error';
+  status: FileStatus;
   errorMessage?: string;
   validation?: FileValidation;
   sourceType: DataSourceType;
@@ -104,13 +108,7 @@ export interface SavedProject {
   thumbnail?: string;
 }
 
-export type ExampleCategory =
-  | 'all'
-  | 'symbols'
-  | 'polygons'
-  | 'lines'
-  | 'texts'
-  | 'hybrids';
+export { ExampleCategory, FileStatus };
 
 export interface CreateProjectState {
   selectedTab: ProjectTab;

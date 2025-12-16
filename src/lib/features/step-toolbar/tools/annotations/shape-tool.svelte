@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     createColorValue,
@@ -73,7 +74,7 @@
   });
 
   function handleAddShape() {
-    annotationsActions.addAnnotation('shape', selectedShape);
+    annotationsActions.addAnnotation(AnnotationKind.SHAPE, selectedShape);
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {
@@ -230,10 +231,10 @@
           <Button
             kind="danger-tertiary"
             icon={TrashCan}
-            disabled={!selected || selected.type !== 'shape'}
+            disabled={!selected || selected.type !== AnnotationKind.SHAPE}
             on:click={() =>
               selected &&
-              selected.type === 'shape' &&
+              selected.type === AnnotationKind.SHAPE &&
               annotationsActions.removeAnnotation(selected.id)}
           >
             Supprimer la forme

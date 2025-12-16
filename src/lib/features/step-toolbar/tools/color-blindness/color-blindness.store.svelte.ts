@@ -1,8 +1,9 @@
+import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
 import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { ColorBlindnessState } from './color-blindness.types';
 
 const DEFAULT_COLOR_BLINDNESS_STATE: ColorBlindnessState = {
-  simulationType: 'none',
+  simulationType: ColorBlindnessType.NONE,
   enabled: false
 };
 
@@ -19,18 +20,7 @@ export const colorBlindnessActions = {
     colorBlindnessState.enabled = !colorBlindnessState.enabled;
   },
 
-  setSimulationType(
-    type:
-      | 'none'
-      | 'protanopia'
-      | 'deuteranopia'
-      | 'tritanopia'
-      | 'protanomaly'
-      | 'deuteranomaly'
-      | 'tritanomaly'
-      | 'achromatopsia'
-      | 'achromatomaly'
-  ): void {
+  setSimulationType(type: ColorBlindnessType): void {
     colorBlindnessState.simulationType = type;
   },
 
@@ -39,6 +29,7 @@ export const colorBlindnessActions = {
 
 export function isSimulationActive(): boolean {
   return (
-    colorBlindnessState.enabled && colorBlindnessState.simulationType !== 'none'
+    colorBlindnessState.enabled &&
+    colorBlindnessState.simulationType !== ColorBlindnessType.NONE
   );
 }

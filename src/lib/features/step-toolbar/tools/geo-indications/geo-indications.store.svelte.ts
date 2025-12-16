@@ -1,3 +1,9 @@
+import {
+  DistanceUnit,
+  InsetMapType,
+  OrientationIndicatorStyle,
+  StrokeStyle
+} from '$lib/features/commons/constants/ui.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type { ColorState, GeoIndicationsState } from './geo-indications.types';
@@ -5,21 +11,21 @@ import type { ColorState, GeoIndicationsState } from './geo-indications.types';
 const DEFAULT_STATE: GeoIndicationsState = {
   scale: {
     enabled: false,
-    style: 'line',
+    style: StrokeStyle.LINE,
     distance: 2000,
-    units: 'kilometers',
+    units: DistanceUnit.KILOMETERS,
     color: { hue: 180, saturation: 50, lightness: 50 },
     expanded: true
   },
   orientation: {
     enabled: false,
-    style: 'arrow',
+    style: OrientationIndicatorStyle.ARROW,
     size: 10,
     color: { hue: 180, saturation: 50, lightness: 50 }
   },
   insetMap: {
     enabled: false,
-    type: 'globe',
+    type: InsetMapType.GLOBE,
     size: 40,
     windowColor: { hue: 180, saturation: 50, lightness: 50 },
     zoom: 50,
@@ -58,7 +64,7 @@ export const geoIndicationsActions = {
     geoIndicationsState.scale.expanded = !geoIndicationsState.scale.expanded;
   },
 
-  setScaleStyle(style: 'line' | 'dashed' | 'dotted'): void {
+  setScaleStyle(style: StrokeStyle): void {
     geoIndicationsState.scale.style = style;
   },
 
@@ -73,7 +79,7 @@ export const geoIndicationsActions = {
     );
   },
 
-  setScaleUnits(units: 'kilometers' | 'miles'): void {
+  setScaleUnits(units: DistanceUnit): void {
     geoIndicationsState.scale.units = units;
   },
 
@@ -85,7 +91,7 @@ export const geoIndicationsActions = {
     geoIndicationsState.scale.color = hexToHsl(hex);
   },
 
-  setOrientationStyle(style: 'arrow' | 'compass'): void {
+  setOrientationStyle(style: OrientationIndicatorStyle): void {
     geoIndicationsState.orientation.style = style;
   },
 
@@ -101,7 +107,7 @@ export const geoIndicationsActions = {
     geoIndicationsState.orientation.color = hexToHsl(hex);
   },
 
-  setInsetMapType(type: 'globe' | 'planisphere'): void {
+  setInsetMapType(type: InsetMapType): void {
     geoIndicationsState.insetMap.type = type;
   },
 

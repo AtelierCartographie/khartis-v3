@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -363,11 +364,11 @@
       )) as Array<{ geom_type?: string }>;
       const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
 
-      const layerType = geomType.includes('point')
-        ? 'point'
+      const layerType: BasemapLayerType = geomType.includes('point')
+        ? BasemapLayerType.POINT
         : geomType.includes('line')
-          ? 'line'
-          : 'polygon';
+          ? BasemapLayerType.LINE
+          : BasemapLayerType.POLYGON;
 
       const customBasemap: BasemapMetadata = {
         file: tableName,
@@ -475,7 +476,7 @@
       date: new Date().getFullYear().toString(),
       bbox: [-180, -90, 180, 90],
       projection: 'EPSG:3857',
-      layers: [{ name: 'base', type: 'polygon' }],
+      layers: [{ name: 'base', type: BasemapLayerType.POLYGON }],
       isCustom: true
     };
 

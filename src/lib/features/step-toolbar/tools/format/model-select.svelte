@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PageModel } from '$lib/features/commons/constants/ui.constants';
   import { m } from '$lib/paraglide/messages';
   import {
     Column,
@@ -10,13 +11,13 @@
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
-  let selectedModel = $state('');
+  let selectedModel = $state<PageModel>(PageModel.A4_LANDSCAPE);
 
   const modelOptions = [
-    { value: 'page-a4-landscape', text: m.format_model_a4_landscape() },
-    { value: 'page-a4-portrait', text: m.format_model_a4_portrait() },
-    { value: 'page-a3-landscape', text: m.format_model_a3_landscape() },
-    { value: 'page-a3-portrait', text: m.format_model_a3_portrait() }
+    { value: PageModel.A4_LANDSCAPE, text: m.format_model_a4_landscape() },
+    { value: PageModel.A4_PORTRAIT, text: m.format_model_a4_portrait() },
+    { value: PageModel.A3_LANDSCAPE, text: m.format_model_a3_landscape() },
+    { value: PageModel.A3_PORTRAIT, text: m.format_model_a3_portrait() }
   ];
 
   $effect(() => {

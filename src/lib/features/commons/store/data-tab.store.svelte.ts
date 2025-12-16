@@ -1,3 +1,9 @@
+import {
+  BasemapSource,
+  GeoreferenceType,
+  JoinStatus,
+  TableViewType
+} from '$lib/features/commons/constants/ui.constants';
 import type { JoinQuality } from '$lib/features/map/types/basemap.types';
 import type { DataTabState } from './data-tab.types';
 
@@ -7,17 +13,17 @@ const DEFAULT_STATE: DataTabState = {
     expandedRowIds: [],
     searchQuery: '',
     filterActive: false,
-    tableView: 'compact'
+    tableView: TableViewType.COMPACT
   },
   geolocation: {
-    geoReference: 'entities',
+    geoReference: GeoreferenceType.ENTITIES,
     linkedVariable: null,
     linkedVariableName: '',
     autoDetected: true
   },
   basemapJoin: {
     selectedBasemap: '',
-    basemapSource: 'catalog',
+    basemapSource: BasemapSource.CATALOG,
     joinedEntities: 0,
     entitiesToVerify: 0,
     duplicateEntities: [],
@@ -61,15 +67,15 @@ export const dataTabActions = {
     dataTabState.basemapJoin.entitiesToVerify = stats.toVerifyCount;
 
     dataTabState.basemapJoin.duplicateEntities = stats.entities
-      .filter((e) => e.status === 'duplicate')
+      .filter((e) => e.status === JoinStatus.DUPLICATE)
       .map((e) => e.dataValue);
 
     dataTabState.basemapJoin.unrecognizedEntities = stats.entities
-      .filter((e) => e.status === 'unrecognized')
+      .filter((e) => e.status === JoinStatus.UNRECOGNIZED)
       .map((e) => e.dataValue);
 
     dataTabState.basemapJoin.joinMappings = stats.entities
-      .filter((e) => e.status === 'to_verify')
+      .filter((e) => e.status === JoinStatus.TO_VERIFY)
       .map((e) => ({
         dataValue: e.dataValue,
         basemapOptions: e.matches || [],
@@ -109,7 +115,7 @@ export const dataTabActions = {
     dataTabState.basemapJoin.selectedBasemap = basemapId;
   },
 
-  setBasemapSource(source: 'catalog' | 'import' | 'osm'): void {
+  setBasemapSource(source: BasemapSource): void {
     dataTabState.basemapJoin.basemapSource = source;
   },
 
@@ -140,7 +146,7 @@ export function totalEntities() {
 export function isDataReady() {
   const geo = dataTabState.geolocation;
 
-  if (geo.geoReference === 'coordinates') {
+  if (geo.geoReference === GeoreferenceType.COORDINATES) {
     return !!geo.latitudeColumn && !!geo.longitudeColumn;
   }
 
