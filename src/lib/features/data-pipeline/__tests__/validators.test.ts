@@ -16,21 +16,25 @@ describe('File Validators', () => {
     });
 
     it('should reject file exceeding MAX_FILE_SIZE (100MB)', async () => {
-      const largeContent = new Uint8Array(101 * 1024 * 1024);
-      const largeFile = new File([largeContent], 'large.csv', {
-        type: 'text/csv'
+      // Create a mock File with size property without allocating actual memory
+      const mockFile = new File(['test'], 'large.csv', { type: 'text/csv' });
+      Object.defineProperty(mockFile, 'size', {
+        value: 101 * 1024 * 1024,
+        writable: false
       });
-      const result = await validateFile(largeFile);
+      const result = await validateFile(mockFile);
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
     it('should warn for file above WARNING_FILE_SIZE (50MB)', async () => {
-      const mediumContent = new Uint8Array(51 * 1024 * 1024);
-      const mediumFile = new File([mediumContent], 'medium.csv', {
-        type: 'text/csv'
+      // Create a mock File with size property without allocating actual memory
+      const mockFile = new File(['test'], 'medium.csv', { type: 'text/csv' });
+      Object.defineProperty(mockFile, 'size', {
+        value: 51 * 1024 * 1024,
+        writable: false
       });
-      const result = await validateFile(mediumFile);
+      const result = await validateFile(mockFile);
       expect(result.isValid).toBe(true);
       expect(result.warnings.length).toBeGreaterThan(0);
     });
@@ -47,11 +51,13 @@ describe('File Validators', () => {
     });
 
     it('should accept file exactly at WARNING_FILE_SIZE without warning', async () => {
-      const exactContent = new Uint8Array(50 * 1024 * 1024);
-      const exactFile = new File([exactContent], 'exact50mb.csv', {
-        type: 'text/csv'
+      // Create a mock File with size property without allocating actual memory
+      const mockFile = new File(['test'], 'exact50mb.csv', { type: 'text/csv' });
+      Object.defineProperty(mockFile, 'size', {
+        value: 50 * 1024 * 1024,
+        writable: false
       });
-      const result = await validateFile(exactFile);
+      const result = await validateFile(mockFile);
       expect(result.isValid).toBe(true);
       expect(result.warnings).toHaveLength(0);
     });

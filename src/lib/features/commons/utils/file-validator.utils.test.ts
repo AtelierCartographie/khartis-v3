@@ -64,11 +64,12 @@ describe('FileValidator', () => {
       });
 
       it('should reject files exceeding max size', () => {
-        const largeContent = new Array(STORAGE_LIMITS.maxFileSize + 1024)
-          .fill('x')
-          .join('');
-        const file = new File([largeContent], 'large.csv', {
+        const smallContent = 'x'.repeat(1024);
+        const file = new File([smallContent], 'large.csv', {
           type: 'text/csv'
+        });
+        Object.defineProperty(file, 'size', {
+          value: STORAGE_LIMITS.maxFileSize + 1024
         });
         const result = FileValidator.validate(file);
 
@@ -79,13 +80,12 @@ describe('FileValidator', () => {
       });
 
       it('should warn about large files approaching the limit', () => {
-        const largeContent = new Array(
-          Math.floor(STORAGE_LIMITS.maxFileSize * 0.85)
-        )
-          .fill('x')
-          .join('');
-        const file = new File([largeContent], 'large.csv', {
+        const smallContent = 'x'.repeat(1024);
+        const file = new File([smallContent], 'large.csv', {
           type: 'text/csv'
+        });
+        Object.defineProperty(file, 'size', {
+          value: Math.floor(STORAGE_LIMITS.maxFileSize * 0.85)
         });
         const result = FileValidator.validate(file);
 
@@ -527,15 +527,16 @@ describe('FileValidator', () => {
     });
 
     it('should reject when total size exceeds maximum', () => {
-      const largeContent = new Array(
-        Math.floor(STORAGE_LIMITS.maxTotalFileSize / 2) + 1
-      )
-        .fill('x')
-        .join('');
-      const files = [
-        new File([largeContent], 'file1.csv', { type: 'text/csv' }),
-        new File([largeContent], 'file2.csv', { type: 'text/csv' })
-      ];
+      const smallContent = 'x'.repeat(1024);
+      const file1 = new File([smallContent], 'file1.csv', { type: 'text/csv' });
+      const file2 = new File([smallContent], 'file2.csv', { type: 'text/csv' });
+      Object.defineProperty(file1, 'size', {
+        value: Math.floor(STORAGE_LIMITS.maxTotalFileSize / 2) + 1
+      });
+      Object.defineProperty(file2, 'size', {
+        value: Math.floor(STORAGE_LIMITS.maxTotalFileSize / 2) + 1
+      });
+      const files = [file1, file2];
       const result = FileValidator.validateMultiple(files);
 
       expect(
