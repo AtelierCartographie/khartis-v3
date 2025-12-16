@@ -14,7 +14,9 @@ describe('ZIP Handler - isZipFile', () => {
   });
 
   it('should detect .zip extension regardless of MIME type', () => {
-    const file = new File(['content'], 'archive.zip', { type: 'application/octet-stream' });
+    const file = new File(['content'], 'archive.zip', {
+      type: 'application/octet-stream'
+    });
     expect(isZipFile(file)).toBe(true);
   });
 

@@ -54,32 +54,32 @@ TODO: add screenshots
 Prerequisites
 
 - Node.js >= 18
-- Yarn 4 (via Corepack)
+- pnpm 9 (via Corepack)
 
 Install
 
 - Enable Corepack (first time only):
 
 ```bash
-corepack enable
+corepack enable pnpm
 ```
 
 - Install dependencies:
 
 ```bash
-yarn install
+pnpm install
 ```
 
 Development
 
 ```bash
-yarn dev
+pnpm dev
 ```
 
 Build
 
 ```bash
-yarn build && yarn preview
+pnpm build && pnpm preview
 ```
 
 ## Scripts
@@ -107,7 +107,7 @@ DuckDB extensions (spatial, parquet, httpfs) are bundled locally for offline-fir
 
 **Auto-sync with dependencies**
 
-Extensions are automatically downloaded after `yarn install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
+Extensions are automatically downloaded after `pnpm install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
 
 ```
 static/duckdb-extensions/v1.4.0/wasm_eh/
@@ -119,7 +119,7 @@ static/duckdb-extensions/v1.4.0/wasm_eh/
 **Manual update**
 
 ```bash
-yarn download:extensions
+pnpm download:extensions
 ```
 
 **Version mapping**
@@ -136,16 +136,16 @@ Old extension versions are automatically cleaned up when upgrading.
 ### Unit tests (Vitest)
 
 ```bash
-yarn test:unit              # Run all unit tests
-yarn test:unit path/to/file # Run specific test file
+pnpm test:unit              # Run all unit tests
+pnpm test:unit path/to/file # Run specific test file
 ```
 
 ### E2E tests (Playwright)
 
 ```bash
-yarn test:e2e               # Run all E2E tests
-yarn test:e2e --headed      # Run with visible browser
-yarn test:e2e --ui          # Run with Playwright UI
+pnpm test:e2e               # Run all E2E tests
+pnpm test:e2e --headed      # Run with visible browser
+pnpm test:e2e --ui          # Run with Playwright UI
 ```
 
 **Structure:**

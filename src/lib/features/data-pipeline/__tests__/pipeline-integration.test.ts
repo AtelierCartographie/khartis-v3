@@ -170,7 +170,8 @@ describe('Pipeline Integration - ZIP Validation', () => {
 });
 
 describe('Pipeline Integration - Extension Validation', () => {
-  const allowedExtensions = PIPELINE_CONST.EXTENSIONS.ALL as unknown as string[];
+  const allowedExtensions = PIPELINE_CONST.EXTENSIONS
+    .ALL as unknown as string[];
 
   it('should accept all valid CSV test files', () => {
     Object.values(CSV_TEST_FILES.VALID).forEach((path) => {

@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  NODE_VERSION: 22
+  NODE_VERSION: '22'
 
 jobs:
   dependency-setup:
@@ -15,17 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Cache dependencies
         uses: actions/cache/save@v4
@@ -33,7 +33,7 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
 
   unit-tests:
     name: Unit Tests (Vitest)
@@ -42,14 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -57,11 +57,14 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
       - name: Run unit tests
-        run: yarn run test:unit -- --run
+        run: pnpm run test:unit -- --run
 
   svelte-check:
     name: Svelte Type Check
@@ -70,14 +73,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -85,27 +88,31 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
       - name: Run Svelte Check
-        run: yarn check
+        run: pnpm check
 
   e2e-tests:
-    name: End-to-End Tests (Playwright)
+    name: E2E Tests (Playwright)
     needs: [unit-tests, svelte-check]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -113,25 +120,52 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
+
       - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
 
       - name: Run Playwright tests
-        run: yarn run test:e2e
+        run: pnpm run test:e2e
+        env:
+          CI: true
+          NODE_OPTIONS: --max-old-space-size=4096
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report
+          name: playwright-report-production
           path: playwright-report/
-          retention-days: 30
+          retention-days: 7
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-results-production
+          path: test-results/
+          retention-days: 7
 
   version-generation:
     name: Semantic Version Generation
-    needs: e2e-tests
+    needs: [unit-tests, svelte-check, e2e-tests]
     runs-on: ubuntu-latest
     permissions: write-all
     outputs:
@@ -139,13 +173,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: pnpm
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -153,14 +188,14 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run semantic-release
         id: semantic-release
         run: npx semantic-release
         env:
-          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Retrieve latest release via GitHub API
         id: get-version

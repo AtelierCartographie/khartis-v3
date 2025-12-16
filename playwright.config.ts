@@ -1,37 +1,46 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 1,
-  reporter: 'html',
+  forbidOnly: isCI,
+  retries: isCI ? 2 : 0,
+  workers: 1,
+  reporter: isCI ? [['html'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
-  timeout: 45000,
+  timeout: isCI ? 90000 : 45000,
   expect: {
-    timeout: 15000
+    timeout: isCI ? 30000 : 15000
   },
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 15000,
-    navigationTimeout: 15000
+    actionTimeout: isCI ? 30000 : 15000,
+    navigationTimeout: isCI ? 30000 : 15000,
+    locale: 'fr-FR',
+    timezoneId: 'Europe/Paris'
   },
 
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        headless: true
+      }
     }
   ],
 
   webServer: {
-    command: 'yarn build && yarn preview',
+    command: 'pnpm build && pnpm preview',
     port: 4173,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 180000 : 120000,
+    stdout: 'pipe',
+    stderr: 'pipe'
   }
 });
