@@ -4,8 +4,8 @@
 # and downloads matching extensions for offline PWA support.
 #
 # Usage:
-#   yarn download:extensions        # Manual download
-#   yarn install                    # Auto-runs via postinstall hook
+#   pnpm download:extensions        # Manual download
+#   pnpm install                    # Auto-runs via postinstall hook
 
 set -e
 
@@ -19,7 +19,7 @@ detect_duckdb_version() {
   local pkg_json="node_modules/@duckdb/duckdb-wasm/package.json"
 
   if [ ! -f "$pkg_json" ]; then
-    echo "Error: @duckdb/duckdb-wasm not found. Run 'yarn install' first."
+    echo "Error: @duckdb/duckdb-wasm not found. Run 'pnpm install' first."
     exit 1
   fi
 

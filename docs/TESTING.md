@@ -34,25 +34,25 @@ src/
 
 ```bash
 # Run all tests
-yarn test
+pnpm test
 
 # Unit tests only
-yarn test:unit
+pnpm test:unit
 
 # Unit tests in watch mode
-yarn test:unit:watch
+pnpm test:unit:watch
 
 # E2E tests
-yarn test:e2e
+pnpm test:e2e
 
 # E2E tests with UI
-yarn test:e2e:ui
+pnpm test:e2e:ui
 
 # Coverage report
-yarn test:coverage
+pnpm test:coverage
 
 # Type checking
-yarn check
+pnpm check
 ```
 
 ## Unit Testing
@@ -694,7 +694,7 @@ export default {
 
 ```bash
 # Generate coverage report
-yarn test:coverage
+pnpm test:coverage
 
 # Open HTML report
 open coverage/index.html
@@ -795,16 +795,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          corepack enable
-          yarn install
+          corepack enable pnpm
+          pnpm install
 
       - name: Run unit tests
-        run: yarn test:unit
+        run: pnpm test:unit
 
       - name: Run E2E tests
         run: |
           npx playwright install
-          yarn test:e2e
+          pnpm test:e2e
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -818,10 +818,10 @@ jobs:
 
 ```bash
 # Run specific test file
-yarn test:unit src/lib/features/data-pipeline/parsers/csv.parser.test.ts
+pnpm test:unit src/lib/features/data-pipeline/parsers/csv.parser.test.ts
 
 # Run tests matching pattern
-yarn test:unit -t "should parse CSV"
+pnpm test:unit -t "should parse CSV"
 
 # Run with debugging
 node --inspect-brk ./node_modules/.bin/vitest
@@ -831,13 +831,13 @@ node --inspect-brk ./node_modules/.bin/vitest
 
 ```bash
 # Run in headed mode
-yarn test:e2e --headed
+pnpm test:e2e --headed
 
 # Run with debug mode
-PWDEBUG=1 yarn test:e2e
+PWDEBUG=1 pnpm test:e2e
 
 # Generate trace
-yarn test:e2e --trace on
+pnpm test:e2e --trace on
 
 # View trace
 npx playwright show-trace trace.zip
@@ -854,7 +854,7 @@ npx playwright show-trace trace.zip
       "type": "node",
       "request": "launch",
       "name": "Debug Unit Tests",
-      "runtimeExecutable": "yarn",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["test:unit", "--run"],
       "console": "integratedTerminal"
     },
@@ -862,7 +862,7 @@ npx playwright show-trace trace.zip
       "type": "node",
       "request": "launch",
       "name": "Debug E2E Tests",
-      "runtimeExecutable": "yarn",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["test:e2e", "--headed"],
       "console": "integratedTerminal"
     }

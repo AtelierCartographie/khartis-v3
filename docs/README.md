@@ -23,9 +23,9 @@ This documentation is organized into focused guides covering different aspects o
 ```bash
 git clone <repo-url>
 cd khartis-v3
-corepack enable          # Enable Yarn 4
-yarn install
-yarn dev
+corepack enable pnpm     # Enable pnpm
+pnpm install
+pnpm dev
 ```
 
 Open http://localhost:5176/
@@ -138,9 +138,9 @@ src/lib/
 ## 🧪 Testing
 
 ```bash
-yarn test:unit        # Unit tests
-yarn test:e2e         # E2E tests
-yarn test:coverage    # Coverage report
+pnpm test:unit        # Unit tests
+pnpm test:e2e         # E2E tests
+pnpm test:coverage    # Coverage report
 ```
 
 ## 📝 Contributing
