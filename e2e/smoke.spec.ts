@@ -30,8 +30,12 @@ test.describe('App Startup', () => {
     await expect(modal).toBeVisible({ timeout: 15000 });
 
     await expect(modal.locator('[data-testid="tab-create-new"]')).toBeVisible();
-    await expect(modal.locator('[data-testid="tab-open-project"]')).toBeVisible();
-    await expect(modal.locator('[data-testid="tab-try-example"]')).toBeVisible();
+    await expect(
+      modal.locator('[data-testid="tab-open-project"]')
+    ).toBeVisible();
+    await expect(
+      modal.locator('[data-testid="tab-try-example"]')
+    ).toBeVisible();
   });
 
   test('should validate project name is required', async ({ page }) => {

@@ -176,9 +176,11 @@ describe('File Integration Tests', () => {
           const content = readFileSync(filePath, 'utf-8');
           const parsed = JSON.parse(content);
 
-          expect(['FeatureCollection', 'Feature', 'GeometryCollection']).toContain(
-            parsed.type
-          );
+          expect([
+            'FeatureCollection',
+            'Feature',
+            'GeometryCollection'
+          ]).toContain(parsed.type);
 
           if (parsed.type === 'FeatureCollection') {
             expect(Array.isArray(parsed.features)).toBe(true);
@@ -217,7 +219,9 @@ describe('File Integration Tests', () => {
           if (!existsSync(shpPath)) return;
 
           const files = readdirSync(shpPath);
-          const extensions = files.map((f) => f.split('.').pop()?.toLowerCase());
+          const extensions = files.map((f) =>
+            f.split('.').pop()?.toLowerCase()
+          );
 
           expect(extensions).toContain('shp');
           expect(extensions).toContain('shx');
@@ -232,7 +236,10 @@ describe('File Integration Tests', () => {
 
           if (shpFile) {
             const filePath = join(shpPath, shpFile);
-            const file = createFileFromPath(filePath, 'application/x-shapefile');
+            const file = createFileFromPath(
+              filePath,
+              'application/x-shapefile'
+            );
             const result = FileValidator.validate(file);
 
             expect(result.fileType).toBe(FileType.SHAPEFILE);

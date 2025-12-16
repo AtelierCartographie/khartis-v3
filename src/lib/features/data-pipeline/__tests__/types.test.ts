@@ -95,9 +95,13 @@ describe('ColumnStats Utilities', () => {
         nulls: 5,
         uniques: 50
       };
-      expect(hasNumericStats({ ...baseStat, median: 24, stdDev: 5 })).toBe(false);
+      expect(hasNumericStats({ ...baseStat, median: 24, stdDev: 5 })).toBe(
+        false
+      );
       expect(hasNumericStats({ ...baseStat, mean: 25, stdDev: 5 })).toBe(false);
-      expect(hasNumericStats({ ...baseStat, mean: 25, median: 24 })).toBe(false);
+      expect(hasNumericStats({ ...baseStat, mean: 25, median: 24 })).toBe(
+        false
+      );
     });
   });
 
@@ -114,8 +118,24 @@ describe('ColumnStats Utilities', () => {
     });
 
     it('should handle edge cases', () => {
-      expect(getNullPercentage({ name: 't', type: ColumnType.TEXT, count: 0, nulls: 0, uniques: 0 })).toBe(0);
-      expect(getNullPercentage({ name: 't', type: ColumnType.TEXT, count: 100, nulls: 100, uniques: 0 })).toBe(100);
+      expect(
+        getNullPercentage({
+          name: 't',
+          type: ColumnType.TEXT,
+          count: 0,
+          nulls: 0,
+          uniques: 0
+        })
+      ).toBe(0);
+      expect(
+        getNullPercentage({
+          name: 't',
+          type: ColumnType.TEXT,
+          count: 100,
+          nulls: 100,
+          uniques: 0
+        })
+      ).toBe(100);
     });
   });
 
@@ -132,8 +152,24 @@ describe('ColumnStats Utilities', () => {
     });
 
     it('should handle edge cases', () => {
-      expect(getUniquePercentage({ name: 't', type: ColumnType.TEXT, count: 0, nulls: 0, uniques: 0 })).toBe(0);
-      expect(getUniquePercentage({ name: 't', type: ColumnType.TEXT, count: 100, nulls: 0, uniques: 100 })).toBe(100);
+      expect(
+        getUniquePercentage({
+          name: 't',
+          type: ColumnType.TEXT,
+          count: 0,
+          nulls: 0,
+          uniques: 0
+        })
+      ).toBe(0);
+      expect(
+        getUniquePercentage({
+          name: 't',
+          type: ColumnType.TEXT,
+          count: 100,
+          nulls: 0,
+          uniques: 100
+        })
+      ).toBe(100);
     });
   });
 });
@@ -192,7 +228,10 @@ describe('Validation Utilities', () => {
 
   describe('mergeValidationResults', () => {
     it('should merge all valid results', () => {
-      const merged = mergeValidationResults([validationSuccess(), validationSuccess()]);
+      const merged = mergeValidationResults([
+        validationSuccess(),
+        validationSuccess()
+      ]);
       expect(merged.isValid).toBe(true);
     });
 
@@ -237,10 +276,20 @@ describe('GeoArrow Metadata', () => {
 
     it('should reject invalid metadata', () => {
       expect(isGeoArrowMetadata(null)).toBe(false);
-      expect(isGeoArrowMetadata({ primary_column: 'geometry', columns: {} })).toBe(false);
+      expect(
+        isGeoArrowMetadata({ primary_column: 'geometry', columns: {} })
+      ).toBe(false);
       expect(isGeoArrowMetadata({ version: '1.0.0', columns: {} })).toBe(false);
-      expect(isGeoArrowMetadata({ version: '1.0.0', primary_column: 'geometry' })).toBe(false);
-      expect(isGeoArrowMetadata({ version: '1.0.0', primary_column: 'geometry', columns: 'invalid' })).toBe(false);
+      expect(
+        isGeoArrowMetadata({ version: '1.0.0', primary_column: 'geometry' })
+      ).toBe(false);
+      expect(
+        isGeoArrowMetadata({
+          version: '1.0.0',
+          primary_column: 'geometry',
+          columns: 'invalid'
+        })
+      ).toBe(false);
     });
   });
 
@@ -250,7 +299,11 @@ describe('GeoArrow Metadata', () => {
     });
 
     it('should return undefined for missing column', () => {
-      const metadata: GeoArrowMetadata = { version: '1.0.0', primary_column: 'missing', columns: {} };
+      const metadata: GeoArrowMetadata = {
+        version: '1.0.0',
+        primary_column: 'missing',
+        columns: {}
+      };
       expect(extractBBox(metadata)).toBeUndefined();
     });
   });
@@ -261,7 +314,11 @@ describe('GeoArrow Metadata', () => {
     });
 
     it('should return empty array for missing column', () => {
-      const metadata: GeoArrowMetadata = { version: '1.0.0', primary_column: 'missing', columns: {} };
+      const metadata: GeoArrowMetadata = {
+        version: '1.0.0',
+        primary_column: 'missing',
+        columns: {}
+      };
       expect(extractGeometryTypes(metadata)).toEqual([]);
     });
   });
@@ -272,13 +329,19 @@ describe('GeoArrow Metadata', () => {
     });
 
     it('should handle edge cases', () => {
-      const missing: GeoArrowMetadata = { version: '1.0.0', primary_column: 'missing', columns: {} };
+      const missing: GeoArrowMetadata = {
+        version: '1.0.0',
+        primary_column: 'missing',
+        columns: {}
+      };
       expect(extractPrimaryGeometryType(missing)).toBeUndefined();
 
       const empty: GeoArrowMetadata = {
         version: '1.0.0',
         primary_column: 'geometry',
-        columns: { geometry: { encoding: 'WKB', geometry_types: [], bbox: [0, 0, 0, 0] } }
+        columns: {
+          geometry: { encoding: 'WKB', geometry_types: [], bbox: [0, 0, 0, 0] }
+        }
       };
       expect(extractPrimaryGeometryType(empty)).toBeUndefined();
     });

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync, existsSync } from 'fs';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import Database from 'duckdb';
 
@@ -267,7 +267,10 @@ describe('DuckDB Pipeline Integration Tests', () => {
       `);
 
       const columns = await query('DESCRIBE type_test');
-      const columnTypes = columns as { column_name: string; column_type: string }[];
+      const columnTypes = columns as {
+        column_name: string;
+        column_type: string;
+      }[];
 
       // NUTS_ID should be VARCHAR (string)
       const nutsCol = columnTypes.find((c) => c.column_name === 'NUTS_ID');
@@ -283,7 +286,11 @@ describe('DuckDB Pipeline Integration Tests', () => {
 
   describe('BOM and Encoding Handling', () => {
     it('should handle UTF-8 BOM in CSV files', async () => {
-      const filePath = join(DATASETS_PATH, 'csv', 'UN_population_by_country_2021.csv');
+      const filePath = join(
+        DATASETS_PATH,
+        'csv',
+        'UN_population_by_country_2021.csv'
+      );
       if (!existsSync(filePath)) return;
 
       // DuckDB should handle BOM automatically

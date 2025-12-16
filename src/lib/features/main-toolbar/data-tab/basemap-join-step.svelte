@@ -1034,7 +1034,10 @@
         class:dropzone-active={isDragging}
         role="button"
         tabindex={0}
-        ondragover={(e: { preventDefault: () => void; }) => { e.preventDefault(); isDragging = true; }}
+        ondragover={(e: { preventDefault: () => void }) => {
+          e.preventDefault();
+          isDragging = true;
+        }}
         ondragleave={() => {
           isDragging = false;
         }}
