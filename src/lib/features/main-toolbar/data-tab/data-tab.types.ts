@@ -1,3 +1,9 @@
+import {
+  BasemapSource,
+  GeoreferenceType,
+  TableViewType
+} from '$lib/features/commons/constants/ui.constants';
+
 export enum DataToolType {
   None = 'none',
   Search = 'search',
@@ -10,11 +16,11 @@ export interface DataControlState {
   expandedRowIds: (string | number)[];
   searchQuery: string;
   filterActive: boolean;
-  tableView: 'compact' | 'expanded';
+  tableView: TableViewType;
 }
 
 export interface GeolocationState {
-  geoReference: 'entities' | 'coordinates' | 'custom';
+  geoReference: GeoreferenceType;
   linkedVariable: number | null;
   linkedVariableName: string;
   autoDetected: boolean;
@@ -22,7 +28,7 @@ export interface GeolocationState {
 
 export interface BasemapJoinState {
   selectedBasemap: string;
-  basemapSource: 'catalog' | 'import' | 'osm';
+  basemapSource: BasemapSource;
   joinedEntities: number;
   entitiesToVerify: number;
   duplicateEntities: string[];

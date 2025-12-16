@@ -1,16 +1,17 @@
-name: Staging Environment Deployment
+name: Pull Request Validation
 
 on:
-  push:
+  pull_request:
     branches:
       - staging
+      - main
 
 env:
   NODE_VERSION: '22'
 
 jobs:
   dependency-setup:
-    name: Dependencies Setup and Installation
+    name: Dependencies Setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,8 +36,8 @@ jobs:
             */*/node_modules
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
 
-  unit-tests:
-    name: Unit Tests (Vitest)
+  lint:
+    name: Code Linting
     needs: dependency-setup
     runs-on: ubuntu-latest
     steps:
@@ -60,11 +61,8 @@ jobs:
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Run unit tests
-        run: pnpm run test:unit -- --run
+      - name: Run ESLint and Prettier
+        run: pnpm lint
 
   svelte-check:
     name: Svelte Type Check
@@ -97,9 +95,68 @@ jobs:
       - name: Run Svelte Check
         run: pnpm check
 
+  unit-tests:
+    name: Unit Tests
+    needs: dependency-setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Run unit tests
+        run: pnpm run test:unit -- --run
+
+  build-check:
+    name: Build Verification
+    needs: [lint, svelte-check, unit-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Build application
+        run: pnpm build
+
   e2e-tests:
-    name: E2E Tests (Playwright)
-    needs: [unit-tests, svelte-check]
+    name: E2E Tests
+    needs: build-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -151,7 +208,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: playwright-report-staging
+          name: playwright-report
           path: playwright-report/
           retention-days: 7
 
@@ -159,48 +216,14 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: test-results-staging
+          name: test-results
           path: test-results/
           retention-days: 7
 
-  semantic-versioning:
-    name: Version Tag Generation
-    needs: [unit-tests, svelte-check, e2e-tests]
+  pr-validation-complete:
+    name: PR Validation Complete
+    needs: [build-check, e2e-tests]
     runs-on: ubuntu-latest
-    permissions: write-all
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Run semantic-release
-        id: semantic-release
-        run: npx semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Retrieve latest release via GitHub API
-        id: get-version
-        run: |
-          LATEST_TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
-          echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
-          echo "Latest version: $LATEST_TAG"
+      - name: Validation passed
+        run: echo "All quality checks passed. PR is ready for review."

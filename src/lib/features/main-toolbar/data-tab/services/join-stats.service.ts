@@ -1,3 +1,4 @@
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import type { JoinEntity, JoinStats } from '../components';
@@ -86,13 +87,13 @@ export async function computeDatasetJoinStats(
     if (duplicateCheck.get(normalizedVal)! > 1) {
       entities.push({
         dataValue: val,
-        status: 'duplicate'
+        status: JoinStatus.DUPLICATE
       });
     } else if (targetSet.has(normalizedVal)) {
       entities.push({
         dataValue: val,
         geoValue: val,
-        status: 'joined'
+        status: JoinStatus.JOINED
       });
     } else {
       const possibleMatches = targetValues
@@ -109,24 +110,27 @@ export async function computeDatasetJoinStats(
       if (possibleMatches.length > 0) {
         entities.push({
           dataValue: val,
-          status: 'to_verify',
+          status: JoinStatus.TO_VERIFY,
           matches: possibleMatches.slice(0, 5)
         });
       } else {
         entities.push({
           dataValue: val,
-          status: 'unrecognized'
+          status: JoinStatus.UNRECOGNIZED
         });
       }
     }
   }
 
   const stats: JoinStats = {
-    joinedCount: entities.filter((e) => e.status === 'joined').length,
-    toVerifyCount: entities.filter((e) => e.status === 'to_verify').length,
-    duplicateCount: entities.filter((e) => e.status === 'duplicate').length,
-    unrecognizedCount: entities.filter((e) => e.status === 'unrecognized')
+    joinedCount: entities.filter((e) => e.status === JoinStatus.JOINED).length,
+    toVerifyCount: entities.filter((e) => e.status === JoinStatus.TO_VERIFY)
       .length,
+    duplicateCount: entities.filter((e) => e.status === JoinStatus.DUPLICATE)
+      .length,
+    unrecognizedCount: entities.filter(
+      (e) => e.status === JoinStatus.UNRECOGNIZED
+    ).length,
     entities
   };
 

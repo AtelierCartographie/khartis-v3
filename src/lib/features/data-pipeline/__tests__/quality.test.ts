@@ -4,7 +4,9 @@ import { computeQualityWarnings } from '../operations/quality';
 import type { EnrichedColumn } from '../types';
 import { ColumnType } from '../types';
 
-function createMockColumn(overrides: Partial<EnrichedColumn> = {}): EnrichedColumn {
+function createMockColumn(
+  overrides: Partial<EnrichedColumn> = {}
+): EnrichedColumn {
   return {
     name: 'test_column',
     type: ColumnType.TEXT,

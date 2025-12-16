@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -35,7 +36,7 @@
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
-        annotationsActions.addAnnotation('image', dataUrl);
+        annotationsActions.addAnnotation(AnnotationKind.IMAGE, dataUrl);
       };
       reader.readAsDataURL(file);
     }
@@ -110,10 +111,10 @@
           <Button
             kind="danger-tertiary"
             icon={TrashCan}
-            disabled={!selected || selected.type !== 'image'}
+            disabled={!selected || selected.type !== AnnotationKind.IMAGE}
             on:click={() =>
               selected &&
-              selected.type === 'image' &&
+              selected.type === AnnotationKind.IMAGE &&
               annotationsActions.removeAnnotation(selected.id)}
           >
             Supprimer l’image

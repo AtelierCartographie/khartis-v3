@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    BasemapLayerType,
+    BasemapSource
+  } from '$lib/features/commons/constants/ui.constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -365,7 +369,7 @@
     selectedBasemapId = basemapId;
     dataTabActions.setBasemapJoinState({
       selectedBasemap: basemapId,
-      basemapSource: 'catalog'
+      basemapSource: BasemapSource.CATALOG
     });
   }
 
@@ -419,11 +423,11 @@
       )) as Array<{ geom_type?: string }>;
       const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
 
-      const layerType = geomType.includes('point')
-        ? 'point'
+      const layerType: BasemapLayerType = geomType.includes('point')
+        ? BasemapLayerType.POINT
         : geomType.includes('line')
-          ? 'line'
-          : 'polygon';
+          ? BasemapLayerType.LINE
+          : BasemapLayerType.POLYGON;
 
       const customBasemap: BasemapMetadata = {
         file: tableName,
@@ -495,13 +499,13 @@
       date: new Date().getFullYear().toString(),
       bbox: [-180, -85, 180, 85],
       projection: 'EPSG:3857',
-      layers: [{ name: 'osm', type: 'polygon' }]
+      layers: [{ name: 'osm', type: BasemapLayerType.POLYGON }]
     };
 
     osmBasemapStore.setOSMBasemap(osmBasemap);
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
-      basemapSource: 'osm'
+      basemapSource: BasemapSource.OSM
     });
     selectedBasemapId = osmBasemap.file;
     logger.success('OSM basemap selected', LogCategory.MAP);

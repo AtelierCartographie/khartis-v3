@@ -1,6 +1,12 @@
+import {
+  FormatMode,
+  Orientation,
+  PageModel
+} from '$lib/features/commons/constants/ui.constants';
+
 export interface FormatState {
-  mode: 'preset' | 'custom';
-  model: string;
+  mode: FormatMode;
+  model: PageModel;
   width: number;
   height: number;
   color: {
@@ -15,5 +21,5 @@ export interface FormatState {
     right: number;
   };
   gridEnabled: boolean;
-  orientation?: 'landscape' | 'portrait';
+  orientation?: Orientation;
 }

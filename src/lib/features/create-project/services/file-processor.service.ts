@@ -1,3 +1,4 @@
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
@@ -41,7 +42,7 @@ export class FileProcessorService {
     const startTime = performance.now();
 
     try {
-      this.callbacks.onStatusChange(uploadedFile.id, 'processing');
+      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.PROCESSING);
 
       const processor = this.getProcessor(uploadedFile.fileType);
       await processor.process(uploadedFile, file);
@@ -58,7 +59,7 @@ export class FileProcessorService {
       );
       const message =
         error instanceof Error ? error.message : ERROR_FILE_PROCESSING();
-      this.callbacks.onStatusChange(uploadedFile.id, 'error', message);
+      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.ERROR, message);
     }
   }
 
@@ -116,7 +117,7 @@ abstract class FileProcessor {
       );
       if (!asyncValidation.isValid) {
         this.callbacks.onDataUpdate(uploadedFile.id, {
-          status: 'error',
+          status: FileStatus.ERROR,
           errorMessage: asyncValidation.errors.join(', '),
           validation: asyncValidation
         });
@@ -227,7 +228,7 @@ class CsvProcessor extends FileProcessor {
       return;
     }
 
-    this.callbacks.onStatusChange(uploadedFile.id, 'complete');
+    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
 
   private async performDeepAnalysis(
@@ -293,7 +294,7 @@ class GeoJsonProcessor extends FileProcessor {
       if (!geoValidation.isValid) {
         this.callbacks.onStatusChange(
           uploadedFile.id,
-          'error',
+          FileStatus.ERROR,
           geoValidation.errors.join(', ')
         );
         return;
@@ -321,17 +322,17 @@ class GeoJsonProcessor extends FileProcessor {
       if (!spatialValidation.isValid) {
         this.callbacks.onStatusChange(
           uploadedFile.id,
-          'error',
+          FileStatus.ERROR,
           spatialValidation.errors[0]
         );
         return;
       }
 
-      this.callbacks.onStatusChange(uploadedFile.id, 'complete');
+      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
     } catch (_e) {
       this.callbacks.onStatusChange(
         uploadedFile.id,
-        'error',
+        FileStatus.ERROR,
         ERROR_INVALID_JSON_FORMAT()
       );
     }
@@ -378,7 +379,7 @@ class GeoPackageProcessor extends FileProcessor {
       parsedData: tabularData
     });
 
-    this.callbacks.onStatusChange(uploadedFile.id, 'complete');
+    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
 }
 
@@ -390,7 +391,7 @@ class GenericProcessor extends FileProcessor {
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       content,
-      status: 'complete'
+      status: FileStatus.COMPLETE
     });
   }
 }

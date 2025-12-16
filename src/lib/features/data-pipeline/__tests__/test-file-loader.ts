@@ -52,7 +52,15 @@ export function listZIPFiles(): string[] {
 export function getShapefileBundle(shpDirName: string): string[] {
   const shpDir = join(TEST_PATHS.SHP, shpDirName);
   const files = readdirSync(shpDir);
-  const shpExtensions = ['.shp', '.shx', '.dbf', '.prj', '.cpg', '.sbn', '.sbx'];
+  const shpExtensions = [
+    '.shp',
+    '.shx',
+    '.dbf',
+    '.prj',
+    '.cpg',
+    '.sbn',
+    '.sbx'
+  ];
 
   return files
     .filter((f) => shpExtensions.some((ext) => f.toLowerCase().endsWith(ext)))

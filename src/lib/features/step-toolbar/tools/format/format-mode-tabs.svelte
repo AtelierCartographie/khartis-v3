@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FormatMode } from '$lib/features/commons/constants/ui.constants';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { m } from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
@@ -14,7 +15,7 @@
     { icon: Edit, label: customLabel, iconSize: 20 }
   ]);
 
-  let modeIndex = $derived(formatState.mode === 'preset' ? 0 : 1);
+  let modeIndex = $derived(formatState.mode === FormatMode.PRESET ? 0 : 1);
 </script>
 
 <Grid padding noGutter>
@@ -28,7 +29,9 @@
         fullWidthClass="full-width"
         onChange={(index) => {
           modeIndex = index;
-          formatActions.setMode(index === 0 ? 'preset' : 'custom');
+          formatActions.setMode(
+            index === 0 ? FormatMode.PRESET : FormatMode.CUSTOM
+          );
         }}
       />
     </Column>

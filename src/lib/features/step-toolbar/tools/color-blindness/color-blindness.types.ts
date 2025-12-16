@@ -1,13 +1,6 @@
+import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+
 export interface ColorBlindnessState {
-  simulationType:
-    | 'none'
-    | 'protanopia'
-    | 'deuteranopia'
-    | 'tritanopia'
-    | 'protanomaly'
-    | 'deuteranomaly'
-    | 'tritanomaly'
-    | 'achromatopsia'
-    | 'achromatomaly';
+  simulationType: ColorBlindnessType;
   enabled: boolean;
 }
