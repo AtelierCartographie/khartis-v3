@@ -155,7 +155,7 @@ export async function analyse(
                   ) as Promise<ArrowTableLike>,
                   executeQuery(
                     ctx.connection,
-                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                    `FROM histogram_date(${analysisTable}, "${d.name}")`
                   )
                 ]);
                 summary_date = dateSum;
