@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import * as m from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Crop, Image, Pen } from 'carbon-icons-svelte';
@@ -20,41 +21,45 @@
       <Column>
         <div class="tool-picker">
           <Button
-            kind={annotationsState.activeType === 'text'
+            kind={annotationsState.activeType === AnnotationKind.TEXT
               ? 'primary'
               : 'tertiary'}
             size="field"
-            onclick={() => annotationsActions.setActiveType('text')}
+            onclick={() =>
+              annotationsActions.setActiveType(AnnotationKind.TEXT)}
           >
             {m.annotations_text()}
           </Button>
           <Button
-            kind={annotationsState.activeType === 'shape'
+            kind={annotationsState.activeType === AnnotationKind.SHAPE
               ? 'primary'
               : 'tertiary'}
             size="field"
             icon={Crop}
-            onclick={() => annotationsActions.setActiveType('shape')}
+            onclick={() =>
+              annotationsActions.setActiveType(AnnotationKind.SHAPE)}
           >
             {m.annotations_shape()}
           </Button>
           <Button
-            kind={annotationsState.activeType === 'drawing'
+            kind={annotationsState.activeType === AnnotationKind.DRAWING
               ? 'primary'
               : 'tertiary'}
             size="field"
             icon={Pen}
-            onclick={() => annotationsActions.setActiveType('drawing')}
+            onclick={() =>
+              annotationsActions.setActiveType(AnnotationKind.DRAWING)}
           >
             {m.annotations_drawing()}
           </Button>
           <Button
-            kind={annotationsState.activeType === 'image'
+            kind={annotationsState.activeType === AnnotationKind.IMAGE
               ? 'primary'
               : 'tertiary'}
             size="field"
             icon={Image}
-            onclick={() => annotationsActions.setActiveType('image')}
+            onclick={() =>
+              annotationsActions.setActiveType(AnnotationKind.IMAGE)}
           >
             {m.annotations_image()}
           </Button>
@@ -64,13 +69,13 @@
 
     <Row>
       <Column>
-        {#if annotationsState.activeType === 'text'}
+        {#if annotationsState.activeType === AnnotationKind.TEXT}
           <TextTool />
-        {:else if annotationsState.activeType === 'shape'}
+        {:else if annotationsState.activeType === AnnotationKind.SHAPE}
           <ShapeTool />
-        {:else if annotationsState.activeType === 'drawing'}
+        {:else if annotationsState.activeType === AnnotationKind.DRAWING}
           <DrawingTool />
-        {:else if annotationsState.activeType === 'image'}
+        {:else if annotationsState.activeType === AnnotationKind.IMAGE}
           <ImageTool />
         {/if}
       </Column>

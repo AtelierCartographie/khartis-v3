@@ -1,10 +1,11 @@
+import { SimplificationTarget } from '$lib/features/commons/constants/ui.constants';
 import {
   SimplificationLevel,
   SimplificationSource
 } from '$lib/features/commons/types/enums';
 
 export interface SimplificationResult {
-  type: 'basemap' | 'geodata';
+  type: SimplificationTarget;
   simplified: boolean;
   vertexReduction: number;
   originalVertices: number;

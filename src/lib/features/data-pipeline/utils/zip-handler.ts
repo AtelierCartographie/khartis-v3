@@ -1,3 +1,7 @@
+import {
+  IGNORED_FILE_PREFIXES,
+  SHAPEFILE_EXTENSIONS
+} from '$lib/features/commons/constants/ui.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { unzip, type Unzipped, type FlateError } from 'fflate';
@@ -14,17 +18,6 @@ export interface ZipExtractionResult {
   shapefileBaseName?: string;
 }
 
-const SHAPEFILE_EXTENSIONS = [
-  '.shp',
-  '.shx',
-  '.dbf',
-  '.prj',
-  '.cpg',
-  '.sbn',
-  '.sbx'
-];
-const IGNORED_PREFIXES = ['__MACOSX', '.DS_Store', '._'];
-
 export function isZipFile(file: File): boolean {
   return file.name.toLowerCase().endsWith('.zip');
 }
@@ -37,7 +30,7 @@ function shouldIgnoreFile(path: string): boolean {
   const pathParts = path.split('/');
   return (
     pathParts.some((part) =>
-      IGNORED_PREFIXES.some((prefix) => part.startsWith(prefix))
+      IGNORED_FILE_PREFIXES.some((prefix) => part.startsWith(prefix))
     ) || path.endsWith('/')
   );
 }
@@ -121,7 +114,7 @@ function detectShapefileInArchive(files: ExtractedFile[]): {
       const ext = getFileExtension(f.name);
       return (
         ext !== '.shp' &&
-        SHAPEFILE_EXTENSIONS.includes(ext) &&
+        (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
         f.name.replace(ext, '').toLowerCase() === baseName.toLowerCase()
       );
     });
@@ -181,7 +174,10 @@ export function getShapefileFilesFromArchive(
   return files.filter((f) => {
     const ext = getFileExtension(f.name);
     const fileBaseName = f.name.replace(ext, '').toLowerCase();
-    return SHAPEFILE_EXTENSIONS.includes(ext) && fileBaseName === baseNameLower;
+    return (
+      (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
+      fileBaseName === baseNameLower
+    );
   });
 }
 

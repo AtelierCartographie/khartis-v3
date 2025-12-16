@@ -1,3 +1,4 @@
+import { SimplificationTarget } from '$lib/features/commons/constants/ui.constants';
 import {
   SimplificationLevel,
   SimplificationSource
@@ -91,7 +92,7 @@ export const simplificationActions = {
         if (simplificationState.source === SimplificationSource.Basemap) {
           const reduction = getVertexReduction(simplificationState.level);
           resolve({
-            type: 'basemap',
+            type: SimplificationTarget.BASEMAP,
             level: simplificationState.level,
             simplified: true,
             vertexReduction: reduction,
@@ -100,7 +101,7 @@ export const simplificationActions = {
           });
         } else {
           resolve({
-            type: 'geodata',
+            type: SimplificationTarget.GEODATA,
             rate: simplificationState.rate,
             simplified: true,
             vertexReduction: simplificationState.rate,
