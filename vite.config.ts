@@ -254,7 +254,9 @@ export default defineConfig(({ mode }) => {
             exclude: [
               'src/**/*.svelte.{test,spec}.{js,ts}',
               'src/**/duckdb-pipeline.test.ts'
-            ]
+            ],
+            pool: 'threads',
+            fileParallelism: false
           }
         }
       ]
