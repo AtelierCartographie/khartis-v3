@@ -1,3 +1,8 @@
+import {
+  LegendPosition,
+  LegendTab
+} from '$lib/features/commons/constants/ui.constants';
+
 export interface LegendItem {
   id: string;
   name: string;
@@ -24,8 +29,8 @@ export interface LegendStyle {
 
 export interface LegendState {
   items: LegendItem[];
-  position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  position: LegendPosition;
   visible: boolean;
   style: LegendStyle;
-  activeTab: 'content' | 'style';
+  activeTab: LegendTab;
 }

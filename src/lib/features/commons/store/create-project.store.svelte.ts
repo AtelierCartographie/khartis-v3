@@ -1,3 +1,7 @@
+import {
+  ExampleCategory,
+  FileStatus
+} from '$lib/features/commons/constants/ui.constants';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
@@ -22,7 +26,6 @@ import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
-  ExampleCategory,
   ExampleProject,
   ProjectTab,
   SavedProject,
@@ -52,7 +55,7 @@ const DEFAULT_STATE: CreateProjectState = {
 
   tryExample: {
     examples: [],
-    selectedCategory: 'all',
+    selectedCategory: ExampleCategory.ALL,
     isLoading: false
   }
 };
@@ -73,7 +76,7 @@ export const createProjectActions = {
   isFileDuplicate(fileName: string): boolean {
     const uploadingFiles = createProjectState.newProject.uploadedFiles;
     const existsInSession = uploadingFiles.some(
-      (f) => f.name === fileName && f.status !== 'error'
+      (f) => f.name === fileName && f.status !== FileStatus.ERROR
     );
 
     if (existsInSession) return true;
@@ -140,7 +143,7 @@ export const createProjectActions = {
             id: crypto.randomUUID(),
             name: mainFileName,
             size: mainFile.size,
-            status: 'error',
+            status: FileStatus.ERROR,
             uploadProgress: 100,
             type: mainFile.type,
             fileType: mainFile.name.endsWith('.shp')
@@ -240,7 +243,7 @@ export const createProjectActions = {
         size: files.reduce((sum, f) => sum + f.size, 0),
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
-        status: 'error',
+        status: FileStatus.ERROR,
         errorMessage: 'Missing .shp file in shapefile set',
         sourceType
       };
@@ -264,7 +267,7 @@ export const createProjectActions = {
         size: files.reduce((sum, f) => sum + f.size, 0),
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
-        status: 'error',
+        status: FileStatus.ERROR,
         errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
         sourceType
       };
@@ -285,7 +288,7 @@ export const createProjectActions = {
         size: files.reduce((sum, f) => sum + f.size, 0),
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
-        status: 'error',
+        status: FileStatus.ERROR,
         errorMessage: 'Missing .shp file in shapefile set',
         sourceType
       };
@@ -318,7 +321,7 @@ export const createProjectActions = {
       size: files.reduce((sum, f) => sum + f.size, 0),
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
-      status: 'complete',
+      status: FileStatus.COMPLETE,
       sourceType,
       relatedFiles: files.map((f) => f.name),
       relatedFileObjects: files,
@@ -593,7 +596,7 @@ export const createProjectActions = {
 
   hasValidFiles(): boolean {
     return createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === 'complete'
+      (f) => f.status === FileStatus.COMPLETE
     );
   },
 

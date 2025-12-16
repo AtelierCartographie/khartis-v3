@@ -1,7 +1,9 @@
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+
 export interface JoinEntity {
   dataValue: string;
   geoValue?: string;
-  status: 'joined' | 'to_verify' | 'duplicate' | 'unrecognized';
+  status: JoinStatus;
   matches?: string[];
   basemapOptions?: string[];
   selectedMapping?: string;

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import {
     createProjectActions,
     createProjectState
@@ -281,7 +282,7 @@
     <!-- ARIA live region for screen reader announcements -->
     <div aria-live="polite" aria-atomic="true" class="sr-only">
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
-        {#if file.status === 'processing'}
+        {#if file.status === FileStatus.PROCESSING}
           {m.create_project_processing_file({ name: file.name })}
         {/if}
       {/each}
@@ -328,7 +329,7 @@
 
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
         <div class="file-item-wrapper">
-          {#if file.status === 'uploading' || file.status === 'processing'}
+          {#if file.status === FileStatus.UPLOADING || file.status === FileStatus.PROCESSING}
             <div class="file-processing-row">
               <div class="file-processing-content">
                 <FileUploaderItem
@@ -340,7 +341,7 @@
                   size="sm"
                   value={file.uploadProgress || 0}
                   max={100}
-                  helperText={file.status === 'processing'
+                  helperText={file.status === FileStatus.PROCESSING
                     ? m.create_project_processing_status()
                     : m.create_project_uploading_status()}
                 />
@@ -358,7 +359,7 @@
                 {/if}
               </Button>
             </div>
-          {:else if file.status === 'error'}
+          {:else if file.status === FileStatus.ERROR}
             <div class="file-error-row">
               <FileUploaderItem
                 invalid
@@ -381,7 +382,7 @@
                 {/if}
               </Button>
             </div>
-          {:else if file.status === 'complete'}
+          {:else if file.status === FileStatus.COMPLETE}
             {@const fileTag = getFileTypeTag(file.fileType)}
             <Tile class="file-complete-tile">
               <div class="file-header">

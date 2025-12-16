@@ -1,5 +1,6 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import {
     dataTabActions,
     dataTabState
@@ -93,7 +94,9 @@
   });
 
   let activeTabIndex = $state(
-    dataTabState.geolocation.geoReference === 'coordinates' ? 1 : 0
+    dataTabState.geolocation.geoReference === GeoreferenceType.COORDINATES
+      ? 1
+      : 0
   );
 
   const GEO_LEARN_MORE_URL =
@@ -115,7 +118,8 @@
   function handleTabChange(index: number) {
     activeTabIndex = index;
     dataTabActions.setGeolocationState({
-      geoReference: index === 1 ? 'coordinates' : 'entities'
+      geoReference:
+        index === 1 ? GeoreferenceType.COORDINATES : GeoreferenceType.ENTITIES
     });
   }
 
@@ -131,7 +135,7 @@
       longitudeFieldId = undefined;
       activeTabIndex = 0;
       dataTabActions.setGeolocationState({
-        geoReference: 'entities',
+        geoReference: GeoreferenceType.ENTITIES,
         linkedVariable: null,
         linkedVariableName: '',
         latitudeColumn: undefined,
@@ -169,7 +173,7 @@
       if (hasLatLon && activeTabIndex === 0) {
         activeTabIndex = 1;
         dataTabActions.setGeolocationState({
-          geoReference: 'coordinates'
+          geoReference: GeoreferenceType.COORDINATES
         });
       }
     }

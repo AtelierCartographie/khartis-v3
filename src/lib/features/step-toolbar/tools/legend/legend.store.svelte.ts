@@ -1,4 +1,8 @@
 import {
+  LegendPosition,
+  LegendTab
+} from '$lib/features/commons/constants/ui.constants';
+import {
   createResetFunction,
   createSetStateFunction
 } from '$lib/features/commons/utils/store.utils';
@@ -23,7 +27,7 @@ const DEFAULT_LEGEND_STATE: LegendState = {
       note: 'Source: INSEE'
     }
   ],
-  position: 'top-right',
+  position: LegendPosition.TOP_RIGHT,
   visible: true,
   style: {
     fontFamily: 'Cabin',
@@ -34,7 +38,7 @@ const DEFAULT_LEGEND_STATE: LegendState = {
       opacity: 100
     }
   },
-  activeTab: 'content'
+  activeTab: LegendTab.CONTENT
 };
 
 export const legendState = $state<LegendState>({ ...DEFAULT_LEGEND_STATE });
@@ -70,13 +74,11 @@ export const legendActions = {
     legendState.visible = !legendState.visible;
   },
 
-  setPosition(
-    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
-  ): void {
+  setPosition(position: LegendPosition): void {
     legendState.position = position;
   },
 
-  setActiveTab(tab: 'content' | 'style'): void {
+  setActiveTab(tab: LegendTab): void {
     legendState.activeTab = tab;
   },
 
