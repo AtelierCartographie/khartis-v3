@@ -12,8 +12,14 @@ export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
 
 // Core helpers
-export async function waitForModal(page: Page, timeout = 15000): Promise<Locator> {
-  await page.waitForSelector('.loading-container', { state: 'hidden', timeout });
+export async function waitForModal(
+  page: Page,
+  timeout = 15000
+): Promise<Locator> {
+  await page.waitForSelector('.loading-container', {
+    state: 'hidden',
+    timeout
+  });
   const modal = page.locator(MODAL_SELECTOR);
   await expect(modal).toBeVisible({ timeout });
   return modal;
@@ -54,8 +60,8 @@ export async function openSideNav(page: Page): Promise<Locator> {
 export async function freshStart(page: Page): Promise<void> {
   await page.goto('/');
   await page.evaluate(() => {
-    indexedDB.databases().then(dbs => {
-      dbs.forEach(db => db.name && indexedDB.deleteDatabase(db.name));
+    indexedDB.databases().then((dbs) => {
+      dbs.forEach((db) => db.name && indexedDB.deleteDatabase(db.name));
     });
     localStorage.clear();
     sessionStorage.clear();

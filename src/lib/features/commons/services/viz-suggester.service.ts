@@ -311,9 +311,7 @@ export class VizSuggesterService {
     const lowerName = columnName.toLowerCase();
     const nameParts = lowerName.split(/[^a-zA-Z0-9%]/);
 
-    const idWords = nameParts.some((p) =>
-      ['id', 'code', 'iso'].includes(p)
-    );
+    const idWords = nameParts.some((p) => ['id', 'code', 'iso'].includes(p));
     const latWords = nameParts.some((p) => ['lat', 'latitude'].includes(p));
     const lonWords = nameParts.some((p) =>
       ['lon', 'lng', 'longitude'].includes(p)
