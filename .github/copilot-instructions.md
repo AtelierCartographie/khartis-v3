@@ -10,23 +10,23 @@ Khartis v3 is a **client-side thematic mapping application** built with SvelteKi
 
 ```bash
 # Setup (first time only)
-corepack enable          # Enable Yarn 4 via Corepack
-yarn install             # Install dependencies
+corepack enable pnpm     # Enable pnpm via Corepack
+pnpm install             # Install dependencies
 
 # Development workflow
-yarn dev                 # Start dev server on port 5176
-yarn check               # Svelte type checks (strict TypeScript enabled)
-yarn lint                # Prettier + ESLint check
-yarn format              # Auto-format with Prettier
-yarn test:unit           # Vitest unit tests
-yarn test:e2e            # Playwright E2E tests
+pnpm dev                 # Start dev server on port 5176
+pnpm check               # Svelte type checks (strict TypeScript enabled)
+pnpm lint                # Prettier + ESLint check
+pnpm format              # Auto-format with Prettier
+pnpm test:unit           # Vitest unit tests
+pnpm test:e2e            # Playwright E2E tests
 
 # Production
-yarn build               # Build for production (uses /cartographie/khartisnewpprd base path)
-yarn preview             # Preview production build
+pnpm build               # Build for production (uses /cartographie/khartisnewpprd base path)
+pnpm preview             # Preview production build
 ```
 
-**⚠️ Critical**: Always use Yarn 4 (via Corepack), never npm. TypeScript strict mode is enabled - no `any` types allowed.
+**⚠️ Critical**: Always use pnpm (via Corepack), never npm. TypeScript strict mode is enabled - no `any` types allowed.
 
 ## Architecture Overview
 
@@ -434,7 +434,7 @@ try {
 3. **No magic strings** - use constants, enums, or type literals
 4. **No direct state mutation** - only through explicit action methods
 5. **No `console.log`** - use `logger` from `$lib/features/commons/utils/logger`
-6. **Use Yarn 4** - never npm or other package managers
+6. **Use pnpm** - never npm or other package managers
 7. **Use Carbon Design System** - import from `carbon-components-svelte`
 8. **Use Paraglide i18n** - all visible text must use `m.key()` messages
 9. **Client-only** - user data never leaves the browser
@@ -444,11 +444,11 @@ try {
 
 ```bash
 # Unit tests (Vitest) - fast logic checks
-yarn test:unit src/path/to/file.test.ts
+pnpm test:unit src/path/to/file.test.ts
 
 # E2E tests (Playwright) - critical user flows
-yarn test:e2e e2e/critical-flows.spec.ts
-yarn test:e2e:ui  # Interactive UI mode
+pnpm test:e2e e2e/critical-flows.spec.ts
+pnpm test:e2e:ui  # Interactive UI mode
 ```
 
 **Test files**: `*.test.ts` or `*.spec.ts` (Vitest), `*.spec.ts` (Playwright in `e2e/`)

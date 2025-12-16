@@ -15,17 +15,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Cache dependencies
         uses: actions/cache/save@v4
@@ -33,7 +33,7 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
 
   unit-tests:
     name: Unit Tests (Vitest)
@@ -42,14 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -57,11 +57,11 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run unit tests
-        run: yarn run test:unit -- --run
+        run: pnpm run test:unit -- --run
 
   svelte-check:
     name: Svelte Type Check
@@ -70,14 +70,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -85,11 +85,11 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run Svelte Check
-        run: yarn check
+        run: pnpm check
 
   e2e-tests:
     name: End-to-End Tests (Playwright)
@@ -98,14 +98,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -113,14 +113,14 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
       - name: Run Playwright tests
-        run: yarn run test:e2e
+        run: pnpm run test:e2e
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -139,13 +139,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup yarn
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'yarn'
+          cache: 'pnpm'
 
       - name: Restore dependencies
         uses: actions/cache/restore@v4
@@ -153,7 +153,7 @@ jobs:
           path: |
             node_modules
             */*/node_modules
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}-${{ github.sha }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       - name: Run semantic-release
