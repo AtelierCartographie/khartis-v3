@@ -89,6 +89,9 @@ jobs:
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
       - name: Run Svelte Check
         run: pnpm check
 
@@ -116,6 +119,9 @@ jobs:
             */*/node_modules
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
           fail-on-cache-miss: true
+
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
       - name: Run unit tests
         run: pnpm run test:unit -- --run
