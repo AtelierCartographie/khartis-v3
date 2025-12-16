@@ -58,6 +58,7 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^24.10.4",
     "carbon-preprocess-svelte": "^0.11.16",
+    "duckdb": "^1.4.3",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.13.1",
