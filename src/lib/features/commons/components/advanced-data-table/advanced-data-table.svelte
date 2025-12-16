@@ -70,7 +70,7 @@
 
   const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
-  const viewportHeightRatioExpanded = 0.65;
+  const viewportHeightRatioExpanded = 0.85;
   const viewportHeightRatio = $derived(
     isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
   );
@@ -309,7 +309,7 @@
 
   let expandEffectInitialized = $state(false);
   $effect(() => {
-    const _currentIsExpanded = isExpanded;
+    void isExpanded;
     if (!expandEffectInitialized) {
       expandEffectInitialized = true;
       return;

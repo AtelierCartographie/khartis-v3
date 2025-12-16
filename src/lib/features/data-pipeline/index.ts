@@ -52,8 +52,6 @@ export type {
 // Constants
 export {
   PIPELINE_CONST,
-  getSupportedExtensions,
-  getSupportedMimeTypes,
   isGeospatialFile,
   isTabularFile
 } from './constants';
