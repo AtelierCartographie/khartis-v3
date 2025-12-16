@@ -200,6 +200,28 @@ export const DuckDBValidatorService = {
                   data: histogram.data
                 });
               }
+            } else if (columnInfo.type_simple === 'date') {
+              const dateSummary = (await Duck.query(
+                `SELECT * FROM summary_date('${escapedTableName}', '${escapedHeader}')`
+              )) as Record<string, unknown>;
+              const dateData = dateSummary?.data as Record<string, unknown>[];
+              if (dateData && dateData.length > 0) {
+                summaries.push({
+                  ...summaries[summaries.length - 1],
+                  ...dateData[0]
+                });
+              }
+
+              const histogram = (await Duck.query(
+                `SELECT * FROM histogram_date('${escapedTableName}', '${escapedHeader}')`
+              )) as Record<string, unknown>;
+              if (histogram?.data) {
+                histograms.push({
+                  column: header,
+                  type: 'date',
+                  data: histogram.data
+                });
+              }
             } else if (columnInfo.type_simple === 'string') {
               const histogram = (await Duck.query(
                 `SELECT * FROM histogram_categorical('${escapedTableName}', '${escapedHeader}')`
