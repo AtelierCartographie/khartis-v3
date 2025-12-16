@@ -320,6 +320,49 @@ export class DuplicateFileError extends NonFatalError {
     super(message, 'DUPLICATE_FILE', { fileName });
   }
 }
+
+// Expression/formula evaluation errors
+export class ExpressionError extends PipelineError {
+  constructor(
+    message: string,
+    public readonly expression?: string,
+    details?: Record<string, unknown>
+  ) {
+    super(message, 'EXPRESSION_ERROR', { expression, ...details });
+  }
+}
+
+// Geographic matching errors
+export class GeoMatchError extends PipelineError {
+  constructor(
+    message: string,
+    public readonly matchRate?: number,
+    details?: Record<string, unknown>
+  ) {
+    super(message, 'GEO_MATCH_ERROR', { matchRate, ...details });
+  }
+}
+
+// Type inference errors
+export class TypeInferenceError extends PipelineError {
+  constructor(
+    message: string,
+    public readonly column?: string,
+    details?: Record<string, unknown>
+  ) {
+    super(message, 'TYPE_INFERENCE_ERROR', { column, ...details });
+  }
+}
+
+// Data quality warning (non-fatal)
+export class DataQualityWarning extends NonFatalError {
+  constructor(
+    message: string,
+    public readonly warnings: string[]
+  ) {
+    super(message, 'DATA_QUALITY_WARNING', { warnings });
+  }
+}
 ```
 
 ### Helper Functions

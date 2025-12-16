@@ -4,7 +4,7 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import type { FileWithId, RegisterFilesOptions } from '../types';
 
-export function normalizeName(str: string): string {
+function normalizeName(str: string): string {
   let normalized = str
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -56,7 +56,7 @@ export function generateUniqueTableName(
   return tablename;
 }
 
-export function addFileId(file: FileWithId): void {
+function addFileId(file: FileWithId): void {
   file.id = file.lastModified + '-' + normalizeName(file.name);
 }
 

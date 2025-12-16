@@ -159,7 +159,7 @@
   }
 
   $effect(() => {
-    const _version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     if (isInitializing) {
       return;
     }

@@ -105,20 +105,105 @@ const best = suggestions[0]; // Highest score
 
 ## Layer Assembly
 
+### Map Module Architecture
+
+The map feature uses a **modular functional design** following the same pattern as DuckDB:
+
+```
+src/lib/features/map/
+├── types.ts              # Consolidated types (LayerContext, GeometryInfo, etc.)
+├── constants/            # Enums (GeometryType, ArrowExtension, DeckLayerId)
+├── core/bounds.ts        # calculateBoundsFromGeoArrow/GeoJSON
+├── io/geometry-parser.ts # WKB, GeoJSON, GeoArrow parsing
+├── layers/               # Layer factory and helpers
+│   ├── layer-helpers.ts  # Color/size accessors, withOpacity
+│   └── layer-factory.ts  # createDeckLayers, createWorldBaseLayer
+├── hooks/                # Svelte 5 custom hooks
+│   ├── use-map-init.svelte.ts     # MapLibre + Deck.gl initialization
+│   ├── use-map-state.svelte.ts    # Visualization state, LayerContext
+│   ├── use-map-layers.svelte.ts   # Deck.gl layer management
+│   ├── use-map-basemap.svelte.ts  # Basemap style + OSM raster
+│   ├── use-map-bounds.svelte.ts   # fitBounds for Arrow/GeoJSON
+│   ├── use-map-position.svelte.ts # localStorage persistence
+│   └── use-map-zoom.svelte.ts     # Global zoom state sync
+├── interactions/         # Tooltip service
+└── components/           # Svelte components (deck-map.svelte ~165 lines)
+```
+
+### Hooks Pattern
+
+The map component uses **Svelte 5 custom hooks** to extract logic:
+
+```typescript
+// Hook returns object with getters for reactive values
+export function useMapState(): UseMapStateReturn {
+  const activeVisualizations = $derived(visualizationStore.activeVisualizations);
+
+  return {
+    get activeVisualizations() { return activeVisualizations; },
+    buildLayerContext
+  };
+}
+
+// Usage with callback props for component-local state
+const mapInit = useMapInit({
+  onMapLoaded: () => mapLayers.updateLayers(jsTable, userGeoJSON),
+  onWorldBaseLoaded: (table) => { worldBaseTable = table; },
+  onZoom: () => mapZoom.handleMapZoom(),
+  onMoveEnd: () => mapPosition.savePosition()
+});
+```
+
+### Available Hooks
+
+| Hook | Responsibility |
+|------|----------------|
+| `useMapInit` | MapLibre/Deck.gl initialization, destroy |
+| `useMapState` | Visualization state, memoized colors, LayerContext |
+| `useMapLayers` | Deck.gl layer updates |
+| `useMapBasemap` | Basemap style sync, OSM raster layers |
+| `useMapBounds` | fitBounds for Arrow/GeoJSON data |
+| `useMapPosition` | localStorage persistence (center/zoom) |
+| `useMapZoom` | Global zoom state ↔ MapLibre sync |
+
+### Layer Creation
+
+```typescript
+import { createDeckLayers, type LayerContext } from '$lib/features/map';
+
+const ctx: LayerContext = {
+  viz: visualization,
+  datasetId: 'my-dataset',
+  fillColor: [180, 180, 180],
+  strokeColor: [255, 255, 255],
+  fillOpacity: 0.6,
+  strokeWidth: 1,
+  strokeOpacity: 1,
+  statistics: { min: 0, max: 100 },
+  categoryColorMap: null
+};
+
+const layers = createDeckLayers(arrowTable, ctx);
+```
+
 ### Rendering Pipeline
 
 ```
 1. Dataset Slice (filtered rows)
    ↓
-2. Attribute Mapping (fillColor, size, pattern)
+2. Geometry Parsing (io/geometry-parser.ts)
    ↓
-3. Deck.gl Layer Creation (GeoJsonLayer, ScatterplotLayer, etc.)
+3. Layer Factory (layers/layer-factory.ts)
    ↓
-4. Picking Configuration (interactive selection)
+4. Attribute Mapping (fillColor, size via layer-helpers.ts)
    ↓
-5. Layer Compositing (basemap → thematic → annotations)
+5. Deck.gl Layer Creation (GeoJsonLayer, GeoArrowScatterplotLayer, etc.)
    ↓
-6. GPU Rendering (hardware-accelerated)
+6. Tooltip Configuration (interactions/tooltip.service.ts)
+   ↓
+7. Layer Compositing (basemap → thematic → annotations)
+   ↓
+8. GPU Rendering (hardware-accelerated)
 ```
 
 ### Layer Order
@@ -126,7 +211,9 @@ const best = suggestions[0]; // Highest score
 ```
 Bottom: Basemap (MapLibre)
   ↓
-Middle: Thematic Layers (Deck.gl)
+Middle: World Base Layer (createWorldBaseLayer)
+  ↓
+Middle: Thematic Layers (createDeckLayers)
   ↓
 Top: Overlays (annotations, scale, north arrow)
 ```
