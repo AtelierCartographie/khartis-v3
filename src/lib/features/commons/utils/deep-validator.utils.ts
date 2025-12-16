@@ -336,11 +336,18 @@ export const DeepDataValidator = {
   },
 
   isDateString(strValue: string): boolean {
-    if (!/^\d{4}-\d{2}-\d{2}/.test(strValue) && !/^\d{2}\/\d{2}\/\d{4}/.test(strValue)) {
+    if (
+      !/^\d{4}-\d{2}-\d{2}/.test(strValue) &&
+      !/^\d{2}\/\d{2}\/\d{4}/.test(strValue)
+    ) {
       return false;
     }
     const date = new Date(strValue);
-    return !isNaN(date.getTime()) && date.getFullYear() > 1900 && date.getFullYear() < 2100;
+    return (
+      !isNaN(date.getTime()) &&
+      date.getFullYear() > 1900 &&
+      date.getFullYear() < 2100
+    );
   },
 
   calculateMedian(values: number[]): number {

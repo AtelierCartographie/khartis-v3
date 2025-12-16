@@ -50,7 +50,6 @@ export default ts.config(
         { blankLine: 'always', prev: ['const', 'let', 'var'], next: 'export' },
         { blankLine: 'always', prev: 'directive', next: '*' },
         { blankLine: 'any', prev: 'directive', next: 'directive' },
-        { blankLine: 'always', prev: ['case', 'default'], next: '*' },
         {
           blankLine: 'always',
           prev: 'import',

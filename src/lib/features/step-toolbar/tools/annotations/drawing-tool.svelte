@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    AnnotationKind,
+    DrawingType
+  } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     createColorValue,
@@ -39,7 +43,7 @@
     );
   }
 
-  let drawingType = $state<'line' | 'zone'>('line');
+  let drawingType = $state<DrawingType>(DrawingType.LINE);
   let strokeColor = $state('#8d8d8d');
   let hue = $state(0);
   let saturation = $state(0);
@@ -66,11 +70,11 @@
   });
 
   function handleStartDrawing() {
-    annotationsActions.addAnnotation('drawing', drawingType);
+    annotationsActions.addAnnotation(AnnotationKind.DRAWING, drawingType);
   }
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
-    const type = String(event.detail) as 'line' | 'zone';
+    const type = String(event.detail) as DrawingType;
     drawingType = type;
     annotationsActions.updateDefaultStyle({
       drawingType: type
@@ -94,8 +98,8 @@
         selected={drawingType}
         on:change={handleDrawingTypeChange}
       >
-        <RadioButton labelText="Ligne" value="line" />
-        <RadioButton labelText="Zone" value="zone" />
+        <RadioButton labelText="Ligne" value={DrawingType.LINE} />
+        <RadioButton labelText="Zone" value={DrawingType.ZONE} />
       </RadioButtonGroup>
     </Column>
   </Row>
@@ -230,10 +234,10 @@
           <Button
             kind="danger-tertiary"
             icon={TrashCan}
-            disabled={!selected || selected.type !== 'drawing'}
+            disabled={!selected || selected.type !== AnnotationKind.DRAWING}
             on:click={() =>
               selected &&
-              selected.type === 'drawing' &&
+              selected.type === AnnotationKind.DRAWING &&
               annotationsActions.removeAnnotation(selected.id)}
           >
             Supprimer le dessin

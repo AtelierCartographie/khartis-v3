@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
+  import { TextAlign } from '$lib/features/commons/types/enums';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -26,7 +28,6 @@
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
-  import { TextAlign } from '$lib/features/commons/types/enums';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
@@ -39,7 +40,7 @@
   ];
 
   function handleAddText() {
-    annotationsActions.addAnnotation('text', '');
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, '');
   }
 
   function handleFontSizeChange(e: CustomEvent<number | string | null>) {
@@ -59,7 +60,7 @@
     const selId = annotationsState.selectedId;
     if (!selId) return null;
     const item = annotationsState.items.find((i) => i.id === selId);
-    return item && item.type === 'text' ? item : null;
+    return item && item.type === AnnotationKind.TEXT ? item : null;
   });
 
   function handleContentInput(e: Event) {

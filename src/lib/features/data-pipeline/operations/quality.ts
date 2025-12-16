@@ -20,7 +20,9 @@ export function computeQualityWarnings(
   }
 
   if (rowCount < 5) {
-    warnings.push(m.pipeline_warning_small_dataset({ count: String(rowCount) }));
+    warnings.push(
+      m.pipeline_warning_small_dataset({ count: String(rowCount) })
+    );
   }
 
   for (const column of columns) {

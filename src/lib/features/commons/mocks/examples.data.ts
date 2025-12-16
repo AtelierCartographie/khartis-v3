@@ -1,19 +1,20 @@
 import { base } from '$app/paths';
+import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 import type { ExampleProject } from '../store/create-project.types';
 
-export interface ExampleCategory {
-  id: string;
+export interface ExampleCategoryConfig {
+  id: ExampleCategory;
   label: string;
   icon?: string;
 }
 
-export const EXAMPLE_CATEGORIES: ExampleCategory[] = [
-  { id: 'all', label: 'try_example_all' },
-  { id: 'symbols', label: 'try_example_symbols' },
-  { id: 'polygons', label: 'try_example_polygons' },
-  { id: 'lines', label: 'try_example_lines' },
-  { id: 'texts', label: 'try_example_texts' },
-  { id: 'hybrids', label: 'try_example_hybrids' }
+export const EXAMPLE_CATEGORIES: ExampleCategoryConfig[] = [
+  { id: ExampleCategory.ALL, label: 'try_example_all' },
+  { id: ExampleCategory.SYMBOLS, label: 'try_example_symbols' },
+  { id: ExampleCategory.POLYGONS, label: 'try_example_polygons' },
+  { id: ExampleCategory.LINES, label: 'try_example_lines' },
+  { id: ExampleCategory.TEXTS, label: 'try_example_texts' },
+  { id: ExampleCategory.HYBRIDS, label: 'try_example_hybrids' }
 ];
 
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
@@ -23,7 +24,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: 'Carte choroplèthe de la population par pays',
     description:
       'Visualisation de la répartition de la population européenne avec une palette séquentielle',
-    category: 'polygons',
+    category: ExampleCategory.POLYGONS,
     thumbnail: '/examples/world-population-thumb.png',
     dataUrl: '/examples/data/countries-population-simple.csv',
     baseMapId: 'world-countries',
@@ -45,7 +46,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: 'Symboles proportionnels des principales villes',
     description:
       'Représentation des villes européennes avec des cercles proportionnels à la population',
-    category: 'symbols',
+    category: ExampleCategory.SYMBOLS,
     thumbnail: '/examples/european-cities-thumb.png',
     dataUrl: '/examples/data/european-cities.csv',
     baseMapId: 'europe-countries',
@@ -68,7 +69,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: 'Pays du monde avec géométries',
     description:
       'Visualisation des frontières de tous les pays du monde avec données GeoJSON',
-    category: 'polygons',
+    category: ExampleCategory.POLYGONS,
     thumbnail: '/examples/world-countries-thumb.png',
     dataUrl: '/examples/data/world-countries.geojson',
     visualizations: [
@@ -88,7 +89,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: 'Carte bivariée PIB et croissance',
     description:
       'Analyse combinée du PIB par habitant et du taux de croissance',
-    category: 'hybrids',
+    category: ExampleCategory.HYBRIDS,
     thumbnail: '/examples/gdp-evolution-thumb.png',
     dataUrl: '/examples/data/gdp-growth-2023.csv',
     baseMapId: 'world-countries',
@@ -108,7 +109,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     title: 'Flux de transport',
     subtitle: 'Lignes de transport européennes',
     description: 'Visualisation des flux de transport avec lignes',
-    category: 'lines',
+    category: ExampleCategory.LINES,
     thumbnail: '/examples/transport-flows-thumb.png',
     dataUrl: '/examples/data/transport-flows.geojson',
     visualizations: [
@@ -122,8 +123,10 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
   }
 ];
 
-export function getExamplesByCategory(category: string): ExampleProject[] {
-  if (category === 'all') {
+export function getExamplesByCategory(
+  category: ExampleCategory
+): ExampleProject[] {
+  if (category === ExampleCategory.ALL) {
     return EXAMPLE_PROJECTS;
   }
   return EXAMPLE_PROJECTS.filter((example) => example.category === category);

@@ -1,15 +1,16 @@
+import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createResetFunction } from '$lib/features/commons/utils/store.utils';
 import type {
+  Annotation,
   AnnotationsState,
-  AnnotationStyle,
-  AnnotationType
+  AnnotationStyle
 } from './annotations.types';
 
 const DEFAULT_ANNOTATIONS_STATE: AnnotationsState = {
   items: [],
   selectedId: null,
-  activeType: 'text',
+  activeType: AnnotationKind.TEXT,
   predefinedStyle: 'default',
   textContent: '',
   defaultStyle: {
@@ -37,11 +38,8 @@ export const annotationsActions = {
     Object.assign(annotationsState, newState);
   },
 
-  addAnnotation(
-    type: 'text' | 'shape' | 'drawing' | 'image',
-    content: string
-  ): void {
-    const newAnnotation: AnnotationType = {
+  addAnnotation(type: AnnotationKind, content: string): void {
+    const newAnnotation: Annotation = {
       id: `annotation-${Date.now()}`,
       type,
       content,
@@ -57,7 +55,7 @@ export const annotationsActions = {
     annotationsState.selectedId = id;
   },
 
-  updateAnnotation(id: string, updates: Partial<AnnotationType>): void {
+  updateAnnotation(id: string, updates: Partial<Annotation>): void {
     annotationsState.items = annotationsState.items.map((item) =>
       item.id === id ? { ...item, ...updates } : item
     );
@@ -72,7 +70,7 @@ export const annotationsActions = {
     }
   },
 
-  setActiveType(type: 'text' | 'shape' | 'drawing' | 'image'): void {
+  setActiveType(type: AnnotationKind): void {
     annotationsState.activeType = type;
   },
 
@@ -177,8 +175,6 @@ export function getVisibleAnnotations() {
   return annotationsState.items;
 }
 
-export function getAnnotationsByType(
-  type: 'text' | 'shape' | 'drawing' | 'image'
-) {
+export function getAnnotationsByType(type: AnnotationKind) {
   return annotationsState.items.filter((item) => item.type === type);
 }

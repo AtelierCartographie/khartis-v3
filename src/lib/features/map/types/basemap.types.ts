@@ -1,7 +1,12 @@
+import {
+  BasemapLayerType,
+  JoinStatus
+} from '$lib/features/commons/constants/ui.constants';
+
 export interface BasemapLayer {
   title?: string;
   name: string;
-  type: 'centroid' | 'limit' | 'polygon' | 'line' | 'point';
+  type: BasemapLayerType;
   file?: string;
   count?: number;
 }
@@ -40,7 +45,7 @@ export interface JoinMapping {
 export interface JoinEntity {
   dataValue: string;
   basemapValue?: string;
-  status: 'joined' | 'to_verify' | 'duplicate' | 'unrecognized';
+  status: JoinStatus;
   matches?: string[];
   matchCount?: number;
 }

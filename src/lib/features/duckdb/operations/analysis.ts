@@ -121,71 +121,47 @@ export async function analyse(
 
           switch (type) {
             case 'numeric': {
-              try {
-                const [numeric, hist] = await Promise.all([
-                  executeQuery(
-                    ctx.connection,
-                    `FROM summary_numeric(${analysisTable}, "${d.name}")`,
-                    { useProxy: false }
-                  ) as Promise<ArrowTableLike>,
-                  executeQuery(
-                    ctx.connection,
-                    `FROM histogram_numeric(${analysisTable}, "${d.name}")`
-                  )
-                ]);
-                summary_numeric = numeric;
-                histogram = hist;
-              } catch (e) {
-                logger.warn(
-                  `Failed numeric analysis for ${d.name}`,
-                  LogCategory.DUCKDB,
-                  e
-                );
-              }
+              const [numeric, hist] = await Promise.all([
+                executeQuery(
+                  ctx.connection,
+                  `FROM summary_numeric(${analysisTable}, "${d.name}")`,
+                  { useProxy: false }
+                ) as Promise<ArrowTableLike>,
+                executeQuery(
+                  ctx.connection,
+                  `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                )
+              ]);
+              summary_numeric = numeric;
+              histogram = hist;
               break;
             }
 
             case 'date': {
-              try {
-                const [dateSum, histDate] = await Promise.all([
-                  executeQuery(
-                    ctx.connection,
-                    `FROM summary_date(${analysisTable}, "${d.name}")`,
-                    { useProxy: false }
-                  ) as Promise<ArrowTableLike>,
-                  executeQuery(
-                    ctx.connection,
-                    `FROM histogram_date(${analysisTable}, "${d.name}")`
-                  )
-                ]);
-                summary_date = dateSum;
-                histogram = histDate;
-              } catch (e) {
-                logger.warn(
-                  `Failed date analysis for ${d.name}`,
-                  LogCategory.DUCKDB,
-                  e
-                );
-              }
+              const [dateSum, histDate] = await Promise.all([
+                executeQuery(
+                  ctx.connection,
+                  `FROM summary_date(${analysisTable}, "${d.name}")`,
+                  { useProxy: false }
+                ) as Promise<ArrowTableLike>,
+                executeQuery(
+                  ctx.connection,
+                  `FROM histogram_date(${analysisTable}, "${d.name}")`
+                )
+              ]);
+              summary_date = dateSum;
+              histogram = histDate;
               break;
             }
 
             case 'string': {
-              try {
-                const [histStr] = await Promise.all([
-                  executeQuery(
-                    ctx.connection,
-                    `FROM histogram_categorical(${analysisTable}, "${d.name}")`
-                  )
-                ]);
-                histogram = histStr;
-              } catch (e) {
-                logger.warn(
-                  `Failed histogram_categorical for ${d.name}`,
-                  LogCategory.DUCKDB,
-                  e
-                );
-              }
+              const [histStr] = await Promise.all([
+                executeQuery(
+                  ctx.connection,
+                  `FROM histogram_categorical(${analysisTable}, "${d.name}")`
+                )
+              ]);
+              histogram = histStr;
               break;
             }
           }

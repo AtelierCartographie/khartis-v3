@@ -1,6 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
+  import {
+    ExampleCategory,
+    FileStatus
+  } from '$lib/features/commons/constants/ui.constants';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import {
     EXAMPLE_CATEGORIES,
@@ -30,14 +34,14 @@
 
   const { onClose }: Props = $props();
 
-  let selectedCategory = $state<string>('all');
+  let selectedCategory = $state<ExampleCategory>(ExampleCategory.ALL);
   let selectedExample = $state<string | null>(null);
   let isLoading = $state(false);
   let error = $state<string>('');
 
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
 
-  function selectCategory(category: string) {
+  function selectCategory(category: ExampleCategory) {
     selectedCategory = category;
   }
 
@@ -80,7 +84,7 @@
         fileType: file.type.includes('json') ? FType.GEOJSON : FType.CSV,
         content: fileContent,
         originalFile: file,
-        status: 'complete',
+        status: FileStatus.COMPLETE,
         sourceType: DataSource.FILE_UPLOAD
       };
 

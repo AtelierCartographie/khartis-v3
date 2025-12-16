@@ -2,6 +2,7 @@
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { LegendTab } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
@@ -69,7 +70,9 @@
     { icon: TextFont, label: m.legend_style(), iconSize: 20 }
   ]);
 
-  const activeTabIndex = $derived(legendState.activeTab === 'content' ? 0 : 1);
+  const activeTabIndex = $derived(
+    legendState.activeTab === LegendTab.CONTENT ? 0 : 1
+  );
 
   function toggleVisibility(id: string): void {
     const item = items.find((i) => i.id === id);
@@ -88,7 +91,9 @@
   }
 
   function handleTabChange(newIndex: number): void {
-    legendActions.setActiveTab(newIndex === 0 ? 'content' : 'style');
+    legendActions.setActiveTab(
+      newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
+    );
   }
 
   function updateFontFamily(newFont: string): void {
