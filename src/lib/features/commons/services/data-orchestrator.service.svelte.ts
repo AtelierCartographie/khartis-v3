@@ -522,7 +522,9 @@ class DataOrchestratorService {
               );
               await this.applyRowDeletions(file);
             }
-          } catch (_err) {}
+          } catch {
+            /* Silently ignore errors during file processing */
+          }
         }
       );
     } catch (error) {

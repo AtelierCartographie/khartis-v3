@@ -220,29 +220,6 @@
     }
   }
 
-  async function _handlePasteData() {
-    if (!pastedDataValue.trim()) return;
-
-    isUploading = true;
-    uploadError = null;
-
-    try {
-      const result = await dataPipeline.processPastedData(pastedDataValue);
-      enrichmentDataset = result;
-      enrichmentFile = null;
-      pastedDataValue = '';
-
-      dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: result.id,
-        isEnrichmentActive: true
-      });
-    } catch (error) {
-      uploadError =
-        error instanceof Error ? error.message : 'Erreur lors du traitement';
-    } finally {
-      isUploading = false;
-    }
-  }
 
   async function handleLoadOnlineFile() {
     if (!onlineUrlValue.trim()) return;
