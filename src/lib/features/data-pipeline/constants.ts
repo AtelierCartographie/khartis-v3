@@ -65,4 +65,3 @@ export function isParquetFile(name: string): boolean {
   const lower = name.toLowerCase();
   return PIPELINE_CONST.EXTENSIONS.PARQUET.some((ext) => lower.endsWith(ext));
 }
-

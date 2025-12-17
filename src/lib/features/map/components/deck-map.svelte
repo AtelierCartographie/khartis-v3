@@ -4,63 +4,89 @@
   import { onMount } from 'svelte';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
   import { globalState } from '../../commons/store/global.svelte';
+  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import {
     useMapBasemap,
     useMapBounds,
     useMapInit,
     useMapLayers,
     useMapPosition,
-    useMapState,
-    useMapZoom
+    useMapState
   } from '../hooks';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import type { DeckMapProps } from '../types';
 
-  let { jsTable, userGeoJSON, onReady }: DeckMapProps = $props();
+  let { jsTable, userGeoJSON, datasetId, onReady }: DeckMapProps = $props();
+
+  const MIN_SKELETON_DURATION_MS = 500;
+  const MAX_WAIT_FOR_DATA_MS = 5000;
 
   let mapContainer: HTMLDivElement;
   let worldBaseTable = $state<ArrowTable | null>(null);
-  let baseZoomLevel = $state(1.5);
+  let hasCalledOnReady = $state(false);
+  let initStartTime = $state<number>(Date.now());
+  let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  // Hook: Map state (visualizations, colors, statistics)
+  function triggerOnReady() {
+    if (hasCalledOnReady) return;
+
+    if (maxWaitTimeoutId) {
+      clearTimeout(maxWaitTimeoutId);
+      maxWaitTimeoutId = null;
+    }
+
+    const elapsed = Date.now() - initStartTime;
+    const remainingDelay = Math.max(0, MIN_SKELETON_DURATION_MS - elapsed);
+
+    if (remainingDelay > 0) {
+      setTimeout(() => {
+        if (!hasCalledOnReady) {
+          hasCalledOnReady = true;
+          onReady?.();
+        }
+      }, remainingDelay);
+    } else {
+      hasCalledOnReady = true;
+      onReady?.();
+    }
+  }
+
+  function startMaxWaitTimeout() {
+    if (maxWaitTimeoutId) return;
+    maxWaitTimeoutId = setTimeout(() => {
+      triggerOnReady();
+    }, MAX_WAIT_FOR_DATA_MS);
+  }
+
   const mapState = useMapState();
 
-  // Hook: Map initialization (MapLibre + Deck.gl)
   const mapInit = useMapInit({
     onMapLoaded: () => {
       if (jsTable || userGeoJSON) {
         mapLayers.updateLayers(jsTable, userGeoJSON);
-      } else if (mapBounds.shouldRestorePosition) {
-        setTimeout(() => mapPosition.restorePosition(), 100);
+      } else {
+        startMaxWaitTimeout();
+        if (mapBounds.shouldRestorePosition) {
+          setTimeout(() => mapPosition.restorePosition(), 100);
+        }
       }
     },
     onWorldBaseLoaded: (table) => {
       worldBaseTable = table;
       mapLayers.updateLayers(jsTable, userGeoJSON);
     },
-    onZoom: () => mapZoom.handleMapZoom(),
-    onMoveEnd: () => mapPosition.savePosition(),
-    onReady: () => onReady?.()
+    onZoom: () => mapInstanceStore.updateZoomFromMap(),
+    onMoveEnd: () => mapPosition.savePosition()
   });
 
-  // Hook: Map position (localStorage persistence)
   const mapPosition = useMapPosition({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     onPositionRestored: (position) => {
-      baseZoomLevel = position.zoom;
+      mapInstanceStore.setBaseZoomLevel(position.zoom);
     }
   });
 
-  // Hook: Map zoom (global state sync)
-  const mapZoom = useMapZoom({
-    getMap: () => mapInit.map,
-    getIsMapLoaded: () => mapInit.isMapLoaded,
-    getBaseZoomLevel: () => baseZoomLevel,
-    setBaseZoomLevel: (zoom) => { baseZoomLevel = zoom; }
-  });
-
-  // Hook: Map layers (Deck.gl layer management)
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -69,22 +95,22 @@
     buildLayerContext: () => mapState.buildLayerContext()
   });
 
-  // Hook: Map basemap (style + OSM raster)
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded
   });
 
-  // Hook: Map bounds (fitBounds for Arrow/GeoJSON)
   const mapBounds = useMapBounds({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getDatasetId: () => mapState.datasetId,
-    onBoundsUpdated: (zoom) => { baseZoomLevel = zoom; },
-    savePosition: () => mapPosition.savePosition()
+    onBoundsUpdated: (zoom) => {
+      mapInstanceStore.setBaseZoomLevel(zoom);
+    },
+    savePosition: () => mapPosition.savePosition(),
+    onFitComplete: () => triggerOnReady()
   });
 
-  // Effect: Update layers when data changes
   $effect(() => {
     void worldBaseTable;
     void osmBasemapStore.activeOSMBasemap;
@@ -93,33 +119,34 @@
     }
   });
 
-  // Effect: Fit to Arrow table bounds
   $effect(() => {
     if (jsTable && mapInit.isMapLoaded && mapInit.map) {
-      mapBounds.fitToArrowBounds(jsTable);
+      mapBounds.fitToArrowBounds(jsTable, datasetId);
     }
   });
 
-  // Effect: Fit to GeoJSON bounds
   $effect(() => {
     if (userGeoJSON && mapInit.isMapLoaded && mapInit.map) {
       mapBounds.fitToGeoJSONBounds(userGeoJSON);
     }
   });
 
-  // Effect: Sync zoom from global state
+  // Resize map when page zoom changes (CSS transform affects MapLibre)
   $effect(() => {
-    void globalState.zoom.mapZoomLevel;
-    mapZoom.syncZoomToMap();
+    const pageZoom = globalState.zoom.pageZoomLevel;
+    if (pageZoom && mapInit.isMapLoaded && mapInit.map) {
+      // Delay resize to allow CSS transform to apply
+      setTimeout(() => {
+        mapInit.map?.resize();
+      }, 50);
+    }
   });
 
-  // Effect: Sync basemap style
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
     mapBasemap.syncBasemapStyle();
   });
 
-  // Effect: OSM raster layer management
   $effect(() => {
     void osmBasemapStore.activeOSMBasemap;
     void osmBasemapStore.tileConfig;
@@ -130,7 +157,12 @@
 
   onMount(() => {
     mapInit.initialize(mapContainer);
-    return () => mapInit.destroy();
+    return () => {
+      mapInit.destroy();
+      if (maxWaitTimeoutId) {
+        clearTimeout(maxWaitTimeoutId);
+      }
+    };
   });
 </script>
 
@@ -142,14 +174,16 @@
   .map-wrapper {
     position: relative;
     width: 100%;
-    height: 700px;
+    height: 100%;
+    min-height: 400px;
     background-color: var(--cds-ui-background);
   }
 
   .map-container {
-    position: relative;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: 700px;
+    height: 100%;
     background-color: var(--cds-ui-background);
   }
 

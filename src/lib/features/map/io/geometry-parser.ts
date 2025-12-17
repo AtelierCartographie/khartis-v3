@@ -16,6 +16,31 @@ import {
 } from '../constants';
 import type { GeometryInfo } from '../types';
 
+const VALID_LNG_RANGE = { min: -180, max: 180 };
+const VALID_LAT_RANGE = { min: -90, max: 90 };
+
+export function isValidCoordinate(lng: number, lat: number): boolean {
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return false;
+  }
+  if (lng < VALID_LNG_RANGE.min || lng > VALID_LNG_RANGE.max) {
+    return false;
+  }
+  if (lat < VALID_LAT_RANGE.min || lat > VALID_LAT_RANGE.max) {
+    return false;
+  }
+  return true;
+}
+
+export function validateCoordinates(coords: [number, number][]): boolean {
+  for (const [lng, lat] of coords) {
+    if (!isValidCoordinate(lng, lat)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export function isGeoJsonGeometry(geom: unknown): geom is Geometry {
   if (!geom) return false;
 
@@ -43,6 +68,14 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
   const first = coords[0];
 
   if (typeof first === 'number') {
+    const [lng, lat] = coords as [number, number];
+    if (!isValidCoordinate(lng, lat)) {
+      logger.warn('Invalid point coordinates detected', LogCategory.MAP, {
+        lng,
+        lat
+      });
+      return null;
+    }
     return {
       type: GeoJsonGeometryType.Point,
       coordinates: coords as [number, number]
@@ -54,9 +87,14 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
   const second = first[0];
 
   if (typeof second === 'number') {
+    const lineCoords = coords as [number, number][];
+    if (!validateCoordinates(lineCoords)) {
+      logger.warn('Invalid linestring coordinates detected', LogCategory.MAP);
+      return null;
+    }
     return {
       type: GeoJsonGeometryType.LineString,
-      coordinates: coords as [number, number][]
+      coordinates: lineCoords
     };
   }
 
@@ -140,8 +178,16 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
 
   try {
     switch (geomType) {
-      case WKBGeometryTypeCode.POINT:
-        return { type: GeoJsonGeometryType.Point, coordinates: readPoint() };
+      case WKBGeometryTypeCode.POINT: {
+        const point = readPoint();
+        if (!isValidCoordinate(point[0], point[1])) {
+          logger.warn('Invalid WKB point coordinates', LogCategory.MAP, {
+            point
+          });
+          return null;
+        }
+        return { type: GeoJsonGeometryType.Point, coordinates: point };
+      }
 
       case WKBGeometryTypeCode.LINESTRING: {
         const numPoints = readUint32();
@@ -153,7 +199,10 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
       }
 
       case WKBGeometryTypeCode.POLYGON:
-        return { type: GeoJsonGeometryType.Polygon, coordinates: readPolygon() };
+        return {
+          type: GeoJsonGeometryType.Polygon,
+          coordinates: readPolygon()
+        };
 
       case WKBGeometryTypeCode.MULTIPOINT: {
         const numPoints = readUint32();
@@ -177,7 +226,10 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           }
           lines.push(line);
         }
-        return { type: GeoJsonGeometryType.MultiLineString, coordinates: lines };
+        return {
+          type: GeoJsonGeometryType.MultiLineString,
+          coordinates: lines
+        };
       }
 
       case WKBGeometryTypeCode.MULTIPOLYGON: {
@@ -187,7 +239,10 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           offset += 5;
           polygons.push(readPolygon());
         }
-        return { type: GeoJsonGeometryType.MultiPolygon, coordinates: polygons };
+        return {
+          type: GeoJsonGeometryType.MultiPolygon,
+          coordinates: polygons
+        };
       }
 
       default:
@@ -348,8 +403,7 @@ export function arrowTableToGeoJSON(
         const col = table.getChild(field.name);
         if (col) {
           const val = col.get(i);
-          properties[field.name] =
-            typeof val === 'bigint' ? Number(val) : val;
+          properties[field.name] = typeof val === 'bigint' ? Number(val) : val;
         }
       }
 
@@ -427,13 +481,13 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
 
     const isNativeGeoArrow = Boolean(
       arrowExtension &&
-        (arrowExtension.startsWith('geoarrow.') ||
-          arrowExtension === ArrowExtension.GEOARROW_POINT ||
-          arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT ||
-          arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
-          arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING ||
-          arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
-          arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON)
+      (arrowExtension.startsWith('geoarrow.') ||
+        arrowExtension === ArrowExtension.GEOARROW_POINT ||
+        arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT ||
+        arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
+        arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING ||
+        arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
+        arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON)
     );
 
     const isWkbEncoded = arrowExtension === ArrowExtension.OGC_WKB;

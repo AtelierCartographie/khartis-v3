@@ -38,7 +38,6 @@ describe('VizSuggesterService', () => {
     it('should suggest choropleth for polygon + numeric relative', () => {
       const columns: ColumnAnalysis[] = [
         {
-          // Use word boundary-friendly name: "unemployment rate"
           name: 'unemployment rate',
           type: 'bigint',
           stats: {
@@ -54,7 +53,6 @@ describe('VizSuggesterService', () => {
       const suggestions = service.suggestVisualizations(columns, 'Polygon');
 
       expect(suggestions.length).toBeGreaterThan(0);
-      // Should suggest choropleth or similar QTR-compatible viz for polygon
       expect(
         suggestions.some(
           (s) =>
@@ -112,7 +110,6 @@ describe('VizSuggesterService', () => {
     it('should suggest visualizations for multiple columns', () => {
       const columns: ColumnAnalysis[] = [
         {
-          // Population with large range -> should be QTA
           name: 'population',
           type: 'bigint',
           stats: {

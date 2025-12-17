@@ -1,8 +1,6 @@
-// Pipeline facade
 export { Pipeline, createFileFromUpload, dataPipeline } from './pipeline';
 export type { DataPipeline } from './pipeline';
 
-// Types (consolidated)
 export {
   ColumnType,
   computeBoundsArea,
@@ -49,14 +47,8 @@ export type {
   ValidationResult
 } from './types';
 
-// Constants
-export {
-  PIPELINE_CONST,
-  isGeospatialFile,
-  isTabularFile
-} from './constants';
+export { PIPELINE_CONST, isGeospatialFile, isTabularFile } from './constants';
 
-// Parsers
 export {
   ParserError,
   canParseFile,
@@ -65,14 +57,12 @@ export {
   parseTabular
 } from './core/parsers';
 
-// Validators
 export {
   validateFile,
   validateFileExtension,
   validateMimeType
 } from './core/validators';
 
-// GeoParquet reader
 export {
   extractGeoArrowMetadata,
   geoParquetReader,
@@ -81,14 +71,12 @@ export {
   tableHasGeoArrowMetadata
 } from './io/geoparquet-reader';
 
-// GeoJSON utilities
 export { convertGeoJSONToRawDataset } from './utils/geojson-converter';
 export type {
   GeoJSONFeature,
   GeoJSONFeatureCollection
 } from './utils/geojson-converter';
 
-// GeoJSON guards
 export {
   describeGeojsonStructure,
   isFeature,

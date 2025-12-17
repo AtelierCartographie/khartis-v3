@@ -20,12 +20,21 @@ export interface UseMapLayersProps {
 }
 
 export interface UseMapLayersReturn {
-  updateLayers: (jsTable: ArrowTable | null, geojson: FeatureCollection | null) => void;
+  updateLayers: (
+    jsTable: ArrowTable | null,
+    geojson: FeatureCollection | null
+  ) => void;
   readonly lastPendingGeoTable: string | null;
 }
 
 export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
-  const { getDeckOverlay, getIsMapLoaded, getWorldBaseTable, getDatasetId, buildLayerContext } = props;
+  const {
+    getDeckOverlay,
+    getIsMapLoaded,
+    getWorldBaseTable,
+    getDatasetId,
+    buildLayerContext
+  } = props;
 
   let lastPendingGeoTable = $state<string | null>(null);
 
@@ -62,10 +71,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       if (!hasGeoMetadata) {
         if (lastPendingGeoTable !== datasetId) {
           lastPendingGeoTable = datasetId ?? null;
-          logger.warn('Arrow table missing GeoArrow metadata', LogCategory.MAP, {
-            datasetId,
-            note: 'Waiting for metadata-prefetch'
-          });
+          logger.warn(
+            'Arrow table missing GeoArrow metadata',
+            LogCategory.MAP,
+            {
+              datasetId,
+              note: 'Waiting for metadata-prefetch'
+            }
+          );
         }
         deckOverlay.setProps({ layers });
         return;
@@ -83,6 +96,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   return {
     updateLayers,
-    get lastPendingGeoTable() { return lastPendingGeoTable; }
+    get lastPendingGeoTable() {
+      return lastPendingGeoTable;
+    }
   };
 }

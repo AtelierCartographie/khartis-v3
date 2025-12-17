@@ -1,6 +1,11 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { ReservedColumnName } from '../constants';
-import type { DeckTooltipInfo, TooltipEntry, TooltipResult, TooltipStyle } from '../types';
+import type {
+  DeckTooltipInfo,
+  TooltipEntry,
+  TooltipResult,
+  TooltipStyle
+} from '../types';
 
 const DEFAULT_TOOLTIP_STYLE: TooltipStyle = {
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -36,9 +41,9 @@ function isReservedColumn(columnName: string): boolean {
   );
 }
 
-function extractEntriesFromGeoJson(
-  feature: { properties?: Record<string, unknown> }
-): TooltipEntry[] {
+function extractEntriesFromGeoJson(feature: {
+  properties?: Record<string, unknown>;
+}): TooltipEntry[] {
   const entries: TooltipEntry[] = [];
   if (feature.properties) {
     for (const key of Object.keys(feature.properties)) {

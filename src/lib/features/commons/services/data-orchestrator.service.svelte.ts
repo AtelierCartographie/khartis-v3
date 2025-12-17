@@ -41,7 +41,6 @@ class DataOrchestratorService {
   }
 
   async onFileAdded(file: UploadedFile): Promise<void> {
-    // Create snapshot BEFORE any changes for potential rollback
     const snapshot = importRollbackService.createSnapshot(file);
 
     try {
@@ -56,12 +55,7 @@ class DataOrchestratorService {
 
       await this.processFileInDuckDB(file, dataset);
 
-      // Mark file as processed to prevent reprocessing
       this.processedFileIds.add(file.id);
-      // Legacy pipeline: no GeoParquet cache, rely on DuckDB state
-
-      // Note: _geometryDatasetsVersion is now incremented inside processFileInDuckDB
-      // after DuckDB dataset is fully ready (prevents 5s delay in map reaction)
 
       if (dataset.geometry) {
         projectionActions.suggestProjectionForCurrentData();
@@ -75,22 +69,16 @@ class DataOrchestratorService {
 
       layersActions.syncWithVisualizations();
     } catch (error) {
-      // Log the error with full context
       logger.error('File import failed', LogCategory.DATA, formatError(error));
 
-      // Check if error is fatal (requires rollback) or non-fatal (just show toast)
       if (isFatalError(error)) {
-        // Rollback all changes
         await importRollbackService.rollback(snapshot);
 
-        // Show error notification for fatal errors
         showError(
           "Erreur fatale lors de l'import",
           error instanceof Error ? error.message : 'Erreur inconnue'
         );
       } else {
-        // Non-fatal error: just show warning toast, keep changes
-
         showWarning(
           'Avertissement',
           error instanceof Error
@@ -99,7 +87,6 @@ class DataOrchestratorService {
         );
       }
 
-      // Re-throw only fatal errors to stop further processing
       if (isFatalError(error)) {
         throw error;
       }
@@ -127,7 +114,6 @@ class DataOrchestratorService {
       if (duckDataset) {
         await duckDBOrchestrator.dropTable(duckDataset.tableName);
 
-        // Cleanup DuckDB cache and file handles to prevent memory leaks
         await this.cleanupDuckDBResources(duckDataset.tableName);
 
         this._geometryDatasetsVersion++;
@@ -137,10 +123,8 @@ class DataOrchestratorService {
       layersActions.syncWithVisualizations();
     }
 
-    // Remove from processed files set
     this.processedFileIds.delete(fileId);
 
-    // Clean up orphaned datasets (datasets whose sourceFileId no longer exists in project)
     this.cleanupOrphanedDatasets();
   }
 
@@ -156,12 +140,10 @@ class DataOrchestratorService {
         return;
       }
 
-      // Remove from loaded files tracking
       if (Duck.loaded_files.has(tableName)) {
         Duck.loaded_files.delete(tableName);
       }
 
-      // Remove from registered files (find by table name)
       const registeredFile = Array.from(Duck.registered_files).find((id) =>
         id.includes(tableName)
       );
@@ -169,12 +151,10 @@ class DataOrchestratorService {
         Duck.registered_files.delete(registeredFile);
       }
 
-      // Remove from table metadata
       if (Duck.table_metadata.has(tableName)) {
         Duck.table_metadata.delete(tableName);
       }
 
-      // Remove from cache (will be handled by LRU but we can force it)
       if (Duck.table_geoparquet_cache.has(tableName)) {
         Duck.table_geoparquet_cache.delete(tableName);
       }
@@ -239,7 +219,6 @@ class DataOrchestratorService {
     return file;
   }
 
-  // KML conversion is now handled directly by DuckDB ST_Read in kml.parser.ts
   private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
     try {
       let geojsonObject: ParserGeoJSONFeatureCollection;
@@ -247,8 +226,6 @@ class DataOrchestratorService {
       if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
         geojsonObject = file.parsedData as ParserGeoJSONFeatureCollection;
       } else {
-        // KML parsing is now done via DuckDB in the data pipeline
-        // This path should not be reached with the new architecture
         throw new Error(
           'KML files should be processed by the data pipeline, not here'
         );
@@ -305,7 +282,6 @@ class DataOrchestratorService {
             duckResult.tableName
           );
 
-          // Mark dataset as DuckDB-processed to prevent reprocessing
           const updatedDataset = datasetsStore.datasets.find(
             (d) => d.id === dataset.id
           );
@@ -316,7 +292,6 @@ class DataOrchestratorService {
             };
           }
 
-          // Increment geometry datasets version to trigger map reactivity
           this._geometryDatasetsVersion++;
         }
       } catch (error) {
@@ -341,7 +316,6 @@ class DataOrchestratorService {
           }
         );
 
-        // If table doesn't exist (null returned), re-process the file
         if (registered === null) {
           logger.info(
             'DuckDB table missing, re-processing file from scratch',
@@ -353,7 +327,6 @@ class DataOrchestratorService {
             }
           );
 
-          // Re-process through the normal flow (will create new table)
           const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
           if (duckDBFile) {
             const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
@@ -397,7 +370,6 @@ class DataOrchestratorService {
   }
 
   async onProjectChanged(): Promise<void> {
-    // Wait for DuckDB to be ready before processing files
     await duckDBOrchestrator.waitForInitialization();
 
     visualizationStore.clear();
@@ -405,7 +377,6 @@ class DataOrchestratorService {
     layersActions.reset();
     projectionActions.reset();
 
-    // Clear processed file IDs when switching projects
     this.processedFileIds.clear();
 
     const currentProject = projectStore.currentProject;
@@ -448,7 +419,6 @@ class DataOrchestratorService {
   }
 
   private async processProjectFiles(files: UploadedFile[]): Promise<void> {
-    // Filter out files that are already processed OR currently being processed
     const unprocessedFiles = files.filter(
       (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
     );
@@ -457,11 +427,8 @@ class DataOrchestratorService {
       return;
     }
 
-    // Mark files as processing BEFORE starting to prevent race conditions
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
 
-    // Begin batch mode to suppress version bumps until all files AND transformations are applied
-    // This prevents UI flash (old column names → new column names)
     duckDBOrchestrator.beginBatch();
 
     try {
@@ -471,7 +438,6 @@ class DataOrchestratorService {
         unprocessedFiles,
         concurrency,
         async (file, index, total) => {
-          // Restore companion files for shapefiles
           logger.debug(
             `[DataOrchestrator] Checking file restoration for ${file.name}`,
             LogCategory.DATA,
@@ -521,7 +487,6 @@ class DataOrchestratorService {
             }
           }
 
-          // Restore original file object if missing (needed for DuckDB ingestion)
           if (!file.originalFile) {
             try {
               file.originalFile = await createFileFromUpload(file);
@@ -543,7 +508,6 @@ class DataOrchestratorService {
           try {
             await this.onFileAdded(file);
 
-            // Apply saved column transformations after file is loaded
             if (
               file.columnTransformations &&
               file.columnTransformations.length > 0
@@ -551,7 +515,6 @@ class DataOrchestratorService {
               await this.applyColumnTransformations(file);
             }
 
-            // Apply saved row deletions after file is loaded
             if (file.deletedRowIds && file.deletedRowIds.length > 0) {
               logger.info(
                 `[DataOrchestrator] Found ${file.deletedRowIds.length} deleted rows to apply for ${file.name}`,
@@ -559,19 +522,14 @@ class DataOrchestratorService {
               );
               await this.applyRowDeletions(file);
             }
-          } catch (_err) {
-            // Individual file failure shouldn't stop the whole batch
-            // Error is already logged in onFileAdded
-          }
+          } catch (_err) {}
         }
       );
     } catch (error) {
       logger.error('Failed to process project files', LogCategory.DATA, error);
     } finally {
-      // Clear processing flags
       unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
 
-      // End batch mode - triggers a single UI update with final state (renamed columns)
       duckDBOrchestrator.endBatch();
     }
   }
@@ -701,7 +659,6 @@ class DataOrchestratorService {
   }
 
   private determineProjectConcurrency(): number {
-    // Use lower concurrency for mobile/tablet
     if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
       return Math.max(1, Math.min(4, navigator.hardwareConcurrency - 1));
     }
