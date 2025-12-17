@@ -97,9 +97,45 @@ jobs:
       - name: Run Svelte Check
         run: pnpm check
 
+  build:
+    name: Build Application
+    needs: [unit-tests, svelte-check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Cache build output
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .svelte-kit/output
+          key: ${{ runner.os }}-build-${{ github.sha }}
+
   e2e-tests:
     name: E2E Tests (Playwright)
-    needs: [unit-tests, svelte-check]
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -125,6 +161,15 @@ jobs:
 
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Restore build output
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .svelte-kit/output
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
