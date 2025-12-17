@@ -1,8 +1,7 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
   changeColumnType,
-  dropColumn,
-  renameColumn
+  dropColumn
 } from '$lib/features/duckdb/orchestrator/column-ops';
 import {
   Duck,

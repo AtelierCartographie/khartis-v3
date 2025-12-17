@@ -13,7 +13,7 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import DeckMap from './components/deck-map.svelte';
+  import ThematicMap from './components/thematic-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
 
@@ -203,7 +203,7 @@
               });
             }
           } else {
-            // Data not ready yet, but dataset exists - set datasetId so DeckMap waits
+            // Data not ready yet, but dataset exists - set datasetId so ThematicMap waits
             setWaitingForData(selectedDataset.id);
           }
         });
@@ -221,7 +221,7 @@
             duckDBDataset.tableName
           );
         } else {
-          // DuckDB dataset not ready yet - set datasetId so DeckMap waits
+          // DuckDB dataset not ready yet - set datasetId so ThematicMap waits
           setWaitingForData(selectedDataset.id);
         }
       }
@@ -268,7 +268,7 @@
           displayDatasetId = selectedDataset.id;
         }
       } else {
-        // Data not ready yet, but dataset exists - set datasetId so DeckMap waits
+        // Data not ready yet, but dataset exists - set datasetId so ThematicMap waits
         setWaitingForData(selectedDataset.id);
       }
     } else if (selectedDataset) {
@@ -285,7 +285,7 @@
           duckDBDataset.tableName
         );
       } else {
-        // DuckDB dataset not ready yet - set datasetId so DeckMap waits
+        // DuckDB dataset not ready yet - set datasetId so ThematicMap waits
         setWaitingForData(selectedDataset.id);
       }
     } else {
@@ -329,7 +329,7 @@
     </div>
   {:else if !isInitializing}
     <div class="map-wrapper" class:visible={isMapReady}>
-      <DeckMap
+      <ThematicMap
         jsTable={displayTable}
         userGeoJSON={displayGeoJSON}
         datasetId={displayDatasetId}
