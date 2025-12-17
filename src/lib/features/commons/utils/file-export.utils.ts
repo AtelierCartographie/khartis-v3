@@ -12,46 +12,34 @@ import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
 
-/**
- * Export data to CSV using DuckDB's COPY TO when table is available,
- * falling back to JavaScript implementation for in-memory data
- */
 export async function exportToCsv(
   data: Record<string, unknown>[] | string,
   headers?: string[]
 ): Promise<Blob> {
-  // If data is a DuckDB table name, use COPY TO
   if (typeof data === 'string') {
     const tableName = data;
 
-    // Ensure DuckDB is initialized
     await initDuckDB();
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    // Use DuckDB's COPY TO to generate CSV
     const csvString = await Duck.copy_to_csv_as_string(tableName, {
       delimiter: ',',
       header: true
     });
 
-    // Add BOM for Excel compatibility
     const bom = '\uFEFF';
     return new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
   }
 
-  // Fallback: JavaScript implementation for in-memory data
   const rows = data as Record<string, unknown>[];
   const fields = headers || (rows.length > 0 ? Object.keys(rows[0]) : []);
 
-  // Build CSV manually
   const csvRows: string[] = [];
 
-  // Add header
   csvRows.push(fields.map(escapeCSVField).join(','));
 
-  // Add data rows
   for (const row of rows) {
     const values = fields.map((field) => {
       const value = row[field];
@@ -65,9 +53,6 @@ export async function exportToCsv(
   return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
 }
 
-/**
- * Escape a field value for CSV format
- */
 function escapeCSVField(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
@@ -75,14 +60,12 @@ function escapeCSVField(value: unknown): string {
 
   const str = String(value);
 
-  // Check if the field needs quotes
   if (
     str.includes(',') ||
     str.includes('"') ||
     str.includes('\n') ||
     str.includes('\r')
   ) {
-    // Escape quotes by doubling them
     return `"${str.replace(/"/g, '""')}"`;
   }
 
@@ -92,15 +75,12 @@ function escapeCSVField(value: unknown): string {
 export async function exportDatasetToCsv(
   dataset: ProcessedDataset
 ): Promise<Blob> {
-  // If dataset has a DuckDB table, use that
   if (dataset.duckdbTableName) {
-    // Ensure DuckDB is initialized
     await initDuckDB();
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    // Create a view that excludes geometry columns
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
       .filter((col) => col.type !== 'geometry')
@@ -108,21 +88,17 @@ export async function exportDatasetToCsv(
       .join(', ');
 
     try {
-      // Create temporary view with only non-geometry columns
       await Duck.query(`
         CREATE TEMPORARY VIEW "${viewName}" AS
         SELECT ${nonGeomColumns} FROM "${dataset.duckdbTableName}"
       `);
 
-      // Export using DuckDB
       const blob = await exportToCsv(viewName);
 
-      // Clean up view
       await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`);
 
       return blob;
     } catch (error) {
-      // Clean up on error
       if (Duck) {
         await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
       }

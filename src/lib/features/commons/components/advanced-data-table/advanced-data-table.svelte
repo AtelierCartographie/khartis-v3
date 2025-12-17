@@ -2,9 +2,14 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import { RefineOperation } from '$lib/features/duckdb';
+  import { Duck, RefineOperation } from '$lib/features/duckdb';
+  import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
-  import { DataTableSkeleton } from 'carbon-components-svelte';
+  import {
+    DataTableSkeleton,
+    Modal,
+    TextInput
+  } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import { LogCategory, logger } from '../../utils/logger';
 
@@ -70,7 +75,7 @@
 
   const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
-  const viewportHeightRatioExpanded = 0.65;
+  const viewportHeightRatioExpanded = 0.85;
   const viewportHeightRatio = $derived(
     isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
   );
@@ -134,8 +139,15 @@
     }
   });
 
+  let renameModalOpen = $state(false);
+  let columnToRename = $state<string | null>(null);
+  let newColumnName = $state('');
+  let deleteConfirmOpen = $state(false);
+  let columnToDelete = $state<string | null>(null);
+
   const columnOps = useColumnOperations({
     tableName: () => tableName,
+    datasetId: () => dataset?.id,
     columns: () => tableData.columns,
     onColumnsChange: async () => {
       await tableData.loadColumnsInfo();
@@ -145,7 +157,12 @@
       await filters.refreshFiltersState();
       await tableData.loadRowsData();
     },
-    onRecordTransformation: recordTransformation
+    onRecordTransformation: recordTransformation,
+    onColumnRenamed: (oldName: string) => {
+      columnToRename = oldName;
+      newColumnName = oldName;
+      renameModalOpen = true;
+    }
   });
 
   const rowSelection = useRowSelection({
@@ -177,6 +194,57 @@
       isLocalUpdate = false;
       throw e;
     } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
+  }
+
+  async function handleRenameConfirm() {
+    if (!columnToRename || !newColumnName.trim() || !tableName) {
+      renameModalOpen = false;
+      return;
+    }
+
+    isLocalUpdate = true;
+    try {
+      await renameColumn(tableName, columnToRename, newColumnName.trim(), Duck);
+      await tableData.loadColumnsInfo();
+      await virtualScroll.initializeRows(virtualScroll.startIndex);
+      recordTransformation(
+        `Colonne renommée: ${columnToRename} → ${newColumnName.trim()}`
+      );
+    } catch (err) {
+      logger.error('Error renaming column', LogCategory.UI, err);
+    } finally {
+      renameModalOpen = false;
+      columnToRename = null;
+      newColumnName = '';
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
+  }
+
+  function handleDeleteRequest(columnName: string) {
+    columnToDelete = columnName;
+    deleteConfirmOpen = true;
+  }
+
+  async function handleDeleteConfirm() {
+    if (!columnToDelete) {
+      deleteConfirmOpen = false;
+      return;
+    }
+
+    isLocalUpdate = true;
+    try {
+      await columnOps.handleDelete(columnToDelete);
+    } catch (err) {
+      logger.error('Error deleting column', LogCategory.UI, err);
+    } finally {
+      deleteConfirmOpen = false;
+      columnToDelete = null;
       setTimeout(() => {
         isLocalUpdate = false;
       }, 100);
@@ -309,7 +377,7 @@
 
   let expandEffectInitialized = $state(false);
   $effect(() => {
-    const _currentIsExpanded = isExpanded;
+    void isExpanded;
     if (!expandEffectInitialized) {
       expandEffectInitialized = true;
       return;
@@ -375,8 +443,13 @@
                   sortOrder={sort.sortOrder}
                   showSummaryPlots={showSummaryPlots}
                   isEditMode={isEditMode}
+                  isHidden={columnOps.isColumnHidden(column.name)}
                   onSort={handleSort}
                   onRefine={handleRefine}
+                  onRename={columnOps.handleRename}
+                  onChangeType={columnOps.handleChangeType}
+                  onHide={columnOps.handleHide}
+                  onDelete={handleDeleteRequest}
                 />
               {/each}
             </tr>
@@ -409,6 +482,63 @@
     </div>
   {/if}
 </div>
+
+<!-- Rename Column Modal -->
+<Modal
+  bind:open={renameModalOpen}
+  modalHeading="Renommer la colonne"
+  primaryButtonText="Confirmer"
+  secondaryButtonText="Annuler"
+  on:click:button--primary={handleRenameConfirm}
+  on:click:button--secondary={() => {
+    renameModalOpen = false;
+    columnToRename = null;
+    newColumnName = '';
+  }}
+  on:close={() => {
+    renameModalOpen = false;
+    columnToRename = null;
+    newColumnName = '';
+  }}
+  size="sm"
+>
+  <div class="rename-modal-content">
+    <p class="rename-modal-description">
+      Entrez le nouveau nom pour la colonne
+      <strong>{columnToRename}</strong>
+    </p>
+    <TextInput
+      bind:value={newColumnName}
+      labelText="Nouveau nom"
+      placeholder="Nom de la colonne"
+    />
+  </div>
+</Modal>
+
+<!-- Delete Column Confirmation Modal -->
+<Modal
+  bind:open={deleteConfirmOpen}
+  modalHeading="Supprimer la colonne"
+  primaryButtonText="Supprimer"
+  primaryButtonDisabled={false}
+  secondaryButtonText="Annuler"
+  danger
+  on:click:button--primary={handleDeleteConfirm}
+  on:click:button--secondary={() => {
+    deleteConfirmOpen = false;
+    columnToDelete = null;
+  }}
+  on:close={() => {
+    deleteConfirmOpen = false;
+    columnToDelete = null;
+  }}
+  size="sm"
+>
+  <p>
+    Êtes-vous sûr de vouloir supprimer la colonne
+    <strong>{columnToDelete}</strong> ? Cette action est irréversible.
+  </p>
+</Modal>
 
 <style>
   .advanced-data-table {
@@ -489,5 +619,16 @@
   .error-message {
     color: var(--cds-text-error);
     border: 1px solid var(--cds-support-01);
+  }
+
+  :global(.rename-modal-content) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
+  :global(.rename-modal-description) {
+    color: var(--cds-text-02);
+    margin-bottom: var(--cds-spacing-03);
   }
 </style>

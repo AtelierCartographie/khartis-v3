@@ -65,17 +65,3 @@ export function isParquetFile(name: string): boolean {
   const lower = name.toLowerCase();
   return PIPELINE_CONST.EXTENSIONS.PARQUET.some((ext) => lower.endsWith(ext));
 }
-
-export function getSupportedExtensions(): string[] {
-  return [...PIPELINE_CONST.EXTENSIONS.ALL];
-}
-
-export function getSupportedMimeTypes(): string[] {
-  return [
-    ...PIPELINE_CONST.MIME_TYPES.CSV,
-    ...PIPELINE_CONST.MIME_TYPES.JSON,
-    ...PIPELINE_CONST.MIME_TYPES.PARQUET,
-    ...PIPELINE_CONST.MIME_TYPES.ARROW,
-    ...PIPELINE_CONST.MIME_TYPES.SHAPEFILE
-  ];
-}

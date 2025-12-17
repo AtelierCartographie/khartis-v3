@@ -36,7 +36,7 @@ export async function loadFromStorage<T>(key: string): Promise<T | null> {
   }
 }
 
-export async function removeFromStorage(key: string): Promise<void> {
+async function removeFromStorage(key: string): Promise<void> {
   await localforage.removeItem(key);
 }
 

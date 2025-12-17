@@ -4,12 +4,23 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { Button, Modal, Tag } from 'carbon-components-svelte';
-  import { Add, Close } from 'carbon-icons-svelte';
+  import {
+    Add,
+    OverflowMenuVertical,
+    Copy,
+    Edit,
+    TrashCan
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import AddDataModal from './add-data-modal.svelte';
+  import {
+    showError,
+    showSuccess
+  } from '$lib/features/commons/utils/notification.utils.svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
   let lastSourceFilesCount = $state(0);
@@ -18,6 +29,9 @@
   let editedName = $state('');
   let nameInputRef = $state<HTMLInputElement | null>(null);
   let tabRefs = $state<Map<string, HTMLDivElement>>(new Map());
+
+  let menuOpenTabId = $state<string | null>(null);
+  let menuPosition = $state({ top: 0, left: 0 });
 
   function registerTab(node: HTMLDivElement, id: string) {
     tabRefs.set(id, node);
@@ -83,6 +97,86 @@
     startEditingTab(tabId, label);
   }
 
+  function toggleTabMenu(tabId: string, event: MouseEvent) {
+    event.stopPropagation();
+    if (menuOpenTabId === tabId) {
+      menuOpenTabId = null;
+    } else {
+      const button = event.currentTarget as HTMLButtonElement;
+      const rect = button.getBoundingClientRect();
+      menuPosition = {
+        top: rect.bottom + 4,
+        left: rect.left
+      };
+      menuOpenTabId = tabId;
+    }
+  }
+
+  function closeTabMenu() {
+    menuOpenTabId = null;
+  }
+
+  function handleTabMenuClickOutside(event: MouseEvent) {
+    const target = event.target as Node;
+    const menuElement = document.querySelector('.tab-context-menu');
+    if (menuElement && !menuElement.contains(target)) {
+      closeTabMenu();
+    }
+  }
+
+  async function handleDuplicateTab(tabId: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.sourceFileId === tabId
+    );
+    if (!dataset) {
+      showError('Erreur', 'Dataset introuvable');
+      return;
+    }
+
+    try {
+      const newDatasetId = await datasetsStore.duplicateDataset(dataset.id);
+      if (newDatasetId) {
+        showSuccess(
+          'Dataset dupliqué',
+          `"${dataset.name}" a été dupliqué avec succès`
+        );
+      }
+    } catch (error) {
+      showError(
+        'Erreur de duplication',
+        error instanceof Error ? error.message : 'Une erreur est survenue'
+      );
+    }
+  }
+
+  function handleRenameFromMenu(tabId: string, label: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+    startEditingTab(tabId, label);
+  }
+
+  function handleDeleteFromMenu(
+    fileId: string,
+    fileName: string,
+    event: Event
+  ) {
+    event.stopPropagation();
+    closeTabMenu();
+    fileToDelete = { id: fileId, name: fileName };
+    isDeleteConfirmOpen = true;
+  }
+
+  $effect(() => {
+    if (menuOpenTabId) {
+      document.addEventListener('click', handleTabMenuClickOutside);
+      return () =>
+        document.removeEventListener('click', handleTabMenuClickOutside);
+    }
+  });
+
   $effect(() => {
     if (editingTabId && nameInputRef) {
       nameInputRef.focus();
@@ -130,16 +224,6 @@
 
   const openAddDataModal = () => {
     isAddDataModalOpen = true;
-  };
-
-  const openDeleteConfirm = (
-    fileId: string,
-    fileName: string,
-    event: Event
-  ) => {
-    event.stopPropagation();
-    fileToDelete = { id: fileId, name: fileName };
-    isDeleteConfirmOpen = true;
   };
 
   const handleDeleteFile = async () => {
@@ -251,15 +335,51 @@
             {/if}
           </div>
           <button
-            class="tab-close-button"
-            onclick={(e: MouseEvent) =>
-              openDeleteConfirm(dataButton.id, dataButton.label, e)}
-            aria-label="Supprimer le fichier"
-            title="Supprimer le fichier"
+            class="tab-menu-button"
+            onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
+            aria-label="Options du fichier"
+            title="Options du fichier"
+            aria-haspopup="true"
+            aria-expanded={menuOpenTabId === dataButton.id}
           >
-            <Close size={16} />
+            <OverflowMenuVertical size={16} />
           </button>
         </Button>
+        {#if menuOpenTabId === dataButton.id}
+          <div
+            class="tab-context-menu"
+            style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+            role="menu"
+          >
+            <button
+              class="tab-menu-item"
+              onclick={(e: Event) =>
+                handleRenameFromMenu(dataButton.id, dataButton.label, e)}
+              role="menuitem"
+            >
+              <Edit size={16} />
+              Renommer...
+            </button>
+            <button
+              class="tab-menu-item"
+              onclick={(e: Event) => handleDuplicateTab(dataButton.id, e)}
+              role="menuitem"
+            >
+              <Copy size={16} />
+              Dupliquer
+            </button>
+            <div class="tab-menu-divider"></div>
+            <button
+              class="tab-menu-item tab-menu-item-danger"
+              onclick={(e: Event) =>
+                handleDeleteFromMenu(dataButton.id, dataButton.label, e)}
+              role="menuitem"
+            >
+              <TrashCan size={16} />
+              Supprimer
+            </button>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -395,7 +515,7 @@
     min-height: 18px;
   }
 
-  .tab-close-button {
+  .tab-menu-button {
     position: absolute;
     right: var(--cds-spacing-03);
     top: 50%;
@@ -412,15 +532,67 @@
     z-index: 10;
   }
 
-  .tab-close-button:hover {
+  .tab-menu-button:hover {
     background-color: var(--cds-hover-ui);
   }
 
-  .tab-close-button :global(svg) {
+  .tab-menu-button :global(svg) {
     fill: var(--cds-text-02);
   }
 
-  .tab-close-button:hover :global(svg) {
+  .tab-menu-button:hover :global(svg) {
     fill: var(--cds-text-01);
+  }
+
+  .tab-context-menu {
+    position: fixed;
+    min-width: 160px;
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-03);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    border-radius: 2px;
+  }
+
+  .tab-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    width: 100%;
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    border: none;
+    background: transparent;
+    color: var(--cds-text-01);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .tab-menu-item:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .tab-menu-item :global(svg) {
+    fill: var(--cds-text-02);
+    flex-shrink: 0;
+  }
+
+  .tab-menu-item-danger {
+    color: var(--cds-support-01);
+  }
+
+  .tab-menu-item-danger:hover {
+    background-color: var(--cds-support-01);
+    color: var(--cds-text-04);
+  }
+
+  .tab-menu-item-danger:hover :global(svg) {
+    fill: var(--cds-text-04);
+  }
+
+  .tab-menu-divider {
+    height: 1px;
+    background-color: var(--cds-ui-03);
+    margin: var(--cds-spacing-02) 0;
   }
 </style>

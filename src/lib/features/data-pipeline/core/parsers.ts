@@ -206,6 +206,7 @@ function detectFileFormat(name: string): FileFormat {
   if (lower.endsWith('.gpkg')) return 'geopackage';
   if (lower.endsWith('.kml')) return 'kml';
   if (lower.endsWith('.kmz')) return 'kmz';
+  if (lower.endsWith('.gpx')) return 'gpx';
   if (lower.endsWith('.geoparquet') || lower.endsWith('.parquet'))
     return 'geoparquet';
   return 'unknown';

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { globalActions, globalState } from '../store/global.svelte';
+  import { mapInstanceStore } from '../store/map-instance.store.svelte';
   import { ToolbarState, ToolbarStep } from '../types/global';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
@@ -56,7 +57,7 @@
         // fallthrough
         case '=':
           if (isMapZoomActive) {
-            globalActions.zoomInMap();
+            mapInstanceStore.map?.zoomIn();
           } else {
             globalActions.zoomInPage();
           }
@@ -64,7 +65,7 @@
 
         case '-':
           if (isMapZoomActive) {
-            globalActions.zoomOutMap();
+            mapInstanceStore.map?.zoomOut();
           } else {
             globalActions.zoomOutPage();
           }
@@ -72,7 +73,8 @@
 
         case '0':
           if (isMapZoomActive) {
-            globalActions.resetMapZoom();
+            const baseZoom = mapInstanceStore.baseZoomLevel;
+            mapInstanceStore.map?.setZoom(baseZoom);
           } else {
             globalActions.resetPageZoom();
           }
@@ -130,13 +132,13 @@
 
       if (event.deltaY < 0) {
         if (isMapZoomActive) {
-          globalActions.zoomInMap();
+          mapInstanceStore.map?.zoomIn();
         } else {
           globalActions.zoomInPage();
         }
       } else {
         if (isMapZoomActive) {
-          globalActions.zoomOutMap();
+          mapInstanceStore.map?.zoomOut();
         } else {
           globalActions.zoomOutPage();
         }

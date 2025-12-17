@@ -59,65 +59,6 @@ export const DEFAULT_MARGINS = {
   right: 32
 } as const;
 
-export const CLASSIFICATION_METHODS = {
-  EQUAL_INTERVAL: 'equal_interval',
-  QUANTILES: 'quantiles',
-  JENKS: 'jenks',
-  STANDARD_DEVIATION: 'standard_deviation',
-  MANUAL: 'manual'
-} as const;
-
-export type ClassificationMethodType =
-  (typeof CLASSIFICATION_METHODS)[keyof typeof CLASSIFICATION_METHODS];
-
-export const GPS_COLUMN_PATTERNS = {
-  LATITUDE: [
-    'lat',
-    'latitude',
-    'y_coord',
-    'y',
-    'lat_dd',
-    'latitude_dd',
-    'geo_lat'
-  ],
-  LONGITUDE: [
-    'lon',
-    'long',
-    'longitude',
-    'x_coord',
-    'x',
-    'lon_dd',
-    'longitude_dd',
-    'lng',
-    'geo_lon'
-  ]
-} as const;
-
-export const MIME_TYPES = {
-  CSV: 'text/csv',
-  PLAIN: 'text/plain',
-  JSON: 'application/json',
-  GEOJSON: 'application/geo+json',
-  ZIP: 'application/zip',
-  OCTET_STREAM: 'application/octet-stream'
-} as const;
-
-export const SUPPORTED_EXTENSIONS = {
-  CSV: '.csv',
-  TSV: '.tsv',
-  TXT: '.txt',
-  JSON: '.json',
-  GEOJSON: '.geojson',
-  SHP: '.shp',
-  GPKG: '.gpkg',
-  KML: '.kml',
-  KMZ: '.kmz',
-  GPX: '.gpx',
-  PARQUET: '.parquet',
-  GEOPARQUET: '.geoparquet',
-  ZIP: '.zip'
-} as const;
-
 export const SHAPEFILE_EXTENSIONS = [
   '.shp',
   '.shx',

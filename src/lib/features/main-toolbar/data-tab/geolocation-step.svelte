@@ -8,12 +8,17 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+  import {
+    Duck,
+    validateGPSColumns,
+    type GPSValidationResult
+  } from '$lib/features/duckdb';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
 
   interface GeoComboBoxItem {
     id: number;
@@ -126,6 +131,7 @@
   let latitudeFieldId = $state<number | undefined>(undefined);
   let longitudeFieldId = $state<number | undefined>(undefined);
   let previousDatasetId = $state<string | undefined>(undefined);
+  let gpsValidation = $state<GPSValidationResult | null>(null);
 
   $effect(() => {
     const currentDatasetId = selectedDataset?.id;
@@ -212,7 +218,6 @@
     }
   });
 
-  // Mark step 1 as complete when geolocation is configured
   $effect(() => {
     const geo = dataTabState.geolocation;
     const isEntityConfigured =
@@ -224,6 +229,30 @@
 
     if (isEntityConfigured || isCoordinatesConfigured) {
       dataTabStore.markStepComplete(1);
+    }
+  });
+
+  $effect(() => {
+    const geo = dataTabState.geolocation;
+    const tableName = selectedDataset?.tableName;
+
+    if (
+      activeTabIndex === 1 &&
+      tableName &&
+      geo.latitudeColumn &&
+      geo.longitudeColumn &&
+      Duck
+    ) {
+      validateGPSColumns(
+        tableName,
+        geo.latitudeColumn,
+        geo.longitudeColumn,
+        Duck
+      ).then((result) => {
+        gpsValidation = result;
+      });
+    } else {
+      gpsValidation = null;
     }
   });
 </script>
@@ -324,6 +353,18 @@
         title={m.geo_coords_detected_title()}
         subtitle={m.geo_coords_detected_subtitle()}
         kind="success"
+        lowContrast
+        hideCloseButton={false}
+      />
+    {/if}
+
+    {#if activeTabIndex === 1 && gpsValidation?.warning}
+      <InlineNotification
+        title={gpsValidation.possibleInversion
+          ? 'Inversion lat/lon détectée'
+          : 'Attention'}
+        subtitle={gpsValidation.warning}
+        kind="warning"
         lowContrast
         hideCloseButton={false}
       />

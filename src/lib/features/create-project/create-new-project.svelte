@@ -6,7 +6,6 @@
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { FileType } from '$lib/features/commons/store/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { SvelteSet } from 'svelte/reactivity';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
@@ -15,20 +14,21 @@
     FileUploaderDropContainer,
     FileUploaderItem,
     InlineNotification,
+    Loading,
     ProgressBar,
+    Tag,
     TextArea,
     TextInput,
-    Tile,
-    Tag,
-    Loading
+    Tile
   } from 'carbon-components-svelte';
   import {
     CloudDownload,
+    DocumentBlank,
     Link,
-    TrashCan,
-    DocumentBlank
+    TrashCan
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
   import {
     CreateProjectValidationService,
@@ -86,7 +86,6 @@
   }
 
   async function handleLoadOnlineFile() {
-    // Clear previous error before retrying
     createProjectActions.setNewProjectError();
 
     if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
@@ -135,7 +134,6 @@
     }
   };
 
-  // Debounced URL validation to avoid running on every keystroke
   let urlValidation = $state<ValidationResult | null>(null);
 
   const debouncedUrlValidation = debounce((url: string) => {
@@ -186,7 +184,9 @@
             ...SUPPORTED_FILE_TYPES.shapefile.extensions,
             ...SUPPORTED_FILE_TYPES.geopackage.extensions,
             ...SUPPORTED_FILE_TYPES.geoparquet.extensions,
-            ...SUPPORTED_FILE_TYPES.kml.extensions
+            ...SUPPORTED_FILE_TYPES.kml.extensions,
+            ...SUPPORTED_FILE_TYPES.gpx.extensions,
+            ...SUPPORTED_FILE_TYPES.zip.extensions
           ]}
           validateFiles={(files) => {
             const validationResult =
@@ -330,7 +330,7 @@
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
         <div class="file-item-wrapper">
           {#if file.status === FileStatus.UPLOADING || file.status === FileStatus.PROCESSING}
-            <div class="file-processing-row">
+            <div class="file-processing-row" data-testid="file-processing">
               <div class="file-processing-content">
                 <FileUploaderItem
                   class="w-full"
@@ -360,7 +360,7 @@
               </Button>
             </div>
           {:else if file.status === FileStatus.ERROR}
-            <div class="file-error-row">
+            <div class="file-error-row" data-testid="file-error">
               <FileUploaderItem
                 invalid
                 class="w-full"
@@ -384,65 +384,67 @@
             </div>
           {:else if file.status === FileStatus.COMPLETE}
             {@const fileTag = getFileTypeTag(file.fileType)}
-            <Tile class="file-complete-tile">
-              <div class="file-header">
-                <div class="file-info">
-                  <DocumentBlank size={20} class="file-icon" />
-                  <div class="file-details">
-                    <div class="file-name">{file.name}</div>
-                    <div class="file-size">{formatFileSize(file.size)}</div>
-                    <div class="file-tags">
-                      <Tag size="sm" type={fileTag.color}>
-                        {fileTag.label}
-                      </Tag>
+            <div data-testid="file-complete">
+              <Tile class="file-complete-tile">
+                <div class="file-header">
+                  <div class="file-info">
+                    <DocumentBlank size={20} class="file-icon" />
+                    <div class="file-details">
+                      <div class="file-name">{file.name}</div>
+                      <div class="file-size">{formatFileSize(file.size)}</div>
+                      <div class="file-tags">
+                        <Tag size="sm" type={fileTag.color}>
+                          {fileTag.label}
+                        </Tag>
+                      </div>
                     </div>
                   </div>
+                  <Button
+                    size="small"
+                    kind="ghost"
+                    iconDescription="Remove file"
+                    icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                    disabled={deletingFileIds.has(file.id)}
+                    on:click={() => handleRemoveFile(file.id)}
+                  >
+                    {#if deletingFileIds.has(file.id)}
+                      <Loading small withOverlay={false} />
+                    {/if}
+                  </Button>
                 </div>
-                <Button
-                  size="small"
-                  kind="ghost"
-                  iconDescription="Remove file"
-                  icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
-                  disabled={deletingFileIds.has(file.id)}
-                  on:click={() => handleRemoveFile(file.id)}
-                >
-                  {#if deletingFileIds.has(file.id)}
-                    <Loading small withOverlay={false} />
-                  {/if}
-                </Button>
-              </div>
 
-              {#if file.relatedFiles && file.relatedFiles.length > 0}
-                <div class="related-files-tags">
-                  <span class="related-files-label">Related files:</span>
-                  <div class="tags-container">
-                    {#each file.relatedFiles as relatedFile, idx (idx)}
-                      <Tag size="sm" type="gray">{relatedFile}</Tag>
-                    {/each}
+                {#if file.relatedFiles && file.relatedFiles.length > 0}
+                  <div class="related-files-tags">
+                    <span class="related-files-label">Related files:</span>
+                    <div class="tags-container">
+                      {#each file.relatedFiles as relatedFile, idx (idx)}
+                        <Tag size="sm" type="gray">{relatedFile}</Tag>
+                      {/each}
+                    </div>
                   </div>
-                </div>
-              {/if}
+                {/if}
 
-              {#if file.validation?.errors && file.validation.errors.length > 0}
-                <InlineNotification
-                  lowContrast
-                  kind="error"
-                  title={m.create_project_error_status()}
-                  subtitle={file.validation.errors.join(', ')}
-                  hideCloseButton
-                />
-              {/if}
+                {#if file.validation?.errors && file.validation.errors.length > 0}
+                  <InlineNotification
+                    lowContrast
+                    kind="error"
+                    title={m.create_project_error_status()}
+                    subtitle={file.validation.errors.join(', ')}
+                    hideCloseButton
+                  />
+                {/if}
 
-              {#if file.validation?.warnings && file.validation.warnings.length > 0}
-                <InlineNotification
-                  lowContrast
-                  kind="warning"
-                  title={m.create_project_validation_errors()}
-                  subtitle={file.validation.warnings.join(', ')}
-                  hideCloseButton
-                />
-              {/if}
-            </Tile>
+                {#if file.validation?.warnings && file.validation.warnings.length > 0}
+                  <InlineNotification
+                    lowContrast
+                    kind="warning"
+                    title={m.create_project_validation_errors()}
+                    subtitle={file.validation.warnings.join(', ')}
+                    hideCloseButton
+                  />
+                {/if}
+              </Tile>
+            </div>
           {/if}
         </div>
       {/each}
@@ -633,7 +635,6 @@
     pointer-events: none;
   }
 
-  /* Screen reader only - visually hidden but accessible */
   .sr-only {
     position: absolute;
     width: 1px;
