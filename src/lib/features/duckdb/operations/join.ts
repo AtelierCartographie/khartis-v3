@@ -154,11 +154,11 @@ export async function applyJoinAssociation(
   await executeQuery(
     ctx.connection,
     `CREATE OR REPLACE TABLE "${table}" AS
-      FROM "${table}" as t
       SELECT
-        t.*,
+        t.* EXCLUDE (basemap_id, typo_match),
         j.id as basemap_id,
         j.typo_match
+      FROM "${table}" as t
       LEFT JOIN "${join_results_name}" as j
       ON t."${id}" = j.geoname
       WHERE j.basemap = '${escapedBasemap}'`
