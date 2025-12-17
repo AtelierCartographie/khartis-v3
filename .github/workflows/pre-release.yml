@@ -64,7 +64,26 @@ jobs:
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
       - name: Run unit tests
-        run: pnpm run test:unit -- --run
+        run: |
+          set -o pipefail
+          pnpm run test:unit -- --run --reporter=verbose 2>&1 | tee test-output.txt
+
+      - name: Generate unit test summary
+        if: always()
+        run: |
+          echo "## 🧪 Unit Tests Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-output.txt ]; then
+            CLEAN=$(cat test-output.txt | sed 's/\x1b\[[0-9;]*m//g')
+            PASSED=$(echo "$CLEAN" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            FAILED=$(echo "$CLEAN" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            SKIPPED=$(echo "$CLEAN" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | ${PASSED:-0} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | ${FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | ${SKIPPED:-0} |" >> $GITHUB_STEP_SUMMARY
+          fi
 
   svelte-check:
     name: Svelte Type Check
@@ -97,11 +116,52 @@ jobs:
       - name: Run Svelte Check
         run: pnpm check
 
-  e2e-tests:
-    name: E2E Tests (Playwright)
+  build:
+    name: Build Application
     needs: [unit-tests, svelte-check]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Build application
+        run: pnpm build
+
+      - name: Cache build output
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .svelte-kit/output
+          key: ${{ runner.os }}-build-${{ github.sha }}
+
+  e2e-tests:
+    name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shardIndex: [1, 2, 3, 4]
+        shardTotal: [4]
     steps:
       - uses: actions/checkout@v4
 
@@ -126,6 +186,15 @@ jobs:
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
+      - name: Restore build output
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+            .svelte-kit/output
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          fail-on-cache-miss: true
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: playwright-cache
@@ -142,30 +211,91 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run Playwright tests
-        run: pnpm run test:e2e
+        run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           CI: true
           NODE_OPTIONS: --max-old-space-size=4096
 
-      - name: Upload Playwright report
+      - name: Upload blob report
         uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: blob-report-staging-${{ matrix.shardIndex }}
+          path: blob-report
+          retention-days: 1
+
+  merge-reports:
+    name: Merge E2E Reports
+    if: ${{ !cancelled() }}
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Restore dependencies
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            */*/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - name: Download blob reports
+        uses: actions/download-artifact@v4
+        with:
+          path: all-blob-reports
+          pattern: blob-report-staging-*
+          merge-multiple: true
+
+      - name: Merge into HTML Report
+        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
+
+      - name: Generate E2E test summary
         if: always()
+        run: |
+          echo "## 🎭 E2E Tests Results (Staging)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f report.md ]; then
+            cat report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🗺️ Cartography Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Domain | Tests |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌍 GeoJSON Import | e2e/imports/geojson.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Shapefile Import | e2e/imports/shapefile.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗄️ GeoPackage Import | e2e/imports/geopackage.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📍 GPX Import | e2e/imports/gpx.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📌 KML Import | e2e/imports/kml.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📊 CSV Import | e2e/imports/csv.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗜️ ZIP Archives | e2e/imports/zip.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📁 Project Management | e2e/project-modal.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📥 [Download full HTML report](../artifacts/playwright-report-staging)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload HTML report
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report-staging
-          path: playwright-report/
-          retention-days: 7
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: test-results-staging
-          path: test-results/
+          path: playwright-report
           retention-days: 7
 
   semantic-versioning:
     name: Version Tag Generation
-    needs: [unit-tests, svelte-check, e2e-tests]
+    needs: [build, merge-reports]
     runs-on: ubuntu-latest
     permissions: write-all
     outputs:

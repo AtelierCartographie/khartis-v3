@@ -80,7 +80,6 @@ export interface UploadedFile {
   geoMatchResult?: Record<string, unknown>;
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
-  // Join state for project persistence
   joinedBasemap?: string;
   geoColumn?: string;
   gpsMode?: boolean;

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   extractZip,
-  getSupportedFilesFromArchive,
   getShapefileFilesFromArchive,
+  getSupportedFilesFromArchive,
   isZipFile
 } from '../utils/zip-handler';
 import { ZIP_TEST_FILES, loadTestFile } from './test-file-loader';
@@ -164,7 +164,6 @@ describe('ZIP Handler - Error handling', () => {
   });
 
   it('should handle empty ZIP', async () => {
-    // A minimal valid ZIP file (empty)
     const emptyZipBytes = new Uint8Array([
       0x50, 0x4b, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00

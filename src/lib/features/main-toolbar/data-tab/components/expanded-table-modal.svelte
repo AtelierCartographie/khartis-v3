@@ -153,7 +153,6 @@
         currentCell={currentCell}
         highlightedRowIds={highlightedRowIds}
         isExpanded={true}
-        maxRows={25}
       />
     </div>
   </Modal>
@@ -161,18 +160,42 @@
 
 <style>
   .modal-table-container {
-    height: 70vh;
+    height: 100%;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-table-container :global(.advanced-data-table) {
+    flex: 1;
+    min-height: 0;
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
-    max-width: 95vw !important;
-    width: 95vw !important;
+    max-width: 100vw !important;
+    width: 100vw !important;
+    max-height: 100vh !important;
+    height: 100vh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-content) {
     padding: 0 !important;
     overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #khartis-expanded-table-modal :global(.bx--modal-header) {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  #khartis-expanded-table-modal :global(.bx--modal-container) {
+    display: flex;
+    flex-direction: column;
   }
 
   .custom-header {

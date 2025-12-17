@@ -17,6 +17,7 @@
   import CalculatorPanel from './components/calculator-panel.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
   import DataToolsBar from './components/data-tools-bar.svelte';
+  import ExpandedTableModal from './components/expanded-table-modal.svelte';
   import FiltersPanel from './components/filters-panel.svelte';
   import SearchPanel, {
     type SearchHighlightResult
@@ -25,7 +26,6 @@
   import { DataToolType } from './data-tab.types';
   import { dataToolsStore } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
-  import ExpandedTableModal from './components/expanded-table-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -41,7 +41,7 @@
   const isBatchProcessing = $derived(duckDBOrchestrator.isBatchProcessing);
 
   const currentDuckTable = $derived.by(() => {
-    const _version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
     const tableName = selectedDataset?.sourceFileId
       ? allDuckDatasets.find(
@@ -57,19 +57,15 @@
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
 
-  // Check if dataset has columns with null values
   const hasNullableColumns = $derived(
     processedDataset
       ? processedDataset.columns.some((col) => col.nullable === true)
       : false
   );
 
-  // Use a separate key that only increments on explicit refresh calls
-  // This avoids unnecessary remounts during initial batch load
   let forceRefreshKey = $state(0);
 
   function refreshTable() {
-    // Increment the key to force a table remount
     forceRefreshKey++;
   }
 
@@ -231,7 +227,6 @@
     }
   });
 
-  // Mark step 0 as complete when dataset is loaded
   $effect(() => {
     if (selectedDataset && currentDuckTable) {
       dataTabStore.markStepComplete(0);
@@ -387,7 +382,6 @@
     overflow: hidden;
   }
 
-  /* Cache le header et la toolbar du DataTableSkeleton */
   .table-skeleton-wrapper :global(.bx--data-table-header),
   .table-skeleton-wrapper :global(.bx--table-toolbar) {
     display: none;

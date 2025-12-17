@@ -1,27 +1,8 @@
-/**
- * DuckDB macro for text normalization used in fuzzy search.
- *
- * Normalizes text by:
- * - Converting to lowercase
- * - Stripping accents
- * - Replacing non-alphanumeric characters with spaces
- * - Trimming whitespace
- * - Handling null values
- */
-export const normalize_text_macro = `CREATE OR REPLACE MACRO normalize_text(s) AS (
+const normalize_text_macro = `CREATE OR REPLACE MACRO normalize_text(s) AS (
 	lower(strip_accents(regexp_replace(trim(coalesce(s::VARCHAR, '')), '[^a-zA-Z0-9]', ' ', 'g')))
 );`;
 
-/**
- * DuckDB table macro for cell-level search using UNPIVOT.
- *
- * Transposes the table to search across all columns efficiently.
- * Scoring:
- * - 1.0: Exact match (normalized)
- * - 0.99: Contains match (substring found in cell)
- * - <0.99: Fuzzy match (Jaro-Winkler similarity)
- */
-export const search_table_macro = `CREATE OR REPLACE MACRO searchInTable(tabname, search_query, threshold := 0.85, max_results := 500) AS TABLE (
+const search_table_macro = `CREATE OR REPLACE MACRO searchInTable(tabname, search_query, threshold := 0.85, max_results := 500) AS TABLE (
   WITH term_wrapper AS (
     SELECT normalize_text(search_query) AS term
   ),

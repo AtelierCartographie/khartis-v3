@@ -1,22 +1,21 @@
 <script lang="ts">
-  import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import {
     dataTabActions,
     dataTabState
   } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
   import type {
     BasemapMetadata,
     BasemapSuggestion
@@ -25,8 +24,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
+    ComboBox,
     InlineNotification,
-    Search,
     Select,
     SelectItem,
     Tag,
@@ -50,8 +49,8 @@
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import BasemapCardVertical from './components/basemap-card-vertical.svelte';
   import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
 
-  // Tab state
   let activeTabIndex = $state(0);
 
   const tabItems = [
@@ -60,12 +59,10 @@
     { icon: GridIcon, label: m.basemap_osm(), iconSize: 20 }
   ];
 
-  // Existing state
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
 
-  // Join state
   const joinRows = $derived(dataTabState.basemapJoin.joinMappings);
   const duplicates = $derived(dataTabState.basemapJoin.duplicateEntities);
   const unknowns = $derived(dataTabState.basemapJoin.unrecognizedEntities);
@@ -85,7 +82,6 @@
 
   const allBasemaps = $derived(basemapCatalogService.basemaps);
 
-  // Import tab state
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
   let importError = $state<string | null>(null);
@@ -103,14 +99,11 @@
     '.parquet'
   ];
 
-  // OSM tab state - default style, customizable in the Visualize step
   const DEFAULT_OSM_STYLE = 'osm-standard';
 
-  // Catalogue tab state
   let searchQuery = $state('');
   let selectedYear = $state('all');
 
-  // AbortController for cancelling pending join computations
   let currentJoinAbortController: AbortController | null = null;
 
   const hasGPSCoordinates = $derived(() => {
@@ -141,7 +134,6 @@
     }[];
   });
 
-  // Catalogue derived state
   const availableYears = $derived(() => {
     const years = new Set(allBasemaps.map((b: BasemapMetadata) => b.date));
     return Array.from(years).sort((a: string, b: string) => b.localeCompare(a));
@@ -182,7 +174,6 @@
     );
   });
 
-  // Year counts for tags
   const yearCounts = $derived(() => {
     const counts: Record<string, number> = {};
     allBasemaps.forEach((b: BasemapMetadata) => {
@@ -191,9 +182,39 @@
     return counts;
   });
 
-  // Handlers
+  interface SearchComboBoxItem {
+    id: string;
+    text: string;
+    basemap: BasemapMetadata;
+  }
+
+  let searchSelectedId = $state<string | undefined>(undefined);
+
+  const searchComboBoxItems = $derived((): SearchComboBoxItem[] => {
+    return allBasemaps.map((b: BasemapMetadata, index: number) => ({
+      id: `basemap-${index}`,
+      text: `${b.title} (${b.date})`,
+      basemap: b
+    }));
+  });
+
+  function handleSearchSelect(
+    e: CustomEvent<{ selectedId: string; selectedItem: SearchComboBoxItem }>
+  ) {
+    if (e.detail.selectedItem) {
+      searchQuery = e.detail.selectedItem.basemap.title;
+    } else {
+      searchQuery = '';
+    }
+    searchSelectedId = e.detail.selectedId;
+  }
+
+  function handleSearchClear() {
+    searchQuery = '';
+    searchSelectedId = undefined;
+  }
+
   async function handleSelectBasemap(basemap: BasemapMetadata) {
-    // Cancel any pending join computation
     if (currentJoinAbortController) {
       currentJoinAbortController.abort();
     }
@@ -219,7 +240,6 @@
           dataTabState.geolocation.linkedVariableName
         );
 
-        // Check if request was cancelled
         if (abortSignal.aborted) {
           logger.debug(
             'Join computation cancelled (basemap changed)',
@@ -230,7 +250,6 @@
 
         dataTabActions.setJoinStats(stats);
 
-        // Auto-finalize join if there are no errors (all entities joined perfectly)
         const hasErrors =
           stats.toVerifyCount > 0 ||
           stats.entities.filter((e) => e.status === 'duplicate').length > 0 ||
@@ -249,7 +268,6 @@
               basemap,
               dataTabState.geolocation.linkedVariableName
             );
-            // Only mark step complete if finalization succeeded
             dataTabStore.markStepComplete(2);
             logger.success(
               'Join auto-finalized, map should update',
@@ -265,7 +283,6 @@
           }
         }
       } catch (error) {
-        // Ignore abort errors
         if (error instanceof Error && error.name === 'AbortError') {
           return;
         }
@@ -492,13 +509,8 @@
       }
     });
 
-    // Finalize OSM join to activate GPS mode for point rendering
     try {
-      await duckDBOrchestrator.finalizeJoin(
-        selectedDataset.id,
-        osmBasemap,
-        '' // geoColumn not used for OSM - GPS columns are auto-detected
-      );
+      await duckDBOrchestrator.finalizeJoin(selectedDataset.id, osmBasemap, '');
       dataTabStore.markStepComplete(2);
       logger.success('OSM basemap activated with GPS mode', LogCategory.MAP);
     } catch (error) {
@@ -577,7 +589,6 @@
         dataTabState.geolocation.linkedVariableName
       );
 
-      // Mark step 2 as complete when join is finalized
       dataTabStore.markStepComplete(2);
 
       logger.success('Join finalized, map should update', LogCategory.MAP);
@@ -663,24 +674,18 @@
     }
   });
 
-  // Consolidated effect for loading suggestions - avoid race conditions
   $effect(() => {
-    const dataset = selectedDataset;
-    const _linkedVar = dataTabState.geolocation.linkedVariableName;
-    // Track both dependencies, only call loadSuggestions once
-    if (dataset) {
+    void dataTabState.geolocation.linkedVariableName;
+    if (selectedDataset) {
       loadSuggestions();
     }
   });
 
-  // Effect to clear OSM basemap when dataset changes
-  // This prevents OSM from persisting when switching to a different file
   let previousDatasetId: string | null = null;
   $effect(() => {
     const currentDatasetId = selectedDataset?.id ?? null;
 
     if (previousDatasetId !== null && currentDatasetId !== previousDatasetId) {
-      // Dataset changed - clear OSM basemap state
       if (osmBasemapStore.isActive) {
         logger.info(
           'Clearing OSM basemap due to dataset change',
@@ -691,7 +696,6 @@
           }
         );
         osmBasemapStore.clear();
-        // Also reset the basemap selection
         dataTabActions.selectBasemap('');
       }
     }
@@ -945,10 +949,22 @@
           <List size={16} />
         {/snippet}
         <div class="catalogue-filters">
-          <Search
-            bind:value={searchQuery}
+          <ComboBox
+            items={searchComboBoxItems()}
+            selectedId={searchSelectedId}
             placeholder={m.basemap_search_placeholder()}
-            size="lg"
+            shouldFilterItem={(item, value) => {
+              if (!value) return true;
+              const query = value.toLowerCase();
+              const basemap = (item as SearchComboBoxItem).basemap;
+              return (
+                basemap.title.toLowerCase().includes(query) ||
+                basemap.description.toLowerCase().includes(query) ||
+                basemap.source.toLowerCase().includes(query)
+              );
+            }}
+            on:select={handleSearchSelect}
+            on:clear={handleSearchClear}
           />
 
           <div class="year-filters">
@@ -1238,7 +1254,6 @@
     margin-top: var(--cds-spacing-04);
   }
 
-  /* Catalogue filters */
   .catalogue-filters {
     display: flex;
     flex-direction: column;
@@ -1288,7 +1303,6 @@
     color: var(--cds-text-02);
   }
 
-  /* Import tab */
   .import-title,
   .osm-title {
     margin: 0 0 var(--cds-spacing-03) 0;
@@ -1379,7 +1393,6 @@
     padding-top: var(--cds-spacing-04);
   }
 
-  /* OSM tab */
   .osm-description {
     margin-bottom: var(--cds-spacing-04);
   }
@@ -1410,7 +1423,6 @@
     margin-bottom: var(--cds-spacing-05);
   }
 
-  /* Join assisted section */
   .join-assisted-section {
     margin-top: var(--cds-spacing-06);
     padding-top: var(--cds-spacing-06);
@@ -1477,7 +1489,6 @@
     margin-bottom: var(--cds-spacing-04);
   }
 
-  /* Accordion Styling */
   .join-stats-accordion {
     display: flex;
     flex-direction: column;
@@ -1532,7 +1543,6 @@
     background-color: var(--cds-layer-01);
   }
 
-  /* Icon Colors */
   :global(.icon-success) {
     color: var(--cds-support-success);
   }
@@ -1543,7 +1553,6 @@
     color: var(--cds-support-error);
   }
 
-  /* Table Styling Override */
   .join-table {
     border: none;
     border-radius: 0;

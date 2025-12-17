@@ -120,7 +120,6 @@
     line-height: 1.4;
   }
 
-  /* Animation for chevron */
   .collapsible:hover .header-content {
     opacity: 0.9;
   }

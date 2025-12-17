@@ -2,19 +2,9 @@ import * as m from '$lib/paraglide/messages';
 import localforage from 'localforage';
 import {
   STORAGE_LIMITS,
-  type StorageLimits,
   type ValidationResult
 } from '../configs/validation.config';
 import { LogCategory, logger } from './logger';
-import { sanitizeProjectName } from './sanitize.utils';
-
-// Re-export for compatibility with existing code
-export {
-  sanitizeProjectName,
-  STORAGE_LIMITS,
-  type StorageLimits,
-  type ValidationResult
-};
 
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;

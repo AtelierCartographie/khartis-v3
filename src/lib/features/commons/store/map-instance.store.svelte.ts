@@ -6,10 +6,14 @@ class MapInstanceStore {
     map: MapLibreMap | null;
     deckOverlay: MapboxOverlay | null;
     isMapLoaded: boolean;
+    zoomLevel: number;
+    baseZoomLevel: number;
   }>({
     map: null,
     deckOverlay: null,
-    isMapLoaded: false
+    isMapLoaded: false,
+    zoomLevel: 100,
+    baseZoomLevel: 1.5
   });
 
   get map() {
@@ -60,10 +64,31 @@ class MapInstanceStore {
     return center ? { lng: center.lng, lat: center.lat } : null;
   }
 
+  get zoomLevel() {
+    return this._state.zoomLevel;
+  }
+
+  get baseZoomLevel() {
+    return this._state.baseZoomLevel;
+  }
+
+  setBaseZoomLevel(zoom: number) {
+    this._state.baseZoomLevel = zoom;
+  }
+
+  updateZoomFromMap() {
+    const mapZoom = this._state.map?.getZoom() ?? 1.5;
+    const baseZoom = this._state.baseZoomLevel;
+    const percent = 100 * Math.pow(2, (mapZoom - baseZoom) / 2);
+    this._state.zoomLevel = Math.round(percent);
+  }
+
   reset() {
     this._state.map = null;
     this._state.deckOverlay = null;
     this._state.isMapLoaded = false;
+    this._state.zoomLevel = 100;
+    this._state.baseZoomLevel = 1.5;
   }
 }
 
