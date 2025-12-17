@@ -419,8 +419,11 @@ class DuckDBOrchestratorService {
           if (result.geoColumn) ds.geoColumn = result.geoColumn;
           if (result.gpsMode) ds.gpsMode = result.gpsMode;
           if (result.gpsColumns) ds.gpsColumns = result.gpsColumns;
+          ds.arrowTableWithMetadata = undefined;
         }
       });
+
+      Duck.invalidateTableCache(dataset.tableName);
       this.bumpDatasetsVersion();
     } catch (error) {
       logger.error('Failed to finalize join', LogCategory.DATA, {
