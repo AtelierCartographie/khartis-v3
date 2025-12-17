@@ -86,13 +86,15 @@ export const SHP_PATH = join(TEST_DATASETS, 'shp');
 export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
 
-// Timeouts adaptés pour CI
+// Timeouts adaptés pour CI (local timeouts optimized for parallel execution)
 const TIMEOUTS = {
-  modal: isCI ? 30000 : 15000,
-  map: isCI ? 60000 : 30000,
-  fileUpload: isCI ? 10000 : 5000,
-  action: isCI ? 20000 : 10000,
-  transition: isCI ? 1000 : 500
+  modal: isCI ? 30000 : 20000,
+  map: isCI ? 60000 : 45000,
+  fileUpload: isCI ? 10000 : 8000,
+  action: isCI ? 20000 : 15000,
+  transition: isCI ? 1000 : 500,
+  // DuckDB WASM init - higher for parallel execution (resource contention)
+  duckdbInit: isCI ? 120000 : 90000
 };
 
 // Core helpers
@@ -163,8 +165,29 @@ export async function createProject(
   await expect(nameInput).toBeEnabled({ timeout: TIMEOUTS.action });
   await nameInput.fill(name);
 
+  // Select a basemap (required step) - prefer "World > countries" as universal default
+  const worldBasemap = modal.getByRole('button', {
+    name: /World.*countries/i
+  });
+  const anyBasemap = modal.locator(
+    'button[class*="basemap-card"], button:has-text("France > régions")'
+  );
+
+  // Wait for basemap suggestions to load
+  await page.waitForTimeout(TIMEOUTS.transition);
+
+  // Try to click World basemap first, then any available basemap
+  if (await worldBasemap.first().isVisible({ timeout: TIMEOUTS.action })) {
+    await worldBasemap.first().click();
+  } else if (await anyBasemap.first().isVisible({ timeout: TIMEOUTS.action })) {
+    await anyBasemap.first().click();
+  }
+
+  // Wait for basemap selection to be processed
+  await page.waitForTimeout(TIMEOUTS.transition);
+
   const createBtn = modal.getByRole('button', { name: 'Créer', exact: true });
-  await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action });
+  await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
   await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
@@ -194,7 +217,7 @@ export async function freshStart(page: Page): Promise<ConsoleErrorTracker> {
         const deletePromises = dbs.map((db) => {
           if (db.name) {
             return new Promise<void>((res) => {
-              const req = indexedDB.deleteDatabase(db.name);
+              const req = indexedDB.deleteDatabase(db.name!);
               req.onsuccess = () => res();
               req.onerror = () => res();
             });
@@ -208,7 +231,8 @@ export async function freshStart(page: Page): Promise<ConsoleErrorTracker> {
   await page.waitForTimeout(TIMEOUTS.transition);
   await page.reload();
   await page.waitForLoadState('domcontentloaded');
-  await waitForModal(page, TIMEOUTS.modal * 1.5);
+  // DuckDB WASM init can be slow (WASM binary + extensions download)
+  await waitForModal(page, TIMEOUTS.duckdbInit);
 
   return errorTracker;
 }
@@ -287,6 +311,33 @@ export async function createShapefileProject(
   await nameInput.fill(name);
 
   const createBtn = modal.getByRole('button', { name: 'Créer', exact: true });
+
+  // For geo files (shapefile, geojson), button might be enabled without basemap
+  // since they have their own geometry
+  const isEnabled = await createBtn.isEnabled().catch(() => false);
+
+  if (!isEnabled) {
+    // Select a basemap if needed
+    const worldBasemap = modal.getByRole('button', {
+      name: /World.*countries/i
+    });
+    const anyBasemap = modal.locator(
+      'button[class*="basemap-card"], button:has-text("France > régions")'
+    );
+
+    await page.waitForTimeout(TIMEOUTS.transition);
+
+    if (await worldBasemap.first().isVisible({ timeout: TIMEOUTS.action })) {
+      await worldBasemap.first().click();
+    } else if (
+      await anyBasemap.first().isVisible({ timeout: TIMEOUTS.action })
+    ) {
+      await anyBasemap.first().click();
+    }
+
+    await page.waitForTimeout(TIMEOUTS.transition);
+  }
+
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 

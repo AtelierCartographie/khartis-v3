@@ -1,0 +1,80 @@
+import { Matrix4 } from '@math.gl/core';
+
+interface CanvasSize {
+  width: number;
+  height: number;
+}
+
+interface GeoParquetColumnMeta {
+  bbox: [number, number, number, number];
+  geometry_types?: string[];
+}
+
+interface GeoParquetMeta {
+  primary_column: string;
+  columns: Record<string, GeoParquetColumnMeta>;
+}
+
+export function get_bbox_from_geoparquet(
+  metadata: string,
+  columnName?: string
+): [number, number, number, number] | null {
+  try {
+    const meta: GeoParquetMeta = JSON.parse(metadata);
+    const column = columnName ?? meta.primary_column;
+    return meta.columns[column]?.bbox ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function get_bbox_center(
+  bbox: [number, number, number, number]
+): [number, number] {
+  return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+}
+
+export function get_max_scale(
+  canvas: CanvasSize,
+  bbox: [number, number, number, number]
+): number {
+  const bbox_width = bbox[2] - bbox[0];
+  const bbox_height = bbox[3] - bbox[1];
+
+  if (bbox_width === 0 || bbox_height === 0) return 1;
+
+  const scale_x = canvas.width / bbox_width;
+  const scale_y = canvas.height / bbox_height;
+
+  return Math.min(scale_x, scale_y);
+}
+
+export function get_model_matrix(
+  metadata: string,
+  canvasSize: CanvasSize,
+  columnName?: string
+): Matrix4 | null {
+  const bbox = get_bbox_from_geoparquet(metadata, columnName);
+  if (!bbox) return null;
+
+  const [cx, cy] = get_bbox_center(bbox);
+  const scale = get_max_scale(canvasSize, bbox);
+
+  return new Matrix4().scale([scale, scale, 1]).translate([-cx, -cy, 0]);
+}
+
+export function is_local_projection(
+  bbox: [number, number, number, number]
+): boolean {
+  const width = Math.abs(bbox[2] - bbox[0]);
+  const height = Math.abs(bbox[3] - bbox[1]);
+
+  return (
+    width > 360 ||
+    height > 180 ||
+    bbox[0] < -180 ||
+    bbox[2] > 180 ||
+    bbox[1] < -90 ||
+    bbox[3] > 90
+  );
+}

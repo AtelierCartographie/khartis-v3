@@ -92,7 +92,11 @@
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getWorldBaseTable: () => worldBaseTable,
     getDatasetId: () => mapState.datasetId,
-    buildLayerContext: () => mapState.buildLayerContext()
+    buildLayerContext: () => mapState.buildLayerContext(),
+    getCanvasSize: () => {
+      const rect = mapContainer?.getBoundingClientRect();
+      return { width: rect?.width ?? 800, height: rect?.height ?? 600 };
+    }
   });
 
   const mapBasemap = useMapBasemap({

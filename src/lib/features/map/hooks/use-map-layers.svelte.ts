@@ -3,13 +3,18 @@ import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  get_bbox_from_geoparquet,
+  get_model_matrix,
+  is_local_projection
+} from '../core/projscreen';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
   createDeckLayers,
   createGeoJsonLayers,
   createWorldBaseLayer
 } from '../layers';
-import type { DeckDataRow, LayerContext } from '../types';
+import type { CanvasSize, DeckDataRow, LayerContext } from '../types';
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -17,6 +22,7 @@ export interface UseMapLayersProps {
   getWorldBaseTable: () => ArrowTable | null;
   getDatasetId: () => string | undefined;
   buildLayerContext: () => LayerContext;
+  getCanvasSize?: () => CanvasSize;
 }
 
 export interface UseMapLayersReturn {
@@ -33,7 +39,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getIsMapLoaded,
     getWorldBaseTable,
     getDatasetId,
-    buildLayerContext
+    buildLayerContext,
+    getCanvasSize
   } = props;
 
   let lastPendingGeoTable = $state<string | null>(null);
@@ -67,8 +74,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     if (geojson) {
       layers.push(...createGeoJsonLayers(geojson, ctx));
     } else if (jsTable) {
-      const hasGeoMetadata = !!jsTable.schema.metadata?.get('geo');
-      if (!hasGeoMetadata) {
+      const geoMetadata = jsTable.schema.metadata?.get('geo');
+      if (!geoMetadata) {
         if (lastPendingGeoTable !== datasetId) {
           lastPendingGeoTable = datasetId ?? null;
           logger.warn(
@@ -84,6 +91,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         return;
       }
       lastPendingGeoTable = null;
+
+      const bbox = get_bbox_from_geoparquet(geoMetadata);
+      if (bbox && is_local_projection(bbox) && getCanvasSize) {
+        const canvasSize = getCanvasSize();
+        ctx.modelMatrix = get_model_matrix(geoMetadata, canvasSize);
+        logger.info(
+          'Local projection detected, applying modelMatrix',
+          LogCategory.MAP,
+          {
+            bbox,
+            canvasSize
+          }
+        );
+      }
+
       layers.push(...createDeckLayers(jsTable, ctx));
     }
 
