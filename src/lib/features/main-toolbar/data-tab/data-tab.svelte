@@ -5,18 +5,16 @@
   import { onMount } from 'svelte';
   import BasemapJoinStep from './basemap-join-step.svelte';
   import DataControlStep from './data-control-step.svelte';
+  import { dataTabStore } from './data-tab.store.svelte';
   import EnrichDataStep from './enrich-data-step.svelte';
   import GeolocationStep from './geolocation-step.svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
 
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);
 
-  // Update navigation permissions when datasets change
   $effect(() => {
     dataTabStore.updateNavigationPermissions();
   });
 
-  // Initialize on mount
   onMount(() => {
     dataTabStore.updateNavigationPermissions();
   });

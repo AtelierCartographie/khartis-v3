@@ -4,10 +4,16 @@
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
+  import Edit from 'carbon-icons-svelte/lib/Edit.svelte';
+  import ChartMultitype from 'carbon-icons-svelte/lib/ChartMultitype.svelte';
+  import ViewOff from 'carbon-icons-svelte/lib/ViewOff.svelte';
+  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
   import { getColumnTypeStyle } from '../column-type-styles';
   import Portal from './Portal.svelte';
+
+  export type ColumnType = 'text' | 'number' | 'date' | 'boolean';
 
   interface Props {
     column: ColumnInfo;
@@ -17,8 +23,13 @@
     sortOrder: 'ASC' | 'DESC' | null;
     showSummaryPlots: boolean;
     isEditMode: boolean;
+    isHidden?: boolean;
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
+    onRename?: (columnName: string) => void;
+    onChangeType?: (columnName: string, newType: ColumnType) => void;
+    onHide?: (columnName: string) => void;
+    onDelete?: (columnName: string) => void;
   }
 
   const {
@@ -29,9 +40,23 @@
     sortOrder,
     showSummaryPlots,
     isEditMode,
+    isHidden = false,
     onSort,
-    onRefine
+    onRefine,
+    onRename,
+    onChangeType,
+    onHide,
+    onDelete
   }: Props = $props();
+
+  const typeOptions: { value: ColumnType; label: string }[] = [
+    { value: 'text', label: 'Texte' },
+    { value: 'number', label: 'Numérique' },
+    { value: 'date', label: 'Date' },
+    { value: 'boolean', label: 'Booléen' }
+  ];
+
+  let showTypeSubmenu = $state(false);
 
   const plotElement = $derived(
     showSummaryPlots && analysis
@@ -210,6 +235,73 @@
                 >
                   Espaces multiples
                 </button>
+
+                <div class="menu-divider"></div>
+
+                {#if onRename}
+                  <button
+                    class="menu-item menu-item-with-icon"
+                    onclick={() =>
+                      handleMenuAction(() => onRename(column.name))}
+                  >
+                    <Edit size={16} />
+                    Renommer...
+                  </button>
+                {/if}
+
+                {#if onChangeType}
+                  <div
+                    class="menu-item menu-item-with-icon submenu-trigger"
+                    role="menuitem"
+                    tabindex="0"
+                    onmouseenter={() => (showTypeSubmenu = true)}
+                    onmouseleave={() => (showTypeSubmenu = false)}
+                    onfocus={() => (showTypeSubmenu = true)}
+                    onblur={() => (showTypeSubmenu = false)}
+                  >
+                    <ChartMultitype size={16} />
+                    Changer le type...
+                    <span class="submenu-arrow">▶</span>
+                    {#if showTypeSubmenu}
+                      <div class="submenu">
+                        {#each typeOptions as option (option.value)}
+                          <button
+                            class="menu-item"
+                            onclick={() =>
+                              handleMenuAction(() =>
+                                onChangeType(column.name, option.value)
+                              )}
+                          >
+                            {option.label}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+
+                <div class="menu-divider"></div>
+
+                {#if onHide}
+                  <button
+                    class="menu-item menu-item-with-icon"
+                    onclick={() => handleMenuAction(() => onHide(column.name))}
+                  >
+                    <ViewOff size={16} />
+                    {isHidden ? 'Afficher' : 'Masquer'}
+                  </button>
+                {/if}
+
+                {#if onDelete}
+                  <button
+                    class="menu-item menu-item-with-icon menu-item-danger"
+                    onclick={() =>
+                      handleMenuAction(() => onDelete(column.name))}
+                  >
+                    <TrashCan size={16} />
+                    Supprimer
+                  </button>
+                {/if}
               </div>
             </Portal>
           {/if}
@@ -370,6 +462,34 @@
     font-size: 12px;
     color: var(--cds-text-02);
     font-weight: 600;
+  }
+
+  :global(.dropdown-menu .menu-item-with-icon) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.dropdown-menu .submenu-trigger) {
+    position: relative;
+    cursor: pointer;
+  }
+
+  :global(.dropdown-menu .submenu-arrow) {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--cds-text-02);
+  }
+
+  :global(.dropdown-menu .submenu) {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    min-width: 140px;
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-03);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
   }
 
   .sort-buttons {

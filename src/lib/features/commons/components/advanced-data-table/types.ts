@@ -40,6 +40,4 @@ export interface PlotOptions {
   nulls_color: string;
 }
 
-export const EXCLUDED_COLUMNS = ['geom', 'geometry', '__id'] as const;
-
 export const TABLE_ROW_HEIGHT = 26;

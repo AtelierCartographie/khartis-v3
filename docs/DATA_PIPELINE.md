@@ -24,9 +24,12 @@ src/lib/features/data-pipeline/
 │   ├── geometry.ts        # extractGeometryInfo, computeBounds
 │   └── quality.ts         # computeQualityWarnings
 └── utils/
+    ├── decimal-detector.ts      # detectDecimalSeparator (CSV decimal format)
     ├── geojson-converter.ts     # convertGeoJSONToRawDataset
     ├── geojson-guards.ts        # Type guards and GeoJSON validation
-    └── processed-dataset.utils.ts  # Dataset utility functions
+    ├── processed-dataset.utils.ts  # normalizeToProcessedDataset, normalizeDatasets
+    ├── shapefile-validator.ts   # validateShapefileCompleteness
+    └── zip-handler.ts           # extractZip, isZipFile, shapefile archive handling
 ```
 
 The `Pipeline` facade provides a clean API that delegates to DuckDB for all parsing and analysis.
@@ -117,7 +120,9 @@ src/lib/features/duckdb/
 │   ├── query.ts             # SQL execution + Arrow conversion
 │   └── transaction.ts       # TransactionMutex
 ├── io/                      # File I/O
+│   ├── file-registry.ts     # File registration utilities
 │   ├── readers.ts           # read_tabular, read_geofile, read_link
+│   ├── reprojection.ts      # proj4 fallback for unsupported CRS (Lambert-93)
 │   ├── exporters.ts         # CSV, GeoParquet export
 │   └── arrow-converter.ts   # Arrow ↔ DuckDB conversion
 ├── cache/                   # Unified cache
@@ -126,12 +131,14 @@ src/lib/features/duckdb/
 │   ├── analysis.ts          # analyse, describeColumns
 │   ├── search.ts            # searchInTable
 │   ├── join.ts              # join_by_id, apply_join_association
-│   └── filters.ts           # add_filter, apply_filters
+│   ├── filters.ts           # add_filter, apply_filters
+│   └── table-ops.ts         # describe_table, get_row_count, drop_rows
 ├── macros/                  # SQL macros
 │   ├── analyse.ts, breaks.ts, join.ts, search.ts
 └── orchestrator/            # Reactive Svelte 5 service
     ├── orchestrator.svelte.ts
-    └── (sub-modules: column-ops, filter-ops, join-ops, etc.)
+    ├── dataset-state.ts     # Dataset state management
+    └── (sub-modules: column-ops, filter-ops, join-ops, gps-ops, arrow-ops, file-processors)
 ```
 
 Key reminders:
@@ -147,6 +154,36 @@ Key reminders:
 - **Transactional ingestion** – `read_tabular`, `read_geofile`, and `read_link` wrap operations inside `runInTransaction`.
 - **Targeted cache invalidation** – mutations invalidate the describe/row-count caches and evict GeoParquet buffers.
 - **Ephemeral file cleanup** – inline uploads are dropped via `dropRegisteredFile` once the table exists.
+
+### Reprojection fallback (proj4js)
+
+DuckDB WASM's `ST_Transform` cannot reproject all coordinate systems because the WebAssembly build lacks access to the full PROJ database (unlike native DuckDB). This affects projections like **Lambert-93 (EPSG:2154)**, common in French datasets.
+
+**Symptom**: Geometries import successfully but coordinates remain in meters (Lambert-93) instead of degrees (WGS84), making them invisible on the map.
+
+**Solution**: A fallback mechanism using `proj4js` handles unsupported projections:
+
+```
+1. Attempt ST_Transform via DuckDB
+2. If fails → extract geometries as WKT
+3. Reproject coordinates with proj4js (client-side)
+4. Update DuckDB table with reprojected WKT
+```
+
+**Files involved**:
+
+| File                        | Purpose                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
+| `duckdb/io/reprojection.ts` | proj4 definitions + `reprojectPoint()`, `reprojectGeometry()`, `reprojectFeatureCollection()` |
+| `duckdb/io/readers.ts`      | Fallback logic in `applyProj4Reprojection()` + `DUCKDB_UNSUPPORTED_PROJECTIONS` list          |
+
+**Supported projections** (defined in `reprojection.ts`):
+
+- EPSG:2154 – Lambert-93 (France métropolitaine)
+- EPSG:27572 – Lambert II étendu
+- EPSG:32631/32632 – UTM zones 31N/32N
+
+**Architecture note**: proj4js is used _only_ for coordinate transformation. Data remains in DuckDB for all other operations (queries, filters, joins, exports).
 
 ## Core interfaces
 

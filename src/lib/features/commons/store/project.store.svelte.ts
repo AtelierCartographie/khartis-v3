@@ -143,9 +143,6 @@ class ProjectStore {
           columnTransformations: file.columnTransformations
         };
 
-        // Force reactivity by reassigning currentProject with deep copy of data
-        // Do everything in one assignment to avoid intermediate states
-
         this._state.currentProject = {
           ...this._state.currentProject,
           data: {
@@ -162,8 +159,6 @@ class ProjectStore {
         } catch (error) {
           logger.error('Failed to process file', LogCategory.PROJECT, error);
 
-          // Force reactivity by reassigning currentProject with deep copy of data
-          // Remove the failed file in one assignment
           this._state.currentProject = {
             ...this._state.currentProject,
             data: {
@@ -188,8 +183,6 @@ class ProjectStore {
       return;
     }
 
-    // Force reactivity by reassigning currentProject with deep copy of data
-    // Remove the file in one assignment to avoid intermediate states
     this._state.currentProject = {
       ...this._state.currentProject,
       data: {

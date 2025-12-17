@@ -140,3 +140,30 @@ export const SHP_TEST_BUNDLES = {
   MOS_FONCIER: 'mos_foncier_agrege_com',
   EEZ: 'Marines-regionsEEZ_land_union_v3_202003'
 } as const;
+
+export const GPKG_TEST_FILES = {
+  COMPAGNIES_HERAULT: 'gpkg/compagnies-herault-l93.gpkg',
+  ADMIN_EXPRESS_GLP:
+    'gpkg/ADMIN-EXPRESS_4-0__GPKG_RGAF09UTM20_GLP_2025-12-05/ADE_4-0_GPKG_RGAF09UTM20_GLP-ED2025-12-05.gpkg'
+} as const;
+
+export const GPX_TEST_FILES = {
+  STAR_ARRETS:
+    'gpx/star_arrets_physiques_actifs/star_arrets_physiques_actifs.gpx'
+} as const;
+
+export const KML_TEST_FILES = {
+  AIRES_COVOITURAGE: 'kml-kmz/aires-covoiturage/aires-covoiturage.kml'
+} as const;
+
+export function listGPKGFiles(): string[] {
+  return Object.values(GPKG_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
+}
+
+export function listGPXFiles(): string[] {
+  return Object.values(GPX_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
+}
+
+export function listKMLFiles(): string[] {
+  return Object.values(KML_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
+}

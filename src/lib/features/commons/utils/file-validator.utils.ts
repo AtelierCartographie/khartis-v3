@@ -645,6 +645,11 @@ export const SUPPORTED_FILE_TYPES = {
     ],
     description: 'KML / KMZ'
   },
+  gpx: {
+    extensions: ['.gpx'],
+    mimeTypes: ['application/gpx+xml'],
+    description: 'GPX (GPS Exchange)'
+  },
   zip: {
     extensions: ['.zip'],
     mimeTypes: ['application/zip', 'application/x-zip-compressed'],

@@ -13,6 +13,136 @@ export interface DuckDBClientForGPS {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
 }
 
+export interface GPSValidationResult {
+  isValid: boolean;
+  possibleInversion: boolean;
+  latColumn: string;
+  lonColumn: string;
+  latStats: { min: number; max: number; median: number } | null;
+  lonStats: { min: number; max: number; median: number } | null;
+  warning?: string;
+}
+
+export async function validateGPSColumns(
+  tableName: string,
+  latCol: string,
+  lonCol: string,
+  Duck: DuckDBClientForGPS
+): Promise<GPSValidationResult> {
+  const start = performance.now();
+  logger.debug('Validating GPS columns', LogCategory.DATA, {
+    tableName,
+    latCol,
+    lonCol
+  });
+
+  try {
+    const result = (await Duck.query(
+      `SELECT
+        MIN("${latCol}") as lat_min,
+        MAX("${latCol}") as lat_max,
+        MEDIAN("${latCol}") as lat_median,
+        MIN("${lonCol}") as lon_min,
+        MAX("${lonCol}") as lon_max,
+        MEDIAN("${lonCol}") as lon_median
+      FROM "${tableName}"
+      WHERE "${latCol}" IS NOT NULL AND "${lonCol}" IS NOT NULL`,
+      { format: 'array' }
+    )) as Array<{
+      lat_min: number;
+      lat_max: number;
+      lat_median: number;
+      lon_min: number;
+      lon_max: number;
+      lon_median: number;
+    }>;
+
+    if (result.length === 0 || result[0].lat_min === null) {
+      return {
+        isValid: false,
+        possibleInversion: false,
+        latColumn: latCol,
+        lonColumn: lonCol,
+        latStats: null,
+        lonStats: null,
+        warning: 'Aucune coordonnée valide trouvée'
+      };
+    }
+
+    const stats = result[0];
+    const latStats = {
+      min: stats.lat_min,
+      max: stats.lat_max,
+      median: stats.lat_median
+    };
+    const lonStats = {
+      min: stats.lon_min,
+      max: stats.lon_max,
+      median: stats.lon_median
+    };
+
+    const latInRange = stats.lat_min >= -90 && stats.lat_max <= 90;
+    const lonInRange = stats.lon_min >= -180 && stats.lon_max <= 180;
+
+    const latLooksLikeLon =
+      stats.lat_min >= -180 &&
+      stats.lat_max <= 180 &&
+      (stats.lat_max > 90 || stats.lat_min < -90);
+    const lonLooksLikeLat = stats.lon_min >= -90 && stats.lon_max <= 90;
+
+    const possibleInversion = latLooksLikeLon && lonLooksLikeLat;
+
+    let warning: string | undefined;
+
+    if (possibleInversion) {
+      warning = `Les colonnes latitude et longitude semblent être inversées. La colonne "${latCol}" contient des valeurs hors de la plage [-90, 90] (min: ${stats.lat_min.toFixed(2)}, max: ${stats.lat_max.toFixed(2)}) tandis que "${lonCol}" est dans la plage de latitude.`;
+    } else if (!latInRange) {
+      warning = `La colonne latitude "${latCol}" contient des valeurs hors de la plage valide [-90, 90] (min: ${stats.lat_min.toFixed(2)}, max: ${stats.lat_max.toFixed(2)}).`;
+    } else if (!lonInRange) {
+      warning = `La colonne longitude "${lonCol}" contient des valeurs hors de la plage valide [-180, 180] (min: ${stats.lon_min.toFixed(2)}, max: ${stats.lon_max.toFixed(2)}).`;
+    }
+
+    const isValid = latInRange && lonInRange;
+
+    logger.info('GPS columns validated', LogCategory.DATA, {
+      tableName,
+      latCol,
+      lonCol,
+      isValid,
+      possibleInversion,
+      latStats,
+      lonStats,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
+
+    return {
+      isValid,
+      possibleInversion,
+      latColumn: latCol,
+      lonColumn: lonCol,
+      latStats,
+      lonStats,
+      warning
+    };
+  } catch (error) {
+    logger.error('Failed to validate GPS columns', LogCategory.DATA, {
+      tableName,
+      latCol,
+      lonCol,
+      error
+    });
+    return {
+      isValid: false,
+      possibleInversion: false,
+      latColumn: latCol,
+      lonColumn: lonCol,
+      latStats: null,
+      lonStats: null,
+      warning: 'Erreur lors de la validation des coordonnées GPS'
+    };
+  }
+}
+
 export function detectGPSColumns(columns: AnalysisResult[]): GPSColumns | null {
   const latColumn = columns.find((col) =>
     /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i.test(col.name)

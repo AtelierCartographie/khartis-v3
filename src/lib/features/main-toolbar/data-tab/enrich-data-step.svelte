@@ -1,10 +1,20 @@
 <script lang="ts">
+  import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import {
     BasemapLayerType,
     BasemapSource
   } from '$lib/features/commons/constants/ui.constants';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import type { DatasetResult } from '$lib/features/data-pipeline';
+  import { ColumnType, dataPipeline } from '$lib/features/data-pipeline';
+  import { Duck } from '$lib/features/duckdb';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import { generateCustomBasemapAttributes } from '$lib/features/map/utils/generate-basemap-attributes';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -18,36 +28,26 @@
     Toggle
   } from 'carbon-components-svelte';
   import {
-    CloudDownload,
-    Close,
+    Catalog,
     ChevronDown,
     ChevronUp,
-    Catalog,
-    Upload,
+    Close,
+    CloudDownload,
     Globe,
     MagicWand,
-    Renew
+    Renew,
+    Upload
   } from 'carbon-icons-svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { dataPipeline, ColumnType } from '$lib/features/data-pipeline';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { Duck } from '$lib/features/duckdb';
-  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-  import { generateCustomBasemapAttributes } from '$lib/features/map/utils/generate-basemap-attributes';
-  import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
-  import BasemapCardVertical from './components/basemap-card-vertical.svelte';
   import {
-    JoinAccordion,
     BasemapImportDropzone,
+    JoinAccordion,
     OSMSelector,
     type JoinStats
   } from './components';
-  import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import BasemapCardVertical from './components/basemap-card-vertical.svelte';
+  import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
   import { computeDatasetJoinStats } from './services/join-stats.service';
 
   interface GeoComboBoxItem {
@@ -72,16 +72,13 @@
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
 
-  // Geolocation state for enrichment data (entities mode only for geo file enrichment)
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
 
-  // Target column from geo file
   let geoFileColumnId = $state<number | undefined>(undefined);
 
   let basemapTabIndex = $state(0);
   let selectedBasemapId = $state<string | undefined>(undefined);
 
-  // Import basemap state
   let basemapImportError = $state<string | null>(null);
   let basemapImportUploading = $state(false);
   let importedCustomBasemap = $state<BasemapMetadata | null>(null);
@@ -95,31 +92,25 @@
     '.parquet'
   ];
 
-  // Join assisted state
   let joinStats = $state<JoinStats | null>(null);
   let isComputingJoin = $state(false);
   let isFinalizingJoin = $state(false);
 
-  // State for join mappings (corrections)
   let joinMappings = $state(new SvelteMap<number, string>());
 
-  // Geo detection for enrichment dataset
   const enrichGeoDetection = $derived(enrichmentDataset?.geoDetection);
 
-  // Check if enrichment file has only coordinates (no entity columns)
   const hasOnlyCoordinates = $derived(() => {
     if (!enrichGeoDetection) return false;
 
     const geoColumns = enrichGeoDetection.geoColumns || [];
     if (geoColumns.length === 0) return false;
 
-    // Entity types that can be used for joining
     const entityTypes = ['country_name', 'iso2', 'iso3', 'region', 'city'];
     const hasEntityColumn = geoColumns.some((gc) =>
       entityTypes.includes(gc.type)
     );
 
-    // Check if we only have coordinates (lat/lon)
     const hasCoordinates = geoColumns.some(
       (gc) => gc.type === 'latitude' || gc.type === 'longitude'
     );
@@ -127,7 +118,6 @@
     return hasCoordinates && !hasEntityColumn;
   });
 
-  // Columns from the geographic file (target)
   const geoFileColumns = $derived(() => {
     if (!selectedDataset) return [];
     return selectedDataset.columns
@@ -138,7 +128,6 @@
       .map((col, idx) => ({ id: idx, text: col.name, columnName: col.name }));
   });
 
-  // Columns from the enrichment dataset with geo detection info
   const enrichDataFieldItems = $derived(() => {
     if (!enrichmentDataset) return [];
 
@@ -165,7 +154,6 @@
       });
   });
 
-  // Suggested column from enrichment dataset
   const enrichSuggestedColumn = $derived(() => {
     const suggested = enrichGeoDetection?.suggestedPrimaryGeoColumn;
     if (!suggested) return undefined;
@@ -175,7 +163,6 @@
     );
   });
 
-  // Auto-select suggested column for entities mode
   $effect(() => {
     const suggested = enrichSuggestedColumn();
     if (enrichLinkedVariableId === undefined && suggested) {
@@ -183,7 +170,6 @@
     }
   });
 
-  // Compute join stats when both columns are selected
   $effect(() => {
     const hasEnrichCol = enrichLinkedVariableId !== undefined;
     const hasGeoCol = geoFileColumnId !== undefined;
@@ -229,30 +215,6 @@
       logger.error('Failed to load enrichment file', LogCategory.DATA, error);
       uploadError =
         error instanceof Error ? error.message : 'Erreur lors du chargement';
-    } finally {
-      isUploading = false;
-    }
-  }
-
-  async function _handlePasteData() {
-    if (!pastedDataValue.trim()) return;
-
-    isUploading = true;
-    uploadError = null;
-
-    try {
-      const result = await dataPipeline.processPastedData(pastedDataValue);
-      enrichmentDataset = result;
-      enrichmentFile = null;
-      pastedDataValue = '';
-
-      dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: result.id,
-        isEnrichmentActive: true
-      });
-    } catch (error) {
-      uploadError =
-        error instanceof Error ? error.message : 'Erreur lors du traitement';
     } finally {
       isUploading = false;
     }
@@ -327,7 +289,6 @@
         targetColumn: geoCol.columnName
       });
 
-      // Get all target values for basemapOptions (correction dropdown)
       const targetValues = (await Duck.query(
         `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
          FROM "${geoTableName}"
@@ -338,7 +299,6 @@
 
       const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
 
-      // Add basemapOptions to to_verify entities
       stats.entities = stats.entities.map((entity) => {
         if (entity.status === 'to_verify') {
           return {
@@ -511,13 +471,10 @@
     logger.success('OSM basemap selected', LogCategory.MAP);
   }
 
-  // Handler for join mapping changes (correction dropdown)
   function handleMappingChange(index: number, value: string) {
     joinMappings.set(index, value);
 
-    // Update the entity's selectedMapping in joinStats
     if (joinStats) {
-      // Find the nth to_verify entity
       let toVerifyIndex = 0;
       const updatedEntities = joinStats.entities.map((entity) => {
         if (entity.status === 'to_verify') {
@@ -537,7 +494,6 @@
     }
   }
 
-  // Handler to apply corrections
   async function handleApplyCorrections() {
     if (!enrichmentDataset || !selectedDataset || !joinStats) return;
 
@@ -549,7 +505,6 @@
     if (!enrichCol || !geoCol) return;
 
     try {
-      // Build corrections map from the to_verify entities with selected mappings
       const corrections: Record<string, string> = {};
       joinStats.entities
         .filter((e) => e.status === 'to_verify' && e.selectedMapping)
@@ -561,7 +516,6 @@
         corrections
       });
 
-      // Apply corrections by updating the enrichment table values
       const geoTableName =
         (selectedDataset as { duckdbTableName?: string; tableName?: string })
           .duckdbTableName ||
@@ -575,7 +529,6 @@
         );
       }
 
-      // Recompute join stats
       const stats = await computeDatasetJoinStats({
         sourceTableName: enrichmentDataset.tableName,
         sourceColumn: enrichCol.columnName,
@@ -583,7 +536,6 @@
         targetColumn: geoCol.columnName
       });
 
-      // Add basemapOptions to to_verify entities (same logic as computeEnrichmentJoinStats)
       const targetValues = (await Duck.query(
         `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
          FROM "${geoTableName}"
@@ -609,12 +561,10 @@
 
       joinStats = stats;
 
-      // Reset mappings
       joinMappings = new SvelteMap<number, string>();
 
       logger.success('Corrections applied', LogCategory.DATA);
 
-      // Auto-finalize if no more errors
       if (
         joinStats.toVerifyCount === 0 &&
         joinStats.duplicateCount === 0 &&
@@ -628,7 +578,6 @@
     }
   }
 
-  // Handler to finalize the enrichment join
   async function handleFinalizeEnrichment() {
     if (!enrichmentDataset || !selectedDataset) return;
 
@@ -648,7 +597,6 @@
         (selectedDataset as { tableName?: string }).tableName ||
         selectedDataset.id;
 
-      // Get enrichment columns (excluding the join column and __id)
       const enrichmentColumns = enrichmentDataset.columns
         .filter(
           (col) => col.name !== enrichCol.columnName && col.name !== '__id'
@@ -667,12 +615,10 @@
         enrichColumns: enrichmentColumns
       });
 
-      // Build the SQL JOIN to add enrichment columns
       const enrichColsSelect = enrichmentColumns
         .map((col) => `e."${col}"`)
         .join(', ');
 
-      // Create a new table with the joined data
       const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
 
       await Duck.query(
@@ -684,10 +630,8 @@
         { format: 'array' }
       );
 
-      // Update the dataset to use the new enriched table
       const newColumns = await Duck.analyse(enrichedTableName);
 
-      // Update the datasets store with the new table and columns
       const toColumnType = (type: string): ColumnType => {
         if (type === 'numeric' || type === 'number') return ColumnType.NUMBER;
         if (type === 'date') return ColumnType.DATE;
@@ -722,7 +666,6 @@
         addedColumns: enrichmentColumns
       });
 
-      // Reset enrichment state
       joinTabularEnabled = false;
       enrichmentDataset = null;
       enrichmentFile = null;
@@ -1303,7 +1246,6 @@
     gap: var(--cds-spacing-02);
   }
 
-  /* Expandable section */
   .expandable-section {
     border: 1px solid var(--cds-border-subtle);
     border-radius: 4px;
@@ -1351,7 +1293,6 @@
     margin-bottom: var(--cds-spacing-02);
   }
 
-  /* Join Assisted Section */
   .join-assisted-section {
     margin-top: var(--cds-spacing-06);
     padding-top: var(--cds-spacing-06);

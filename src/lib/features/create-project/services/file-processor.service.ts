@@ -86,7 +86,6 @@ abstract class FileProcessor {
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
 
   protected async stringifyInChunks(data: unknown[]): Promise<string> {
-    // Chunked stringify to avoid blocking on large datasets.
     if (data.length < 1000) {
       return JSON.stringify(data);
     }
@@ -95,10 +94,10 @@ abstract class FileProcessor {
     const CHUNK_SIZE = 500;
 
     for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0)); // yield between chunks
+      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
       const chunk = data.slice(i, i + CHUNK_SIZE);
-      chunks.push(JSON.stringify(chunk).slice(1, -1)); // strip array brackets
+      chunks.push(JSON.stringify(chunk).slice(1, -1));
     }
 
     return '[' + chunks.join(',') + ']';
@@ -146,12 +145,10 @@ class CsvProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    // Read original file content for persistence (needed for project restore)
     const originalContent = await readFileContent(file, (progress) => {
       this.callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    // Use dataPipeline directly - DuckDB handles everything
     const { dataPipeline } = await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
 
@@ -159,7 +156,6 @@ class CsvProcessor extends FileProcessor {
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
 
-    // Convert DuckDB stats to the expected statistics format
     const statistics: Record<string, ColumnStatSummary> = {};
     for (const col of columns) {
       statistics[col.name] = {
@@ -173,21 +169,17 @@ class CsvProcessor extends FileProcessor {
       };
     }
 
-    // Detect duplicates using SQL (much faster than JS for large datasets)
-    // Note: COUNT(DISTINCT *) is not supported in DuckDB, use subquery instead
     const duplicateResult = (await Duck!.query(
       `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
       { format: 'array' }
     )) as Array<{ duplicate_count: number }>;
     const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
 
-    // Get sample data for deep analysis (limit to 100 rows for geo detection)
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    // Convert to tabular data format
     const tabularData = sampleData.map((row) => {
       const tabularRow: Record<string, JsonValue> = {};
       for (const [key, value] of Object.entries(row)) {
@@ -217,7 +209,6 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
-    // Perform deep analysis for geo column detection
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
       sampleData,
@@ -236,7 +227,6 @@ class CsvProcessor extends FileProcessor {
     sampleData: Array<Record<string, unknown>>,
     headers: string[]
   ): Promise<boolean> {
-    // Convert sample data to matrix format for DeepDataValidator
     const dataMatrix: CsvMatrix = sampleData.map((row) =>
       headers.map((header) => {
         const value = row[header];
@@ -260,12 +250,10 @@ class CsvProcessor extends FileProcessor {
     );
 
     if (!deepAnalysis.geoDetection.hasGeoColumns) {
-      // Show warning instead of blocking - user can still manually join to a basemap
       showWarning(
         WARNING_NO_GEO_COLUMN_TITLE(),
         WARNING_NO_GEO_COLUMN_MESSAGE()
       );
-      // Continue processing - don't block the import
     }
 
     if (deepAnalysis.performanceWarnings.length > 0) {
@@ -343,25 +331,21 @@ class GeoPackageProcessor extends FileProcessor {
   async process(uploadedFile: UploadedFile, file: File): Promise<void> {
     if (!(await this.validateAsync(uploadedFile, file))) return;
 
-    // Read original file content for persistence
     const content = await readFileContent(file, (progress) => {
       this.callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    // Delegate to dataPipeline for proper GeoPackage processing
     const { dataPipeline } = await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
 
     const dataset = await dataPipeline.processFile(file);
     const { tableName } = dataset;
 
-    // Get sample data for preview (similar to CsvProcessor)
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    // Convert to tabular data format
     const tabularData = sampleData.map((row) => {
       const tabularRow: Record<string, JsonValue> = {};
       for (const [key, value] of Object.entries(row)) {

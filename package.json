@@ -8,6 +8,10 @@
   },
   "contributors": [
     {
+      "name": "Thomas Ansart",
+      "url": "https://www.sciencespo.fr/cartographie/"
+    },
+    {
       "name": "Jean-Baptiste Thery",
       "email": "jb.thery@jcode.works",
       "url": "https://github.com/jb-thery"
@@ -61,7 +65,7 @@
     "@types/d3-geo": "^3.1.0",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.19.3",
-    "@vitest/ui": "^4.0.15",
+    "@vitest/ui": "^4.0.16",
     "carbon-preprocess-svelte": "^0.11.16",
     "duckdb": "^1.4.3",
     "eslint": "^9.39.2",
@@ -78,21 +82,20 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.50.0",
     "vite": "^7.3.0",
-    "vitest": "^4.0.15",
+    "vitest": "^4.0.16",
     "workbox-window": "^7.4.0"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.2.5",
     "@deck.gl/core": "^9.2.5",
-    "@deck.gl/extensions": "^9.2.5",
     "@deck.gl/geo-layers": "^9.2.5",
     "@deck.gl/layers": "^9.2.5",
     "@deck.gl/mapbox": "^9.2.5",
-    "@deck.gl/mesh-layers": "^9.2.5",
     "@duckdb/duckdb-wasm": "1.31.0",
     "@geoarrow/deck.gl-layers": "^0.3.1",
     "@geoarrow/geoparquet-wasm": "0.2.0-beta.5",
     "@inlang/paraglide-js": "^2.7.0",
+    "@math.gl/core": "^4.1.0",
     "@observablehq/plot": "^0.6.17",
     "@uwdata/flechette": "^2.2.6",
     "apache-arrow": "^21.1.0",
@@ -103,7 +106,8 @@
     "d3-geo-projection": "^4.0.0",
     "fflate": "^0.8.2",
     "localforage": "^1.10.0",
-    "maplibre-gl": "^5.14.0",
+    "maplibre-gl": "^5.15.0",
+    "proj4": "^2.20.2",
     "vite-plugin-pwa": "^1.2.0"
   },
   "pnpm": {
