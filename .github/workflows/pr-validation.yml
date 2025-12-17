@@ -62,7 +62,22 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Run ESLint and Prettier
-        run: pnpm lint
+        id: lint
+        run: |
+          set -o pipefail
+          pnpm lint 2>&1 | tee lint-output.txt
+
+      - name: Generate lint summary
+        if: always()
+        run: |
+          echo "## 🔍 Code Quality" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.lint.outcome }}" == "success" ]; then
+            echo "✅ **ESLint**: No errors" >> $GITHUB_STEP_SUMMARY
+            echo "✅ **Prettier**: Code formatted correctly" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Lint failed** - see logs for details" >> $GITHUB_STEP_SUMMARY
+          fi
 
   svelte-check:
     name: Svelte Type Check
@@ -93,7 +108,26 @@ jobs:
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
       - name: Run Svelte Check
-        run: pnpm check
+        id: svelte-check
+        run: |
+          set -o pipefail
+          pnpm check 2>&1 | tee svelte-check-output.txt
+
+      - name: Generate type check summary
+        if: always()
+        run: |
+          echo "## 📝 TypeScript / Svelte Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.svelte-check.outcome }}" == "success" ]; then
+            echo "✅ **Type check passed** - 0 errors" >> $GITHUB_STEP_SUMMARY
+          else
+            ERRORS=$(grep -c "Error:" svelte-check-output.txt || echo "0")
+            WARNINGS=$(grep -c "Warning:" svelte-check-output.txt || echo "0")
+            echo "| Type | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⚠️ Warnings | $WARNINGS |" >> $GITHUB_STEP_SUMMARY
+          fi
 
   unit-tests:
     name: Unit Tests
@@ -124,7 +158,27 @@ jobs:
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
       - name: Run unit tests
-        run: pnpm run test:unit -- --run
+        run: |
+          set -o pipefail
+          pnpm run test:unit -- --run --reporter=verbose 2>&1 | tee test-output.txt
+
+      - name: Generate unit test summary
+        if: always()
+        run: |
+          echo "## 🧪 Unit Tests Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-output.txt ]; then
+            # Strip ANSI codes and extract test summary
+            CLEAN=$(cat test-output.txt | sed 's/\x1b\[[0-9;]*m//g')
+            PASSED=$(echo "$CLEAN" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            FAILED=$(echo "$CLEAN" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            SKIPPED=$(echo "$CLEAN" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || echo "0")
+            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | ${PASSED:-0} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | ${FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
+            echo "| ⏭️ Skipped | ${SKIPPED:-0} |" >> $GITHUB_STEP_SUMMARY
+          fi
 
   build-check:
     name: Build Verification
@@ -152,7 +206,28 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Build application
-        run: pnpm build
+        run: |
+          set -o pipefail
+          pnpm build 2>&1 | tee build-output.txt
+
+      - name: Generate build summary
+        if: always()
+        run: |
+          echo "## 📦 Build Metrics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Calculate build size
+          if [ -d "build" ]; then
+            TOTAL_SIZE=$(du -sh build | cut -f1)
+            JS_SIZE=$(find build -name "*.js" -exec du -ch {} + 2>/dev/null | tail -1 | cut -f1 || echo "N/A")
+            CSS_SIZE=$(find build -name "*.css" -exec du -ch {} + 2>/dev/null | tail -1 | cut -f1 || echo "N/A")
+
+            echo "| Asset Type | Size |" >> $GITHUB_STEP_SUMMARY
+            echo "|------------|------|" >> $GITHUB_STEP_SUMMARY
+            echo "| 📁 Total | $TOTAL_SIZE |" >> $GITHUB_STEP_SUMMARY
+            echo "| 📜 JavaScript | $JS_SIZE |" >> $GITHUB_STEP_SUMMARY
+            echo "| 🎨 CSS | $CSS_SIZE |" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Cache build output
         uses: actions/cache/save@v4
@@ -268,7 +343,33 @@ jobs:
           merge-multiple: true
 
       - name: Merge into HTML Report
-        run: npx playwright merge-reports --reporter html ./all-blob-reports
+        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
+
+      - name: Generate E2E test summary
+        if: always()
+        run: |
+          echo "## 🎭 E2E Tests Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f report.md ]; then
+            cat report.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🗺️ Cartography Test Coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Domain | Tests |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🌍 GeoJSON Import | e2e/imports/geojson.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📦 Shapefile Import | e2e/imports/shapefile.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗄️ GeoPackage Import | e2e/imports/geopackage.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📍 GPX Import | e2e/imports/gpx.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📌 KML Import | e2e/imports/kml.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📊 CSV Import | e2e/imports/csv.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗜️ ZIP Archives | e2e/imports/zip.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "| 📁 Project Management | e2e/project-modal.spec.ts |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📥 [Download full HTML report](../artifacts/playwright-report)" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
@@ -279,8 +380,83 @@ jobs:
 
   pr-validation-complete:
     name: PR Validation Complete
-    needs: [build-check, merge-reports]
+    needs: [lint, svelte-check, unit-tests, build-check, merge-reports]
+    if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Validation passed
-        run: echo "All quality checks passed. PR is ready for review."
+      - name: Generate Health Report
+        run: |
+          echo "# 🏥 Khartis Application Health Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Determine overall status
+          LINT="${{ needs.lint.result }}"
+          TYPECHECK="${{ needs.svelte-check.result }}"
+          UNIT="${{ needs.unit-tests.result }}"
+          BUILD="${{ needs.build-check.result }}"
+          E2E="${{ needs.merge-reports.result }}"
+
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$LINT" == "success" ]; then
+            echo "| 🔍 Code Quality (ESLint + Prettier) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🔍 Code Quality (ESLint + Prettier) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$TYPECHECK" == "success" ]; then
+            echo "| 📝 Type Check (Svelte + TS) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 📝 Type Check (Svelte + TS) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$UNIT" == "success" ]; then
+            echo "| 🧪 Unit Tests (Vitest) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🧪 Unit Tests (Vitest) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$BUILD" == "success" ]; then
+            echo "| 📦 Build | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 📦 Build | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$E2E" == "success" ]; then
+            echo "| 🎭 E2E Tests (Playwright) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🎭 E2E Tests (Playwright) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Calculate health score
+          SCORE=0
+          [ "$LINT" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$E2E" == "success" ] && SCORE=$((SCORE + 20))
+
+          echo "## Health Score: $SCORE/100" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ $SCORE -eq 100 ]; then
+            echo "🎉 **All checks passed!** PR is ready for review." >> $GITHUB_STEP_SUMMARY
+          elif [ $SCORE -ge 80 ]; then
+            echo "⚠️ **Almost there!** Some checks need attention." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Issues detected.** Please fix before merging." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Check overall result
+        if: |
+          needs.lint.result != 'success' ||
+          needs.svelte-check.result != 'success' ||
+          needs.unit-tests.result != 'success' ||
+          needs.build-check.result != 'success' ||
+          needs.merge-reports.result != 'success'
+        run: exit 1
