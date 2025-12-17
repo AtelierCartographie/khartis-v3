@@ -36,10 +36,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'pnpm build && pnpm preview',
+    command: isCI ? 'pnpm preview' : 'pnpm build && pnpm preview',
     port: 4173,
     reuseExistingServer: !isCI,
-    timeout: isCI ? 180000 : 120000,
+    timeout: isCI ? 60000 : 120000,
     stdout: 'pipe',
     stderr: 'pipe'
   }
