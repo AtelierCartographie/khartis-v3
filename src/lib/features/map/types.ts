@@ -1,4 +1,5 @@
 import type { Color, Layer } from '@deck.gl/core';
+import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import type { LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
@@ -339,4 +340,22 @@ export interface LayerContext {
   strokeOpacity: number;
   statistics: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
+  modelMatrix?: Matrix4 | null;
+}
+
+// =============================================================================
+// Projection Types
+// =============================================================================
+
+export type BBox = [number, number, number, number];
+
+export interface ProjectionContext {
+  modelMatrix: Matrix4 | null;
+  isLocalCRS: boolean;
+  bbox: BBox | null;
+}
+
+export interface CanvasSize {
+  width: number;
+  height: number;
 }

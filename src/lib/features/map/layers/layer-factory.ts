@@ -44,7 +44,8 @@ export function createPointLayers(
     strokeWidth,
     strokeOpacity,
     statistics,
-    categoryColorMap
+    categoryColorMap,
+    modelMatrix
   } = ctx;
   const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
@@ -129,6 +130,7 @@ export function createPointLayers(
         opacity: fillOpacity,
         pickable: true,
         autoHighlight: false,
+        ...(modelMatrix && { modelMatrix }),
         updateTriggers: {
           getFillColor: [
             useCategoricalColor,
@@ -183,6 +185,7 @@ export function createPointLayers(
     lineWidthScale: strokeWidth / 3,
     pickable: true,
     autoHighlight: false,
+    ...(modelMatrix && { modelMatrix }),
     updateTriggers: {
       getFillColor: [
         useCategoricalColor,
@@ -211,7 +214,7 @@ export function createLineLayers(
   geometryInfo: GeometryInfo,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { datasetId, fillColor, fillOpacity, strokeWidth } = ctx;
+  const { datasetId, fillColor, fillOpacity, strokeWidth, modelMatrix } = ctx;
   const { geoColumn, encoding: arrowExtension } = geometryInfo;
 
   const layerId = createLayerId(DeckLayerId.LINE_LAYER, datasetId);
@@ -252,6 +255,7 @@ export function createLineLayers(
       lineWidthMinPixels: 1,
       pickable: true,
       autoHighlight: false,
+      ...(modelMatrix && { modelMatrix }),
       updateTriggers: {
         getLineColor: [fillColor, fillOpacity],
         getLineWidth: [strokeWidth]
@@ -272,7 +276,8 @@ export function createPolygonLayers(
     strokeColor,
     fillOpacity,
     strokeWidth,
-    strokeOpacity
+    strokeOpacity,
+    modelMatrix
   } = ctx;
   const {
     geoColumn,
@@ -347,6 +352,7 @@ export function createPolygonLayers(
       lineWidthScale: strokeWidth / 4,
       pickable: true,
       autoHighlight: false,
+      ...(modelMatrix && { modelMatrix }),
       updateTriggers: {
         getFillColor: [
           useChoropleth,
@@ -404,7 +410,7 @@ export function createGeoJsonLayers(
   geojson: FeatureCollection,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { fillColor, strokeColor, fillOpacity, strokeWidth } = ctx;
+  const { fillColor, strokeColor, fillOpacity, strokeWidth, modelMatrix } = ctx;
 
   return [
     new GeoJsonLayer({
@@ -418,6 +424,7 @@ export function createGeoJsonLayers(
       lineWidthMinPixels: strokeWidth,
       pickable: true,
       autoHighlight: false,
+      ...(modelMatrix && { modelMatrix }),
       updateTriggers: {
         getFillColor: [fillColor, fillOpacity],
         getLineColor: [strokeColor],

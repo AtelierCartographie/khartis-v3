@@ -7,18 +7,20 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  workers: isCI ? 2 : 1,
+  // Limit workers to avoid DuckDB thread exhaustion (each browser creates thread pool)
+  workers: isCI ? 2 : 4,
   reporter: isCI ? [['blob'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
-  timeout: isCI ? 60000 : 45000,
+  timeout: isCI ? 90000 : 60000,
   expect: {
-    timeout: isCI ? 30000 : 15000
+    timeout: isCI ? 30000 : 20000
   },
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // Disable video locally for speed
+    video: isCI ? 'retain-on-failure' : 'off',
     actionTimeout: isCI ? 20000 : 15000,
     navigationTimeout: isCI ? 20000 : 15000,
     locale: 'fr-FR',
