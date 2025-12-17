@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { accessSync } from 'node:fs';
 import { join } from 'node:path';
 
 const isCI = !!process.env.CI;
@@ -203,9 +204,9 @@ export function getShapefileComponents(shpPath: string): string[] {
   const extensions = ['.shp', '.dbf', '.shx', '.prj', '.cpg'];
   return extensions
     .map((ext) => baseName + ext)
-    .filter((path) => {
+    .filter((filePath) => {
       try {
-        require('node:fs').accessSync(path);
+        accessSync(filePath);
         return true;
       } catch {
         return false;
