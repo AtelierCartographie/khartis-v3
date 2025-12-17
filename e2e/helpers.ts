@@ -130,17 +130,44 @@ export async function createProject(
   const fileInput = modal.locator('input[type="file"]').first();
   await fileInput.setInputFiles(filePath);
 
-  // Wait for file processing
-  await page.waitForTimeout(TIMEOUTS.fileUpload);
+  // Wait for file processing to complete (not just timeout)
+  // Use data-testid selectors for reliability
+  const processingIndicator = modal.locator('[data-testid="file-processing"]');
+  const completeIndicator = modal.locator('[data-testid="file-complete"]');
+  const errorIndicator = modal.locator('[data-testid="file-error"]');
+
+  // Wait for processing to finish (complete or error)
+  await expect(
+    processingIndicator.or(completeIndicator).or(errorIndicator)
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
+
+  // Wait for processing to complete
+  await expect(processingIndicator).toBeHidden({
+    timeout: TIMEOUTS.action * 3
+  });
+
+  // Check for errors
+  if (await errorIndicator.isVisible()) {
+    const errorText = await errorIndicator.textContent();
+    throw new Error(`File processing failed: ${errorText}`);
+  }
+
+  // Ensure complete tile is visible
+  await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
   const name = projectName || `Test ${Date.now()}`;
-  await modal.locator('[data-testid="project-name-input"]').fill(name);
+  const nameInput = modal.locator('[data-testid="project-name-input"]');
+
+  // Wait for input to be ready
+  await expect(nameInput).toBeVisible({ timeout: TIMEOUTS.action });
+  await expect(nameInput).toBeEnabled({ timeout: TIMEOUTS.action });
+  await nameInput.fill(name);
 
   const createBtn = modal.getByRole('button', { name: 'Créer', exact: true });
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action });
   await createBtn.click();
 
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 2 });
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
 }
 
 export async function openSideNav(page: Page): Promise<Locator> {
@@ -226,14 +253,42 @@ export async function createShapefileProject(
   const fileInput = dropContainer.locator('input[type="file"]');
   await fileInput.setInputFiles(shapefileComponents);
 
-  await page.waitForTimeout(TIMEOUTS.fileUpload * 2);
+  // Wait for file processing to complete (not just timeout)
+  // Use data-testid selectors for reliability
+  const processingIndicator = modal.locator('[data-testid="file-processing"]');
+  const completeIndicator = modal.locator('[data-testid="file-complete"]');
+  const errorIndicator = modal.locator('[data-testid="file-error"]');
+
+  // Wait for processing to start
+  await expect(
+    processingIndicator.or(completeIndicator).or(errorIndicator)
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
+
+  // Wait for processing to complete (longer timeout for shapefiles)
+  await expect(processingIndicator).toBeHidden({
+    timeout: TIMEOUTS.action * 4
+  });
+
+  // Check for errors
+  if (await errorIndicator.isVisible()) {
+    const errorText = await errorIndicator.textContent();
+    throw new Error(`Shapefile processing failed: ${errorText}`);
+  }
+
+  // Ensure complete tile is visible
+  await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
   const name = projectName || `Test ${Date.now()}`;
-  await modal.locator('[data-testid="project-name-input"]').fill(name);
+  const nameInput = modal.locator('[data-testid="project-name-input"]');
+
+  // Wait for input to be ready
+  await expect(nameInput).toBeVisible({ timeout: TIMEOUTS.action });
+  await expect(nameInput).toBeEnabled({ timeout: TIMEOUTS.action });
+  await nameInput.fill(name);
 
   const createBtn = modal.getByRole('button', { name: 'Créer', exact: true });
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 2 });
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
 }
