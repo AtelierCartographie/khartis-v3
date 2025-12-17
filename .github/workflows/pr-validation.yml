@@ -157,7 +157,9 @@ jobs:
       - name: Cache build output
         uses: actions/cache/save@v4
         with:
-          path: build
+          path: |
+            build
+            .svelte-kit/output
           key: ${{ runner.os }}-build-${{ github.sha }}
 
   e2e-tests:
@@ -192,7 +194,9 @@ jobs:
       - name: Restore build output
         uses: actions/cache/restore@v4
         with:
-          path: build
+          path: |
+            build
+            .svelte-kit/output
           key: ${{ runner.os }}-build-${{ github.sha }}
           fail-on-cache-miss: true
 
