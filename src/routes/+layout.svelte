@@ -81,8 +81,10 @@
   }
 
   // Reactive transform style for page zoom
+  // Note: The map component must apply a counter-transform to preserve pointer event coordinates
+  const pageZoomScale = $derived(globalState.zoom.pageZoomLevel / 100);
   const pageTransformStyle = $derived(
-    `transform: scale(${globalState.zoom.pageZoomLevel / 100}); transform-origin: center center;`
+    `transform: scale(${pageZoomScale}); transform-origin: center center;`
   );
 </script>
 

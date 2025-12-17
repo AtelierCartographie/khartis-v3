@@ -230,15 +230,15 @@ src/lib/features/project-management/
     └── json-helpers.ts   # JSON utilities
 ```
 
-| Module | Location | Responsibility |
-| ------ | -------- | -------------- |
-| `projectRepository` | `core/persistence.ts` | IndexedDB connection, save/load/remove projects, metadata management |
-| `projectStorage` | `core/storage.ts` | Thin localforage wrapper for metadata and preferences |
-| `serialize/deserialize` | `core/serializer.ts` | Convert between runtime and persisted representations |
-| `exportProject/createArchive` | `io/exporter.ts` | Export to JSON or compressed `.kh` archive |
-| `importProject` | `io/importer.ts` | Import and validate project files |
-| `AutoSaveController` | `operations/auto-save.ts` | Debounced persistence after mutations |
-| `duplicateProject` | `operations/duplicate.ts` | Clone existing projects |
+| Module                        | Location                  | Responsibility                                                       |
+| ----------------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `projectRepository`           | `core/persistence.ts`     | IndexedDB connection, save/load/remove projects, metadata management |
+| `projectStorage`              | `core/storage.ts`         | Thin localforage wrapper for metadata and preferences                |
+| `serialize/deserialize`       | `core/serializer.ts`      | Convert between runtime and persisted representations                |
+| `exportProject/createArchive` | `io/exporter.ts`          | Export to JSON or compressed `.kh` archive                           |
+| `importProject`               | `io/importer.ts`          | Import and validate project files                                    |
+| `AutoSaveController`          | `operations/auto-save.ts` | Debounced persistence after mutations                                |
+| `duplicateProject`            | `operations/duplicate.ts` | Clone existing projects                                              |
 
 ## Feature Pattern
 

@@ -1,5 +1,8 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { visualizationStore, type VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import {
+  visualizationStore,
+  type VisualizationConfig
+} from '$lib/features/commons/store/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
@@ -18,7 +21,9 @@ export interface UseMapStateReturn {
 }
 
 export function useMapState(): UseMapStateReturn {
-  const activeVisualizations = $derived(visualizationStore.activeVisualizations);
+  const activeVisualizations = $derived(
+    visualizationStore.activeVisualizations
+  );
   const defaultVisualization = $derived(activeVisualizations[0]);
   const datasetId = $derived(defaultVisualization?.datasetId);
 
@@ -99,12 +104,24 @@ export function useMapState(): UseMapStateReturn {
   }
 
   return {
-    get activeVisualizations() { return activeVisualizations; },
-    get defaultVisualization() { return defaultVisualization; },
-    get datasetId() { return datasetId; },
-    get memoizedColors() { return memoizedColors; },
-    get memoizedStatistics() { return memoizedStatistics; },
-    get memoizedCategoryColorMap() { return memoizedCategoryColorMap; },
+    get activeVisualizations() {
+      return activeVisualizations;
+    },
+    get defaultVisualization() {
+      return defaultVisualization;
+    },
+    get datasetId() {
+      return datasetId;
+    },
+    get memoizedColors() {
+      return memoizedColors;
+    },
+    get memoizedStatistics() {
+      return memoizedStatistics;
+    },
+    get memoizedCategoryColorMap() {
+      return memoizedCategoryColorMap;
+    },
     buildLayerContext
   };
 }

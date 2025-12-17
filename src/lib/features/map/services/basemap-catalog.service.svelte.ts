@@ -232,16 +232,13 @@ class BasemapCatalogService {
       return;
     }
 
-    // Check if basemap already exists
     const existingIndex = this._state.catalog.basemaps.findIndex(
       (b) => b.file === basemap.file
     );
 
     if (existingIndex !== -1) {
-      // Replace existing
       this._state.catalog.basemaps[existingIndex] = basemap;
     } else {
-      // Add new
       this._state.catalog.basemaps.push(basemap);
     }
   }

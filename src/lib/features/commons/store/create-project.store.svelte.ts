@@ -197,7 +197,6 @@ export const createProjectActions = {
     }
 
     const uploadedFile = createUploadedFile(file, sourceType);
-    // IMPORTANT: Store the original File object to avoid re-parsing
     uploadedFile.originalFile = file;
     this.addUploadedFile(uploadedFile);
 
@@ -222,7 +221,6 @@ export const createProjectActions = {
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    // Validate total shapefile group size
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
     if (totalSize > STORAGE_LIMITS.maxFileSize) {
       showError(
@@ -297,7 +295,6 @@ export const createProjectActions = {
       return;
     }
 
-    // Read content of all files for persistence
     const relatedFilesData: Record<string, ArrayBuffer> = {};
     let shpContent: ArrayBuffer = new ArrayBuffer(0);
 
@@ -336,7 +333,6 @@ export const createProjectActions = {
   async processPastedData(pastedText: string): Promise<void> {
     const result = extractDataFromPaste(pastedText);
 
-    // If paste doesn't look like tabular data, show error
     if (!result) {
       showError(
         'Invalid pasted data',
@@ -362,7 +358,6 @@ export const createProjectActions = {
       fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
     const file = new File([content], fileName, { type: mimeType });
 
-    // DuckDB will handle validation during processing
     await this.processSingleFile(file, DataSourceType.PASTE);
     this.setPastedData('');
   },
@@ -372,7 +367,6 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
-      // Clean up File object references to prevent memory leaks
       const fileToRemove = createProjectState.newProject.uploadedFiles[index];
       if (fileToRemove) {
         fileToRemove.originalFile = undefined;
@@ -488,7 +482,7 @@ export const createProjectActions = {
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
       const response = await fetch(url, { signal: controller.signal });
@@ -500,7 +494,6 @@ export const createProjectActions = {
         );
       }
 
-      // Validate Content-Type
       const contentType = response.headers.get('content-type') || '';
       const allowedTypes = [
         'text/csv',
@@ -551,7 +544,6 @@ export const createProjectActions = {
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
-    // Clean up File object references to prevent memory leaks
     for (const file of createProjectState.newProject.uploadedFiles) {
       file.originalFile = undefined;
       file.relatedFileObjects = undefined;
@@ -583,9 +575,6 @@ export const createProjectActions = {
   clearUploadState(): void {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
-
-    // Do NOT call datasetsStore.clear(), visualizationStore.clear(), or duckDBOrchestrator.clear()
-    // The data has been successfully added to the project and should remain
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {

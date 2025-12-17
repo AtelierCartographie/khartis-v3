@@ -68,4 +68,3 @@ export function setRowCountCache(
 ): void {
   ctx.rowCountCache.set(table, count);
 }
-

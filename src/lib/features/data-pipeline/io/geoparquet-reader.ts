@@ -8,7 +8,6 @@ import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { GeoArrowMetadata } from '../types';
 import { isGeoArrowMetadata } from '../types';
 
-// Module-level state
 let wasmInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -114,7 +113,6 @@ export function tableHasGeoArrowMetadata(table: ArrowTable): boolean {
   return !!(table.schema.metadata && table.schema.metadata.has('geo'));
 }
 
-// Compatibility: export an object with methods for consumers expecting geoParquetReader
 export const geoParquetReader = {
   initialize: initializeGeoParquetWasm,
   readGeoParquet,

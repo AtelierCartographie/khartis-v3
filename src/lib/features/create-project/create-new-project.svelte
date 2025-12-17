@@ -6,7 +6,6 @@
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { FileType } from '$lib/features/commons/store/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
-  import { SvelteSet } from 'svelte/reactivity';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
@@ -15,20 +14,21 @@
     FileUploaderDropContainer,
     FileUploaderItem,
     InlineNotification,
+    Loading,
     ProgressBar,
+    Tag,
     TextArea,
     TextInput,
-    Tile,
-    Tag,
-    Loading
+    Tile
   } from 'carbon-components-svelte';
   import {
     CloudDownload,
+    DocumentBlank,
     Link,
-    TrashCan,
-    DocumentBlank
+    TrashCan
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
   import {
     CreateProjectValidationService,
@@ -86,7 +86,6 @@
   }
 
   async function handleLoadOnlineFile() {
-    // Clear previous error before retrying
     createProjectActions.setNewProjectError();
 
     if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
@@ -135,7 +134,6 @@
     }
   };
 
-  // Debounced URL validation to avoid running on every keystroke
   let urlValidation = $state<ValidationResult | null>(null);
 
   const debouncedUrlValidation = debounce((url: string) => {
@@ -635,7 +633,6 @@
     pointer-events: none;
   }
 
-  /* Screen reader only - visually hidden but accessible */
   .sr-only {
     position: absolute;
     width: 1px;

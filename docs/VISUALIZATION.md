@@ -137,10 +137,14 @@ The map component uses **Svelte 5 custom hooks** to extract logic:
 ```typescript
 // Hook returns object with getters for reactive values
 export function useMapState(): UseMapStateReturn {
-  const activeVisualizations = $derived(visualizationStore.activeVisualizations);
+  const activeVisualizations = $derived(
+    visualizationStore.activeVisualizations
+  );
 
   return {
-    get activeVisualizations() { return activeVisualizations; },
+    get activeVisualizations() {
+      return activeVisualizations;
+    },
     buildLayerContext
   };
 }
@@ -148,7 +152,9 @@ export function useMapState(): UseMapStateReturn {
 // Usage with callback props for component-local state
 const mapInit = useMapInit({
   onMapLoaded: () => mapLayers.updateLayers(jsTable, userGeoJSON),
-  onWorldBaseLoaded: (table) => { worldBaseTable = table; },
+  onWorldBaseLoaded: (table) => {
+    worldBaseTable = table;
+  },
   onZoom: () => mapZoom.handleMapZoom(),
   onMoveEnd: () => mapPosition.savePosition()
 });
@@ -156,15 +162,15 @@ const mapInit = useMapInit({
 
 ### Available Hooks
 
-| Hook | Responsibility |
-|------|----------------|
-| `useMapInit` | MapLibre/Deck.gl initialization, destroy |
-| `useMapState` | Visualization state, memoized colors, LayerContext |
-| `useMapLayers` | Deck.gl layer updates |
-| `useMapBasemap` | Basemap style sync, OSM raster layers |
-| `useMapBounds` | fitBounds for Arrow/GeoJSON data |
-| `useMapPosition` | localStorage persistence (center/zoom) |
-| `useMapZoom` | Global zoom state ↔ MapLibre sync |
+| Hook             | Responsibility                                     |
+| ---------------- | -------------------------------------------------- |
+| `useMapInit`     | MapLibre/Deck.gl initialization, destroy           |
+| `useMapState`    | Visualization state, memoized colors, LayerContext |
+| `useMapLayers`   | Deck.gl layer updates                              |
+| `useMapBasemap`  | Basemap style sync, OSM raster layers              |
+| `useMapBounds`   | fitBounds for Arrow/GeoJSON data                   |
+| `useMapPosition` | localStorage persistence (center/zoom)             |
+| `useMapZoom`     | Global zoom state ↔ MapLibre sync                  |
 
 ### Layer Creation
 

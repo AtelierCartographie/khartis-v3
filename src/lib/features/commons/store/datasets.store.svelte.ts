@@ -12,12 +12,14 @@ interface DatasetsState {
   selectedDatasetId?: string;
   isProcessing: boolean;
   error?: string;
+  hiddenColumns: Map<string, Set<string>>;
 }
 
 class DatasetsStore {
   private _state = $state<DatasetsState>({
     datasets: [],
-    isProcessing: false
+    isProcessing: false,
+    hiddenColumns: new Map()
   });
 
   private activeOperations = 0;
@@ -27,25 +29,9 @@ class DatasetsStore {
     Array<(datasetId: string) => void>
   >();
 
-  // Semaphore to limit concurrent file processing to prevent memory exhaustion
   private processingSemaphore = new ProcessingSemaphore(2);
 
-  constructor() {
-    // DISABLED: Reactive sync causes triple processing
-    // DataOrchestrator.onProjectChanged() already handles project file loading
-    // This $effect was triggering addFile() for each file when project changes,
-    // causing files to be processed multiple times
-    // if (typeof window !== 'undefined') {
-    //   $effect.root(() => {
-    //     $effect(() => {
-    //       const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
-    //       if (sourceFiles !== undefined) {
-    //         void this.syncWithProject();
-    //       }
-    //     });
-    //   });
-    // }
-  }
+  constructor() {}
 
   get datasets() {
     return this._state.datasets;
@@ -80,7 +66,6 @@ class DatasetsStore {
   }
 
   addProcessedDataset(dataset: DatasetResult): void {
-    // Force reactivity by creating a new array
     this._state.datasets = [...this._state.datasets, dataset];
     if (!this._state.selectedDatasetId) {
       this._state.selectedDatasetId = dataset.id;
@@ -101,7 +86,6 @@ class DatasetsStore {
         LogCategory.STORE
       );
 
-      // Process files with semaphore to limit concurrent operations
       const newDatasets = await Promise.all(
         files.map(async (file) => {
           return this.processingSemaphore.run(async () => {
@@ -161,7 +145,6 @@ class DatasetsStore {
     let addedDataset: DatasetResult | null = null;
 
     try {
-      // Use semaphore for single file processing to maintain consistency
       const dataset = await this.processingSemaphore.run(async () => {
         if (!file.content && !file.originalFile) {
           throw new Error(`File ${file.name} has no content or originalFile`);
@@ -176,23 +159,19 @@ class DatasetsStore {
       });
 
       if (dataset) {
-        // Check for duplicates by sourceFileId
         const existingDataset = this._state.datasets.find(
           (d) => d.sourceFileId === dataset.sourceFileId
         );
 
         if (existingDataset) {
-          // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
             d.sourceFileId === dataset.sourceFileId ? dataset : d
           );
-          // Update selection if we replaced the selected dataset
           if (this._state.selectedDatasetId === existingDataset.id) {
             this._state.selectedDatasetId = dataset.id;
           }
 
           addedDataset = dataset;
-          // Throw non-fatal error to show warning toast (won't trigger rollback)
           throw new DuplicateFileError(
             `Le fichier "${file.name}" existe déjà et a été remplacé`,
             file.name,
@@ -202,7 +181,6 @@ class DatasetsStore {
             }
           );
         } else {
-          // Force reactivity by creating a new array
           this._state.datasets = [...this._state.datasets, dataset];
         }
 
@@ -548,10 +526,116 @@ class DatasetsStore {
     );
   }
 
+  hideColumn(datasetId: string, columnName: string): void {
+    const hiddenSet = this._state.hiddenColumns.get(datasetId) ?? new Set();
+    hiddenSet.add(columnName);
+    this._state.hiddenColumns.set(datasetId, hiddenSet);
+    logger.debug('Column hidden', LogCategory.STORE, { datasetId, columnName });
+  }
+
+  showColumn(datasetId: string, columnName: string): void {
+    const hiddenSet = this._state.hiddenColumns.get(datasetId);
+    if (hiddenSet) {
+      hiddenSet.delete(columnName);
+      if (hiddenSet.size === 0) {
+        this._state.hiddenColumns.delete(datasetId);
+      }
+    }
+    logger.debug('Column shown', LogCategory.STORE, { datasetId, columnName });
+  }
+
+  toggleColumnHidden(datasetId: string, columnName: string): void {
+    if (this.isColumnHidden(datasetId, columnName)) {
+      this.showColumn(datasetId, columnName);
+    } else {
+      this.hideColumn(datasetId, columnName);
+    }
+  }
+
+  isColumnHidden(datasetId: string, columnName: string): boolean {
+    return this._state.hiddenColumns.get(datasetId)?.has(columnName) ?? false;
+  }
+
+  getHiddenColumns(datasetId: string): string[] {
+    return Array.from(this._state.hiddenColumns.get(datasetId) ?? []);
+  }
+
+  getVisibleColumns(datasetId: string): string[] {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) return [];
+
+    const hiddenSet = this._state.hiddenColumns.get(datasetId) ?? new Set();
+    return dataset.columns
+      .map((c) => c.name)
+      .filter((name) => !hiddenSet.has(name));
+  }
+
+  async duplicateDataset(datasetId: string): Promise<string | null> {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      logger.warn('Dataset not found for duplication', LogCategory.STORE, {
+        datasetId
+      });
+      return null;
+    }
+
+    try {
+      this.startProcessing();
+
+      const { Duck, duckDBOrchestrator } = await import('$lib/features/duckdb');
+
+      const newId = crypto.randomUUID();
+      const newTableName = `dataset_${newId.replace(/-/g, '_')}`;
+      const copyName = `${dataset.name} (copie)`;
+
+      await Duck.query(
+        `CREATE TABLE "${newTableName}" AS SELECT * FROM "${dataset.tableName}"`
+      );
+
+      const newDataset: DatasetResult = {
+        ...dataset,
+        id: newId,
+        name: copyName,
+        tableName: newTableName,
+        columns: [...dataset.columns],
+        metadata: {
+          ...dataset.metadata,
+          processedAt: new Date(),
+          transformations: []
+        }
+      };
+
+      this._state.datasets = [...this._state.datasets, newDataset];
+
+      await duckDBOrchestrator.registerExistingTable(
+        newTableName,
+        newDataset.sourceFileId,
+        copyName,
+        {
+          geoDetection: newDataset.geoDetection
+        }
+      );
+
+      logger.success('Dataset duplicated successfully', LogCategory.STORE, {
+        originalId: datasetId,
+        newId,
+        newTableName
+      });
+
+      return newId;
+    } catch (error) {
+      logger.error('Failed to duplicate dataset', LogCategory.STORE, error);
+      return null;
+    } finally {
+      this.endProcessing();
+    }
+  }
+
   clear(): void {
     this._state.datasets = [];
     this._state.selectedDatasetId = undefined;
     this._state.error = undefined;
+    this._state.hiddenColumns.clear();
   }
 }
 

@@ -1,7 +1,7 @@
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import * as m from '$lib/paraglide/messages';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
+import * as m from '$lib/paraglide/messages';
 import type { FeatureCollection } from 'geojson';
 import { isGeospatialFile, isParquetFile } from './constants';
 import { validateFile } from './core/validators';
@@ -30,7 +30,6 @@ import {
   isZipFile
 } from './utils/zip-handler';
 
-// Module-level state
 let initialized = false;
 
 function getContext(): PipelineContext {
@@ -654,6 +653,5 @@ async function processShapefile(
   return dataset;
 }
 
-// Export singleton for compatibility
 export const dataPipeline = Pipeline;
 export type DataPipeline = typeof Pipeline;
