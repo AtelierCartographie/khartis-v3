@@ -26,19 +26,33 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
 
   const geoColumnName = geomColumn.name;
 
-  const extensionName = geomColumn.metadata?.get(GeoArrowMetadataKey.EXTENSION_NAME);
+  const extensionName = geomColumn.metadata?.get(
+    GeoArrowMetadataKey.EXTENSION_NAME
+  );
   let encoding: string = GeometryEncoding.WKB;
-  let geometryTypes = [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon];
+  let geometryTypes = [
+    GeoJsonGeometryType.Polygon,
+    GeoJsonGeometryType.MultiPolygon
+  ];
 
   if (extensionName) {
     if (extensionName.includes('geoarrow')) {
       encoding = extensionName;
       if (extensionName.includes('point')) {
-        geometryTypes = [GeoJsonGeometryType.Point, GeoJsonGeometryType.MultiPoint];
+        geometryTypes = [
+          GeoJsonGeometryType.Point,
+          GeoJsonGeometryType.MultiPoint
+        ];
       } else if (extensionName.includes('line')) {
-        geometryTypes = [GeoJsonGeometryType.LineString, GeoJsonGeometryType.MultiLineString];
+        geometryTypes = [
+          GeoJsonGeometryType.LineString,
+          GeoJsonGeometryType.MultiLineString
+        ];
       } else if (extensionName.includes('polygon')) {
-        geometryTypes = [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon];
+        geometryTypes = [
+          GeoJsonGeometryType.Polygon,
+          GeoJsonGeometryType.MultiPolygon
+        ];
       }
     } else if (extensionName === ArrowExtension.OGC_WKB) {
       encoding = GeometryEncoding.WKB;
@@ -72,7 +86,10 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
       if (!fieldMetadata.has(GeoArrowMetadataKey.EXTENSION_NAME)) {
-        fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, ArrowExtension.OGC_WKB);
+        fieldMetadata.set(
+          GeoArrowMetadataKey.EXTENSION_NAME,
+          ArrowExtension.OGC_WKB
+        );
       }
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
@@ -110,8 +127,6 @@ export async function readGeoJSONAsArrow(
 
   const escapedFileId = escapeSqlString(fileId);
 
-  // Output geometry as GeoJSON text string for compatibility with GeoJsonLayer
-  // ST_AsGeoJSON converts DuckDB GEOMETRY to GeoJSON string format
   const result = await Duck.query(
     `SELECT * EXCLUDE (geom), ST_AsGeoJSON(geom) as geom FROM ST_Read('${escapedFileId}')`,
     {
@@ -121,7 +136,6 @@ export async function readGeoJSONAsArrow(
 
   let table = tableFromIPC(result as Uint8Array);
 
-  // Add metadata indicating this is GeoJSON-encoded geometry
   table = addGeoJsonMetadata(table);
 
   return table;
@@ -144,7 +158,10 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
     columns: {
       [geoColumnName]: {
         encoding: GeometryEncoding.GEOJSON,
-        geometry_types: [GeoJsonGeometryType.Polygon, GeoJsonGeometryType.MultiPolygon],
+        geometry_types: [
+          GeoJsonGeometryType.Polygon,
+          GeoJsonGeometryType.MultiPolygon
+        ],
         crs: {
           type: 'name',
           properties: {
@@ -162,7 +179,10 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   const newFields = table.schema.fields.map((field) => {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
-      fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, ArrowExtension.GEOJSON);
+      fieldMetadata.set(
+        GeoArrowMetadataKey.EXTENSION_NAME,
+        ArrowExtension.GEOJSON
+      );
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
     return new Field(field.name, field.type, field.nullable, field.metadata);
@@ -213,8 +233,6 @@ export async function readGeoParquetViaDuckDB(
     fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
   const escapedFileId = escapeSqlString(fileId);
 
-  // Use read_parquet for GeoParquet - the spatial extension handles geometry automatically
-  // Convert geometry to WKB for compatibility with @geoarrow/deck.gl-layers
   const result = await Duck.query(
     `SELECT * EXCLUDE (geom), ST_AsWKB(geom) as geom FROM read_parquet('${escapedFileId}')`,
     { format: 'arrow-ipc' }

@@ -172,10 +172,10 @@ DuckDB WASM's `ST_Transform` cannot reproject all coordinate systems because the
 
 **Files involved**:
 
-| File | Purpose |
-|------|---------|
+| File                        | Purpose                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------- |
 | `duckdb/io/reprojection.ts` | proj4 definitions + `reprojectPoint()`, `reprojectGeometry()`, `reprojectFeatureCollection()` |
-| `duckdb/io/readers.ts` | Fallback logic in `applyProj4Reprojection()` + `DUCKDB_UNSUPPORTED_PROJECTIONS` list |
+| `duckdb/io/readers.ts`      | Fallback logic in `applyProj4Reprojection()` + `DUCKDB_UNSUPPORTED_PROJECTIONS` list          |
 
 **Supported projections** (defined in `reprojection.ts`):
 
@@ -183,7 +183,7 @@ DuckDB WASM's `ST_Transform` cannot reproject all coordinate systems because the
 - EPSG:27572 – Lambert II étendu
 - EPSG:32631/32632 – UTM zones 31N/32N
 
-**Architecture note**: proj4js is used *only* for coordinate transformation. Data remains in DuckDB for all other operations (queries, filters, joins, exports).
+**Architecture note**: proj4js is used _only_ for coordinate transformation. Data remains in DuckDB for all other operations (queries, filters, joins, exports).
 
 ## Core interfaces
 

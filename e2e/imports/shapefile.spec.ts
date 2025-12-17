@@ -37,7 +37,11 @@ test.describe('Shapefile Import', () => {
         'ne_50m',
         'ne_50m_admin_0_countries_lakes.shp'
       );
-      await createShapefileProject(page, shpPath, `SHP NaturalEarth ${Date.now()}`);
+      await createShapefileProject(
+        page,
+        shpPath,
+        `SHP NaturalEarth ${Date.now()}`
+      );
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();

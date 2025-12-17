@@ -16,7 +16,6 @@ describe('File Validators', () => {
     });
 
     it('should reject file exceeding MAX_FILE_SIZE (100MB)', async () => {
-      // Create a mock File with size property without allocating actual memory
       const mockFile = new File(['test'], 'large.csv', { type: 'text/csv' });
       Object.defineProperty(mockFile, 'size', {
         value: 101 * 1024 * 1024,
@@ -28,7 +27,6 @@ describe('File Validators', () => {
     });
 
     it('should warn for file above WARNING_FILE_SIZE (50MB)', async () => {
-      // Create a mock File with size property without allocating actual memory
       const mockFile = new File(['test'], 'medium.csv', { type: 'text/csv' });
       Object.defineProperty(mockFile, 'size', {
         value: 51 * 1024 * 1024,
@@ -51,7 +49,6 @@ describe('File Validators', () => {
     });
 
     it('should accept file exactly at WARNING_FILE_SIZE without warning', async () => {
-      // Create a mock File with size property without allocating actual memory
       const mockFile = new File(['test'], 'exact50mb.csv', {
         type: 'text/csv'
       });

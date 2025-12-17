@@ -39,7 +39,13 @@ export interface MapPosition {
 // Layer Types
 // =============================================================================
 
-export type LayerType = 'choropleth' | 'proportional' | 'categorical' | 'line' | 'point' | 'base';
+export type LayerType =
+  | 'choropleth'
+  | 'proportional'
+  | 'categorical'
+  | 'line'
+  | 'point'
+  | 'base';
 
 export interface LayerConfig {
   id: string;
@@ -212,6 +218,7 @@ export interface DeckTooltipInfo {
 export interface DeckMapProps {
   jsTable: ArrowTable | null;
   userGeoJSON: FeatureCollection | null;
+  datasetId?: string;
   onReady?: () => void;
 }
 
@@ -235,8 +242,12 @@ export interface MapLayerUpdate {
 
 export type ColorAccessor = (object: DeckDataRow) => RGBColor;
 export type SizeAccessor = (object: DeckDataRow) => number;
-export type GeoJsonColorAccessor = (feature: { properties?: Record<string, unknown> }) => RGBColor | Color;
-export type GeoJsonSizeAccessor = (feature: { properties?: Record<string, unknown> }) => number;
+export type GeoJsonColorAccessor = (feature: {
+  properties?: Record<string, unknown>;
+}) => RGBColor | Color;
+export type GeoJsonSizeAccessor = (feature: {
+  properties?: Record<string, unknown>;
+}) => number;
 
 // =============================================================================
 // Update Trigger Types
@@ -317,7 +328,9 @@ export interface CreateCategoricalOptions extends CreateLayerOptions {
 // =============================================================================
 
 export interface LayerContext {
-  viz: import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig | null;
+  viz:
+    | import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig
+    | null;
   datasetId: string | undefined;
   fillColor: RGBColor;
   strokeColor: RGBColor;

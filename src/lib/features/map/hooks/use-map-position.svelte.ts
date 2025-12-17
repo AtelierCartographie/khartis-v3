@@ -1,5 +1,4 @@
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { MapStorageKey } from '../constants';
 import type { MapPosition } from '../types';
@@ -16,7 +15,9 @@ export interface UseMapPositionReturn {
   getSavedPosition: () => MapPosition | null;
 }
 
-export function useMapPosition(props: UseMapPositionProps): UseMapPositionReturn {
+export function useMapPosition(
+  props: UseMapPositionProps
+): UseMapPositionReturn {
   const { getMap, getIsMapLoaded, onPositionRestored } = props;
 
   function savePosition(): void {
@@ -67,7 +68,6 @@ export function useMapPosition(props: UseMapPositionProps): UseMapPositionReturn
     try {
       map.setCenter([position.center.lng, position.center.lat]);
       map.setZoom(position.zoom);
-      globalActions.setMapZoom(100);
 
       onPositionRestored?.(position);
     } catch (error) {

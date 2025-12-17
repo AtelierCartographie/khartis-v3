@@ -3,6 +3,7 @@
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
   import Separator from '../../commons/components/separator.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
+  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import {
     globalActions,
     globalState
@@ -29,7 +30,7 @@
 
   function handleZoomIn(): void {
     if (activeTabIndex === 0) {
-      globalActions.zoomInMap();
+      mapInstanceStore.map?.zoomIn();
     } else {
       globalActions.zoomInPage();
     }
@@ -37,7 +38,7 @@
 
   function handleZoomOut(): void {
     if (activeTabIndex === 0) {
-      globalActions.zoomOutMap();
+      mapInstanceStore.map?.zoomOut();
     } else {
       globalActions.zoomOutPage();
     }
@@ -45,7 +46,8 @@
 
   function handleResetZoom(): void {
     if (activeTabIndex === 0) {
-      globalActions.resetMapZoom();
+      const baseZoom = mapInstanceStore.baseZoomLevel;
+      mapInstanceStore.map?.setZoom(baseZoom);
     } else {
       globalActions.resetPageZoom();
     }
@@ -60,7 +62,7 @@
 
   const displayValue = $derived(
     activeTabIndex === 0
-      ? `${Math.round(globalState.zoom.mapZoomLevel)} %`
+      ? `${mapInstanceStore.zoomLevel} %`
       : `${globalState.zoom.pageZoomLevel} %`
   );
 </script>

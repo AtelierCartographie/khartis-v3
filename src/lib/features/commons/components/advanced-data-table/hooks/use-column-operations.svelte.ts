@@ -1,13 +1,27 @@
-import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import {
+  changeColumnType,
+  dropColumn,
+  renameColumn
+} from '$lib/features/duckdb/orchestrator/column-ops';
+import {
+  Duck,
+  duckDBOrchestrator,
+  RefineOperation
+} from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo } from '../types';
+import type { ColumnType } from '../components/TableColumnHeader.svelte';
 
 export interface UseColumnOperationsProps {
   tableName?: string | (() => string | undefined);
+  datasetId?: string | (() => string | undefined);
   columns: ColumnInfo[] | (() => ColumnInfo[]);
   onColumnsChange: () => Promise<void>;
   onColumnRefined?: () => Promise<void>;
   onRecordTransformation?: (summary: string) => void;
+  onColumnDeleted?: (columnName: string) => void;
+  onColumnRenamed?: (oldName: string, newName: string) => void;
 }
 
 export interface UseColumnOperationsReturn {
@@ -16,6 +30,11 @@ export interface UseColumnOperationsReturn {
     columnName: string,
     operation: RefineOperation
   ) => Promise<void>;
+  handleRename: (columnName: string) => void;
+  handleChangeType: (columnName: string, newType: ColumnType) => Promise<void>;
+  handleHide: (columnName: string) => void;
+  handleDelete: (columnName: string) => Promise<void>;
+  isColumnHidden: (columnName: string) => boolean;
 }
 
 function getValue<T>(prop: T | (() => T)): T {
@@ -26,8 +45,21 @@ export function useColumnOperations(
   props: UseColumnOperationsProps
 ): UseColumnOperationsReturn {
   const visibleColumns = $derived.by(() => {
-    return getValue(props.columns);
+    const columns = getValue(props.columns);
+    const datasetId = getValue(props.datasetId);
+
+    if (!datasetId) return columns;
+
+    return columns.filter(
+      (col) => !datasetsStore.isColumnHidden(datasetId, col.name)
+    );
   });
+
+  function isColumnHidden(columnName: string): boolean {
+    const datasetId = getValue(props.datasetId);
+    if (!datasetId) return false;
+    return datasetsStore.isColumnHidden(datasetId, columnName);
+  }
 
   async function handleRefine(
     columnName: string,
@@ -56,10 +88,87 @@ export function useColumnOperations(
     }
   }
 
+  function handleRename(columnName: string): void {
+    props.onColumnRenamed?.(columnName, '');
+  }
+
+  async function handleChangeType(
+    columnName: string,
+    newType: ColumnType
+  ): Promise<void> {
+    const tableName = getValue(props.tableName);
+
+    if (!tableName) {
+      return;
+    }
+
+    try {
+      const duckType = mapColumnTypeToDuckDB(newType);
+      await changeColumnType(tableName, columnName, duckType, Duck);
+      await props.onColumnsChange();
+      props.onRecordTransformation?.(
+        `Type changé (${newType}) sur ${columnName}`
+      );
+    } catch (err) {
+      logger.error('Error changing column type', LogCategory.UI, err);
+    }
+  }
+
+  function handleHide(columnName: string): void {
+    const datasetId = getValue(props.datasetId);
+
+    if (!datasetId) {
+      return;
+    }
+
+    datasetsStore.toggleColumnHidden(datasetId, columnName);
+    logger.debug('Column visibility toggled', LogCategory.UI, {
+      datasetId,
+      columnName
+    });
+  }
+
+  async function handleDelete(columnName: string): Promise<void> {
+    const tableName = getValue(props.tableName);
+
+    if (!tableName) {
+      return;
+    }
+
+    try {
+      await dropColumn(tableName, columnName, Duck);
+      await props.onColumnsChange();
+      props.onColumnDeleted?.(columnName);
+      props.onRecordTransformation?.(`Colonne supprimée: ${columnName}`);
+    } catch (err) {
+      logger.error('Error deleting column', LogCategory.UI, err);
+    }
+  }
+
   return {
     get visibleColumns() {
       return visibleColumns;
     },
-    handleRefine
+    handleRefine,
+    handleRename,
+    handleChangeType,
+    handleHide,
+    handleDelete,
+    isColumnHidden
   };
+}
+
+function mapColumnTypeToDuckDB(type: ColumnType): string {
+  switch (type) {
+    case 'text':
+      return 'VARCHAR';
+    case 'number':
+      return 'DOUBLE';
+    case 'date':
+      return 'DATE';
+    case 'boolean':
+      return 'BOOLEAN';
+    default:
+      return 'VARCHAR';
+  }
 }

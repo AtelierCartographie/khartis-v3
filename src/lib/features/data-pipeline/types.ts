@@ -2,8 +2,6 @@ import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-valida
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { Duck } from '$lib/features/duckdb';
 
-// --- Column Types ---
-
 export enum ColumnType {
   BOOLEAN = 'boolean',
   DATE = 'date',
@@ -78,8 +76,6 @@ export function fromDuckDBType(duckType: string): ColumnType {
   return ColumnType.TEXT;
 }
 
-// --- Column Stats ---
-
 export interface ColumnStats {
   name: string;
   type: ColumnType;
@@ -111,8 +107,6 @@ export function getUniquePercentage(stats: ColumnStats): number {
   return (stats.uniques / stats.count) * 100;
 }
 
-// --- Raw Data Types ---
-
 export interface RawColumn {
   name: string;
   values: unknown[];
@@ -130,18 +124,14 @@ export interface RawDataset {
   metadata: Record<string, unknown>;
 }
 
-// --- Enriched Column ---
-
 export interface EnrichedColumn extends InferredColumn {
   stats: ColumnStats;
 }
 
-// --- Geometry Types ---
-
 export interface GeometryInfo {
   type: string;
-  bounds: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
-  centroid: [number, number]; // [lon, lat]
+  bounds: [number, number, number, number];
+  centroid: [number, number];
   crs?: string;
   featureCount?: number;
 }
@@ -173,8 +163,6 @@ export function computeBoundsArea(
   return width * height;
 }
 
-// --- Validation Types ---
-
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
@@ -201,8 +189,6 @@ export function mergeValidationResults(
     warnings: results.flatMap((r) => r.warnings)
   };
 }
-
-// --- GeoArrow Metadata ---
 
 export interface GeoArrowMetadata {
   version: string;
@@ -258,8 +244,6 @@ export function extractPrimaryGeometryType(
   return types.length > 0 ? types[0] : undefined;
 }
 
-// --- Column Analysis ---
-
 export interface ColumnAnalysis {
   name?: string;
   type?: ColumnType | string;
@@ -283,8 +267,6 @@ export interface ColumnAnalysis {
   };
   dateInfo?: { earliest: Date; latest: Date; range: string };
 }
-
-// --- Public API Types ---
 
 export interface ColumnInfo {
   name: string;
@@ -314,9 +296,6 @@ export interface AnalysisResult {
   warnings: string[];
 }
 
-// --- Dataset Result (main output) ---
-
-// Use FileFormatEnum values instead of string literals
 export type FileFormat = `${FileFormatEnum}`;
 
 export interface DatasetMetadata {
@@ -353,8 +332,6 @@ export interface DatasetResult {
   geoColumn?: string;
 }
 
-// --- ProcessedDataset (public API compatibility) ---
-
 export interface ProcessedDatasetAnalysisResult {
   columns: ColumnInfo[];
   geoColumns: GeoColumnInfo[] | unknown[];
@@ -387,13 +364,9 @@ export interface ProcessedDataset {
   };
 }
 
-// --- Pipeline Context ---
-
 export interface PipelineContext {
   duck: typeof Duck;
 }
-
-// --- Uploaded File Payload ---
 
 export interface UploadedFilePayload {
   id: string;
@@ -408,8 +381,6 @@ export interface UploadedFilePayload {
   relatedFileObjects?: File[];
 }
 
-// --- DuckDB Analytics Column (internal) ---
-
 export interface DuckAnalyticsColumn {
   name: string;
   type_simple?: string;
@@ -422,7 +393,5 @@ export interface DuckAnalyticsColumn {
   median?: number | string;
   stddev?: number | string;
 }
-
-// --- File Info ---
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;

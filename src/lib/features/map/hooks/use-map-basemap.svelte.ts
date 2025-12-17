@@ -3,7 +3,10 @@ import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.sto
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
-import { createOSMRasterSource, createOSMRasterLayer } from '../services/osm-tile.service';
+import {
+  createOSMRasterSource,
+  createOSMRasterLayer
+} from '../services/osm-tile.service';
 
 export interface UseMapBasemapProps {
   getMap: () => MapLibreMap | null;
@@ -44,7 +47,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
     try {
       if (map.getLayer(osmLayerId)) map.removeLayer(osmLayerId);
-      if (map.getSource(OSMSourceId.RASTER)) map.removeSource(OSMSourceId.RASTER);
+      if (map.getSource(OSMSourceId.RASTER))
+        map.removeSource(OSMSourceId.RASTER);
     } catch {
       // Ignore cleanup errors
     }

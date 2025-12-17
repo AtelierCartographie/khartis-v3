@@ -4,7 +4,12 @@ import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { ArrowExtension, createLayerId, DeckLayerId, GeometryType } from '../constants';
+import {
+  ArrowExtension,
+  createLayerId,
+  DeckLayerId,
+  GeometryType
+} from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
 import {
@@ -32,8 +37,19 @@ export function createPointLayers(
   geometryInfo: GeometryInfo,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { viz, datasetId, fillColor, strokeColor, fillOpacity, strokeWidth, strokeOpacity, statistics, categoryColorMap } = ctx;
-  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
+  const {
+    viz,
+    datasetId,
+    fillColor,
+    strokeColor,
+    fillOpacity,
+    strokeWidth,
+    strokeOpacity,
+    statistics,
+    categoryColorMap
+  } = ctx;
+  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } =
+    geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
@@ -54,32 +70,51 @@ export function createPointLayers(
       { arrowExtension, geometryType: geometryInfo.type }
     );
 
-    const geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+    let geojsonData;
+    try {
+      geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+    } catch (error) {
+      logger.error(
+        'Error converting point geometry to GeoJSON',
+        LogCategory.MAP,
+        {
+          encoding: arrowExtension,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      return [];
+    }
     if (!geojsonData) {
-      logger.warn('Failed to convert point geometry to GeoJSON', LogCategory.MAP, {
-        encoding: arrowExtension
-      });
+      logger.warn(
+        'Failed to convert point geometry to GeoJSON',
+        LogCategory.MAP,
+        {
+          encoding: arrowExtension
+        }
+      );
       return [];
     }
 
-    const geoJsonFillColor = useCategoricalColor && viz
-      ? createGeoJsonCategoricalColorAccessor(
-          viz.mapping.categoryColumn!,
-          categoryColorMap,
-          fillColor
-        )
-      : fillColor;
+    const geoJsonFillColor =
+      useCategoricalColor && viz
+        ? createGeoJsonCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap,
+            fillColor
+          )
+        : fillColor;
 
-    const geoJsonRadius = useProportionalSymbols && viz
-      ? createGeoJsonProportionalSizeAccessor(
-          viz.mapping.sizeColumn!,
-          minValue,
-          maxValue,
-          viz.symbols!.minSize,
-          viz.symbols!.maxSize,
-          viz.symbols!.sizeScale
-        )
-      : 5;
+    const geoJsonRadius =
+      useProportionalSymbols && viz
+        ? createGeoJsonProportionalSizeAccessor(
+            viz.mapping.sizeColumn!,
+            minValue,
+            maxValue,
+            viz.symbols!.minSize,
+            viz.symbols!.maxSize,
+            viz.symbols!.sizeScale
+          )
+        : 5;
 
     return [
       new GeoJsonLayer({
@@ -125,21 +160,26 @@ export function createPointLayers(
     id: layerId,
     data: jsTable,
     stroked: true,
-    getFillColor: useCategoricalColor && viz
-      ? createCategoricalColorAccessor(viz.mapping.categoryColumn!, categoryColorMap)
-      : fillColor,
+    getFillColor:
+      useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : fillColor,
     getLineColor: withOpacity(strokeColor, strokeOpacity),
     opacity: fillOpacity,
-    getRadius: useProportionalSymbols && viz
-      ? createProportionalSizeAccessor(
-          viz.mapping.sizeColumn!,
-          minValue,
-          maxValue,
-          viz.symbols!.minSize,
-          viz.symbols!.maxSize,
-          viz.symbols!.sizeScale
-        )
-      : 1,
+    getRadius:
+      useProportionalSymbols && viz
+        ? createProportionalSizeAccessor(
+            viz.mapping.sizeColumn!,
+            minValue,
+            maxValue,
+            viz.symbols!.minSize,
+            viz.symbols!.maxSize,
+            viz.symbols!.sizeScale
+          )
+        : 1,
     radiusScale: useProportionalSymbols ? 1 : 5,
     radiusUnits: 'pixels',
     lineWidthUnits: 'pixels',
@@ -179,7 +219,17 @@ export function createLineLayers(
 
   const layerId = createLayerId(DeckLayerId.LINE_LAYER, datasetId);
 
-  const lineGeojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+  let lineGeojsonData;
+  try {
+    lineGeojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+  } catch (error) {
+    logger.error('Error converting line geometry to GeoJSON', LogCategory.MAP, {
+      encoding: arrowExtension,
+      geoColumn,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return [];
+  }
   if (!lineGeojsonData) {
     logger.warn('Failed to convert line geometry to GeoJSON', LogCategory.MAP, {
       encoding: arrowExtension,
@@ -218,8 +268,22 @@ export function createPolygonLayers(
   geometryInfo: GeometryInfo,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { viz, datasetId, fillColor, strokeColor, fillOpacity, strokeWidth, strokeOpacity } = ctx;
-  const { geoColumn, encoding: arrowExtension, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
+  const {
+    viz,
+    datasetId,
+    fillColor,
+    strokeColor,
+    fillOpacity,
+    strokeWidth,
+    strokeOpacity
+  } = ctx;
+  const {
+    geoColumn,
+    encoding: arrowExtension,
+    isNativeGeoArrow,
+    isWkbEncoded,
+    isGeoJsonEncoded
+  } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
   const layerId = createLayerId(DeckLayerId.POLYGON_LAYER, datasetId);
@@ -237,7 +301,21 @@ export function createPolygonLayers(
     return [];
   }
 
-  const geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+  let geojsonData;
+  try {
+    geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+  } catch (error) {
+    logger.error(
+      'Error converting polygon geometry to GeoJSON',
+      LogCategory.MAP,
+      {
+        encoding: arrowExtension,
+        geoColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    return [];
+  }
   if (!geojsonData) {
     logger.warn('Failed to convert geometry to GeoJSON', LogCategory.MAP, {
       encoding: arrowExtension
@@ -251,14 +329,15 @@ export function createPolygonLayers(
     hasVisualization: Boolean(viz)
   });
 
-  const geoJsonFillColor = useChoropleth && viz
-    ? createGeoJsonChoroplethColorAccessor(
-        viz.mapping.valueColumn!,
-        viz.classification!.breaks!,
-        viz.classification!.colors!,
-        fillColor
-      )
-    : fillColor;
+  const geoJsonFillColor =
+    useChoropleth && viz
+      ? createGeoJsonChoroplethColorAccessor(
+          viz.mapping.valueColumn!,
+          viz.classification!.breaks!,
+          viz.classification!.colors!,
+          fillColor
+        )
+      : fillColor;
 
   return [
     new GeoJsonLayer({
@@ -300,7 +379,10 @@ export function createWorldBaseLayer(
     const geojsonData = arrowTableToGeoJSON(baseTable, geoColumn);
 
     if (!geojsonData) {
-      logger.warn('Failed to convert world base table to GeoJSON', LogCategory.MAP);
+      logger.warn(
+        'Failed to convert world base table to GeoJSON',
+        LogCategory.MAP
+      );
       return null;
     }
 
@@ -380,10 +462,14 @@ export function createDeckLayers(
       return createPolygonLayers(jsTable, geometryInfo, ctx);
 
     default:
-      logger.error('Unsupported geometry type for Deck layer', LogCategory.MAP, {
-        geometryType: resolvedGeometryType,
-        datasetId: ctx.datasetId
-      });
+      logger.error(
+        'Unsupported geometry type for Deck layer',
+        LogCategory.MAP,
+        {
+          geometryType: resolvedGeometryType,
+          datasetId: ctx.datasetId
+        }
+      );
       return [];
   }
 }

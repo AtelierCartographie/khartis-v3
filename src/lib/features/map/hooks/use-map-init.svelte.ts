@@ -20,7 +20,6 @@ export interface UseMapInitProps {
   onWorldBaseLoaded: (table: ArrowTable) => void;
   onZoom: () => void;
   onMoveEnd: () => void;
-  onReady?: () => void;
 }
 
 export interface UseMapInitReturn {
@@ -39,13 +38,16 @@ const DEFAULT_CONFIG: MapInitConfig = {
 };
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
-  const { onMapLoaded, onWorldBaseLoaded, onZoom, onMoveEnd, onReady } = props;
+  const { onMapLoaded, onWorldBaseLoaded, onZoom, onMoveEnd } = props;
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
   let isMapLoaded = $state(false);
 
-  function initialize(container: HTMLDivElement, config: MapInitConfig = DEFAULT_CONFIG): void {
+  function initialize(
+    container: HTMLDivElement,
+    config: MapInitConfig = DEFAULT_CONFIG
+  ): void {
     logger.info('Mounting Deck.gl map component', LogCategory.MAP);
 
     map = new maplibregl.Map({
@@ -58,7 +60,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       pitch: 0,
       bearing: 0,
       interactive: true,
-      scrollZoom: false,
+      scrollZoom: true,
       dragPan: true,
       dragRotate: false,
       doubleClickZoom: true,
@@ -97,8 +99,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         }
       });
 
+      // Trigger resize to handle CSS transform on parent container
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => onReady?.());
+        map?.resize();
       });
     });
 
@@ -121,8 +124,14 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   return {
     initialize,
     destroy,
-    get map() { return map; },
-    get deckOverlay() { return deckOverlay; },
-    get isMapLoaded() { return isMapLoaded; }
+    get map() {
+      return map;
+    },
+    get deckOverlay() {
+      return deckOverlay;
+    },
+    get isMapLoaded() {
+      return isMapLoaded;
+    }
   };
 }

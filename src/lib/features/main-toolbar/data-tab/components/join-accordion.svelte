@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     InlineNotification,
@@ -14,7 +15,6 @@
     WarningAltFilled,
     WarningFilled
   } from 'carbon-icons-svelte';
-  import * as m from '$lib/paraglide/messages';
   import type { JoinStats } from './join-accordion.types';
 
   interface Props {
@@ -356,7 +356,6 @@
     margin: 0;
   }
 
-  /* Correction table */
   .join-table {
     border: 1px solid var(--cds-border-subtle);
     border-radius: 6px;
@@ -381,7 +380,6 @@
     align-items: center;
   }
 
-  /* Action sections */
   .correction {
     border-left: 4px solid var(--cds-focus);
     background: var(--cds-layer);

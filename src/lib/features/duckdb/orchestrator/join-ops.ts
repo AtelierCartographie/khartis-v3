@@ -95,7 +95,10 @@ export async function computeJoinStats(
             : JoinStatus.JOINED,
     matches: r.candidates?.map((c) => c.name) || [],
     matchCount: r.candidates?.length || 0,
-    basemapValue: r.status === 'matched' ? r.candidates[0].name : undefined
+    basemapValue:
+      r.status === 'matched' && r.candidates?.length > 0
+        ? r.candidates[0].name
+        : undefined
   }));
 
   return {
