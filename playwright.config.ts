@@ -4,13 +4,13 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
-  workers: 1,
-  reporter: isCI ? [['html'], ['github']] : 'html',
+  retries: isCI ? 1 : 0,
+  workers: isCI ? 2 : 1,
+  reporter: isCI ? [['blob'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
-  timeout: isCI ? 90000 : 45000,
+  timeout: isCI ? 60000 : 45000,
   expect: {
     timeout: isCI ? 30000 : 15000
   },
@@ -19,8 +19,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: isCI ? 30000 : 15000,
-    navigationTimeout: isCI ? 30000 : 15000,
+    actionTimeout: isCI ? 20000 : 15000,
+    navigationTimeout: isCI ? 20000 : 15000,
     locale: 'fr-FR',
     timezoneId: 'Europe/Paris'
   },
