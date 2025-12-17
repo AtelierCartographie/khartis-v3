@@ -154,6 +154,12 @@ jobs:
       - name: Build application
         run: pnpm build
 
+      - name: Cache build output
+        uses: actions/cache/save@v4
+        with:
+          path: build
+          key: ${{ runner.os }}-build-${{ github.sha }}
+
   e2e-tests:
     name: E2E Tests
     needs: build-check
@@ -182,6 +188,13 @@ jobs:
 
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Restore build output
+        uses: actions/cache/restore@v4
+        with:
+          path: build
+          key: ${{ runner.os }}-build-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
