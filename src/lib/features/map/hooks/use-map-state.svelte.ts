@@ -88,7 +88,7 @@ export function useMapState(): UseMapStateReturn {
     return getCategoricalColorMap(categories, viz.classification.colors);
   });
 
-  function buildLayerContext(): LayerContext {
+  const memoizedLayerContext = $derived.by((): LayerContext => {
     const viz = defaultVisualization;
     return {
       viz: viz ?? null,
@@ -101,6 +101,10 @@ export function useMapState(): UseMapStateReturn {
       statistics: memoizedStatistics,
       categoryColorMap: memoizedCategoryColorMap
     };
+  });
+
+  function buildLayerContext(): LayerContext {
+    return memoizedLayerContext;
   }
 
   return {

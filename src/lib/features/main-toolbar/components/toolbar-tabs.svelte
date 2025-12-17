@@ -10,7 +10,6 @@
   import { Button, Modal, Tag } from 'carbon-components-svelte';
   import {
     Add,
-    Close,
     OverflowMenuVertical,
     Copy,
     Edit,

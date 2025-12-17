@@ -21,12 +21,10 @@ import {
   BASE_FILL_COLOR,
   BASE_STROKE_COLOR,
   createCategoricalColorAccessor,
-  createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
-  HIGHLIGHT_FILL_COLOR,
   withOpacity
 } from './layer-helpers';
 
@@ -48,8 +46,7 @@ export function createPointLayers(
     statistics,
     categoryColorMap
   } = ctx;
-  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } =
-    geometryInfo;
+  const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);

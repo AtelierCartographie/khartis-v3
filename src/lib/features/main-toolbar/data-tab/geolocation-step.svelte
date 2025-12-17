@@ -132,7 +132,6 @@
   let longitudeFieldId = $state<number | undefined>(undefined);
   let previousDatasetId = $state<string | undefined>(undefined);
   let gpsValidation = $state<GPSValidationResult | null>(null);
-  let isValidatingGPS = $state(false);
 
   $effect(() => {
     const currentDatasetId = selectedDataset?.id;
@@ -244,19 +243,14 @@
       geo.longitudeColumn &&
       Duck
     ) {
-      isValidatingGPS = true;
       validateGPSColumns(
         tableName,
         geo.latitudeColumn,
         geo.longitudeColumn,
         Duck
-      )
-        .then((result) => {
-          gpsValidation = result;
-        })
-        .finally(() => {
-          isValidatingGPS = false;
-        });
+      ).then((result) => {
+        gpsValidation = result;
+      });
     } else {
       gpsValidation = null;
     }

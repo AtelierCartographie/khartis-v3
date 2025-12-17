@@ -1,5 +1,6 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline } from '$lib/features/data-pipeline';
+import { SvelteSet } from 'svelte/reactivity';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
 import { ProcessingSemaphore } from '../utils/processing-semaphore';
@@ -527,7 +528,8 @@ class DatasetsStore {
   }
 
   hideColumn(datasetId: string, columnName: string): void {
-    const hiddenSet = this._state.hiddenColumns.get(datasetId) ?? new Set();
+    const hiddenSet =
+      this._state.hiddenColumns.get(datasetId) ?? new SvelteSet<string>();
     hiddenSet.add(columnName);
     this._state.hiddenColumns.set(datasetId, hiddenSet);
     logger.debug('Column hidden', LogCategory.STORE, { datasetId, columnName });

@@ -114,8 +114,13 @@
   $effect(() => {
     void worldBaseTable;
     void osmBasemapStore.activeOSMBasemap;
+    void osmBasemapStore.tileConfig;
+
     if (mapInit.isMapLoaded && mapInit.deckOverlay) {
       mapLayers.updateLayers(jsTable, userGeoJSON);
+    }
+    if (mapInit.isMapLoaded && mapInit.map) {
+      mapBasemap.syncOSMRasterLayer();
     }
   });
 
@@ -131,28 +136,16 @@
     }
   });
 
-  // Resize map when page zoom changes (CSS transform affects MapLibre)
   $effect(() => {
     const pageZoom = globalState.zoom.pageZoomLevel;
     if (pageZoom && mapInit.isMapLoaded && mapInit.map) {
-      // Delay resize to allow CSS transform to apply
-      setTimeout(() => {
-        mapInit.map?.resize();
-      }, 50);
+      setTimeout(() => mapInit.map?.resize(), 50);
     }
   });
 
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
     mapBasemap.syncBasemapStyle();
-  });
-
-  $effect(() => {
-    void osmBasemapStore.activeOSMBasemap;
-    void osmBasemapStore.tileConfig;
-    if (mapInit.isMapLoaded && mapInit.map) {
-      mapBasemap.syncOSMRasterLayer();
-    }
   });
 
   onMount(() => {

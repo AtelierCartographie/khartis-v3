@@ -264,7 +264,7 @@
                     <span class="submenu-arrow">▶</span>
                     {#if showTypeSubmenu}
                       <div class="submenu">
-                        {#each typeOptions as option}
+                        {#each typeOptions as option (option.value)}
                           <button
                             class="menu-item"
                             onclick={() =>
