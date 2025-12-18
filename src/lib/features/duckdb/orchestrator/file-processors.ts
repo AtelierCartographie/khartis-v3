@@ -42,18 +42,6 @@ export interface FileProcessorCallbacks {
   }>;
 }
 
-export function generateTableName(filename: string): string {
-  let name = filename.replace(/\.[^/.]+$/, '');
-  name = name.replace(/[^a-zA-Z0-9_]/g, '_');
-
-  if (!/^[a-zA-Z]/.test(name)) {
-    name = 't_' + name;
-  }
-
-  const timestamp = Date.now().toString(36);
-  return `${name}_${timestamp}`;
-}
-
 export function convertToCSV(data: Record<string, unknown>[]): string {
   if (!data || data.length === 0) return '';
 

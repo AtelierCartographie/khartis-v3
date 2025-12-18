@@ -10,35 +10,17 @@ export interface ComputeJoinStatsOptions {
   targetColumn: string;
 }
 
-function levenshteinDistance(a: string, b: string): number {
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
+interface JoinAnalysisRow {
+  source_val: string;
+  normalized_val: string;
+  duplicate_count: number;
+  exact_match: string | null;
+}
 
-  const matrix: number[][] = [];
-
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          matrix[i][j - 1] + 1,
-          matrix[i - 1][j] + 1
-        );
-      }
-    }
-  }
-
-  return matrix[b.length][a.length];
+interface FuzzyMatchRow {
+  source_val: string;
+  target_val: string;
+  distance: number;
 }
 
 export async function computeDatasetJoinStats(
@@ -54,68 +36,113 @@ export async function computeDatasetJoinStats(
     targetColumn
   });
 
-  const sourceValues = (await Duck.query(
-    `SELECT DISTINCT CAST("${sourceColumn}" AS VARCHAR) as val FROM "${sourceTableName}" WHERE "${sourceColumn}" IS NOT NULL`,
-    { format: 'array' }
-  )) as Array<{ val: string }>;
+  const joinAnalysisQuery = `
+    WITH source_data AS (
+      SELECT
+        CAST("${sourceColumn}" AS VARCHAR) as source_val,
+        LOWER(CAST("${sourceColumn}" AS VARCHAR)) as normalized_val
+      FROM "${sourceTableName}"
+      WHERE "${sourceColumn}" IS NOT NULL
+    ),
+    source_with_counts AS (
+      SELECT
+        source_val,
+        normalized_val,
+        COUNT(*) OVER (PARTITION BY normalized_val) as duplicate_count
+      FROM source_data
+    ),
+    target_normalized AS (
+      SELECT DISTINCT
+        CAST("${targetColumn}" AS VARCHAR) as target_val,
+        LOWER(CAST("${targetColumn}" AS VARCHAR)) as normalized_target
+      FROM "${targetTableName}"
+      WHERE "${targetColumn}" IS NOT NULL
+    )
+    SELECT DISTINCT
+      s.source_val,
+      s.normalized_val,
+      s.duplicate_count,
+      t.target_val as exact_match
+    FROM source_with_counts s
+    LEFT JOIN target_normalized t ON s.normalized_val = t.normalized_target
+  `;
 
-  const targetValues = (await Duck.query(
-    `SELECT DISTINCT CAST("${targetColumn}" AS VARCHAR) as val FROM "${targetTableName}" WHERE "${targetColumn}" IS NOT NULL`,
-    { format: 'array' }
-  )) as Array<{ val: string }>;
-
-  const targetSet = new Set(
-    targetValues.map((v) => v.val?.toLowerCase?.() || '')
-  );
+  const analysisResults = (await Duck.query(joinAnalysisQuery, {
+    format: 'array'
+  })) as JoinAnalysisRow[];
 
   const entities: JoinEntity[] = [];
-  const duplicateCheck: globalThis.Map<string, number> = new globalThis.Map();
+  const unmatchedValues: string[] = [];
 
-  for (const row of sourceValues) {
-    const val = row.val;
-    const normalizedVal = val?.toLowerCase?.() || '';
-    duplicateCheck.set(
-      normalizedVal,
-      (duplicateCheck.get(normalizedVal) || 0) + 1
-    );
-  }
-
-  for (const row of sourceValues) {
-    const val = row.val;
-    const normalizedVal = val?.toLowerCase?.() || '';
-
-    if (duplicateCheck.get(normalizedVal)! > 1) {
+  for (const row of analysisResults) {
+    if (row.duplicate_count > 1) {
       entities.push({
-        dataValue: val,
+        dataValue: row.source_val,
         status: JoinStatus.DUPLICATE
       });
-    } else if (targetSet.has(normalizedVal)) {
+    } else if (row.exact_match) {
       entities.push({
-        dataValue: val,
-        geoValue: val,
+        dataValue: row.source_val,
+        geoValue: row.source_val,
         status: JoinStatus.JOINED
       });
     } else {
-      const possibleMatches = targetValues
-        .filter((t) => {
-          const tNorm = t.val?.toLowerCase?.() || '';
-          return (
-            tNorm.includes(normalizedVal) ||
-            normalizedVal.includes(tNorm) ||
-            levenshteinDistance(normalizedVal, tNorm) <= 2
-          );
-        })
-        .map((t) => t.val);
+      unmatchedValues.push(row.source_val);
+    }
+  }
 
-      if (possibleMatches.length > 0) {
+  if (unmatchedValues.length > 0) {
+    const safeValues = unmatchedValues.map((v) => v.replace(/'/g, "''"));
+    const valuesLiteral = safeValues.map((v) => `'${v}'`).join(', ');
+
+    const fuzzyMatchQuery = `
+      WITH unmatched AS (
+        SELECT unnest([${valuesLiteral}]) as source_val
+      ),
+      target_normalized AS (
+        SELECT DISTINCT
+          CAST("${targetColumn}" AS VARCHAR) as target_val,
+          LOWER(CAST("${targetColumn}" AS VARCHAR)) as normalized_target
+        FROM "${targetTableName}"
+        WHERE "${targetColumn}" IS NOT NULL
+      )
+      SELECT
+        u.source_val,
+        t.target_val,
+        levenshtein(LOWER(u.source_val), t.normalized_target) as distance
+      FROM unmatched u
+      CROSS JOIN target_normalized t
+      WHERE
+        levenshtein(LOWER(u.source_val), t.normalized_target) <= 2
+        OR t.normalized_target LIKE '%' || LOWER(u.source_val) || '%'
+        OR LOWER(u.source_val) LIKE '%' || t.normalized_target || '%'
+      ORDER BY u.source_val, distance
+    `;
+
+    const fuzzyResults = (await Duck.query(fuzzyMatchQuery, {
+      format: 'array'
+    })) as FuzzyMatchRow[];
+
+    const matchesBySource = new Map<string, string[]>();
+    for (const row of fuzzyResults) {
+      const existing = matchesBySource.get(row.source_val) || [];
+      if (existing.length < 5) {
+        existing.push(row.target_val);
+        matchesBySource.set(row.source_val, existing);
+      }
+    }
+
+    for (const sourceVal of unmatchedValues) {
+      const matches = matchesBySource.get(sourceVal);
+      if (matches && matches.length > 0) {
         entities.push({
-          dataValue: val,
+          dataValue: sourceVal,
           status: JoinStatus.TO_VERIFY,
-          matches: possibleMatches.slice(0, 5)
+          matches
         });
       } else {
         entities.push({
-          dataValue: val,
+          dataValue: sourceVal,
           status: JoinStatus.UNRECOGNIZED
         });
       }

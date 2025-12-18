@@ -18,16 +18,6 @@ describe('projscreen', () => {
     }
   });
 
-  const wgs84GeoParquetMeta = JSON.stringify({
-    primary_column: 'geom',
-    columns: {
-      geom: {
-        bbox: [-5.5, 41.3, 9.6, 51.1],
-        geometry_types: ['Polygon']
-      }
-    }
-  });
-
   describe('get_bbox_from_geoparquet', () => {
     it('should extract bbox from valid metadata', () => {
       const bbox = get_bbox_from_geoparquet(validGeoParquetMeta);

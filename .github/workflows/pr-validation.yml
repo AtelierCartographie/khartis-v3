@@ -243,7 +243,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         shardIndex: [1, 2, 3, 4]
         shardTotal: [4]
@@ -336,14 +336,24 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Download blob reports
+        id: download-reports
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: all-blob-reports
           pattern: blob-report-*
           merge-multiple: true
 
       - name: Merge into HTML Report
-        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
+        run: |
+          if [ -d "all-blob-reports" ] && [ "$(ls -A all-blob-reports 2>/dev/null)" ]; then
+            echo "Found blob reports, merging..."
+            npx playwright merge-reports --reporter html,markdown ./all-blob-reports
+          else
+            echo "⚠️ No E2E test reports found - tests may have failed before producing reports" >> $GITHUB_STEP_SUMMARY
+            mkdir -p playwright-report
+            echo "<html><body><h1>No E2E reports available</h1><p>Tests failed before producing reports.</p></body></html>" > playwright-report/index.html
+          fi
 
       - name: Generate E2E test summary
         if: always()
@@ -380,7 +390,8 @@ jobs:
 
   pr-validation-complete:
     name: PR Validation Complete
-    needs: [lint, svelte-check, unit-tests, build-check, merge-reports]
+    needs:
+      [lint, svelte-check, unit-tests, build-check, e2e-tests, merge-reports]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -396,7 +407,7 @@ jobs:
           TYPECHECK="${{ needs.svelte-check.result }}"
           UNIT="${{ needs.unit-tests.result }}"
           BUILD="${{ needs.build-check.result }}"
-          E2E="${{ needs.merge-reports.result }}"
+          E2E="${{ needs.e2e-tests.result }}"
 
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -458,5 +469,5 @@ jobs:
           needs.svelte-check.result != 'success' ||
           needs.unit-tests.result != 'success' ||
           needs.build-check.result != 'success' ||
-          needs.merge-reports.result != 'success'
+          needs.e2e-tests.result != 'success'
         run: exit 1

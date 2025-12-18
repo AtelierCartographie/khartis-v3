@@ -1,28 +1,24 @@
-import type { Layer } from '@deck.gl/core';
+import type { Deck, Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  get_bbox_from_geoparquet,
-  get_model_matrix,
-  is_local_projection
-} from '../core/projscreen';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { projectionStore } from '../stores/projection.store.svelte';
 import {
   createDeckLayers,
   createGeoJsonLayers,
   createWorldBaseLayer
 } from '../layers';
-import type { CanvasSize, DeckDataRow, LayerContext } from '../types';
+import type { DeckDataRow, LayerContext } from '../types';
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
+  getDeckInstance: () => Deck | null;
   getIsMapLoaded: () => boolean;
   getWorldBaseTable: () => ArrowTable | null;
   getDatasetId: () => string | undefined;
   buildLayerContext: () => LayerContext;
-  getCanvasSize?: () => CanvasSize;
 }
 
 export interface UseMapLayersReturn {
@@ -36,38 +32,56 @@ export interface UseMapLayersReturn {
 export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   const {
     getDeckOverlay,
+    getDeckInstance,
     getIsMapLoaded,
     getWorldBaseTable,
     getDatasetId,
-    buildLayerContext,
-    getCanvasSize
+    buildLayerContext
   } = props;
 
   let lastPendingGeoTable = $state<string | null>(null);
+
+  function setLayers(layers: Layer<DeckDataRow>[]): void {
+    const deckOverlay = getDeckOverlay();
+    const deckInstance = getDeckInstance();
+
+    if (deckOverlay) {
+      deckOverlay.setProps({ layers });
+    } else if (deckInstance) {
+      deckInstance.setProps({ layers });
+    }
+  }
 
   function updateLayers(
     jsTable: ArrowTable | null,
     geojson: FeatureCollection | null
   ): void {
     const deckOverlay = getDeckOverlay();
-    if (!deckOverlay || !getIsMapLoaded()) return;
+    const deckInstance = getDeckInstance();
+
+    if ((!deckOverlay && !deckInstance) || !getIsMapLoaded()) {
+      return;
+    }
 
     const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
     const ctx = buildLayerContext();
     const worldBaseTable = getWorldBaseTable();
     const datasetId = getDatasetId();
 
+    ctx.modelMatrix = projectionStore.modelMatrix;
+
     logger.debug('Updating Deck.gl layers', LogCategory.MAP, {
       hasArrowTable: Boolean(jsTable),
       hasGeoJSON: Boolean(geojson),
       hasWorldBase: Boolean(worldBaseTable),
-      isOSMActive
+      isOSMActive,
+      hasModelMatrix: Boolean(ctx.modelMatrix)
     });
 
     const layers: Layer<DeckDataRow>[] = [];
 
     if (worldBaseTable && !isOSMActive) {
-      const baseLayer = createWorldBaseLayer(worldBaseTable);
+      const baseLayer = createWorldBaseLayer(worldBaseTable, ctx);
       if (baseLayer) layers.push(baseLayer);
     }
 
@@ -87,29 +101,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
           );
         }
-        deckOverlay.setProps({ layers });
+        setLayers(layers);
         return;
       }
       lastPendingGeoTable = null;
 
-      const bbox = get_bbox_from_geoparquet(geoMetadata);
-      if (bbox && is_local_projection(bbox) && getCanvasSize) {
-        const canvasSize = getCanvasSize();
-        ctx.modelMatrix = get_model_matrix(geoMetadata, canvasSize);
-        logger.info(
-          'Local projection detected, applying modelMatrix',
-          LogCategory.MAP,
-          {
-            bbox,
-            canvasSize
-          }
-        );
-      }
-
       layers.push(...createDeckLayers(jsTable, ctx));
     }
 
-    deckOverlay.setProps({ layers });
+    setLayers(layers);
     logger.success('Deck.gl layers applied', LogCategory.MAP, {
       layerCount: layers.length,
       isOSMActive

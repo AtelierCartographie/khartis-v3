@@ -24,9 +24,15 @@ export interface ParseResult {
   format: FileFormat;
 }
 
-function generateTableName(filename: string, prefix: string): string {
-  const base = filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-  return `${prefix}_${base}_${Date.now()}`;
+export function generateTableName(filename: string, prefix?: string): string {
+  let name = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+  if (prefix) {
+    name = `${prefix}_${name}`;
+  } else if (!/^[a-zA-Z]/.test(name)) {
+    name = 't_' + name;
+  }
+  const timestamp = Date.now().toString(36);
+  return `${name}_${timestamp}`;
 }
 
 async function cleanupTableOnError(
@@ -193,7 +199,7 @@ export async function parseFile(
   );
 }
 
-function detectFileFormat(name: string): FileFormat {
+export function detectFileFormat(name: string): FileFormat {
   const lower = name.toLowerCase();
   if (
     lower.endsWith('.csv') ||
