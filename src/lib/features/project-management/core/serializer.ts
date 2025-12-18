@@ -251,6 +251,14 @@ export function serializeUploadedFile(
     }
   }
 
+  if (file.sourceArchive) {
+    serialized.sourceArchive = file.sourceArchive;
+  }
+
+  if (file.duckdbTableName) {
+    serialized.duckdbTableName = file.duckdbTableName;
+  }
+
   return serialized;
 }
 
@@ -333,6 +341,12 @@ export function deserializeUploadedFile(
   }
   if (data.gpsColumns) {
     file.gpsColumns = data.gpsColumns;
+  }
+  if (data.sourceArchive) {
+    file.sourceArchive = data.sourceArchive;
+  }
+  if (data.duckdbTableName) {
+    file.duckdbTableName = data.duckdbTableName;
   }
 
   return file as UploadedFile;

@@ -28,6 +28,8 @@ export interface GlobalState {
   projectionFilter?: ProjectionFilterId;
   projectionViewMode?: ProjectionViewMode;
   zoom: ZoomState;
+  isMobileView: boolean;
+  isMobileToolbarOpen: boolean;
 }
 
 export const enum ToolbarStep {

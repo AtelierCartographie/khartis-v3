@@ -1,6 +1,7 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import {
   type ColumnStatSummary,
@@ -33,6 +34,7 @@ export interface ProcessingCallbacks {
     errorMessage?: string
   ) => void;
   onDataUpdate: (fileId: string, data: Partial<UploadedFile>) => void;
+  onAdditionalFile?: (file: UploadedFile) => void;
 }
 
 export class FileProcessorService {
@@ -138,7 +140,7 @@ class CsvProcessor extends FileProcessor {
     const { dataPipeline } = await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
 
-    const dataset = await dataPipeline.processFile(file);
+    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
 
@@ -343,7 +345,7 @@ class GeoPackageProcessor extends FileProcessor {
     const { dataPipeline } = await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
 
-    const dataset = await dataPipeline.processFile(file);
+    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName } = dataset;
 
     const sampleData = (await Duck!.query(
@@ -380,11 +382,65 @@ class ZipProcessor extends FileProcessor {
 
     const fileContent = await file.arrayBuffer();
 
-    const { dataPipeline } = await import('$lib/features/data-pipeline');
+    const { dataPipeline, isZipDatasetResult } =
+      await import('$lib/features/data-pipeline');
     const { Duck } = await import('$lib/features/duckdb');
 
-    const dataset = await dataPipeline.processFile(file);
-    const { tableName, columns, rowCount } = dataset;
+    const result = await dataPipeline.processFile(file);
+
+    if (isZipDatasetResult(result)) {
+      await this.processMultipleDatasets(
+        uploadedFile,
+        result,
+        fileContent,
+        Duck
+      );
+      return;
+    }
+
+    await this.processSingleDataset(uploadedFile, result, fileContent, Duck);
+  }
+
+  private async processSingleDataset(
+    uploadedFile: UploadedFile,
+    dataset: Awaited<
+      ReturnType<
+        typeof import('$lib/features/data-pipeline').dataPipeline.processFile
+      >
+    > & {
+      tableName: string;
+      columns: Array<{
+        name: string;
+        type: unknown;
+        stats: {
+          count?: number;
+          nulls?: number;
+          uniques?: number;
+          min?: unknown;
+          max?: unknown;
+          mean?: number;
+        };
+      }>;
+    },
+    fileContent: ArrayBuffer,
+    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+  ): Promise<void> {
+    const { tableName, columns, rowCount } = dataset as {
+      tableName: string;
+      columns: Array<{
+        name: string;
+        type: string;
+        stats: {
+          count?: number;
+          nulls?: number;
+          uniques?: number;
+          min?: unknown;
+          max?: unknown;
+          mean?: number;
+        };
+      }>;
+      rowCount: number;
+    };
     const headers = columns.map((col) => col.name);
 
     this.callbacks.onProgress(uploadedFile.id, 50);
@@ -452,6 +508,139 @@ class ZipProcessor extends FileProcessor {
     this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
     this.callbacks.onProgress(uploadedFile.id, 100);
     this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+  }
+
+  private async processMultipleDatasets(
+    uploadedFile: UploadedFile,
+    zipResult: Awaited<
+      ReturnType<
+        typeof import('$lib/features/data-pipeline').dataPipeline.processFile
+      >
+    >,
+    fileContent: ArrayBuffer,
+    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+  ): Promise<void> {
+    const result = zipResult as {
+      datasets: Array<{
+        id: string;
+        name: string;
+        tableName: string;
+        columns: Array<{
+          name: string;
+          type: string;
+          stats: {
+            count?: number;
+            nulls?: number;
+            uniques?: number;
+            min?: unknown;
+            max?: unknown;
+            mean?: number;
+          };
+        }>;
+        rowCount: number;
+        fileSize?: number;
+      }>;
+      sourceZipName: string;
+    };
+    const datasets = result.datasets;
+    const totalDatasets = datasets.length;
+
+    for (let i = 0; i < datasets.length; i++) {
+      const dataset = datasets[i];
+      const { tableName, columns, rowCount, name, fileSize } = dataset;
+      const headers = columns.map((col) => col.name);
+      const progressBase = (i / totalDatasets) * 100;
+
+      const statistics: Record<string, ColumnStatSummary> = {};
+      for (const col of columns) {
+        statistics[col.name] = {
+          type: col.type,
+          count: col.stats.count ?? rowCount,
+          nullCount: col.stats.nulls ?? 0,
+          unique: col.stats.uniques ?? 0,
+          min: col.stats.min as number | undefined,
+          max: col.stats.max as number | undefined,
+          mean: col.stats.mean
+        };
+      }
+
+      let fullData: Array<Record<string, unknown>> = [];
+      try {
+        fullData = (await Duck!.query(`SELECT * FROM "${tableName}"`, {
+          format: 'array'
+        })) as Array<Record<string, unknown>>;
+      } catch {
+        /* Query failed, fullData remains empty */
+      }
+
+      const tabularData = fullData.map((row) => {
+        const tabularRow: Record<string, JsonValue> = {};
+        for (const [key, value] of Object.entries(row)) {
+          if (value instanceof Date) {
+            tabularRow[key] = value.toISOString();
+          } else {
+            tabularRow[key] = value as JsonValue;
+          }
+        }
+        return tabularRow;
+      });
+
+      const sampleForAnalysis = fullData.slice(0, 100);
+      const dataMatrix = sampleForAnalysis.map((row) =>
+        headers.map((header) => {
+          const value = row[header];
+          if (value === null || value === undefined) return null;
+          if (value instanceof Date) return value;
+          if (
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+          ) {
+            return value;
+          }
+          return String(value);
+        })
+      ) as CsvMatrix;
+
+      const deepAnalysis = await DeepDataValidator.analyzeDataContent(
+        headers,
+        dataMatrix,
+        { sampleSize: Math.min(100, dataMatrix.length) }
+      );
+
+      if (i === 0) {
+        this.callbacks.onDataUpdate(uploadedFile.id, {
+          name,
+          fileType: FileType.CSV,
+          parsedData: tabularData,
+          statistics,
+          content: undefined,
+          deepAnalysis,
+          sourceArchive: result.sourceZipName,
+          duckdbTableName: tableName
+        });
+        this.callbacks.onProgress(uploadedFile.id, progressBase + 50);
+        this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+      } else if (this.callbacks.onAdditionalFile) {
+        const additionalFile: UploadedFile = {
+          id: crypto.randomUUID(),
+          name,
+          size: fileSize ?? 0,
+          type: 'text/csv',
+          fileType: FileType.CSV,
+          status: FileStatus.COMPLETE,
+          sourceType: uploadedFile.sourceType,
+          parsedData: tabularData,
+          statistics,
+          deepAnalysis,
+          sourceArchive: result.sourceZipName,
+          duckdbTableName: tableName
+        };
+        this.callbacks.onAdditionalFile(additionalFile);
+      }
+    }
+
+    this.callbacks.onProgress(uploadedFile.id, 100);
   }
 }
 
