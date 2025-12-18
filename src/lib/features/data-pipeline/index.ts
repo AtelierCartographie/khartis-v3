@@ -7,6 +7,7 @@ export {
   fromDuckDBType,
   isGeoArrowMetadata,
   isNumericType,
+  isZipDatasetResult,
   mergeValidationResults,
   validationFailure,
   validationSuccess
@@ -34,7 +35,8 @@ export type {
   RawColumn,
   RawDataset,
   UploadedFilePayload,
-  ValidationResult
+  ValidationResult,
+  ZipDatasetResult
 } from './types';
 
 export { PIPELINE_CONST, isGeospatialFile, isTabularFile } from './constants';

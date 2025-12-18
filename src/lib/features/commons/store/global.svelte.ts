@@ -13,6 +13,7 @@ import { projectStore } from './project.store.svelte';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
+const MOBILE_BREAKPOINT_VALUE = 1024;
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -33,7 +34,12 @@ class GlobalStore {
       minPageZoom: 10,
       maxPageZoom: 500,
       pageZoomStep: 10
-    }
+    },
+    isMobileView:
+      typeof window !== 'undefined'
+        ? window.innerWidth < MOBILE_BREAKPOINT_VALUE
+        : false,
+    isMobileToolbarOpen: false
   });
 
   private _selectedDataButtonId = $state<string | undefined>(
@@ -224,6 +230,33 @@ class GlobalStore {
     return this._state.zoom;
   }
 
+  get isMobileView() {
+    return this._state.isMobileView;
+  }
+
+  get isMobileToolbarOpen() {
+    return this._state.isMobileToolbarOpen;
+  }
+
+  setMobileView(value: boolean): void {
+    this._state.isMobileView = value;
+    if (!value) {
+      this._state.isMobileToolbarOpen = false;
+    }
+  }
+
+  openMobileToolbar(): void {
+    this._state.isMobileToolbarOpen = true;
+  }
+
+  closeMobileToolbar(): void {
+    this._state.isMobileToolbarOpen = false;
+  }
+
+  toggleMobileToolbar(): void {
+    this._state.isMobileToolbarOpen = !this._state.isMobileToolbarOpen;
+  }
+
   setNavigationState(selectedStep: ToolbarStep): void {
     this.selectedStep = selectedStep;
 
@@ -316,5 +349,11 @@ export const globalActions = {
   zoomInPage: globalState.zoomInPage.bind(globalState),
   zoomOutPage: globalState.zoomOutPage.bind(globalState),
   resetPageZoom: globalState.resetPageZoom.bind(globalState),
-  setPageZoom: globalState.setPageZoom.bind(globalState)
+  setPageZoom: globalState.setPageZoom.bind(globalState),
+  setMobileView: globalState.setMobileView.bind(globalState),
+  openMobileToolbar: globalState.openMobileToolbar.bind(globalState),
+  closeMobileToolbar: globalState.closeMobileToolbar.bind(globalState),
+  toggleMobileToolbar: globalState.toggleMobileToolbar.bind(globalState)
 };
+
+export const MOBILE_BREAKPOINT = 1024;

@@ -1,5 +1,12 @@
-import type { DatasetResult } from '$lib/features/data-pipeline';
-import { dataPipeline } from '$lib/features/data-pipeline';
+import type {
+  DatasetResult,
+  EnrichedColumn
+} from '$lib/features/data-pipeline';
+import {
+  ColumnType,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
 import { SvelteSet } from 'svelte/reactivity';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
@@ -7,6 +14,66 @@ import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
 import { projectStore } from './project.store.svelte';
+
+function createDatasetFromPreprocessedFile(file: UploadedFile): DatasetResult {
+  const statistics = file.statistics as Record<
+    string,
+    {
+      type?: string;
+      count?: number;
+      nullCount?: number;
+      unique?: number;
+      min?: unknown;
+      max?: unknown;
+      mean?: number;
+    }
+  >;
+
+  const columns: EnrichedColumn[] = Object.entries(statistics || {}).map(
+    ([name, stats]) => ({
+      name,
+      values: [],
+      type: (stats.type as ColumnType) || ColumnType.TEXT,
+      stats: {
+        name,
+        type: (stats.type as ColumnType) || ColumnType.TEXT,
+        count: stats.count ?? 0,
+        nulls: stats.nullCount ?? 0,
+        uniques: stats.unique ?? 0,
+        min: stats.min,
+        max: stats.max,
+        mean: stats.mean
+      }
+    })
+  );
+
+  const data = file.parsedData as Record<string, unknown>[] | undefined;
+
+  const firstColStats = Object.values(statistics)[0];
+  const actualRowCount = firstColStats?.count ?? data?.length ?? 0;
+
+  const tableName =
+    file.duckdbTableName ??
+    `legacy_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    sourceFileId: file.id,
+    tableName,
+    columns,
+    rowCount: actualRowCount,
+    metadata: {
+      processedAt: new Date(),
+      fileType: file.fileType,
+      parserUsed: file.duckdbTableName ? 'zip-preprocessed' : 'legacy-parsed'
+    },
+    data,
+    fileSize: file.size,
+    geoDetection: file.deepAnalysis?.geoDetection,
+    createdAt: new Date()
+  };
+}
 
 interface DatasetsState {
   datasets: DatasetResult[];
@@ -87,7 +154,7 @@ class DatasetsStore {
         LogCategory.STORE
       );
 
-      const newDatasets = await Promise.all(
+      const results = await Promise.all(
         files.map(async (file) => {
           return this.processingSemaphore.run(async () => {
             logger.debug(
@@ -95,13 +162,34 @@ class DatasetsStore {
               LogCategory.STORE
             );
 
+            if (file.duckdbTableName) {
+              logger.debug(
+                `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
+                LogCategory.STORE
+              );
+              return createDatasetFromPreprocessedFile(file);
+            }
+
+            if (
+              !file.content &&
+              !file.originalFile &&
+              file.parsedData &&
+              file.statistics
+            ) {
+              logger.warn(
+                `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
+                LogCategory.STORE
+              );
+              return createDatasetFromPreprocessedFile(file);
+            }
+
             if (!file.content && !file.originalFile) {
               throw new Error(
                 `File ${file.name} has no content or originalFile`
               );
             }
 
-            const dataset = await dataPipeline.processUploadedFile(
+            const result = await dataPipeline.processUploadedFile(
               file,
               file.originalFile
             );
@@ -110,9 +198,13 @@ class DatasetsStore {
               `Completed processing: ${file.name}`,
               LogCategory.STORE
             );
-            return dataset;
+            return result;
           });
         })
+      );
+
+      const newDatasets: DatasetResult[] = results.flatMap((result) =>
+        isZipDatasetResult(result) ? result.datasets : [result]
       );
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
@@ -146,7 +238,28 @@ class DatasetsStore {
     let addedDataset: DatasetResult | null = null;
 
     try {
-      const dataset = await this.processingSemaphore.run(async () => {
+      const result = await this.processingSemaphore.run(async () => {
+        if (file.duckdbTableName) {
+          logger.debug(
+            `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
+            LogCategory.STORE
+          );
+          return createDatasetFromPreprocessedFile(file);
+        }
+
+        if (
+          !file.content &&
+          !file.originalFile &&
+          file.parsedData &&
+          file.statistics
+        ) {
+          logger.warn(
+            `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
+            LogCategory.STORE
+          );
+          return createDatasetFromPreprocessedFile(file);
+        }
+
         if (!file.content && !file.originalFile) {
           throw new Error(`File ${file.name} has no content or originalFile`);
         }
@@ -159,7 +272,11 @@ class DatasetsStore {
         return await dataPipeline.processUploadedFile(file, file.originalFile);
       });
 
-      if (dataset) {
+      const datasets: DatasetResult[] = isZipDatasetResult(result)
+        ? result.datasets
+        : [result];
+
+      for (const dataset of datasets) {
         const existingDataset = this._state.datasets.find(
           (d) => d.sourceFileId === dataset.sourceFileId
         );
@@ -172,7 +289,7 @@ class DatasetsStore {
             this._state.selectedDatasetId = dataset.id;
           }
 
-          addedDataset = dataset;
+          if (!addedDataset) addedDataset = dataset;
           throw new DuplicateFileError(
             `Le fichier "${file.name}" existe déjà et a été remplacé`,
             file.name,
@@ -189,7 +306,7 @@ class DatasetsStore {
           this._state.selectedDatasetId = dataset.id;
         }
 
-        addedDataset = dataset;
+        if (!addedDataset) addedDataset = dataset;
 
         const pendingResolvers = this.pendingDatasetResolvers.get(
           dataset.sourceFileId
@@ -390,12 +507,16 @@ class DatasetsStore {
         (d) => d.id !== datasetId
       );
 
-      const newDataset = await dataPipeline.processUploadedFile(
+      const result = await dataPipeline.processUploadedFile(
         sourceFile,
         sourceFile.originalFile
       );
 
-      const resetDataset = {
+      const newDataset: DatasetResult = isZipDatasetResult(result)
+        ? result.datasets[0]
+        : result;
+
+      const resetDataset: DatasetResult = {
         ...newDataset,
         id: datasetId
       };
