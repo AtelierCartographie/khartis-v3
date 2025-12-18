@@ -1,9 +1,7 @@
 import { Matrix4 } from '@math.gl/core';
+import type { CanvasSize } from '../types';
 
-interface CanvasSize {
-  width: number;
-  height: number;
-}
+const FIT_BOUNDS_PADDING_FACTOR = 0.92;
 
 interface GeoParquetColumnMeta {
   bbox: [number, number, number, number];
@@ -46,7 +44,7 @@ export function get_max_scale(
   const scale_x = canvas.width / bbox_width;
   const scale_y = canvas.height / bbox_height;
 
-  return Math.min(scale_x, scale_y);
+  return Math.min(scale_x, scale_y) * FIT_BOUNDS_PADDING_FACTOR;
 }
 
 export function get_model_matrix(
@@ -57,6 +55,13 @@ export function get_model_matrix(
   const bbox = get_bbox_from_geoparquet(metadata, columnName);
   if (!bbox) return null;
 
+  return get_model_matrix_from_bbox(bbox, canvasSize);
+}
+
+export function get_model_matrix_from_bbox(
+  bbox: [number, number, number, number],
+  canvasSize: CanvasSize
+): Matrix4 {
   const [cx, cy] = get_bbox_center(bbox);
   const scale = get_max_scale(canvasSize, bbox);
 

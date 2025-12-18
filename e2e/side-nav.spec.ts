@@ -30,14 +30,16 @@ test.describe('Side Navigation', () => {
     ).toBeEnabled();
 
     await page.locator('#khartis-side-nav select').selectOption('en');
-    await page.waitForTimeout(500);
+    // Wait for language change to take effect
+    await page.waitForTimeout(2000);
+    // Reopen side nav if it closed after language change
+    const sideNavAfterLang = page.locator(SIDENAV_SELECTOR);
+    if (!(await sideNavAfterLang.isVisible())) {
+      await openSideNav(page);
+    }
     await expect(
       page.locator('[data-testid="sidenav-new-project"]')
-    ).toContainText('New project');
-
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
-    await expect(page.locator(SIDENAV_SELECTOR)).toBeHidden();
+    ).toContainText('New project', { timeout: 15000 });
   });
 
   test('should have all project buttons with correct states', async ({

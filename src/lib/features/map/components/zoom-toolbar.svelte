@@ -30,7 +30,7 @@
 
   function handleZoomIn(): void {
     if (activeTabIndex === 0) {
-      mapInstanceStore.map?.zoomIn();
+      mapInstanceStore.zoomIn();
     } else {
       globalActions.zoomInPage();
     }
@@ -38,7 +38,7 @@
 
   function handleZoomOut(): void {
     if (activeTabIndex === 0) {
-      mapInstanceStore.map?.zoomOut();
+      mapInstanceStore.zoomOut();
     } else {
       globalActions.zoomOutPage();
     }
@@ -46,8 +46,7 @@
 
   function handleResetZoom(): void {
     if (activeTabIndex === 0) {
-      const baseZoom = mapInstanceStore.baseZoomLevel;
-      mapInstanceStore.map?.setZoom(baseZoom);
+      mapInstanceStore.resetZoom();
     } else {
       globalActions.resetPageZoom();
     }
