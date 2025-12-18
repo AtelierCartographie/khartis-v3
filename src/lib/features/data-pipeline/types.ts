@@ -48,14 +48,6 @@ export function isNumericType(type: ColumnType): boolean {
   return type === ColumnType.NUMBER;
 }
 
-export function isTemporalType(type: ColumnType): boolean {
-  return type === ColumnType.DATE;
-}
-
-export function isSpatialType(type: ColumnType): boolean {
-  return type === ColumnType.GEOMETRY;
-}
-
 export function fromDuckDBType(duckType: string): ColumnType {
   const normalized = duckType.toLowerCase();
 
@@ -87,24 +79,6 @@ export interface ColumnStats {
   mean?: number;
   median?: number;
   stdDev?: number;
-}
-
-export function hasNumericStats(stats: ColumnStats): boolean {
-  return (
-    stats.mean !== undefined &&
-    stats.median !== undefined &&
-    stats.stdDev !== undefined
-  );
-}
-
-export function getNullPercentage(stats: ColumnStats): number {
-  if (stats.count === 0) return 0;
-  return (stats.nulls / stats.count) * 100;
-}
-
-export function getUniquePercentage(stats: ColumnStats): number {
-  if (stats.count === 0) return 0;
-  return (stats.uniques / stats.count) * 100;
 }
 
 export interface RawColumn {
@@ -140,27 +114,6 @@ export function computeCentroid(
   bounds: [number, number, number, number]
 ): [number, number] {
   return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-}
-
-export function isValidBounds(
-  bounds: [number, number, number, number]
-): boolean {
-  return (
-    bounds[0] < bounds[2] &&
-    bounds[1] < bounds[3] &&
-    bounds[0] >= -180 &&
-    bounds[2] <= 180 &&
-    bounds[1] >= -90 &&
-    bounds[3] <= 90
-  );
-}
-
-export function computeBoundsArea(
-  bounds: [number, number, number, number]
-): number {
-  const width = bounds[2] - bounds[0];
-  const height = bounds[3] - bounds[1];
-  return width * height;
 }
 
 export interface ValidationResult {
@@ -221,27 +174,6 @@ export function isGeoArrowMetadata(obj: unknown): obj is GeoArrowMetadata {
   }
   const columns = (obj as Record<string, unknown>).columns;
   return typeof columns === 'object' && columns !== null;
-}
-
-export function extractBBox(
-  metadata: GeoArrowMetadata
-): [number, number, number, number] | undefined {
-  const primaryColumn = metadata.primary_column;
-  const columnMetadata = metadata.columns[primaryColumn];
-  return columnMetadata?.bbox;
-}
-
-export function extractGeometryTypes(metadata: GeoArrowMetadata): string[] {
-  const primaryColumn = metadata.primary_column;
-  const columnMetadata = metadata.columns[primaryColumn];
-  return columnMetadata?.geometry_types || [];
-}
-
-export function extractPrimaryGeometryType(
-  metadata: GeoArrowMetadata
-): string | undefined {
-  const types = extractGeometryTypes(metadata);
-  return types.length > 0 ? types[0] : undefined;
 }
 
 export interface ColumnAnalysis {
@@ -379,6 +311,7 @@ export interface UploadedFilePayload {
   deepAnalysis?: DataAnalysisResult;
   preparedGeoJSON?: string;
   relatedFileObjects?: File[];
+  relatedFilesData?: Record<string, ArrayBuffer | number[]>;
 }
 
 export interface DuckAnalyticsColumn {

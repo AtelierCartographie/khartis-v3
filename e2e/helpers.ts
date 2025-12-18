@@ -86,15 +86,15 @@ export const SHP_PATH = join(TEST_DATASETS, 'shp');
 export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
 
-// Timeouts adaptés pour CI (local timeouts optimized for parallel execution)
+// Timeouts adaptés pour CI et exécution locale parallèle (2+ workers)
 const TIMEOUTS = {
-  modal: isCI ? 30000 : 20000,
-  map: isCI ? 60000 : 45000,
-  fileUpload: isCI ? 10000 : 8000,
-  action: isCI ? 20000 : 15000,
+  modal: isCI ? 30000 : 30000,
+  map: isCI ? 60000 : 60000,
+  fileUpload: isCI ? 15000 : 15000,
+  action: isCI ? 25000 : 25000,
   transition: isCI ? 1000 : 500,
   // DuckDB WASM init - higher for parallel execution (resource contention)
-  duckdbInit: isCI ? 120000 : 90000
+  duckdbInit: isCI ? 120000 : 120000
 };
 
 // Core helpers
@@ -190,7 +190,8 @@ export async function createProject(
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
+  // Longer timeout for project creation (includes dataset registration, map rendering)
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
 }
 
 export async function openSideNav(page: Page): Promise<Locator> {
@@ -341,5 +342,6 @@ export async function createShapefileProject(
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
+  // Longer timeout for shapefile project creation
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
 }

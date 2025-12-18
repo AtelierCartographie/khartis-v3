@@ -4,10 +4,11 @@ import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detecto
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import {
+  generateTableName,
   geoParquetReader,
-  type GeoArrowMetadata
+  type GeoArrowMetadata,
+  type ProcessedDataset
 } from '$lib/features/data-pipeline';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
@@ -252,7 +253,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      const tableName = fileProcessors.generateTableName(file.name);
+      const tableName = generateTableName(file.name);
       const callbacks = {
         getRowCount: (tn: string) => this.getRowCount(tn),
         createArrowTableWithMetadata: (tn: string) =>

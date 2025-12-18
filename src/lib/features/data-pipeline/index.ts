@@ -3,20 +3,10 @@ export type { DataPipeline } from './pipeline';
 
 export {
   ColumnType,
-  computeBoundsArea,
   computeCentroid,
-  extractBBox,
-  extractGeometryTypes,
-  extractPrimaryGeometryType,
   fromDuckDBType,
-  getNullPercentage,
-  getUniquePercentage,
-  hasNumericStats,
   isGeoArrowMetadata,
   isNumericType,
-  isSpatialType,
-  isTemporalType,
-  isValidBounds,
   mergeValidationResults,
   validationFailure,
   validationSuccess
@@ -52,6 +42,8 @@ export { PIPELINE_CONST, isGeospatialFile, isTabularFile } from './constants';
 export {
   ParserError,
   canParseFile,
+  detectFileFormat,
+  generateTableName,
   parseFile,
   parseGeoFile,
   parseTabular
@@ -71,7 +63,6 @@ export {
   tableHasGeoArrowMetadata
 } from './io/geoparquet-reader';
 
-export { convertGeoJSONToRawDataset } from './utils/geojson-converter';
 export type {
   GeoJSONFeature,
   GeoJSONFeatureCollection

@@ -817,6 +817,7 @@
   "dataset_pasted_name": "Pasted table",
   "create_project_type_selector": "Project type selection",
   "create_project_processing_file": "Processing file {name}...",
+  "create_project_processing_files": "Processing {count} file(s)...",
   "import_decimal_european_detected": "European number format detected (comma decimal)",
   "import_decimal_standard_detected": "Standard number format detected (dot decimal)",
   "warning_mixed_decimal_formats": "Mixed number formats detected",

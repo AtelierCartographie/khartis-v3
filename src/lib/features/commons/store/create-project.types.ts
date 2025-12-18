@@ -118,6 +118,8 @@ export interface CreateProjectState {
     onlineFileUrl: string;
     projectName: string;
     isLoading: boolean;
+    isProcessingFiles: boolean;
+    processingFileCount: number;
     error?: string;
     validationErrors: string[];
   };

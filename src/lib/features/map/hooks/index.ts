@@ -23,5 +23,6 @@ export {
   useMapInit,
   type UseMapInitProps,
   type UseMapInitReturn,
-  type MapInitConfig
+  type MapInitConfig,
+  type ViewMode
 } from './use-map-init.svelte';
