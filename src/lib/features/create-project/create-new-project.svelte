@@ -280,7 +280,6 @@
       />
     {/if}
 
-    <!-- ARIA live region for screen reader announcements -->
     <div aria-live="polite" aria-atomic="true" class="sr-only">
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
         {#if file.status === FileStatus.PROCESSING}

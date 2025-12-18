@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { base } from '$app/paths';
   import {
     ExampleCategory,
     FileStatus
@@ -18,10 +16,10 @@
     DataSourceType as DataSource,
     FileType as FType
   } from '$lib/features/commons/store/create-project.types';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
+  import { useProjectNavigation } from './hooks';
   import {
     InlineNotification,
     SkeletonPlaceholder,
@@ -34,12 +32,29 @@
 
   const { onClose }: Props = $props();
 
+  const { navigateAfterAction } = useProjectNavigation({
+    getOnClose: () => onClose
+  });
+
   let selectedCategory = $state<ExampleCategory>(ExampleCategory.ALL);
   let selectedExample = $state<string | null>(null);
   let isLoading = $state(false);
   let error = $state<string>('');
 
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
+
+  const CATEGORY_LABELS: Record<string, () => string> = {
+    try_example_all: m.try_example_all,
+    try_example_symbols: m.try_example_symbols,
+    try_example_polygons: m.try_example_polygons,
+    try_example_lines: m.try_example_lines,
+    try_example_texts: m.try_example_texts,
+    try_example_hybrids: m.try_example_hybrids
+  };
+
+  function getCategoryLabel(label: string): string {
+    return CATEGORY_LABELS[label]?.() ?? label;
+  }
 
   function selectCategory(category: ExampleCategory) {
     selectedCategory = category;
@@ -93,10 +108,7 @@
 
       await projectStore.createProject(example.title, [uploadedFile]);
 
-      globalState.isCreateProjectModalOpen = false;
-      createProjectActions.resetAllTabs();
-      onClose?.();
-      await goto(base || '/', { replaceState: true });
+      await navigateAfterAction();
     } catch (err) {
       logger.error('Failed to load example', LogCategory.PROJECT, err);
       error =
@@ -138,21 +150,7 @@
           interactive
           on:click={() => selectCategory(category.id)}
         >
-          {#if category.label === 'try_example_all'}
-            {m.try_example_all()}
-          {:else if category.label === 'try_example_symbols'}
-            {m.try_example_symbols()}
-          {:else if category.label === 'try_example_polygons'}
-            {m.try_example_polygons()}
-          {:else if category.label === 'try_example_lines'}
-            {m.try_example_lines()}
-          {:else if category.label === 'try_example_texts'}
-            {m.try_example_texts()}
-          {:else if category.label === 'try_example_hybrids'}
-            {m.try_example_hybrids()}
-          {:else}
-            {category.label}
-          {/if}
+          {getCategoryLabel(category.label)}
         </Tag>
       {/each}
     </div>

@@ -1,4 +1,4 @@
-export { Pipeline, createFileFromUpload, dataPipeline } from './pipeline';
+export { createFileFromUpload, dataPipeline } from './pipeline';
 export type { DataPipeline } from './pipeline';
 
 export {

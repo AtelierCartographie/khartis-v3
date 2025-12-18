@@ -103,7 +103,7 @@ function createCompanionFilesFromUpload(
   return companionFiles.length > 0 ? companionFiles : undefined;
 }
 
-export const Pipeline = {
+const Pipeline = {
   get initialized() {
     return initialized;
   },

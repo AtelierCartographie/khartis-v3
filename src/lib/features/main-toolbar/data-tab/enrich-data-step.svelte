@@ -53,14 +53,7 @@
   import BasemapCardVertical from './components/basemap-card-vertical.svelte';
   import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
   import { computeDatasetJoinStats } from './services/join-stats.service';
-
-  interface GeoComboBoxItem {
-    id: number;
-    text: string;
-    columnName: string;
-    isGeo: boolean;
-    confidence: number;
-  }
+  import type { GeoComboBoxItem } from './data-tab.shared.types';
 
   let suggestionsExpanded = $state(true);
 
