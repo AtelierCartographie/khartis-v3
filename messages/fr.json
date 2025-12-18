@@ -817,6 +817,7 @@
   "dataset_pasted_name": "Tableau collé",
   "create_project_type_selector": "Sélection du type de projet",
   "create_project_processing_file": "Traitement du fichier {name} en cours...",
+  "create_project_processing_files": "Traitement de {count} fichier(s) en cours...",
   "import_decimal_european_detected": "Format de nombre européen détecté (virgule décimale)",
   "import_decimal_standard_detected": "Format de nombre standard détecté (point décimal)",
   "warning_mixed_decimal_formats": "Formats de nombres mixtes détectés",

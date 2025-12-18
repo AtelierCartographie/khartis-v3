@@ -54,7 +54,7 @@ TODO: add screenshots
 Prerequisites
 
 - Node.js >= 18
-- pnpm 9 (via Corepack)
+- pnpm 10 (via Corepack)
 
 Install
 

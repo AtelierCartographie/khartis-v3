@@ -1,3 +1,4 @@
+import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
@@ -7,6 +8,9 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { BASEMAP_STYLES, DEFAULT_BASEMAP_STYLE } from '../constants';
 import { createTooltipHandler } from '../interactions';
 import { basemapService } from '../services/basemap.service.svelte';
+import { projectionStore } from '../stores/projection.store.svelte';
+
+export type ViewMode = 'orthographic' | 'maplibre';
 
 export interface MapInitConfig {
   center: [number, number];
@@ -23,11 +27,15 @@ export interface UseMapInitProps {
 }
 
 export interface UseMapInitReturn {
-  initialize: (container: HTMLDivElement) => void;
+  initialize: (container: HTMLDivElement, viewMode?: ViewMode) => void;
   destroy: () => void;
+  switchToMapLibreMode: () => void;
+  switchToOrthographicMode: () => void;
   readonly map: maplibregl.Map | null;
   readonly deckOverlay: MapboxOverlay | null;
+  readonly deckInstance: Deck | null;
   readonly isMapLoaded: boolean;
+  readonly viewMode: ViewMode;
 }
 
 const DEFAULT_CONFIG: MapInitConfig = {
@@ -37,18 +45,83 @@ const DEFAULT_CONFIG: MapInitConfig = {
   maxZoom: 20
 };
 
+const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: 'main', flipY: false });
+
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   const { onMapLoaded, onWorldBaseLoaded, onZoom, onMoveEnd } = props;
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
+  let deckInstance = $state<Deck | null>(null);
   let isMapLoaded = $state(false);
+  let currentViewMode = $state<ViewMode>('orthographic');
+  let containerRef = $state<HTMLDivElement | null>(null);
 
-  function initialize(
+  function initializeOrthographic(container: HTMLDivElement): void {
+    logger.info('Initializing Deck.gl with OrthographicView', LogCategory.MAP);
+
+    containerRef = container;
+
+    const canvasSize = {
+      width: container.clientWidth || 800,
+      height: container.clientHeight || 600
+    };
+    projectionStore.updateCanvasSize(canvasSize);
+
+    deckInstance = new Deck({
+      parent: container,
+      views: [ORTHOGRAPHIC_VIEW],
+      initialViewState: {
+        main: {
+          target: [0, 0, 0],
+          zoom: 0,
+          minZoom: -10,
+          maxZoom: 10
+        }
+      },
+      width: '100%',
+      height: '100%',
+      controller: true,
+      layers: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getTooltip: createTooltipHandler() as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      onViewStateChange: ({ viewState }: { viewState: any }) => {
+        if (viewState.main) {
+          mapInstanceStore.updateDeckViewState({
+            target: viewState.main.target,
+            zoom: viewState.main.zoom
+          });
+        }
+        onZoom();
+        return viewState;
+      },
+      onResize: ({ width, height }) => {
+        projectionStore.updateCanvasSize({ width, height });
+      },
+      onAfterRender: () => {
+        if (!isMapLoaded) {
+          isMapLoaded = true;
+          mapInstanceStore.setDeckInstance(deckInstance);
+          mapInstanceStore.setMapLoaded(true);
+          logger.success('Deck.gl OrthographicView ready', LogCategory.MAP);
+          onMapLoaded();
+          loadDefaultBasemap();
+        }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    }) as any as Deck;
+
+    currentViewMode = 'orthographic';
+  }
+
+  function initializeMapLibre(
     container: HTMLDivElement,
     config: MapInitConfig = DEFAULT_CONFIG
   ): void {
-    logger.info('Mounting Deck.gl map component', LogCategory.MAP);
+    logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
+
+    containerRef = container;
 
     map = new maplibregl.Map({
       container,
@@ -86,20 +159,11 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setMapInstance(map);
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
-      logger.success('Maplibre + Deck.gl ready', LogCategory.MAP);
+      logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
 
       onMapLoaded();
+      loadDefaultBasemap();
 
-      basemapService.loadDefaultBasemap().then((basemap) => {
-        if (basemap?.geometryTable) {
-          onWorldBaseLoaded(basemap.geometryTable);
-          logger.info('World base layer loaded', LogCategory.MAP, {
-            rows: basemap.geometryTable.numRows
-          });
-        }
-      });
-
-      // Trigger resize to handle CSS transform on parent container
       requestAnimationFrame(() => {
         map?.resize();
       });
@@ -108,6 +172,43 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     map.on('zoom', onZoom);
     map.on('moveend', onMoveEnd);
     map.on('zoomend', onMoveEnd);
+    currentViewMode = 'maplibre';
+  }
+
+  function loadDefaultBasemap(): void {
+    basemapService.loadDefaultBasemap().then((basemap) => {
+      if (basemap?.geometryTable) {
+        onWorldBaseLoaded(basemap.geometryTable);
+        logger.info('World base layer loaded', LogCategory.MAP, {
+          rows: basemap.geometryTable.numRows
+        });
+      }
+    });
+  }
+
+  function initialize(
+    container: HTMLDivElement,
+    viewMode: ViewMode = 'orthographic'
+  ): void {
+    if (viewMode === 'orthographic') {
+      initializeOrthographic(container);
+    } else {
+      initializeMapLibre(container);
+    }
+  }
+
+  function switchToMapLibreMode(): void {
+    if (currentViewMode === 'maplibre' || !containerRef) return;
+
+    destroy();
+    initializeMapLibre(containerRef);
+  }
+
+  function switchToOrthographicMode(): void {
+    if (currentViewMode === 'orthographic' || !containerRef) return;
+
+    destroy();
+    initializeOrthographic(containerRef);
   }
 
   function destroy(): void {
@@ -115,23 +216,36 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       map.remove();
       map = null;
     }
+    if (deckInstance) {
+      deckInstance.finalize();
+      deckInstance = null;
+    }
     deckOverlay = null;
     isMapLoaded = false;
+    projectionStore.reset();
     mapInstanceStore.reset();
-    logger.info('Deck.gl map destroyed', LogCategory.MAP);
+    logger.info('Map destroyed', LogCategory.MAP);
   }
 
   return {
     initialize,
     destroy,
+    switchToMapLibreMode,
+    switchToOrthographicMode,
     get map() {
       return map;
     },
     get deckOverlay() {
       return deckOverlay;
     },
+    get deckInstance() {
+      return deckInstance;
+    },
     get isMapLoaded() {
       return isMapLoaded;
+    },
+    get viewMode() {
+      return currentViewMode;
     }
   };
 }

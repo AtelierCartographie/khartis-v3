@@ -2,13 +2,12 @@ import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detecto
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import type { FeatureCollection } from 'geojson';
 import { isGeospatialFile, isParquetFile } from './constants';
 import { validateFile } from './core/validators';
+import { detectFileFormat, generateTableName } from './core/parsers';
 import { buildDatasetFromDuckTable } from './operations/analysis';
 import type {
   DatasetResult,
-  FileFormat,
   FileInfo,
   PipelineContext,
   RawDataset,
@@ -16,12 +15,6 @@ import type {
   ValidationResult
 } from './types';
 import { detectDecimalSeparator } from './utils/decimal-detector';
-import { convertGeoJSONToRawDataset } from './utils/geojson-converter';
-import {
-  describeGeojsonStructure,
-  normalizeGeojsonInput,
-  type GeoJSONLike
-} from './utils/geojson-guards';
 import {
   createFileFromExtracted,
   extractZip,
@@ -35,32 +28,6 @@ let initialized = false;
 function getContext(): PipelineContext {
   if (!initialized) throw new Error('Pipeline not initialized');
   return { duck: Duck };
-}
-
-function generateTableName(filename: string): string {
-  const base = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-  const prefix = base.length > 0 ? base : 'table';
-  const suffix = Date.now().toString(36);
-  return `${prefix}_${suffix}`;
-}
-
-function detectFileFormat(name: string): FileFormat {
-  const lower = name.toLowerCase();
-  if (
-    lower.endsWith('.csv') ||
-    lower.endsWith('.tsv') ||
-    lower.endsWith('.txt')
-  )
-    return 'csv';
-  if (lower.endsWith('.geojson') || lower.endsWith('.json')) return 'geojson';
-  if (lower.endsWith('.shp')) return 'shapefile';
-  if (lower.endsWith('.gpkg')) return 'geopackage';
-  if (lower.endsWith('.kml')) return 'kml';
-  if (lower.endsWith('.kmz')) return 'kmz';
-  if (lower.endsWith('.gpx')) return 'gpx';
-  if (lower.endsWith('.geoparquet') || lower.endsWith('.parquet'))
-    return 'geoparquet';
-  return 'unknown';
 }
 
 function applyGeoDetection(
@@ -107,6 +74,32 @@ export async function createFileFromUpload(
     uploadedFile.name,
     uploadedFile.type
   );
+}
+
+function createCompanionFilesFromUpload(
+  uploadedFile: UploadedFilePayload
+): File[] | undefined {
+  if (!uploadedFile.relatedFilesData) {
+    return undefined;
+  }
+
+  const mainFileName = uploadedFile.name.toLowerCase();
+  const companionFiles: File[] = [];
+
+  for (const [fileName, data] of Object.entries(
+    uploadedFile.relatedFilesData
+  )) {
+    if (fileName.toLowerCase() === mainFileName) continue;
+
+    const buffer =
+      data instanceof ArrayBuffer
+        ? data
+        : new Uint8Array(data as number[]).buffer;
+    const blob = new Blob([buffer], { type: 'application/octet-stream' });
+    companionFiles.push(new File([blob], fileName));
+  }
+
+  return companionFiles.length > 0 ? companionFiles : undefined;
 }
 
 export const Pipeline = {
@@ -235,8 +228,8 @@ export const Pipeline = {
     try {
       let dataset: DatasetResult;
 
-      if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
-        dataset = await processShapefile(ctx, uploadedFile);
+      if (originalFile && isZipFile(originalFile)) {
+        dataset = await this.processZipFile(originalFile);
       } else if (originalFile) {
         const originalName = originalFile.name.toLowerCase();
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
@@ -247,7 +240,14 @@ export const Pipeline = {
         });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
-        dataset = await processFileInternal(ctx, fallback);
+        if (isZipFile(fallback)) {
+          dataset = await this.processZipFile(fallback);
+        } else {
+          const companionFiles = createCompanionFilesFromUpload(uploadedFile);
+          dataset = await processFileInternal(ctx, fallback, {
+            companionFiles
+          });
+        }
       }
 
       dataset.sourceFileId = uploadedFile.id;
@@ -541,10 +541,12 @@ async function processFileInternal(
     hasCompanionFiles: Boolean(options.companionFiles?.length)
   });
 
-  if (isShapefile && options.companionFiles?.length) {
-    const allShapefileFiles = [file, ...options.companionFiles];
+  if (isShapefile) {
+    const allShapefileFiles = options.companionFiles?.length
+      ? [file, ...options.companionFiles]
+      : [file];
     await Duck.register_files(allShapefileFiles, { shapefile: true });
-  } else if (!isShapefile) {
+  } else {
     await Duck.register_files([file]);
   }
 
@@ -601,52 +603,6 @@ async function processFileInternal(
   logger.success('DuckDB dataset built', LogCategory.DATA, {
     tableName,
     rowCount: dataset.rowCount,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
-  return dataset;
-}
-
-async function processShapefile(
-  ctx: PipelineContext,
-  uploadedFile: UploadedFilePayload
-): Promise<DatasetResult> {
-  const start = performance.now();
-  logger.info('Processing shapefile upload', LogCategory.DATA, {
-    fileId: uploadedFile.id,
-    fileName: uploadedFile.name
-  });
-
-  const parsedGeojson =
-    typeof uploadedFile.parsedData === 'string'
-      ? JSON.parse(uploadedFile.parsedData)
-      : uploadedFile.parsedData;
-
-  const structureInfo = describeGeojsonStructure(parsedGeojson);
-  const normalizedGeojson = normalizeGeojsonInput(parsedGeojson as GeoJSONLike);
-  const rawDataset = convertGeoJSONToRawDataset(
-    normalizedGeojson as FeatureCollection
-  );
-
-  const geojsonString = JSON.stringify(normalizedGeojson);
-  const geojsonFileName = uploadedFile.name.replace(/\.shp$/i, '.geojson');
-  uploadedFile.preparedGeoJSON = geojsonString;
-
-  const geojsonFile = new File([geojsonString], geojsonFileName, {
-    type: 'application/geo+json'
-  });
-
-  const dataset = await processFileInternal(ctx, geojsonFile, {
-    originalName: uploadedFile.name,
-    rawDataset
-  });
-
-  dataset.sourceFileId = uploadedFile.id;
-  dataset.name = uploadedFile.name;
-
-  logger.success('Shapefile converted to dataset', LogCategory.DATA, {
-    fileId: uploadedFile.id,
-    featureKeys: structureInfo.keys,
     durationMs: (performance.now() - start).toFixed(2)
   });
 

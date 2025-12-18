@@ -327,6 +327,7 @@
 
   function handleSelectBasemap(basemapId: string) {
     selectedBasemapId = basemapId;
+    osmBasemapStore.clear();
     dataTabActions.setBasemapJoinState({
       selectedBasemap: basemapId,
       basemapSource: BasemapSource.CATALOG
