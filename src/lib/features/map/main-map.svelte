@@ -13,6 +13,7 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
+  import { formatState } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
@@ -106,8 +107,10 @@
     tableName: string
   ): Promise<void> {
     const start = performance.now();
+    const datasetIdAtStart = dataset.id;
+
     logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
-      datasetId: dataset.id,
+      datasetId: datasetIdAtStart,
       joinedBasemap,
       tableName
     });
@@ -118,10 +121,22 @@
         joinedBasemap
       );
 
+      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+        logger.debug(
+          'Dataset changed during joined basemap load, ignoring',
+          LogCategory.MAP,
+          {
+            loadedDatasetId: datasetIdAtStart,
+            currentSelectedId: datasetsStore.selectedDataset?.id
+          }
+        );
+        return;
+      }
+
       if (joinedTable) {
         displayTable = joinedTable;
         displayGeoJSON = null;
-        displayDatasetId = dataset.id;
+        displayDatasetId = datasetIdAtStart;
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
           rows: joinedTable.numRows,
           durationMs: (performance.now() - start).toFixed(2)
@@ -141,17 +156,32 @@
 
   async function loadGPSData(datasetId: string): Promise<void> {
     const start = performance.now();
+    const datasetIdAtStart = datasetId;
+
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
-      datasetId
+      datasetId: datasetIdAtStart
     });
 
     try {
-      const { table } = await duckDBOrchestrator.getGPSArrowTable(datasetId);
+      const { table } =
+        await duckDBOrchestrator.getGPSArrowTable(datasetIdAtStart);
+
+      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+        logger.debug(
+          'Dataset changed during GPS data load, ignoring',
+          LogCategory.MAP,
+          {
+            loadedDatasetId: datasetIdAtStart,
+            currentSelectedId: datasetsStore.selectedDataset?.id
+          }
+        );
+        return;
+      }
 
       if (table) {
         displayTable = table;
         displayGeoJSON = null;
-        displayDatasetId = datasetId;
+        displayDatasetId = datasetIdAtStart;
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
           rows: table.numRows,
           durationMs: (performance.now() - start).toFixed(2)
@@ -176,17 +206,31 @@
     errorMessage = null;
 
     if (selectedDataset) {
+      const currentDatasetId = selectedDataset.id;
+
       logger.debug('Map reacting to dataset change', LogCategory.MAP, {
-        datasetId: selectedDataset.id
+        datasetId: currentDatasetId
       });
 
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
+          if (datasetsStore.selectedDataset?.id !== currentDatasetId) {
+            logger.debug(
+              'Dataset changed during async load, ignoring result',
+              LogCategory.MAP,
+              {
+                loadedDatasetId: currentDatasetId,
+                currentSelectedId: datasetsStore.selectedDataset?.id
+              }
+            );
+            return;
+          }
+
           if (result) {
             if ('numRows' in result) {
               displayTable = result;
               displayGeoJSON = null;
-              displayDatasetId = selectedDataset.id;
+              displayDatasetId = currentDatasetId;
               logger.info(
                 'Map display updated with Arrow table',
                 LogCategory.MAP,
@@ -197,14 +241,13 @@
             } else if ('features' in result) {
               displayTable = null;
               displayGeoJSON = result;
-              displayDatasetId = selectedDataset.id;
+              displayDatasetId = currentDatasetId;
               logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
                 features: result.features.length
               });
             }
           } else {
-            // Data not ready yet, but dataset exists - set datasetId so ThematicMap waits
-            setWaitingForData(selectedDataset.id);
+            setWaitingForData(currentDatasetId);
           }
         });
       } else {
@@ -221,8 +264,7 @@
             duckDBDataset.tableName
           );
         } else {
-          // DuckDB dataset not ready yet - set datasetId so ThematicMap waits
-          setWaitingForData(selectedDataset.id);
+          setWaitingForData(currentDatasetId);
         }
       }
     } else {
@@ -268,7 +310,6 @@
           displayDatasetId = selectedDataset.id;
         }
       } else {
-        // Data not ready yet, but dataset exists - set datasetId so ThematicMap waits
         setWaitingForData(selectedDataset.id);
       }
     } else if (selectedDataset) {
@@ -285,7 +326,6 @@
           duckDBDataset.tableName
         );
       } else {
-        // DuckDB dataset not ready yet - set datasetId so ThematicMap waits
         setWaitingForData(selectedDataset.id);
       }
     } else {
@@ -304,10 +344,15 @@
   }
 </script>
 
-<div class="map-container">
+<div class="main-map-container">
   <!-- Skeleton loader - only during initial load -->
   {#if !isMapReady}
-    <div class="skeleton-loader" out:fade={{ duration: 300, easing: cubicOut }}>
+    <div
+      class="skeleton-loader"
+      style="width: {formatState.width + 32}px; height: {formatState.height +
+        32}px;"
+      out:fade={{ duration: 300, easing: cubicOut }}
+    >
       <SkeletonPlaceholder style="width: 100%; height: 100%;" />
     </div>
   {/if}
@@ -328,11 +373,13 @@
       />
     </div>
   {:else if !isInitializing}
-    <div class="map-wrapper" class:visible={isMapReady}>
+    <div class="thematic-map-wrapper" class:visible={isMapReady}>
       <ThematicMap
         jsTable={displayTable}
         userGeoJSON={displayGeoJSON}
         datasetId={displayDatasetId}
+        width={formatState.width}
+        height={formatState.height}
         onReady={handleMapReady}
       />
     </div>
@@ -340,34 +387,34 @@
 </div>
 
 <style>
-  .map-container {
+  .main-map-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
     height: 100%;
-    min-height: 400px;
-    background-color: var(--cds-ui-background);
     position: relative;
-    border-radius: 4px;
   }
 
-  .map-wrapper {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+  .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
   }
 
-  .map-wrapper.visible {
+  .thematic-map-wrapper.visible {
     opacity: 1;
   }
 
   .skeleton-loader {
     position: absolute;
-    inset: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: 10;
     overflow: hidden;
     pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
   }
 
   .skeleton-loader :global(.bx--skeleton__placeholder) {

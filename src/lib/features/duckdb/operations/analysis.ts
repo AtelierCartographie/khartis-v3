@@ -3,6 +3,7 @@ import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
+import { getRowCount } from './table-ops';
 import type {
   AnalyseOptions,
   AnalysisResult,
@@ -216,31 +217,5 @@ export async function analyse(
         // ignore
       }
     }
-  }
-}
-
-export async function getRowCount(
-  ctx: DuckDBContext,
-  table: string
-): Promise<number> {
-  const cached = ctx.rowCountCache.get(table);
-  if (cached !== undefined) return cached;
-
-  try {
-    const result = (await executeQuery(
-      ctx.connection,
-      `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM "${table}"`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{ num_rows: number }>;
-
-    const count = Number(result[0]?.num_rows ?? 0);
-    ctx.rowCountCache.set(table, count);
-    return count;
-  } catch (error) {
-    logger.error('Failed to get row count', LogCategory.DUCKDB, {
-      table,
-      error
-    });
-    throw error;
   }
 }

@@ -21,6 +21,7 @@ import {
   BASE_FILL_COLOR,
   BASE_STROKE_COLOR,
   createCategoricalColorAccessor,
+  createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
@@ -215,9 +216,55 @@ export function createLineLayers(
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   const { datasetId, fillColor, fillOpacity, strokeWidth, modelMatrix } = ctx;
-  const { geoColumn, encoding: arrowExtension } = geometryInfo;
+  const {
+    geoColumn,
+    encoding: arrowExtension,
+    isNativeGeoArrow,
+    isWkbEncoded,
+    isGeoJsonEncoded
+  } = geometryInfo;
 
   const layerId = createLayerId(DeckLayerId.LINE_LAYER, datasetId);
+
+  const isNativeGeoArrowLine =
+    arrowExtension &&
+    (arrowExtension === ArrowExtension.GEOARROW_LINESTRING ||
+      arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
+
+  if (isNativeGeoArrowLine || isNativeGeoArrow) {
+    logger.info('Using GeoArrowPathLayer for lines', LogCategory.MAP, {
+      encoding: arrowExtension,
+      rows: jsTable.numRows
+    });
+
+    const pathProps: ConstructorParameters<
+      typeof geodecklayers.GeoArrowPathLayer
+    >[0] = {
+      id: layerId,
+      data: jsTable,
+      getColor: withOpacity(fillColor, fillOpacity),
+      widthUnits: 'pixels',
+      getWidth: strokeWidth,
+      widthMinPixels: 1,
+      pickable: true,
+      autoHighlight: false,
+      ...(modelMatrix && { modelMatrix }),
+      updateTriggers: {
+        getColor: [fillColor, fillOpacity],
+        getWidth: [strokeWidth]
+      }
+    };
+
+    return [new geodecklayers.GeoArrowPathLayer(pathProps)];
+  }
+
+  if (!isWkbEncoded && !isGeoJsonEncoded) {
+    logger.warn(
+      'Unknown line encoding, attempting GeoJSON fallback',
+      LogCategory.MAP,
+      { arrowExtension }
+    );
+  }
 
   let lineGeojsonData;
   try {
@@ -238,7 +285,7 @@ export function createLineLayers(
     return [];
   }
 
-  logger.info('Using GeoJsonLayer for lines', LogCategory.MAP, {
+  logger.info('Using GeoJsonLayer fallback for lines', LogCategory.MAP, {
     encoding: arrowExtension,
     featureCount: lineGeojsonData.features.length
   });
@@ -303,6 +350,57 @@ export function createPolygonLayers(
     return [];
   }
 
+  const isNativeGeoArrowPolygon =
+    arrowExtension &&
+    (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
+      arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
+
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
+    logger.info('Using GeoArrowPolygonLayer for polygons', LogCategory.MAP, {
+      encoding: arrowExtension,
+      rows: jsTable.numRows,
+      hasVisualization: Boolean(viz)
+    });
+
+    const arrowFillColor =
+      useChoropleth && viz
+        ? createChoroplethColorAccessor(
+            viz.mapping.valueColumn!,
+            viz.classification!.breaks!,
+            viz.classification!.colors!
+          )
+        : fillColor;
+
+    const polygonProps: ConstructorParameters<
+      typeof geodecklayers.GeoArrowPolygonLayer
+    >[0] = {
+      id: layerId,
+      data: jsTable,
+      filled: true,
+      stroked: true,
+      getFillColor: arrowFillColor,
+      getLineColor: withOpacity(strokeColor, strokeOpacity),
+      opacity: fillOpacity,
+      lineWidthUnits: 'pixels',
+      lineWidthScale: strokeWidth / 4,
+      pickable: true,
+      autoHighlight: false,
+      ...(modelMatrix && { modelMatrix }),
+      updateTriggers: {
+        getFillColor: [
+          useChoropleth,
+          viz?.mapping.valueColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          fillColor
+        ],
+        getLineColor: [strokeColor, strokeOpacity]
+      }
+    };
+
+    return [new geodecklayers.GeoArrowPolygonLayer(polygonProps)];
+  }
+
   let geojsonData;
   try {
     geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
@@ -325,7 +423,7 @@ export function createPolygonLayers(
     return [];
   }
 
-  logger.info('Using GeoJsonLayer for polygons', LogCategory.MAP, {
+  logger.info('Using GeoJsonLayer fallback for polygons', LogCategory.MAP, {
     encoding: arrowExtension,
     featureCount: geojsonData.features.length,
     hasVisualization: Boolean(viz)
@@ -368,17 +466,54 @@ export function createPolygonLayers(
 }
 
 export function createWorldBaseLayer(
-  baseTable: ArrowTable
+  baseTable: ArrowTable,
+  ctx?: LayerContext
 ): Layer<DeckDataRow> | null {
-  const geoMetadata = baseTable.schema.metadata?.get('geo');
-  if (!geoMetadata) {
+  const geometryInfo = extractGeometryInfo(baseTable);
+  if (!geometryInfo) {
     logger.warn('World base table missing geo metadata', LogCategory.MAP);
     return null;
   }
 
+  const modelMatrix = ctx?.modelMatrix;
+  const {
+    geoColumn,
+    isNativeGeoArrow,
+    encoding: arrowExtension
+  } = geometryInfo;
+
+  const isNativeGeoArrowPolygon =
+    arrowExtension &&
+    (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
+      arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
+
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
+    logger.debug('Using GeoArrowPolygonLayer for world base', LogCategory.MAP, {
+      encoding: arrowExtension,
+      rows: baseTable.numRows
+    });
+
+    const polygonProps: ConstructorParameters<
+      typeof geodecklayers.GeoArrowPolygonLayer
+    >[0] = {
+      id: DeckLayerId.WORLD_BASE_LAYER,
+      data: baseTable,
+      filled: true,
+      stroked: true,
+      getFillColor: [...BASE_FILL_COLOR, 255],
+      getLineColor: BASE_STROKE_COLOR,
+      opacity: 1,
+      lineWidthUnits: 'pixels',
+      lineWidthScale: 0.25,
+      pickable: false,
+      autoHighlight: false,
+      ...(modelMatrix && { modelMatrix })
+    };
+
+    return new geodecklayers.GeoArrowPolygonLayer(polygonProps);
+  }
+
   try {
-    const jsonMeta = JSON.parse(geoMetadata);
-    const geoColumn = jsonMeta.primary_column;
     const geojsonData = arrowTableToGeoJSON(baseTable, geoColumn);
 
     if (!geojsonData) {
@@ -389,6 +524,15 @@ export function createWorldBaseLayer(
       return null;
     }
 
+    logger.debug(
+      'Using GeoJsonLayer fallback for world base',
+      LogCategory.MAP,
+      {
+        encoding: arrowExtension,
+        featureCount: geojsonData.features.length
+      }
+    );
+
     return new GeoJsonLayer({
       id: DeckLayerId.WORLD_BASE_LAYER,
       data: geojsonData,
@@ -398,7 +542,8 @@ export function createWorldBaseLayer(
       lineWidthUnits: 'pixels',
       lineWidthScale: 0.25,
       pickable: false,
-      autoHighlight: false
+      autoHighlight: false,
+      ...(modelMatrix && { modelMatrix })
     });
   } catch (error) {
     logger.error('Failed to create world base layer', LogCategory.MAP, error);

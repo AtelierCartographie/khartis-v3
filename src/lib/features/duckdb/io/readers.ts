@@ -330,56 +330,81 @@ async function reprojectPointGeometries(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
   )) as ArrowTable;
 
-  const updates: { id: number; lon: number; lat: number }[] = [];
   const idCol = coordsResult.getChild('__temp_rowid');
   const xCol = coordsResult.getChild('x');
   const yCol = coordsResult.getChild('y');
 
+  if (!idCol || !xCol || !yCol) {
+    logger.warn('Missing columns for reprojection', LogCategory.DUCKDB);
+    return;
+  }
+
+  const ids = idCol.toArray();
+  const xs = xCol.toArray();
+  const ys = yCol.toArray();
+
+  const valueRows: string[] = [];
   for (let i = 0; i < coordsResult.numRows; i++) {
-    const id = idCol?.get(i);
-    const x = xCol?.get(i);
-    const y = yCol?.get(i);
+    const id = ids[i];
+    const x = xs[i];
+    const y = ys[i];
 
     if (id !== null && x !== null && y !== null) {
-      const result = reprojectPoint(x, y, sourceCRS, 'EPSG:4326');
+      const result = reprojectPoint(
+        x as number,
+        y as number,
+        sourceCRS,
+        'EPSG:4326'
+      );
       if (result.success && result.coordinates) {
-        updates.push({
-          id,
-          lon: result.coordinates[0],
-          lat: result.coordinates[1]
-        });
+        valueRows.push(
+          `(${id}, ${result.coordinates[0]}, ${result.coordinates[1]})`
+        );
       }
     }
   }
 
-  const BATCH_SIZE = 500;
-  for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-    const batch = updates.slice(i, i + BATCH_SIZE);
-    const caseStatementLon = batch
-      .map((u) => `WHEN ${u.id} THEN ${u.lon}`)
-      .join(' ');
-    const caseStatementLat = batch
-      .map((u) => `WHEN ${u.id} THEN ${u.lat}`)
-      .join(' ');
-    const ids = batch.map((u) => u.id).join(',');
+  if (valueRows.length === 0) {
+    logger.warn('No valid points to reproject', LogCategory.DUCKDB);
+    return;
+  }
 
+  const tempTable = `__reproj_temp_${Date.now()}`;
+
+  await executeQuery(
+    ctx.connection,
+    `CREATE TEMP TABLE "${tempTable}" (rowid BIGINT, lon DOUBLE, lat DOUBLE);`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  );
+
+  const BATCH_SIZE = 5000;
+  for (let i = 0; i < valueRows.length; i += BATCH_SIZE) {
+    const batch = valueRows.slice(i, i + BATCH_SIZE);
     await executeQuery(
       ctx.connection,
-      `UPDATE "${tablename}"
-       SET "${geomCol}" = ST_Point(
-         CASE __temp_rowid ${caseStatementLon} END,
-         CASE __temp_rowid ${caseStatementLat} END
-       )
-       WHERE __temp_rowid IN (${ids});`,
+      `INSERT INTO "${tempTable}" VALUES ${batch.join(',')};`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
   }
+
+  await executeQuery(
+    ctx.connection,
+    `UPDATE "${tablename}" AS t
+     SET "${geomCol}" = ST_Point(r.lon, r.lat)
+     FROM "${tempTable}" AS r
+     WHERE t.__temp_rowid = r.rowid;`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  );
+
+  await executeQuery(ctx.connection, `DROP TABLE IF EXISTS "${tempTable}";`, {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  });
 
   logger.success(
     'Point geometries reprojected with proj4',
     LogCategory.DUCKDB,
     {
-      rowCount: updates.length,
+      rowCount: valueRows.length,
       sourceCRS
     }
   );
@@ -397,37 +422,70 @@ async function reprojectComplexGeometries(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
   )) as ArrowTable;
 
-  const updates: { id: number; wkt: string }[] = [];
   const idCol = wktResult.getChild('__temp_rowid');
   const wktCol = wktResult.getChild('wkt');
 
+  if (!idCol || !wktCol) {
+    logger.warn('Missing columns for reprojection', LogCategory.DUCKDB);
+    return;
+  }
+
+  const ids = idCol.toArray();
+  const wkts = wktCol.toArray();
+
+  const updates: { id: number; wkt: string }[] = [];
   for (let i = 0; i < wktResult.numRows; i++) {
-    const id = idCol?.get(i);
-    const wkt = wktCol?.get(i);
+    const id = ids[i];
+    const wkt = wkts[i];
 
     if (id !== null && wkt !== null && typeof wkt === 'string') {
       const reprojectedWkt = reprojectWKT(wkt, sourceCRS);
       if (reprojectedWkt) {
-        updates.push({ id, wkt: reprojectedWkt });
+        updates.push({ id: id as number, wkt: reprojectedWkt });
       }
     }
   }
 
-  const BATCH_SIZE = 100;
+  if (updates.length === 0) {
+    logger.warn('No valid geometries to reproject', LogCategory.DUCKDB);
+    return;
+  }
+
+  const tempTable = `__reproj_wkt_temp_${Date.now()}`;
+
+  await executeQuery(
+    ctx.connection,
+    `CREATE TEMP TABLE "${tempTable}" (rowid BIGINT, wkt VARCHAR);`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  );
+
+  const BATCH_SIZE = 1000;
   for (let i = 0; i < updates.length; i += BATCH_SIZE) {
     const batch = updates.slice(i, i + BATCH_SIZE);
+    const valueRows = batch.map((u) => {
+      const escapedWkt = u.wkt.replace(/'/g, "''");
+      return `(${u.id}, '${escapedWkt}')`;
+    });
 
-    for (const update of batch) {
-      const escapedWkt = escapeSqlString(update.wkt);
-      await executeQuery(
-        ctx.connection,
-        `UPDATE "${tablename}"
-         SET "${geomCol}" = ST_GeomFromText('${escapedWkt}')::GEOMETRY
-         WHERE __temp_rowid = ${update.id};`,
-        { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-      );
-    }
+    await executeQuery(
+      ctx.connection,
+      `INSERT INTO "${tempTable}" VALUES ${valueRows.join(',')};`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+    );
   }
+
+  await executeQuery(
+    ctx.connection,
+    `UPDATE "${tablename}" AS t
+     SET "${geomCol}" = ST_GeomFromText(r.wkt)::GEOMETRY
+     FROM "${tempTable}" AS r
+     WHERE t.__temp_rowid = r.rowid;`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  );
+
+  await executeQuery(ctx.connection, `DROP TABLE IF EXISTS "${tempTable}";`, {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  });
 
   logger.success(
     'Complex geometries reprojected with proj4',

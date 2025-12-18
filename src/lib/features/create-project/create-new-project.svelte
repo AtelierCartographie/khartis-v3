@@ -13,6 +13,7 @@
     Button,
     FileUploaderDropContainer,
     FileUploaderItem,
+    InlineLoading,
     InlineNotification,
     Loading,
     ProgressBar,
@@ -324,6 +325,17 @@
               {/if}
             </Button>
           {/if}
+        </div>
+      {/if}
+
+      {#if createProjectState.newProject.isProcessingFiles}
+        <div class="processing-overlay">
+          <InlineLoading
+            status="active"
+            description={m.create_project_processing_files({
+              count: createProjectState.newProject.processingFileCount
+            })}
+          />
         </div>
       {/if}
 
@@ -645,5 +657,15 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+
+  .processing-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--cds-spacing-04);
+    background: var(--cds-layer-01);
+    border: 1px solid var(--cds-border-subtle);
+    border-radius: var(--cds-spacing-02);
   }
 </style>

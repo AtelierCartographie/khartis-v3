@@ -76,6 +76,10 @@ export class FileProcessorService {
       return new GeoPackageProcessor(this.callbacks);
     }
 
+    if (fileType === FileType.ZIP) {
+      return new ZipProcessor(this.callbacks);
+    }
+
     return new GenericProcessor(this.callbacks);
   }
 }
@@ -84,24 +88,6 @@ abstract class FileProcessor {
   constructor(protected callbacks: ProcessingCallbacks) {}
 
   abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
-
-  protected async stringifyInChunks(data: unknown[]): Promise<string> {
-    if (data.length < 1000) {
-      return JSON.stringify(data);
-    }
-
-    const chunks: string[] = [];
-    const CHUNK_SIZE = 500;
-
-    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
-
-      const chunk = data.slice(i, i + CHUNK_SIZE);
-      chunks.push(JSON.stringify(chunk).slice(1, -1));
-    }
-
-    return '[' + chunks.join(',') + ']';
-  }
 
   protected async validateAsync(
     uploadedFile: UploadedFile,
@@ -169,12 +155,6 @@ class CsvProcessor extends FileProcessor {
       };
     }
 
-    const duplicateResult = (await Duck!.query(
-      `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
-      { format: 'array' }
-    )) as Array<{ duplicate_count: number }>;
-    const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
-
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
@@ -195,19 +175,8 @@ class CsvProcessor extends FileProcessor {
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
       content: originalContent,
-      duplicates: {
-        hasDuplicates: duplicateCount > 0,
-        duplicateCount
-      },
       statistics
     });
-
-    if (duplicateCount > 0) {
-      showWarning(
-        WARNING_DUPLICATE_ROWS_TITLE(),
-        `Found ${duplicateCount} duplicate rows`
-      );
-    }
 
     const deepAnalysisCompleted = await this.performDeepAnalysis(
       uploadedFile,
@@ -220,6 +189,42 @@ class CsvProcessor extends FileProcessor {
     }
 
     this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+
+    this.computeDuplicatesAsync(uploadedFile.id, tableName, Duck!);
+  }
+
+  private async computeDuplicatesAsync(
+    fileId: string,
+    tableName: string,
+    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+  ): Promise<void> {
+    try {
+      const duplicateResult = (await Duck.query(
+        `SELECT COUNT(*) - COUNT(DISTINCT hash(*)) as duplicate_count FROM "${tableName}"`,
+        { format: 'array' }
+      )) as Array<{ duplicate_count: number }>;
+      const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
+
+      this.callbacks.onDataUpdate(fileId, {
+        duplicates: {
+          hasDuplicates: duplicateCount > 0,
+          duplicateCount
+        }
+      });
+
+      if (duplicateCount > 0) {
+        showWarning(
+          WARNING_DUPLICATE_ROWS_TITLE(),
+          `Found ${duplicateCount} duplicate rows`
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        '[CsvProcessor:computeDuplicatesAsync] Failed to compute duplicates',
+        LogCategory.FILE,
+        { fileId, error }
+      );
+    }
   }
 
   private async performDeepAnalysis(
@@ -363,6 +368,89 @@ class GeoPackageProcessor extends FileProcessor {
       parsedData: tabularData
     });
 
+    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+  }
+}
+
+class ZipProcessor extends FileProcessor {
+  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
+    if (!(await this.validateAsync(uploadedFile, file))) return;
+
+    this.callbacks.onProgress(uploadedFile.id, 10);
+
+    const fileContent = await file.arrayBuffer();
+
+    const { dataPipeline } = await import('$lib/features/data-pipeline');
+    const { Duck } = await import('$lib/features/duckdb');
+
+    const dataset = await dataPipeline.processFile(file);
+    const { tableName, columns, rowCount } = dataset;
+    const headers = columns.map((col) => col.name);
+
+    this.callbacks.onProgress(uploadedFile.id, 50);
+
+    const statistics: Record<string, ColumnStatSummary> = {};
+    for (const col of columns) {
+      statistics[col.name] = {
+        type: col.type,
+        count: col.stats.count ?? rowCount,
+        nullCount: col.stats.nulls ?? 0,
+        unique: col.stats.uniques ?? 0,
+        min: col.stats.min as number | undefined,
+        max: col.stats.max as number | undefined,
+        mean: col.stats.mean
+      };
+    }
+
+    const sampleData = (await Duck!.query(
+      `SELECT * FROM "${tableName}" LIMIT 100`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
+
+    const tabularData = sampleData.map((row) => {
+      const tabularRow: Record<string, JsonValue> = {};
+      for (const [key, value] of Object.entries(row)) {
+        if (value instanceof Date) {
+          tabularRow[key] = value.toISOString();
+        } else {
+          tabularRow[key] = value as JsonValue;
+        }
+      }
+      return tabularRow;
+    });
+
+    this.callbacks.onProgress(uploadedFile.id, 80);
+
+    this.callbacks.onDataUpdate(uploadedFile.id, {
+      parsedData: tabularData,
+      statistics,
+      content: fileContent
+    });
+
+    const dataMatrix = sampleData.map((row) =>
+      headers.map((header) => {
+        const value = row[header];
+        if (value === null || value === undefined) return null;
+        if (value instanceof Date) return value;
+        if (
+          typeof value === 'string' ||
+          typeof value === 'number' ||
+          typeof value === 'boolean'
+        ) {
+          return value;
+        }
+        return String(value);
+      })
+    ) as CsvMatrix;
+
+    const deepAnalysis = await DeepDataValidator.analyzeDataContent(
+      headers,
+      dataMatrix,
+      { sampleSize: Math.min(100, dataMatrix.length) }
+    );
+
+    this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
+    this.callbacks.onProgress(uploadedFile.id, 100);
     this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
 }

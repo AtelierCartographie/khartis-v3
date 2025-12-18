@@ -220,6 +220,8 @@ export interface DeckMapProps {
   jsTable: ArrowTable | null;
   userGeoJSON: FeatureCollection | null;
   datasetId?: string;
+  width: number;
+  height: number;
   onReady?: () => void;
 }
 
