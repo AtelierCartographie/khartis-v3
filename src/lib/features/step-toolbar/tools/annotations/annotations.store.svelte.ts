@@ -1,13 +1,13 @@
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
+import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type {
   Annotation,
   AnnotationsState,
   AnnotationStyle
 } from './annotations.types';
 
-const DEFAULT_ANNOTATIONS_STATE: AnnotationsState = {
+const DEFAULT_STATE: AnnotationsState = {
   items: [],
   selectedId: null,
   activeType: AnnotationKind.TEXT,
@@ -25,86 +25,77 @@ const DEFAULT_ANNOTATIONS_STATE: AnnotationsState = {
   }
 };
 
-export const annotationsState = $state<AnnotationsState>({
-  ...DEFAULT_ANNOTATIONS_STATE
-});
+type AnnotationsActions = {
+  addAnnotation: (type: AnnotationKind, content: string) => void;
+  selectAnnotation: (id: string | null) => void;
+  updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
+  removeAnnotation: (id: string) => void;
+  setActiveType: (type: AnnotationKind) => void;
+  setPredefinedStyle: (styleName: string) => void;
+  setTextContent: (content: string) => void;
+  updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => void;
+  duplicateAnnotation: (id: string) => void;
+  moveAnnotation: (id: string, newPosition: { x: number; y: number }) => void;
+  toggleVisibility: (id: string) => void;
+  clearAll: () => void;
+  toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => void;
+  setTextAlign: (align: TextAlign) => void;
+};
 
-export function getAnnotationsState(): AnnotationsState {
-  return annotationsState;
-}
+const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
+  note: { fontSize: 12, bold: false, italic: false },
+  title: { fontSize: 24, bold: true, italic: false },
+  subtitle: { fontSize: 18, bold: false, italic: false },
+  caption: { fontSize: 10, bold: false, italic: true }
+};
 
-export const annotationsActions = {
-  setState(newState: Partial<AnnotationsState>): void {
-    Object.assign(annotationsState, newState);
-  },
-
-  addAnnotation(type: AnnotationKind, content: string): void {
+const { state, actions, getState } = createToolStore<
+  AnnotationsState,
+  AnnotationsActions
+>(DEFAULT_STATE, (s) => ({
+  addAnnotation: (type: AnnotationKind, content: string) => {
     const newAnnotation: Annotation = {
       id: `annotation-${Date.now()}`,
       type,
       content,
       position: { x: Math.random() * 300 + 50, y: Math.random() * 200 + 50 },
-      style: { ...annotationsState.defaultStyle }
+      style: { ...s.defaultStyle }
     };
-
-    annotationsState.items = [...annotationsState.items, newAnnotation];
-    annotationsState.selectedId = newAnnotation.id;
+    s.items = [...s.items, newAnnotation];
+    s.selectedId = newAnnotation.id;
   },
-
-  selectAnnotation(id: string | null): void {
-    annotationsState.selectedId = id;
+  selectAnnotation: (id: string | null) => {
+    s.selectedId = id;
   },
-
-  updateAnnotation(id: string, updates: Partial<Annotation>): void {
-    annotationsState.items = annotationsState.items.map((item) =>
+  updateAnnotation: (id: string, updates: Partial<Annotation>) => {
+    s.items = s.items.map((item) =>
       item.id === id ? { ...item, ...updates } : item
     );
   },
-
-  removeAnnotation(id: string): void {
-    annotationsState.items = annotationsState.items.filter(
-      (item) => item.id !== id
-    );
-    if (annotationsState.selectedId === id) {
-      annotationsState.selectedId = null;
+  removeAnnotation: (id: string) => {
+    s.items = s.items.filter((item) => item.id !== id);
+    if (s.selectedId === id) {
+      s.selectedId = null;
     }
   },
-
-  setActiveType(type: AnnotationKind): void {
-    annotationsState.activeType = type;
+  setActiveType: (type: AnnotationKind) => {
+    s.activeType = type;
   },
-
-  setPredefinedStyle(styleName: string): void {
-    const styles: Record<string, Partial<AnnotationStyle>> = {
-      note: { fontSize: 12, bold: false, italic: false },
-      title: { fontSize: 24, bold: true, italic: false },
-      subtitle: { fontSize: 18, bold: false, italic: false },
-      caption: { fontSize: 10, bold: false, italic: true }
-    };
-
-    const style = styles[styleName];
+  setPredefinedStyle: (styleName: string) => {
+    const style = PREDEFINED_STYLES[styleName];
     if (style) {
-      annotationsState.predefinedStyle = styleName;
-      annotationsState.defaultStyle = {
-        ...annotationsState.defaultStyle,
-        ...style
-      };
+      s.predefinedStyle = styleName;
+      s.defaultStyle = { ...s.defaultStyle, ...style };
     }
   },
-
-  setTextContent(content: string): void {
-    annotationsState.textContent = content;
+  setTextContent: (content: string) => {
+    s.textContent = content;
   },
-
-  updateDefaultStyle(styleUpdates: Partial<AnnotationStyle>): void {
-    annotationsState.defaultStyle = {
-      ...annotationsState.defaultStyle,
-      ...styleUpdates
-    };
+  updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
+    s.defaultStyle = { ...s.defaultStyle, ...styleUpdates };
   },
-
-  duplicateAnnotation(id: string): void {
-    const original = annotationsState.items.find((item) => item.id === id);
+  duplicateAnnotation: (id: string) => {
+    const original = s.items.find((item) => item.id === id);
     if (original) {
       const duplicate = {
         ...original,
@@ -115,66 +106,35 @@ export const annotationsActions = {
           y: original.position.y + 20
         }
       };
-
-      annotationsState.items = [...annotationsState.items, duplicate];
-      annotationsState.selectedId = duplicate.id;
+      s.items = [...s.items, duplicate];
+      s.selectedId = duplicate.id;
     }
   },
-
-  moveAnnotation(id: string, newPosition: { x: number; y: number }): void {
-    annotationsState.items = annotationsState.items.map((item) =>
+  moveAnnotation: (id: string, newPosition: { x: number; y: number }) => {
+    s.items = s.items.map((item) =>
       item.id === id ? { ...item, position: newPosition } : item
     );
   },
-
-  toggleVisibility(id: string): void {
-    annotationsState.items = annotationsState.items.map((item) =>
+  toggleVisibility: (id: string) => {
+    s.items = s.items.map((item) =>
       item.id === id ? { ...item, visible: !item.visible } : item
     );
   },
-
-  clearAll(): void {
-    annotationsState.items = [];
-    annotationsState.selectedId = null;
+  clearAll: () => {
+    s.items = [];
+    s.selectedId = null;
   },
-
-  toggleStyleProperty(property: 'bold' | 'italic' | 'underlined'): void {
-    const updatedStyle = { ...annotationsState.defaultStyle };
-
-    if (property === 'bold') {
-      updatedStyle.bold = !updatedStyle.bold;
-    } else if (property === 'italic') {
-      updatedStyle.italic = !updatedStyle.italic;
-    } else if (property === 'underlined') {
-      updatedStyle.underlined = !updatedStyle.underlined;
-    }
-
-    annotationsState.defaultStyle = updatedStyle;
-  },
-
-  setTextAlign(align: TextAlign): void {
-    annotationsState.defaultStyle = {
-      ...annotationsState.defaultStyle,
-      textAlign: align
+  toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => {
+    s.defaultStyle = {
+      ...s.defaultStyle,
+      [property]: !s.defaultStyle[property]
     };
   },
+  setTextAlign: (align: TextAlign) => {
+    s.defaultStyle = { ...s.defaultStyle, textAlign: align };
+  }
+}));
 
-  reset: createResetFunction(annotationsState, DEFAULT_ANNOTATIONS_STATE)
-};
-
-export function getSelectedAnnotation() {
-  if (!annotationsState.selectedId) return null;
-  return (
-    annotationsState.items.find(
-      (item) => item.id === annotationsState.selectedId
-    ) || null
-  );
-}
-
-export function getVisibleAnnotations() {
-  return annotationsState.items;
-}
-
-export function getAnnotationsByType(type: AnnotationKind) {
-  return annotationsState.items.filter((item) => item.type === type);
-}
+export const annotationsState = state;
+export const annotationsActions = actions;
+export const getAnnotationsState = getState;

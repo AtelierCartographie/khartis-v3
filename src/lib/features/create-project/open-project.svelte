@@ -1,9 +1,5 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { base } from '$app/paths';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
-  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     formatDate,
@@ -23,6 +19,7 @@
   } from 'carbon-components-svelte';
   import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
+  import { useProjectNavigation } from './hooks';
   import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
@@ -30,6 +27,10 @@
   }
 
   const { onClose }: Props = $props();
+
+  const { navigateAfterAction } = useProjectNavigation({
+    getOnClose: () => onClose
+  });
 
   let savedProjects = $state<SavedProjectMetadata[]>([]);
   let selectedProjectId = $state<string | null>(null);
@@ -68,10 +69,7 @@
 
     try {
       await projectStore.loadProject(projectId);
-      globalState.isCreateProjectModalOpen = false;
-      createProjectActions.resetAllTabs();
-      onClose?.();
-      await goto(base || '/', { replaceState: true });
+      await navigateAfterAction();
     } catch (err) {
       logger.error('Failed to load project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to load project';
@@ -99,10 +97,7 @@
 
     try {
       await projectStore.importProject(khFile);
-      globalState.isCreateProjectModalOpen = false;
-      createProjectActions.resetAllTabs();
-      onClose?.();
-      await goto(base || '/', { replaceState: true });
+      await navigateAfterAction();
     } catch (err) {
       logger.error('Failed to import project', LogCategory.PROJECT, err);
       error = err instanceof Error ? err.message : 'Failed to import project';

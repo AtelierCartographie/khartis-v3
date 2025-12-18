@@ -3,8 +3,6 @@
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
 
-  function handleConfigureVisualization() {}
-
   function handleLearnMore() {
     window.open(
       'https://cartographie.sciencespo.fr/khartis/help/facets',
@@ -47,7 +45,7 @@
           style="width: 100%;"
           icon={SettingsAdjust}
           iconDescription={m.facets_configure_visualization()}
-          onclick={handleConfigureVisualization}
+          disabled
         >
           {m.facets_configure_visualization()}
         </Button>

@@ -191,20 +191,20 @@
           class={clsx('sub-tab', { selected: activeVizSubTab === 'choose' })}
           onclick={() => (activeVizSubTab = 'choose')}
         >
-          Choisir
+          {m.mobile_viz_tab_choose()}
         </button>
         <button
           class={clsx('sub-tab', { selected: activeVizSubTab === 'configure' })}
           onclick={() => (activeVizSubTab = 'configure')}
         >
-          Personnaliser
+          {m.mobile_viz_tab_customize()}
         </button>
       </div>
     {/if}
   </div>
 
   {#if showToolsBar && hasProject}
-    <nav class="mobile-tools-bar app-shadow" aria-label="Outils">
+    <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
       <Button
         kind="ghost"
         size="small"

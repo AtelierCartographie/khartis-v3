@@ -23,8 +23,7 @@
     type SearchHighlightResult
   } from './components/search-panel.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
-  import { DataToolType } from './data-tab.types';
-  import { dataToolsStore } from './data-tools.store.svelte';
+  import { dataToolsStore, DataToolType } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
