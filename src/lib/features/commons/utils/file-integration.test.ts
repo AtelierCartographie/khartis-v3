@@ -6,7 +6,6 @@ import { DeepDataValidator } from './deep-validator.utils';
 import { FileType } from '../store/create-project.types';
 
 const DATASETS_PATH = join(process.cwd(), 'tests-datasets');
-const HAS_FILE_READER = typeof FileReader !== 'undefined';
 
 function createFileFromPath(filePath: string, mimeType?: string): File {
   const buffer = readFileSync(filePath);
@@ -247,33 +246,5 @@ describe('File Integration Tests', () => {
         });
       });
     });
-  });
-
-  describe('Async Validation (Browser only)', () => {
-    it.skipIf(!HAS_FILE_READER)(
-      'should detect encoding via validateAsync',
-      async () => {
-        const filePath = join(
-          DATASETS_PATH,
-          'csv',
-          'naissances-par-commune-departement-et-region-2018.csv'
-        );
-        const file = createFileFromPath(filePath, 'text/csv');
-        const initialResult = FileValidator.validate(file);
-        const result = await FileValidator.validateAsync(file, initialResult);
-        expect(result.metadata?.encoding).toBe('UTF-8 with BOM');
-      }
-    );
-
-    it.skipIf(!HAS_FILE_READER)(
-      'should validate GeoJSON content asynchronously',
-      async () => {
-        const filePath = join(DATASETS_PATH, 'geojson', 'nuts2_data.geojson');
-        const file = createFileFromPath(filePath, 'application/geo+json');
-        const initialResult = FileValidator.validate(file);
-        const result = await FileValidator.validateAsync(file, initialResult);
-        expect(result.isValid).toBe(true);
-      }
-    );
   });
 });

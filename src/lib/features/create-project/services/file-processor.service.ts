@@ -4,7 +4,6 @@ import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import {
-  type ColumnStatSummary,
   readFileContent,
   validateGeospatialFile
 } from '$lib/features/commons/utils/file-import.utils';
@@ -21,10 +20,12 @@ const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
-import type { JsonValue } from '$lib/types/data';
-
-type CsvPrimitive = string | number | boolean | null | Date;
-type CsvMatrix = CsvPrimitive[][];
+import {
+  buildColumnStatistics,
+  convertRowsToTabular,
+  createDataMatrix,
+  type ColumnInfo
+} from './file-processor.utils';
 
 export interface ProcessingCallbacks {
   onProgress: (fileId: string, progress: number) => void;
@@ -144,35 +145,14 @@ class CsvProcessor extends FileProcessor {
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
 
-    const statistics: Record<string, ColumnStatSummary> = {};
-    for (const col of columns) {
-      statistics[col.name] = {
-        type: col.type,
-        count: col.stats.count ?? rowCount,
-        nullCount: col.stats.nulls ?? 0,
-        unique: col.stats.uniques ?? 0,
-        min: col.stats.min as number | undefined,
-        max: col.stats.max as number | undefined,
-        mean: col.stats.mean
-      };
-    }
+    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
@@ -234,21 +214,7 @@ class CsvProcessor extends FileProcessor {
     sampleData: Array<Record<string, unknown>>,
     headers: string[]
   ): Promise<boolean> {
-    const dataMatrix: CsvMatrix = sampleData.map((row) =>
-      headers.map((header) => {
-        const value = row[header];
-        if (value === null || value === undefined) return null;
-        if (value instanceof Date) return value;
-        if (
-          typeof value === 'string' ||
-          typeof value === 'number' ||
-          typeof value === 'boolean'
-        ) {
-          return value;
-        }
-        return String(value);
-      })
-    );
+    const dataMatrix = createDataMatrix(sampleData, headers);
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
@@ -353,17 +319,7 @@ class GeoPackageProcessor extends FileProcessor {
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       content,
@@ -445,35 +401,14 @@ class ZipProcessor extends FileProcessor {
 
     this.callbacks.onProgress(uploadedFile.id, 50);
 
-    const statistics: Record<string, ColumnStatSummary> = {};
-    for (const col of columns) {
-      statistics[col.name] = {
-        type: col.type,
-        count: col.stats.count ?? rowCount,
-        nullCount: col.stats.nulls ?? 0,
-        unique: col.stats.uniques ?? 0,
-        min: col.stats.min as number | undefined,
-        max: col.stats.max as number | undefined,
-        mean: col.stats.mean
-      };
-    }
+    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onProgress(uploadedFile.id, 80);
 
@@ -483,21 +418,7 @@ class ZipProcessor extends FileProcessor {
       content: fileContent
     });
 
-    const dataMatrix = sampleData.map((row) =>
-      headers.map((header) => {
-        const value = row[header];
-        if (value === null || value === undefined) return null;
-        if (value instanceof Date) return value;
-        if (
-          typeof value === 'string' ||
-          typeof value === 'number' ||
-          typeof value === 'boolean'
-        ) {
-          return value;
-        }
-        return String(value);
-      })
-    ) as CsvMatrix;
+    const dataMatrix = createDataMatrix(sampleData, headers);
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
@@ -551,18 +472,10 @@ class ZipProcessor extends FileProcessor {
       const headers = columns.map((col) => col.name);
       const progressBase = (i / totalDatasets) * 100;
 
-      const statistics: Record<string, ColumnStatSummary> = {};
-      for (const col of columns) {
-        statistics[col.name] = {
-          type: col.type,
-          count: col.stats.count ?? rowCount,
-          nullCount: col.stats.nulls ?? 0,
-          unique: col.stats.uniques ?? 0,
-          min: col.stats.min as number | undefined,
-          max: col.stats.max as number | undefined,
-          mean: col.stats.mean
-        };
-      }
+      const statistics = buildColumnStatistics(
+        columns as ColumnInfo[],
+        rowCount
+      );
 
       let fullData: Array<Record<string, unknown>> = [];
       try {
@@ -570,37 +483,12 @@ class ZipProcessor extends FileProcessor {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
-        /* Query failed, fullData remains empty */
+        // empty
       }
 
-      const tabularData = fullData.map((row) => {
-        const tabularRow: Record<string, JsonValue> = {};
-        for (const [key, value] of Object.entries(row)) {
-          if (value instanceof Date) {
-            tabularRow[key] = value.toISOString();
-          } else {
-            tabularRow[key] = value as JsonValue;
-          }
-        }
-        return tabularRow;
-      });
-
+      const tabularData = convertRowsToTabular(fullData);
       const sampleForAnalysis = fullData.slice(0, 100);
-      const dataMatrix = sampleForAnalysis.map((row) =>
-        headers.map((header) => {
-          const value = row[header];
-          if (value === null || value === undefined) return null;
-          if (value instanceof Date) return value;
-          if (
-            typeof value === 'string' ||
-            typeof value === 'number' ||
-            typeof value === 'boolean'
-          ) {
-            return value;
-          }
-          return String(value);
-        })
-      ) as CsvMatrix;
+      const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
 
       const deepAnalysis = await DeepDataValidator.analyzeDataContent(
         headers,

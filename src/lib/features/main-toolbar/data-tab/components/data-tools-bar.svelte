@@ -9,8 +9,7 @@
     Maximize
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { dataToolsStore } from '../data-tools.store.svelte';
-  import { DataToolType } from '../data-tab.types';
+  import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
 
   interface Props {
     onDelete?: () => void;

@@ -41,24 +41,6 @@
     localOpacity = legendState.style.background.opacity;
   });
 
-  $effect(() => {
-    if (localFontFamily && localFontFamily !== legendState.style.fontFamily) {
-      updateFontFamily(localFontFamily);
-    }
-  });
-
-  $effect(() => {
-    if (localFontSize !== legendState.style.fontSize) {
-      updateFontSize(localFontSize);
-    }
-  });
-
-  $effect(() => {
-    if (localOpacity !== legendState.style.background.opacity) {
-      updateOpacity(localOpacity);
-    }
-  });
-
   const backgroundEnabled = $derived(legendState.style.background.enabled);
   const bgColor = $derived(legendState.style.background.color);
   const bgHex = $derived(
@@ -96,62 +78,34 @@
     );
   }
 
-  function updateFontFamily(newFont: string): void {
-    legendActions.setState({
-      style: {
-        ...legendState.style,
-        fontFamily: newFont
-      }
-    });
+  function handleFontFamilyChange(): void {
+    if (localFontFamily !== legendState.style.fontFamily) {
+      legendActions.updateStyle({ fontFamily: localFontFamily });
+    }
   }
 
-  function updateFontSize(newSize: number): void {
-    legendActions.setState({
-      style: {
-        ...legendState.style,
-        fontSize: newSize
-      }
-    });
+  function handleFontSizeChange(): void {
+    if (localFontSize !== legendState.style.fontSize) {
+      legendActions.updateStyle({ fontSize: localFontSize });
+    }
   }
 
-  function updateBackgroundEnabled(enabled: boolean): void {
-    legendActions.setState({
-      style: {
-        ...legendState.style,
-        background: {
-          ...legendState.style.background,
-          enabled
-        }
-      }
-    });
+  function handleBackgroundEnabledChange(enabled: boolean): void {
+    legendActions.updateBackground({ enabled });
   }
 
-  function updateBackgroundColor(color: {
+  function handleBackgroundColorChange(color: {
     hue: number;
     saturation: number;
     lightness: number;
   }): void {
-    legendActions.setState({
-      style: {
-        ...legendState.style,
-        background: {
-          ...legendState.style.background,
-          color
-        }
-      }
-    });
+    legendActions.updateBackground({ color });
   }
 
-  function updateOpacity(newOpacity: number): void {
-    legendActions.setState({
-      style: {
-        ...legendState.style,
-        background: {
-          ...legendState.style.background,
-          opacity: newOpacity
-        }
-      }
-    });
+  function handleOpacityChange(): void {
+    if (localOpacity !== legendState.style.background.opacity) {
+      legendActions.updateBackground({ opacity: localOpacity });
+    }
   }
 
   const availableFonts = [
@@ -254,6 +208,7 @@
             id="legend-font-select"
             labelText={m.legend_font()}
             bind:selected={localFontFamily}
+            on:change={handleFontFamilyChange}
             size="xl"
           >
             {#each availableFonts as f (f)}
@@ -267,6 +222,7 @@
             id="legend-font-size"
             labelText={m.legend_font_size()}
             bind:selected={localFontSize}
+            on:change={handleFontSizeChange}
             size="xl"
           >
             {#each [10, 11, 12, 14, 16, 18, 20, 24] as s (s)}
@@ -284,7 +240,7 @@
             labelText={m.legend_background()}
             id="legend-bg-toggle"
             toggled={backgroundEnabled}
-            on:toggle={(e) => updateBackgroundEnabled(e.detail.toggled)}
+            on:toggle={(e) => handleBackgroundEnabledChange(e.detail.toggled)}
           />
         </Column>
 
@@ -300,7 +256,7 @@
               saturation,
               lightness
             }: ColorPickerValidateEvent) => {
-              updateBackgroundColor({ hue, saturation, lightness });
+              handleBackgroundColorChange({ hue, saturation, lightness });
             }}
           />
         </Column>
@@ -315,6 +271,7 @@
               max={100}
               step={1}
               bind:value={localOpacity}
+              on:change={handleOpacityChange}
               hideTextInput
             />
           </div>
@@ -330,6 +287,7 @@
               max={100}
               step={1}
               bind:value={localOpacity}
+              onchange={handleOpacityChange}
               inputmode="numeric"
             />
           </div>
