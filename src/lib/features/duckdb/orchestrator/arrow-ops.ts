@@ -42,7 +42,7 @@ export async function fetchArrowTableWithGeometry(
   return tableFromIPC(ipcBuffer);
 }
 
-export async function fetchTableWithGeometryAsWkb(
+async function fetchTableWithGeometryAsWkb(
   tableName: string,
   geometryColumn: string,
   Duck: DuckDBClientForArrow
@@ -60,7 +60,7 @@ export async function fetchTableWithGeometryAsWkb(
   return tableFromIPC(ipcBuffer);
 }
 
-export async function ensureGeometryColumnIsWkb(
+async function ensureGeometryColumnIsWkb(
   table: Table,
   tableName: string,
   geometryColumn: string,

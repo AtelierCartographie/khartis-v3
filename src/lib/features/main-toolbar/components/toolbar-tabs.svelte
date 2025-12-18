@@ -21,6 +21,7 @@
     showError,
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
   let lastSourceFilesCount = $state(0);
@@ -132,7 +133,10 @@
       (d) => d.sourceFileId === tabId
     );
     if (!dataset) {
-      showError('Erreur', 'Dataset introuvable');
+      showError(
+        m.error_dataset_not_found_title(),
+        m.error_dataset_not_found_message()
+      );
       return;
     }
 
@@ -140,14 +144,14 @@
       const newDatasetId = await datasetsStore.duplicateDataset(dataset.id);
       if (newDatasetId) {
         showSuccess(
-          'Dataset dupliqué',
-          `"${dataset.name}" a été dupliqué avec succès`
+          m.success_dataset_duplicated_title(),
+          m.success_dataset_duplicated_message({ name: dataset.name })
         );
       }
     } catch (error) {
       showError(
-        'Erreur de duplication',
-        error instanceof Error ? error.message : 'Une erreur est survenue'
+        m.error_duplicate_dataset_title(),
+        error instanceof Error ? error.message : m.error_generic_message()
       );
     }
   }

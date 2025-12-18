@@ -84,6 +84,8 @@ export interface UploadedFile {
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: { lat: string; lon: string };
+  sourceArchive?: string;
+  duckdbTableName?: string;
 }
 
 export interface ExampleProject {

@@ -217,7 +217,8 @@ export const createProjectActions = {
         errorMessage?: string
       ) => this.updateFileStatus(fileId, status, errorMessage),
       onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
-        this.updateFileData(fileId, data)
+        this.updateFileData(fileId, data),
+      onAdditionalFile: (file: UploadedFile) => this.addUploadedFile(file)
     };
 
     const processor = new FileProcessorService(callbacks);
@@ -250,11 +251,14 @@ export const createProjectActions = {
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
         status: FileStatus.ERROR,
-        errorMessage: 'Missing .shp file in shapefile set',
+        errorMessage: m.error_shapefile_missing_shp(),
         sourceType
       };
       this.addUploadedFile(errorFile);
-      showError('Invalid shapefile', 'Missing .shp file in shapefile set');
+      showError(
+        m.error_shapefile_invalid_title(),
+        m.error_shapefile_missing_shp()
+      );
       return;
     }
 
@@ -274,13 +278,17 @@ export const createProjectActions = {
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
         status: FileStatus.ERROR,
-        errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
+        errorMessage: m.error_shapefile_missing_components({
+          components: missingExtensions.join(', ')
+        }),
         sourceType
       };
       this.addUploadedFile(errorFile);
       showError(
-        'Incomplete shapefile',
-        `Missing required components: ${missingExtensions.join(', ')}`
+        m.error_shapefile_incomplete_title(),
+        m.error_shapefile_missing_components({
+          components: missingExtensions.join(', ')
+        })
       );
       return;
     }
@@ -295,11 +303,14 @@ export const createProjectActions = {
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
         status: FileStatus.ERROR,
-        errorMessage: 'Missing .shp file in shapefile set',
+        errorMessage: m.error_shapefile_no_shp_found(),
         sourceType
       };
       this.addUploadedFile(errorFile);
-      showError('Shapefile processing failed', 'No .shp file found');
+      showError(
+        m.error_shapefile_processing_failed_title(),
+        m.error_shapefile_no_shp_found()
+      );
       return;
     }
 
@@ -316,7 +327,10 @@ export const createProjectActions = {
       }
     } catch (error) {
       logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      showError('Shapefile read failed', 'Could not read file content');
+      showError(
+        m.error_shapefile_read_failed_title(),
+        m.error_shapefile_read_failed_message()
+      );
       return;
     }
 
@@ -343,8 +357,8 @@ export const createProjectActions = {
 
     if (!result) {
       showError(
-        'Invalid pasted data',
-        'Unable to detect tabular data. Please paste CSV or TSV content with delimiters.'
+        m.error_pasted_data_invalid_title(),
+        m.error_pasted_data_invalid_message()
       );
       this.setPastedData('');
       return;
@@ -453,13 +467,15 @@ export const createProjectActions = {
     const urls = extractUrlsFromInput(inputValue);
 
     if (urls.length === 0) {
-      this.setNewProjectError('Please enter at least one HTTP or HTTPS URL');
+      this.setNewProjectError(m.error_url_required());
       return;
     }
 
     const invalidUrls = urls.filter((entry) => !isValidUrl(entry));
     if (invalidUrls.length > 0) {
-      this.setNewProjectError(`Invalid URL(s): ${invalidUrls.join(', ')}`);
+      this.setNewProjectError(
+        m.error_url_invalid({ urls: invalidUrls.join(', ') })
+      );
       return;
     }
 
@@ -485,9 +501,9 @@ export const createProjectActions = {
       const message =
         error instanceof Error
           ? error.message
-          : 'Failed to load online file(s)';
+          : m.error_load_online_file_title();
       this.setNewProjectError(message);
-      showError('Failed to load online file(s)', message, error);
+      showError(m.error_load_online_file_title(), message, error);
     } finally {
       this.setNewProjectLoading(false);
     }
