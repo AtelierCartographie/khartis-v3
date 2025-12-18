@@ -140,7 +140,9 @@ class ProjectStore {
           originalFile: file.originalFile,
           relatedFiles: file.relatedFiles,
           relatedFilesData: file.relatedFilesData,
-          columnTransformations: file.columnTransformations
+          columnTransformations: file.columnTransformations,
+          duckdbTableName: file.duckdbTableName,
+          sourceArchive: file.sourceArchive
         };
 
         this._state.currentProject = {
@@ -484,13 +486,13 @@ class ProjectStore {
       this._state.lastSaved = new Date();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to save project';
+        error instanceof Error ? error.message : m.error_save_project_title();
       logger.error(
         'Failed to save project to IndexedDB',
         LogCategory.PROJECT,
         error
       );
-      showError('Failed to save project', message, error);
+      showError(m.error_save_project_title(), message, error);
       throw error;
     }
   }
@@ -506,8 +508,8 @@ class ProjectStore {
       }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to delete project';
-      showError('Failed to delete project', message, error);
+        error instanceof Error ? error.message : m.error_delete_project_title();
+      showError(m.error_delete_project_title(), message, error);
       throw error;
     }
   }
@@ -550,8 +552,10 @@ class ProjectStore {
       return duplicatedProject.id;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to duplicate project';
-      showError('Failed to duplicate project', message, error);
+        error instanceof Error
+          ? error.message
+          : m.error_duplicate_project_title();
+      showError(m.error_duplicate_project_title(), message, error);
       throw error;
     }
   }
@@ -592,8 +596,8 @@ class ProjectStore {
       downloadFile(blob, filename);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to export project';
-      showError('Failed to export project', message, error);
+        error instanceof Error ? error.message : m.error_export_project_title();
+      showError(m.error_export_project_title(), message, error);
       throw error;
     }
   }
@@ -617,8 +621,8 @@ class ProjectStore {
       await dataOrchestratorService.onProjectChanged();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to import project';
-      showError('Failed to import project', message, error);
+        error instanceof Error ? error.message : m.error_import_project_title();
+      showError(m.error_import_project_title(), message, error);
       throw error;
     }
   }

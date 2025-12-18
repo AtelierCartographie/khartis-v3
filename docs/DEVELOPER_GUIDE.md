@@ -130,11 +130,11 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 
 ## 🎨 Extension Points
 
-| What                   | How                                                     |
-| ---------------------- | ------------------------------------------------------- |
-| **New file format**    | Implement `IParser` in `data-pipeline/adapters/parsers` |
-| **New classification** | Add method in `duckdb/macros/breaks.ts`                 |
-| **New tool**           | Store + component + toolbar registration                |
+| What                   | How                                                    |
+| ---------------------- | ------------------------------------------------------ |
+| **New file format**    | Add parser function in `data-pipeline/core/parsers.ts` |
+| **New classification** | Add method in `duckdb/macros/breaks.ts`                |
+| **New tool**           | Store + component + toolbar registration               |
 
 ## ⚡ Performance Strategies
 

@@ -328,3 +328,17 @@ export interface DuckAnalyticsColumn {
 }
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;
+
+export interface ZipDatasetResult {
+  datasets: DatasetResult[];
+  sourceZipName: string;
+  totalFiles: number;
+  processedFiles: number;
+  skippedFiles: string[];
+}
+
+export function isZipDatasetResult(
+  result: DatasetResult | ZipDatasetResult
+): result is ZipDatasetResult {
+  return 'datasets' in result && Array.isArray(result.datasets);
+}

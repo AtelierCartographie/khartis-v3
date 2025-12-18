@@ -5,6 +5,7 @@
     showSuccess,
     showError
   } from '$lib/features/commons/utils/notification.utils.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
 
   let {
@@ -41,7 +42,8 @@
       } else {
         showError(m.reset_data_error_title(), m.reset_data_error_message());
       }
-    } catch {
+    } catch (error) {
+      logger.error('Failed to reset dataset', LogCategory.DATA, error);
       showError(m.reset_data_error_title(), m.reset_data_error_generic());
     } finally {
       isResetting = false;

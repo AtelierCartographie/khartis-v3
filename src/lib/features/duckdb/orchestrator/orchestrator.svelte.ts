@@ -3,6 +3,7 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import {
   generateTableName,
@@ -142,7 +143,7 @@ class DuckDBOrchestratorService {
       } catch (error) {
         this.initPromise = null;
         logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
-        showError('DuckDB initialization failed', 'Please refresh the page');
+        showError(m.error_duckdb_init_title(), m.error_duckdb_init_message());
         throw error;
       }
     })();
@@ -335,8 +336,8 @@ class DuckDBOrchestratorService {
         error
       );
       showError(
-        'Failed to process file',
-        error instanceof Error ? error.message : 'Unknown error'
+        m.error_process_file_title(),
+        error instanceof Error ? error.message : m.error_unknown()
       );
       return null;
     }
