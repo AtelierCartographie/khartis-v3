@@ -12,7 +12,8 @@ import type {
   PipelineContext,
   RawDataset,
   UploadedFilePayload,
-  ValidationResult
+  ValidationResult,
+  ZipDatasetResult
 } from './types';
 import { detectDecimalSeparator } from './utils/decimal-detector';
 import {
@@ -127,7 +128,7 @@ export const Pipeline = {
     }
   },
 
-  async processFile(file: File): Promise<DatasetResult> {
+  async processFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
@@ -209,7 +210,7 @@ export const Pipeline = {
   async processUploadedFile(
     uploadedFile: UploadedFilePayload,
     originalFile?: File
-  ): Promise<DatasetResult> {
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
@@ -226,41 +227,54 @@ export const Pipeline = {
     );
 
     try {
-      let dataset: DatasetResult;
+      let result: DatasetResult | ZipDatasetResult;
 
       if (originalFile && isZipFile(originalFile)) {
-        dataset = await this.processZipFile(originalFile);
+        result = await this.processZipFile(originalFile);
       } else if (originalFile) {
         const originalName = originalFile.name.toLowerCase();
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
           (f: File) => f.name.toLowerCase() !== originalName
         );
-        dataset = await processFileInternal(ctx, originalFile, {
+        result = await processFileInternal(ctx, originalFile, {
           companionFiles
         });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
         if (isZipFile(fallback)) {
-          dataset = await this.processZipFile(fallback);
+          result = await this.processZipFile(fallback);
         } else {
           const companionFiles = createCompanionFilesFromUpload(uploadedFile);
-          dataset = await processFileInternal(ctx, fallback, {
+          result = await processFileInternal(ctx, fallback, {
             companionFiles
           });
         }
       }
 
-      dataset.sourceFileId = uploadedFile.id;
-      applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
-      dataset.name = uploadedFile.name;
+      if ('datasets' in result) {
+        for (const dataset of result.datasets) {
+          dataset.sourceFileId = uploadedFile.id;
+          applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
+        }
+        logger.success('ZIP with multiple files processed', LogCategory.DATA, {
+          sourceFile: uploadedFile.name,
+          datasetCount: result.datasets.length,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+        return result;
+      }
+
+      result.sourceFileId = uploadedFile.id;
+      applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);
+      result.name = uploadedFile.name;
 
       logger.success('Uploaded file processed', LogCategory.DATA, {
-        datasetId: dataset.id,
-        fileName: dataset.name,
+        datasetId: result.id,
+        fileName: result.name,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
-      return dataset;
+      return result;
     } catch (error) {
       logger.error('Failed to process uploaded file', LogCategory.DATA, {
         fileId: uploadedFile.id,
@@ -273,7 +287,7 @@ export const Pipeline = {
   async processRemoteFile(
     url: string,
     options: { tableName?: string; decimalSeparator?: string } = {}
-  ): Promise<DatasetResult> {
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
 
@@ -305,7 +319,9 @@ export const Pipeline = {
     return dataset;
   },
 
-  async processRemoteZipFile(url: string): Promise<DatasetResult> {
+  async processRemoteZipFile(
+    url: string
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const start = performance.now();
 
@@ -334,16 +350,32 @@ export const Pipeline = {
         type: 'application/zip'
       });
 
-      const dataset = await this.processZipFile(file);
-      dataset.sourceFileId = url;
+      const result = await this.processZipFile(file);
 
+      if ('datasets' in result) {
+        for (const dataset of result.datasets) {
+          dataset.sourceFileId = url;
+        }
+        logger.success(
+          'Remote ZIP archive processed (multi)',
+          LogCategory.DATA,
+          {
+            url,
+            datasetCount: result.datasets.length,
+            durationMs: (performance.now() - start).toFixed(2)
+          }
+        );
+        return result;
+      }
+
+      result.sourceFileId = url;
       logger.success('Remote ZIP archive processed', LogCategory.DATA, {
         url,
-        datasetId: dataset.id,
+        datasetId: result.id,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
-      return dataset;
+      return result;
     } catch (error) {
       logger.error('Failed to process remote ZIP archive', LogCategory.DATA, {
         url,
@@ -360,7 +392,8 @@ export const Pipeline = {
     const name = options.name ?? 'pasted-data.csv';
     const type = options.type ?? 'text/csv';
     const file = await createFileFromUploadContent(content, name, type);
-    return this.processFile(file);
+    const result = await this.processFile(file);
+    return result as DatasetResult;
   },
 
   async joinDatasetById(
@@ -410,7 +443,7 @@ export const Pipeline = {
     return validateFile(file);
   },
 
-  async processZipFile(file: File): Promise<DatasetResult> {
+  async processZipFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
@@ -469,34 +502,86 @@ export const Pipeline = {
         throw new Error(m.pipeline_error_no_supported_files());
       }
 
-      if (supportedFiles.length > 1) {
-        logger.warn(
-          'ZIP contains multiple files, processing first supported file',
-          LogCategory.DATA,
-          {
-            fileCount: supportedFiles.length,
-            files: supportedFiles.map((f) => f.name)
-          }
-        );
+      if (supportedFiles.length === 1) {
+        const firstFile = supportedFiles[0];
+        const extractedFile = createFileFromExtracted(firstFile);
+
+        const dataset = await processFileInternal(ctx, extractedFile, {
+          originalName: firstFile.name
+        });
+
+        dataset.sourceFileId = file.name;
+        dataset.name = firstFile.name;
+
+        logger.success('File from ZIP processed', LogCategory.DATA, {
+          datasetId: dataset.id,
+          extractedFile: firstFile.name,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+
+        return dataset;
       }
 
-      const firstFile = supportedFiles[0];
-      const extractedFile = createFileFromExtracted(firstFile);
+      logger.info(
+        'ZIP contains multiple files, processing all',
+        LogCategory.DATA,
+        {
+          fileCount: supportedFiles.length,
+          files: supportedFiles.map((f) => f.name)
+        }
+      );
 
-      const dataset = await processFileInternal(ctx, extractedFile, {
-        originalName: firstFile.name
-      });
+      const datasets: DatasetResult[] = [];
+      const skippedFiles: string[] = [];
 
-      dataset.sourceFileId = file.name;
-      dataset.name = firstFile.name;
+      for (const extractedFileInfo of supportedFiles) {
+        try {
+          const extractedFile = createFileFromExtracted(extractedFileInfo);
+          const dataset = await processFileInternal(ctx, extractedFile, {
+            originalName: extractedFileInfo.name
+          });
 
-      logger.success('File from ZIP processed', LogCategory.DATA, {
-        datasetId: dataset.id,
-        extractedFile: firstFile.name,
+          dataset.sourceFileId = file.name;
+          dataset.name = extractedFileInfo.name;
+          datasets.push(dataset);
+
+          logger.debug('Processed file from ZIP', LogCategory.DATA, {
+            fileName: extractedFileInfo.name,
+            datasetId: dataset.id
+          });
+        } catch (error) {
+          logger.warn(
+            'Failed to process file from ZIP, skipping',
+            LogCategory.DATA,
+            {
+              fileName: extractedFileInfo.name,
+              error
+            }
+          );
+          skippedFiles.push(extractedFileInfo.name);
+        }
+      }
+
+      if (datasets.length === 0) {
+        throw new Error(m.pipeline_error_no_supported_files());
+      }
+
+      const result: ZipDatasetResult = {
+        datasets,
+        sourceZipName: file.name,
+        totalFiles: supportedFiles.length,
+        processedFiles: datasets.length,
+        skippedFiles
+      };
+
+      logger.success('ZIP archive processed', LogCategory.DATA, {
+        sourceZip: file.name,
+        processedCount: datasets.length,
+        skippedCount: skippedFiles.length,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
-      return dataset;
+      return result;
     } catch (error) {
       logger.error('Failed to process ZIP archive', LogCategory.DATA, {
         fileName: file.name,

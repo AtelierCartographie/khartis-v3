@@ -348,6 +348,12 @@ class DataOrchestratorService {
 
               this._geometryDatasetsVersion++;
             }
+          } else if (file.parsedData && Array.isArray(file.parsedData)) {
+            await this.recreateTableFromParsedData(
+              file,
+              dataset.tableName,
+              dataset
+            );
           }
         }
       } catch (registerError) {
@@ -359,6 +365,68 @@ class DataOrchestratorService {
           tableName: dataset.tableName
         });
       }
+    }
+  }
+
+  private async recreateTableFromParsedData(
+    file: UploadedFile,
+    tableName: string,
+    dataset: DatasetResult
+  ): Promise<void> {
+    try {
+      const { Duck } = await import('$lib/features/duckdb');
+      if (!Duck) {
+        throw new Error('DuckDB not initialized');
+      }
+
+      logger.info(
+        'Recreating DuckDB table from parsed data',
+        LogCategory.DUCKDB,
+        {
+          fileId: file.id,
+          fileName: file.name,
+          tableName,
+          rowCount: (file.parsedData as unknown[]).length
+        }
+      );
+
+      const jsonData = JSON.stringify(file.parsedData);
+      const jsonBlob = new Blob([jsonData], { type: 'application/json' });
+      const jsonFile = new File([jsonBlob], `${tableName}.json`, {
+        type: 'application/json'
+      });
+
+      await Duck.register_files([jsonFile]);
+
+      const escapedTableName = tableName.replace(/"/g, '""');
+      await Duck.query(
+        `CREATE TABLE "${escapedTableName}" AS SELECT * FROM read_json_auto('${tableName}.json')`
+      );
+
+      await duckDBOrchestrator.registerExistingTable(
+        tableName,
+        dataset.sourceFileId || file.id,
+        file.name,
+        {
+          geoDetection: dataset.geoDetection
+        }
+      );
+
+      logger.success(
+        'DuckDB table recreated from parsed data',
+        LogCategory.DUCKDB,
+        {
+          tableName,
+          rowCount: (file.parsedData as unknown[]).length
+        }
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to recreate table from parsed data',
+        LogCategory.DUCKDB,
+        error
+      );
+      throw error;
     }
   }
 

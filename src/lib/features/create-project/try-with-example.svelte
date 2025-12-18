@@ -58,7 +58,7 @@
     try {
       const example = EXAMPLE_PROJECTS.find((e) => e.id === exampleId);
       if (!example) {
-        throw new Error('Example not found');
+        throw new Error(m.error_example_not_found());
       }
 
       const data = await loadExampleData(example);
@@ -99,7 +99,8 @@
       await goto(base || '/', { replaceState: true });
     } catch (err) {
       logger.error('Failed to load example', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to load example';
+      error =
+        err instanceof Error ? err.message : m.error_example_load_failed();
     } finally {
       isLoading = false;
     }

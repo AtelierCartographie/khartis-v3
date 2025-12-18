@@ -19,6 +19,9 @@ const DEFAULT_FORMAT_STATE: FormatState = {
 
 export const formatState = $state<FormatState>({ ...DEFAULT_FORMAT_STATE });
 
+const CONTAINER_PADDING = 80;
+const MIN_MAP_SIZE = 200;
+
 export const formatActions = {
   setState(newState: Partial<FormatState>): void {
     Object.assign(formatState, newState);
@@ -62,6 +65,34 @@ export const formatActions = {
 
   toggleGrid(): void {
     formatState.gridEnabled = !formatState.gridEnabled;
+  },
+
+  fitToContainer(containerWidth: number, containerHeight: number): void {
+    const preset = PAGE_PRESETS[formatState.model];
+    if (!preset) return;
+
+    const aspectRatio = preset.width / preset.height;
+    const availableWidth = Math.max(0, containerWidth - CONTAINER_PADDING);
+    const availableHeight = Math.max(0, containerHeight - CONTAINER_PADDING);
+
+    if (availableWidth <= 0 || availableHeight <= 0) return;
+
+    let newWidth: number;
+    let newHeight: number;
+
+    if (availableWidth / availableHeight > aspectRatio) {
+      newHeight = availableHeight;
+      newWidth = newHeight * aspectRatio;
+    } else {
+      newWidth = availableWidth;
+      newHeight = newWidth / aspectRatio;
+    }
+
+    newWidth = Math.max(MIN_MAP_SIZE, Math.min(newWidth, availableWidth));
+    newHeight = Math.max(MIN_MAP_SIZE, Math.min(newHeight, availableHeight));
+
+    formatState.width = Math.round(newWidth);
+    formatState.height = Math.round(newHeight);
   },
 
   reset: createResetFunction(formatState, DEFAULT_FORMAT_STATE)

@@ -145,22 +145,12 @@
             <Button
               size="small"
               kind="ghost"
-              icon={CopyFile}
               class="menu-bar-item"
-              data-testid="sidenav-duplicate-project"
-              on:click={handleDuplicateProject}
-              >{m.sidenav_duplicate_project()}
-            </Button>
-
-            <Button
-              size="small"
-              kind="ghost"
-              icon={TrashCan}
-              class="menu-bar-item"
-              data-testid="sidenav-delete-project"
-              disabled={!projectStore.currentProject}
-              on:click={handleDeleteProject}
-              >{m.sidenav_delete_project()}
+              data-testid="sidenav-open-project"
+              on:click={handleOpenProject}
+            >
+              {m.sidenav_open_project()}
+              <span class="shortcut-icon">⇧⌘O</span>
             </Button>
 
             <Button
@@ -179,12 +169,22 @@
             <Button
               size="small"
               kind="ghost"
+              icon={CopyFile}
               class="menu-bar-item"
-              data-testid="sidenav-open-project"
-              on:click={handleOpenProject}
-            >
-              {m.sidenav_open_project()}
-              <span class="shortcut-icon">⇧⌘O</span>
+              data-testid="sidenav-duplicate-project"
+              on:click={handleDuplicateProject}
+              >{m.sidenav_duplicate_project()}
+            </Button>
+
+            <Button
+              size="small"
+              kind="danger-ghost"
+              icon={TrashCan}
+              class="menu-bar-item"
+              data-testid="sidenav-delete-project"
+              disabled={!projectStore.currentProject}
+              on:click={handleDeleteProject}
+              >{m.sidenav_delete_project()}
             </Button>
           </Column>
         </Row>

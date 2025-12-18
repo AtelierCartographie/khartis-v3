@@ -13,10 +13,15 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import { formatState } from '../step-toolbar/tools/format/format.store.svelte';
+  import {
+    formatActions,
+    formatState
+  } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
+
+  let containerRef: HTMLDivElement;
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
@@ -291,7 +296,15 @@
     }
   });
 
-  onMount(async () => {
+  let resizeObserver: ResizeObserver | null = null;
+
+  function handleContainerResize() {
+    if (!containerRef) return;
+    const rect = containerRef.getBoundingClientRect();
+    formatActions.fitToContainer(rect.width, rect.height);
+  }
+
+  async function initializeMap() {
     const start = performance.now();
     logger.info('Initializing main map view', LogCategory.MAP);
 
@@ -336,6 +349,21 @@
       durationMs: (performance.now() - start).toFixed(2)
     });
     isInitializing = false;
+  }
+
+  onMount(() => {
+    handleContainerResize();
+
+    resizeObserver = new ResizeObserver(() => {
+      handleContainerResize();
+    });
+    resizeObserver.observe(containerRef);
+
+    initializeMap();
+
+    return () => {
+      resizeObserver?.disconnect();
+    };
   });
 
   function handleMapReady() {
@@ -344,7 +372,7 @@
   }
 </script>
 
-<div class="main-map-container">
+<div class="main-map-container" bind:this={containerRef}>
   <!-- Skeleton loader - only during initial load -->
   {#if !isMapReady}
     <div
