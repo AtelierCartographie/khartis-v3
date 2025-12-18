@@ -2,8 +2,8 @@ import type { Color } from '@deck.gl/core';
 import type { DeckDataRow, RGBColor } from '../types';
 import { getSizeForValue, getColorForValue } from '../utils/data-styling.utils';
 
-export const BASE_FILL_COLOR: RGBColor = [232, 232, 232];
-export const BASE_STROKE_COLOR: RGBColor = [255, 255, 255];
+export const BASE_FILL_COLOR: RGBColor = [220, 220, 220];
+export const BASE_STROKE_COLOR: RGBColor = [80, 80, 80];
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
 export function withOpacity(color: number[], opacity = 1): Color {

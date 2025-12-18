@@ -8,7 +8,8 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   // Limit workers to avoid DuckDB thread exhaustion (each browser creates thread pool)
-  workers: isCI ? 2 : 4,
+  // Keep low to avoid WASM memory and thread contention
+  workers: isCI ? 2 : 2,
   reporter: isCI ? [['blob'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
   timeout: isCI ? 90000 : 60000,

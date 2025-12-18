@@ -45,6 +45,8 @@ const DEFAULT_STATE: CreateProjectState = {
     onlineFileUrl: '',
     projectName: '',
     isLoading: false,
+    isProcessingFiles: false,
+    processingFileCount: 0,
     validationErrors: []
   },
 
@@ -89,98 +91,104 @@ export const createProjectActions = {
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    const validationResult =
-      CreateProjectValidationService.validateFiles(files);
+    this.setProcessingFiles(true, files.length);
 
-    createProjectState.newProject.validationErrors =
-      validationResult.globalErrors;
+    try {
+      const validationResult =
+        CreateProjectValidationService.validateFiles(files);
 
-    const fileGroups = groupShapefiles(files);
-    const duplicates: string[] = [];
-    const toProcess: SvelteMap<string, File[]> = new SvelteMap();
+      createProjectState.newProject.validationErrors =
+        validationResult.globalErrors;
 
-    for (const [baseName, groupFiles] of fileGroups) {
-      const mainFileName =
-        groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
+      const fileGroups = groupShapefiles(files);
+      const duplicates: string[] = [];
+      const toProcess: SvelteMap<string, File[]> = new SvelteMap();
 
-      if (this.isFileDuplicate(mainFileName)) {
-        duplicates.push(mainFileName);
-      } else {
-        toProcess.set(baseName, groupFiles);
-      }
-    }
+      for (const [baseName, groupFiles] of fileGroups) {
+        const mainFileName =
+          groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
 
-    if (!validationResult.isValid) {
-      for (const [baseName, groupFiles] of toProcess) {
-        const mainFile =
-          groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
-        const mainFileName = mainFile.name;
-        const fileValidation = validationResult.results.get(mainFileName);
-
-        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
-          err.includes(`Shapefile "${baseName}"`)
-        );
-
-        const errors: string[] = [];
-        const warnings: string[] = [];
-
-        if (fileValidation) {
-          errors.push(...fileValidation.errors);
-          warnings.push(...fileValidation.warnings);
+        if (this.isFileDuplicate(mainFileName)) {
+          duplicates.push(mainFileName);
+        } else {
+          toProcess.set(baseName, groupFiles);
         }
+      }
 
-        if (shapefileGlobalError) {
-          errors.push(
-            shapefileGlobalError.replace(
-              `Shapefile "${baseName}" incomplet. `,
-              ''
-            )
+      if (!validationResult.isValid) {
+        for (const [baseName, groupFiles] of toProcess) {
+          const mainFile =
+            groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
+          const mainFileName = mainFile.name;
+          const fileValidation = validationResult.results.get(mainFileName);
+
+          const shapefileGlobalError = validationResult.globalErrors.find(
+            (err) => err.includes(`Shapefile "${baseName}"`)
           );
-        }
 
-        if (errors.length > 0 || warnings.length > 0) {
-          const errorFile: UploadedFile = {
-            id: crypto.randomUUID(),
-            name: mainFileName,
-            size: mainFile.size,
-            status: FileStatus.ERROR,
-            uploadProgress: 100,
-            type: mainFile.type,
-            fileType: mainFile.name.endsWith('.shp')
-              ? FileType.SHAPEFILE
-              : FileType.UNKNOWN,
-            sourceType,
-            relatedFiles: groupFiles
-              .filter((f) => f !== mainFile)
-              .map((f) => f.name),
-            validation: {
-              isValid: errors.length === 0,
-              errors,
-              warnings
-            }
-          };
-          this.addUploadedFile(errorFile);
+          const errors: string[] = [];
+          const warnings: string[] = [];
+
+          if (fileValidation) {
+            errors.push(...fileValidation.errors);
+            warnings.push(...fileValidation.warnings);
+          }
+
+          if (shapefileGlobalError) {
+            errors.push(
+              shapefileGlobalError.replace(
+                `Shapefile "${baseName}" incomplet. `,
+                ''
+              )
+            );
+          }
+
+          if (errors.length > 0 || warnings.length > 0) {
+            const errorFile: UploadedFile = {
+              id: crypto.randomUUID(),
+              name: mainFileName,
+              size: mainFile.size,
+              status: FileStatus.ERROR,
+              uploadProgress: 100,
+              type: mainFile.type,
+              fileType: mainFile.name.endsWith('.shp')
+                ? FileType.SHAPEFILE
+                : FileType.UNKNOWN,
+              sourceType,
+              relatedFiles: groupFiles
+                .filter((f) => f !== mainFile)
+                .map((f) => f.name),
+              validation: {
+                isValid: errors.length === 0,
+                errors,
+                warnings
+              }
+            };
+            this.addUploadedFile(errorFile);
+          }
+        }
+        return;
+      }
+
+      if (duplicates.length > 0) {
+        showWarning(
+          m.warning_files_duplicate_title(),
+          m.warning_files_duplicate_message({ files: duplicates.join(', ') })
+        );
+      }
+
+      for (const [baseName, groupFiles] of toProcess) {
+        if (
+          groupFiles.length === 1 &&
+          !isShapefileComponent(groupFiles[0].name)
+        ) {
+          await this.processSingleFile(groupFiles[0], sourceType);
+        } else {
+          await this.processShapefileGroup(baseName, groupFiles, sourceType);
         }
       }
-      return;
-    }
-
-    if (duplicates.length > 0) {
-      showWarning(
-        m.warning_files_duplicate_title(),
-        m.warning_files_duplicate_message({ files: duplicates.join(', ') })
-      );
-    }
-
-    for (const [baseName, groupFiles] of toProcess) {
-      if (
-        groupFiles.length === 1 &&
-        !isShapefileComponent(groupFiles[0].name)
-      ) {
-        await this.processSingleFile(groupFiles[0], sourceType);
-      } else {
-        await this.processShapefileGroup(baseName, groupFiles, sourceType);
-      }
+    } finally {
+      this.setProcessingFiles(false, 0);
     }
   },
 
@@ -426,6 +434,11 @@ export const createProjectActions = {
 
   setNewProjectLoading(loading: boolean): void {
     createProjectState.newProject.isLoading = loading;
+  },
+
+  setProcessingFiles(isProcessing: boolean, count: number = 0): void {
+    createProjectState.newProject.isProcessingFiles = isProcessing;
+    createProjectState.newProject.processingFileCount = count;
   },
 
   setNewProjectError(error?: string): void {

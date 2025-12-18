@@ -88,6 +88,26 @@ export function detectFileType(file: File): FileType {
     return FileType.KMZ;
   }
 
+  if (extension === 'gpx') {
+    return FileType.GPX;
+  }
+
+  if (extension === 'zip' || mimeType.includes('zip')) {
+    return FileType.ZIP;
+  }
+
+  if (extension === 'tsv' || mimeType.includes('tab-separated')) {
+    return FileType.TSV;
+  }
+
+  if (extension === 'parquet') {
+    return FileType.GEOPARQUET;
+  }
+
+  if (extension === 'arrow') {
+    return FileType.ARROW;
+  }
+
   return FileType.UNKNOWN;
 }
 

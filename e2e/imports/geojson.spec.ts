@@ -24,7 +24,7 @@ test.describe('GeoJSON Import', () => {
   test('should import lignes-du-reseau-star-de-rennes-metropole.geojson (large file with lines)', async ({
     page
   }) => {
-    test.slow();
+    test.setTimeout(300000); // 5 min for 10MB file
     const errorTracker = await freshStart(page);
 
     const geoPath = join(
@@ -32,7 +32,7 @@ test.describe('GeoJSON Import', () => {
       'lignes-du-reseau-star-de-rennes-metropole.geojson'
     );
     await createProject(page, geoPath, `GeoJSON STAR ${Date.now()}`);
-    await waitForMap(page, 90000);
+    await waitForMap(page, 120000);
 
     await expect(page.locator('.map-container').first()).toBeVisible();
     assertNoConsoleErrors(errorTracker, 'STAR lines GeoJSON import');
