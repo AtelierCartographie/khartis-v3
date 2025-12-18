@@ -124,8 +124,7 @@ src/lib/features/map/
 │   ├── use-map-layers.svelte.ts   # Deck.gl layer management
 │   ├── use-map-basemap.svelte.ts  # Basemap style + OSM raster
 │   ├── use-map-bounds.svelte.ts   # fitBounds for Arrow/GeoJSON
-│   ├── use-map-position.svelte.ts # localStorage persistence
-│   └── use-map-zoom.svelte.ts     # Global zoom state sync
+│   └── use-map-position.svelte.ts # localStorage persistence
 ├── interactions/         # Tooltip service
 └── components/           # Svelte components (deck-map.svelte ~165 lines)
 ```
@@ -155,7 +154,6 @@ const mapInit = useMapInit({
   onWorldBaseLoaded: (table) => {
     worldBaseTable = table;
   },
-  onZoom: () => mapZoom.handleMapZoom(),
   onMoveEnd: () => mapPosition.savePosition()
 });
 ```
@@ -170,7 +168,6 @@ const mapInit = useMapInit({
 | `useMapBasemap`  | Basemap style sync, OSM raster layers              |
 | `useMapBounds`   | fitBounds for Arrow/GeoJSON data                   |
 | `useMapPosition` | localStorage persistence (center/zoom)             |
-| `useMapZoom`     | Global zoom state ↔ MapLibre sync                  |
 
 ### Layer Creation
 

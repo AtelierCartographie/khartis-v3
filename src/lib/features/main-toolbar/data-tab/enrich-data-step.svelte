@@ -9,7 +9,11 @@
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { ColumnType, dataPipeline } from '$lib/features/data-pipeline';
+  import {
+    ColumnType,
+    dataPipeline,
+    isZipDatasetResult
+  } from '$lib/features/data-pipeline';
   import { Duck } from '$lib/features/duckdb';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -199,17 +203,20 @@
 
     try {
       const result = await dataPipeline.processFile(file);
-      enrichmentDataset = result;
+      const dataset: DatasetResult = isZipDatasetResult(result)
+        ? result.datasets[0]
+        : result;
+      enrichmentDataset = dataset;
       enrichmentFile = file;
 
       dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: result.id,
+        enrichmentDatasetId: dataset.id,
         isEnrichmentActive: true
       });
 
       logger.success('Enrichment file loaded', LogCategory.DATA, {
         fileName: file.name,
-        rowCount: result.rowCount
+        rowCount: dataset.rowCount
       });
     } catch (error) {
       logger.error('Failed to load enrichment file', LogCategory.DATA, error);
@@ -228,12 +235,15 @@
 
     try {
       const result = await dataPipeline.processRemoteFile(onlineUrlValue);
-      enrichmentDataset = result;
+      const dataset: DatasetResult = isZipDatasetResult(result)
+        ? result.datasets[0]
+        : result;
+      enrichmentDataset = dataset;
       enrichmentFile = null;
       onlineUrlValue = '';
 
       dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: result.id,
+        enrichmentDatasetId: dataset.id,
         isEnrichmentActive: true
       });
     } catch (error) {

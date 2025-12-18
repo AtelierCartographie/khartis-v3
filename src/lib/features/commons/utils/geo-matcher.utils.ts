@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import { LogCategory, logger } from './logger';
 import { normalizeForMatching } from './string.utils';
 
@@ -45,7 +46,7 @@ function createGeoMatcher() {
     const catalogue = await loadCatalogue(catalogueId);
 
     if (!catalogue) {
-      throw new Error(`Catalogue "${catalogueId}" non trouvé`);
+      throw new Error(m.error_catalogue_not_found({ catalogueId }));
     }
 
     const normalizedValues = preprocessValues(values, options.caseSensitive);
