@@ -259,7 +259,7 @@
           <TextInput
             size="sm"
             labelText={m.filter_value_min()}
-            placeholder="Min"
+            placeholder={m.filter_placeholder_min()}
             bind:value={newFilter.value}
           />
         </div>
@@ -267,7 +267,7 @@
           <TextInput
             size="sm"
             labelText={m.filter_value_max()}
-            placeholder="Max"
+            placeholder={m.filter_placeholder_max()}
             bind:value={newFilter.secondaryValue}
           />
         </div>

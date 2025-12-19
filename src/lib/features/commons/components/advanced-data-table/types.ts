@@ -41,3 +41,4 @@ export interface PlotOptions {
 }
 
 export const TABLE_ROW_HEIGHT = 26;
+export const DOM_UPDATE_DELAY_MS = 50;

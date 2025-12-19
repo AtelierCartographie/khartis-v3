@@ -15,6 +15,7 @@
     isZipDatasetResult
   } from '$lib/features/data-pipeline';
   import { Duck } from '$lib/features/duckdb';
+  import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -187,7 +188,7 @@
     const ext = file.name.toLowerCase().split('.').pop();
 
     if (!['csv', 'tsv', 'txt'].includes(ext || '')) {
-      uploadError = 'Format non supporté. Utilisez un fichier CSV ou TSV.';
+      uploadError = m.error_upload_unsupported_format();
       return;
     }
 
@@ -214,7 +215,7 @@
     } catch (error) {
       logger.error('Failed to load enrichment file', LogCategory.DATA, error);
       uploadError =
-        error instanceof Error ? error.message : 'Erreur lors du chargement';
+        error instanceof Error ? error.message : m.error_loading_default();
     } finally {
       isUploading = false;
     }
@@ -241,7 +242,41 @@
       });
     } catch (error) {
       uploadError =
-        error instanceof Error ? error.message : 'Erreur lors du chargement';
+        error instanceof Error ? error.message : m.error_loading_default();
+    } finally {
+      isUploading = false;
+    }
+  }
+
+  async function handlePasteData() {
+    if (!pastedDataValue.trim()) return;
+
+    isUploading = true;
+    uploadError = null;
+
+    try {
+      const result = await dataPipeline.processPastedData(pastedDataValue);
+      const dataset: DatasetResult = isZipDatasetResult(result)
+        ? result.datasets[0]
+        : result;
+      enrichmentDataset = dataset;
+      enrichmentFile = null;
+      pastedDataValue = '';
+
+      dataTabActions.setEnrichDataState({
+        enrichmentDatasetId: dataset.id,
+        isEnrichmentActive: true
+      });
+
+      logger.success('Pasted data loaded', LogCategory.DATA, {
+        rowCount: dataset.rowCount
+      });
+    } catch (error) {
+      logger.error('Failed to load pasted data', LogCategory.DATA, error);
+      uploadError =
+        error instanceof Error
+          ? error.message
+          : m.error_pasted_data_invalid_message();
     } finally {
       isUploading = false;
     }
@@ -425,7 +460,7 @@
     } catch (error) {
       logger.error('Failed to import custom basemap', LogCategory.MAP, error);
       basemapImportError =
-        error instanceof Error ? error.message : "Erreur lors de l'import";
+        error instanceof Error ? error.message : m.error_import_default();
     } finally {
       basemapImportUploading = false;
     }
@@ -448,7 +483,7 @@
     } catch (err) {
       logger.error('Error loading basemap URL', LogCategory.MAP, err);
       basemapImportError =
-        err instanceof Error ? err.message : 'Erreur lors du chargement';
+        err instanceof Error ? err.message : m.error_loading_default();
     } finally {
       basemapImportUploading = false;
     }
@@ -456,14 +491,15 @@
 
   function handleSelectOSM() {
     const osmBasemap: BasemapMetadata = {
-      file: 'osm-standard',
-      title: 'OpenStreetMap',
-      description: m.osm_modal_description(),
-      source: 'OpenStreetMap',
+      file: `osm_${DEFAULT_OSM_STYLE}_${Date.now()}`,
+      title: m.osm_basemap_title({ style: 'OpenStreetMap' }),
+      description: m.osm_basemap_description(),
+      source: m.osm_basemap_source(),
       date: new Date().getFullYear().toString(),
-      bbox: [-180, -85, 180, 85],
+      bbox: [-180, -90, 180, 90],
       projection: 'EPSG:3857',
-      layers: [{ name: 'osm', type: BasemapLayerType.POLYGON }]
+      layers: [{ name: 'base', type: BasemapLayerType.POLYGON }],
+      isCustom: true
     };
 
     osmBasemapStore.setOSMBasemap(osmBasemap);
@@ -741,11 +777,21 @@
               on:change={(e) => handleFileUpload(e.detail)}
             />
 
-            <TextArea
-              bind:value={pastedDataValue}
-              placeholder={m.enrich_paste_data()}
-              rows={6}
-            />
+            <div class="paste-section">
+              <TextArea
+                bind:value={pastedDataValue}
+                placeholder={m.enrich_paste_data()}
+                rows={5}
+              />
+              <Button
+                kind="secondary"
+                size="small"
+                on:click={handlePasteData}
+                disabled={!pastedDataValue.trim() || isUploading}
+              >
+                {m.create_project_process_button()}
+              </Button>
+            </div>
           </div>
 
           <div class="url-section">
@@ -773,7 +819,7 @@
             <span class="file-label">{m.enrich_file_imported()}</span>
             <div class="file-row">
               <span class="file-name"
-                >{enrichmentFile?.name || 'Données collées'}</span
+                >{enrichmentFile?.name || m.dataset_pasted_name()}</span
               >
               <button class="file-remove" onclick={handleRemoveFile}>
                 <Close size={16} />
@@ -796,8 +842,8 @@
           <!-- Warning for coordinate-only files -->
           {#if hasOnlyCoordinates()}
             <InlineNotification
-              title="Fichier de coordonnées uniquement"
-              subtitle="Ce fichier ne contient que des coordonnées GPS (latitude/longitude). Pour enrichir un fichier géographique, utilisez un fichier avec des identifiants géographiques (pays, régions, codes ISO, etc.)."
+              title={m.enrich_coordinates_only_title()}
+              subtitle={m.enrich_coordinates_only_subtitle()}
               kind="warning"
               lowContrast
               hideCloseButton={false}
@@ -884,7 +930,7 @@
 
               {#if isComputingJoin}
                 <div class="computing-join">
-                  <span>Calcul de la jointure en cours...</span>
+                  <span>{m.enrich_computing_join()}</span>
                 </div>
               {:else if joinStats}
                 <JoinAccordion
@@ -900,7 +946,7 @@
 
                 {#if isFinalizingJoin}
                   <div class="finalizing-join">
-                    <span>Fusion des données en cours...</span>
+                    <span>{m.enrich_finalizing_join()}</span>
                   </div>
                 {/if}
               {/if}
@@ -908,7 +954,7 @@
           {:else}
             <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
             <p class="placeholder-text">
-              Sélectionnez les colonnes à joindre pour voir la vérification.
+              {m.enrich_select_columns_to_join()}
             </p>
           {/if}
         {/if}
@@ -916,7 +962,7 @@
         {#if uploadError}
           <InlineNotification
             kind="error"
-            title="Erreur"
+            title={m.error_title()}
             subtitle={uploadError}
             hideCloseButton={false}
             on:close={() => (uploadError = null)}
@@ -1110,6 +1156,16 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--cds-spacing-04);
+  }
+
+  .paste-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .paste-section :global(.bx--btn) {
+    align-self: flex-end;
   }
 
   .url-section {

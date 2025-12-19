@@ -354,6 +354,12 @@ export const FileValidator = {
       return;
     }
 
+    if (lines.length === 1) {
+      result.warnings.push(
+        'CSV file contains only one line (header or single row of data)'
+      );
+    }
+
     const separators = [',', ';', '\t', '|'];
     let detectedSeparator = ',';
     let maxCount = 0;
@@ -496,35 +502,12 @@ export const FileValidator = {
   },
 
   validateShapefileGroup(
-    files: File[],
-    results: Map<string, DetailedValidationResult>,
-    globalErrors: string[]
+    _files: File[],
+    _results: Map<string, DetailedValidationResult>,
+    _globalErrors: string[]
   ): void {
-    const shapefileComponents = new Map<string, Set<string>>();
-
-    for (const file of files) {
-      const result = results.get(file.name);
-      if (result?.fileType === FileType.SHAPEFILE) {
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-        const ext = FileValidator.getFileExtension(file.name);
-
-        if (!shapefileComponents.has(baseName)) {
-          shapefileComponents.set(baseName, new Set());
-        }
-        shapefileComponents.get(baseName)!.add(ext);
-      }
-    }
-
-    for (const [baseName, extensions] of shapefileComponents) {
-      const requiredExtensions = ['shp', 'shx', 'dbf'];
-      const missing = requiredExtensions.filter((ext) => !extensions.has(ext));
-
-      if (missing.length > 0) {
-        globalErrors.push(
-          `Incomplete shapefile "${baseName}". Missing files: ${missing.map((e) => `.${e}`).join(', ')}`
-        );
-      }
-    }
+    // Shapefile validation is handled in processShapefileGroup
+    // to support progressive import (adding .shx, .dbf after .shp)
   },
 
   requiresAsyncValidation(fileType: FileType): boolean {

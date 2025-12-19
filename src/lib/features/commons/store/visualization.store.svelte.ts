@@ -140,7 +140,7 @@ class VisualizationStore {
     const duplicateName = this.generateDuplicateName(original.name);
 
     const duplicate: VisualizationConfig = {
-      ...structuredClone(original),
+      ...(JSON.parse(JSON.stringify(original)) as VisualizationConfig),
       id: crypto.randomUUID(),
       name: duplicateName
     };
@@ -206,8 +206,27 @@ class VisualizationStore {
     }
   }
 
+  invertPalette(id: string): void {
+    const viz = this._state.visualizations.find((v) => v.id === id);
+    if (viz?.classification?.colors) {
+      viz.classification.colors = [...viz.classification.colors].reverse();
+    }
+  }
+
   getVisualizationsByDataset(datasetId: string): VisualizationConfig[] {
     return this._state.visualizations.filter((v) => v.datasetId === datasetId);
+  }
+
+  getVisualizationsUsingColumn(columnName: string): VisualizationConfig[] {
+    return this._state.visualizations.filter((viz) => {
+      const mapping = viz.mapping;
+      return (
+        mapping?.valueColumn === columnName ||
+        mapping?.categoryColumn === columnName ||
+        mapping?.sizeColumn === columnName ||
+        mapping?.colorColumn === columnName
+      );
+    });
   }
 
   private getDefaultStyle(type: VisualizationType) {

@@ -17,7 +17,7 @@ const DEFAULT_STATE: FormatState = {
   gridEnabled: true
 };
 
-const CONTAINER_PADDING = 80;
+const CONTAINER_PADDING = 16;
 const MIN_MAP_SIZE = 200;
 
 type FormatActions = {
