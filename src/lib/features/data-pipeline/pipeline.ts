@@ -398,7 +398,7 @@ const Pipeline = {
     content: string,
     options: { name?: string; type?: string } = {}
   ): Promise<DatasetResult> {
-    const name = options.name ?? 'pasted-data.csv';
+    const name = options.name ?? `pasted-data-${Date.now()}.csv`;
     const type = options.type ?? 'text/csv';
     const file = await createFileFromUploadContent(content, name, type);
     const result = await this.processFile(file);

@@ -5,6 +5,7 @@
   import { Button } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
+  import { fly } from 'svelte/transition';
   import { dataToolsStore } from '../data-tools.store.svelte';
 
   interface Props {
@@ -28,7 +29,12 @@
   });
 </script>
 
-<aside class="data-tool-panel" style:right={toolbarWidth}>
+<aside
+  class="data-tool-panel"
+  style:right={toolbarWidth}
+  in:fly={{ x: 20, duration: 200 }}
+  out:fly={{ x: 20, duration: 150 }}
+>
   <header class="panel-header">
     <h3>{title}</h3>
     <Button
@@ -56,7 +62,7 @@
     z-index: 100;
     display: flex;
     flex-direction: column;
-    transition: right 0.3s ease-in-out;
+    transition: right 0.2s ease-out;
   }
 
   .panel-header {

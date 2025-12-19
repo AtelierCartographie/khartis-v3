@@ -16,6 +16,7 @@
     TrashCan
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
   import {
     showError,
@@ -27,7 +28,7 @@
   let tabsScroller: HTMLDivElement | null = $state(null);
 
   const datasetsBySourceFile = $derived.by(() => {
-    const map = new Map<
+    const map = new SvelteMap<
       string,
       { id: string; name: string; isSelected: boolean }[]
     >();
@@ -144,7 +145,7 @@
   let editingTabId = $state<string | null>(null);
   let editedName = $state('');
   let nameInputRef = $state<HTMLInputElement | null>(null);
-  let tabRefs = $state<Map<string, HTMLDivElement>>(new Map());
+  let tabRefs = new SvelteMap<string, HTMLDivElement>();
 
   let menuOpenTabId = $state<string | null>(null);
   let menuPosition = $state({ top: 0, left: 0 });

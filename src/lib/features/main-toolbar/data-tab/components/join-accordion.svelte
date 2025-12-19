@@ -1,6 +1,8 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import {
+    Accordion,
+    AccordionItem,
     Button,
     InlineNotification,
     Select,
@@ -9,8 +11,6 @@
   } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
-    ChevronDown,
-    ChevronUp,
     ErrorFilled,
     WarningAltFilled,
     WarningFilled
@@ -65,55 +65,43 @@
 </script>
 
 <div class="join-stats-accordion">
-  <!-- Joined Entities -->
-  <div class="accordion-item joined">
-    <button
-      class="accordion-header"
-      onclick={() => (joinedExpanded = !joinedExpanded)}
+  <Accordion>
+    <!-- Joined Entities -->
+    <AccordionItem
+      open={joinedExpanded}
+      on:click={() => (joinedExpanded = !joinedExpanded)}
     >
-      <div class="status-icon">
-        <CheckmarkFilled size={20} class="icon-success" />
-      </div>
-      <span class="status-text"
-        >{m.join_entities_joined({ count: stats.joinedCount })}</span
-      >
-      <div class="expand-icon">
-        {#if joinedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
-      </div>
-    </button>
-    {#if joinedExpanded}
-      <div class="accordion-content">
-        {#if joinedEntities.length > 0}
-          <ul class="entities-list joined-list">
-            {#each joinedEntities as entity (entity.dataValue)}
-              <li>{entity.dataValue}</li>
-            {/each}
-          </ul>
-        {:else}
-          <p class="helper-text">{m.join_entities_joined_desc()}</p>
-        {/if}
-      </div>
-    {/if}
-  </div>
+      <svelte:fragment slot="title">
+        <div class="accordion-title">
+          <CheckmarkFilled size={20} class="icon-success" />
+          <span>{m.join_entities_joined({ count: stats.joinedCount })}</span>
+        </div>
+      </svelte:fragment>
+      {#if joinedEntities.length > 0}
+        <ul class="entities-list joined-list">
+          {#each joinedEntities as entity (entity.dataValue)}
+            <li>{entity.dataValue}</li>
+          {/each}
+        </ul>
+      {:else}
+        <p class="helper-text">{m.join_entities_joined_desc()}</p>
+      {/if}
+    </AccordionItem>
 
-  <!-- To Verify Entities -->
-  <div class="accordion-item to-verify">
-    <button
-      class="accordion-header"
-      onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
+    <!-- To Verify Entities -->
+    <AccordionItem
+      open={toVerifyExpanded}
+      on:click={() => (toVerifyExpanded = !toVerifyExpanded)}
     >
-      <div class="status-icon">
-        <WarningFilled size={20} class="icon-warning" />
-      </div>
-      <span class="status-text"
-        >{m.join_entities_to_verify({ count: stats.toVerifyCount })}</span
-      >
-      <div class="expand-icon">
-        {#if toVerifyExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
-      </div>
-    </button>
-    {#if toVerifyExpanded && stats.toVerifyCount > 0}
-      <div class="accordion-content">
+      <svelte:fragment slot="title">
+        <div class="accordion-title">
+          <WarningFilled size={20} class="icon-warning" />
+          <span
+            >{m.join_entities_to_verify({ count: stats.toVerifyCount })}</span
+          >
+        </div>
+      </svelte:fragment>
+      {#if stats.toVerifyCount > 0}
         {#if showCorrectionTable && toVerifyEntities.some((e) => e.basemapOptions)}
           <div class="join-table">
             <div class="head">
@@ -167,65 +155,55 @@
             {/each}
           </ul>
         {/if}
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </AccordionItem>
 
-  <!-- Duplicate Entities -->
-  <div class="accordion-item duplicates">
-    <button
-      class="accordion-header"
-      onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+    <!-- Duplicate Entities -->
+    <AccordionItem
+      open={duplicatesExpanded}
+      on:click={() => (duplicatesExpanded = !duplicatesExpanded)}
     >
-      <div class="status-icon">
-        <WarningAltFilled size={20} class="icon-error" />
-      </div>
-      <span class="status-text"
-        >{m.join_entities_duplicate({ count: stats.duplicateCount })}</span
-      >
-      <div class="expand-icon">
-        {#if duplicatesExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
-      </div>
-    </button>
-    {#if duplicatesExpanded && stats.duplicateCount > 0}
-      <div class="accordion-content">
+      <svelte:fragment slot="title">
+        <div class="accordion-title">
+          <WarningAltFilled size={20} class="icon-error" />
+          <span
+            >{m.join_entities_duplicate({ count: stats.duplicateCount })}</span
+          >
+        </div>
+      </svelte:fragment>
+      {#if stats.duplicateCount > 0}
         <ul class="entities-list">
           {#each duplicateEntities as entity (entity.dataValue)}
             <li>{entity.dataValue}</li>
           {/each}
         </ul>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </AccordionItem>
 
-  <!-- Unrecognized Entities -->
-  <div class="accordion-item unrecognized">
-    <button
-      class="accordion-header"
-      onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
+    <!-- Unrecognized Entities -->
+    <AccordionItem
+      open={unrecognizedExpanded}
+      on:click={() => (unrecognizedExpanded = !unrecognizedExpanded)}
     >
-      <div class="status-icon">
-        <ErrorFilled size={20} class="icon-error" />
-      </div>
-      <span class="status-text"
-        >{m.join_entities_unrecognized({
-          count: stats.unrecognizedCount
-        })}</span
-      >
-      <div class="expand-icon">
-        {#if unrecognizedExpanded}<ChevronUp />{:else}<ChevronDown />{/if}
-      </div>
-    </button>
-    {#if unrecognizedExpanded && stats.unrecognizedCount > 0}
-      <div class="accordion-content">
+      <svelte:fragment slot="title">
+        <div class="accordion-title">
+          <ErrorFilled size={20} class="icon-error" />
+          <span
+            >{m.join_entities_unrecognized({
+              count: stats.unrecognizedCount
+            })}</span
+          >
+        </div>
+      </svelte:fragment>
+      {#if stats.unrecognizedCount > 0}
         <ul class="entities-list">
           {#each unrecognizedEntities as entity (entity.dataValue)}
             <li>{entity.dataValue}</li>
           {/each}
         </ul>
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </AccordionItem>
+  </Accordion>
 </div>
 
 {#if hasErrors}
@@ -258,67 +236,39 @@
 
 <style>
   .join-stats-accordion {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background-color: var(--cds-border-subtle);
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    overflow: hidden;
     margin-bottom: var(--cds-spacing-04);
   }
 
-  .accordion-item {
-    background-color: var(--cds-layer-01);
+  .join-stats-accordion :global(.bx--accordion) {
+    border: 1px solid var(--cds-border-subtle);
+    border-radius: var(--cds-spacing-02);
+    overflow: hidden;
   }
 
-  .accordion-header {
+  .join-stats-accordion :global(.bx--accordion__item) {
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .join-stats-accordion :global(.bx--accordion__item:first-child) {
+    border-top: none;
+  }
+
+  .accordion-title {
     display: flex;
     align-items: center;
-    width: 100%;
-    padding: var(--cds-spacing-04);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
+    gap: var(--cds-spacing-03);
   }
 
-  .accordion-header:hover {
-    background-color: var(--cds-layer-hover-01);
-  }
-
-  .status-icon {
-    margin-right: var(--cds-spacing-03);
-    display: flex;
-    align-items: center;
-  }
-
-  .status-icon :global(.icon-success) {
+  .accordion-title :global(.icon-success) {
     color: var(--cds-support-success);
   }
 
-  .status-icon :global(.icon-warning) {
+  .accordion-title :global(.icon-warning) {
     color: var(--cds-support-warning);
   }
 
-  .status-icon :global(.icon-error) {
+  .accordion-title :global(.icon-error) {
     color: var(--cds-support-error);
-  }
-
-  .status-text {
-    flex: 1;
-    font-size: 0.875rem;
-    color: var(--cds-text-01);
-  }
-
-  .expand-icon {
-    color: var(--cds-icon-01);
-  }
-
-  .accordion-content {
-    padding: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
-    background-color: var(--cds-layer-01);
   }
 
   .entities-list {
@@ -358,7 +308,7 @@
 
   .join-table {
     border: 1px solid var(--cds-border-subtle);
-    border-radius: 6px;
+    border-radius: var(--cds-spacing-02);
     overflow: hidden;
     margin-bottom: var(--cds-spacing-05);
   }
@@ -385,7 +335,7 @@
     background: var(--cds-layer);
     padding: var(--cds-spacing-04);
     margin-top: var(--cds-spacing-05);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
   }
 
   .correction .title {
@@ -397,7 +347,7 @@
     margin-top: var(--cds-spacing-04);
     padding: var(--cds-spacing-04);
     background-color: var(--cds-layer-02);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     border-left: 4px solid var(--cds-support-success);
   }
 
