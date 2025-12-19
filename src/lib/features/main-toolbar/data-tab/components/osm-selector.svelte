@@ -117,6 +117,6 @@
   }
 
   .link-text:hover {
-    color: var(--cds-link-primary-hover, #0043ce);
+    color: var(--cds-link-primary-hover);
   }
 </style>

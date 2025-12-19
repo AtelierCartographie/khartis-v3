@@ -190,10 +190,10 @@
     gap: var(--cds-spacing-03);
     padding: var(--cds-spacing-06);
     border: 2px dashed var(--cds-border-subtle);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     background-color: var(--cds-layer-02);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease-out;
     margin-bottom: var(--cds-spacing-04);
   }
 
@@ -255,7 +255,7 @@
     padding: var(--cds-spacing-03);
     background-color: var(--cds-layer-02);
     border: 1px solid var(--cds-support-success);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
   }
 
   .file-name {

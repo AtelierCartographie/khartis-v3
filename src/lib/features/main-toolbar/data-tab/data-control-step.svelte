@@ -437,7 +437,7 @@
     text-align: center;
     color: var(--cds-text-02);
     background-color: var(--cds-ui-01);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     margin-top: var(--cds-spacing-05);
   }
 

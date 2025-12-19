@@ -1325,10 +1325,10 @@
     min-height: 180px;
     padding: var(--cds-spacing-05);
     border: 2px dashed var(--cds-border-subtle);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     background-color: var(--cds-ui-01);
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease-out;
   }
 
   .dropzone:hover,
@@ -1368,7 +1368,7 @@
   .imported-file {
     background-color: var(--cds-ui-01);
     padding: var(--cds-spacing-04);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     border: 1px solid var(--cds-border-subtle);
   }
 
@@ -1466,7 +1466,7 @@
     background: var(--cds-layer);
     padding: var(--cds-spacing-04);
     margin-top: var(--cds-spacing-05);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
   }
 
   .correction .title {
@@ -1479,7 +1479,7 @@
     background: var(--cds-layer);
     padding: var(--cds-spacing-04);
     margin-top: var(--cds-spacing-05);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
   }
 
   .validation .title {
@@ -1498,7 +1498,7 @@
     gap: 1px;
     background-color: var(--cds-border-subtle);
     border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     overflow: hidden;
     margin-bottom: var(--cds-spacing-05);
   }
