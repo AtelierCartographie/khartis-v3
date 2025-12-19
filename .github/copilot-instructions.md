@@ -10,23 +10,23 @@ Khartis v3 is a **client-side thematic mapping application** built with SvelteKi
 
 ```bash
 # Setup (first time only)
-corepack enable          # Enable Yarn 4 via Corepack
-yarn install             # Install dependencies
+corepack enable pnpm     # Enable pnpm via Corepack
+pnpm install             # Install dependencies
 
 # Development workflow
-yarn dev                 # Start dev server on port 5176
-yarn check               # Svelte type checks (strict TypeScript enabled)
-yarn lint                # Prettier + ESLint check
-yarn format              # Auto-format with Prettier
-yarn test:unit           # Vitest unit tests
-yarn test:e2e            # Playwright E2E tests
+pnpm dev                 # Start dev server on port 5176
+pnpm check               # Svelte type checks (strict TypeScript enabled)
+pnpm lint                # Prettier + ESLint check
+pnpm format              # Auto-format with Prettier
+pnpm test:unit           # Vitest unit tests
+pnpm test:e2e            # Playwright E2E tests
 
 # Production
-yarn build               # Build for production (uses /cartographie/khartisnewpprd base path)
-yarn preview             # Preview production build
+pnpm build               # Build for production (uses /cartographie/khartisnewpprd base path)
+pnpm preview             # Preview production build
 ```
 
-**⚠️ Critical**: Always use Yarn 4 (via Corepack), never npm. TypeScript strict mode is enabled - no `any` types allowed.
+**⚠️ Critical**: Always use pnpm (via Corepack), never npm. TypeScript strict mode is enabled - no `any` types allowed.
 
 ## Architecture Overview
 
@@ -40,12 +40,14 @@ yarn preview             # Preview production build
 ### Data Flow Pipeline
 
 ```
-File Upload → ParserRegistry → Parse → ValidationChain → TypeInferrer → DuckDB → Stats → ProcessedDataset
-                                                                          ↓
+File Upload → validateFile() → detectFileFormat() → parseTabular/parseGeoFile()
+                                                              ↓
+                                    DuckDB table → buildDatasetFromDuckTable() → DatasetResult
+                                                              ↓
                                         Visualization Suggestion → User Config → Deck.gl Layers → GPU Rendering
 ```
 
-**Key Insight**: Single-pass processing with DuckDB WASM running in main thread, providing SQL query capabilities for all data analysis.
+**Key Insight**: Direct-to-DuckDB processing with native functions (`read_csv()`, `ST_Read()`), providing SQL query capabilities for all data analysis.
 
 ### Feature-based Structure
 
@@ -53,19 +55,29 @@ File Upload → ParserRegistry → Parse → ValidationChain → TypeInferrer �
 src/lib/
 ├── features/           # Feature-based architecture
 │   ├── commons/        # Shared: components, stores, services, utils, types
-│   ├── pipeline/           # Data pipeline (modular functional design)
-│   │   ├── adapters/       # Concrete implementations (parsers, validators, type inference)
-│   │   ├── contracts/      # TypeScript interfaces (IParser, IValidator, ITypeInferrer)
-│   │   ├── models/         # Domain entities (RawDataset, DatasetResult, ColumnType)
-│   │   ├── pipeline/       # Pipeline factory & orchestration
-│   │   └── types/          # TypeScript type definitions
-│   ├── duckdb/     # DuckDB WASM integration (modular functional)
-│   │   ├── core/           # Engine, query, transaction
-│   │   ├── io/             # File I/O (readers, exporters)
-│   │   ├── cache/          # Unified cache manager
-│   │   ├── operations/     # Analysis, search, join, filters
-│   │   └── orchestrator/   # Reactive Svelte 5 service
+│   ├── data-pipeline/  # Data pipeline (modular functional design)
+│   │   ├── pipeline.ts         # Pipeline facade singleton
+│   │   ├── types.ts            # DatasetResult, EnrichedColumn, ColumnType
+│   │   ├── constants.ts        # PIPELINE_CONST (extensions, limits)
+│   │   ├── core/               # parsers.ts, validators.ts
+│   │   ├── io/                 # geoparquet-reader.ts
+│   │   ├── operations/         # analysis.ts, geometry.ts, quality.ts
+│   │   └── utils/              # GeoJSON converter, guards
+│   ├── duckdb/         # DuckDB WASM integration (modular functional)
+│   │   ├── duck.ts             # Duck facade object
+│   │   ├── types.ts            # ALL consolidated types
+│   │   ├── core/               # Engine, query, transaction
+│   │   ├── io/                 # File I/O (readers, exporters)
+│   │   ├── cache/              # Unified cache manager
+│   │   ├── operations/         # Analysis, search, join, filters
+│   │   ├── macros/             # SQL macros
+│   │   └── orchestrator/       # Reactive Svelte 5 service
 │   ├── create-project/ # Project creation modal
+│   │   ├── create-project.svelte       # Main modal wrapper
+│   │   ├── create-new-project.svelte   # New project tab
+│   │   ├── open-project.svelte         # Open existing tab
+│   │   ├── try-with-example.svelte     # Example projects tab
+│   │   └── services/                   # File processing & validation
 │   ├── header/         # Top navigation
 │   ├── main-toolbar/   # Left sidebar (data/viz/styling tabs)
 │   ├── map/            # Map visualization with Deck.gl + MapLibre
@@ -134,63 +146,62 @@ export const annotationsStore = new AnnotationsStore();
 
 ## Critical Project-Specific Conventions
 
-### 1. Data Pipeline (Modern Functional Architecture)
+### 1. Data Pipeline (Modular Functional Architecture)
 
-The data pipeline uses **modular functional design** with dependency injection:
+The data pipeline uses **pure functions + module-level state** (NO classes):
 
 ```typescript
-// Usage (factory function creates configured pipeline)
-import { dataPipeline } from '$lib/features/data';
+// Usage
+import { dataPipeline } from '$lib/features/data-pipeline';
 
 await dataPipeline.initialize(); // Initialize DuckDB once at startup
 const result = await dataPipeline.processFile(file); // Returns DatasetResult
+
+// Other methods
+await dataPipeline.processUploadedFile(uploadedFile, originalFile);
+await dataPipeline.processRemoteFile(url);
+await dataPipeline.processPastedData(csvContent);
+await dataPipeline.joinDatasetById(tableName, idColumn, options);
 ```
 
 **Architecture structure**:
 
 ```
 src/lib/features/data-pipeline/
-├── adapters/          # Concrete implementations
-│   ├── parsers/       # File format parsers (CSV, GeoJSON, Shapefile, etc.)
-│   ├── validators/    # Data validators (size, schema, quality)
-│   └── type-inference/# Type detection (heuristic-based)
-├── contracts/         # TypeScript interfaces (IParser, IValidator, ITypeInferrer)
-├── models/            # Domain entities (RawDataset, DatasetResult, ColumnType)
-├── pipeline/          # Pipeline factory & orchestration
-└── types/             # TypeScript type definitions
+├── pipeline.ts            # Pipeline facade singleton
+├── types.ts               # DatasetResult, EnrichedColumn, ColumnType
+├── constants.ts           # PIPELINE_CONST (extensions, MIME types, limits)
+├── core/
+│   ├── parsers.ts         # parseTabular(), parseGeoFile(), parseFile()
+│   └── validators.ts      # validateFile(), validateFileExtension()
+├── io/
+│   └── geoparquet-reader.ts  # GeoParquet with GeoArrow metadata
+├── operations/
+│   ├── analysis.ts        # buildDatasetFromDuckTable(), enrichColumns()
+│   ├── geometry.ts        # extractGeometryInfo()
+│   └── quality.ts         # computeQualityWarnings()
+└── utils/
+    └── geojson-converter.ts  # convertGeoJSONToRawDataset()
 ```
 
-**To add a new file parser**:
+**To add a new file format**:
 
 ```typescript
-// 1. Implement IParser interface in src/lib/features/data-pipeline/adapters/parsers/
-export class ExcelParser implements IParser {
-  readonly supportedExtensions = ['.xlsx'];
+// 1. Add extension to constants.ts
+PIPELINE_CONST.EXTENSIONS.TABULAR.push('.xlsx');
 
-  canParse(file: File): boolean {
-    return file.name.endsWith('.xlsx');
-  }
+// 2. Update detectFileFormat() in pipeline.ts
+if (ext === 'xlsx') return 'xlsx';
 
-  async parse(file: File): Promise<RawDataset> {
-    // Parse logic
-    return { headers, rows, columns };
-  }
+// 3. Add parser function in core/parsers.ts
+export async function parseExcel(ctx, file, options): Promise<ParseResult> {
+  // Convert to format DuckDB can handle, then use existing parsers
 }
 
-// 2. Add to parser list in src/lib/features/data-pipeline/adapters/parsers/index.ts
-export function createParserList(override?: ParserList): IParser[] {
-  return (
-    override ?? [
-      new CSVParser(),
-      new GeoJSONParser(),
-      new ExcelParser() // ← Add here
-      // ...
-    ]
-  );
-}
+// 4. Update parseFile() to route to new parser
 ```
 
-**Type Inference**: Priority order is Boolean → Date → Number → Geometry → Text (80% threshold on 100-row sample)
+**Type Inference**: Handled by DuckDB's native type detection, mapped via `enrichColumns()`
 
 ### 2. DuckDB Integration
 
@@ -423,7 +434,7 @@ try {
 3. **No magic strings** - use constants, enums, or type literals
 4. **No direct state mutation** - only through explicit action methods
 5. **No `console.log`** - use `logger` from `$lib/features/commons/utils/logger`
-6. **Use Yarn 4** - never npm or other package managers
+6. **Use pnpm** - never npm or other package managers
 7. **Use Carbon Design System** - import from `carbon-components-svelte`
 8. **Use Paraglide i18n** - all visible text must use `m.key()` messages
 9. **Client-only** - user data never leaves the browser
@@ -433,11 +444,11 @@ try {
 
 ```bash
 # Unit tests (Vitest) - fast logic checks
-yarn test:unit src/path/to/file.test.ts
+pnpm test:unit src/path/to/file.test.ts
 
 # E2E tests (Playwright) - critical user flows
-yarn test:e2e e2e/critical-flows.spec.ts
-yarn test:e2e:ui  # Interactive UI mode
+pnpm test:e2e e2e/critical-flows.spec.ts
+pnpm test:e2e:ui  # Interactive UI mode
 ```
 
 **Test files**: `*.test.ts` or `*.spec.ts` (Vitest), `*.spec.ts` (Playwright in `e2e/`)

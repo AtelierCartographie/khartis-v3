@@ -1,44 +1,31 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
+import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { ColorBlindnessState } from './color-blindness.types';
 
-const DEFAULT_COLOR_BLINDNESS_STATE: ColorBlindnessState = {
-  simulationType: 'none',
+const DEFAULT_STATE: ColorBlindnessState = {
+  simulationType: ColorBlindnessType.NONE,
   enabled: false
 };
 
-export const colorBlindnessState = $state<ColorBlindnessState>({
-  ...DEFAULT_COLOR_BLINDNESS_STATE
-});
-
-export function getColorBlindnessState(): ColorBlindnessState {
-  return colorBlindnessState;
-}
-
-export const colorBlindnessActions = {
-  toggleEnabled(): void {
-    colorBlindnessState.enabled = !colorBlindnessState.enabled;
+const { state, actions, getState } = createToolStore<
+  ColorBlindnessState,
+  {
+    toggleEnabled: () => void;
+    setSimulationType: (type: ColorBlindnessType) => void;
+  }
+>(DEFAULT_STATE, (s) => ({
+  toggleEnabled: () => {
+    s.enabled = !s.enabled;
   },
+  setSimulationType: (type: ColorBlindnessType) => {
+    s.simulationType = type;
+  }
+}));
 
-  setSimulationType(
-    type:
-      | 'none'
-      | 'protanopia'
-      | 'deuteranopia'
-      | 'tritanopia'
-      | 'protanomaly'
-      | 'deuteranomaly'
-      | 'tritanomaly'
-      | 'achromatopsia'
-      | 'achromatomaly'
-  ): void {
-    colorBlindnessState.simulationType = type;
-  },
-
-  reset: createResetFunction(colorBlindnessState, DEFAULT_COLOR_BLINDNESS_STATE)
-};
+export const colorBlindnessState = state;
+export const colorBlindnessActions = actions;
+export const getColorBlindnessState = getState;
 
 export function isSimulationActive(): boolean {
-  return (
-    colorBlindnessState.enabled && colorBlindnessState.simulationType !== 'none'
-  );
+  return state.enabled && state.simulationType !== ColorBlindnessType.NONE;
 }

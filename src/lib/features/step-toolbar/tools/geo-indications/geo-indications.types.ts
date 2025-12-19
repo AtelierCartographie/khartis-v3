@@ -1,3 +1,10 @@
+import {
+  DistanceUnit,
+  InsetMapType,
+  OrientationIndicatorStyle,
+  StrokeStyle
+} from '$lib/features/commons/constants/ui.constants';
+
 export interface ColorState {
   hue: number;
   saturation: number;
@@ -7,21 +14,21 @@ export interface ColorState {
 export interface GeoIndicationsState {
   scale: {
     enabled: boolean;
-    style: 'line' | 'dashed' | 'dotted';
+    style: StrokeStyle;
     distance: number;
-    units: 'kilometers' | 'miles';
+    units: DistanceUnit;
     color: ColorState;
     expanded: boolean;
   };
   orientation: {
     enabled: boolean;
-    style: 'arrow' | 'compass';
+    style: OrientationIndicatorStyle;
     size: number;
     color: ColorState;
   };
   insetMap: {
     enabled: boolean;
-    type: 'globe' | 'planisphere';
+    type: InsetMapType;
     size: number;
     windowColor: ColorState;
     zoom: number;

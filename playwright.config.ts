@@ -1,37 +1,49 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : 1,
-  reporter: 'html',
+  fullyParallel: true,
+  forbidOnly: isCI,
+  retries: isCI ? 1 : 0,
+  // Limit workers to avoid DuckDB thread exhaustion (each browser creates thread pool)
+  // Keep low to avoid WASM memory and thread contention
+  workers: isCI ? 2 : 2,
+  reporter: isCI ? [['blob'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
-  timeout: 45000,
+  timeout: isCI ? 90000 : 60000,
   expect: {
-    timeout: 15000
+    timeout: isCI ? 30000 : 20000
   },
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    actionTimeout: 15000,
-    navigationTimeout: 15000
+    // Disable video locally for speed
+    video: isCI ? 'retain-on-failure' : 'off',
+    actionTimeout: isCI ? 20000 : 15000,
+    navigationTimeout: isCI ? 20000 : 15000,
+    locale: 'fr-FR',
+    timezoneId: 'Europe/Paris'
   },
 
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        headless: true
+      }
     }
   ],
 
   webServer: {
-    command: 'yarn build && yarn preview',
+    command: isCI ? 'pnpm preview' : 'pnpm build && pnpm preview',
     port: 4173,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120000
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 60000 : 120000,
+    stdout: 'pipe',
+    stderr: 'pipe'
   }
 });

@@ -1,14 +1,15 @@
 import { base } from '$app/paths';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { BasemapMetadata, BasemapLayer } from '../types/basemap.types';
-import { logger, LogCategory } from '../../commons/utils/logger';
-import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { SvelteMap } from 'svelte/reactivity';
+import { LogCategory, logger } from '../../commons/utils/logger';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
+import { projectionStore } from '../stores/projection.store.svelte';
+import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
 import {
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
-import { SvelteMap } from 'svelte/reactivity';
 
 const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
@@ -102,16 +103,14 @@ class BasemapService {
         (attributesFile as File & { id?: string }).id ||
         `${attributesFile.lastModified}-${attributesFile.name}`;
 
-      // Escape fileId for SQL string literal
       const escapedFileId = escapeSqlString(fileId);
 
-      // Optimized Parquet scan with performance hints
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
         SELECT * FROM parquet_scan('${escapedFileId}',
-          hive_partitioning=false,  -- No Hive partitioning in our files
-          union_by_name=false,      -- No union needed
-          filename=false             -- Don't include filename column
+          hive_partitioning=false,
+          union_by_name=false,
+          filename=false
         )
       `);
 
@@ -127,24 +126,31 @@ class BasemapService {
     }
   }
 
+  private async fetchGeometryFile(
+    filename: string
+  ): Promise<{ response: Response; isGeoJSON: boolean }> {
+    let url = `${GEOMETRY_BASE_PATH}${filename}.geojson`;
+    let response = await fetch(url);
+
+    if (response.ok) {
+      return { response, isGeoJSON: true };
+    }
+
+    url = `${GEOMETRY_BASE_PATH}${filename}.parquet`;
+    response = await fetch(url);
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch geometry: ${response.statusText}`);
+    }
+
+    return { response, isGeoJSON: false };
+  }
+
   private async loadGeometryFromParquet(filename: string): Promise<ArrowTable> {
     const start = performance.now();
     logger.debug('Loading basemap geometry', LogCategory.MAP, { filename });
 
-    // Try GeoJSON first (more compatible than GeoArrow struct encoding in parquet)
-    let url = `${GEOMETRY_BASE_PATH}${filename}.geojson`;
-    let response = await fetch(url);
-    const isGeoJSON = response.ok;
-
-    if (!isGeoJSON) {
-      // Fall back to parquet if GeoJSON doesn't exist
-      url = `${GEOMETRY_BASE_PATH}${filename}.parquet`;
-      response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch geometry: ${response.statusText}`);
-      }
-    }
+    const { response, isGeoJSON } = await this.fetchGeometryFile(filename);
 
     let jsTable: ArrowTable;
 
@@ -153,7 +159,6 @@ class BasemapService {
       jsTable = await readGeoJSONAsArrow(geojsonText, `basemap_${filename}`);
     } else {
       const arrayBuffer = await response.arrayBuffer();
-      // Use DuckDB to read GeoParquet - handles various geometry encodings correctly
       jsTable = await readGeoParquetViaDuckDB(
         arrayBuffer,
         `basemap_${filename}`
@@ -199,7 +204,6 @@ class BasemapService {
   async loadGeometryIntoDuckDB(basemapId: string): Promise<string> {
     const tableName = `basemap_geom_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
-    // Check if already loaded
     if (this._geometryTablesInDuckDB.has(tableName)) {
       logger.debug('Basemap geometry already in DuckDB', LogCategory.MAP, {
         basemapId,
@@ -218,19 +222,7 @@ class BasemapService {
     });
 
     try {
-      // Try GeoJSON first, fall back to parquet
-      let url = `${GEOMETRY_BASE_PATH}${basemapId}.geojson`;
-      let response = await fetch(url);
-      const isGeoJSON = response.ok;
-
-      if (!isGeoJSON) {
-        url = `${GEOMETRY_BASE_PATH}${basemapId}.parquet`;
-        response = await fetch(url);
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch geometry: ${response.statusText}`);
-        }
-      }
+      const { response, isGeoJSON } = await this.fetchGeometryFile(basemapId);
 
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
@@ -241,12 +233,7 @@ class BasemapService {
       );
 
       await Duck.register_files([geometryFile]);
-
-      if (isGeoJSON) {
-        await Duck.read_geofile(geometryFile, { tablename: tableName });
-      } else {
-        await Duck.read_geofile(geometryFile, { tablename: tableName });
-      }
+      await Duck.read_geofile(geometryFile, { tablename: tableName });
 
       this._geometryTablesInDuckDB.add(tableName);
 
@@ -267,10 +254,32 @@ class BasemapService {
     }
   }
 
+  private updateProjectionFromTable(geometryTable: ArrowTable): void {
+    if (projectionStore.referenceBbox !== null) {
+      logger.debug(
+        'Skipping basemap bbox update - user data bbox already set',
+        LogCategory.MAP,
+        {
+          currentBbox: projectionStore.referenceBbox
+        }
+      );
+      return;
+    }
+
+    const geoMetadata = geometryTable.schema.metadata?.get('geo');
+    if (geoMetadata) {
+      projectionStore.setReferenceBboxFromMetadata(geoMetadata);
+      logger.debug('Projection store updated from basemap', LogCategory.MAP, {
+        bbox: projectionStore.referenceBbox
+      });
+    }
+  }
+
   async loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
     if (this._basemapCache.has(basemapId)) {
       logger.debug('Basemap loaded from cache', LogCategory.MAP, { basemapId });
       this._currentBasemap = this._basemapCache.get(basemapId)!;
+      this.updateProjectionFromTable(this._currentBasemap.geometryTable);
       return this._currentBasemap;
     }
 
@@ -297,6 +306,8 @@ class BasemapService {
       };
 
       this._basemapCache.set(basemapId, this._currentBasemap);
+
+      this.updateProjectionFromTable(geometryTable);
 
       logger.success('Basemap loaded', LogCategory.MAP, {
         basemapId,

@@ -1,10 +1,11 @@
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
-import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { Table } from 'apache-arrow/Arrow';
 import { join_macros } from '../macros/join';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
@@ -77,31 +78,41 @@ export async function computeJoinStats(
     { format: 'array' }
   )) as Array<{
     original_name: string;
-    status: 'matched' | 'check' | 'ambiguous' | 'not_found';
+    source_dup_count: number;
+    status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
     candidates: { id: string; name: string; score: number; type: string }[];
     best_score: number;
   }>;
 
   const entities = result.map((r) => ({
     dataValue: r.original_name,
-    status: (r.status === 'ambiguous'
-      ? 'to_verify'
-      : r.status === 'check'
-        ? 'to_verify'
-        : r.status === 'not_found'
-          ? 'unrecognized'
-          : 'joined') as 'joined' | 'to_verify' | 'duplicate' | 'unrecognized',
+    status:
+      r.status === 'duplicate'
+        ? JoinStatus.DUPLICATE
+        : r.status === 'ambiguous'
+          ? JoinStatus.TO_VERIFY
+          : r.status === 'check'
+            ? JoinStatus.TO_VERIFY
+            : r.status === 'not_found'
+              ? JoinStatus.UNRECOGNIZED
+              : JoinStatus.JOINED,
     matches: r.candidates?.map((c) => c.name) || [],
     matchCount: r.candidates?.length || 0,
-    basemapValue: r.status === 'matched' ? r.candidates[0].name : undefined
+    basemapValue:
+      r.status === 'matched' && r.candidates?.length > 0
+        ? r.candidates[0].name
+        : undefined
   }));
 
   return {
-    joinedCount: entities.filter((e) => e.status === 'joined').length,
-    toVerifyCount: entities.filter((e) => e.status === 'to_verify').length,
-    duplicateCount: entities.filter((e) => e.status === 'duplicate').length,
-    unrecognizedCount: entities.filter((e) => e.status === 'unrecognized')
+    joinedCount: entities.filter((e) => e.status === JoinStatus.JOINED).length,
+    toVerifyCount: entities.filter((e) => e.status === JoinStatus.TO_VERIFY)
       .length,
+    duplicateCount: entities.filter((e) => e.status === JoinStatus.DUPLICATE)
+      .length,
+    unrecognizedCount: entities.filter(
+      (e) => e.status === JoinStatus.UNRECOGNIZED
+    ).length,
     entities,
     totalEntities: entities.length
   };

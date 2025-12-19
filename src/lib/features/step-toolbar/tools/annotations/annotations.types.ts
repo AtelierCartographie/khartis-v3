@@ -1,8 +1,12 @@
+import {
+  AnnotationKind,
+  DrawingType
+} from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 
-export interface AnnotationType {
+export interface Annotation {
   id: string;
-  type: 'text' | 'shape' | 'drawing' | 'image';
+  type: AnnotationKind;
   content: unknown;
   position: { x: number; y: number };
   style?: AnnotationStyle;
@@ -28,14 +32,15 @@ export interface AnnotationStyle {
   curvature?: number;
 
   smoothness?: number;
-  drawingType?: 'line' | 'zone';
+  drawingType?: DrawingType;
 
   size?: number;
 }
+
 export interface AnnotationsState {
-  items: AnnotationType[];
+  items: Annotation[];
   selectedId: string | null;
-  activeType: 'text' | 'shape' | 'drawing' | 'image';
+  activeType: AnnotationKind;
   predefinedStyle: string;
   textContent: string;
   defaultStyle: AnnotationStyle;

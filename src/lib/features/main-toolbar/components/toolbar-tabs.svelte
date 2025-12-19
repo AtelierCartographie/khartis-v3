@@ -4,20 +4,151 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { Button, Modal, Tag } from 'carbon-components-svelte';
-  import { Add, Close } from 'carbon-icons-svelte';
+  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
+  import {
+    Add,
+    OverflowMenuVertical,
+    Copy,
+    Edit,
+    TrashCan
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
+  import {
+    showError,
+    showSuccess
+  } from '$lib/features/commons/utils/notification.utils.svelte';
+  import * as m from '$lib/paraglide/messages';
+  import { Checkmark } from 'carbon-icons-svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
+
+  const datasetsBySourceFile = $derived.by(() => {
+    const map = new SvelteMap<
+      string,
+      { id: string; name: string; isSelected: boolean }[]
+    >();
+    for (const dataset of datasetsStore.datasets) {
+      const sourceFileId = dataset.sourceFileId;
+      if (!map.has(sourceFileId)) {
+        map.set(sourceFileId, []);
+      }
+      map.get(sourceFileId)!.push({
+        id: dataset.id,
+        name: dataset.name,
+        isSelected: datasetsStore.selectedDataset?.id === dataset.id
+      });
+    }
+    return map;
+  });
+
+  function getDatasetCountForTab(sourceFileId: string): number {
+    return datasetsBySourceFile.get(sourceFileId)?.length ?? 0;
+  }
+
+  function getDatasetsForTab(
+    sourceFileId: string
+  ): { id: string; name: string; isSelected: boolean }[] {
+    return datasetsBySourceFile.get(sourceFileId) ?? [];
+  }
+
+  function getSelectedDatasetForTab(
+    sourceFileId: string
+  ): { id: string; name: string } | undefined {
+    const datasets = getDatasetsForTab(sourceFileId);
+    return datasets.find((d) => d.isSelected) ?? datasets[0];
+  }
+
+  function handleSelectDataset(datasetId: string, event: Event) {
+    event.stopPropagation();
+    datasetsStore.selectDataset(datasetId);
+    closeTabMenu();
+  }
+
+  let datasetToDelete = $state<{ id: string; name: string } | null>(null);
+  let isDeleteDatasetConfirmOpen = $state(false);
+  let editingDatasetId = $state<string | null>(null);
+  let editedDatasetName = $state('');
+
+  function startEditingDataset(datasetId: string, name: string, event: Event) {
+    event.stopPropagation();
+    editingDatasetId = datasetId;
+    editedDatasetName = name;
+  }
+
+  function saveDatasetRename() {
+    if (!editingDatasetId || !editedDatasetName.trim()) {
+      cancelDatasetEditing();
+      return;
+    }
+
+    const success = datasetsStore.renameDatasetOnly(
+      editingDatasetId,
+      editedDatasetName.trim()
+    );
+    if (success) {
+      showSuccess(
+        m.success_dataset_renamed_title(),
+        m.success_dataset_renamed_message({ name: editedDatasetName.trim() })
+      );
+    }
+    cancelDatasetEditing();
+  }
+
+  function cancelDatasetEditing() {
+    editingDatasetId = null;
+    editedDatasetName = '';
+  }
+
+  function handleDatasetEditKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveDatasetRename();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelDatasetEditing();
+    }
+  }
+
+  function handleDeleteDataset(datasetId: string, name: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+    datasetToDelete = { id: datasetId, name };
+    isDeleteDatasetConfirmOpen = true;
+  }
+
+  async function confirmDeleteDataset() {
+    if (datasetToDelete) {
+      const success = await datasetsStore.deleteDataset(datasetToDelete.id);
+      if (success) {
+        showSuccess(
+          m.success_dataset_deleted_title(),
+          m.success_dataset_deleted_message({ name: datasetToDelete.name })
+        );
+      }
+    }
+    isDeleteDatasetConfirmOpen = false;
+    datasetToDelete = null;
+  }
+
+  function cancelDeleteDataset() {
+    isDeleteDatasetConfirmOpen = false;
+    datasetToDelete = null;
+  }
+
   let lastSourceFilesCount = $state(0);
 
   let editingTabId = $state<string | null>(null);
   let editedName = $state('');
   let nameInputRef = $state<HTMLInputElement | null>(null);
-  let tabRefs = $state<Map<string, HTMLDivElement>>(new Map());
+  let tabRefs = new SvelteMap<string, HTMLDivElement>();
+
+  let menuOpenTabId = $state<string | null>(null);
+  let menuPosition = $state({ top: 0, left: 0 });
 
   function registerTab(node: HTMLDivElement, id: string) {
     tabRefs.set(id, node);
@@ -78,10 +209,94 @@
     }
   }
 
-  function handleTabDoubleClick(tabId: string, label: string, event: Event) {
+  function toggleTabMenu(tabId: string, event: MouseEvent) {
     event.stopPropagation();
+    if (menuOpenTabId === tabId) {
+      menuOpenTabId = null;
+    } else {
+      const button = event.currentTarget as HTMLButtonElement;
+      const rect = button.getBoundingClientRect();
+      menuPosition = {
+        top: rect.bottom + 4,
+        left: rect.left
+      };
+      menuOpenTabId = tabId;
+    }
+  }
+
+  function closeTabMenu() {
+    menuOpenTabId = null;
+  }
+
+  function handleTabMenuClickOutside(event: MouseEvent) {
+    const target = event.target as Node;
+    const menuElement = document.querySelector('.tab-context-menu');
+    if (menuElement && !menuElement.contains(target)) {
+      closeTabMenu();
+    }
+  }
+
+  async function handleDuplicateTab(tabId: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.sourceFileId === tabId
+    );
+    if (!dataset) {
+      showError(
+        m.error_dataset_not_found_title(),
+        m.error_dataset_not_found_message()
+      );
+      return;
+    }
+
+    try {
+      const newDatasetId = await datasetsStore.duplicateDataset(dataset.id);
+      if (newDatasetId) {
+        datasetsStore.selectDataset(newDatasetId);
+        const newDataset = datasetsStore.datasets.find(
+          (d) => d.id === newDatasetId
+        );
+        showSuccess(
+          m.success_dataset_duplicated_title(),
+          m.success_dataset_duplicated_message({
+            name: newDataset?.name ?? dataset.name
+          })
+        );
+      }
+    } catch (error) {
+      showError(
+        m.error_duplicate_dataset_title(),
+        error instanceof Error ? error.message : m.error_generic_message()
+      );
+    }
+  }
+
+  function handleRenameFromMenu(tabId: string, label: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
     startEditingTab(tabId, label);
   }
+
+  function handleDeleteFromMenu(
+    fileId: string,
+    fileName: string,
+    event: Event
+  ) {
+    event.stopPropagation();
+    closeTabMenu();
+    fileToDelete = { id: fileId, name: fileName };
+    isDeleteConfirmOpen = true;
+  }
+
+  $effect(() => {
+    if (menuOpenTabId) {
+      document.addEventListener('click', handleTabMenuClickOutside);
+      return () =>
+        document.removeEventListener('click', handleTabMenuClickOutside);
+    }
+  });
 
   $effect(() => {
     if (editingTabId && nameInputRef) {
@@ -132,16 +347,6 @@
     isAddDataModalOpen = true;
   };
 
-  const openDeleteConfirm = (
-    fileId: string,
-    fileName: string,
-    event: Event
-  ) => {
-    event.stopPropagation();
-    fileToDelete = { id: fileId, name: fileName };
-    isDeleteConfirmOpen = true;
-  };
-
   const handleDeleteFile = async () => {
     if (fileToDelete && projectStore.currentProject) {
       await projectStore.removeFileFromProject(fileToDelete.id);
@@ -172,28 +377,6 @@
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength - 3) + '...';
   };
-
-  const EXTENSION_COLORS: Record<string, 'blue' | 'green' | 'purple'> = {
-    csv: 'blue',
-    tsv: 'blue',
-    txt: 'blue',
-    json: 'green',
-    geojson: 'green',
-    shp: 'purple',
-    gpkg: 'purple',
-    kml: 'purple',
-    kmz: 'purple',
-    geoparquet: 'purple',
-    gpq: 'purple'
-  };
-
-  const getExtensionColor = (
-    extension: string
-  ): 'blue' | 'green' | 'purple' | 'gray' => {
-    const ext = extension.toLowerCase();
-
-    return EXTENSION_COLORS[ext] ?? 'gray';
-  };
 </script>
 
 <div
@@ -209,6 +392,12 @@
   >
     {#each globalState.dataButtons as dataButton (dataButton.id)}
       {@const fileInfo = getFileInfo(dataButton.label)}
+      {@const datasetCount = getDatasetCountForTab(dataButton.id)}
+      {@const selectedDataset = getSelectedDatasetForTab(dataButton.id)}
+      {@const displayName =
+        datasetCount > 1 && selectedDataset
+          ? selectedDataset.name
+          : fileInfo.name}
       <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
         <Button
           isSelected={dataButton.isSelected}
@@ -219,7 +408,7 @@
             }
           }}
           class="tab-button"
-          title={dataButton.label}
+          title={displayName}
         >
           <div class="tab-content">
             {#if editingTabId === dataButton.id}
@@ -233,33 +422,113 @@
                 onclick={(e: MouseEvent) => e.stopPropagation()}
               />
             {:else}
-              <span
-                class="tab-label"
-                role="button"
-                tabindex="0"
-                ondblclick={(e: MouseEvent) =>
-                  handleTabDoubleClick(dataButton.id, dataButton.label, e)}
-                title="Double-cliquer pour renommer"
-              >
-                {truncateFileName(fileInfo.name)}
+              <span class="tab-label">
+                {truncateFileName(displayName)}
               </span>
             {/if}
-            {#if fileInfo.extension}
-              <Tag type={getExtensionColor(fileInfo.extension)} size="sm">
-                {fileInfo.extension}
+            {#if datasetCount > 1}
+              <Tag type="high-contrast" size="sm" class="dataset-count-tag">
+                {datasetCount}
               </Tag>
             {/if}
           </div>
           <button
-            class="tab-close-button"
-            onclick={(e: MouseEvent) =>
-              openDeleteConfirm(dataButton.id, dataButton.label, e)}
-            aria-label="Supprimer le fichier"
-            title="Supprimer le fichier"
+            class="tab-menu-button"
+            onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
+            aria-label="Options du fichier"
+            title="Options du fichier"
+            aria-haspopup="true"
+            aria-expanded={menuOpenTabId === dataButton.id}
           >
-            <Close size={16} />
+            <OverflowMenuVertical size={16} />
           </button>
         </Button>
+        {#if menuOpenTabId === dataButton.id}
+          {@const menuDatasets = getDatasetsForTab(dataButton.id)}
+          <div
+            class="tab-context-menu"
+            style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+            role="menu"
+          >
+            {#if menuDatasets.length > 1}
+              <div class="tab-menu-section-label">Jeux de données</div>
+              {#each menuDatasets as dataset (dataset.id)}
+                <div class="tab-menu-item-dataset-row">
+                  {#if editingDatasetId === dataset.id}
+                    <TextInput
+                      size="sm"
+                      hideLabel
+                      labelText="Nom du jeu de données"
+                      bind:value={editedDatasetName}
+                      on:keydown={handleDatasetEditKeyPress}
+                      on:blur={saveDatasetRename}
+                      on:click={(e) => e.stopPropagation()}
+                    />
+                  {:else}
+                    <button
+                      class="tab-menu-item tab-menu-item-dataset"
+                      class:tab-menu-item-selected={dataset.isSelected}
+                      onclick={(e: Event) => handleSelectDataset(dataset.id, e)}
+                      role="menuitemradio"
+                      aria-checked={dataset.isSelected}
+                    >
+                      <span class="dataset-check-icon">
+                        {#if dataset.isSelected}
+                          <Checkmark size={16} />
+                        {/if}
+                      </span>
+                      <span class="dataset-name">{dataset.name}</span>
+                    </button>
+                  {/if}
+                  <Button
+                    kind="ghost"
+                    size="small"
+                    iconDescription="Renommer le jeu de données"
+                    icon={Edit}
+                    on:click={(e) =>
+                      startEditingDataset(dataset.id, dataset.name, e)}
+                  />
+                  <Button
+                    kind="danger-ghost"
+                    size="small"
+                    iconDescription="Supprimer le jeu de données"
+                    icon={TrashCan}
+                    on:click={(e) =>
+                      handleDeleteDataset(dataset.id, dataset.name, e)}
+                  />
+                </div>
+              {/each}
+              <div class="tab-menu-divider"></div>
+            {/if}
+            <button
+              class="tab-menu-item"
+              onclick={(e: Event) =>
+                handleRenameFromMenu(dataButton.id, dataButton.label, e)}
+              role="menuitem"
+            >
+              <Edit size={16} />
+              Renommer...
+            </button>
+            <button
+              class="tab-menu-item"
+              onclick={(e: Event) => handleDuplicateTab(dataButton.id, e)}
+              role="menuitem"
+            >
+              <Copy size={16} />
+              Dupliquer
+            </button>
+            <div class="tab-menu-divider"></div>
+            <button
+              class="tab-menu-item tab-menu-item-danger"
+              onclick={(e: Event) =>
+                handleDeleteFromMenu(dataButton.id, dataButton.label, e)}
+              role="menuitem"
+            >
+              <TrashCan size={16} />
+              Supprimer
+            </button>
+          </div>
+        {/if}
       </div>
     {/each}
 
@@ -296,6 +565,24 @@
     Êtes-vous sûr de vouloir supprimer le fichier <strong
       >{fileToDelete?.name}</strong
     > du projet ? Cette action est irréversible.
+  </p>
+</Modal>
+
+<Modal
+  danger
+  open={isDeleteDatasetConfirmOpen}
+  modalHeading="Supprimer le jeu de données"
+  primaryButtonText="Supprimer"
+  secondaryButtonText="Annuler"
+  size="sm"
+  on:click:button--secondary={cancelDeleteDataset}
+  on:click:button--primary={confirmDeleteDataset}
+  on:close={cancelDeleteDataset}
+>
+  <p>
+    Êtes-vous sûr de vouloir supprimer le jeu de données <strong
+      >{datasetToDelete?.name}</strong
+    > ? Les visualisations associées seront également supprimées.
   </p>
 </Modal>
 
@@ -395,7 +682,7 @@
     min-height: 18px;
   }
 
-  .tab-close-button {
+  .tab-menu-button {
     position: absolute;
     right: var(--cds-spacing-03);
     top: 50%;
@@ -412,15 +699,135 @@
     z-index: 10;
   }
 
-  .tab-close-button:hover {
+  .tab-menu-button:hover {
     background-color: var(--cds-hover-ui);
   }
 
-  .tab-close-button :global(svg) {
+  .tab-menu-button :global(svg) {
     fill: var(--cds-text-02);
   }
 
-  .tab-close-button:hover :global(svg) {
+  .tab-menu-button:hover :global(svg) {
     fill: var(--cds-text-01);
+  }
+
+  .tab-context-menu {
+    position: fixed;
+    min-width: 160px;
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-03);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    border-radius: 2px;
+  }
+
+  .tab-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    width: 100%;
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
+    border: none;
+    background: transparent;
+    color: var(--cds-text-01);
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .tab-menu-item:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .tab-menu-item :global(svg) {
+    fill: var(--cds-text-02);
+    flex-shrink: 0;
+  }
+
+  .tab-menu-item-danger {
+    color: var(--cds-support-01);
+  }
+
+  .tab-menu-item-danger:hover {
+    background-color: var(--cds-support-01);
+    color: var(--cds-text-04);
+  }
+
+  .tab-menu-item-danger:hover :global(svg) {
+    fill: var(--cds-text-04);
+  }
+
+  .tab-menu-divider {
+    height: 1px;
+    background-color: var(--cds-ui-03);
+    margin: var(--cds-spacing-02) 0;
+  }
+
+  .tab-menu-section-label {
+    padding: var(--cds-spacing-02) var(--cds-spacing-04);
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.32px;
+  }
+
+  .tab-menu-item-dataset {
+    padding-left: var(--cds-spacing-03);
+  }
+
+  .dataset-check-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .dataset-check-icon :global(svg) {
+    fill: var(--cds-interactive-01);
+  }
+
+  .dataset-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+
+  .tab-menu-item-selected {
+    background-color: var(--cds-selected-ui);
+  }
+
+  .tab-menu-item-selected:hover {
+    background-color: var(--cds-hover-selected-ui);
+  }
+
+  :global(.dataset-count-tag) {
+    min-width: 20px;
+    justify-content: center;
+  }
+
+  .tab-menu-item-dataset-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-01);
+  }
+
+  .tab-menu-item-dataset-row .tab-menu-item-dataset {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tab-menu-item-dataset-row :global(.bx--text-input) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tab-menu-item-dataset-row :global(.bx--btn--ghost),
+  .tab-menu-item-dataset-row :global(.bx--btn--danger-ghost) {
+    min-height: auto;
+    padding: var(--cds-spacing-02);
   }
 </style>

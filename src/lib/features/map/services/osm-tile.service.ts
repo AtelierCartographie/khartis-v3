@@ -1,3 +1,4 @@
+import { MapLibreLayerType, OSMTileServer } from '../constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 
 export interface OSMTileConfig {
@@ -8,22 +9,22 @@ export interface OSMTileConfig {
   tileSize: number;
 }
 
-const OSM_TILE_SERVERS = {
-  'osm-standard': {
+const OSM_TILE_SERVERS: Record<OSMTileServer, OSMTileConfig> = {
+  [OSMTileServer.STANDARD]: {
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '© OpenStreetMap contributors',
     minZoom: 0,
     maxZoom: 19,
     tileSize: 256
   },
-  'osm-carto': {
+  [OSMTileServer.CARTO]: {
     urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '© OpenStreetMap contributors',
     minZoom: 0,
     maxZoom: 19,
     tileSize: 256
   },
-  'osm-humanitarian': {
+  [OSMTileServer.HUMANITARIAN]: {
     urlTemplate: 'https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution:
       '© OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
@@ -31,7 +32,7 @@ const OSM_TILE_SERVERS = {
     maxZoom: 19,
     tileSize: 256
   },
-  'osm-transport': {
+  [OSMTileServer.TRANSPORT]: {
     urlTemplate: 'https://tile.thunderforest.com/transport/{z}/{x}/{y}.png',
     attribution: '© OpenStreetMap contributors, Tiles by Thunderforest',
     minZoom: 0,
@@ -59,7 +60,8 @@ export function getOSMTileConfig(
     return null;
   }
 
-  const config = OSM_TILE_SERVERS[style as keyof typeof OSM_TILE_SERVERS];
+  const tileServerKey = `osm-${style}` as OSMTileServer;
+  const config = OSM_TILE_SERVERS[tileServerKey];
 
   if (!config) {
     return null;
@@ -86,7 +88,7 @@ export function generateTileURL(
 
 export function createOSMRasterSource(config: OSMTileConfig) {
   return {
-    type: 'raster' as const,
+    type: MapLibreLayerType.RASTER as const,
     tiles: [config.urlTemplate],
     tileSize: config.tileSize,
     attribution: config.attribution,
@@ -98,7 +100,7 @@ export function createOSMRasterSource(config: OSMTileConfig) {
 export function createOSMRasterLayer(sourceId: string) {
   return {
     id: `${sourceId}-layer`,
-    type: 'raster' as const,
+    type: MapLibreLayerType.RASTER as const,
     source: sourceId,
     paint: {
       'raster-opacity': 1

@@ -4,18 +4,25 @@ import type { GeometryInfo } from '../types';
 import { computeCentroid } from '../types';
 
 export async function extractGeometryInfo(
-  tableName: string
+  tableName: string,
+  knownColumns?: Array<{ name: string; type: string }>
 ): Promise<GeometryInfo | undefined> {
   if (!Duck) return undefined;
 
   try {
-    const describe = await Duck.describe_table(tableName);
-    const columns = describe.name.map((name, index) => ({
-      name,
-      type: describe.type[index]
-    }));
+    let geometryColumn: { name: string; type: string } | undefined;
 
-    const geometryColumn = columns.find((column) => column.type === 'GEOMETRY');
+    if (knownColumns) {
+      geometryColumn = knownColumns.find((col) => col.type === 'GEOMETRY');
+    } else {
+      const describe = await Duck.describe_table(tableName);
+      const columns = describe.name.map((name, index) => ({
+        name,
+        type: describe.type[index]
+      }));
+      geometryColumn = columns.find((column) => column.type === 'GEOMETRY');
+    }
+
     if (!geometryColumn) {
       return undefined;
     }
@@ -92,14 +99,19 @@ function normalizeGeometryType(type?: string | null): GeometryInfo['type'] {
   switch (normalized) {
     case 'point':
       return 'Point';
+
     case 'multipoint':
       return 'MultiPoint';
+
     case 'linestring':
       return 'LineString';
+
     case 'multilinestring':
       return 'MultiLineString';
+
     case 'multipolygon':
       return 'MultiPolygon';
+
     default:
       return 'Polygon';
   }

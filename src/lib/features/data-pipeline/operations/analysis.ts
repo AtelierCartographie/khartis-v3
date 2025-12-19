@@ -1,12 +1,12 @@
 import { Duck } from '$lib/features/duckdb';
 import type {
-  PipelineContext,
-  EnrichedColumn,
-  DuckAnalyticsColumn,
   DatasetResult,
+  DuckAnalyticsColumn,
+  EnrichedColumn,
+  FileFormat,
   FileInfo,
   GeometryInfo,
-  FileFormat
+  PipelineContext
 } from '../types';
 import { fromDuckDBType } from '../types';
 import { extractGeometryInfo } from './geometry';
@@ -45,11 +45,11 @@ export async function buildDatasetFromDuckTable(
 ): Promise<DatasetResult> {
   const { file, tableName, isGeoFile, format } = params;
 
-  const duckdbColumns = (await Duck.analyse(
-    tableName
-  )) as DuckAnalyticsColumn[];
-  const rowCount = await Duck.get_row_count(tableName);
-  const geometryInfo = await extractGeometryInfo(tableName);
+  const [duckdbColumns, rowCount, geometryInfo] = await Promise.all([
+    Duck.analyse(tableName) as Promise<DuckAnalyticsColumn[]>,
+    Duck.get_row_count(tableName),
+    extractGeometryInfo(tableName)
+  ]);
   const enrichedColumns = enrichColumns(duckdbColumns);
 
   const dataset = buildDatasetResult({

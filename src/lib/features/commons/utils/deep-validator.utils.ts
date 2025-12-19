@@ -308,25 +308,15 @@ export const DeepDataValidator = {
 
       const strValue = String(value).trim();
 
-      if (
-        strValue === 'true' ||
-        strValue === 'false' ||
-        strValue === '0' ||
-        strValue === '1'
-      ) {
+      if (strValue === 'true' || strValue === 'false') {
         types.boolean++;
+      } else if (this.isDateString(strValue)) {
+        types.date++;
       } else if (
         !isNaN(parseFloat(strValue)) &&
         isFinite(parseFloat(strValue))
       ) {
         types.numeric++;
-      } else if (!isNaN(Date.parse(strValue))) {
-        const date = new Date(strValue);
-        if (date.getFullYear() > 1900 && date.getFullYear() < 2100) {
-          types.date++;
-        } else {
-          types.string++;
-        }
       } else {
         types.string++;
       }
@@ -337,12 +327,27 @@ export const DeepDataValidator = {
 
     const threshold = total * 0.8;
 
-    if (types.numeric >= threshold) return 'numeric';
     if (types.date >= threshold) return 'date';
+    if (types.numeric >= threshold) return 'numeric';
     if (types.boolean >= threshold) return 'boolean';
     if (types.string >= threshold) return 'string';
 
     return 'mixed';
+  },
+
+  isDateString(strValue: string): boolean {
+    if (
+      !/^\d{4}-\d{2}-\d{2}/.test(strValue) &&
+      !/^\d{2}\/\d{2}\/\d{4}/.test(strValue)
+    ) {
+      return false;
+    }
+    const date = new Date(strValue);
+    return (
+      !isNaN(date.getTime()) &&
+      date.getFullYear() > 1900 &&
+      date.getFullYear() < 2100
+    );
   },
 
   calculateMedian(values: number[]): number {
@@ -385,7 +390,14 @@ export const DeepDataValidator = {
         });
       }
 
-      if (column.uniqueCount === 1) {
+      if (column.uniqueCount === 0 || column.nullPercentage === 100) {
+        issues.push({
+          severity: 'warning',
+          column: column.name,
+          message: 'Column is empty - no unique value found',
+          suggestion: 'This column can be removed as it provides no information'
+        });
+      } else if (column.uniqueCount === 1) {
         issues.push({
           severity: 'warning',
           column: column.name,

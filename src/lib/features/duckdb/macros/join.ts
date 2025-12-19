@@ -45,10 +45,18 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
  * - 'check': Partial match found or ambiguous exact matches.
  * - 'not_found': No match found above threshold.
  * - 'ambiguous': Multiple candidates with high scores (handled within 'check' for UI simplicity, but logic detects it).
+ * - 'duplicate': Source data contains duplicate values for this entity.
  */
 const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality(candidates_table, geoname_column, join_table) AS TABLE (
-    WITH candidates AS (
-        SELECT DISTINCT "geoname_column" as original_name FROM query_table(candidates_table)
+    WITH source_with_counts AS (
+        SELECT
+            "geoname_column" as original_name,
+            COUNT(*) OVER (PARTITION BY normalize_text_join(CAST("geoname_column" AS VARCHAR))) as source_dup_count
+        FROM query_table(candidates_table)
+        WHERE "geoname_column" IS NOT NULL
+    ),
+    candidates AS (
+        SELECT DISTINCT original_name, source_dup_count FROM source_with_counts
     ),
     matches AS (
         FROM candidates, LATERAL (SELECT * FROM get_similarity(original_name, join_table))
@@ -64,11 +72,13 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
     )
     SELECT
         c.original_name,
+        c.source_dup_count,
         CASE
+            WHEN c.source_dup_count > 1 THEN 'duplicate'
             WHEN bm.best_score IS NULL THEN 'not_found'
             WHEN bm.best_score = 1 AND bm.match_count = 1 THEN 'matched'
-            WHEN bm.best_score = 1 AND bm.match_count > 1 THEN 'ambiguous' -- Exact match but multiple candidates (e.g. duplicates in basemap)
-            ELSE 'check' -- Partial match
+            WHEN bm.best_score = 1 AND bm.match_count > 1 THEN 'ambiguous'
+            ELSE 'check'
         END as status,
         bm.candidates,
         bm.best_score

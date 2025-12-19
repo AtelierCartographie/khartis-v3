@@ -26,6 +26,9 @@
 
   const canDismiss = $derived(!!projectStore.currentProject);
 
+  const TAB_COUNT = 3;
+  let tabRefs = $state<HTMLElement[]>([]);
+
   function handleClose() {
     if (canDismiss) {
       onClose?.();
@@ -34,6 +37,30 @@
 
   function selectTile(index: number) {
     createProjectActions.selectTab(index as 1 | 2 | 3);
+  }
+
+  function handleTabKeydown(e: KeyboardEvent, currentTab: number) {
+    let newTab = currentTab;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      newTab = currentTab === TAB_COUNT ? 1 : currentTab + 1;
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      newTab = currentTab === 1 ? TAB_COUNT : currentTab - 1;
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      newTab = 1;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      newTab = TAB_COUNT;
+    }
+
+    if (newTab !== currentTab) {
+      selectTile(newTab);
+      const tabElement = tabRefs[newTab - 1]?.querySelector('[role="tab"]');
+      (tabElement as HTMLElement)?.focus();
+    }
   }
 </script>
 
@@ -51,44 +78,56 @@
 
     <ModalBody class="fixed-modal-body">
       <article class="project-selector-wrapper relative">
-        <section
-          role="group"
+        <div
+          role="tablist"
           class="project-type-selector"
-          aria-label="selectable tiles"
+          aria-label={m.create_project_type_selector()}
         >
-          <ProjectTab
-            selected={createProjectState.selectedTab === 1}
-            onclick={() => selectTile(1)}
-            title={m.create_project_new_project()}
-            data-testid="tab-create-new"
-          >
-            {#snippet icon()}
-              <Upload size={20} />
-            {/snippet}
-          </ProjectTab>
+          <div class="tab-wrapper" bind:this={tabRefs[0]}>
+            <ProjectTab
+              selected={createProjectState.selectedTab === 1}
+              onclick={() => selectTile(1)}
+              onkeydown={(e) => handleTabKeydown(e, 1)}
+              tabIndex={createProjectState.selectedTab === 1 ? 0 : -1}
+              title={m.create_project_new_project()}
+              data-testid="tab-create-new"
+            >
+              {#snippet icon()}
+                <Upload size={20} />
+              {/snippet}
+            </ProjectTab>
+          </div>
 
-          <ProjectTab
-            selected={createProjectState.selectedTab === 2}
-            onclick={() => selectTile(2)}
-            title={m.create_project_open_project()}
-            data-testid="tab-open-project"
-          >
-            {#snippet icon()}
-              <FileStorage size={20} />
-            {/snippet}
-          </ProjectTab>
+          <div class="tab-wrapper" bind:this={tabRefs[1]}>
+            <ProjectTab
+              selected={createProjectState.selectedTab === 2}
+              onclick={() => selectTile(2)}
+              onkeydown={(e) => handleTabKeydown(e, 2)}
+              tabIndex={createProjectState.selectedTab === 2 ? 0 : -1}
+              title={m.create_project_open_project()}
+              data-testid="tab-open-project"
+            >
+              {#snippet icon()}
+                <FileStorage size={20} />
+              {/snippet}
+            </ProjectTab>
+          </div>
 
-          <ProjectTab
-            selected={createProjectState.selectedTab === 3}
-            onclick={() => selectTile(3)}
-            title={m.create_project_try_example()}
-            data-testid="tab-try-example"
-          >
-            {#snippet icon()}
-              <ShapeExclude size={20} />
-            {/snippet}
-          </ProjectTab>
-        </section>
+          <div class="tab-wrapper" bind:this={tabRefs[2]}>
+            <ProjectTab
+              selected={createProjectState.selectedTab === 3}
+              onclick={() => selectTile(3)}
+              onkeydown={(e) => handleTabKeydown(e, 3)}
+              tabIndex={createProjectState.selectedTab === 3 ? 0 : -1}
+              title={m.create_project_try_example()}
+              data-testid="tab-try-example"
+            >
+              {#snippet icon()}
+                <ShapeExclude size={20} />
+              {/snippet}
+            </ProjectTab>
+          </div>
+        </div>
 
         <div class="tab-content" data-testid="tab-content">
           {#if createProjectState.selectedTab === 1}
@@ -140,6 +179,10 @@
     gap: var(--cds-spacing-05);
     width: 100%;
     flex-shrink: 0;
+  }
+
+  .tab-wrapper {
+    flex: 1;
   }
 
   .tab-content {

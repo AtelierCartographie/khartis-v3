@@ -1,17 +1,13 @@
 {
   "recommendations": [
-    "github.copilot",
     "github.vscode-github-actions",
     "github.copilot-chat",
     "github.vscode-pull-request-github",
-    "visualstudioexptteam.vscodeintellicode",
-    "visualstudioexptteam.intellicode-api-usage-examples",
     "ms-playwright.playwright",
     "esbenp.prettier-vscode",
     "svelte.svelte-vscode",
     "vitest.explorer",
     "inlang.vs-code-extension",
-    "arcanis.vscode-zipfs",
     "dbaeumer.vscode-eslint"
   ]
 }

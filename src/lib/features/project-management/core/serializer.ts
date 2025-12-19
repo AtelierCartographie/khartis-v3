@@ -4,13 +4,13 @@ import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { KhartisProject } from '../types';
 import type {
   SerializedBasemapAttribute,
   SerializedProject,
   SerializedProjectData,
   SerializedUploadedFile
 } from '$lib/types/serialization.types';
+import type { KhartisProject } from '../types';
 import { bigIntReplacer } from '../utils/json-helpers';
 
 export async function serialize(
@@ -251,6 +251,14 @@ export function serializeUploadedFile(
     }
   }
 
+  if (file.sourceArchive) {
+    serialized.sourceArchive = file.sourceArchive;
+  }
+
+  if (file.duckdbTableName) {
+    serialized.duckdbTableName = file.duckdbTableName;
+  }
+
   return serialized;
 }
 
@@ -333,6 +341,12 @@ export function deserializeUploadedFile(
   }
   if (data.gpsColumns) {
     file.gpsColumns = data.gpsColumns;
+  }
+  if (data.sourceArchive) {
+    file.sourceArchive = data.sourceArchive;
+  }
+  if (data.duckdbTableName) {
+    file.duckdbTableName = data.duckdbTableName;
   }
 
   return file as UploadedFile;

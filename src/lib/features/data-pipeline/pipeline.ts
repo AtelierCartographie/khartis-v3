@@ -1,57 +1,36 @@
+import { DataValidationError } from '$lib/features/commons/errors/pipeline.errors';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
-import type { FeatureCollection } from 'geojson';
-import { isGeospatialFile } from './constants';
+import * as m from '$lib/paraglide/messages';
+import { isGeospatialFile, isParquetFile } from './constants';
 import { validateFile } from './core/validators';
+import { detectFileFormat, generateTableName } from './core/parsers';
 import { buildDatasetFromDuckTable } from './operations/analysis';
 import type {
   DatasetResult,
-  FileFormat,
   FileInfo,
   PipelineContext,
   RawDataset,
   UploadedFilePayload,
-  ValidationResult
+  ValidationResult,
+  ZipDatasetResult
 } from './types';
-import { convertGeoJSONToRawDataset } from './utils/geojson-converter';
+import { detectDecimalSeparator } from './utils/decimal-detector';
 import {
-  describeGeojsonStructure,
-  normalizeGeojsonInput,
-  type GeoJSONLike
-} from './utils/geojson-guards';
+  createFileFromExtracted,
+  extractZip,
+  getNonShapefileFilesFromArchive,
+  getShapefileFilesFromArchive,
+  getSupportedFilesFromArchive,
+  isZipFile
+} from './utils/zip-handler';
 
-// Module-level state
 let initialized = false;
 
 function getContext(): PipelineContext {
   if (!initialized) throw new Error('Pipeline not initialized');
   return { duck: Duck };
-}
-
-function generateTableName(filename: string): string {
-  const base = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-  const prefix = base.length > 0 ? base : 'table';
-  const suffix = Date.now().toString(36);
-  return `${prefix}_${suffix}`;
-}
-
-function detectFileFormat(name: string): FileFormat {
-  const lower = name.toLowerCase();
-  if (
-    lower.endsWith('.csv') ||
-    lower.endsWith('.tsv') ||
-    lower.endsWith('.txt')
-  )
-    return 'csv';
-  if (lower.endsWith('.geojson') || lower.endsWith('.json')) return 'geojson';
-  if (lower.endsWith('.shp')) return 'shapefile';
-  if (lower.endsWith('.gpkg')) return 'geopackage';
-  if (lower.endsWith('.kml')) return 'kml';
-  if (lower.endsWith('.kmz')) return 'kmz';
-  if (lower.endsWith('.geoparquet') || lower.endsWith('.parquet'))
-    return 'geoparquet';
-  return 'unknown';
 }
 
 function applyGeoDetection(
@@ -91,7 +70,7 @@ export async function createFileFromUpload(
       fileId: uploadedFile.id,
       fileName: uploadedFile.name
     });
-    throw new Error('Uploaded file has no content');
+    throw new Error(m.pipeline_error_no_content());
   }
   return createFileFromUploadContent(
     uploadedFile.content,
@@ -100,7 +79,33 @@ export async function createFileFromUpload(
   );
 }
 
-export const Pipeline = {
+function createCompanionFilesFromUpload(
+  uploadedFile: UploadedFilePayload
+): File[] | undefined {
+  if (!uploadedFile.relatedFilesData) {
+    return undefined;
+  }
+
+  const mainFileName = uploadedFile.name.toLowerCase();
+  const companionFiles: File[] = [];
+
+  for (const [fileName, data] of Object.entries(
+    uploadedFile.relatedFilesData
+  )) {
+    if (fileName.toLowerCase() === mainFileName) continue;
+
+    const buffer =
+      data instanceof ArrayBuffer
+        ? data
+        : new Uint8Array(data as number[]).buffer;
+    const blob = new Blob([buffer], { type: 'application/octet-stream' });
+    companionFiles.push(new File([blob], fileName));
+  }
+
+  return companionFiles.length > 0 ? companionFiles : undefined;
+}
+
+const Pipeline = {
   get initialized() {
     return initialized;
   },
@@ -125,7 +130,7 @@ export const Pipeline = {
     }
   },
 
-  async processFile(file: File): Promise<DatasetResult> {
+  async processFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
@@ -135,7 +140,18 @@ export const Pipeline = {
       fileType: file.type
     });
 
+    const validation = await validateFile(file);
+    if (!validation.isValid) {
+      throw new DataValidationError(validation.errors[0], undefined, {
+        errors: validation.errors
+      });
+    }
+
     try {
+      if (isZipFile(file)) {
+        return this.processZipFile(file);
+      }
+
       const fileInfo: FileInfo = {
         name: file.name,
         size: file.size,
@@ -149,8 +165,28 @@ export const Pipeline = {
 
       if (isGeoFile) {
         await Duck.read_geofile(file, { tablename: tableName });
+      } else if (isParquetFile(file.name)) {
+        await Duck.read_tabular(file, {
+          tablename: tableName,
+          format: 'parquet'
+        });
+      } else if (file.name.toLowerCase().endsWith('.arrow')) {
+        await Duck.read_tabular(file, {
+          tablename: tableName,
+          format: 'parquet'
+        });
       } else {
-        await Duck.read_tabular(file, { tablename: tableName });
+        const detection = await detectDecimalSeparator(file);
+        if (detection.separator === ',') {
+          logger.info('European decimal format detected', LogCategory.DATA, {
+            confidence: detection.confidence,
+            sampleSize: detection.sampleSize
+          });
+        }
+        await Duck.read_tabular(file, {
+          tablename: tableName,
+          decimal_separator: detection.separator
+        });
       }
 
       const dataset = await buildDatasetFromDuckTable(ctx, {
@@ -183,7 +219,7 @@ export const Pipeline = {
   async processUploadedFile(
     uploadedFile: UploadedFilePayload,
     originalFile?: File
-  ): Promise<DatasetResult> {
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
@@ -200,34 +236,54 @@ export const Pipeline = {
     );
 
     try {
-      let dataset: DatasetResult;
+      let result: DatasetResult | ZipDatasetResult;
 
-      if (uploadedFile.parsedData && uploadedFile.fileType === 'shapefile') {
-        dataset = await processShapefile(ctx, uploadedFile);
+      if (originalFile && isZipFile(originalFile)) {
+        result = await this.processZipFile(originalFile);
       } else if (originalFile) {
         const originalName = originalFile.name.toLowerCase();
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
           (f: File) => f.name.toLowerCase() !== originalName
         );
-        dataset = await processFileInternal(ctx, originalFile, {
+        result = await processFileInternal(ctx, originalFile, {
           companionFiles
         });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
-        dataset = await processFileInternal(ctx, fallback);
+        if (isZipFile(fallback)) {
+          result = await this.processZipFile(fallback);
+        } else {
+          const companionFiles = createCompanionFilesFromUpload(uploadedFile);
+          result = await processFileInternal(ctx, fallback, {
+            companionFiles
+          });
+        }
       }
 
-      dataset.sourceFileId = uploadedFile.id;
-      applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
-      dataset.name = uploadedFile.name;
+      if ('datasets' in result) {
+        for (const dataset of result.datasets) {
+          dataset.sourceFileId = uploadedFile.id;
+          applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
+        }
+        logger.success('ZIP with multiple files processed', LogCategory.DATA, {
+          sourceFile: uploadedFile.name,
+          datasetCount: result.datasets.length,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+        return result;
+      }
+
+      result.sourceFileId = uploadedFile.id;
+      applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);
+      result.name = uploadedFile.name;
 
       logger.success('Uploaded file processed', LogCategory.DATA, {
-        datasetId: dataset.id,
-        fileName: dataset.name,
+        datasetId: result.id,
+        fileName: result.name,
         durationMs: (performance.now() - start).toFixed(2)
       });
 
-      return dataset;
+      return result;
     } catch (error) {
       logger.error('Failed to process uploaded file', LogCategory.DATA, {
         fileId: uploadedFile.id,
@@ -240,12 +296,17 @@ export const Pipeline = {
   async processRemoteFile(
     url: string,
     options: { tableName?: string; decimalSeparator?: string } = {}
-  ): Promise<DatasetResult> {
+  ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
     const ctx = getContext();
 
     const { tableName: providedTableName, decimalSeparator } = options;
     const filename = url.split('/').pop() || 'remote_file';
+
+    if (filename.toLowerCase().endsWith('.zip')) {
+      return this.processRemoteZipFile(url);
+    }
+
     const format = detectFileFormat(filename);
     const isGeoFile = isGeospatialFile(filename);
     const tableName = providedTableName ?? generateTableName(filename);
@@ -267,14 +328,81 @@ export const Pipeline = {
     return dataset;
   },
 
+  async processRemoteZipFile(
+    url: string
+  ): Promise<DatasetResult | ZipDatasetResult> {
+    await this.initialize();
+    const start = performance.now();
+
+    logger.info(
+      'Downloading and processing remote ZIP archive',
+      LogCategory.DATA,
+      {
+        url
+      }
+    );
+
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(
+          m.pipeline_error_fetch_failed({
+            status: String(response.status),
+            statusText: response.statusText
+          })
+        );
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const filename = url.split('/').pop() || 'remote.zip';
+      const file = new File([arrayBuffer], filename, {
+        type: 'application/zip'
+      });
+
+      const result = await this.processZipFile(file);
+
+      if ('datasets' in result) {
+        for (const dataset of result.datasets) {
+          dataset.sourceFileId = url;
+        }
+        logger.success(
+          'Remote ZIP archive processed (multi)',
+          LogCategory.DATA,
+          {
+            url,
+            datasetCount: result.datasets.length,
+            durationMs: (performance.now() - start).toFixed(2)
+          }
+        );
+        return result;
+      }
+
+      result.sourceFileId = url;
+      logger.success('Remote ZIP archive processed', LogCategory.DATA, {
+        url,
+        datasetId: result.id,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to process remote ZIP archive', LogCategory.DATA, {
+        url,
+        error
+      });
+      throw error;
+    }
+  },
+
   async processPastedData(
     content: string,
     options: { name?: string; type?: string } = {}
   ): Promise<DatasetResult> {
-    const name = options.name ?? 'pasted-data.csv';
+    const name = options.name ?? `pasted-data-${Date.now()}.csv`;
     const type = options.type ?? 'text/csv';
     const file = await createFileFromUploadContent(content, name, type);
-    return this.processFile(file);
+    const result = await this.processFile(file);
+    return result as DatasetResult;
   },
 
   async joinDatasetById(
@@ -324,6 +452,214 @@ export const Pipeline = {
     return validateFile(file);
   },
 
+  async processZipFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
+    await this.initialize();
+    const ctx = getContext();
+    const start = performance.now();
+
+    logger.info('Processing ZIP archive', LogCategory.DATA, {
+      fileName: file.name,
+      fileSize: file.size
+    });
+
+    try {
+      const extraction = await extractZip(file);
+
+      if (extraction.isShapefileArchive && extraction.shapefileBaseName) {
+        logger.info('ZIP contains shapefile archive', LogCategory.DATA, {
+          baseName: extraction.shapefileBaseName,
+          fileCount: extraction.files.length
+        });
+
+        const shapefileFiles = getShapefileFilesFromArchive(
+          extraction.files,
+          extraction.shapefileBaseName
+        );
+
+        const shpExtracted = shapefileFiles.find((f) =>
+          f.name.toLowerCase().endsWith('.shp')
+        );
+        if (!shpExtracted) {
+          throw new Error(m.pipeline_error_shp_not_found());
+        }
+
+        const shpFile = createFileFromExtracted(shpExtracted);
+        const companionFiles = shapefileFiles
+          .filter((f) => !f.name.toLowerCase().endsWith('.shp'))
+          .map((f) => createFileFromExtracted(f));
+
+        const dataset = await processFileInternal(ctx, shpFile, {
+          originalName: `${extraction.shapefileBaseName}.shp`,
+          companionFiles
+        });
+
+        dataset.sourceFileId = file.name;
+        dataset.name = extraction.shapefileBaseName;
+
+        logger.success('Shapefile from ZIP processed', LogCategory.DATA, {
+          datasetId: dataset.id,
+          baseName: extraction.shapefileBaseName,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+
+        const otherFiles = getNonShapefileFilesFromArchive(
+          extraction.files,
+          extraction.shapefileBaseName
+        );
+
+        if (otherFiles.length === 0) {
+          return dataset;
+        }
+
+        logger.info(
+          'ZIP contains additional files besides shapefile',
+          LogCategory.DATA,
+          {
+            shapefileBaseName: extraction.shapefileBaseName,
+            additionalFiles: otherFiles.map((f) => f.name)
+          }
+        );
+
+        const additionalDatasets: DatasetResult[] = [];
+        const skippedOtherFiles: string[] = [];
+
+        for (const extractedFileInfo of otherFiles) {
+          try {
+            const extractedFile = createFileFromExtracted(extractedFileInfo);
+            const additionalDataset = await processFileInternal(
+              ctx,
+              extractedFile,
+              {
+                originalName: extractedFileInfo.name
+              }
+            );
+
+            additionalDataset.sourceFileId = file.name;
+            additionalDataset.name = extractedFileInfo.name;
+
+            additionalDatasets.push(additionalDataset);
+          } catch (error) {
+            logger.warn(
+              'Failed to process additional file from ZIP',
+              LogCategory.DATA,
+              {
+                fileName: extractedFileInfo.name,
+                error
+              }
+            );
+            skippedOtherFiles.push(extractedFileInfo.name);
+          }
+        }
+
+        if (additionalDatasets.length === 0) {
+          return dataset;
+        }
+
+        const allDatasets = [dataset, ...additionalDatasets];
+        return {
+          datasets: allDatasets,
+          sourceZipName: file.name,
+          totalFiles: otherFiles.length + 1,
+          processedFiles: allDatasets.length,
+          skippedFiles: skippedOtherFiles
+        } satisfies ZipDatasetResult;
+      }
+
+      const supportedFiles = getSupportedFilesFromArchive(extraction.files);
+
+      if (supportedFiles.length === 0) {
+        throw new Error(m.pipeline_error_no_supported_files());
+      }
+
+      if (supportedFiles.length === 1) {
+        const firstFile = supportedFiles[0];
+        const extractedFile = createFileFromExtracted(firstFile);
+
+        const dataset = await processFileInternal(ctx, extractedFile, {
+          originalName: firstFile.name
+        });
+
+        dataset.sourceFileId = file.name;
+        dataset.name = firstFile.name;
+
+        logger.success('File from ZIP processed', LogCategory.DATA, {
+          datasetId: dataset.id,
+          extractedFile: firstFile.name,
+          durationMs: (performance.now() - start).toFixed(2)
+        });
+
+        return dataset;
+      }
+
+      logger.info(
+        'ZIP contains multiple files, processing all',
+        LogCategory.DATA,
+        {
+          fileCount: supportedFiles.length,
+          files: supportedFiles.map((f) => f.name)
+        }
+      );
+
+      const datasets: DatasetResult[] = [];
+      const skippedFiles: string[] = [];
+
+      for (const extractedFileInfo of supportedFiles) {
+        try {
+          const extractedFile = createFileFromExtracted(extractedFileInfo);
+          const dataset = await processFileInternal(ctx, extractedFile, {
+            originalName: extractedFileInfo.name
+          });
+
+          dataset.sourceFileId = file.name;
+          dataset.name = extractedFileInfo.name;
+          datasets.push(dataset);
+
+          logger.debug('Processed file from ZIP', LogCategory.DATA, {
+            fileName: extractedFileInfo.name,
+            datasetId: dataset.id
+          });
+        } catch (error) {
+          logger.warn(
+            'Failed to process file from ZIP, skipping',
+            LogCategory.DATA,
+            {
+              fileName: extractedFileInfo.name,
+              error
+            }
+          );
+          skippedFiles.push(extractedFileInfo.name);
+        }
+      }
+
+      if (datasets.length === 0) {
+        throw new Error(m.pipeline_error_no_supported_files());
+      }
+
+      const result: ZipDatasetResult = {
+        datasets,
+        sourceZipName: file.name,
+        totalFiles: supportedFiles.length,
+        processedFiles: datasets.length,
+        skippedFiles
+      };
+
+      logger.success('ZIP archive processed', LogCategory.DATA, {
+        sourceZip: file.name,
+        processedCount: datasets.length,
+        skippedCount: skippedFiles.length,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to process ZIP archive', LogCategory.DATA, {
+        fileName: file.name,
+        error
+      });
+      throw error;
+    }
+  },
+
   async destroy(): Promise<void> {
     initialized = false;
     logger.info('Data pipeline destroyed', LogCategory.DATA);
@@ -359,10 +695,12 @@ async function processFileInternal(
     hasCompanionFiles: Boolean(options.companionFiles?.length)
   });
 
-  if (isShapefile && options.companionFiles?.length) {
-    const allShapefileFiles = [file, ...options.companionFiles];
+  if (isShapefile) {
+    const allShapefileFiles = options.companionFiles?.length
+      ? [file, ...options.companionFiles]
+      : [file];
     await Duck.register_files(allShapefileFiles, { shapefile: true });
-  } else if (!isShapefile) {
+  } else {
     await Duck.register_files([file]);
   }
 
@@ -372,7 +710,27 @@ async function processFileInternal(
       shapefile: isShapefile
     });
   } else {
-    await Duck.read_tabular(file, { tablename: tableName });
+    const isParquet = fileInfo.name.toLowerCase().endsWith('.parquet');
+    const isArrow = fileInfo.name.toLowerCase().endsWith('.arrow');
+
+    if (isParquet || isArrow) {
+      await Duck.read_tabular(file, {
+        tablename: tableName,
+        format: 'parquet'
+      });
+    } else {
+      const detection = await detectDecimalSeparator(file);
+      if (detection.separator === ',') {
+        logger.info('European decimal format detected', LogCategory.DATA, {
+          confidence: detection.confidence,
+          sampleSize: detection.sampleSize
+        });
+      }
+      await Duck.read_tabular(file, {
+        tablename: tableName,
+        decimal_separator: detection.separator
+      });
+    }
   }
 
   const dataset = await buildDatasetFromDuckTable(ctx, {
@@ -405,52 +763,5 @@ async function processFileInternal(
   return dataset;
 }
 
-async function processShapefile(
-  ctx: PipelineContext,
-  uploadedFile: UploadedFilePayload
-): Promise<DatasetResult> {
-  const start = performance.now();
-  logger.info('Processing shapefile upload', LogCategory.DATA, {
-    fileId: uploadedFile.id,
-    fileName: uploadedFile.name
-  });
-
-  const parsedGeojson =
-    typeof uploadedFile.parsedData === 'string'
-      ? JSON.parse(uploadedFile.parsedData)
-      : uploadedFile.parsedData;
-
-  const structureInfo = describeGeojsonStructure(parsedGeojson);
-  const normalizedGeojson = normalizeGeojsonInput(parsedGeojson as GeoJSONLike);
-  const rawDataset = convertGeoJSONToRawDataset(
-    normalizedGeojson as FeatureCollection
-  );
-
-  const geojsonString = JSON.stringify(normalizedGeojson);
-  const geojsonFileName = uploadedFile.name.replace(/\.shp$/i, '.geojson');
-  uploadedFile.preparedGeoJSON = geojsonString;
-
-  const geojsonFile = new File([geojsonString], geojsonFileName, {
-    type: 'application/geo+json'
-  });
-
-  const dataset = await processFileInternal(ctx, geojsonFile, {
-    originalName: uploadedFile.name,
-    rawDataset
-  });
-
-  dataset.sourceFileId = uploadedFile.id;
-  dataset.name = uploadedFile.name;
-
-  logger.success('Shapefile converted to dataset', LogCategory.DATA, {
-    fileId: uploadedFile.id,
-    featureKeys: structureInfo.keys,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
-
-  return dataset;
-}
-
-// Export singleton for compatibility
 export const dataPipeline = Pipeline;
 export type DataPipeline = typeof Pipeline;

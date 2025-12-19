@@ -1,5 +1,6 @@
 <script lang="ts">
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
+  import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import {
     globalActions,
     globalState
@@ -41,11 +42,11 @@
     globalActions.setProjectionFilter(id);
   }
 
-  let viewMode = $derived(globalState.projectionViewMode ?? 'list');
+  let viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
 
   const headerClass = $derived(
     clsx('projection-header', 'mt-3', 'color-blue', {
-      'mb-5': viewMode === 'grid'
+      'mb-5': viewMode === ViewMode.GRID
     })
   );
 
@@ -70,9 +71,9 @@
         icon={List}
         size="small"
         iconDescription={m.view_list()}
-        isSelected={viewMode === 'list'}
-        aria-pressed={viewMode === 'list'}
-        on:click={() => projectionActions.setViewMode('list')}
+        isSelected={viewMode === ViewMode.LIST}
+        aria-pressed={viewMode === ViewMode.LIST}
+        on:click={() => projectionActions.setViewMode(ViewMode.LIST)}
       />
 
       <Button
@@ -80,14 +81,14 @@
         icon={Grid}
         size="small"
         iconDescription={m.view_grid()}
-        isSelected={viewMode === 'grid'}
-        aria-pressed={viewMode === 'grid'}
-        on:click={() => projectionActions.setViewMode('grid')}
+        isSelected={viewMode === ViewMode.GRID}
+        aria-pressed={viewMode === ViewMode.GRID}
+        on:click={() => projectionActions.setViewMode(ViewMode.GRID)}
       />
     </div>
   </div>
 
-  {#if viewMode === 'list'}
+  {#if viewMode === ViewMode.LIST}
     <div class="projection-tags">
       {#each filterOptions as opt (opt.id)}
         <Tag

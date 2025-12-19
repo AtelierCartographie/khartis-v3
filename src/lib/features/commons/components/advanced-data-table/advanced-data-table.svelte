@@ -2,12 +2,21 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import { RefineOperation } from '$lib/features/duckdb';
+  import {
+    Duck,
+    RefineOperation,
+    duckDBOrchestrator
+  } from '$lib/features/duckdb';
+  import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
-  import { DataTableSkeleton } from 'carbon-components-svelte';
+  import {
+    DataTableSkeleton,
+    InlineNotification,
+    Modal,
+    TextInput
+  } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
   import { LogCategory, logger } from '../../utils/logger';
-  import ColumnRenameModal from '../column-rename-modal.svelte';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
   import { useRowSelection } from './hooks/use-row-selection.svelte';
@@ -15,37 +24,52 @@
   import { useTableFilters } from './hooks/use-table-filters.svelte';
   import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
-  import { TABLE_ROW_HEIGHT } from './types';
+  import { DOM_UPDATE_DELAY_MS, TABLE_ROW_HEIGHT } from './types';
 
   import TableColumnHeader from './components/TableColumnHeader.svelte';
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
 
-  export type HighlightType = 'exact' | 'partial' | 'current' | null;
+  export type HighlightType =
+    | 'exact'
+    | 'contains'
+    | 'partial'
+    | 'current'
+    | null;
+
+  export interface CellHighlight {
+    rowId: number;
+    columnName: string;
+    type: 'exact' | 'contains' | 'partial';
+  }
 
   interface Props {
     dataset?: ProcessedDataset;
     tableName?: string;
-    exactHighlightIds?: number[];
-    partialHighlightIds?: number[];
-    currentHighlightId?: number | null;
+    cellHighlights?: CellHighlight[];
+    currentCell?: { rowId: number; columnName: string } | null;
+    highlightedRowIds?: number[];
     showSummaryPlots?: boolean;
     maxRows?: number;
     isExpanded?: boolean;
     isSelectable?: boolean;
+    isReadOnly?: boolean;
+    datasetVersion?: number;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
   }
 
   let {
     dataset,
     tableName,
-    exactHighlightIds = [],
-    partialHighlightIds = [],
-    currentHighlightId = null,
+    cellHighlights = [],
+    currentCell = null,
+    highlightedRowIds = [],
     showSummaryPlots = true,
     maxRows,
     isExpanded = false,
     isSelectable = false,
+    isReadOnly = false,
+    datasetVersion,
     onSelectionChange
   }: Props = $props();
 
@@ -56,7 +80,7 @@
 
   const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
-  const viewportHeightRatioExpanded = 0.65;
+  const viewportHeightRatioExpanded = 0.85;
   const viewportHeightRatio = $derived(
     isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
   );
@@ -67,15 +91,7 @@
   const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
   const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
-  const isEditMode = $derived(!!tableName);
-
-  const COLUMN_TYPE_OPTIONS = $derived([
-    { label: m.column_type_text(), value: 'VARCHAR' },
-    { label: m.column_type_number(), value: 'DOUBLE' },
-    { label: m.column_type_integer(), value: 'BIGINT' },
-    { label: m.column_type_date(), value: 'DATE' },
-    { label: m.column_type_boolean(), value: 'BOOLEAN' }
-  ]);
+  const isEditMode = $derived(!!tableName && !isReadOnly);
 
   function recordTransformation(summary: string) {
     if (!dataset?.id) return;
@@ -83,7 +99,7 @@
   }
 
   async function recordProjectTransformation(
-    type: 'rename' | 'drop' | 'type_change' | 'refine',
+    type: 'refine',
     column: string,
     newValue?: string
   ) {
@@ -128,24 +144,35 @@
     }
   });
 
+  let renameModalOpen = $state(false);
+  let columnToRename = $state<string | null>(null);
+  let newColumnName = $state('');
+  let deleteConfirmOpen = $state(false);
+  let columnToDelete = $state<string | null>(null);
+
   const columnOps = useColumnOperations({
     tableName: () => tableName,
+    datasetId: () => dataset?.id,
     columns: () => tableData.columns,
     onColumnsChange: async () => {
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
     },
-    onSortColumnRenamed: (oldName, newName) => {
-      if (sort.sortColumn === oldName) {
-        sort.sortTable(newName, sort.sortOrder ?? 'ASC');
-      }
+    onColumnRefined: async () => {
+      await filters.refreshFiltersState();
+      await tableData.loadRowsData();
     },
-    onSortColumnDeleted: (columnName) => {
-      if (sort.sortColumn === columnName) {
-        sort.sortTable(columnName, 'ASC');
-      }
-    },
-    onRecordTransformation: recordTransformation
+    onRecordTransformation: recordTransformation,
+    onColumnRenamed: (oldName: string) => {
+      columnToRename = oldName;
+      newColumnName = oldName;
+      renameModalOpen = true;
+    }
+  });
+
+  const affectedVisualizations = $derived.by(() => {
+    if (!columnToDelete) return [];
+    return columnOps.getAffectedVisualizations(columnToDelete);
   });
 
   const rowSelection = useRowSelection({
@@ -168,31 +195,86 @@
     sort.sortTable(column, order);
   }
 
-  async function handleRename(columnName: string) {
-    columnOps.openRenameModal(columnName);
-  }
-
-  async function handleRenameConfirm(newName: string) {
-    if (columnOps.columnToRename) {
-      const oldName = columnOps.columnToRename;
-      await columnOps.handleRename(newName);
-      await recordProjectTransformation('rename', oldName, newName);
+  async function handleRefine(columnName: string, operation: RefineOperation) {
+    isLocalUpdate = true;
+    try {
+      await columnOps.handleRefine(columnName, operation);
+      await recordProjectTransformation('refine', columnName, operation);
+    } catch (e) {
+      isLocalUpdate = false;
+      throw e;
+    } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
     }
   }
 
-  async function handleChangeType(columnName: string, duckType: string) {
-    await columnOps.changeColumnType(columnName, duckType);
-    await recordProjectTransformation('type_change', columnName, duckType);
+  async function handleRenameConfirm() {
+    if (!columnToRename || !newColumnName.trim() || !tableName) {
+      renameModalOpen = false;
+      return;
+    }
+
+    isLocalUpdate = true;
+    try {
+      await renameColumn(tableName, columnToRename, newColumnName.trim(), Duck);
+      await tableData.loadColumnsInfo();
+      await virtualScroll.initializeRows(virtualScroll.startIndex);
+      recordTransformation(
+        `Colonne renommée: ${columnToRename} → ${newColumnName.trim()}`
+      );
+    } catch (err) {
+      logger.error('Error renaming column', LogCategory.UI, err);
+    } finally {
+      renameModalOpen = false;
+      columnToRename = null;
+      newColumnName = '';
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
   }
 
-  async function handleRefine(columnName: string, operation: RefineOperation) {
-    await columnOps.handleRefine(columnName, operation);
-    await recordProjectTransformation('refine', columnName, operation);
+  function handleDeleteRequest(columnName: string) {
+    columnToDelete = columnName;
+    deleteConfirmOpen = true;
   }
 
-  async function handleDrop(columnName: string) {
-    await columnOps.dropColumn(columnName);
-    await recordProjectTransformation('drop', columnName);
+  async function handleDeleteConfirm() {
+    if (!columnToDelete) {
+      deleteConfirmOpen = false;
+      return;
+    }
+
+    isLocalUpdate = true;
+    try {
+      await columnOps.handleDelete(columnToDelete);
+    } catch (err) {
+      logger.error('Error deleting column', LogCategory.UI, err);
+    } finally {
+      deleteConfirmOpen = false;
+      columnToDelete = null;
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
+  }
+
+  function getCellHighlightType(
+    rowId: number,
+    columnName: string
+  ): HighlightType {
+    if (
+      currentCell?.rowId === rowId &&
+      currentCell?.columnName === columnName
+    ) {
+      return 'current';
+    }
+    const highlight = cellHighlights.find(
+      (h) => h.rowId === rowId && h.columnName === columnName
+    );
+    return highlight?.type ?? null;
   }
 
   function getRowHighlightType(
@@ -200,9 +282,8 @@
     row: Record<string, unknown>
   ): HighlightType {
     const rowId = (row.__id as number | undefined) ?? rowIndex + 1;
-    if (currentHighlightId === rowId) return 'current';
-    if (exactHighlightIds.includes(rowId)) return 'exact';
-    if (partialHighlightIds.includes(rowId)) return 'partial';
+    if (currentCell?.rowId === rowId) return 'current';
+    if (highlightedRowIds.includes(rowId)) return 'partial';
     return null;
   }
 
@@ -221,32 +302,73 @@
   });
 
   $effect(() => {
-    if (currentHighlightId && filters.numRows > 0) {
-      untrack(() => virtualScroll.goToId(currentHighlightId));
+    if (currentCell && filters.numRows > 0 && tableName) {
+      const rowId = currentCell.rowId;
+      const columnName = currentCell.columnName;
+      const currentSortColumn = sort.sortColumn;
+      const currentSortOrder = sort.sortOrder;
+      const currentTableName = tableName;
+
+      untrack(async () => {
+        const position = await duckDBOrchestrator.getRowPosition(
+          currentTableName,
+          rowId,
+          { orderBy: currentSortColumn, order: currentSortOrder }
+        );
+
+        if (position >= 0) {
+          await virtualScroll.goToPosition(position);
+        }
+
+        setTimeout(() => {
+          const cellSelector = `td[data-column="${columnName}"]`;
+          const cell = tableContainer?.querySelector(cellSelector);
+          cell?.scrollIntoView({
+            behavior: 'smooth',
+            inline: 'center',
+            block: 'nearest'
+          });
+        }, DOM_UPDATE_DELAY_MS);
+      });
     }
   });
 
   let lastDatasetId: string | undefined = undefined;
   let lastTableName: string | undefined = undefined;
   let lastColumnsRef: unknown[] | undefined = undefined;
+  let lastDatasetVersion: number | undefined = undefined;
+  let isLocalUpdate = false;
 
   $effect(() => {
     const currentTableName = tableName;
     const currentDataset = dataset;
     const currentDatasetId = currentDataset?.id;
     const currentColumnsRef = currentDataset?.columns;
+    const currentDatasetVersion = datasetVersion;
 
     const datasetChanged = currentDatasetId !== lastDatasetId;
     const tableChanged = currentTableName !== lastTableName;
     const columnsChanged = currentColumnsRef !== lastColumnsRef;
+    const versionChanged = currentDatasetVersion !== lastDatasetVersion;
 
-    if (!datasetChanged && !tableChanged && !columnsChanged) {
+    if (
+      !datasetChanged &&
+      !tableChanged &&
+      !columnsChanged &&
+      !versionChanged
+    ) {
       return;
     }
 
     lastDatasetId = currentDatasetId;
     lastTableName = currentTableName;
     lastColumnsRef = currentColumnsRef;
+    lastDatasetVersion = currentDatasetVersion;
+
+    if (isLocalUpdate) {
+      logger.debug('Ignoring update due to local update', LogCategory.UI);
+      return;
+    }
 
     if (currentDataset || currentTableName) {
       untrack(async () => {
@@ -277,7 +399,7 @@
 
   let expandEffectInitialized = $state(false);
   $effect(() => {
-    const _currentIsExpanded = isExpanded;
+    void isExpanded;
     if (!expandEffectInitialized) {
       expandEffectInitialized = true;
       return;
@@ -287,17 +409,25 @@
     });
   });
 
+  const skeletonRowHeight = 32;
+  const skeletonRows = $derived(
+    Math.floor((effectiveMaxRows * rowHeight) / skeletonRowHeight)
+  );
+
   const getSkeletonProps = () =>
-    ({ columns: 5, rows: Math.floor(effectiveMaxRows) }) as any;
+    ({
+      columns: 5,
+      rows: skeletonRows,
+      size: 'compact',
+      showHeader: false,
+      showToolbar: false
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
+    }) as any;
 </script>
 
 <div class="advanced-data-table">
-  {#if tableData.isFullyLoaded && filters.numRows > 0}
-    <TableHeaderInfo
-      filterStats={filters.filterStats}
-      hiddenColumns={columnOps.hiddenColumns}
-      onShowColumn={columnOps.toggleColumnVisibility}
-    />
+  {#if tableData.isFullyLoaded && filters.numRows > 0 && !isReadOnly}
+    <TableHeaderInfo filterStats={filters.filterStats} />
   {/if}
 
   {#if tableData.error}
@@ -335,13 +465,13 @@
                   sortOrder={sort.sortOrder}
                   showSummaryPlots={showSummaryPlots}
                   isEditMode={isEditMode}
-                  columnTypeOptions={COLUMN_TYPE_OPTIONS}
+                  isHidden={columnOps.isColumnHidden(column.name)}
                   onSort={handleSort}
-                  onRename={handleRename}
-                  onChangeType={handleChangeType}
                   onRefine={handleRefine}
-                  onToggleVisibility={columnOps.toggleColumnVisibility}
-                  onDrop={handleDrop}
+                  onRename={columnOps.handleRename}
+                  onChangeType={columnOps.handleChangeType}
+                  onHide={columnOps.handleHide}
+                  onDelete={handleDeleteRequest}
                 />
               {/each}
             </tr>
@@ -355,6 +485,8 @@
                 rowIndex={rowIndex}
                 visibleColumns={columnOps.visibleColumns}
                 highlightType={getRowHighlightType(rowIndex, row)}
+                getCellHighlight={(colName) =>
+                  getCellHighlightType(rowId, colName)}
                 isSelectable={isSelectable && isEditMode}
                 isSelected={rowSelection.isRowSelected(rowId)}
                 onToggleSelection={rowSelection.toggleRowSelection}
@@ -365,7 +497,7 @@
       </div>
 
       {#if !tableData.isFullyLoaded}
-        <div class="skeleton-overlay">
+        <div class="skeleton-overlay" style="max-height: {maxHeight}px;">
           <DataTableSkeleton {...getSkeletonProps()} />
         </div>
       {/if}
@@ -373,17 +505,72 @@
   {/if}
 </div>
 
-{#if columnOps.columnToRename}
-  <ColumnRenameModal
-    bind:open={columnOps.renameModalOpen}
-    columnName={columnOps.columnToRename}
-    onClose={() => {
-      columnOps.setRenameModalOpen(false);
-      columnOps.setColumnToRename(null);
-    }}
-    onRename={handleRenameConfirm}
-  />
-{/if}
+<!-- Rename Column Modal -->
+<Modal
+  bind:open={renameModalOpen}
+  modalHeading="Renommer la colonne"
+  primaryButtonText="Confirmer"
+  secondaryButtonText="Annuler"
+  on:click:button--primary={handleRenameConfirm}
+  on:click:button--secondary={() => {
+    renameModalOpen = false;
+    columnToRename = null;
+    newColumnName = '';
+  }}
+  on:close={() => {
+    renameModalOpen = false;
+    columnToRename = null;
+    newColumnName = '';
+  }}
+  size="sm"
+>
+  <div class="rename-modal-content">
+    <p class="rename-modal-description">
+      Entrez le nouveau nom pour la colonne
+      <strong>{columnToRename}</strong>
+    </p>
+    <TextInput
+      bind:value={newColumnName}
+      labelText="Nouveau nom"
+      placeholder="Nom de la colonne"
+    />
+  </div>
+</Modal>
+
+<!-- Delete Column Confirmation Modal -->
+<Modal
+  bind:open={deleteConfirmOpen}
+  modalHeading={m.delete_column_title()}
+  primaryButtonText={m.delete_column_confirm()}
+  primaryButtonDisabled={false}
+  secondaryButtonText={m.cancel()}
+  danger
+  on:click:button--primary={handleDeleteConfirm}
+  on:click:button--secondary={() => {
+    deleteConfirmOpen = false;
+    columnToDelete = null;
+  }}
+  on:close={() => {
+    deleteConfirmOpen = false;
+    columnToDelete = null;
+  }}
+  size="sm"
+>
+  <p>
+    {m.delete_column_message({ column: columnToDelete ?? '' })}
+  </p>
+  {#if affectedVisualizations.length > 0}
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      hideCloseButton
+      title={m.delete_column_warning_title({
+        count: affectedVisualizations.length
+      })}
+      subtitle={affectedVisualizations.map((v) => v.name).join(', ')}
+    />
+  {/if}
+</Modal>
 
 <style>
   .advanced-data-table {
@@ -414,6 +601,16 @@
     font-variant-numeric: tabular-nums;
   }
 
+  table :global {
+    td,
+    th {
+      text-overflow: ellipsis;
+      min-width: 150px;
+      max-width: 150px;
+      overflow: hidden;
+    }
+  }
+
   thead {
     position: sticky;
     top: 0;
@@ -442,11 +639,6 @@
     overflow: hidden;
   }
 
-  .skeleton-overlay :global(.bx--data-table-header),
-  .skeleton-overlay :global(.bx--table-toolbar) {
-    display: none;
-  }
-
   .empty-state,
   .error-message {
     padding: var(--cds-spacing-07);
@@ -459,5 +651,16 @@
   .error-message {
     color: var(--cds-text-error);
     border: 1px solid var(--cds-support-01);
+  }
+
+  :global(.rename-modal-content) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
+  :global(.rename-modal-description) {
+    color: var(--cds-text-02);
+    margin-bottom: var(--cds-spacing-03);
   }
 </style>
