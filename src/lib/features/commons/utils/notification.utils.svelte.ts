@@ -1,4 +1,4 @@
-import { logger, LogCategory } from './logger';
+import { LogCategory, logger } from './logger';
 
 export enum NotificationType {
   SUCCESS = 'success',

@@ -1,0 +1,27 @@
+id,description,value
+1,integer positive,42
+2,integer negative,-42
+3,integer zero,0
+4,float standard,3.14159
+5,float negative,-273.15
+6,float no leading zero,.5
+7,float trailing zero,10.0
+8,scientific positive,6.022e23
+9,scientific negative,1.6E-19
+10,thousand separator US,"1,234,567"
+11,thousand separator EU,1.234.567
+12,decimal comma,"3,14"
+13,percentage,75%
+14,currency dollar,$1234.56
+15,currency euro,€ 1234,56
+16,negative parenthesis,(500)
+17,negative dash,- 500
+18,positive explicit,+100
+19,infinity,Infinity
+20,negative infinity,-Infinity
+21,not a number,NaN
+22,very small,0.000000001
+23,very large,999999999999999
+24,leading zeros,007
+25,trailing spaces,  42  
+26,mixed whitespace,	100	

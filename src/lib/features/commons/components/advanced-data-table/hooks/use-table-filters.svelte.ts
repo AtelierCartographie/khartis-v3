@@ -1,9 +1,9 @@
+import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import {
   duckDBOrchestrator,
   type DataTableFilter,
   type FilterStats
 } from '$lib/features/duckdb';
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
 
 export interface UseTableFiltersProps {
   tableName?: string | (() => string | undefined);

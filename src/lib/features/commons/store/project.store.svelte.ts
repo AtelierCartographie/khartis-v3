@@ -20,12 +20,41 @@ import { dataOrchestratorService } from '../services/data-orchestrator.service.s
 import { downloadFile } from '../utils/file-export.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError } from '../utils/notification.utils.svelte';
+import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import type {
   ColumnTransformation,
   UploadedFile
 } from './create-project.types';
+import { bigIntReplacer } from '$lib/features/project-management/utils/json-helpers';
+
+function cleanFileForStorage(file: UploadedFile): UploadedFile {
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    fileType: file.fileType,
+    status: file.status,
+    uploadProgress: file.uploadProgress,
+    errorMessage: file.errorMessage,
+    validation: file.validation,
+    parsedData: file.parsedData,
+    content: file.content,
+    preparedGeoJSON: file.preparedGeoJSON,
+    duplicates: file.duplicates,
+    statistics: file.statistics,
+    sourceType: file.sourceType,
+    deepAnalysis: file.deepAnalysis,
+    geoMatchResult: file.geoMatchResult,
+    relatedFiles: file.relatedFiles,
+    relatedFilesData: file.relatedFilesData,
+    columnTransformations: file.columnTransformations,
+    duckdbTableName: file.duckdbTableName,
+    sourceArchive: file.sourceArchive
+  };
+}
 
 class ProjectStore {
   private _state = $state<ProjectState>({
@@ -117,33 +146,7 @@ class ProjectStore {
         (f) => f.id === file.id || f.name === file.name
       );
       if (!exists) {
-        const fileCopy = {
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          fileType: file.fileType,
-          status: file.status,
-          uploadProgress: file.uploadProgress,
-          errorMessage: file.errorMessage,
-          validation: file.validation,
-          parsedData: file.parsedData,
-          content: file.content,
-          preparedGeoJSON: file.preparedGeoJSON,
-          duplicates: file.duplicates,
-          statistics: file.statistics,
-          sourceType: file.sourceType,
-          deepAnalysis: file.deepAnalysis,
-          geoMatchResult: file.geoMatchResult,
-          relatedFileObjects: file.relatedFileObjects,
-          originalFile: file.originalFile,
-          relatedFiles: file.relatedFiles,
-          relatedFilesData: file.relatedFilesData,
-          columnTransformations: file.columnTransformations
-        };
-
-        // Force reactivity by reassigning currentProject with deep copy of data
-        // Do everything in one assignment to avoid intermediate states
+        const fileCopy = cleanFileForStorage(file);
 
         this._state.currentProject = {
           ...this._state.currentProject,
@@ -161,8 +164,6 @@ class ProjectStore {
         } catch (error) {
           logger.error('Failed to process file', LogCategory.PROJECT, error);
 
-          // Force reactivity by reassigning currentProject with deep copy of data
-          // Remove the failed file in one assignment
           this._state.currentProject = {
             ...this._state.currentProject,
             data: {
@@ -187,8 +188,6 @@ class ProjectStore {
       return;
     }
 
-    // Force reactivity by reassigning currentProject with deep copy of data
-    // Remove the file in one assignment to avoid intermediate states
     this._state.currentProject = {
       ...this._state.currentProject,
       data: {
@@ -218,11 +217,48 @@ class ProjectStore {
       return;
     }
 
-    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
-    updatedFiles[fileIndex] = {
-      ...updatedFiles[fileIndex],
-      name: newName
+    const currentFile = this._state.currentProject.data.sourceFiles[fileIndex];
+    const oldName = currentFile.name;
+
+    const getBaseName = (fileName: string) => {
+      const lastDot = fileName.lastIndexOf('.');
+      return lastDot > 0 ? fileName.slice(0, lastDot) : fileName;
     };
+
+    const oldBaseName = getBaseName(oldName);
+    const newBaseName = getBaseName(newName);
+
+    const updatedFiles = [...this._state.currentProject.data.sourceFiles];
+    const updatedFile = { ...updatedFiles[fileIndex], name: newName };
+
+    if (updatedFile.relatedFilesData && oldBaseName !== newBaseName) {
+      const renamedData: Record<string, ArrayBuffer> = {};
+      for (const [fileName, buffer] of Object.entries(
+        updatedFile.relatedFilesData
+      )) {
+        const fileBaseName = getBaseName(fileName);
+        const fileExt = fileName.slice(fileBaseName.length);
+        if (fileBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
+          renamedData[newBaseName + fileExt] = buffer;
+        } else {
+          renamedData[fileName] = buffer;
+        }
+      }
+      updatedFile.relatedFilesData = renamedData;
+    }
+
+    if (updatedFile.relatedFiles && oldBaseName !== newBaseName) {
+      updatedFile.relatedFiles = updatedFile.relatedFiles.map((fileName) => {
+        const fileBaseName = getBaseName(fileName);
+        const fileExt = fileName.slice(fileBaseName.length);
+        if (fileBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
+          return newBaseName + fileExt;
+        }
+        return fileName;
+      });
+    }
+
+    updatedFiles[fileIndex] = updatedFile;
 
     this._state.currentProject = {
       ...this._state.currentProject,
@@ -373,7 +409,9 @@ class ProjectStore {
       throw new Error(nameValidation.errors.join(', '));
     }
 
-    const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+    const sanitizedName = sanitizeProjectName(name);
+
+    const cleanedFiles = files.map(cleanFileForStorage);
 
     const project: KhartisProject = {
       id: crypto.randomUUID(),
@@ -385,7 +423,7 @@ class ProjectStore {
         format: 'kh'
       },
       data: {
-        sourceFiles: files
+        sourceFiles: cleanedFiles
       }
     };
 
@@ -415,6 +453,8 @@ class ProjectStore {
       this._state.lastSaved = new Date();
       this._state.history = [];
       this._state.historyIndex = -1;
+
+      this.addToHistory('Project loaded', project);
 
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
@@ -453,13 +493,13 @@ class ProjectStore {
       this._state.lastSaved = new Date();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to save project';
+        error instanceof Error ? error.message : m.error_save_project_title();
       logger.error(
         'Failed to save project to IndexedDB',
         LogCategory.PROJECT,
         error
       );
-      showError('Failed to save project', message, error);
+      showError(m.error_save_project_title(), message, error);
       throw error;
     }
   }
@@ -475,8 +515,8 @@ class ProjectStore {
       }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to delete project';
-      showError('Failed to delete project', message, error);
+        error instanceof Error ? error.message : m.error_delete_project_title();
+      showError(m.error_delete_project_title(), message, error);
       throw error;
     }
   }
@@ -511,7 +551,7 @@ class ProjectStore {
 
       const duplicatedProject = duplicateProjectEntity(
         originalProject,
-        ProjectValidator.sanitizeProjectName(duplicatedName)
+        sanitizeProjectName(duplicatedName)
       );
 
       await projectRepository.save(duplicatedProject);
@@ -519,8 +559,10 @@ class ProjectStore {
       return duplicatedProject.id;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to duplicate project';
-      showError('Failed to duplicate project', message, error);
+        error instanceof Error
+          ? error.message
+          : m.error_duplicate_project_title();
+      showError(m.error_duplicate_project_title(), message, error);
       throw error;
     }
   }
@@ -561,8 +603,8 @@ class ProjectStore {
       downloadFile(blob, filename);
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to export project';
-      showError('Failed to export project', message, error);
+        error instanceof Error ? error.message : m.error_export_project_title();
+      showError(m.error_export_project_title(), message, error);
       throw error;
     }
   }
@@ -581,13 +623,15 @@ class ProjectStore {
       this._state.history = [];
       this._state.historyIndex = -1;
 
+      this.addToHistory('Project imported', project);
+
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
       await dataOrchestratorService.onProjectChanged();
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to import project';
-      showError('Failed to import project', message, error);
+        error instanceof Error ? error.message : m.error_import_project_title();
+      showError(m.error_import_project_title(), message, error);
       throw error;
     }
   }
@@ -664,10 +708,9 @@ class ProjectStore {
     const entry = this._state.history[this._state.historyIndex];
 
     if (entry.snapshot) {
-      this._state.currentProject = {
-        ...this._state.currentProject!,
-        ...entry.snapshot
-      };
+      this._state.currentProject = JSON.parse(
+        JSON.stringify(entry.snapshot, bigIntReplacer)
+      ) as KhartisProject;
       this.markDirty();
     }
   }
@@ -681,10 +724,9 @@ class ProjectStore {
     const entry = this._state.history[this._state.historyIndex];
 
     if (entry.snapshot) {
-      this._state.currentProject = {
-        ...this._state.currentProject!,
-        ...entry.snapshot
-      };
+      this._state.currentProject = JSON.parse(
+        JSON.stringify(entry.snapshot, bigIntReplacer)
+      ) as KhartisProject;
       this.markDirty();
     }
   }
@@ -707,10 +749,17 @@ class ProjectStore {
       );
     }
 
+    const projectToSnapshot = snapshot || this._state.currentProject;
+    const clonedSnapshot = projectToSnapshot
+      ? (JSON.parse(
+          JSON.stringify(projectToSnapshot, bigIntReplacer)
+        ) as KhartisProject)
+      : undefined;
+
     const entry: ProjectHistoryEntry = {
       timestamp: new Date(),
       action,
-      snapshot: snapshot || this._state.currentProject
+      snapshot: clonedSnapshot
     };
 
     this._state.history.push(entry);

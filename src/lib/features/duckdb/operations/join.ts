@@ -3,9 +3,9 @@ import {
   DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
-import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import type { AnalysisResults, DuckDBContext, JoinByIdOptions } from '../types';
 
 export async function joinById(
@@ -85,7 +85,7 @@ export async function joinById(
     }
   } else if (basemap_table) {
     basemap_join_ref_name = `${basemap_table}_join_ref`;
-    const escapedBasemapJoinRefName = basemap_join_ref_name.replace(/'/g, "''");
+    const escapedBasemapJoinRefName = escapeSqlString(basemap_join_ref_name);
     if (basemap_others_id) {
       await executeQuery(
         ctx.connection,
@@ -154,11 +154,11 @@ export async function applyJoinAssociation(
   await executeQuery(
     ctx.connection,
     `CREATE OR REPLACE TABLE "${table}" AS
-      FROM "${table}" as t
       SELECT
-        t.*,
+        t.* EXCLUDE (basemap_id, typo_match),
         j.id as basemap_id,
         j.typo_match
+      FROM "${table}" as t
       LEFT JOIN "${join_results_name}" as j
       ON t."${id}" = j.geoname
       WHERE j.basemap = '${escapedBasemap}'`

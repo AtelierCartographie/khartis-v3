@@ -1,6 +1,6 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import localforage from 'localforage';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
-import { safeJsonStringify, safeJsonParse } from '../utils/json-helpers';
+import { safeJsonParse, safeJsonStringify } from '../utils/json-helpers';
 
 export async function saveToStorage<T>(key: string, data: T): Promise<void> {
   try {
@@ -36,7 +36,7 @@ export async function loadFromStorage<T>(key: string): Promise<T | null> {
   }
 }
 
-export async function removeFromStorage(key: string): Promise<void> {
+async function removeFromStorage(key: string): Promise<void> {
   await localforage.removeItem(key);
 }
 

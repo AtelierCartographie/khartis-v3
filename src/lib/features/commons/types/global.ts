@@ -5,13 +5,9 @@ export enum ToolbarState {
 }
 
 export interface ZoomState {
-  mapZoomLevel: number;
   pageZoomLevel: number;
-  minMapZoom: number;
-  maxMapZoom: number;
   minPageZoom: number;
   maxPageZoom: number;
-  zoomStep: number;
   pageZoomStep: number;
 }
 
@@ -32,6 +28,8 @@ export interface GlobalState {
   projectionFilter?: ProjectionFilterId;
   projectionViewMode?: ProjectionViewMode;
   zoom: ZoomState;
+  isMobileView: boolean;
+  isMobileToolbarOpen: boolean;
 }
 
 export const enum ToolbarStep {

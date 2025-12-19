@@ -1,13 +1,13 @@
+import type { GeoJSONFeature, GeoJSONFeatureCollection } from '$lib/types/data';
 import {
-  tableFromArrays,
-  Utf8,
+  Bool,
   Float64,
   Int32,
-  Bool,
-  type Table,
-  type DataType
+  tableFromArrays,
+  Utf8,
+  type DataType,
+  type Table
 } from 'apache-arrow';
-import type { GeoJSONFeatureCollection, GeoJSONFeature } from '$lib/types/data';
 interface SchemaInfo {
   fields: Map<string, DataType>;
   hasGeometry: boolean;

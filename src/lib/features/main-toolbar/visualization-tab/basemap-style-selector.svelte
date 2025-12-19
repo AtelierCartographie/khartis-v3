@@ -2,7 +2,7 @@
   import { m } from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-  import { BasemapStyle } from '$lib/features/map/configs/basemap-styles';
+  import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   const basemapOptions = [
     {

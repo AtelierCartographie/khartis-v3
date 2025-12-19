@@ -1,13 +1,19 @@
+import {
+  BasemapSource,
+  GeoreferenceType,
+  TableViewType
+} from '$lib/features/commons/constants/ui.constants';
+
 export interface DataControlState {
   selectedRowIds: (string | number)[];
   expandedRowIds: (string | number)[];
   searchQuery: string;
   filterActive: boolean;
-  tableView: 'compact' | 'expanded';
+  tableView: TableViewType;
 }
 
 export interface GeolocationState {
-  geoReference: 'entities' | 'coordinates' | 'custom';
+  geoReference: GeoreferenceType;
   linkedVariable: number | null;
   linkedVariableName: string;
   latitudeColumn?: string;
@@ -17,7 +23,7 @@ export interface GeolocationState {
 
 export interface BasemapJoinState {
   selectedBasemap: string;
-  basemapSource: 'catalog' | 'import' | 'osm';
+  basemapSource: BasemapSource;
   joinedEntities: number;
   entitiesToVerify: number;
   duplicateEntities: string[];
@@ -30,10 +36,18 @@ export interface BasemapJoinState {
   correctionEnabled: boolean;
 }
 
+export interface EnrichDataState {
+  enrichmentDatasetId?: string;
+  enrichmentColumn?: string;
+  targetColumn?: string;
+  isEnrichmentActive: boolean;
+}
+
 export interface DataTabState {
   dataControl: DataControlState;
   geolocation: GeolocationState;
   basemapJoin: BasemapJoinState;
+  enrichData: EnrichDataState;
   notifications: {
     variableTypes: boolean;
     warnings: boolean;

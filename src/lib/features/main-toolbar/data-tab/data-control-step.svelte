@@ -1,5 +1,6 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import { FileType } from '$lib/features/commons/store/create-project.types';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
@@ -7,7 +8,7 @@
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator, Duck } from '$lib/features/duckdb';
+  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -15,16 +16,19 @@
   } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import CalculatorPanel from './components/calculator-panel.svelte';
+  import CsvOptionsModal, {
+    type CsvOptions
+  } from './components/csv-options-modal.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
   import DataToolsBar from './components/data-tools-bar.svelte';
-  import DeleteRowsModal from './delete-rows-modal.svelte';
+  import ExpandedTableModal from './components/expanded-table-modal.svelte';
   import FiltersPanel from './components/filters-panel.svelte';
   import SearchPanel, {
     type SearchHighlightResult
   } from './components/search-panel.svelte';
-  import { DataToolType } from './data-tab.types';
-  import { dataToolsStore } from './data-tools.store.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import { dataToolsStore, DataToolType } from './data-tools.store.svelte';
+  import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
 
   const selectedDataset = $derived.by(() => {
@@ -40,7 +44,7 @@
   const isBatchProcessing = $derived(duckDBOrchestrator.isBatchProcessing);
 
   const currentDuckTable = $derived.by(() => {
-    const _version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
     const tableName = selectedDataset?.sourceFileId
       ? allDuckDatasets.find(
@@ -53,22 +57,44 @@
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
   let warningsNotificationDismissed = $state(false);
-  let isTableExpanded = $state(false);
+  let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
+  let csvOptionsModalOpen = $state(false);
+  let showSummaryPlots = $state(true);
+  let currentCsvOptions = $state<CsvOptions>({
+    header: true,
+    decimalSeparator: '.',
+    thousandsSeparator: undefined
+  });
 
-  // Check if dataset has columns with null values
+  const isCsvFile = $derived.by(() => {
+    if (!selectedDataset) return false;
+    const format = selectedDataset.format?.toLowerCase();
+    if (format === 'csv') return true;
+    const sf = projectStore.currentProject?.data?.sourceFiles?.find(
+      (f: { id: string }) => f.id === selectedDataset.sourceFileId
+    );
+    return sf?.fileType === FileType.CSV;
+  });
+
+  const sourceFile = $derived.by(() => {
+    if (!selectedDataset) return null;
+    return (
+      projectStore.currentProject?.data?.sourceFiles?.find(
+        (f: { id: string }) => f.id === selectedDataset.sourceFileId
+      ) || null
+    );
+  });
+
   const hasNullableColumns = $derived(
     processedDataset
       ? processedDataset.columns.some((col) => col.nullable === true)
       : false
   );
 
-  // Use a separate key that only increments on explicit refresh calls
-  // This avoids unnecessary remounts during initial batch load
   let forceRefreshKey = $state(0);
 
   function refreshTable() {
-    // Increment the key to force a table remount
     forceRefreshKey++;
   }
 
@@ -76,10 +102,46 @@
     resetModalOpen = true;
   }
 
+  function handleOpenCsvOptions() {
+    csvOptionsModalOpen = true;
+  }
+
+  async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
+    if (!sourceFile || !currentDuckTable || !selectedDataset) {
+      throw new Error('No source file or table available');
+    }
+
+    const file = sourceFile.originalFile;
+    if (!file) {
+      throw new Error('Original file not available for re-import');
+    }
+
+    try {
+      await Duck.read_tabular(file, {
+        tablename: currentDuckTable,
+        header: options.header,
+        decimal_separator: options.decimalSeparator,
+        thousands_separator: options.thousandsSeparator
+      });
+
+      currentCsvOptions = options;
+      duckDBOrchestrator.bumpDatasetsVersion();
+      refreshTable();
+
+      showSuccess(m.csv_options_reimport_success(), '');
+    } catch (error) {
+      showError(
+        m.csv_options_reimport_error(),
+        error instanceof Error ? error.message : ''
+      );
+      throw error;
+    }
+  }
+
   let searchHighlight = $state<SearchHighlightResult>({
-    exactIds: [],
-    partialIds: [],
-    currentId: null
+    cellHighlights: [],
+    currentCell: null,
+    highlightedRowIds: []
   });
 
   function handleSearchResults(result: SearchHighlightResult) {
@@ -222,11 +284,14 @@
 
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
-      searchHighlight = { exactIds: [], partialIds: [], currentId: null };
+      searchHighlight = {
+        cellHighlights: [],
+        currentCell: null,
+        highlightedRowIds: []
+      };
     }
   });
 
-  // Mark step 0 as complete when dataset is loaded
   $effect(() => {
     if (selectedDataset && currentDuckTable) {
       dataTabStore.markStepComplete(0);
@@ -282,25 +347,39 @@
       onConfirm={handleDeleteRows}
     />
 
+    {#if isCsvFile}
+      <CsvOptionsModal
+        open={csvOptionsModalOpen}
+        currentOptions={currentCsvOptions}
+        onClose={() => (csvOptionsModalOpen = false)}
+        onApply={handleApplyCsvOptions}
+      />
+    {/if}
+
     <!-- Barre d'outils -->
     <DataToolsBar
       onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
-      onExpand={() => (isTableExpanded = !isTableExpanded)}
+      onExpand={() => (isModalOpen = true)}
+      onCsvOptions={handleOpenCsvOptions}
+      onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
       selectionCount={selectedRowIds.length}
+      showCsvOptions={isCsvFile && !!sourceFile?.originalFile}
+      showSummaryPlots={showSummaryPlots}
     />
   {/if}
 
   {#if processedDataset && !isBatchProcessing}
-    {#key `${forceRefreshKey}-${duckDBDatasetsVersion}`}
+    {#key forceRefreshKey}
       <AdvancedDataTable
         dataset={processedDataset}
         tableName={currentDuckTable || undefined}
-        showSummaryPlots={true}
-        exactHighlightIds={searchHighlight.exactIds}
-        partialHighlightIds={searchHighlight.partialIds}
-        currentHighlightId={searchHighlight.currentId}
-        isExpanded={isTableExpanded}
+        datasetVersion={duckDBDatasetsVersion}
+        showSummaryPlots={showSummaryPlots}
+        cellHighlights={searchHighlight.cellHighlights}
+        currentCell={searchHighlight.currentCell}
+        highlightedRowIds={searchHighlight.highlightedRowIds}
+        isExpanded={false}
         isSelectable={true}
         onSelectionChange={handleSelectionChange}
       />
@@ -329,6 +408,17 @@
       on:close={() => (warningsNotificationDismissed = true)}
     />
   {/if}
+
+  <ExpandedTableModal
+    bind:open={isModalOpen}
+    dataset={processedDataset || undefined}
+    tableName={currentDuckTable || undefined}
+    datasetVersion={duckDBDatasetsVersion}
+    cellHighlights={searchHighlight.cellHighlights}
+    currentCell={searchHighlight.currentCell}
+    highlightedRowIds={searchHighlight.highlightedRowIds}
+    onClose={() => (isModalOpen = false)}
+  />
 </section>
 
 <style>
@@ -347,7 +437,7 @@
     text-align: center;
     color: var(--cds-text-02);
     background-color: var(--cds-ui-01);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     margin-top: var(--cds-spacing-05);
   }
 
@@ -370,7 +460,6 @@
     overflow: hidden;
   }
 
-  /* Cache le header et la toolbar du DataTableSkeleton */
   .table-skeleton-wrapper :global(.bx--data-table-header),
   .table-skeleton-wrapper :global(.bx--table-toolbar) {
     display: none;

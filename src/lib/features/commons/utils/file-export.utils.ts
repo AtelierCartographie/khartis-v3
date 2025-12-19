@@ -1,57 +1,45 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { GeoJSONFeature } from '$lib/types/data';
 import {
   isGeoJSONFeature,
   isGeoJSONFeatureCollection,
   isTabularData
 } from '$lib/types/data';
-import { Duck, initDuckDB } from '$lib/features/duckdb';
 import type { UploadedFile } from '../store/create-project.types';
-import { generateFilename } from './string.utils';
 import { escapeSqlString } from './sanitize.utils';
+import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
 
-/**
- * Export data to CSV using DuckDB's COPY TO when table is available,
- * falling back to JavaScript implementation for in-memory data
- */
 export async function exportToCsv(
   data: Record<string, unknown>[] | string,
   headers?: string[]
 ): Promise<Blob> {
-  // If data is a DuckDB table name, use COPY TO
   if (typeof data === 'string') {
     const tableName = data;
 
-    // Ensure DuckDB is initialized
     await initDuckDB();
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    // Use DuckDB's COPY TO to generate CSV
     const csvString = await Duck.copy_to_csv_as_string(tableName, {
       delimiter: ',',
       header: true
     });
 
-    // Add BOM for Excel compatibility
     const bom = '\uFEFF';
     return new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
   }
 
-  // Fallback: JavaScript implementation for in-memory data
   const rows = data as Record<string, unknown>[];
   const fields = headers || (rows.length > 0 ? Object.keys(rows[0]) : []);
 
-  // Build CSV manually
   const csvRows: string[] = [];
 
-  // Add header
   csvRows.push(fields.map(escapeCSVField).join(','));
 
-  // Add data rows
   for (const row of rows) {
     const values = fields.map((field) => {
       const value = row[field];
@@ -65,9 +53,6 @@ export async function exportToCsv(
   return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
 }
 
-/**
- * Escape a field value for CSV format
- */
 function escapeCSVField(value: unknown): string {
   if (value === null || value === undefined) {
     return '';
@@ -75,14 +60,12 @@ function escapeCSVField(value: unknown): string {
 
   const str = String(value);
 
-  // Check if the field needs quotes
   if (
     str.includes(',') ||
     str.includes('"') ||
     str.includes('\n') ||
     str.includes('\r')
   ) {
-    // Escape quotes by doubling them
     return `"${str.replace(/"/g, '""')}"`;
   }
 
@@ -92,15 +75,12 @@ function escapeCSVField(value: unknown): string {
 export async function exportDatasetToCsv(
   dataset: ProcessedDataset
 ): Promise<Blob> {
-  // If dataset has a DuckDB table, use that
   if (dataset.duckdbTableName) {
-    // Ensure DuckDB is initialized
     await initDuckDB();
     if (!Duck) {
       throw new Error('DuckDB not initialized');
     }
 
-    // Create a view that excludes geometry columns
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
       .filter((col) => col.type !== 'geometry')
@@ -108,21 +88,17 @@ export async function exportDatasetToCsv(
       .join(', ');
 
     try {
-      // Create temporary view with only non-geometry columns
       await Duck.query(`
         CREATE TEMPORARY VIEW "${viewName}" AS
         SELECT ${nonGeomColumns} FROM "${dataset.duckdbTableName}"
       `);
 
-      // Export using DuckDB
       const blob = await exportToCsv(viewName);
 
-      // Clean up view
       await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`);
 
       return blob;
     } catch (error) {
-      // Clean up on error
       if (Duck) {
         await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`).catch(() => {});
       }
@@ -217,12 +193,109 @@ export function exportToJson(data: unknown): Blob {
   return new Blob([jsonString], { type: 'application/json' });
 }
 
+async function exportDatasetsToCsvWithGeometry(
+  datasets: ProcessedDataset[]
+): Promise<Blob> {
+  const allData: Record<string, unknown>[] = [];
+
+  for (const dataset of datasets) {
+    for (const row of dataset.data) {
+      const exportRow: Record<string, unknown> = {};
+
+      for (const col of dataset.columns) {
+        if (col.type === 'geometry') {
+          const geometry = row[col.name];
+          if (geometry && typeof geometry === 'object') {
+            exportRow['geometry_wkt'] = geometryToWkt(geometry);
+          }
+        } else {
+          exportRow[col.name] = row[col.name];
+        }
+      }
+
+      if (datasets.length > 1) {
+        exportRow['_source_dataset'] = dataset.name;
+      }
+
+      allData.push(exportRow);
+    }
+  }
+
+  const allHeaders = Array.from(
+    new Set(allData.flatMap((row) => Object.keys(row)))
+  );
+
+  return exportToCsv(allData, allHeaders);
+}
+
+function geometryToWkt(geometry: unknown): string {
+  if (!geometry || typeof geometry !== 'object') {
+    return '';
+  }
+
+  const geom = geometry as { type?: string; coordinates?: unknown };
+  const type = geom.type;
+  const coords = geom.coordinates;
+
+  if (!type || !coords) {
+    return '';
+  }
+
+  switch (type) {
+    case 'Point':
+      return `POINT(${formatCoords(coords)})`;
+    case 'MultiPoint':
+      return `MULTIPOINT(${formatMultiCoords(coords as unknown[][])})`;
+    case 'LineString':
+      return `LINESTRING(${formatLineCoords(coords as unknown[])})`;
+    case 'MultiLineString':
+      return `MULTILINESTRING(${formatMultiLineCoords(coords as unknown[][])})`;
+    case 'Polygon':
+      return `POLYGON(${formatPolygonCoords(coords as unknown[][])})`;
+    case 'MultiPolygon':
+      return `MULTIPOLYGON(${formatMultiPolygonCoords(coords as unknown[][][])})`;
+    default:
+      return JSON.stringify(geometry);
+  }
+}
+
+function formatCoords(coords: unknown): string {
+  if (Array.isArray(coords) && coords.length >= 2) {
+    return `${coords[0]} ${coords[1]}`;
+  }
+  return '';
+}
+
+function formatMultiCoords(coords: unknown[][]): string {
+  return coords.map((c) => `(${formatCoords(c)})`).join(', ');
+}
+
+function formatLineCoords(coords: unknown[]): string {
+  return coords.map((c) => formatCoords(c)).join(', ');
+}
+
+function formatMultiLineCoords(coords: unknown[][]): string {
+  return coords.map((line) => `(${formatLineCoords(line)})`).join(', ');
+}
+
+function formatPolygonCoords(coords: unknown[][]): string {
+  return coords.map((ring) => `(${formatLineCoords(ring)})`).join(', ');
+}
+
+function formatMultiPolygonCoords(coords: unknown[][][]): string {
+  return coords.map((poly) => `(${formatPolygonCoords(poly)})`).join(', ');
+}
+
 export async function exportProcessedDatasets(
   datasets: ProcessedDataset[],
-  format: 'csv' | 'geojson' | 'json' = 'json'
+  format: 'csv' | 'geojson' | 'json' | 'csv-geo' = 'json'
 ): Promise<Blob> {
   if (datasets.length === 0) {
     throw new Error('No datasets to export');
+  }
+
+  if (format === 'csv-geo') {
+    return exportDatasetsToCsvWithGeometry(datasets);
   }
 
   if (format === 'csv') {

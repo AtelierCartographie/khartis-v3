@@ -5,7 +5,7 @@ export function sanitizeProjectName(name: string): string {
 
   let sanitized = name.replace(/[<>:"/\\|?*]/g, '');
 
-  sanitized = sanitized.substring(0, 100);
+  sanitized = sanitized.substring(0, 255);
 
   sanitized = sanitized.replace(/\s+/g, ' ').trim();
 
@@ -30,4 +30,17 @@ export function sanitizeTextInput(input: string): string {
  */
 export function escapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
+}
+
+/**
+ * Escapes double quotes in a string for safe use in SQL identifiers.
+ * Replaces " with "" (two double quotes) as per SQL standard escaping.
+ * Use this for table names and column names wrapped in double quotes.
+ *
+ * @example
+ * escapeIdentifier('my"column') // Returns 'my""column'
+ * escapeIdentifier("test") // Returns "test"
+ */
+export function escapeIdentifier(identifier: string): string {
+  return identifier.replace(/"/g, '""');
 }

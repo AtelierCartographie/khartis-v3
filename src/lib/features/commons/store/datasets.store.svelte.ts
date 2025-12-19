@@ -1,23 +1,96 @@
-import type { DatasetResult } from '$lib/features/data-pipeline';
-import { dataPipeline } from '$lib/features/data-pipeline';
+import type {
+  DatasetResult,
+  EnrichedColumn,
+  ZipDatasetResult
+} from '$lib/features/data-pipeline';
+import {
+  ColumnType,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
+import * as m from '$lib/paraglide/messages';
+import { showWarning } from '../utils/notification.utils.svelte';
+import { SvelteSet } from 'svelte/reactivity';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
+import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
-import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { projectStore } from './project.store.svelte';
+
+function createDatasetFromPreprocessedFile(file: UploadedFile): DatasetResult {
+  const statistics = file.statistics as Record<
+    string,
+    {
+      type?: string;
+      count?: number;
+      nullCount?: number;
+      unique?: number;
+      min?: unknown;
+      max?: unknown;
+      mean?: number;
+    }
+  >;
+
+  const columns: EnrichedColumn[] = Object.entries(statistics || {}).map(
+    ([name, stats]) => ({
+      name,
+      values: [],
+      type: (stats.type as ColumnType) || ColumnType.TEXT,
+      stats: {
+        name,
+        type: (stats.type as ColumnType) || ColumnType.TEXT,
+        count: stats.count ?? 0,
+        nulls: stats.nullCount ?? 0,
+        uniques: stats.unique ?? 0,
+        min: stats.min,
+        max: stats.max,
+        mean: stats.mean
+      }
+    })
+  );
+
+  const data = file.parsedData as Record<string, unknown>[] | undefined;
+
+  const firstColStats = Object.values(statistics)[0];
+  const actualRowCount = firstColStats?.count ?? data?.length ?? 0;
+
+  const tableName =
+    file.duckdbTableName ??
+    `legacy_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    sourceFileId: file.id,
+    tableName,
+    columns,
+    rowCount: actualRowCount,
+    metadata: {
+      processedAt: new Date(),
+      fileType: file.fileType,
+      parserUsed: file.duckdbTableName ? 'zip-preprocessed' : 'legacy-parsed'
+    },
+    data,
+    fileSize: file.size,
+    geoDetection: file.deepAnalysis?.geoDetection,
+    createdAt: new Date()
+  };
+}
 
 interface DatasetsState {
   datasets: DatasetResult[];
   selectedDatasetId?: string;
   isProcessing: boolean;
   error?: string;
+  hiddenColumns: Map<string, Set<string>>;
 }
 
 class DatasetsStore {
   private _state = $state<DatasetsState>({
     datasets: [],
-    isProcessing: false
+    isProcessing: false,
+    hiddenColumns: new Map()
   });
 
   private activeOperations = 0;
@@ -27,25 +100,9 @@ class DatasetsStore {
     Array<(datasetId: string) => void>
   >();
 
-  // Semaphore to limit concurrent file processing to prevent memory exhaustion
   private processingSemaphore = new ProcessingSemaphore(2);
 
-  constructor() {
-    // DISABLED: Reactive sync causes triple processing
-    // DataOrchestrator.onProjectChanged() already handles project file loading
-    // This $effect was triggering addFile() for each file when project changes,
-    // causing files to be processed multiple times
-    // if (typeof window !== 'undefined') {
-    //   $effect.root(() => {
-    //     $effect(() => {
-    //       const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
-    //       if (sourceFiles !== undefined) {
-    //         void this.syncWithProject();
-    //       }
-    //     });
-    //   });
-    // }
-  }
+  constructor() {}
 
   get datasets() {
     return this._state.datasets;
@@ -80,7 +137,6 @@ class DatasetsStore {
   }
 
   addProcessedDataset(dataset: DatasetResult): void {
-    // Force reactivity by creating a new array
     this._state.datasets = [...this._state.datasets, dataset];
     if (!this._state.selectedDatasetId) {
       this._state.selectedDatasetId = dataset.id;
@@ -101,8 +157,7 @@ class DatasetsStore {
         LogCategory.STORE
       );
 
-      // Process files with semaphore to limit concurrent operations
-      const newDatasets = await Promise.all(
+      const results = await Promise.all(
         files.map(async (file) => {
           return this.processingSemaphore.run(async () => {
             logger.debug(
@@ -110,13 +165,34 @@ class DatasetsStore {
               LogCategory.STORE
             );
 
+            if (file.duckdbTableName) {
+              logger.debug(
+                `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
+                LogCategory.STORE
+              );
+              return createDatasetFromPreprocessedFile(file);
+            }
+
+            if (
+              !file.content &&
+              !file.originalFile &&
+              file.parsedData &&
+              file.statistics
+            ) {
+              logger.warn(
+                `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
+                LogCategory.STORE
+              );
+              return createDatasetFromPreprocessedFile(file);
+            }
+
             if (!file.content && !file.originalFile) {
               throw new Error(
                 `File ${file.name} has no content or originalFile`
               );
             }
 
-            const dataset = await dataPipeline.processUploadedFile(
+            const result = await dataPipeline.processUploadedFile(
               file,
               file.originalFile
             );
@@ -125,9 +201,13 @@ class DatasetsStore {
               `Completed processing: ${file.name}`,
               LogCategory.STORE
             );
-            return dataset;
+            return result;
           });
         })
+      );
+
+      const newDatasets: DatasetResult[] = results.flatMap((result) =>
+        isZipDatasetResult(result) ? result.datasets : [result]
       );
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
@@ -135,6 +215,13 @@ class DatasetsStore {
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
+
+      const geoDatasets = newDatasets.filter((d) => d.geometry);
+      if (geoDatasets.length > 0) {
+        await this.createVisualizationsForGeoDatasets(geoDatasets);
+      }
+
+      this.notifySkippedFiles(results);
 
       logger.success(
         `All ${files.length} files processed successfully`,
@@ -161,8 +248,28 @@ class DatasetsStore {
     let addedDataset: DatasetResult | null = null;
 
     try {
-      // Use semaphore for single file processing to maintain consistency
-      const dataset = await this.processingSemaphore.run(async () => {
+      const result = await this.processingSemaphore.run(async () => {
+        if (file.duckdbTableName) {
+          logger.debug(
+            `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
+            LogCategory.STORE
+          );
+          return createDatasetFromPreprocessedFile(file);
+        }
+
+        if (
+          !file.content &&
+          !file.originalFile &&
+          file.parsedData &&
+          file.statistics
+        ) {
+          logger.warn(
+            `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
+            LogCategory.STORE
+          );
+          return createDatasetFromPreprocessedFile(file);
+        }
+
         if (!file.content && !file.originalFile) {
           throw new Error(`File ${file.name} has no content or originalFile`);
         }
@@ -175,24 +282,24 @@ class DatasetsStore {
         return await dataPipeline.processUploadedFile(file, file.originalFile);
       });
 
-      if (dataset) {
-        // Check for duplicates by sourceFileId
+      const datasets: DatasetResult[] = isZipDatasetResult(result)
+        ? result.datasets
+        : [result];
+
+      for (const dataset of datasets) {
         const existingDataset = this._state.datasets.find(
           (d) => d.sourceFileId === dataset.sourceFileId
         );
 
         if (existingDataset) {
-          // Replace the existing dataset
           this._state.datasets = this._state.datasets.map((d) =>
             d.sourceFileId === dataset.sourceFileId ? dataset : d
           );
-          // Update selection if we replaced the selected dataset
           if (this._state.selectedDatasetId === existingDataset.id) {
             this._state.selectedDatasetId = dataset.id;
           }
 
-          addedDataset = dataset;
-          // Throw non-fatal error to show warning toast (won't trigger rollback)
+          if (!addedDataset) addedDataset = dataset;
           throw new DuplicateFileError(
             `Le fichier "${file.name}" existe déjà et a été remplacé`,
             file.name,
@@ -202,7 +309,6 @@ class DatasetsStore {
             }
           );
         } else {
-          // Force reactivity by creating a new array
           this._state.datasets = [...this._state.datasets, dataset];
         }
 
@@ -210,7 +316,7 @@ class DatasetsStore {
           this._state.selectedDatasetId = dataset.id;
         }
 
-        addedDataset = dataset;
+        if (!addedDataset) addedDataset = dataset;
 
         const pendingResolvers = this.pendingDatasetResolvers.get(
           dataset.sourceFileId
@@ -219,6 +325,11 @@ class DatasetsStore {
           pendingResolvers.forEach((resolve) => resolve(dataset.id));
           this.pendingDatasetResolvers.delete(dataset.sourceFileId);
         }
+      }
+
+      const geoDatasets = datasets.filter((d) => d.geometry);
+      if (geoDatasets.length > 0) {
+        await this.createVisualizationsForGeoDatasets(geoDatasets);
       }
 
       return addedDataset;
@@ -257,6 +368,59 @@ class DatasetsStore {
     }
 
     this._state.datasets = filteredDatasets;
+  }
+
+  async deleteDataset(datasetId: string): Promise<boolean> {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      return false;
+    }
+
+    const { visualizationStore } =
+      await import('$lib/features/commons/store/visualization.store.svelte');
+    const vizs = visualizationStore.getVisualizationsByDataset(datasetId);
+    for (const viz of vizs) {
+      visualizationStore.removeVisualization(viz.id);
+    }
+
+    const { duckDBOrchestrator } = await import('$lib/features/duckdb');
+    await duckDBOrchestrator.dropTable(dataset.tableName);
+
+    this.removeDataset(datasetId);
+
+    return true;
+  }
+
+  updateDataset(
+    datasetId: string,
+    updates: Partial<Pick<DatasetResult, 'tableName' | 'columns'>>
+  ): void {
+    const datasetIndex = this._state.datasets.findIndex(
+      (d) => d.id === datasetId
+    );
+
+    if (datasetIndex === -1) {
+      logger.warn('Dataset not found for update', LogCategory.STORE, {
+        datasetId
+      });
+      return;
+    }
+
+    const updatedDataset = {
+      ...this._state.datasets[datasetIndex],
+      ...updates
+    };
+
+    this._state.datasets = [
+      ...this._state.datasets.slice(0, datasetIndex),
+      updatedDataset,
+      ...this._state.datasets.slice(datasetIndex + 1)
+    ];
+
+    logger.debug('Dataset updated', LogCategory.STORE, {
+      datasetId,
+      updates: Object.keys(updates)
+    });
   }
 
   getAllDatasets(): DatasetResult[] {
@@ -379,12 +543,16 @@ class DatasetsStore {
         (d) => d.id !== datasetId
       );
 
-      const newDataset = await dataPipeline.processUploadedFile(
+      const result = await dataPipeline.processUploadedFile(
         sourceFile,
         sourceFile.originalFile
       );
 
-      const resetDataset = {
+      const newDataset: DatasetResult = isZipDatasetResult(result)
+        ? result.datasets[0]
+        : result;
+
+      const resetDataset: DatasetResult = {
         ...newDataset,
         id: datasetId
       };
@@ -510,16 +678,188 @@ class DatasetsStore {
     return true;
   }
 
+  renameDatasetOnly(datasetId: string, newName: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      return false;
+    }
+
+    const sanitizedName = sanitizeTextInput(newName);
+    if (!sanitizedName) {
+      return false;
+    }
+
+    dataset.name = sanitizedName;
+    return true;
+  }
+
   updateDatasetTableName(datasetId: string, tableName: string): void {
     this._state.datasets = this._state.datasets.map((dataset) =>
       dataset.id === datasetId ? { ...dataset, tableName } : dataset
     );
   }
 
+  hideColumn(datasetId: string, columnName: string): void {
+    const hiddenSet =
+      this._state.hiddenColumns.get(datasetId) ?? new SvelteSet<string>();
+    hiddenSet.add(columnName);
+    this._state.hiddenColumns.set(datasetId, hiddenSet);
+    logger.debug('Column hidden', LogCategory.STORE, { datasetId, columnName });
+  }
+
+  showColumn(datasetId: string, columnName: string): void {
+    const hiddenSet = this._state.hiddenColumns.get(datasetId);
+    if (hiddenSet) {
+      hiddenSet.delete(columnName);
+      if (hiddenSet.size === 0) {
+        this._state.hiddenColumns.delete(datasetId);
+      }
+    }
+    logger.debug('Column shown', LogCategory.STORE, { datasetId, columnName });
+  }
+
+  toggleColumnHidden(datasetId: string, columnName: string): void {
+    if (this.isColumnHidden(datasetId, columnName)) {
+      this.showColumn(datasetId, columnName);
+    } else {
+      this.hideColumn(datasetId, columnName);
+    }
+  }
+
+  isColumnHidden(datasetId: string, columnName: string): boolean {
+    return this._state.hiddenColumns.get(datasetId)?.has(columnName) ?? false;
+  }
+
+  getHiddenColumns(datasetId: string): string[] {
+    return Array.from(this._state.hiddenColumns.get(datasetId) ?? []);
+  }
+
+  getVisibleColumns(datasetId: string): string[] {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) return [];
+
+    const hiddenSet = this._state.hiddenColumns.get(datasetId) ?? new Set();
+    return dataset.columns
+      .map((c) => c.name)
+      .filter((name) => !hiddenSet.has(name));
+  }
+
+  async duplicateDataset(datasetId: string): Promise<string | null> {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      logger.warn('Dataset not found for duplication', LogCategory.STORE, {
+        datasetId
+      });
+      return null;
+    }
+
+    try {
+      this.startProcessing();
+
+      const { Duck, duckDBOrchestrator } = await import('$lib/features/duckdb');
+
+      const newId = crypto.randomUUID();
+      const newTableName = `dataset_${newId.replace(/-/g, '_')}`;
+      const copyName = `${dataset.name} (copie)`;
+
+      await Duck.query(
+        `CREATE TABLE "${newTableName}" AS SELECT * FROM "${dataset.tableName}"`
+      );
+
+      const newDataset: DatasetResult = {
+        ...dataset,
+        id: newId,
+        name: copyName,
+        tableName: newTableName,
+        columns: [...dataset.columns],
+        metadata: {
+          ...dataset.metadata,
+          processedAt: new Date(),
+          transformations: []
+        }
+      };
+
+      this._state.datasets = [...this._state.datasets, newDataset];
+
+      await duckDBOrchestrator.registerExistingTable(
+        newTableName,
+        newDataset.sourceFileId,
+        copyName,
+        {
+          geoDetection: newDataset.geoDetection
+        }
+      );
+
+      logger.success('Dataset duplicated successfully', LogCategory.STORE, {
+        originalId: datasetId,
+        newId,
+        newTableName
+      });
+
+      return newId;
+    } catch (error) {
+      logger.error('Failed to duplicate dataset', LogCategory.STORE, error);
+      return null;
+    } finally {
+      this.endProcessing();
+    }
+  }
+
   clear(): void {
     this._state.datasets = [];
     this._state.selectedDatasetId = undefined;
     this._state.error = undefined;
+    this._state.hiddenColumns.clear();
+  }
+
+  async createVisualizationsForGeoDatasets(
+    datasets: DatasetResult[]
+  ): Promise<void> {
+    const { visualizationStore, VisualizationType } =
+      await import('./visualization.store.svelte');
+
+    for (const dataset of datasets) {
+      if (dataset.geometry) {
+        const existingViz = visualizationStore.getVisualizationsByDataset(
+          dataset.id
+        );
+        if (existingViz.length === 0) {
+          visualizationStore.createVisualization(
+            VisualizationType.CHOROPLETH,
+            dataset.id,
+            dataset.name
+          );
+          logger.debug(
+            `Created visualization for geo dataset: ${dataset.name}`,
+            LogCategory.STORE
+          );
+        }
+      }
+    }
+  }
+
+  private notifySkippedFiles(
+    results: (DatasetResult | ZipDatasetResult)[]
+  ): void {
+    const allSkippedFiles: string[] = [];
+
+    for (const result of results) {
+      if (isZipDatasetResult(result) && result.skippedFiles.length > 0) {
+        allSkippedFiles.push(...result.skippedFiles);
+      }
+    }
+
+    if (allSkippedFiles.length > 0) {
+      showWarning(
+        m.warning_zip_files_skipped_title(),
+        m.warning_zip_files_skipped_message({
+          files: allSkippedFiles.join(', ')
+        })
+      );
+      logger.warn('Some files from ZIP were skipped', LogCategory.STORE, {
+        skippedFiles: allSkippedFiles
+      });
+    }
   }
 }
 

@@ -42,6 +42,7 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'geoparquet',
     'gpq',
     'parquet',
+    'arrow',
     'shp',
     'shx',
     'dbf',
@@ -51,7 +52,9 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'sbx',
     'gpkg',
     'kml',
-    'kmz'
+    'kmz',
+    'gpx',
+    'zip'
   ],
   allowedMimeTypes: [
     'text/csv',
@@ -64,13 +67,17 @@ export const FILE_VALIDATION_CONFIG: FileValidationConfig = {
     'application/geoparquet',
     'application/x-parquet',
     'application/parquet',
+    'application/vnd.apache.arrow.file',
     'application/x-shapefile',
     'application/x-dbf',
     'application/octet-stream',
     'application/geopackage+sqlite3',
     'application/x-sqlite3',
     'application/vnd.google-earth.kml+xml',
-    'application/vnd.google-earth.kmz'
+    'application/vnd.google-earth.kmz',
+    'application/gpx+xml',
+    'application/zip',
+    'application/x-zip-compressed'
   ],
   strictMode: true
 };
@@ -269,11 +276,21 @@ export const FileValidator = {
       return FileType.GEOPARQUET;
     }
 
+    if (extension === 'arrow' || mimeType.includes('arrow')) {
+      return FileType.ARROW;
+    }
+
     if (extension === 'kml' || mimeType.includes('kml')) {
       return FileType.KML;
     }
     if (extension === 'kmz' || mimeType.includes('kmz')) {
       return FileType.KMZ;
+    }
+    if (extension === 'gpx' || mimeType.includes('gpx')) {
+      return FileType.GPX;
+    }
+    if (extension === 'zip' || mimeType.includes('zip')) {
+      return FileType.ZIP;
     }
 
     return FileType.UNKNOWN;
@@ -335,6 +352,12 @@ export const FileValidator = {
     if (lines.length === 0) {
       result.errors.push('Empty CSV file');
       return;
+    }
+
+    if (lines.length === 1) {
+      result.warnings.push(
+        'CSV file contains only one line (header or single row of data)'
+      );
     }
 
     const separators = [',', ';', '\t', '|'];
@@ -479,35 +502,12 @@ export const FileValidator = {
   },
 
   validateShapefileGroup(
-    files: File[],
-    results: Map<string, DetailedValidationResult>,
-    globalErrors: string[]
+    _files: File[],
+    _results: Map<string, DetailedValidationResult>,
+    _globalErrors: string[]
   ): void {
-    const shapefileComponents = new Map<string, Set<string>>();
-
-    for (const file of files) {
-      const result = results.get(file.name);
-      if (result?.fileType === FileType.SHAPEFILE) {
-        const baseName = file.name.substring(0, file.name.lastIndexOf('.'));
-        const ext = FileValidator.getFileExtension(file.name);
-
-        if (!shapefileComponents.has(baseName)) {
-          shapefileComponents.set(baseName, new Set());
-        }
-        shapefileComponents.get(baseName)!.add(ext);
-      }
-    }
-
-    for (const [baseName, extensions] of shapefileComponents) {
-      const requiredExtensions = ['shp', 'shx', 'dbf'];
-      const missing = requiredExtensions.filter((ext) => !extensions.has(ext));
-
-      if (missing.length > 0) {
-        globalErrors.push(
-          `Incomplete shapefile "${baseName}". Missing files: ${missing.map((e) => `.${e}`).join(', ')}`
-        );
-      }
-    }
+    // Shapefile validation is handled in processShapefileGroup
+    // to support progressive import (adding .shx, .dbf after .shp)
   },
 
   requiresAsyncValidation(fileType: FileType): boolean {
@@ -627,5 +627,15 @@ export const SUPPORTED_FILE_TYPES = {
       'application/vnd.google-earth.kmz'
     ],
     description: 'KML / KMZ'
+  },
+  gpx: {
+    extensions: ['.gpx'],
+    mimeTypes: ['application/gpx+xml'],
+    description: 'GPX (GPS Exchange)'
+  },
+  zip: {
+    extensions: ['.zip'],
+    mimeTypes: ['application/zip', 'application/x-zip-compressed'],
+    description: 'ZIP archive'
   }
 };

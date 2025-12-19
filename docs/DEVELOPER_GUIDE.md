@@ -6,9 +6,9 @@
 
 ```bash
 git clone <repo-url>
-corepack enable          # Enable Yarn 4
-yarn install
-yarn dev
+corepack enable pnpm     # Enable pnpm
+pnpm install
+pnpm dev
 ```
 
 Open http://localhost:5176/ and explore `src/lib/features/` to understand the structure.
@@ -130,11 +130,11 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 
 ## 🎨 Extension Points
 
-| What                   | How                                                     |
-| ---------------------- | ------------------------------------------------------- |
-| **New file format**    | Implement `IParser` in `data-pipeline/adapters/parsers` |
-| **New classification** | Add method in `duckdb/macros/breaks.ts`                 |
-| **New tool**           | Store + component + toolbar registration                |
+| What                   | How                                                    |
+| ---------------------- | ------------------------------------------------------ |
+| **New file format**    | Add parser function in `data-pipeline/core/parsers.ts` |
+| **New classification** | Add method in `duckdb/macros/breaks.ts`                |
+| **New tool**           | Store + component + toolbar registration               |
 
 ## ⚡ Performance Strategies
 
@@ -153,7 +153,7 @@ Component Local → Feature Store → Global Coordination → IndexedDB
 - **E2E**: Critical flows (import → visualize → export)
 - **Performance**: Synthetic dataset benchmarks
 
-Run tests: `yarn test:unit`
+Run tests: `pnpm test:unit`
 
 ## 📝 Contribution Workflow
 
@@ -204,7 +204,7 @@ import * as m from '$paraglide/messages';
 
 ## ❓ Troubleshooting
 
-**Build fails**: Check `.svelte-kit/tsconfig.json` exists (run `yarn dev` once)
+**Build fails**: Check `.svelte-kit/tsconfig.json` exists (run `pnpm dev` once)
 
 **Types not found**: Restart TypeScript server in IDE
 

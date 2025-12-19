@@ -16,18 +16,6 @@
   } from 'carbon-icons-svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
-  let searchValue = $state(searchState.searchValue);
-  let selectedSource = $state(searchState.selectedSource);
-  let replaceValue = $state(searchState.replaceValue);
-
-  $effect(() => {
-    searchActions.setState({
-      searchValue,
-      selectedSource,
-      replaceValue
-    });
-  });
-
   const sourceOptions = [
     { id: 'all', text: m.search_all_variables() },
     { id: 'numeric', text: m.search_numeric_variables() },
@@ -35,21 +23,31 @@
     { id: 'text', text: m.search_text_variables() }
   ];
 
+  function handleSearchInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    searchActions.setSearchValue(target.value);
+  }
+
+  function handleSourceChange(e: CustomEvent<{ selectedId: string }>) {
+    searchActions.setSelectedSource(e.detail.selectedId);
+  }
+
+  function handleReplaceInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    searchActions.setReplaceValue(target.value);
+  }
+
   async function handleReplace() {
     const success = await searchActions.replaceAll();
     if (success > 0) {
-      searchValue = '';
-      replaceValue = '';
+      searchActions.clearSearch();
     }
   }
 
   function navigateResults(direction: 'prev' | 'next') {
-    const currentIndex = searchState.currentResultIndex;
-    const totalResults = searchState.results.length;
-
-    if (direction === 'next' && currentIndex < totalResults - 1) {
+    if (direction === 'next') {
       searchActions.goToNextResult();
-    } else if (direction === 'prev' && currentIndex > 0) {
+    } else {
       searchActions.goToPreviousResult();
     }
   }
@@ -57,7 +55,7 @@
   const results = $derived(searchState.results);
   const currentResultIndex = $derived(searchState.currentResultIndex);
   const hasResults = $derived(results.length > 0);
-  const showResults = $derived(searchValue.trim().length > 0);
+  const showResults = $derived(searchState.searchValue.trim().length > 0);
   const noResults = $derived(showResults && !hasResults);
 </script>
 
@@ -66,7 +64,8 @@
     <Row padding>
       <Column>
         <Search
-          bind:value={searchValue}
+          value={searchState.searchValue}
+          on:input={handleSearchInput}
           placeholder={m.search_placeholder()}
           size="lg"
         />
@@ -78,7 +77,8 @@
         <Dropdown
           id="source-dropdown"
           labelText={m.search_sources()}
-          bind:selectedId={selectedSource}
+          selectedId={searchState.selectedSource}
+          on:select={handleSourceChange}
           items={sourceOptions}
           size="lg"
         />
@@ -140,7 +140,8 @@
           <TextInput
             labelText={m.search_replace_by()}
             id="replace-input"
-            bind:value={replaceValue}
+            value={searchState.replaceValue}
+            on:input={handleReplaceInput}
             placeholder={m.search_no_value()}
             size="xl"
           />
@@ -150,7 +151,7 @@
           <Button
             kind="primary"
             onclick={handleReplace}
-            disabled={!searchValue.trim() || !hasResults}
+            disabled={!searchState.searchValue.trim() || !hasResults}
             icon={WatsonHealthRotate_360}
           >
             {m.search_replace()}

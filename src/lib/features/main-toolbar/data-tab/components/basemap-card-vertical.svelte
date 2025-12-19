@@ -56,6 +56,7 @@
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
   aria-label={basemap.title}
+  aria-pressed={selected}
 >
   <!-- Top Section - Preview -->
   <div class="top-section">
@@ -107,11 +108,10 @@
     flex-shrink: 0;
     overflow: hidden;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease-out;
     box-sizing: border-box;
   }
 
-  /* Border styles */
   .basemap-card.border-default {
     border: 1px solid var(--cds-pale-blue);
   }
@@ -128,7 +128,6 @@
     border: 2px solid var(--cds-dark-gray);
   }
 
-  /* Hover states - Blue variant */
   .basemap-card:not(.variant-gray):hover .top-section {
     background-color: var(--cds-pale-blue);
   }
@@ -137,7 +136,6 @@
     background-color: var(--cds-pale-blue);
   }
 
-  /* Hover states - Gray variant */
   .basemap-card.variant-gray:hover .top-section {
     background-color: var(--cds-light-gray);
   }
@@ -151,7 +149,6 @@
     outline-offset: 2px;
   }
 
-  /* Top Section - White background */
   .top-section {
     display: flex;
     flex-direction: column;
@@ -191,7 +188,6 @@
     color: var(--cds-text-02);
   }
 
-  /* Content Section - Blue variant */
   .content-section {
     display: flex;
     flex-direction: column;
@@ -201,7 +197,6 @@
     flex: 1;
   }
 
-  /* Content Section - Gray variant */
   .variant-gray .content-section {
     background-color: var(--cds-light-gray);
   }
@@ -235,7 +230,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease-out;
   }
 
   .radio-indicator.selected {
@@ -284,7 +279,6 @@
     gap: 0.25rem;
   }
 
-  /* Match Section - Blue variant */
   .match-section {
     display: flex;
     flex-direction: column;
@@ -294,7 +288,6 @@
     border-top: 1px solid var(--cds-dark-blue);
   }
 
-  /* Match Section - Gray variant */
   .variant-gray .match-section {
     background-color: var(--cds-light-gray);
     border-top: 1px solid var(--cds-dark-gray);
@@ -329,12 +322,10 @@
     display: none;
   }
 
-  /* Progress bar - Blue variant */
   .match-section :global(.bx--progress-bar__bar) {
     background-color: var(--cds-blue);
   }
 
-  /* Progress bar - Gray variant */
   .variant-gray .match-section :global(.bx--progress-bar__bar) {
     background-color: var(--cds-dark-gray);
   }

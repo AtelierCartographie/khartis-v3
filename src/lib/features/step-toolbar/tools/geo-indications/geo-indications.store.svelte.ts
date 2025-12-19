@@ -1,25 +1,31 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
+import {
+  DistanceUnit,
+  InsetMapType,
+  OrientationIndicatorStyle,
+  StrokeStyle
+} from '$lib/features/commons/constants/ui.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { ColorState, GeoIndicationsState } from './geo-indications.types';
 
 const DEFAULT_STATE: GeoIndicationsState = {
   scale: {
     enabled: false,
-    style: 'line',
+    style: StrokeStyle.LINE,
     distance: 2000,
-    units: 'kilometers',
+    units: DistanceUnit.KILOMETERS,
     color: { hue: 180, saturation: 50, lightness: 50 },
     expanded: true
   },
   orientation: {
     enabled: false,
-    style: 'arrow',
+    style: OrientationIndicatorStyle.ARROW,
     size: 10,
     color: { hue: 180, saturation: 50, lightness: 50 }
   },
   insetMap: {
     enabled: false,
-    type: 'globe',
+    type: InsetMapType.GLOBE,
     size: 40,
     windowColor: { hue: 180, saturation: 50, lightness: 50 },
     zoom: 50,
@@ -27,106 +33,99 @@ const DEFAULT_STATE: GeoIndicationsState = {
   }
 };
 
-export const geoIndicationsState = $state<GeoIndicationsState>({
-  ...DEFAULT_STATE
-});
-
-export const geoIndicationsActions = {
-  setState(newState: Partial<GeoIndicationsState>): void {
-    Object.assign(geoIndicationsState, newState);
-  },
-
-  toggleScale(): void {
-    geoIndicationsState.scale.enabled = !geoIndicationsState.scale.enabled;
-  },
-
-  setScaleDistance(distance: number): void {
-    geoIndicationsState.scale.distance = Math.max(0, distance);
-  },
-
-  toggleOrientation(): void {
-    geoIndicationsState.orientation.enabled =
-      !geoIndicationsState.orientation.enabled;
-  },
-
-  toggleInsetMap(): void {
-    geoIndicationsState.insetMap.enabled =
-      !geoIndicationsState.insetMap.enabled;
-  },
-
-  toggleScaleExpanded(): void {
-    geoIndicationsState.scale.expanded = !geoIndicationsState.scale.expanded;
-  },
-
-  setScaleStyle(style: 'line' | 'dashed' | 'dotted'): void {
-    geoIndicationsState.scale.style = style;
-  },
-
-  incrementScaleDistance(step: number = 500): void {
-    geoIndicationsState.scale.distance += step;
-  },
-
-  decrementScaleDistance(step: number = 500): void {
-    geoIndicationsState.scale.distance = Math.max(
-      0,
-      geoIndicationsState.scale.distance - step
-    );
-  },
-
-  setScaleUnits(units: 'kilometers' | 'miles'): void {
-    geoIndicationsState.scale.units = units;
-  },
-
-  setScaleColor(colorState: ColorState): void {
-    geoIndicationsState.scale.color = colorState;
-  },
-
-  setScaleColorFromHex(hex: string): void {
-    geoIndicationsState.scale.color = hexToHsl(hex);
-  },
-
-  setOrientationStyle(style: 'arrow' | 'compass'): void {
-    geoIndicationsState.orientation.style = style;
-  },
-
-  setOrientationSize(size: number): void {
-    geoIndicationsState.orientation.size = Math.max(5, Math.min(30, size));
-  },
-
-  setOrientationColor(colorState: ColorState): void {
-    geoIndicationsState.orientation.color = colorState;
-  },
-
-  setOrientationColorFromHex(hex: string): void {
-    geoIndicationsState.orientation.color = hexToHsl(hex);
-  },
-
-  setInsetMapType(type: 'globe' | 'planisphere'): void {
-    geoIndicationsState.insetMap.type = type;
-  },
-
-  setInsetMapSize(size: number): void {
-    geoIndicationsState.insetMap.size = Math.max(20, Math.min(210, size));
-  },
-
-  setInsetMapWindowColor(colorState: ColorState): void {
-    geoIndicationsState.insetMap.windowColor = colorState;
-  },
-
-  setInsetMapWindowColorFromHex(hex: string): void {
-    geoIndicationsState.insetMap.windowColor = hexToHsl(hex);
-  },
-
-  setInsetMapZoom(zoom: number): void {
-    geoIndicationsState.insetMap.zoom = Math.max(0, Math.min(100, zoom));
-  },
-
-  setInsetMapContrast(contrast: number): void {
-    geoIndicationsState.insetMap.contrast = Math.max(
-      0,
-      Math.min(100, contrast)
-    );
-  },
-
-  reset: createResetFunction(geoIndicationsState, DEFAULT_STATE)
+type GeoIndicationsActions = {
+  toggleScale: () => void;
+  setScaleDistance: (distance: number) => void;
+  toggleOrientation: () => void;
+  toggleInsetMap: () => void;
+  toggleScaleExpanded: () => void;
+  setScaleStyle: (style: StrokeStyle) => void;
+  incrementScaleDistance: (step?: number) => void;
+  decrementScaleDistance: (step?: number) => void;
+  setScaleUnits: (units: DistanceUnit) => void;
+  setScaleColor: (colorState: ColorState) => void;
+  setScaleColorFromHex: (hex: string) => void;
+  setOrientationStyle: (style: OrientationIndicatorStyle) => void;
+  setOrientationSize: (size: number) => void;
+  setOrientationColor: (colorState: ColorState) => void;
+  setOrientationColorFromHex: (hex: string) => void;
+  setInsetMapType: (type: InsetMapType) => void;
+  setInsetMapSize: (size: number) => void;
+  setInsetMapWindowColor: (colorState: ColorState) => void;
+  setInsetMapWindowColorFromHex: (hex: string) => void;
+  setInsetMapZoom: (zoom: number) => void;
+  setInsetMapContrast: (contrast: number) => void;
 };
+
+const { state, actions, getState } = createToolStore<
+  GeoIndicationsState,
+  GeoIndicationsActions
+>(DEFAULT_STATE, (s) => ({
+  toggleScale: () => {
+    s.scale.enabled = !s.scale.enabled;
+  },
+  setScaleDistance: (distance: number) => {
+    s.scale.distance = Math.max(0, distance);
+  },
+  toggleOrientation: () => {
+    s.orientation.enabled = !s.orientation.enabled;
+  },
+  toggleInsetMap: () => {
+    s.insetMap.enabled = !s.insetMap.enabled;
+  },
+  toggleScaleExpanded: () => {
+    s.scale.expanded = !s.scale.expanded;
+  },
+  setScaleStyle: (style: StrokeStyle) => {
+    s.scale.style = style;
+  },
+  incrementScaleDistance: (step: number = 500) => {
+    s.scale.distance += step;
+  },
+  decrementScaleDistance: (step: number = 500) => {
+    s.scale.distance = Math.max(0, s.scale.distance - step);
+  },
+  setScaleUnits: (units: DistanceUnit) => {
+    s.scale.units = units;
+  },
+  setScaleColor: (colorState: ColorState) => {
+    s.scale.color = colorState;
+  },
+  setScaleColorFromHex: (hex: string) => {
+    s.scale.color = hexToHsl(hex);
+  },
+  setOrientationStyle: (style: OrientationIndicatorStyle) => {
+    s.orientation.style = style;
+  },
+  setOrientationSize: (size: number) => {
+    s.orientation.size = Math.max(5, Math.min(30, size));
+  },
+  setOrientationColor: (colorState: ColorState) => {
+    s.orientation.color = colorState;
+  },
+  setOrientationColorFromHex: (hex: string) => {
+    s.orientation.color = hexToHsl(hex);
+  },
+  setInsetMapType: (type: InsetMapType) => {
+    s.insetMap.type = type;
+  },
+  setInsetMapSize: (size: number) => {
+    s.insetMap.size = Math.max(20, Math.min(210, size));
+  },
+  setInsetMapWindowColor: (colorState: ColorState) => {
+    s.insetMap.windowColor = colorState;
+  },
+  setInsetMapWindowColorFromHex: (hex: string) => {
+    s.insetMap.windowColor = hexToHsl(hex);
+  },
+  setInsetMapZoom: (zoom: number) => {
+    s.insetMap.zoom = Math.max(0, Math.min(100, zoom));
+  },
+  setInsetMapContrast: (contrast: number) => {
+    s.insetMap.contrast = Math.max(0, Math.min(100, contrast));
+  }
+}));
+
+export const geoIndicationsState = state;
+export const geoIndicationsActions = actions;
+export const getGeoIndicationsState = getState;

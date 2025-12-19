@@ -1,15 +1,15 @@
-export type {
-  KhartisProject,
-  ProjectManifest,
-  ProjectData,
-  ProjectState,
-  ProjectHistoryEntry,
-  SavedProjectMetadata,
-  VisualizationConfig,
-  LayoutConfig,
-  AutoSaveConfig
-} from './types';
 export { ProjectStorageKey } from './types';
+export type {
+  AutoSaveConfig,
+  KhartisProject,
+  LayoutConfig,
+  ProjectData,
+  ProjectHistoryEntry,
+  ProjectManifest,
+  ProjectState,
+  SavedProjectMetadata,
+  VisualizationConfig
+} from './types';
 
 export { PROJECT_CONST } from './constants';
 

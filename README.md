@@ -26,7 +26,7 @@
 Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client‑side to keep your data private.
 
 - Website (coming soon)
-- Documentation: see the `docs/` folder (entry: `docs/summary.md`)
+- Documentation: see the `docs/` folder (entry: `docs/README.md`)
 
 ## Features
 
@@ -54,32 +54,32 @@ TODO: add screenshots
 Prerequisites
 
 - Node.js >= 18
-- Yarn 4 (via Corepack)
+- pnpm 10 (via Corepack)
 
 Install
 
 - Enable Corepack (first time only):
 
 ```bash
-corepack enable
+corepack enable pnpm
 ```
 
 - Install dependencies:
 
 ```bash
-yarn install
+pnpm install
 ```
 
 Development
 
 ```bash
-yarn dev
+pnpm dev
 ```
 
 Build
 
 ```bash
-yarn build && yarn preview
+pnpm build && pnpm preview
 ```
 
 ## Scripts
@@ -107,7 +107,7 @@ DuckDB extensions (spatial, parquet, httpfs) are bundled locally for offline-fir
 
 **Auto-sync with dependencies**
 
-Extensions are automatically downloaded after `yarn install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
+Extensions are automatically downloaded after `pnpm install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
 
 ```
 static/duckdb-extensions/v1.4.0/wasm_eh/
@@ -119,7 +119,7 @@ static/duckdb-extensions/v1.4.0/wasm_eh/
 **Manual update**
 
 ```bash
-yarn download:extensions
+pnpm download:extensions
 ```
 
 **Version mapping**
@@ -136,27 +136,38 @@ Old extension versions are automatically cleaned up when upgrading.
 ### Unit tests (Vitest)
 
 ```bash
-yarn test:unit              # Run all unit tests
-yarn test:unit path/to/file # Run specific test file
+pnpm test:unit              # Run all unit tests
+pnpm test:unit:ui           # Run with Vitest UI
+pnpm test:unit path/to/file # Run specific test file
 ```
 
 ### E2E tests (Playwright)
 
 ```bash
-yarn test:e2e               # Run all E2E tests
-yarn test:e2e --headed      # Run with visible browser
-yarn test:e2e --ui          # Run with Playwright UI
+pnpm test:e2e               # Run all E2E tests
+pnpm test:e2e:ui            # Run with Playwright UI
+pnpm test:e2e --headed      # Run with visible browser
 ```
 
 **Structure:**
 
 ```
 e2e/
-├── features/                    # Tests by feature
-│   ├── create-project.spec.ts   # Project creation (8 tests)
-│   └── side-nav.spec.ts         # Side navigation (9 tests)
-├── utils/test-helpers.ts        # Shared helpers
-└── mocks/csv/                   # Test data
+├── global-setup.ts              # Playwright global setup
+├── helpers.ts                   # Shared test helpers
+├── imports/                     # File import tests by format
+│   ├── csv.spec.ts
+│   ├── geojson.spec.ts
+│   ├── geopackage.spec.ts
+│   ├── gpx.spec.ts
+│   ├── kml.spec.ts
+│   ├── kmz.spec.ts
+│   ├── parquet.spec.ts
+│   ├── shapefile.spec.ts
+│   ├── tsv.spec.ts
+│   └── zip.spec.ts
+├── project-modal.spec.ts        # Project creation modal
+└── side-nav.spec.ts             # Side navigation
 ```
 
 **Test data selectors:** Tests use `data-testid` attributes for stability.
@@ -172,16 +183,17 @@ e2e/
 
 ## Documentation
 
-- Start here: `docs/summary.md`
-- Highlights:
-  - Data management: `docs/01-data-management.md`
-  - Visualization engine: `docs/02-visualization-engine.md`
-  - Layout system: `docs/03-layout-system.md`
-  - Export system: `docs/04-export-system.md`
-  - Technical architecture: `docs/05-technical-architecture.md`
-  - Performance optimization: `docs/06-performance-optimization.md`
-  - Accessibility and security: `docs/07-accessibility-security.md`
-  - Keyboard shortcuts: `docs/08-keyboard-shortcuts.md`
+- Start here: `docs/README.md`
+- Key documentation:
+  - Architecture: `docs/ARCHITECTURE.md`
+  - Data Pipeline: `docs/DATA_PIPELINE.md`
+  - State & Features: `docs/STATE_AND_FEATURES.md`
+  - Developer Guide: `docs/DEVELOPER_GUIDE.md`
+  - Visualization: `docs/VISUALIZATION.md`
+  - Basemaps: `docs/BASEMAPS.md`
+  - PWA Configuration: `docs/PWA_CONFIGURATION.md`
+  - Testing: `docs/TESTING.md`
+  - Reference: `docs/REFERENCE.md`
 
 ## Privacy, security, and data
 

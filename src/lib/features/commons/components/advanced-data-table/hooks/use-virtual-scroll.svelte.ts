@@ -13,9 +13,10 @@ export interface UseVirtualScrollReturn {
   startIndex: number;
   offsetRows: number;
   handleScroll: () => void;
-  goToId: (id: number) => Promise<void>;
+  goToPosition: (position: number) => Promise<void>;
   initializeRows: (start: number) => Promise<void>;
   setTableContainer: (container: HTMLDivElement | undefined) => void;
+  setRows: (newRows: number[]) => void;
 }
 
 function createIndexArray(length: number, start = 0): number[] {
@@ -82,22 +83,23 @@ export function useVirtualScroll(
     }
   }
 
-  async function goToId(id: number): Promise<void> {
+  async function goToPosition(position: number): Promise<void> {
     const numRows = getNumRows();
-    if (numRows === 0 || id > numRows) return;
+    if (numRows === 0 || position < 0 || position >= numRows) return;
 
-    const index = id - 1;
-    if (index !== -1) {
-      const newStartIndex = Math.max(0, index - offsetRows);
-      await initializeRows(newStartIndex);
-      await tick();
+    const newStartIndex = Math.max(0, position - offsetRows);
+    await initializeRows(newStartIndex);
+    await tick();
 
-      const targetRowPosition = index - newStartIndex;
-      const scrollPosition = Math.max(0, (targetRowPosition - 3) * rowHeight);
-      if (tableContainer) {
-        tableContainer.scrollTop = scrollPosition;
-      }
+    const targetRowPosition = position - newStartIndex;
+    const scrollPosition = Math.max(0, (targetRowPosition - 3) * rowHeight);
+    if (tableContainer) {
+      tableContainer.scrollTop = scrollPosition;
     }
+  }
+
+  function setRows(newRows: number[]): void {
+    rows = newRows;
   }
 
   function setTableContainer(container: HTMLDivElement | undefined): void {
@@ -115,8 +117,9 @@ export function useVirtualScroll(
       return offsetRows;
     },
     handleScroll,
-    goToId,
+    goToPosition,
     initializeRows,
-    setTableContainer
+    setTableContainer,
+    setRows
   };
 }
