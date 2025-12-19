@@ -78,7 +78,8 @@ export async function computeJoinStats(
     { format: 'array' }
   )) as Array<{
     original_name: string;
-    status: 'matched' | 'check' | 'ambiguous' | 'not_found';
+    source_dup_count: number;
+    status: 'matched' | 'check' | 'ambiguous' | 'not_found' | 'duplicate';
     candidates: { id: string; name: string; score: number; type: string }[];
     best_score: number;
   }>;
@@ -86,13 +87,15 @@ export async function computeJoinStats(
   const entities = result.map((r) => ({
     dataValue: r.original_name,
     status:
-      r.status === 'ambiguous'
-        ? JoinStatus.TO_VERIFY
-        : r.status === 'check'
+      r.status === 'duplicate'
+        ? JoinStatus.DUPLICATE
+        : r.status === 'ambiguous'
           ? JoinStatus.TO_VERIFY
-          : r.status === 'not_found'
-            ? JoinStatus.UNRECOGNIZED
-            : JoinStatus.JOINED,
+          : r.status === 'check'
+            ? JoinStatus.TO_VERIFY
+            : r.status === 'not_found'
+              ? JoinStatus.UNRECOGNIZED
+              : JoinStatus.JOINED,
     matches: r.candidates?.map((c) => c.name) || [],
     matchCount: r.candidates?.length || 0,
     basemapValue:

@@ -1,5 +1,8 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import type {
   DataTableFilter,
   DataTableFilterInput,
@@ -43,7 +46,7 @@ export function buildFilterSQL(
   tableName: string,
   filter: DataTableFilterInput
 ): string {
-  const columnRef = `"${filter.column}"`;
+  const columnRef = `"${escapeIdentifier(filter.column)}"`;
   const value = formatFilterValue(filter.value);
   const secondValue = formatFilterValue(filter.secondaryValue);
 

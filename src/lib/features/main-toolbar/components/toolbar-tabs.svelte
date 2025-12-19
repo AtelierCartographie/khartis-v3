@@ -7,7 +7,7 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { Button, Modal, Tag } from 'carbon-components-svelte';
+  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
   import {
     Add,
     OverflowMenuVertical,
@@ -22,8 +22,123 @@
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { Checkmark } from 'carbon-icons-svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
+
+  const datasetsBySourceFile = $derived.by(() => {
+    const map = new Map<
+      string,
+      { id: string; name: string; isSelected: boolean }[]
+    >();
+    for (const dataset of datasetsStore.datasets) {
+      const sourceFileId = dataset.sourceFileId;
+      if (!map.has(sourceFileId)) {
+        map.set(sourceFileId, []);
+      }
+      map.get(sourceFileId)!.push({
+        id: dataset.id,
+        name: dataset.name,
+        isSelected: datasetsStore.selectedDataset?.id === dataset.id
+      });
+    }
+    return map;
+  });
+
+  function getDatasetCountForTab(sourceFileId: string): number {
+    return datasetsBySourceFile.get(sourceFileId)?.length ?? 0;
+  }
+
+  function getDatasetsForTab(
+    sourceFileId: string
+  ): { id: string; name: string; isSelected: boolean }[] {
+    return datasetsBySourceFile.get(sourceFileId) ?? [];
+  }
+
+  function getSelectedDatasetForTab(
+    sourceFileId: string
+  ): { id: string; name: string } | undefined {
+    const datasets = getDatasetsForTab(sourceFileId);
+    return datasets.find((d) => d.isSelected) ?? datasets[0];
+  }
+
+  function handleSelectDataset(datasetId: string, event: Event) {
+    event.stopPropagation();
+    datasetsStore.selectDataset(datasetId);
+    closeTabMenu();
+  }
+
+  let datasetToDelete = $state<{ id: string; name: string } | null>(null);
+  let isDeleteDatasetConfirmOpen = $state(false);
+  let editingDatasetId = $state<string | null>(null);
+  let editedDatasetName = $state('');
+
+  function startEditingDataset(datasetId: string, name: string, event: Event) {
+    event.stopPropagation();
+    editingDatasetId = datasetId;
+    editedDatasetName = name;
+  }
+
+  function saveDatasetRename() {
+    if (!editingDatasetId || !editedDatasetName.trim()) {
+      cancelDatasetEditing();
+      return;
+    }
+
+    const success = datasetsStore.renameDatasetOnly(
+      editingDatasetId,
+      editedDatasetName.trim()
+    );
+    if (success) {
+      showSuccess(
+        m.success_dataset_renamed_title(),
+        m.success_dataset_renamed_message({ name: editedDatasetName.trim() })
+      );
+    }
+    cancelDatasetEditing();
+  }
+
+  function cancelDatasetEditing() {
+    editingDatasetId = null;
+    editedDatasetName = '';
+  }
+
+  function handleDatasetEditKeyPress(event: KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveDatasetRename();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelDatasetEditing();
+    }
+  }
+
+  function handleDeleteDataset(datasetId: string, name: string, event: Event) {
+    event.stopPropagation();
+    closeTabMenu();
+    datasetToDelete = { id: datasetId, name };
+    isDeleteDatasetConfirmOpen = true;
+  }
+
+  async function confirmDeleteDataset() {
+    if (datasetToDelete) {
+      const success = await datasetsStore.deleteDataset(datasetToDelete.id);
+      if (success) {
+        showSuccess(
+          m.success_dataset_deleted_title(),
+          m.success_dataset_deleted_message({ name: datasetToDelete.name })
+        );
+      }
+    }
+    isDeleteDatasetConfirmOpen = false;
+    datasetToDelete = null;
+  }
+
+  function cancelDeleteDataset() {
+    isDeleteDatasetConfirmOpen = false;
+    datasetToDelete = null;
+  }
+
   let lastSourceFilesCount = $state(0);
 
   let editingTabId = $state<string | null>(null);
@@ -93,11 +208,6 @@
     }
   }
 
-  function handleTabDoubleClick(tabId: string, label: string, event: Event) {
-    event.stopPropagation();
-    startEditingTab(tabId, label);
-  }
-
   function toggleTabMenu(tabId: string, event: MouseEvent) {
     event.stopPropagation();
     if (menuOpenTabId === tabId) {
@@ -143,9 +253,15 @@
     try {
       const newDatasetId = await datasetsStore.duplicateDataset(dataset.id);
       if (newDatasetId) {
+        datasetsStore.selectDataset(newDatasetId);
+        const newDataset = datasetsStore.datasets.find(
+          (d) => d.id === newDatasetId
+        );
         showSuccess(
           m.success_dataset_duplicated_title(),
-          m.success_dataset_duplicated_message({ name: dataset.name })
+          m.success_dataset_duplicated_message({
+            name: newDataset?.name ?? dataset.name
+          })
         );
       }
     } catch (error) {
@@ -260,28 +376,6 @@
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength - 3) + '...';
   };
-
-  const EXTENSION_COLORS: Record<string, 'blue' | 'green' | 'purple'> = {
-    csv: 'blue',
-    tsv: 'blue',
-    txt: 'blue',
-    json: 'green',
-    geojson: 'green',
-    shp: 'purple',
-    gpkg: 'purple',
-    kml: 'purple',
-    kmz: 'purple',
-    geoparquet: 'purple',
-    gpq: 'purple'
-  };
-
-  const getExtensionColor = (
-    extension: string
-  ): 'blue' | 'green' | 'purple' | 'gray' => {
-    const ext = extension.toLowerCase();
-
-    return EXTENSION_COLORS[ext] ?? 'gray';
-  };
 </script>
 
 <div
@@ -297,6 +391,12 @@
   >
     {#each globalState.dataButtons as dataButton (dataButton.id)}
       {@const fileInfo = getFileInfo(dataButton.label)}
+      {@const datasetCount = getDatasetCountForTab(dataButton.id)}
+      {@const selectedDataset = getSelectedDatasetForTab(dataButton.id)}
+      {@const displayName =
+        datasetCount > 1 && selectedDataset
+          ? selectedDataset.name
+          : fileInfo.name}
       <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
         <Button
           isSelected={dataButton.isSelected}
@@ -307,7 +407,7 @@
             }
           }}
           class="tab-button"
-          title={dataButton.label}
+          title={displayName}
         >
           <div class="tab-content">
             {#if editingTabId === dataButton.id}
@@ -321,20 +421,13 @@
                 onclick={(e: MouseEvent) => e.stopPropagation()}
               />
             {:else}
-              <span
-                class="tab-label"
-                role="button"
-                tabindex="0"
-                ondblclick={(e: MouseEvent) =>
-                  handleTabDoubleClick(dataButton.id, dataButton.label, e)}
-                title="Double-cliquer pour renommer"
-              >
-                {truncateFileName(fileInfo.name)}
+              <span class="tab-label">
+                {truncateFileName(displayName)}
               </span>
             {/if}
-            {#if fileInfo.extension}
-              <Tag type={getExtensionColor(fileInfo.extension)} size="sm">
-                {fileInfo.extension}
+            {#if datasetCount > 1}
+              <Tag type="high-contrast" size="sm" class="dataset-count-tag">
+                {datasetCount}
               </Tag>
             {/if}
           </div>
@@ -350,11 +443,62 @@
           </button>
         </Button>
         {#if menuOpenTabId === dataButton.id}
+          {@const menuDatasets = getDatasetsForTab(dataButton.id)}
           <div
             class="tab-context-menu"
             style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
             role="menu"
           >
+            {#if menuDatasets.length > 1}
+              <div class="tab-menu-section-label">Jeux de données</div>
+              {#each menuDatasets as dataset (dataset.id)}
+                <div class="tab-menu-item-dataset-row">
+                  {#if editingDatasetId === dataset.id}
+                    <TextInput
+                      size="sm"
+                      hideLabel
+                      labelText="Nom du jeu de données"
+                      bind:value={editedDatasetName}
+                      on:keydown={handleDatasetEditKeyPress}
+                      on:blur={saveDatasetRename}
+                      on:click={(e) => e.stopPropagation()}
+                    />
+                  {:else}
+                    <button
+                      class="tab-menu-item tab-menu-item-dataset"
+                      class:tab-menu-item-selected={dataset.isSelected}
+                      onclick={(e: Event) => handleSelectDataset(dataset.id, e)}
+                      role="menuitemradio"
+                      aria-checked={dataset.isSelected}
+                    >
+                      <span class="dataset-check-icon">
+                        {#if dataset.isSelected}
+                          <Checkmark size={16} />
+                        {/if}
+                      </span>
+                      <span class="dataset-name">{dataset.name}</span>
+                    </button>
+                  {/if}
+                  <Button
+                    kind="ghost"
+                    size="small"
+                    iconDescription="Renommer le jeu de données"
+                    icon={Edit}
+                    on:click={(e) =>
+                      startEditingDataset(dataset.id, dataset.name, e)}
+                  />
+                  <Button
+                    kind="danger-ghost"
+                    size="small"
+                    iconDescription="Supprimer le jeu de données"
+                    icon={TrashCan}
+                    on:click={(e) =>
+                      handleDeleteDataset(dataset.id, dataset.name, e)}
+                  />
+                </div>
+              {/each}
+              <div class="tab-menu-divider"></div>
+            {/if}
             <button
               class="tab-menu-item"
               onclick={(e: Event) =>
@@ -420,6 +564,24 @@
     Êtes-vous sûr de vouloir supprimer le fichier <strong
       >{fileToDelete?.name}</strong
     > du projet ? Cette action est irréversible.
+  </p>
+</Modal>
+
+<Modal
+  danger
+  open={isDeleteDatasetConfirmOpen}
+  modalHeading="Supprimer le jeu de données"
+  primaryButtonText="Supprimer"
+  secondaryButtonText="Annuler"
+  size="sm"
+  on:click:button--secondary={cancelDeleteDataset}
+  on:click:button--primary={confirmDeleteDataset}
+  on:close={cancelDeleteDataset}
+>
+  <p>
+    Êtes-vous sûr de vouloir supprimer le jeu de données <strong
+      >{datasetToDelete?.name}</strong
+    > ? Les visualisations associées seront également supprimées.
   </p>
 </Modal>
 
@@ -598,5 +760,73 @@
     height: 1px;
     background-color: var(--cds-ui-03);
     margin: var(--cds-spacing-02) 0;
+  }
+
+  .tab-menu-section-label {
+    padding: var(--cds-spacing-02) var(--cds-spacing-04);
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.32px;
+  }
+
+  .tab-menu-item-dataset {
+    padding-left: var(--cds-spacing-03);
+  }
+
+  .dataset-check-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .dataset-check-icon :global(svg) {
+    fill: var(--cds-interactive-01);
+  }
+
+  .dataset-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+  }
+
+  .tab-menu-item-selected {
+    background-color: var(--cds-selected-ui);
+  }
+
+  .tab-menu-item-selected:hover {
+    background-color: var(--cds-hover-selected-ui);
+  }
+
+  :global(.dataset-count-tag) {
+    min-width: 20px;
+    justify-content: center;
+  }
+
+  .tab-menu-item-dataset-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-01);
+  }
+
+  .tab-menu-item-dataset-row .tab-menu-item-dataset {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tab-menu-item-dataset-row :global(.bx--text-input) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .tab-menu-item-dataset-row :global(.bx--btn--ghost),
+  .tab-menu-item-dataset-row :global(.bx--btn--danger-ghost) {
+    min-height: auto;
+    padding: var(--cds-spacing-02);
   }
 </style>

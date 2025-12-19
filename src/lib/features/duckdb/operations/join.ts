@@ -85,7 +85,7 @@ export async function joinById(
     }
   } else if (basemap_table) {
     basemap_join_ref_name = `${basemap_table}_join_ref`;
-    const escapedBasemapJoinRefName = basemap_join_ref_name.replace(/'/g, "''");
+    const escapedBasemapJoinRefName = escapeSqlString(basemap_join_ref_name);
     if (basemap_others_id) {
       await executeQuery(
         ctx.connection,

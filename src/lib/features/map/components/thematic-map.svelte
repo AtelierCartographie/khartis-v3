@@ -225,6 +225,12 @@
   });
 
   $effect(() => {
+    if (!jsTable && !userGeoJSON && mapInit.isMapLoaded) {
+      untrack(() => mapLayers.updateLayers(null, null));
+    }
+  });
+
+  $effect(() => {
     const pageZoom = globalState.zoom.pageZoomLevel;
     if (pageZoom && mapInit.isMapLoaded) {
       setTimeout(() => {
