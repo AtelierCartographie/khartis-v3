@@ -27,6 +27,7 @@ import type {
   ColumnTransformation,
   UploadedFile
 } from './create-project.types';
+import { bigIntReplacer } from '$lib/features/project-management/utils/json-helpers';
 
 function cleanFileForStorage(file: UploadedFile): UploadedFile {
   return {
@@ -708,7 +709,7 @@ class ProjectStore {
 
     if (entry.snapshot) {
       this._state.currentProject = JSON.parse(
-        JSON.stringify(entry.snapshot)
+        JSON.stringify(entry.snapshot, bigIntReplacer)
       ) as KhartisProject;
       this.markDirty();
     }
@@ -724,7 +725,7 @@ class ProjectStore {
 
     if (entry.snapshot) {
       this._state.currentProject = JSON.parse(
-        JSON.stringify(entry.snapshot)
+        JSON.stringify(entry.snapshot, bigIntReplacer)
       ) as KhartisProject;
       this.markDirty();
     }
@@ -750,7 +751,9 @@ class ProjectStore {
 
     const projectToSnapshot = snapshot || this._state.currentProject;
     const clonedSnapshot = projectToSnapshot
-      ? (JSON.parse(JSON.stringify(projectToSnapshot)) as KhartisProject)
+      ? (JSON.parse(
+          JSON.stringify(projectToSnapshot, bigIntReplacer)
+        ) as KhartisProject)
       : undefined;
 
     const entry: ProjectHistoryEntry = {
