@@ -59,6 +59,15 @@ function resolveFillColor(color?: string | string[]): string | undefined {
 function calculateDatasetBounds(
   dataset: ProcessedDataset
 ): GeometryBounds | null {
+  if (dataset.bounds) {
+    return {
+      minX: dataset.bounds.minLon,
+      minY: dataset.bounds.minLat,
+      maxX: dataset.bounds.maxLon,
+      maxY: dataset.bounds.maxLat
+    };
+  }
+
   const geometryColumn = dataset.columns.find((col) => col.type === 'geometry');
   if (!geometryColumn) return null;
 
@@ -374,6 +383,7 @@ export function exportMapToSvg(
   }
 
   svgContent += `  </g>
+  <text x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="#666666" opacity="0.7">Réalisé avec Khartis</text>
 </svg>`;
 
   return new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
@@ -408,6 +418,10 @@ export function exportMapToJpg(
           ctx.fillStyle = opts.backgroundColor;
           ctx.fillRect(0, 0, opts.width, opts.height);
           ctx.drawImage(img, 0, 0);
+
+          ctx.font = '12px Arial, sans-serif';
+          ctx.fillStyle = 'rgba(102, 102, 102, 0.7)';
+          ctx.fillText('Réalisé avec Khartis', 10, opts.height - 10);
 
           canvas.toBlob(
             (blob) => {

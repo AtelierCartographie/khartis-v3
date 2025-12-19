@@ -29,15 +29,3 @@ export enum SimplificationLevel {
   Medium = 'medium',
   High = 'high'
 }
-
-export enum LayerType {
-  Visualization = 'visualization',
-  Geographic = 'geographic'
-}
-
-export enum NotificationKind {
-  Warning = 'warning',
-  Info = 'info',
-  Error = 'error',
-  Success = 'success'
-}

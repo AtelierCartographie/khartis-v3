@@ -200,3 +200,23 @@ export function getSupportedFilesFromArchive(
     return supportedExtensions.includes(ext);
   });
 }
+
+export function getNonShapefileFilesFromArchive(
+  files: ExtractedFile[],
+  shapefileBaseName?: string
+): ExtractedFile[] {
+  const supportedFiles = getSupportedFilesFromArchive(files);
+  if (!shapefileBaseName) return supportedFiles;
+
+  const baseNameLower = shapefileBaseName.toLowerCase();
+
+  return supportedFiles.filter((f) => {
+    const ext = getFileExtension(f.name);
+    const fileBaseName = f.name.replace(ext, '').toLowerCase();
+
+    if (fileBaseName === baseNameLower) {
+      return !(SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext);
+    }
+    return true;
+  });
+}

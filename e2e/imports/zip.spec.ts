@@ -2,11 +2,13 @@ import { expect, test } from '@playwright/test';
 import { join } from 'node:path';
 import {
   ZIP_PATH,
+  TIMEOUTS,
   waitForMap,
   waitForModal,
   createProject,
   freshStart,
-  assertNoConsoleErrors
+  assertNoConsoleErrors,
+  assertFileImported
 } from '../helpers';
 
 test.describe('ZIP Import', () => {
@@ -15,7 +17,10 @@ test.describe('ZIP Import', () => {
     const errorTracker = await freshStart(page);
 
     const zipPath = join(ZIP_PATH, 'single-csv.zip');
-    await createProject(page, zipPath, `ZIP single CSV ${Date.now()}`);
+    await createProject(page, zipPath, {
+      projectName: `ZIP single CSV ${Date.now()}`,
+      fileAssertions: { minRows: 10, minColumns: 3 }
+    });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();
@@ -49,9 +54,12 @@ test.describe('ZIP Import', () => {
     const fileCount = await completeIndicators.count();
     expect(fileCount).toBeGreaterThanOrEqual(2);
 
+    // Validate file import for each extracted file
+    await assertFileImported(modal, { minRows: 1, minColumns: 1 });
+
     // Fill project name
     const nameInput = modal.locator('[data-testid="project-name-input"]');
-    await expect(nameInput).toBeVisible({ timeout: 25000 });
+    await expect(nameInput).toBeVisible({ timeout: TIMEOUTS.action });
     await nameInput.fill(`ZIP multiple CSV ${Date.now()}`);
 
     // Select basemap
@@ -64,19 +72,21 @@ test.describe('ZIP Import', () => {
 
     await page.waitForTimeout(500);
 
-    if (await worldBasemap.first().isVisible({ timeout: 25000 })) {
+    if (await worldBasemap.first().isVisible({ timeout: TIMEOUTS.action })) {
       await worldBasemap.first().click();
-    } else if (await anyBasemap.first().isVisible({ timeout: 25000 })) {
+    } else if (
+      await anyBasemap.first().isVisible({ timeout: TIMEOUTS.action })
+    ) {
       await anyBasemap.first().click();
     }
 
     await page.waitForTimeout(500);
 
     const createBtn = modal.getByRole('button', { name: 'Créer', exact: true });
-    await expect(createBtn).toBeEnabled({ timeout: 50000 });
+    await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
     await createBtn.click();
 
-    await expect(modal).toBeHidden({ timeout: 100000 });
+    await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

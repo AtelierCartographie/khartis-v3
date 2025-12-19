@@ -18,7 +18,10 @@ test.describe('KML Import', () => {
       'aires-covoiturage',
       'aires-covoiturage.kml'
     );
-    await createProject(page, kmlPath, `KML Covoiturage ${Date.now()}`);
+    await createProject(page, kmlPath, {
+      projectName: `KML Covoiturage ${Date.now()}`,
+      fileAssertions: { minRows: 50, minColumns: 3 }
+    });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

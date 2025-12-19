@@ -8,15 +8,6 @@ export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 export { validateGPSColumns } from './orchestrator/gps-ops';
 export type { GPSValidationResult } from './orchestrator/gps-ops';
 
-// Validator
-export { DuckDBValidatorService } from './validator.service';
-
-// Arrow converter
-export {
-  convertTabularDataToArrow,
-  insertArrowTableIntoDuckDB
-} from './io/arrow-converter';
-
 // Types
 export { RefineOperation } from './types';
 export type {
@@ -44,6 +35,3 @@ export type {
   SearchStats,
   TableMetadata
 } from './types';
-
-// Constants
-export { CACHE_CONSTANTS, DUCK_CONST } from './constants';

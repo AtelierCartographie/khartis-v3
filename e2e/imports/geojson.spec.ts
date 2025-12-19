@@ -14,7 +14,10 @@ test.describe('GeoJSON Import', () => {
     const errorTracker = await freshStart(page);
 
     const geoPath = join(GEOJSON_PATH, 'nuts2_data.geojson');
-    await createProject(page, geoPath, `GeoJSON NUTS2 ${Date.now()}`);
+    await createProject(page, geoPath, {
+      projectName: `GeoJSON NUTS2 ${Date.now()}`,
+      fileAssertions: { minRows: 100, minColumns: 5 }
+    });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();
@@ -31,7 +34,10 @@ test.describe('GeoJSON Import', () => {
       GEOJSON_PATH,
       'lignes-du-reseau-star-de-rennes-metropole.geojson'
     );
-    await createProject(page, geoPath, `GeoJSON STAR ${Date.now()}`);
+    await createProject(page, geoPath, {
+      projectName: `GeoJSON STAR ${Date.now()}`,
+      fileAssertions: { minRows: 10, minColumns: 2 }
+    });
     await waitForMap(page, 120000);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

@@ -82,6 +82,7 @@ export function mapGeoColumnType(
     country_name: 'country_name',
     iso2: 'iso2',
     iso3: 'iso3',
+    nuts: 'nuts',
     region: 'region',
     city: 'city',
     coordinates: 'coordinates',
