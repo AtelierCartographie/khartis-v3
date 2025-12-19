@@ -16,6 +16,9 @@ const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
   maxZoom: 10
 };
 
+const DECK_ZOOM_STEP = 0.1375;
+const MAPLIBRE_ZOOM_STEP = 0.275;
+
 class MapInstanceStore {
   private _state = $state<{
     map: MapLibreMap | null;
@@ -86,6 +89,13 @@ class MapInstanceStore {
     return this._state.map?.getZoom() ?? 0;
   }
 
+  get currentZoom(): number {
+    if (this._state.map) {
+      return this._state.map.getZoom();
+    }
+    return this._state.deckViewState.zoom;
+  }
+
   getMapCenter(): { lng: number; lat: number } | null {
     const center = this._state.map?.getCenter();
     return center ? { lng: center.lng, lat: center.lat } : null;
@@ -130,10 +140,11 @@ class MapInstanceStore {
 
   zoomIn() {
     if (this._state.map) {
-      this._state.map.zoomIn();
+      const currentZoom = this._state.map.getZoom();
+      this._state.map.setZoom(currentZoom + MAPLIBRE_ZOOM_STEP);
     } else if (this._state.deckInstance) {
       const newZoom = Math.min(
-        this._state.deckViewState.zoom + 0.5,
+        this._state.deckViewState.zoom + DECK_ZOOM_STEP,
         this._state.deckViewState.maxZoom
       );
       this._state.deckViewState = {
@@ -150,10 +161,11 @@ class MapInstanceStore {
 
   zoomOut() {
     if (this._state.map) {
-      this._state.map.zoomOut();
+      const currentZoom = this._state.map.getZoom();
+      this._state.map.setZoom(currentZoom - MAPLIBRE_ZOOM_STEP);
     } else if (this._state.deckInstance) {
       const newZoom = Math.max(
-        this._state.deckViewState.zoom - 0.5,
+        this._state.deckViewState.zoom - DECK_ZOOM_STEP,
         this._state.deckViewState.minZoom
       );
       this._state.deckViewState = {

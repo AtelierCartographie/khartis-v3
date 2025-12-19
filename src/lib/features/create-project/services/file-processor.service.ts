@@ -4,7 +4,6 @@ import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
 import {
-  type ColumnStatSummary,
   readFileContent,
   validateGeospatialFile
 } from '$lib/features/commons/utils/file-import.utils';
@@ -14,6 +13,63 @@ import { showWarning } from '$lib/features/commons/utils/notification.utils.svel
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
+function detectFileTypeFromName(filename: string): FileType {
+  const ext = filename.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'csv':
+      return FileType.CSV;
+    case 'tsv':
+    case 'txt':
+      return FileType.TSV;
+    case 'geojson':
+    case 'json':
+      return FileType.GEOJSON;
+    case 'shp':
+      return FileType.SHAPEFILE;
+    case 'gpkg':
+      return FileType.GEOPACKAGE;
+    case 'geoparquet':
+    case 'parquet':
+      return FileType.GEOPARQUET;
+    case 'arrow':
+      return FileType.ARROW;
+    case 'kml':
+      return FileType.KML;
+    case 'kmz':
+      return FileType.KMZ;
+    case 'gpx':
+      return FileType.GPX;
+    case 'zip':
+      return FileType.ZIP;
+    default:
+      return FileType.UNKNOWN;
+  }
+}
+
+function getMimeTypeFromFileType(fileType: FileType): string {
+  switch (fileType) {
+    case FileType.CSV:
+      return 'text/csv';
+    case FileType.TSV:
+      return 'text/tab-separated-values';
+    case FileType.GEOJSON:
+      return 'application/geo+json';
+    case FileType.GEOPACKAGE:
+      return 'application/geopackage+sqlite3';
+    case FileType.GEOPARQUET:
+    case FileType.ARROW:
+      return 'application/octet-stream';
+    case FileType.KML:
+      return 'application/vnd.google-earth.kml+xml';
+    case FileType.KMZ:
+      return 'application/vnd.google-earth.kmz';
+    case FileType.GPX:
+      return 'application/gpx+xml';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 const ERROR_FILE_PROCESSING = () => m.error_file_processing();
 const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
@@ -21,10 +77,12 @@ const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
 
-import type { JsonValue } from '$lib/types/data';
-
-type CsvPrimitive = string | number | boolean | null | Date;
-type CsvMatrix = CsvPrimitive[][];
+import {
+  buildColumnStatistics,
+  convertRowsToTabular,
+  createDataMatrix,
+  type ColumnInfo
+} from './file-processor.utils';
 
 export interface ProcessingCallbacks {
   onProgress: (fileId: string, progress: number) => void;
@@ -144,35 +202,23 @@ class CsvProcessor extends FileProcessor {
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
 
-    const statistics: Record<string, ColumnStatSummary> = {};
-    for (const col of columns) {
-      statistics[col.name] = {
-        type: col.type,
-        count: col.stats.count ?? rowCount,
-        nullCount: col.stats.nulls ?? 0,
-        unique: col.stats.uniques ?? 0,
-        min: col.stats.min as number | undefined,
-        max: col.stats.max as number | undefined,
-        mean: col.stats.mean
-      };
+    if (rowCount === 0) {
+      this.callbacks.onStatusChange(
+        uploadedFile.id,
+        FileStatus.ERROR,
+        m.pipeline_error_header_only()
+      );
+      return;
     }
+
+    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
@@ -234,21 +280,7 @@ class CsvProcessor extends FileProcessor {
     sampleData: Array<Record<string, unknown>>,
     headers: string[]
   ): Promise<boolean> {
-    const dataMatrix: CsvMatrix = sampleData.map((row) =>
-      headers.map((header) => {
-        const value = row[header];
-        if (value === null || value === undefined) return null;
-        if (value instanceof Date) return value;
-        if (
-          typeof value === 'string' ||
-          typeof value === 'number' ||
-          typeof value === 'boolean'
-        ) {
-          return value;
-        }
-        return String(value);
-      })
-    );
+    const dataMatrix = createDataMatrix(sampleData, headers);
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
@@ -353,17 +385,7 @@ class GeoPackageProcessor extends FileProcessor {
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onDataUpdate(uploadedFile.id, {
       content,
@@ -445,35 +467,14 @@ class ZipProcessor extends FileProcessor {
 
     this.callbacks.onProgress(uploadedFile.id, 50);
 
-    const statistics: Record<string, ColumnStatSummary> = {};
-    for (const col of columns) {
-      statistics[col.name] = {
-        type: col.type,
-        count: col.stats.count ?? rowCount,
-        nullCount: col.stats.nulls ?? 0,
-        unique: col.stats.uniques ?? 0,
-        min: col.stats.min as number | undefined,
-        max: col.stats.max as number | undefined,
-        mean: col.stats.mean
-      };
-    }
+    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
     const sampleData = (await Duck!.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    const tabularData = sampleData.map((row) => {
-      const tabularRow: Record<string, JsonValue> = {};
-      for (const [key, value] of Object.entries(row)) {
-        if (value instanceof Date) {
-          tabularRow[key] = value.toISOString();
-        } else {
-          tabularRow[key] = value as JsonValue;
-        }
-      }
-      return tabularRow;
-    });
+    const tabularData = convertRowsToTabular(sampleData);
 
     this.callbacks.onProgress(uploadedFile.id, 80);
 
@@ -483,21 +484,7 @@ class ZipProcessor extends FileProcessor {
       content: fileContent
     });
 
-    const dataMatrix = sampleData.map((row) =>
-      headers.map((header) => {
-        const value = row[header];
-        if (value === null || value === undefined) return null;
-        if (value instanceof Date) return value;
-        if (
-          typeof value === 'string' ||
-          typeof value === 'number' ||
-          typeof value === 'boolean'
-        ) {
-          return value;
-        }
-        return String(value);
-      })
-    ) as CsvMatrix;
+    const dataMatrix = createDataMatrix(sampleData, headers);
 
     const deepAnalysis = await DeepDataValidator.analyzeDataContent(
       headers,
@@ -521,25 +508,7 @@ class ZipProcessor extends FileProcessor {
     Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
   ): Promise<void> {
     const result = zipResult as {
-      datasets: Array<{
-        id: string;
-        name: string;
-        tableName: string;
-        columns: Array<{
-          name: string;
-          type: string;
-          stats: {
-            count?: number;
-            nulls?: number;
-            uniques?: number;
-            min?: unknown;
-            max?: unknown;
-            mean?: number;
-          };
-        }>;
-        rowCount: number;
-        fileSize?: number;
-      }>;
+      datasets: DatasetResult[];
       sourceZipName: string;
     };
     const datasets = result.datasets;
@@ -547,22 +516,18 @@ class ZipProcessor extends FileProcessor {
 
     for (let i = 0; i < datasets.length; i++) {
       const dataset = datasets[i];
-      const { tableName, columns, rowCount, name, fileSize } = dataset;
+      const { tableName, columns, rowCount, name, fileSize, geometry } =
+        dataset;
       const headers = columns.map((col) => col.name);
       const progressBase = (i / totalDatasets) * 100;
 
-      const statistics: Record<string, ColumnStatSummary> = {};
-      for (const col of columns) {
-        statistics[col.name] = {
-          type: col.type,
-          count: col.stats.count ?? rowCount,
-          nullCount: col.stats.nulls ?? 0,
-          unique: col.stats.uniques ?? 0,
-          min: col.stats.min as number | undefined,
-          max: col.stats.max as number | undefined,
-          mean: col.stats.mean
-        };
-      }
+      const detectedFileType = detectFileTypeFromName(name);
+      const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
+
+      const statistics = buildColumnStatistics(
+        columns as ColumnInfo[],
+        rowCount
+      );
 
       let fullData: Array<Record<string, unknown>> = [];
       try {
@@ -570,37 +535,12 @@ class ZipProcessor extends FileProcessor {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
-        /* Query failed, fullData remains empty */
+        // empty
       }
 
-      const tabularData = fullData.map((row) => {
-        const tabularRow: Record<string, JsonValue> = {};
-        for (const [key, value] of Object.entries(row)) {
-          if (value instanceof Date) {
-            tabularRow[key] = value.toISOString();
-          } else {
-            tabularRow[key] = value as JsonValue;
-          }
-        }
-        return tabularRow;
-      });
-
+      const tabularData = convertRowsToTabular(fullData);
       const sampleForAnalysis = fullData.slice(0, 100);
-      const dataMatrix = sampleForAnalysis.map((row) =>
-        headers.map((header) => {
-          const value = row[header];
-          if (value === null || value === undefined) return null;
-          if (value instanceof Date) return value;
-          if (
-            typeof value === 'string' ||
-            typeof value === 'number' ||
-            typeof value === 'boolean'
-          ) {
-            return value;
-          }
-          return String(value);
-        })
-      ) as CsvMatrix;
+      const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
 
       const deepAnalysis = await DeepDataValidator.analyzeDataContent(
         headers,
@@ -608,10 +548,25 @@ class ZipProcessor extends FileProcessor {
         { sampleSize: Math.min(100, dataMatrix.length) }
       );
 
+      if (geometry) {
+        deepAnalysis.geoDetection = {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              columnName: 'geom',
+              type: 'unknown',
+              confidence: 1,
+              index: 0
+            }
+          ],
+          warnings: []
+        };
+      }
+
       if (i === 0) {
         this.callbacks.onDataUpdate(uploadedFile.id, {
           name,
-          fileType: FileType.CSV,
+          fileType: detectedFileType,
           parsedData: tabularData,
           statistics,
           content: undefined,
@@ -626,8 +581,8 @@ class ZipProcessor extends FileProcessor {
           id: crypto.randomUUID(),
           name,
           size: fileSize ?? 0,
-          type: 'text/csv',
-          fileType: FileType.CSV,
+          type: detectedMimeType,
+          fileType: detectedFileType,
           status: FileStatus.COMPLETE,
           sourceType: uploadedFile.sourceType,
           parsedData: tabularData,

@@ -19,14 +19,7 @@
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
-
-  interface GeoComboBoxItem {
-    id: number;
-    text: string;
-    columnName: string;
-    isGeo: boolean;
-    confidence: number;
-  }
+  import type { GeoComboBoxItem } from './data-tab.shared.types';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const processedDataset = $derived.by(() =>

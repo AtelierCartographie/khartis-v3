@@ -1,11 +1,8 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { base } from '$app/paths';
   import {
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -14,6 +11,7 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
+  import { useProjectNavigation } from './hooks';
   import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {
@@ -21,6 +19,10 @@
   }
 
   const { onClose }: Props = $props();
+
+  const { navigateAfterAction } = useProjectNavigation({
+    getOnClose: () => onClose
+  });
 
   let isCreating = $state(false);
   let hasTriedSubmit = $state(false);
@@ -77,13 +79,9 @@
       creationStep = m.create_project_processing_status();
       await projectStore.createProject(safeName, validFiles);
 
-      creationStep = m.create_project_processing_status();
-
       await projectsStore.refresh();
 
-      createProjectActions.resetAllTabs();
-
-      await goto(base || '/', { replaceState: true });
+      await navigateAfterAction();
     } catch (error) {
       const duration = performance.now() - startTime;
       logger.error('Failed to create project', LogCategory.PROJECT, {
@@ -99,8 +97,6 @@
     } finally {
       isCreating = false;
       creationStep = '';
-      globalState.isCreateProjectModalOpen = false;
-      onClose?.();
     }
   }
 

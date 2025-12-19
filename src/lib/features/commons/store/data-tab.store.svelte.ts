@@ -127,31 +127,3 @@ export const dataTabActions = {
     Object.assign(dataTabState, DEFAULT_STATE);
   }
 };
-
-export function hasJoinErrors() {
-  return (
-    dataTabState.basemapJoin.entitiesToVerify > 0 ||
-    dataTabState.basemapJoin.duplicateEntities.length > 0 ||
-    dataTabState.basemapJoin.unrecognizedEntities.length > 0
-  );
-}
-
-export function totalEntities() {
-  return (
-    dataTabState.basemapJoin.joinedEntities +
-    dataTabState.basemapJoin.entitiesToVerify
-  );
-}
-
-export function isDataReady() {
-  const geo = dataTabState.geolocation;
-
-  if (geo.geoReference === GeoreferenceType.COORDINATES) {
-    return !!geo.latitudeColumn && !!geo.longitudeColumn;
-  }
-
-  return (
-    geo.linkedVariable !== null &&
-    dataTabState.basemapJoin.selectedBasemap !== ''
-  );
-}
