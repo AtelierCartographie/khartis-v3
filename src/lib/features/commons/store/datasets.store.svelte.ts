@@ -370,6 +370,27 @@ class DatasetsStore {
     this._state.datasets = filteredDatasets;
   }
 
+  async deleteDataset(datasetId: string): Promise<boolean> {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      return false;
+    }
+
+    const { visualizationStore } =
+      await import('$lib/features/commons/store/visualization.store.svelte');
+    const vizs = visualizationStore.getVisualizationsByDataset(datasetId);
+    for (const viz of vizs) {
+      visualizationStore.removeVisualization(viz.id);
+    }
+
+    const { duckDBOrchestrator } = await import('$lib/features/duckdb');
+    await duckDBOrchestrator.dropTable(dataset.tableName);
+
+    this.removeDataset(datasetId);
+
+    return true;
+  }
+
   updateDataset(
     datasetId: string,
     updates: Partial<Pick<DatasetResult, 'tableName' | 'columns'>>
@@ -654,6 +675,21 @@ class DatasetsStore {
       await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
     }
 
+    return true;
+  }
+
+  renameDatasetOnly(datasetId: string, newName: string): boolean {
+    const dataset = this._state.datasets.find((d) => d.id === datasetId);
+    if (!dataset) {
+      return false;
+    }
+
+    const sanitizedName = sanitizeTextInput(newName);
+    if (!sanitizedName) {
+      return false;
+    }
+
+    dataset.name = sanitizedName;
     return true;
   }
 
