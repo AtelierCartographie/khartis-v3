@@ -736,7 +736,9 @@
             <svelte:fragment slot="title">
               <div class="accordion-title">
                 <WarningFilled size={20} class="icon-warning" />
-                <span>{m.join_entities_to_verify({ count: toVerifyCount })}</span>
+                <span
+                  >{m.join_entities_to_verify({ count: toVerifyCount })}</span
+                >
               </div>
             </svelte:fragment>
             <div class="join-table">
@@ -786,7 +788,9 @@
             <svelte:fragment slot="title">
               <div class="accordion-title">
                 <WarningAltFilled size={20} class="icon-error" />
-                <span>{m.join_entities_duplicate({ count: duplicateCount })}</span>
+                <span
+                  >{m.join_entities_duplicate({ count: duplicateCount })}</span
+                >
               </div>
             </svelte:fragment>
             {#if duplicateCount > 0}
@@ -806,7 +810,11 @@
             <svelte:fragment slot="title">
               <div class="accordion-title">
                 <ErrorFilled size={20} class="icon-error" />
-                <span>{m.join_entities_unrecognized({ count: unrecognizedCount })}</span>
+                <span
+                  >{m.join_entities_unrecognized({
+                    count: unrecognizedCount
+                  })}</span
+                >
               </div>
             </svelte:fragment>
             {#if unrecognizedCount > 0}
