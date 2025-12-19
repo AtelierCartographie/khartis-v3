@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import type {
   Feature,
   FeatureCollection,
@@ -85,7 +86,7 @@ export function normalizeGeojsonInput(input: GeoJSONLike): FeatureCollection {
     };
   }
 
-  throw new Error('Invalid GeoJSON structure');
+  throw new Error(m.pipeline_error_invalid_geojson());
 }
 
 export function describeGeojsonStructure(data: unknown): {

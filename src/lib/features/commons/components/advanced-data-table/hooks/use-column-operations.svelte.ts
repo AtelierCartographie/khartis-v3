@@ -1,34 +1,44 @@
-import { SvelteSet } from 'svelte/reactivity';
-import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
-import { logger, LogCategory } from '../../../utils/logger';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import {
+  visualizationStore,
+  type VisualizationConfig
+} from '$lib/features/commons/store/visualization.store.svelte';
+import {
+  changeColumnType,
+  dropColumn
+} from '$lib/features/duckdb/orchestrator/column-ops';
+import {
+  Duck,
+  duckDBOrchestrator,
+  RefineOperation
+} from '$lib/features/duckdb';
+import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo } from '../types';
+import type { ColumnType } from '../components/TableColumnHeader.svelte';
 
 export interface UseColumnOperationsProps {
   tableName?: string | (() => string | undefined);
+  datasetId?: string | (() => string | undefined);
   columns: ColumnInfo[] | (() => ColumnInfo[]);
   onColumnsChange: () => Promise<void>;
-  onSortColumnRenamed?: (oldName: string, newName: string) => void;
-  onSortColumnDeleted?: (columnName: string) => void;
+  onColumnRefined?: () => Promise<void>;
   onRecordTransformation?: (summary: string) => void;
+  onColumnDeleted?: (columnName: string) => void;
+  onColumnRenamed?: (oldName: string, newName: string) => void;
 }
 
 export interface UseColumnOperationsReturn {
-  hiddenColumns: Set<string>;
-  renameModalOpen: boolean;
-  columnToRename: string | null;
   visibleColumns: ColumnInfo[];
-  setRenameModalOpen: (open: boolean) => void;
-  setColumnToRename: (columnName: string | null) => void;
-  renameColumn: (oldName: string, newName: string) => Promise<void>;
-  dropColumn: (columnName: string) => Promise<void>;
-  toggleColumnVisibility: (columnName: string) => void;
-  openRenameModal: (columnName: string) => void;
-  handleRename: (newName: string) => Promise<void>;
   handleRefine: (
     columnName: string,
     operation: RefineOperation
   ) => Promise<void>;
-  changeColumnType: (columnName: string, duckType: string) => Promise<void>;
+  handleRename: (columnName: string) => void;
+  handleChangeType: (columnName: string, newType: ColumnType) => Promise<void>;
+  handleHide: (columnName: string) => void;
+  handleDelete: (columnName: string) => Promise<void>;
+  isColumnHidden: (columnName: string) => boolean;
+  getAffectedVisualizations: (columnName: string) => VisualizationConfig[];
 }
 
 function getValue<T>(prop: T | (() => T)): T {
@@ -38,92 +48,21 @@ function getValue<T>(prop: T | (() => T)): T {
 export function useColumnOperations(
   props: UseColumnOperationsProps
 ): UseColumnOperationsReturn {
-  let hiddenColumns = new SvelteSet<string>();
-  let renameModalOpen = $state<boolean>(false);
-  let columnToRename = $state<string | null>(null);
-
   const visibleColumns = $derived.by(() => {
     const columns = getValue(props.columns);
-    const hidden = Array.from(hiddenColumns);
-    return columns.filter((col) => !hidden.includes(col.name));
+    const datasetId = getValue(props.datasetId);
+
+    if (!datasetId) return columns;
+
+    return columns.filter(
+      (col) => !datasetsStore.isColumnHidden(datasetId, col.name)
+    );
   });
 
-  function setRenameModalOpen(open: boolean): void {
-    renameModalOpen = open;
-  }
-
-  function setColumnToRename(columnName: string | null): void {
-    columnToRename = columnName;
-  }
-
-  async function renameColumn(oldName: string, newName: string): Promise<void> {
-    const tableName = getValue(props.tableName);
-
-    if (!tableName) {
-      return;
-    }
-
-    try {
-      await duckDBOrchestrator.renameColumn(tableName, oldName, newName);
-      props.onSortColumnRenamed?.(oldName, newName);
-
-      if (hiddenColumns.has(oldName)) {
-        hiddenColumns.delete(oldName);
-        hiddenColumns.add(newName);
-        hiddenColumns = new SvelteSet(hiddenColumns);
-      }
-
-      await props.onColumnsChange();
-      props.onRecordTransformation?.(`Renommage de ${oldName} en ${newName}`);
-    } catch (err) {
-      logger.error('Error renaming column', LogCategory.UI, err);
-    }
-  }
-
-  async function dropColumn(columnName: string): Promise<void> {
-    const tableName = getValue(props.tableName);
-
-    if (!tableName) {
-      return;
-    }
-
-    try {
-      await duckDBOrchestrator.dropColumn(tableName, columnName);
-      props.onSortColumnDeleted?.(columnName);
-
-      if (hiddenColumns.has(columnName)) {
-        hiddenColumns.delete(columnName);
-        hiddenColumns = new SvelteSet(hiddenColumns);
-      }
-
-      await props.onColumnsChange();
-      props.onRecordTransformation?.(`Suppression de la colonne ${columnName}`);
-    } catch (err) {
-      logger.error('Error dropping column', LogCategory.UI, err);
-    }
-  }
-
-  function toggleColumnVisibility(columnName: string): void {
-    if (hiddenColumns.has(columnName)) {
-      hiddenColumns.delete(columnName);
-    } else {
-      hiddenColumns.add(columnName);
-    }
-    hiddenColumns = new SvelteSet(hiddenColumns);
-  }
-
-  function openRenameModal(columnName: string): void {
-    columnToRename = columnName;
-    renameModalOpen = true;
-  }
-
-  async function handleRename(newName: string): Promise<void> {
-    if (!columnToRename) return;
-
-    const oldName = columnToRename;
-    await renameColumn(oldName, newName);
-    renameModalOpen = false;
-    columnToRename = null;
+  function isColumnHidden(columnName: string): boolean {
+    const datasetId = getValue(props.datasetId);
+    if (!datasetId) return false;
+    return datasetsStore.isColumnHidden(datasetId, columnName);
   }
 
   async function handleRefine(
@@ -138,7 +77,13 @@ export function useColumnOperations(
 
     try {
       await duckDBOrchestrator.refineColumn(tableName, columnName, operation);
-      await props.onColumnsChange();
+
+      if (props.onColumnRefined) {
+        await props.onColumnRefined();
+      } else {
+        await props.onColumnsChange();
+      }
+
       props.onRecordTransformation?.(
         `Affinage (${operation}) sur ${columnName}`
       );
@@ -147,9 +92,13 @@ export function useColumnOperations(
     }
   }
 
-  async function changeColumnType(
+  function handleRename(columnName: string): void {
+    props.onColumnRenamed?.(columnName, '');
+  }
+
+  async function handleChangeType(
     columnName: string,
-    duckType: string
+    newType: ColumnType
   ): Promise<void> {
     const tableName = getValue(props.tableName);
 
@@ -158,41 +107,79 @@ export function useColumnOperations(
     }
 
     try {
-      await duckDBOrchestrator.changeColumnType(
-        tableName,
-        columnName,
-        duckType
-      );
+      const duckType = mapColumnTypeToDuckDB(newType);
+      await changeColumnType(tableName, columnName, duckType, Duck);
       await props.onColumnsChange();
       props.onRecordTransformation?.(
-        `Type de ${columnName} converti en ${duckType}`
+        `Type changé (${newType}) sur ${columnName}`
       );
     } catch (err) {
       logger.error('Error changing column type', LogCategory.UI, err);
     }
   }
 
+  function handleHide(columnName: string): void {
+    const datasetId = getValue(props.datasetId);
+
+    if (!datasetId) {
+      return;
+    }
+
+    datasetsStore.toggleColumnHidden(datasetId, columnName);
+    logger.debug('Column visibility toggled', LogCategory.UI, {
+      datasetId,
+      columnName
+    });
+  }
+
+  async function handleDelete(columnName: string): Promise<void> {
+    const tableName = getValue(props.tableName);
+
+    if (!tableName) {
+      return;
+    }
+
+    try {
+      await dropColumn(tableName, columnName, Duck);
+      await props.onColumnsChange();
+      props.onColumnDeleted?.(columnName);
+      props.onRecordTransformation?.(`Colonne supprimée: ${columnName}`);
+    } catch (err) {
+      logger.error('Error deleting column', LogCategory.UI, err);
+    }
+  }
+
+  function getAffectedVisualizations(
+    columnName: string
+  ): VisualizationConfig[] {
+    return visualizationStore.getVisualizationsUsingColumn(columnName);
+  }
+
   return {
-    get hiddenColumns() {
-      return hiddenColumns;
-    },
-    get renameModalOpen() {
-      return renameModalOpen;
-    },
-    get columnToRename() {
-      return columnToRename;
-    },
     get visibleColumns() {
       return visibleColumns;
     },
-    setRenameModalOpen,
-    setColumnToRename,
-    renameColumn,
-    dropColumn,
-    toggleColumnVisibility,
-    openRenameModal,
-    handleRename,
     handleRefine,
-    changeColumnType
+    handleRename,
+    handleChangeType,
+    handleHide,
+    handleDelete,
+    isColumnHidden,
+    getAffectedVisualizations
   };
+}
+
+function mapColumnTypeToDuckDB(type: ColumnType): string {
+  switch (type) {
+    case 'text':
+      return 'VARCHAR';
+    case 'number':
+      return 'DOUBLE';
+    case 'date':
+      return 'DATE';
+    case 'boolean':
+      return 'BOOLEAN';
+    default:
+      return 'VARCHAR';
+  }
 }

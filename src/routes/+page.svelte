@@ -2,16 +2,14 @@
   import MainMap from '$lib/features/map/main-map.svelte';
 </script>
 
-<article class="page-content app-shadow">
+<div class="map-page">
   <MainMap />
-</article>
+</div>
 
 <style>
-  .page-content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  .map-page {
     flex: 1;
-    background-color: white;
+    width: 100%;
+    height: 100%;
   }
 </style>

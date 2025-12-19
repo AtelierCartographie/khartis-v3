@@ -1,8 +1,8 @@
-import type { KhartisProject } from '../types';
-import { deserialize } from '../core/serializer';
-import { saveProject } from '../core/persistence';
 import { decompressData } from '$lib/features/commons/utils/compression.utils';
 import type { SerializedProject } from '$lib/types/serialization.types';
+import { saveProject } from '../core/persistence';
+import { deserialize } from '../core/serializer';
+import type { KhartisProject } from '../types';
 
 export async function importProject(file: File): Promise<KhartisProject> {
   const contents = await readFile(file);

@@ -9,9 +9,3 @@
 {#key svgElement}
   <div class="summary-plot-container" use:myplot {...rest}></div>
 {/key}
-
-<style>
-  .summary-plot-container {
-    overflow: visible;
-  }
-</style>

@@ -1,13 +1,13 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import wasmInit, {
   readGeoParquet as readGeoParquetWasm
 } from '@geoarrow/geoparquet-wasm/esm/index.js';
 import geoParquetWasmUrl from '@geoarrow/geoparquet-wasm/esm/index_bg.wasm?url';
 import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { GeoArrowMetadata } from '../types';
 import { isGeoArrowMetadata } from '../types';
 
-// Module-level state
 let wasmInitialized = false;
 let initializationPromise: Promise<void> | null = null;
 
@@ -35,7 +35,7 @@ export async function initializeGeoParquetWasm(): Promise<void> {
         LogCategory.DATA,
         error
       );
-      throw new Error('GeoParquet WASM initialization failed');
+      throw new Error(m.pipeline_error_geoparquet_init_failed());
     } finally {
       initializationPromise = null;
     }
@@ -76,7 +76,9 @@ export async function readGeoParquet(
   } catch (error) {
     logger.error('Failed to read GeoParquet', LogCategory.DATA, error);
     throw new Error(
-      `GeoParquet read failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      m.pipeline_error_geoparquet_read_failed({
+        error: error instanceof Error ? error.message : 'Unknown error'
+      })
     );
   }
 }
@@ -111,7 +113,6 @@ export function tableHasGeoArrowMetadata(table: ArrowTable): boolean {
   return !!(table.schema.metadata && table.schema.metadata.has('geo'));
 }
 
-// Compatibility: export an object with methods for consumers expecting geoParquetReader
 export const geoParquetReader = {
   initialize: initializeGeoParquetWasm,
   readGeoParquet,

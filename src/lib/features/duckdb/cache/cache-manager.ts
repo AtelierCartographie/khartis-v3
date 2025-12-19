@@ -1,12 +1,11 @@
 import type { DescribeResult, DuckDBContext, TableMetadata } from '../types';
-import { CACHE_CONSTANTS } from '../constants';
 
 export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.describeCache.delete(table);
   ctx.rowCountCache.delete(table);
 }
 
-export function evictGeoParquetEntry(ctx: DuckDBContext, table: string): void {
+function evictGeoParquetEntry(ctx: DuckDBContext, table: string): void {
   if (!ctx.table_geoparquet_cache.has(table)) return;
 
   const cachedBuffer = ctx.table_geoparquet_cache.get(table);
@@ -68,45 +67,4 @@ export function setRowCountCache(
   count: number
 ): void {
   ctx.rowCountCache.set(table, count);
-}
-
-export function getGeoparquet(
-  ctx: DuckDBContext,
-  table: string
-): Uint8Array | undefined {
-  const cache = ctx.table_geoparquet_cache;
-  if (!cache.has(table)) return undefined;
-
-  const index = ctx.cacheState.accessOrder.indexOf(table);
-  if (index > -1) {
-    ctx.cacheState.accessOrder.splice(index, 1);
-    ctx.cacheState.accessOrder.push(table);
-  }
-
-  return cache.get(table);
-}
-
-export function setGeoparquet(
-  ctx: DuckDBContext,
-  table: string,
-  buffer: Uint8Array
-): void {
-  const cache = ctx.table_geoparquet_cache;
-  const cacheState = ctx.cacheState;
-
-  while (
-    cacheState.size + buffer.byteLength > CACHE_CONSTANTS.MAX_CACHE_SIZE &&
-    cacheState.accessOrder.length > 0
-  ) {
-    const oldest = cacheState.accessOrder.shift()!;
-    const oldBuffer = cache.get(oldest);
-    if (oldBuffer) {
-      cacheState.size -= oldBuffer.byteLength;
-      cache.delete(oldest);
-    }
-  }
-
-  cache.set(table, buffer);
-  cacheState.accessOrder.push(table);
-  cacheState.size += buffer.byteLength;
 }

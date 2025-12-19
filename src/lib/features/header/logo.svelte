@@ -6,7 +6,7 @@
   import Separator from '../commons/components/separator.svelte';
   import { EnvironmentUtils } from '../commons/utils/environment.utils';
 
-  const isNotProduction = $state(!EnvironmentUtils.isProduction());
+  const isNotProduction = !EnvironmentUtils.isProduction();
 </script>
 
 <div id="khartis-logo">

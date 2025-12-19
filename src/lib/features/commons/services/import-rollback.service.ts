@@ -1,9 +1,9 @@
-import { projectStore } from '../store/project.store.svelte';
-import { datasetsStore } from '../store/datasets.store.svelte';
-import { visualizationStore } from '../store/visualization.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
-import { logger, LogCategory } from '../utils/logger';
 import type { UploadedFile } from '../store/create-project.types';
+import { datasetsStore } from '../store/datasets.store.svelte';
+import { projectStore } from '../store/project.store.svelte';
+import { visualizationStore } from '../store/visualization.store.svelte';
+import { LogCategory, logger } from '../utils/logger';
 
 /**
  * Snapshot of the state before import attempt
@@ -14,7 +14,6 @@ interface ImportSnapshot {
   fileName: string;
   timestamp: Date;
 
-  // State to restore
   hadProjectFile: boolean;
   hadDataset: boolean;
   datasetId?: string;
@@ -78,7 +77,6 @@ class ImportRollbackService {
     };
 
     try {
-      // 1. Remove file from project if it wasn't there before
       if (!snapshot.hadProjectFile) {
         const currentProject = projectStore.currentProject;
         if (currentProject?.data?.sourceFiles) {
@@ -92,11 +90,9 @@ class ImportRollbackService {
         }
       }
 
-      // 2. Remove dataset if it wasn't there before
       if (!snapshot.hadDataset) {
         const dataset = datasetsStore.getDatasetBySourceFile(snapshot.fileId);
         if (dataset) {
-          // Remove visualizations created for this dataset
           const visualizations = visualizationStore.getVisualizationsByDataset(
             dataset.id
           );
@@ -110,7 +106,6 @@ class ImportRollbackService {
         }
       }
 
-      // 3. Drop DuckDB table if it wasn't there before
       if (!snapshot.hadDuckDBTable) {
         const duckDataset = duckDBOrchestrator
           .getAllDatasets()
@@ -119,7 +114,6 @@ class ImportRollbackService {
         if (duckDataset) {
           await duckDBOrchestrator.dropTable(duckDataset.tableName);
 
-          // 4. Clean up DuckDB cache and file handles
           await this.cleanupDuckDBResources(duckDataset.tableName);
           cleanupResults.duckDBTable = true;
           cleanupResults.duckDBCache = true;
@@ -132,9 +126,6 @@ class ImportRollbackService {
         cleanupResults,
         error: rollbackError
       });
-
-      // Even if rollback fails, we log it but don't throw
-      // Better to have some cleanup than none
     }
   }
 
@@ -150,12 +141,10 @@ class ImportRollbackService {
         return;
       }
 
-      // Remove from loaded files tracking
       if (Duck.loaded_files.has(tableName)) {
         Duck.loaded_files.delete(tableName);
       }
 
-      // Remove from registered files
       const registeredFile = Array.from(Duck.registered_files).find((id) =>
         id.includes(tableName)
       );
@@ -163,12 +152,10 @@ class ImportRollbackService {
         Duck.registered_files.delete(registeredFile);
       }
 
-      // Remove from table metadata
       if (Duck.table_metadata.has(tableName)) {
         Duck.table_metadata.delete(tableName);
       }
 
-      // Remove from cache with LRU update
       if (Duck.table_geoparquet_cache.has(tableName)) {
         Duck.table_geoparquet_cache.delete(tableName);
       }

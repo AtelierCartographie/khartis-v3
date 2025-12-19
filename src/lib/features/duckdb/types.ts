@@ -1,10 +1,39 @@
-import type * as duckdb from '@duckdb/duckdb-wasm';
+import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
-import { FileType } from '$lib/features/commons/store/create-project.types';
+import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { Table } from 'apache-arrow/Arrow';
 
 export { FileType };
+
+// --- Enums ---
+
+export enum DuckDBSimplifiedType {
+  NUMERIC = 'numeric',
+  DATE = 'date',
+  STRING = 'string',
+  GEOMETRY = 'geometry',
+  OTHER = 'other'
+}
+
+export enum QueryFormatEnum {
+  ARROW_TABLE = 'arrow-table',
+  ARROW_IPC = 'arrow-ipc',
+  ARRAY = 'array'
+}
+
+export enum FilterOperatorEnum {
+  GTE = 'gte',
+  LTE = 'lte',
+  CONTAINS = 'contains',
+  EQUALS = 'equals',
+  NOT_EQUALS = 'not_equals',
+  BETWEEN = 'between',
+  TOP_ASC = 'top_asc',
+  TOP_DESC = 'top_desc',
+  EMPTY = 'empty',
+  NOT_EMPTY = 'not_empty'
+}
 
 // --- DuckDB Metadata Types ---
 
@@ -20,7 +49,7 @@ export interface DuckDBMetadata {
 
 export interface AnalysisResult {
   name: string;
-  type_simple: 'numeric' | 'date' | 'string';
+  type_simple: DuckDBSimplifiedType | 'numeric' | 'date' | 'string';
   min?: number | Date;
   max?: number | Date;
   histogram?: unknown;
@@ -35,7 +64,8 @@ export type AnalysisResults = AnalysisResult[];
 
 // --- Query Types ---
 
-export type QueryFormat = 'arrow-table' | 'arrow-ipc' | 'array';
+// Use QueryFormatEnum values instead of string literals
+export type QueryFormat = `${QueryFormatEnum}`;
 
 export interface QueryOptions {
   format?: QueryFormat;
@@ -75,6 +105,8 @@ export interface FileWithId extends File {
 export interface ReadTabularOptions {
   tablename?: string;
   decimal_separator?: string;
+  thousands_separator?: string;
+  header?: boolean;
   format?: string;
 }
 
@@ -117,17 +149,23 @@ export interface FinalizeJoinResult {
 
 // --- Search Types ---
 
-export interface SearchResultWithScore {
-  id: number;
-  score: number;
-  column: string;
+export interface CellSearchResult {
+  rowId: number;
+  columnName: string;
+  value: string;
+  score: number; // 1.0=exact, 0.99=contains, <0.99=fuzzy
 }
 
 export interface SearchStats {
-  exactCount: number;
-  partialCount: number;
-  results: SearchResultWithScore[];
+  exactCount: number; // score === 1.0
+  containsCount: number; // score === 0.99
+  fuzzyCount: number; // score > threshold && score < 0.99
+  totalCount: number;
+  results: CellSearchResult[];
 }
+
+// Alias for backwards compatibility
+export type SearchResultWithScore = CellSearchResult;
 
 // --- Cache Types ---
 
@@ -164,17 +202,8 @@ export enum RefineOperation {
   TRIM_ALL = 'trim_all'
 }
 
-export type FilterOperator =
-  | 'gte'
-  | 'lte'
-  | 'contains'
-  | 'equals'
-  | 'not_equals'
-  | 'between'
-  | 'top_asc'
-  | 'top_desc'
-  | 'empty'
-  | 'not_empty';
+// Use FilterOperatorEnum values instead of string literals
+export type FilterOperator = `${FilterOperatorEnum}`;
 
 export interface DataTableFilterInput {
   column: string;

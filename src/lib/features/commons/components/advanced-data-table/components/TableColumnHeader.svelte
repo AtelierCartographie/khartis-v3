@@ -3,15 +3,17 @@
   import SummaryPlot from '$lib/features/commons/components/summary-plot/SummaryPlot.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
-  import * as m from '$lib/paraglide/messages';
+  import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
+  import Edit from 'carbon-icons-svelte/lib/Edit.svelte';
+  import ChartMultitype from 'carbon-icons-svelte/lib/ChartMultitype.svelte';
+  import ViewOff from 'carbon-icons-svelte/lib/ViewOff.svelte';
+  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
+  import { getColumnTypeStyle } from '../column-type-styles';
   import Portal from './Portal.svelte';
 
-  interface ColumnTypeOption {
-    label: string;
-    value: string;
-  }
+  export type ColumnType = 'text' | 'number' | 'date' | 'boolean';
 
   interface Props {
     column: ColumnInfo;
@@ -21,13 +23,13 @@
     sortOrder: 'ASC' | 'DESC' | null;
     showSummaryPlots: boolean;
     isEditMode: boolean;
-    columnTypeOptions: ColumnTypeOption[];
+    isHidden?: boolean;
     onSort: (column: string, order: 'ASC' | 'DESC') => void;
-    onRename: (columnName: string) => void;
-    onChangeType: (columnName: string, type: string) => void;
     onRefine: (columnName: string, operation: RefineOperation) => void;
-    onToggleVisibility: (columnName: string) => void;
-    onDrop: (columnName: string) => void;
+    onRename?: (columnName: string) => void;
+    onChangeType?: (columnName: string, newType: ColumnType) => void;
+    onHide?: (columnName: string) => void;
+    onDelete?: (columnName: string) => void;
   }
 
   const {
@@ -38,20 +40,31 @@
     sortOrder,
     showSummaryPlots,
     isEditMode,
-    columnTypeOptions,
+    isHidden = false,
     onSort,
+    onRefine,
     onRename,
     onChangeType,
-    onRefine,
-    onToggleVisibility,
-    onDrop
+    onHide,
+    onDelete
   }: Props = $props();
+
+  const typeOptions: { value: ColumnType; label: string }[] = [
+    { value: 'text', label: 'Texte' },
+    { value: 'number', label: 'Numérique' },
+    { value: 'date', label: 'Date' },
+    { value: 'boolean', label: 'Booléen' }
+  ];
+
+  let showTypeSubmenu = $state(false);
 
   const plotElement = $derived(
     showSummaryPlots && analysis
       ? getPlotForColumn(column.name, columnAnalysis)
       : null
   );
+
+  const typeStyle = $derived(getColumnTypeStyle(analysis?.type_simple));
 
   interface ColumnWarning {
     type: 'nulls' | 'duplicates' | 'low_uniques';
@@ -138,7 +151,18 @@
 <th>
   <div class="col-header">
     <div class="col-title-row">
-      <span class="col-name" title={column.name}>{column.name}</span>
+      <span class="type-badge" style="--badge-color: {typeStyle.color}">
+        {#if analysis?.type_simple === 'date'}
+          <Calendar size={16} />
+        {:else if typeStyle.label}
+          {typeStyle.label}
+        {/if}
+      </span>
+      <span
+        class="col-name"
+        style="color: {typeStyle.color}"
+        title={column.name}>{column.name}</span
+      >
       {#if columnWarnings.length > 0}
         <span
           class="warning-badge"
@@ -165,86 +189,119 @@
                 style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
                 role="menu"
               >
-                <button
-                  class="menu-item"
-                  onclick={() => handleMenuAction(() => onRename(column.name))}
-                >
-                  Renommer
-                </button>
-                <div class="menu-divider"></div>
-                <span class="menu-label">{m.column_type_change()}</span>
-                {#each columnTypeOptions as typeOption (typeOption.value)}
-                  <button
-                    class="menu-item menu-item-indent"
-                    onclick={() =>
-                      handleMenuAction(() =>
-                        onChangeType(column.name, typeOption.value)
-                      )}
-                  >
-                    → {typeOption.label}
-                  </button>
-                {/each}
-                <div class="menu-divider"></div>
                 <span class="menu-label">Affiner...</span>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.UPPERCASE)
                     )}
                 >
-                  → MAJUSCULES
+                  MAJUSCULES
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.LOWERCASE)
                     )}
                 >
-                  → minuscules
+                  minuscules
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TITLECASE)
                     )}
                 >
-                  → Casse Titre
+                  Casse Titre
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TRIM)
                     )}
                 >
-                  → Supprimer espaces
+                  Supprimer espaces
                 </button>
                 <button
-                  class="menu-item menu-item-indent"
+                  class="menu-item"
                   onclick={() =>
                     handleMenuAction(() =>
                       onRefine(column.name, RefineOperation.TRIM_ALL)
                     )}
                 >
-                  → Espaces multiples
+                  Espaces multiples
                 </button>
+
                 <div class="menu-divider"></div>
-                <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() => onToggleVisibility(column.name))}
-                >
-                  Masquer
-                </button>
-                <button
-                  class="menu-item menu-item-danger"
-                  onclick={() => handleMenuAction(() => onDrop(column.name))}
-                >
-                  Supprimer
-                </button>
+
+                {#if onRename}
+                  <button
+                    class="menu-item menu-item-with-icon"
+                    onclick={() =>
+                      handleMenuAction(() => onRename(column.name))}
+                  >
+                    <Edit size={16} />
+                    Renommer...
+                  </button>
+                {/if}
+
+                {#if onChangeType}
+                  <div
+                    class="menu-item menu-item-with-icon submenu-trigger"
+                    role="menuitem"
+                    tabindex="0"
+                    onmouseenter={() => (showTypeSubmenu = true)}
+                    onmouseleave={() => (showTypeSubmenu = false)}
+                    onfocus={() => (showTypeSubmenu = true)}
+                    onblur={() => (showTypeSubmenu = false)}
+                  >
+                    <ChartMultitype size={16} />
+                    Changer le type...
+                    <span class="submenu-arrow">▶</span>
+                    {#if showTypeSubmenu}
+                      <div class="submenu">
+                        {#each typeOptions as option (option.value)}
+                          <button
+                            class="menu-item"
+                            onclick={() =>
+                              handleMenuAction(() =>
+                                onChangeType(column.name, option.value)
+                              )}
+                          >
+                            {option.label}
+                          </button>
+                        {/each}
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
+
+                <div class="menu-divider"></div>
+
+                {#if onHide}
+                  <button
+                    class="menu-item menu-item-with-icon"
+                    onclick={() => handleMenuAction(() => onHide(column.name))}
+                  >
+                    <ViewOff size={16} />
+                    {isHidden ? 'Afficher' : 'Masquer'}
+                  </button>
+                {/if}
+
+                {#if onDelete}
+                  <button
+                    class="menu-item menu-item-with-icon menu-item-danger"
+                    onclick={() =>
+                      handleMenuAction(() => onDelete(column.name))}
+                  >
+                    <TrashCan size={16} />
+                    Supprimer
+                  </button>
+                {/if}
               </div>
             </Portal>
           {/if}
@@ -273,9 +330,18 @@
       <div class="summary-plot">
         {#if plotElement}
           <SummaryPlot svgElement={plotElement} />
+          <!-- Afficher le compteur uniques sous le plot pour colonnes numériques/date -->
+          {#if analysis.uniques !== undefined && analysis.uniques > 0 && analysis.type_simple !== 'string'}
+            <span
+              class="unique-count unique-count-secondary"
+              title="Nombre de valeurs distinctes"
+            >
+              {analysis.uniques} uniques
+            </span>
+          {/if}
         {:else if analysis.type_simple === 'string'}
-          <span class="unique-count"
-            >{analysis.uniques ?? 0} valeurs uniques</span
+          <span class="unique-count" style="background-color: {typeStyle.color}"
+            >{analysis.uniques ?? 0} uniques</span
           >
         {/if}
       </div>
@@ -287,7 +353,7 @@
   th {
     text-align: left;
     vertical-align: top;
-    padding: var(--cds-spacing-03);
+    padding: var(--cds-spacing-02) var(--cds-spacing-03);
     border-bottom: 2px solid var(--cds-ui-03);
     min-width: 150px;
   }
@@ -295,7 +361,7 @@
   .col-header {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-01);
   }
 
   .col-title-row {
@@ -305,10 +371,25 @@
     gap: var(--cds-spacing-02);
   }
 
+  .type-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    font-weight: 600;
+    background-color: var(--badge-color);
+    color: #fff;
+    flex-shrink: 0;
+  }
+
   .col-name {
     font-weight: 600;
     color: var(--cds-text-01);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     flex: 1;
   }
 
@@ -392,6 +473,34 @@
     font-weight: 600;
   }
 
+  :global(.dropdown-menu .menu-item-with-icon) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  :global(.dropdown-menu .submenu-trigger) {
+    position: relative;
+    cursor: pointer;
+  }
+
+  :global(.dropdown-menu .submenu-arrow) {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--cds-text-02);
+  }
+
+  :global(.dropdown-menu .submenu) {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    min-width: 140px;
+    background-color: var(--cds-ui-01);
+    border: 1px solid var(--cds-ui-03);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    z-index: 10001;
+  }
+
   .sort-buttons {
     display: flex;
     flex-direction: column;
@@ -419,16 +528,30 @@
   .summary-plot {
     height: 64px;
     margin-top: var(--cds-spacing-02);
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
   }
 
   .unique-count {
     display: inline-block;
     background-color: var(--cds-ui-03);
-    color: var(--cds-text-01);
+    color: #ffffff;
     padding: 4px 12px;
     border-radius: 12px;
     font-size: 9px;
     font-weight: 500;
+  }
+
+  .unique-count-secondary {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background-color: var(--cds-ui-02);
+    color: var(--cds-text-02);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 8px;
   }
 
   .warning-badge {

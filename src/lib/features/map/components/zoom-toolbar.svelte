@@ -3,6 +3,7 @@
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
   import Separator from '../../commons/components/separator.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
+  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import {
     globalActions,
     globalState
@@ -29,7 +30,7 @@
 
   function handleZoomIn(): void {
     if (activeTabIndex === 0) {
-      globalActions.zoomInMap();
+      mapInstanceStore.zoomIn();
     } else {
       globalActions.zoomInPage();
     }
@@ -37,7 +38,7 @@
 
   function handleZoomOut(): void {
     if (activeTabIndex === 0) {
-      globalActions.zoomOutMap();
+      mapInstanceStore.zoomOut();
     } else {
       globalActions.zoomOutPage();
     }
@@ -45,7 +46,7 @@
 
   function handleResetZoom(): void {
     if (activeTabIndex === 0) {
-      globalActions.resetMapZoom();
+      mapInstanceStore.resetZoom();
     } else {
       globalActions.resetPageZoom();
     }
@@ -60,7 +61,7 @@
 
   const displayValue = $derived(
     activeTabIndex === 0
-      ? `${Math.round(globalState.zoom.mapZoomLevel)} %`
+      ? `${mapInstanceStore.zoomLevel} %`
       : `${globalState.zoom.pageZoomLevel} %`
   );
 </script>
@@ -187,5 +188,13 @@ Shortcuts: Ctrl/Cmd + Plus/Minus to zoom, Ctrl/Cmd + 0 to reset, Alt + Z to swit
   #khartis-zoom-toolbar :global(.separator) {
     height: 24px;
     margin: 0 2px;
+  }
+
+  @media (max-width: 1023px) {
+    .zoom-toolbar {
+      bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 70px);
+      left: var(--cds-spacing-03);
+      width: 160px;
+    }
   }
 </style>

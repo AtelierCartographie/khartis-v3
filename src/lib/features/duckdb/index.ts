@@ -4,41 +4,34 @@ export { Duck, initDuckDB } from './duck';
 // Orchestrator
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 
-// Validator
-export { DuckDBValidatorService } from './validator.service';
-
-// Arrow converter
-export {
-  insertArrowTableIntoDuckDB,
-  convertTabularDataToArrow
-} from './io/arrow-converter';
+// GPS Operations
+export { validateGPSColumns } from './orchestrator/gps-ops';
+export type { GPSValidationResult } from './orchestrator/gps-ops';
 
 // Types
 export { RefineOperation } from './types';
 export type {
+  AnalyseOptions,
   AnalysisResult,
   AnalysisResults,
   ArrowTableLike,
-  SearchResultWithScore,
-  SearchStats,
-  FilterOperator,
+  CellSearchResult,
   DataTableFilter,
   DataTableFilterInput,
-  FilterStats,
+  DuckDBContext,
   DuckDBDataset,
   DuckDBMetadata,
-  DuckDBContext,
-  TableMetadata,
+  FilterOperator,
+  FilterStats,
+  FinalizeJoinResult,
+  GPSBounds,
+  GPSColumns,
+  JoinByIdOptions,
   QueryOptions,
-  ReadTabularOptions,
   ReadGeofileOptions,
   ReadLinkOptions,
-  JoinByIdOptions,
-  AnalyseOptions,
-  GPSColumns,
-  GPSBounds,
-  FinalizeJoinResult
+  ReadTabularOptions,
+  SearchResultWithScore,
+  SearchStats,
+  TableMetadata
 } from './types';
-
-// Constants
-export { DUCK_CONST, CACHE_CONSTANTS } from './constants';

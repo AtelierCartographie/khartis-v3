@@ -9,6 +9,8 @@
     selected?: boolean;
     name?: string;
     onclick?: (e: Event) => void | undefined;
+    onkeydown?: (e: KeyboardEvent) => void | undefined;
+    tabIndex?: number;
     'data-testid'?: string;
   }
 
@@ -18,8 +20,18 @@
     selected = false,
     name = 'project-type',
     onclick,
+    onkeydown,
+    tabIndex = 0,
     'data-testid': dataTestId
   }: ProjectCardProps = $props();
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onclick?.(e);
+    }
+    onkeydown?.(e);
+  }
 </script>
 
 <div
@@ -27,16 +39,11 @@
     'project-card w-full relative cursor-pointer pl-5 pt-5 pb-5',
     selected && 'selected'
   )}
-  role="button"
-  tabindex={0}
+  role="tab"
+  tabindex={tabIndex}
   onclick={onclick}
-  onkeydown={(e: KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onclick?.(e);
-    }
-  }}
-  aria-pressed={selected}
+  onkeydown={handleKeydown}
+  aria-selected={selected}
   data-testid={dataTestId}
 >
   <div class="flex justify-between w-full items-start pb-3">
@@ -67,6 +74,7 @@
       var(--cds-layer) 100%
     );
     box-sizing: border-box;
+    height: 100%;
   }
 
   .project-card.selected {

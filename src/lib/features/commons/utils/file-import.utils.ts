@@ -1,3 +1,4 @@
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
@@ -85,6 +86,26 @@ export function detectFileType(file: File): FileType {
 
   if (extension === 'kmz') {
     return FileType.KMZ;
+  }
+
+  if (extension === 'gpx') {
+    return FileType.GPX;
+  }
+
+  if (extension === 'zip' || mimeType.includes('zip')) {
+    return FileType.ZIP;
+  }
+
+  if (extension === 'tsv' || mimeType.includes('tab-separated')) {
+    return FileType.TSV;
+  }
+
+  if (extension === 'parquet') {
+    return FileType.GEOPARQUET;
+  }
+
+  if (extension === 'arrow') {
+    return FileType.ARROW;
   }
 
   return FileType.UNKNOWN;
@@ -206,7 +227,7 @@ export function createUploadedFile(
     size: file.size,
     type: file.type,
     fileType: detectFileType(file),
-    status: 'uploading',
+    status: FileStatus.UPLOADING,
     sourceType,
     relatedFiles,
     uploadProgress: 0

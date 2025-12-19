@@ -1,7 +1,7 @@
-import { Duck } from '$lib/features/duckdb';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { Duck } from '$lib/features/duckdb';
 import type { BasemapAttribute } from '../types/basemap.types';
 
 function escapeIdentifier(name: string): string {

@@ -1,13 +1,13 @@
+import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
 import type { KhartisProject } from '../types';
-import { ProjectValidator } from '$lib/features/commons/utils/validation.utils';
 
 export function duplicateProject(
   original: KhartisProject,
   name: string
 ): KhartisProject {
-  const clone = structuredClone(original);
+  const clone = JSON.parse(JSON.stringify(original)) as KhartisProject;
   const now = new Date();
-  const sanitizedName = ProjectValidator.sanitizeProjectName(name);
+  const sanitizedName = sanitizeProjectName(name);
 
   return {
     ...clone,

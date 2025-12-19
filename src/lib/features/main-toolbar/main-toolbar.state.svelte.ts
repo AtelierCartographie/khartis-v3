@@ -1,7 +1,7 @@
-import { ToolbarStep } from '$lib/features/commons/types/global';
+import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;

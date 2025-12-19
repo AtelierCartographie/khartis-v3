@@ -1,4 +1,4 @@
-import { logger, LogCategory } from './logger';
+import { LogCategory, logger } from './logger';
 
 export async function compressData(data: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();

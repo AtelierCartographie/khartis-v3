@@ -1,10 +1,16 @@
+import {
+  ExampleCategory,
+  FileStatus
+} from '$lib/features/commons/constants/ui.constants';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
+import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
 import {
   FileProcessorService,
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
+import { STORAGE_LIMITS } from '../configs/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -15,11 +21,11 @@ import {
   isShapefileComponent,
   isValidUrl
 } from '../utils/file-import.utils';
+import { formatFileSize } from '../utils/format.utils';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
-  ExampleCategory,
   ExampleProject,
   ProjectTab,
   SavedProject,
@@ -39,6 +45,8 @@ const DEFAULT_STATE: CreateProjectState = {
     onlineFileUrl: '',
     projectName: '',
     isLoading: false,
+    isProcessingFiles: false,
+    processingFileCount: 0,
     validationErrors: []
   },
 
@@ -49,7 +57,7 @@ const DEFAULT_STATE: CreateProjectState = {
 
   tryExample: {
     examples: [],
-    selectedCategory: 'all',
+    selectedCategory: ExampleCategory.ALL,
     isLoading: false
   }
 };
@@ -68,40 +76,121 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
-    // Only check duplicates within the current upload session
-    // Users should be able to create multiple projects with the same files
     const uploadingFiles = createProjectState.newProject.uploadedFiles;
-    return uploadingFiles.some(
-      (f) => f.name === fileName && f.status !== 'error'
+    const existsInSession = uploadingFiles.some(
+      (f) => f.name === fileName && f.status !== FileStatus.ERROR
     );
+
+    if (existsInSession) return true;
+
+    const projectFiles = projectStore.currentProject?.data?.sourceFiles ?? [];
+    return projectFiles.some((f) => f.name === fileName);
+  },
+
+  findIncompleteShapefile(baseName: string): UploadedFile | undefined {
+    return createProjectState.newProject.uploadedFiles.find(
+      (f) =>
+        f.status === FileStatus.INCOMPLETE &&
+        f.shapefileBaseName?.toLowerCase() === baseName.toLowerCase()
+    );
+  },
+
+  async mergeIntoIncompleteShapefile(
+    incompleteFile: UploadedFile,
+    newFiles: File[],
+    sourceType: DataSourceType
+  ): Promise<void> {
+    const existingFileObjects = incompleteFile.relatedFileObjects ?? [];
+    const allFiles = [...existingFileObjects, ...newFiles];
+
+    const baseName = incompleteFile.shapefileBaseName!;
+    const presentExtensions = allFiles.map((f) => {
+      const ext = f.name.toLowerCase().split('.').pop();
+      return ext ? `.${ext}` : '';
+    });
+
+    const requiredExtensions = ['.shp', '.shx', '.dbf'];
+    const stillMissing = requiredExtensions.filter(
+      (ext) => !presentExtensions.includes(ext)
+    );
+
+    if (stillMissing.length === 0) {
+      const fileIndex =
+        createProjectState.newProject.uploadedFiles.indexOf(incompleteFile);
+      if (fileIndex !== -1) {
+        createProjectState.newProject.uploadedFiles.splice(fileIndex, 1);
+      }
+
+      await this.processShapefileGroup(baseName, allFiles, sourceType);
+
+      logger.info('Incomplete shapefile completed', LogCategory.FILE, {
+        baseName,
+        fileCount: allFiles.length
+      });
+    } else {
+      // Update the incomplete file with new files and recalculate missing
+      incompleteFile.relatedFileObjects = allFiles;
+      incompleteFile.relatedFiles = allFiles.map((f) => f.name);
+      incompleteFile.missingShapefileComponents = stillMissing;
+      incompleteFile.size = allFiles.reduce((sum, f) => sum + f.size, 0);
+      incompleteFile.validation = {
+        isValid: false,
+        errors: [],
+        warnings: [
+          m.shapefile_incomplete_message({ missing: stillMissing.join(', ') })
+        ]
+      };
+    }
   },
 
   async processFiles(
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    const validationResult =
-      CreateProjectValidationService.validateFiles(files);
+    this.setProcessingFiles(true, files.length);
 
-    createProjectState.newProject.validationErrors =
-      validationResult.globalErrors;
+    try {
+      const fileGroups = groupShapefiles(files);
 
-    const fileGroups = groupShapefiles(files);
-    const duplicates: string[] = [];
-    const toProcess: SvelteMap<string, File[]> = new SvelteMap();
-
-    for (const [baseName, groupFiles] of fileGroups) {
-      const mainFileName =
-        groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
-
-      if (this.isFileDuplicate(mainFileName)) {
-        duplicates.push(mainFileName);
-      } else {
-        toProcess.set(baseName, groupFiles);
+      for (const [baseName, groupFiles] of fileGroups) {
+        const incompleteShapefile = this.findIncompleteShapefile(baseName);
+        if (incompleteShapefile) {
+          await this.mergeIntoIncompleteShapefile(
+            incompleteShapefile,
+            groupFiles,
+            sourceType
+          );
+          fileGroups.delete(baseName);
+        }
       }
-    }
 
-    if (!validationResult.isValid) {
+      if (fileGroups.size === 0) {
+        return;
+      }
+
+      const remainingFiles = Array.from(fileGroups.values()).flat();
+      const validationResult =
+        CreateProjectValidationService.validateFiles(remainingFiles);
+
+      const nonShapefileErrors = validationResult.globalErrors.filter(
+        (err) => !err.includes('Incomplete shapefile')
+      );
+      createProjectState.newProject.validationErrors = nonShapefileErrors;
+
+      const duplicates: string[] = [];
+      const toProcess: SvelteMap<string, File[]> = new SvelteMap();
+
+      for (const [baseName, groupFiles] of fileGroups) {
+        const mainFileName =
+          groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
+
+        if (this.isFileDuplicate(mainFileName)) {
+          duplicates.push(mainFileName);
+        } else {
+          toProcess.set(baseName, groupFiles);
+        }
+      }
+
       for (const [baseName, groupFiles] of toProcess) {
         const mainFile =
           groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
@@ -109,32 +198,53 @@ export const createProjectActions = {
         const fileValidation = validationResult.results.get(mainFileName);
 
         const shapefileGlobalError = validationResult.globalErrors.find((err) =>
-          err.includes(`Shapefile "${baseName}"`)
+          err.includes(`Incomplete shapefile "${baseName}"`)
         );
 
-        const errors: string[] = [];
-        const warnings: string[] = [];
+        const hasShapefileError = !!shapefileGlobalError;
+        const hasOtherErrors =
+          fileValidation && fileValidation.errors.length > 0;
 
-        if (fileValidation) {
-          errors.push(...fileValidation.errors);
-          warnings.push(...fileValidation.warnings);
-        }
+        if (hasShapefileError && !hasOtherErrors) {
+          const missingMatch =
+            shapefileGlobalError.match(/Missing files: (.*)/);
+          const missingComponents = missingMatch
+            ? missingMatch[1].split(', ').map((s) => s.trim())
+            : [];
 
-        if (shapefileGlobalError) {
-          errors.push(
-            shapefileGlobalError.replace(
-              `Shapefile "${baseName}" incomplet. `,
-              ''
-            )
-          );
-        }
-
-        if (errors.length > 0 || warnings.length > 0) {
+          const incompleteFile: UploadedFile = {
+            id: crypto.randomUUID(),
+            name: mainFileName,
+            size: mainFile.size,
+            status: FileStatus.INCOMPLETE,
+            uploadProgress: 100,
+            type: mainFile.type,
+            fileType: FileType.SHAPEFILE,
+            sourceType,
+            relatedFiles: groupFiles
+              .filter((f) => f !== mainFile)
+              .map((f) => f.name),
+            relatedFileObjects: groupFiles,
+            shapefileBaseName: baseName,
+            missingShapefileComponents: missingComponents,
+            validation: {
+              isValid: false,
+              errors: [],
+              warnings: [
+                m.shapefile_incomplete_message({
+                  missing: missingComponents.join(', ')
+                })
+              ]
+            }
+          };
+          this.addUploadedFile(incompleteFile);
+          toProcess.delete(baseName);
+        } else if (hasOtherErrors) {
           const errorFile: UploadedFile = {
             id: crypto.randomUUID(),
             name: mainFileName,
             size: mainFile.size,
-            status: 'error',
+            status: FileStatus.ERROR,
             uploadProgress: 100,
             type: mainFile.type,
             fileType: mainFile.name.endsWith('.shp')
@@ -145,33 +255,35 @@ export const createProjectActions = {
               .filter((f) => f !== mainFile)
               .map((f) => f.name),
             validation: {
-              isValid: errors.length === 0,
-              errors,
-              warnings
+              isValid: false,
+              errors: fileValidation.errors,
+              warnings: fileValidation.warnings
             }
           };
           this.addUploadedFile(errorFile);
+          toProcess.delete(baseName);
         }
       }
-      return;
-    }
 
-    if (duplicates.length > 0) {
-      showWarning(
-        'Fichiers déjà importés',
-        `Les fichiers suivants existent déjà : ${duplicates.join(', ')}`
-      );
-    }
-
-    for (const [baseName, groupFiles] of toProcess) {
-      if (
-        groupFiles.length === 1 &&
-        !isShapefileComponent(groupFiles[0].name)
-      ) {
-        await this.processSingleFile(groupFiles[0], sourceType);
-      } else {
-        await this.processShapefileGroup(baseName, groupFiles, sourceType);
+      if (duplicates.length > 0) {
+        showWarning(
+          m.warning_files_duplicate_title(),
+          m.warning_files_duplicate_message({ files: duplicates.join(', ') })
+        );
       }
+
+      for (const [baseName, groupFiles] of toProcess) {
+        if (
+          groupFiles.length === 1 &&
+          !isShapefileComponent(groupFiles[0].name)
+        ) {
+          await this.processSingleFile(groupFiles[0], sourceType);
+        } else {
+          await this.processShapefileGroup(baseName, groupFiles, sourceType);
+        }
+      }
+    } finally {
+      this.setProcessingFiles(false, 0);
     }
   },
 
@@ -181,14 +293,13 @@ export const createProjectActions = {
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
       showWarning(
-        'Fichier déjà importé',
-        `Le fichier "${file.name}" existe déjà dans le projet`
+        m.warning_files_duplicate_title(),
+        m.warning_files_duplicate_message({ files: file.name })
       );
       return;
     }
 
     const uploadedFile = createUploadedFile(file, sourceType);
-    // IMPORTANT: Store the original File object to avoid re-parsing
     uploadedFile.originalFile = file;
     this.addUploadedFile(uploadedFile);
 
@@ -201,7 +312,8 @@ export const createProjectActions = {
         errorMessage?: string
       ) => this.updateFileStatus(fileId, status, errorMessage),
       onDataUpdate: (fileId: string, data: Partial<UploadedFile>) =>
-        this.updateFileData(fileId, data)
+        this.updateFileData(fileId, data),
+      onAdditionalFile: (file: UploadedFile) => this.addUploadedFile(file)
     };
 
     const processor = new FileProcessorService(callbacks);
@@ -213,20 +325,15 @@ export const createProjectActions = {
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    const mainFile = files.find((f) => f.name.endsWith('.shp'));
-    if (!mainFile) {
-      const errorFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: baseName,
-        size: files.reduce((sum, f) => sum + f.size, 0),
-        type: 'application/x-shapefile',
-        fileType: FileType.SHAPEFILE,
-        status: 'error',
-        errorMessage: 'Missing .shp file in shapefile set',
-        sourceType
-      };
-      this.addUploadedFile(errorFile);
-      showError('Invalid shapefile', 'Missing .shp file in shapefile set');
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+    if (totalSize > STORAGE_LIMITS.maxFileSize) {
+      showError(
+        m.error_shapefile_too_large_title(),
+        m.error_shapefile_too_large_message({
+          size: formatFileSize(totalSize),
+          max: formatFileSize(STORAGE_LIMITS.maxFileSize)
+        })
+      );
       return;
     }
 
@@ -239,43 +346,37 @@ export const createProjectActions = {
     );
 
     if (missingExtensions.length > 0) {
-      const errorFile: UploadedFile = {
+      // Create INCOMPLETE file - show all present files and what's missing
+      const incompleteFile: UploadedFile = {
         id: crypto.randomUUID(),
         name: baseName,
         size: files.reduce((sum, f) => sum + f.size, 0),
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
-        status: 'error',
-        errorMessage: `Missing required shapefile components: ${missingExtensions.join(', ')}`,
-        sourceType
+        status: FileStatus.INCOMPLETE,
+        sourceType,
+        shapefileBaseName: baseName,
+        missingShapefileComponents: missingExtensions,
+        relatedFileObjects: files,
+        relatedFiles: files.map((f) => f.name),
+        validation: {
+          isValid: false,
+          errors: [],
+          warnings: [
+            m.shapefile_incomplete_message({
+              missing: missingExtensions.join(', ')
+            })
+          ]
+        }
       };
-      this.addUploadedFile(errorFile);
-      showError(
-        'Incomplete shapefile',
-        `Missing required components: ${missingExtensions.join(', ')}`
-      );
+      this.addUploadedFile(incompleteFile);
+      // No flash message - warning shown in form
       return;
     }
 
-    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'));
+    // At this point all required files are present (we returned early if any missing)
+    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
-    if (!shpFile) {
-      const errorFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: baseName,
-        size: files.reduce((sum, f) => sum + f.size, 0),
-        type: 'application/x-shapefile',
-        fileType: FileType.SHAPEFILE,
-        status: 'error',
-        errorMessage: 'Missing .shp file in shapefile set',
-        sourceType
-      };
-      this.addUploadedFile(errorFile);
-      showError('Shapefile processing failed', 'No .shp file found');
-      return;
-    }
-
-    // Read content of all files for persistence
     const relatedFilesData: Record<string, ArrayBuffer> = {};
     let shpContent: ArrayBuffer = new ArrayBuffer(0);
 
@@ -289,7 +390,10 @@ export const createProjectActions = {
       }
     } catch (error) {
       logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      showError('Shapefile read failed', 'Could not read file content');
+      showError(
+        m.error_shapefile_read_failed_title(),
+        m.error_shapefile_read_failed_message()
+      );
       return;
     }
 
@@ -299,7 +403,7 @@ export const createProjectActions = {
       size: files.reduce((sum, f) => sum + f.size, 0),
       type: 'application/x-shapefile',
       fileType: FileType.SHAPEFILE,
-      status: 'complete',
+      status: FileStatus.COMPLETE,
       sourceType,
       relatedFiles: files.map((f) => f.name),
       relatedFileObjects: files,
@@ -314,24 +418,24 @@ export const createProjectActions = {
   async processPastedData(pastedText: string): Promise<void> {
     const result = extractDataFromPaste(pastedText);
 
-    // If paste doesn't look like tabular data, show error
     if (!result) {
       showError(
-        'Invalid pasted data',
-        'Unable to detect tabular data. Please paste CSV or TSV content with delimiters.'
+        m.error_pasted_data_invalid_title(),
+        m.error_pasted_data_invalid_message()
       );
       this.setPastedData('');
       return;
     }
 
     const { fileType, content } = result;
-    const baseName = 'pasted-data';
+    const baseName = m.dataset_pasted_name();
     const extension = fileType === FileType.TSV ? 'tsv' : 'csv';
-    let fileName = `${baseName}.${extension}`;
+    const timestamp = Date.now();
+    let fileName = `${baseName}-${timestamp}.${extension}`;
 
     let counter = 1;
     while (this.isFileDuplicate(fileName)) {
-      fileName = `${baseName}-${counter}.${extension}`;
+      fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
       counter++;
     }
 
@@ -339,7 +443,6 @@ export const createProjectActions = {
       fileType === FileType.TSV ? 'text/tab-separated-values' : 'text/csv';
     const file = new File([content], fileName, { type: mimeType });
 
-    // DuckDB will handle validation during processing
     await this.processSingleFile(file, DataSourceType.PASTE);
     this.setPastedData('');
   },
@@ -349,6 +452,13 @@ export const createProjectActions = {
       (f) => f.id === fileId
     );
     if (index !== -1) {
+      const fileToRemove = createProjectState.newProject.uploadedFiles[index];
+      if (fileToRemove) {
+        fileToRemove.originalFile = undefined;
+        fileToRemove.relatedFileObjects = undefined;
+        fileToRemove.content = undefined;
+        fileToRemove.relatedFilesData = undefined;
+      }
       createProjectState.newProject.uploadedFiles.splice(index, 1);
     }
   },
@@ -403,6 +513,11 @@ export const createProjectActions = {
     createProjectState.newProject.isLoading = loading;
   },
 
+  setProcessingFiles(isProcessing: boolean, count: number = 0): void {
+    createProjectState.newProject.isProcessingFiles = isProcessing;
+    createProjectState.newProject.processingFileCount = count;
+  },
+
   setNewProjectError(error?: string): void {
     createProjectState.newProject.error = error;
     if (error) {
@@ -415,13 +530,15 @@ export const createProjectActions = {
     const urls = extractUrlsFromInput(inputValue);
 
     if (urls.length === 0) {
-      this.setNewProjectError('Please enter at least one HTTP or HTTPS URL');
+      this.setNewProjectError(m.error_url_required());
       return;
     }
 
     const invalidUrls = urls.filter((entry) => !isValidUrl(entry));
     if (invalidUrls.length > 0) {
-      this.setNewProjectError(`Invalid URL(s): ${invalidUrls.join(', ')}`);
+      this.setNewProjectError(
+        m.error_url_invalid({ urls: invalidUrls.join(', ') })
+      );
       return;
     }
 
@@ -447,37 +564,84 @@ export const createProjectActions = {
       const message =
         error instanceof Error
           ? error.message
-          : 'Failed to load online file(s)';
+          : m.error_load_online_file_title();
       this.setNewProjectError(message);
-      showError('Failed to load online file(s)', message, error);
+      showError(m.error_load_online_file_title(), message, error);
     } finally {
       this.setNewProjectLoading(false);
     }
   },
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `HTTP ${response.status} (${response.statusText}) for ${url}`
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(
+          `HTTP ${response.status} (${response.statusText}) for ${url}`
+        );
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      const allowedTypes = [
+        'text/csv',
+        'text/plain',
+        'text/tab-separated-values',
+        'application/json',
+        'application/geo+json',
+        'application/vnd.geo+json',
+        'application/octet-stream',
+        'application/x-shapefile',
+        'application/geopackage+sqlite3',
+        'application/x-sqlite3',
+        'application/zip',
+        'application/x-zip-compressed',
+        'application/geoparquet',
+        'application/parquet'
+      ];
+
+      const isAllowed =
+        allowedTypes.some((t) => contentType.includes(t)) ||
+        contentType.includes('octet-stream') ||
+        contentType === '';
+      if (!isAllowed) {
+        throw new Error(m.error_invalid_content_type({ type: contentType }));
+      }
+
+      const blob = await response.blob();
+      const headerFilename = getFilenameFromContentDisposition(
+        response.headers
       );
+      const urlFilename = getFilenameFromUrl(url);
+      const safeName = ensureFilenameHasExtension(
+        headerFilename || urlFilename,
+        blob.type,
+        index
+      );
+
+      return new File([blob], safeName, {
+        type: blob.type || 'application/octet-stream'
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(m.error_download_timeout());
+      }
+      throw error;
     }
-
-    const blob = await response.blob();
-    const headerFilename = getFilenameFromContentDisposition(response.headers);
-    const urlFilename = getFilenameFromUrl(url);
-    const safeName = ensureFilenameHasExtension(
-      headerFilename || urlFilename,
-      blob.type,
-      index
-    );
-
-    return new File([blob], safeName, {
-      type: blob.type || 'application/octet-stream'
-    });
   },
 
   async clearAllFiles(saveProject: boolean = false): Promise<void> {
+    for (const file of createProjectState.newProject.uploadedFiles) {
+      file.originalFile = undefined;
+      file.relatedFileObjects = undefined;
+      file.content = undefined;
+      file.relatedFilesData = undefined;
+    }
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
 
@@ -503,9 +667,6 @@ export const createProjectActions = {
   clearUploadState(): void {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
-
-    // Do NOT call datasetsStore.clear(), visualizationStore.clear(), or duckDBOrchestrator.clear()
-    // The data has been successfully added to the project and should remain
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {
@@ -516,7 +677,7 @@ export const createProjectActions = {
 
   hasValidFiles(): boolean {
     return createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === 'complete'
+      (f) => f.status === FileStatus.COMPLETE
     );
   },
 

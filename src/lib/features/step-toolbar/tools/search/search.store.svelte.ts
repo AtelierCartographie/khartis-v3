@@ -1,5 +1,4 @@
-import { createResetFunction } from '$lib/features/commons/utils/store.utils';
-import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { SearchState } from './search.types';
 
 const FIXTURE_RESULTS = [
@@ -37,174 +36,144 @@ const DEFAULT_STATE: SearchState = {
   useRegex: false
 };
 
-export const searchState = $state<SearchState>({ ...DEFAULT_STATE });
-
-export const searchActions = {
-  setState(newState: Partial<SearchState>): void {
-    Object.assign(searchState, newState);
-  },
-
-  setSearchValue(value: string): void {
-    searchState.searchValue = value;
-
-    if (value.trim()) {
-      this.performSearch();
-    } else {
-      searchState.results = [];
-      searchState.currentResultIndex = 0;
-    }
-  },
-
-  setSelectedSource(source: string): void {
-    searchState.selectedSource = source;
-
-    if (searchState.searchValue.trim()) {
-      this.performSearch();
-    }
-  },
-
-  setReplaceValue(value: string): void {
-    searchState.replaceValue = value;
-  },
-
-  async performSearch(): Promise<void> {
-    const query = searchState.searchValue.trim().toLowerCase();
-    if (!query) {
-      searchState.results = [];
-      searchState.currentResultIndex = 0;
-      return;
-    }
-
-    searchState.isSearching = true;
-
-    setTimeout(() => {
-      let filteredResults = FIXTURE_RESULTS.filter((result) =>
-        result.text.toLowerCase().includes(query)
-      );
-
-      if (searchState.selectedSource !== 'all') {
-        const sourceMap = {
-          numeric: 'Numérique',
-          categorical: 'Catégorielle',
-          text: 'Texte'
-        };
-        const sourceFilter =
-          sourceMap[searchState.selectedSource as keyof typeof sourceMap];
-        if (sourceFilter) {
-          filteredResults = filteredResults.filter((result) =>
-            result.location.includes(sourceFilter)
-          );
-        }
-      }
-
-      searchState.results = filteredResults;
-      searchState.currentResultIndex = filteredResults.length > 0 ? 0 : 0;
-      searchState.isSearching = false;
-    }, 500);
-  },
-
-  async replaceNext(): Promise<boolean> {
-    if (!searchState.replaceValue.trim()) {
-      return false;
-    }
-
-    if (searchState.results.length === 0) {
-      return false;
-    }
-
-    return true;
-  },
-
-  async replaceAll(): Promise<number> {
-    if (!searchState.replaceValue.trim()) {
-      return 0;
-    }
-
-    if (searchState.results.length === 0) {
-      return 0;
-    }
-
-    const count = searchState.results.length;
-    searchState.results = [];
-    searchState.currentResultIndex = 0;
-    return count;
-  },
-
-  goToNextResult(): void {
-    if (searchState.results.length === 0) {
-      return;
-    }
-
-    searchState.currentResultIndex =
-      (searchState.currentResultIndex + 1) % searchState.results.length;
-  },
-
-  goToPreviousResult(): void {
-    if (searchState.results.length === 0) {
-      return;
-    }
-
-    searchState.currentResultIndex =
-      searchState.currentResultIndex === 0
-        ? searchState.results.length - 1
-        : searchState.currentResultIndex - 1;
-  },
-
-  goToResult(index: number): void {
-    if (index >= 0 && index < searchState.results.length) {
-      searchState.currentResultIndex = index;
-    }
-  },
-
-  toggleCaseSensitive(): void {
-    searchState.caseSensitive = !searchState.caseSensitive;
-    if (searchState.searchValue.trim()) {
-      this.performSearch();
-    }
-  },
-
-  toggleUseRegex(): void {
-    searchState.useRegex = !searchState.useRegex;
-    if (searchState.searchValue.trim()) {
-      this.performSearch();
-    }
-  },
-
-  toggleWholeWord(): void {
-    searchState.wholeWord = !searchState.wholeWord;
-    if (searchState.searchValue.trim()) {
-      this.performSearch();
-    }
-  },
-
-  clearSearch(): void {
-    Object.assign(searchState, {
-      searchValue: '',
-      replaceValue: '',
-      results: [],
-      currentResultIndex: 0,
-      isSearching: false
-    });
-  },
-
-  reset: createResetFunction(searchState, DEFAULT_STATE)
+const SOURCE_MAP: Record<string, string> = {
+  numeric: 'Numérique',
+  categorical: 'Catégorielle',
+  text: 'Texte'
 };
 
-export function getSearchPattern(): RegExp | string {
-  let pattern = searchState.searchValue;
+type SearchActions = {
+  setSearchValue: (value: string) => void;
+  setSelectedSource: (source: string) => void;
+  setReplaceValue: (value: string) => void;
+  performSearch: () => Promise<void>;
+  replaceNext: () => Promise<boolean>;
+  replaceAll: () => Promise<number>;
+  goToNextResult: () => void;
+  goToPreviousResult: () => void;
+  goToResult: (index: number) => void;
+  toggleCaseSensitive: () => void;
+  toggleUseRegex: () => void;
+  toggleWholeWord: () => void;
+  clearSearch: () => void;
+};
 
-  if (!searchState.useRegex) {
-    pattern = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
+const { state, actions, getState } = createToolStore<
+  SearchState,
+  SearchActions
+>(DEFAULT_STATE, (s) => {
+  const performSearch = async (): Promise<void> => {
+    const query = s.searchValue.trim().toLowerCase();
+    if (!query) {
+      s.results = [];
+      s.currentResultIndex = 0;
+      return;
+    }
 
-  if (searchState.wholeWord) {
-    pattern = `\\b${pattern}\\b`;
-  }
+    s.isSearching = true;
 
-  try {
-    return new RegExp(pattern, searchState.caseSensitive ? 'g' : 'gi');
-  } catch (error) {
-    logger.error('Invalid regex pattern', LogCategory.UI, error);
-    return searchState.searchValue;
-  }
-}
+    await new Promise<void>((resolve) => {
+      setTimeout(() => {
+        let filteredResults = FIXTURE_RESULTS.filter((result) =>
+          result.text.toLowerCase().includes(query)
+        );
+
+        if (s.selectedSource !== 'all') {
+          const sourceFilter = SOURCE_MAP[s.selectedSource];
+          if (sourceFilter) {
+            filteredResults = filteredResults.filter((result) =>
+              result.location.includes(sourceFilter)
+            );
+          }
+        }
+
+        s.results = filteredResults;
+        s.currentResultIndex = 0;
+        s.isSearching = false;
+        resolve();
+      }, 500);
+    });
+  };
+
+  return {
+    performSearch,
+    setSearchValue: (value: string) => {
+      s.searchValue = value;
+      if (value.trim()) {
+        performSearch();
+      } else {
+        s.results = [];
+        s.currentResultIndex = 0;
+      }
+    },
+    setSelectedSource: (source: string) => {
+      s.selectedSource = source;
+      if (s.searchValue.trim()) {
+        performSearch();
+      }
+    },
+    setReplaceValue: (value: string) => {
+      s.replaceValue = value;
+    },
+    replaceNext: async (): Promise<boolean> => {
+      if (!s.replaceValue.trim() || s.results.length === 0) {
+        return false;
+      }
+      return true;
+    },
+    replaceAll: async (): Promise<number> => {
+      if (!s.replaceValue.trim() || s.results.length === 0) {
+        return 0;
+      }
+      const count = s.results.length;
+      s.results = [];
+      s.currentResultIndex = 0;
+      return count;
+    },
+    goToNextResult: () => {
+      if (s.results.length === 0) return;
+      s.currentResultIndex = (s.currentResultIndex + 1) % s.results.length;
+    },
+    goToPreviousResult: () => {
+      if (s.results.length === 0) return;
+      s.currentResultIndex =
+        s.currentResultIndex === 0
+          ? s.results.length - 1
+          : s.currentResultIndex - 1;
+    },
+    goToResult: (index: number) => {
+      if (index >= 0 && index < s.results.length) {
+        s.currentResultIndex = index;
+      }
+    },
+    toggleCaseSensitive: () => {
+      s.caseSensitive = !s.caseSensitive;
+      if (s.searchValue.trim()) {
+        performSearch();
+      }
+    },
+    toggleUseRegex: () => {
+      s.useRegex = !s.useRegex;
+      if (s.searchValue.trim()) {
+        performSearch();
+      }
+    },
+    toggleWholeWord: () => {
+      s.wholeWord = !s.wholeWord;
+      if (s.searchValue.trim()) {
+        performSearch();
+      }
+    },
+    clearSearch: () => {
+      s.searchValue = '';
+      s.replaceValue = '';
+      s.results = [];
+      s.currentResultIndex = 0;
+      s.isSearching = false;
+    }
+  };
+});
+
+export const searchState = state;
+export const searchActions = actions;
+export const getSearchState = getState;

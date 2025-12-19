@@ -1,10 +1,11 @@
 import {
-  createResetFunction,
-  createSetStateFunction
-} from '$lib/features/commons/utils/store.utils';
-import type { LegendItem, LegendState } from './legend.types';
+  LegendPosition,
+  LegendTab
+} from '$lib/features/commons/constants/ui.constants';
+import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import type { LegendItem, LegendState, LegendStyle } from './legend.types';
 
-const DEFAULT_LEGEND_STATE: LegendState = {
+const DEFAULT_STATE: LegendState = {
   items: [
     {
       id: 'legend-1',
@@ -23,7 +24,7 @@ const DEFAULT_LEGEND_STATE: LegendState = {
       note: 'Source: INSEE'
     }
   ],
-  position: 'top-right',
+  position: LegendPosition.TOP_RIGHT,
   visible: true,
   style: {
     fontFamily: 'Cabin',
@@ -34,51 +35,59 @@ const DEFAULT_LEGEND_STATE: LegendState = {
       opacity: 100
     }
   },
-  activeTab: 'content'
+  activeTab: LegendTab.CONTENT
 };
 
-export const legendState = $state<LegendState>({ ...DEFAULT_LEGEND_STATE });
+type LegendActions = {
+  addLegendItem: (item: Omit<LegendItem, 'id'>) => LegendItem;
+  removeLegendItem: (id: string) => void;
+  updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
+  toggleLegendVisibility: () => void;
+  setPosition: (position: LegendPosition) => void;
+  setActiveTab: (tab: LegendTab) => void;
+  updateStyle: (updates: Partial<LegendStyle>) => void;
+  updateBackground: (
+    updates: Partial<LegendState['style']['background']>
+  ) => void;
+};
 
-export function getLegendState(): LegendState {
-  return legendState;
-}
-
-export const legendActions = {
-  setState: createSetStateFunction(legendState),
-
-  addLegendItem(item: Omit<LegendItem, 'id'>): LegendItem {
+const { state, actions, getState } = createToolStore<
+  LegendState,
+  LegendActions
+>(DEFAULT_STATE, (s) => ({
+  addLegendItem: (item: Omit<LegendItem, 'id'>): LegendItem => {
     const newItem: LegendItem = {
       ...item,
       id: `legend-${Date.now()}`
     };
-
-    legendState.items = [...legendState.items, newItem];
+    s.items = [...s.items, newItem];
     return newItem;
   },
-
-  removeLegendItem(id: string): void {
-    legendState.items = legendState.items.filter((item) => item.id !== id);
+  removeLegendItem: (id: string) => {
+    s.items = s.items.filter((item) => item.id !== id);
   },
-
-  updateLegendItem(id: string, updates: Partial<LegendItem>): void {
-    legendState.items = legendState.items.map((item) =>
+  updateLegendItem: (id: string, updates: Partial<LegendItem>) => {
+    s.items = s.items.map((item) =>
       item.id === id ? { ...item, ...updates } : item
     );
   },
-
-  toggleLegendVisibility(): void {
-    legendState.visible = !legendState.visible;
+  toggleLegendVisibility: () => {
+    s.visible = !s.visible;
   },
-
-  setPosition(
-    position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
-  ): void {
-    legendState.position = position;
+  setPosition: (position: LegendPosition) => {
+    s.position = position;
   },
-
-  setActiveTab(tab: 'content' | 'style'): void {
-    legendState.activeTab = tab;
+  setActiveTab: (tab: LegendTab) => {
+    s.activeTab = tab;
   },
+  updateStyle: (updates: Partial<LegendStyle>) => {
+    Object.assign(s.style, updates);
+  },
+  updateBackground: (updates: Partial<LegendState['style']['background']>) => {
+    Object.assign(s.style.background, updates);
+  }
+}));
 
-  reset: createResetFunction(legendState, DEFAULT_LEGEND_STATE)
-};
+export const legendState = state;
+export const legendActions = actions;
+export const getLegendState = getState;

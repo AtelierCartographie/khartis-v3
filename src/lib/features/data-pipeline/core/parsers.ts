@@ -1,8 +1,9 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
-import type { PipelineContext, FileFormat } from '../types';
 import { isGeospatialFile, isTabularFile } from '../constants';
+import type { FileFormat, PipelineContext } from '../types';
 
 export class ParserError extends Error {
   constructor(
@@ -23,9 +24,15 @@ export interface ParseResult {
   format: FileFormat;
 }
 
-function generateTableName(filename: string, prefix: string): string {
-  const base = filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
-  return `${prefix}_${base}_${Date.now()}`;
+export function generateTableName(filename: string, prefix?: string): string {
+  let name = filename.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+  if (prefix) {
+    name = `${prefix}_${name}`;
+  } else if (!/^[a-zA-Z]/.test(name)) {
+    name = 't_' + name;
+  }
+  const timestamp = Date.now().toString(36);
+  return `${name}_${timestamp}`;
 }
 
 async function cleanupTableOnError(
@@ -56,7 +63,10 @@ function handleParserError(
     error
   });
   throw new ParserError(
-    `Failed to parse ${parserType}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    m.pipeline_error_parse_failed({
+      format: parserType,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }),
     error,
     parserType
   );
@@ -183,13 +193,13 @@ export async function parseFile(
   }
 
   throw new ParserError(
-    `Unsupported file type: ${file.name}`,
+    m.pipeline_error_unsupported_file({ name: file.name }),
     undefined,
     'unknown'
   );
 }
 
-function detectFileFormat(name: string): FileFormat {
+export function detectFileFormat(name: string): FileFormat {
   const lower = name.toLowerCase();
   if (
     lower.endsWith('.csv') ||
@@ -202,6 +212,7 @@ function detectFileFormat(name: string): FileFormat {
   if (lower.endsWith('.gpkg')) return 'geopackage';
   if (lower.endsWith('.kml')) return 'kml';
   if (lower.endsWith('.kmz')) return 'kmz';
+  if (lower.endsWith('.gpx')) return 'gpx';
   if (lower.endsWith('.geoparquet') || lower.endsWith('.parquet'))
     return 'geoparquet';
   return 'unknown';

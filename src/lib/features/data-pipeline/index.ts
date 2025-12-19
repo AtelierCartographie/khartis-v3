@@ -1,24 +1,13 @@
-// Pipeline facade
-export { createFileFromUpload, dataPipeline, Pipeline } from './pipeline';
+export { createFileFromUpload, dataPipeline } from './pipeline';
 export type { DataPipeline } from './pipeline';
 
-// Types (consolidated)
 export {
   ColumnType,
-  computeBoundsArea,
   computeCentroid,
-  extractBBox,
-  extractGeometryTypes,
-  extractPrimaryGeometryType,
   fromDuckDBType,
-  getNullPercentage,
-  getUniquePercentage,
-  hasNumericStats,
   isGeoArrowMetadata,
   isNumericType,
-  isSpatialType,
-  isTemporalType,
-  isValidBounds,
+  isZipDatasetResult,
   mergeValidationResults,
   validationFailure,
   validationSuccess
@@ -35,8 +24,8 @@ export type {
   EnrichedColumn,
   FileFormat,
   FileInfo,
-  GeoArrowColumnMetadata,
   GeoArrowCRS,
+  GeoArrowColumnMetadata,
   GeoArrowMetadata,
   GeoColumnInfo,
   GeometryInfo,
@@ -46,35 +35,28 @@ export type {
   RawColumn,
   RawDataset,
   UploadedFilePayload,
-  ValidationResult
+  ValidationResult,
+  ZipDatasetResult
 } from './types';
 
-// Constants
-export {
-  getSupportedExtensions,
-  getSupportedMimeTypes,
-  isGeospatialFile,
-  isTabularFile,
-  PIPELINE_CONST
-} from './constants';
+export { PIPELINE_CONST, isGeospatialFile, isTabularFile } from './constants';
 
-// Parsers
 export {
+  ParserError,
   canParseFile,
+  detectFileFormat,
+  generateTableName,
   parseFile,
   parseGeoFile,
-  ParserError,
   parseTabular
 } from './core/parsers';
 
-// Validators
 export {
   validateFile,
   validateFileExtension,
   validateMimeType
 } from './core/validators';
 
-// GeoParquet reader
 export {
   extractGeoArrowMetadata,
   geoParquetReader,
@@ -83,14 +65,11 @@ export {
   tableHasGeoArrowMetadata
 } from './io/geoparquet-reader';
 
-// GeoJSON utilities
-export { convertGeoJSONToRawDataset } from './utils/geojson-converter';
 export type {
   GeoJSONFeature,
   GeoJSONFeatureCollection
 } from './utils/geojson-converter';
 
-// GeoJSON guards
 export {
   describeGeojsonStructure,
   isFeature,

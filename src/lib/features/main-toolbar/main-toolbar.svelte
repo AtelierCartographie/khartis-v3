@@ -74,11 +74,6 @@
       'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
     }
   )}
-  style="width: {globalState.toolbarState === ToolbarState.Collapsed
-    ? '50px'
-    : globalState.toolbarState === ToolbarState.Compact
-      ? '400px'
-      : 'var(--cds-main-toolbar-width)'}"
 >
   <header class="flex sticky z-1000 bg-white border-b main-toolbar-header">
     {#if globalState.toolbarState === ToolbarState.Compact}
@@ -210,12 +205,12 @@
     border-left: 1px solid var(--cds-ui-01);
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      right 0.2s ease-in-out;
-    width: var(--cds-main-toolbar-width);
+      flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     height: calc(100dvh - var(--cds-header-height));
     overflow-y: scroll;
     position: relative;
     gap: var(--cds-spacing-05);
+    flex-shrink: 0;
   }
 
   .scrollbar-hidden {
@@ -228,21 +223,21 @@
   }
 
   nav.full {
-    right: 0;
-    width: var(--cds-main-toolbar-width);
+    width: 50%;
+    min-width: 400px;
+    max-width: 800px;
   }
 
   nav.compact {
-    width: 400px !important;
-    right: 0;
+    width: 320px;
   }
 
   nav.collapsed {
-    right: 0;
-    width: 50px !important;
-    min-width: 0;
+    width: 50px;
+    min-width: 50px;
     padding: 0;
     height: calc(100dvh - 47px);
+    overflow: hidden;
   }
 
   .collapsed-toolbar {

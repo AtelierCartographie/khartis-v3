@@ -3,17 +3,19 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import {
+  generateTableName,
   geoParquetReader,
-  type GeoArrowMetadata
+  type GeoArrowMetadata,
+  type ProcessedDataset
 } from '$lib/features/data-pipeline';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
   BasemapMetadata,
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
-import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type { Table } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { Duck, initDuckDB } from '../duck';
@@ -31,12 +33,12 @@ import {
 } from '../types';
 import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 
-import * as columnOps from './column-ops';
-import * as gpsOps from './gps-ops';
 import * as arrowOps from './arrow-ops';
-import * as joinOps from './join-ops';
-import * as fileProcessors from './file-processors';
+import * as columnOps from './column-ops';
 import * as datasetState from './dataset-state';
+import * as fileProcessors from './file-processors';
+import * as gpsOps from './gps-ops';
+import * as joinOps from './join-ops';
 
 export {
   FileType,
@@ -141,7 +143,7 @@ class DuckDBOrchestratorService {
       } catch (error) {
         this.initPromise = null;
         logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, error);
-        showError('DuckDB initialization failed', 'Please refresh the page');
+        showError(m.error_duckdb_init_title(), m.error_duckdb_init_message());
         throw error;
       }
     })();
@@ -252,7 +254,7 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      const tableName = fileProcessors.generateTableName(file.name);
+      const tableName = generateTableName(file.name);
       const callbacks = {
         getRowCount: (tn: string) => this.getRowCount(tn),
         createArrowTableWithMetadata: (tn: string) =>
@@ -334,8 +336,8 @@ class DuckDBOrchestratorService {
         error
       );
       showError(
-        'Failed to process file',
-        error instanceof Error ? error.message : 'Unknown error'
+        m.error_process_file_title(),
+        error instanceof Error ? error.message : m.error_unknown()
       );
       return null;
     }
@@ -419,8 +421,11 @@ class DuckDBOrchestratorService {
           if (result.geoColumn) ds.geoColumn = result.geoColumn;
           if (result.gpsMode) ds.gpsMode = result.gpsMode;
           if (result.gpsColumns) ds.gpsColumns = result.gpsColumns;
+          ds.arrowTableWithMetadata = undefined;
         }
       });
+
+      Duck.invalidateTableCache(dataset.tableName);
       this.bumpDatasetsVersion();
     } catch (error) {
       logger.error('Failed to finalize join', LogCategory.DATA, {
@@ -532,6 +537,49 @@ class DuckDBOrchestratorService {
     }
   }
 
+  async getRowPosition(
+    tableName: string,
+    rowId: number,
+    options?: {
+      orderBy?: string | null;
+      order?: 'ASC' | 'DESC' | null;
+    }
+  ): Promise<number> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    try {
+      const whereClause = buildFilterWhereClause(this._filters.get(tableName));
+      const filterPart = whereClause ? `WHERE ${whereClause}` : '';
+      const orderPart =
+        options?.orderBy && options?.order
+          ? `ORDER BY "${options.orderBy}" ${options.order}`
+          : 'ORDER BY __id ASC';
+
+      const query = `
+        WITH ordered AS (
+          SELECT __id, ROW_NUMBER() OVER (${orderPart}) - 1 as position
+          FROM "${tableName}"
+          ${filterPart}
+        )
+        SELECT position FROM ordered WHERE __id = ${rowId}
+      `;
+
+      const result = (await Duck.query(query)) as ArrowTableLike;
+      if (result.numRows > 0) {
+        const row = result.get(0);
+        return Number(row.position);
+      }
+      return -1;
+    } catch (error) {
+      logger.error('Error getting row position', LogCategory.DUCKDB, error);
+      return -1;
+    }
+  }
+
   async getRowStats(tableName: string): Promise<FilterStats> {
     if (!this.initialized) {
       await this.initialize();
@@ -605,6 +653,15 @@ class DuckDBOrchestratorService {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.renameColumn(tableName, oldName, newName, Duck);
+
+    const filters = this._filters.get(tableName);
+    if (filters) {
+      const updatedFilters = filters.map((f) =>
+        f.column === oldName ? { ...f, column: newName } : f
+      );
+      this._filters.set(tableName, updatedFilters);
+    }
+
     this.bumpDatasetsVersion();
   }
 
@@ -1224,7 +1281,9 @@ class DuckDBOrchestratorService {
 
     const emptyResult: SearchStats = {
       exactCount: 0,
-      partialCount: 0,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 0,
       results: []
     };
 

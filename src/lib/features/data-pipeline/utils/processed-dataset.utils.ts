@@ -1,4 +1,8 @@
 import type {
+  GeoColumnResult,
+  GeoDetectionResult
+} from '$lib/features/commons/utils/geo-detector.utils';
+import type {
   ColumnInfo,
   ColumnStats,
   DatasetResult,
@@ -8,10 +12,6 @@ import type {
   ProcessedDatasetAnalysisResult
 } from '../types';
 import { ColumnType, isNumericType } from '../types';
-import type {
-  GeoColumnResult,
-  GeoDetectionResult
-} from '$lib/features/commons/utils/geo-detector.utils';
 
 type DatasetLike = DatasetResult | ProcessedDataset;
 

@@ -1,5 +1,11 @@
 <script lang="ts">
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
+  import {
+    vizSuggester,
+    type GeometryType
+  } from '$lib/features/commons/services/viz-suggester.service';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -19,33 +25,55 @@
     ratio?: string;
   }
 
-  const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
-  const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
   let selectedFieldId = $state<number>(0);
+  let selectedSuggestion = $state<string | undefined>(undefined);
 
-  let suggestions = $state<Suggestion[]>([
-    {
-      id: 'symb1',
-      title: 'Symboles proportionnels',
-      tags: ['Sous-alim 2020'],
-      ratio: '1:1'
-    },
-    {
-      id: 'symb2',
-      title: 'Symboles proportionnels',
-      subtitle: 'colorés',
-      tags: ['Sous-alim 2020', 'Part sous-alim.'],
-      ratio: '1:1'
-    },
-    {
-      id: 'symb3',
-      title: 'Symboles proportionnels',
-      tags: ['Sous-alim 2020', '+ 3'],
-      ratio: '1:1'
+  const dataFieldItems = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset?.columns) return [];
+    return dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .map((col, id) => ({ id, text: col.name }));
+  });
+
+  const suggestions = $derived.by((): Suggestion[] => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset?.columns) return [];
+
+    const columnAnalysis: ColumnAnalysis[] = dataset.columns.map((col) => ({
+      name: col.name,
+      type: col.type,
+      stats: {
+        count: col.stats?.count ?? 0,
+        nulls: col.stats?.nulls ?? 0,
+        uniques: col.stats?.uniques ?? 0,
+        min: col.stats?.min,
+        max: col.stats?.max,
+        mean: col.stats?.mean
+      }
+    }));
+
+    const geometryType = (dataset.geometry?.type as GeometryType) || null;
+
+    const vizSuggestions = vizSuggester.suggestVisualizations(
+      columnAnalysis,
+      geometryType,
+      { maxSuggestions: 5 }
+    );
+
+    return vizSuggestions.map((viz) => ({
+      id: viz.id,
+      title: viz.label,
+      tags: viz.columns || [],
+      ratio: viz.nbColumns > 0 ? `${viz.nbColumns}:1` : undefined
+    }));
+  });
+
+  $effect(() => {
+    if (suggestions.length > 0 && !selectedSuggestion) {
+      selectedSuggestion = suggestions[0].id;
     }
-  ]);
-
-  let selectedSuggestion = $state<string>('symb2');
+  });
 </script>
 
 <section id="choose-visualization">

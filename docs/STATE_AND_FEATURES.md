@@ -209,13 +209,36 @@ Sorted by `updatedAt` descending on load.
 
 ## Project Management Services
 
-| Service                                                                                       | Responsibility                                                                       | Notes                                                                                                                                                          |
-| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ProjectRepository` (`src/lib/features/project-management/services/project-repository.ts`)    | Owns the IndexedDB connection and read/write lifecycle for `KhartisProject` records. | Runs `ProjectSerializer.prepareForIndexedDB` before `put`, updates `SavedProjectMetadata` via `projectStorage`, and lazily creates the object store + indices. |
-| `projectStorage` (`src/lib/features/project-management/services/project-storage.ts`)          | Thin localforage wrapper for metadata and preferences.                               | Serializes payloads to JSON strings so quotas/errors can be surfaced with meaningful messages.                                                                 |
-| `ProjectSerializer` (`src/lib/features/project-management/utils/project-serializer.ts`)       | Converts between runtime and persisted representations.                              | Normalizes dates, uploaded files, and deep-clones projects so IndexedDB never sees prototypes or `ArrayBuffer` references.                                     |
-| `ProjectFileService` (`src/lib/features/project-management/services/project-file.service.ts`) | Handles import/export flows.                                                         | Exports pretty JSON or `.kh` archives, compresses/ decompresses payloads, validates manifests, and persists imports through the repository.                    |
-| `AutoSaveController` (`src/lib/features/project-management/services/auto-save.controller.ts`) | Debounces persistence after state mutations.                                         | Runs only in the browser, resets timers on each mutation, and surfaces failures via `console.error` for upstream handling.                                     |
+The project management feature uses **modular functional design** with the following structure:
+
+```
+src/lib/features/project-management/
+├── index.ts              # Public API barrel exports
+├── types.ts              # Type definitions
+├── constants.ts          # Storage keys and limits
+├── core/
+│   ├── persistence.ts    # projectRepository (IndexedDB operations)
+│   ├── storage.ts        # projectStorage (localforage wrapper)
+│   └── serializer.ts     # serialize/deserialize functions
+├── io/
+│   ├── exporter.ts       # exportProject, createArchive
+│   └── importer.ts       # importProject
+├── operations/
+│   ├── auto-save.ts      # AutoSaveController class
+│   └── duplicate.ts      # duplicateProject function
+└── utils/
+    └── json-helpers.ts   # JSON utilities
+```
+
+| Module                        | Location                  | Responsibility                                                       |
+| ----------------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `projectRepository`           | `core/persistence.ts`     | IndexedDB connection, save/load/remove projects, metadata management |
+| `projectStorage`              | `core/storage.ts`         | Thin localforage wrapper for metadata and preferences                |
+| `serialize/deserialize`       | `core/serializer.ts`      | Convert between runtime and persisted representations                |
+| `exportProject/createArchive` | `io/exporter.ts`          | Export to JSON or compressed `.kh` archive                           |
+| `importProject`               | `io/importer.ts`          | Import and validate project files                                    |
+| `AutoSaveController`          | `operations/auto-save.ts` | Debounced persistence after mutations                                |
+| `duplicateProject`            | `operations/duplicate.ts` | Clone existing projects                                              |
 
 ## Feature Pattern
 

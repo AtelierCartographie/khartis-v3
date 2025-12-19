@@ -86,4 +86,7 @@ export interface SerializedUploadedFile {
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: { lat: string; lon: string };
+  // ZIP multi-file support
+  sourceArchive?: string;
+  duckdbTableName?: string;
 }

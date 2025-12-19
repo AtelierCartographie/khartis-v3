@@ -2,21 +2,33 @@
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import { SkeletonPlaceholder } from 'carbon-components-svelte';
+  import {
+    InlineNotification,
+    SkeletonPlaceholder
+  } from 'carbon-components-svelte';
+  import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
   import { onMount } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import DeckMap from './components/deck-map.svelte';
-  import { basemapService } from './services/basemap.service.svelte';
+  import {
+    formatActions,
+    formatState
+  } from '../step-toolbar/tools/format/format.store.svelte';
+  import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
+
+  let containerRef: HTMLDivElement;
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
+  let hasError = $state(false);
+  let errorMessage = $state<string | null>(null);
   let displayTable = $state<ArrowTable | null>(null);
   let displayGeoJSON = $state<FeatureCollection | null>(null);
+  let displayDatasetId = $state<string | undefined>(undefined);
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -57,7 +69,7 @@
       }
 
       logger.warn(
-        'Dataset missing geometry metadata, falling back to basemap',
+        'Dataset missing geometry metadata, showing empty map',
         LogCategory.MAP,
         {
           datasetId: dataset.id
@@ -70,25 +82,27 @@
         LogCategory.MAP,
         error
       );
+      hasError = true;
+      errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Erreur de conversion des donnees';
       return null;
     }
   }
 
-  async function loadFallbackBasemap(): Promise<void> {
-    const start = performance.now();
-    logger.info('Loading fallback basemap for map view', LogCategory.MAP);
-    const basemap = await basemapService.loadDefaultBasemap();
+  function clearDisplay(): void {
+    displayTable = null;
+    displayGeoJSON = null;
+    displayDatasetId = undefined;
+    logger.info('Cleared map display - showing empty map', LogCategory.MAP);
+  }
 
-    if (basemap?.geometryTable) {
-      displayTable = basemap.geometryTable;
-      displayGeoJSON = null;
-      logger.success('Fallback basemap ready', LogCategory.MAP, {
-        basemapId: basemap.metadata.file,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-    } else {
-      logger.error('Failed to load fallback basemap', LogCategory.MAP);
-    }
+  function setWaitingForData(datasetId: string): void {
+    displayTable = null;
+    displayGeoJSON = null;
+    displayDatasetId = datasetId;
+    logger.info('Waiting for data to load', LogCategory.MAP, { datasetId });
   }
 
   async function loadJoinedBasemap(
@@ -97,8 +111,10 @@
     tableName: string
   ): Promise<void> {
     const start = performance.now();
+    const datasetIdAtStart = dataset.id;
+
     logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
-      datasetId: dataset.id,
+      datasetId: datasetIdAtStart,
       joinedBasemap,
       tableName
     });
@@ -109,73 +125,116 @@
         joinedBasemap
       );
 
+      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+        logger.debug(
+          'Dataset changed during joined basemap load, ignoring',
+          LogCategory.MAP,
+          {
+            loadedDatasetId: datasetIdAtStart,
+            currentSelectedId: datasetsStore.selectedDataset?.id
+          }
+        );
+        return;
+      }
+
       if (joinedTable) {
         displayTable = joinedTable;
         displayGeoJSON = null;
+        displayDatasetId = datasetIdAtStart;
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
           rows: joinedTable.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
         logger.warn(
-          'No joined data returned, falling back to basemap',
+          'No joined data returned, clearing display',
           LogCategory.MAP
         );
-        await loadFallbackBasemap();
+        clearDisplay();
       }
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
-      await loadFallbackBasemap();
+      clearDisplay();
     }
   }
 
   async function loadGPSData(datasetId: string): Promise<void> {
     const start = performance.now();
+    const datasetIdAtStart = datasetId;
+
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
-      datasetId
+      datasetId: datasetIdAtStart
     });
 
     try {
-      const { table } = await duckDBOrchestrator.getGPSArrowTable(datasetId);
+      const { table } =
+        await duckDBOrchestrator.getGPSArrowTable(datasetIdAtStart);
+
+      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+        logger.debug(
+          'Dataset changed during GPS data load, ignoring',
+          LogCategory.MAP,
+          {
+            loadedDatasetId: datasetIdAtStart,
+            currentSelectedId: datasetsStore.selectedDataset?.id
+          }
+        );
+        return;
+      }
 
       if (table) {
         displayTable = table;
         displayGeoJSON = null;
+        displayDatasetId = datasetIdAtStart;
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
           rows: table.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
-        logger.warn(
-          'No GPS data returned, falling back to basemap',
-          LogCategory.MAP
-        );
-        await loadFallbackBasemap();
+        logger.warn('No GPS data returned, clearing display', LogCategory.MAP);
+        clearDisplay();
       }
     } catch (error) {
       logger.error('Failed to load GPS data', LogCategory.MAP, error);
-      await loadFallbackBasemap();
+      clearDisplay();
     }
   }
 
   $effect(() => {
-    const _version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     if (isInitializing) {
       return;
     }
 
+    hasError = false;
+    errorMessage = null;
+
     if (selectedDataset) {
+      const currentDatasetId = selectedDataset.id;
+
       logger.debug('Map reacting to dataset change', LogCategory.MAP, {
-        datasetId: selectedDataset.id
+        datasetId: currentDatasetId
       });
 
-      // Check if dataset has native geometry (GeoJSON, Shapefile, etc.)
       if (selectedDataset.geometry) {
         convertDatasetToGeoJSON(selectedDataset).then((result) => {
+          if (datasetsStore.selectedDataset?.id !== currentDatasetId) {
+            logger.debug(
+              'Dataset changed during async load, ignoring result',
+              LogCategory.MAP,
+              {
+                loadedDatasetId: currentDatasetId,
+                currentSelectedId: datasetsStore.selectedDataset?.id
+              }
+            );
+            return;
+          }
+
           if (result) {
             if ('numRows' in result) {
               displayTable = result;
               displayGeoJSON = null;
+              displayDatasetId = currentDatasetId;
               logger.info(
                 'Map display updated with Arrow table',
                 LogCategory.MAP,
@@ -186,21 +245,20 @@
             } else if ('features' in result) {
               displayTable = null;
               displayGeoJSON = result;
+              displayDatasetId = currentDatasetId;
               logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
                 features: result.features.length
               });
             }
           } else {
-            loadFallbackBasemap();
+            setWaitingForData(currentDatasetId);
           }
         });
       } else {
-        // Check if dataset is joined to a basemap (tabular data)
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           selectedDataset.sourceFileId
         );
 
-        // GPS mode - render points on OSM basemap
         if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
           loadGPSData(duckDBDataset.id);
         } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
@@ -210,22 +268,20 @@
             duckDBDataset.tableName
           );
         } else {
-          loadFallbackBasemap();
+          setWaitingForData(currentDatasetId);
         }
       }
     } else {
-      loadFallbackBasemap();
+      clearDisplay();
     }
   });
 
-  // Effect to handle OSM basemap activation - load GPS data when OSM is selected
   $effect(() => {
     const osmBasemap = activeOSMBasemap;
     if (isInitializing || !osmBasemap || !selectedDataset) {
       return;
     }
 
-    // When OSM basemap is activated, check if we need to load GPS data
     const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
       selectedDataset.sourceFileId
     );
@@ -239,33 +295,38 @@
     }
   });
 
-  onMount(async () => {
+  let resizeObserver: ResizeObserver | null = null;
+
+  function handleContainerResize() {
+    if (!containerRef) return;
+    const rect = containerRef.getBoundingClientRect();
+    formatActions.fitToContainer(rect.width, rect.height);
+  }
+
+  async function initializeMap() {
     const start = performance.now();
     logger.info('Initializing main map view', LogCategory.MAP);
 
-    await basemapService.initialize();
-
     if (selectedDataset?.geometry) {
-      // Dataset has native geometry
       const result = await convertDatasetToGeoJSON(selectedDataset);
       if (result) {
         if ('numRows' in result) {
           displayTable = result;
           displayGeoJSON = null;
+          displayDatasetId = selectedDataset.id;
         } else if ('features' in result) {
           displayTable = null;
           displayGeoJSON = result;
+          displayDatasetId = selectedDataset.id;
         }
       } else {
-        await loadFallbackBasemap();
+        setWaitingForData(selectedDataset.id);
       }
     } else if (selectedDataset) {
-      // Check if tabular dataset is joined to a basemap
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         selectedDataset.sourceFileId
       );
 
-      // GPS mode - render points on OSM basemap
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
         await loadGPSData(duckDBDataset.id);
       } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
@@ -275,16 +336,31 @@
           duckDBDataset.tableName
         );
       } else {
-        await loadFallbackBasemap();
+        setWaitingForData(selectedDataset.id);
       }
     } else {
-      await loadFallbackBasemap();
+      clearDisplay();
     }
 
     logger.success('Main map data ready', LogCategory.MAP, {
       durationMs: (performance.now() - start).toFixed(2)
     });
     isInitializing = false;
+  }
+
+  onMount(() => {
+    handleContainerResize();
+
+    resizeObserver = new ResizeObserver(() => {
+      handleContainerResize();
+    });
+    resizeObserver.observe(containerRef);
+
+    initializeMap();
+
+    return () => {
+      resizeObserver?.disconnect();
+    };
   });
 
   function handleMapReady() {
@@ -293,76 +369,76 @@
   }
 </script>
 
-<div class="map-container">
+<div class="main-map-container" bind:this={containerRef}>
   <!-- Skeleton loader - only during initial load -->
   {#if !isMapReady}
-    <div class="skeleton-loader" out:fade={{ duration: 300, easing: cubicOut }}>
+    <div
+      class="skeleton-loader"
+      style="width: {formatState.width}px; height: {formatState.height}px;"
+      out:fade={{ duration: 300, easing: cubicOut }}
+    >
       <SkeletonPlaceholder style="width: 100%; height: 100%;" />
     </div>
   {/if}
 
-  <!-- Map wrapper - rendered once data is ready -->
-  {#if !isInitializing && displayTable}
-    <div class="map-wrapper" class:visible={isMapReady}>
-      <DeckMap
-        jsTable={displayTable}
-        userGeoJSON={null}
-        onReady={handleMapReady}
-      />
-    </div>
-  {:else if !isInitializing && displayGeoJSON}
-    <div class="map-wrapper" class:visible={isMapReady}>
-      <DeckMap
-        jsTable={null}
-        userGeoJSON={displayGeoJSON}
-        onReady={handleMapReady}
+  <!-- Map wrapper - always rendered once initialized -->
+  {#if !isInitializing && hasError}
+    <div class="error-state" in:fade={{ duration: 300 }}>
+      <div class="error-icon">
+        <WarningAlt size={32} />
+      </div>
+      <InlineNotification
+        kind="error"
+        title="Erreur de chargement"
+        subtitle={errorMessage ??
+          'Une erreur est survenue lors du chargement de la carte'}
+        hideCloseButton
+        lowContrast
       />
     </div>
   {:else if !isInitializing}
-    <div class="empty-state" in:fade={{ duration: 300 }}>
-      <div class="empty-icon">
-        <svg
-          viewBox="0 0 24 24"
-          width="48"
-          height="48"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-        >
-          <path
-            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-          />
-        </svg>
-      </div>
-      <span>Aucune donnee chargee</span>
+    <div class="thematic-map-wrapper" class:visible={isMapReady}>
+      <ThematicMap
+        jsTable={displayTable}
+        userGeoJSON={displayGeoJSON}
+        datasetId={displayDatasetId}
+        width={formatState.width}
+        height={formatState.height}
+        onReady={handleMapReady}
+      />
     </div>
   {/if}
 </div>
 
 <style>
-  .map-container {
-    width: 100%;
-    background-color: var(--cds-ui-background);
-    position: relative;
-    border-radius: 4px;
-  }
-
-  .map-wrapper {
+  .main-map-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
     height: 100%;
+    position: relative;
+  }
+
+  .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
   }
 
-  .map-wrapper.visible {
+  .thematic-map-wrapper.visible {
     opacity: 1;
   }
 
   .skeleton-loader {
     position: absolute;
-    inset: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     z-index: 10;
     overflow: hidden;
+    pointer-events: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
   }
 
   .skeleton-loader :global(.bx--skeleton__placeholder) {
@@ -370,7 +446,7 @@
     height: 100%;
   }
 
-  .empty-state {
+  .error-state {
     width: 100%;
     height: 100%;
     display: flex;
@@ -378,11 +454,15 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: var(--cds-text-secondary, #525252);
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    padding: 2rem;
+    background: var(--cds-ui-01, #f4f4f4);
   }
 
-  .empty-icon {
-    opacity: 0.5;
+  .error-icon {
+    color: var(--cds-support-error, #da1e28);
+  }
+
+  .error-state :global(.bx--inline-notification) {
+    max-width: 400px;
   }
 </style>

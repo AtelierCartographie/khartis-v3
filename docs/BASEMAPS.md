@@ -103,7 +103,7 @@ Compute the bbox with GDAL (`ogrinfo`) or DuckDB (`ST_Envelope_Agg`).
 1. Copy geometry files to `static/basemaps/geometry/`
 2. Update `all-basemaps-metadata.json`
 3. Append attributes to `all-basemaps-attributes.parquet`
-4. Test in-app (`yarn dev`, create a project, verify the join suggestions)
+4. Test in-app (`pnpm dev`, create a project, verify the join suggestions)
 
 ## ✅ Validation checklist
 

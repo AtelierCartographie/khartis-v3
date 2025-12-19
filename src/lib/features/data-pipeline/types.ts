@@ -1,8 +1,6 @@
-import type { Duck } from '$lib/features/duckdb';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
-
-// --- Column Types ---
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import type { Duck } from '$lib/features/duckdb';
 
 export enum ColumnType {
   BOOLEAN = 'boolean',
@@ -12,16 +10,43 @@ export enum ColumnType {
   TEXT = 'text'
 }
 
+export enum GeometryTypeEnum {
+  POINT = 'Point',
+  MULTIPOINT = 'MultiPoint',
+  LINESTRING = 'LineString',
+  MULTILINESTRING = 'MultiLineString',
+  POLYGON = 'Polygon',
+  MULTIPOLYGON = 'MultiPolygon'
+}
+
+export enum GeoLocationType {
+  LATITUDE = 'latitude',
+  LONGITUDE = 'longitude',
+  COUNTRY_NAME = 'country_name',
+  ISO2 = 'iso2',
+  ISO3 = 'iso3',
+  NUTS = 'nuts',
+  REGION = 'region',
+  CITY = 'city',
+  COORDINATES = 'coordinates',
+  LOCATION_NAME = 'location_name',
+  UNKNOWN = 'unknown'
+}
+
+export enum FileFormatEnum {
+  CSV = 'csv',
+  GEOJSON = 'geojson',
+  SHAPEFILE = 'shapefile',
+  GEOPACKAGE = 'geopackage',
+  GEOPARQUET = 'geoparquet',
+  KML = 'kml',
+  KMZ = 'kmz',
+  GPX = 'gpx',
+  UNKNOWN = 'unknown'
+}
+
 export function isNumericType(type: ColumnType): boolean {
   return type === ColumnType.NUMBER;
-}
-
-export function isTemporalType(type: ColumnType): boolean {
-  return type === ColumnType.DATE;
-}
-
-export function isSpatialType(type: ColumnType): boolean {
-  return type === ColumnType.GEOMETRY;
 }
 
 export function fromDuckDBType(duckType: string): ColumnType {
@@ -44,8 +69,6 @@ export function fromDuckDBType(duckType: string): ColumnType {
   return ColumnType.TEXT;
 }
 
-// --- Column Stats ---
-
 export interface ColumnStats {
   name: string;
   type: ColumnType;
@@ -58,26 +81,6 @@ export interface ColumnStats {
   median?: number;
   stdDev?: number;
 }
-
-export function hasNumericStats(stats: ColumnStats): boolean {
-  return (
-    stats.mean !== undefined &&
-    stats.median !== undefined &&
-    stats.stdDev !== undefined
-  );
-}
-
-export function getNullPercentage(stats: ColumnStats): number {
-  if (stats.count === 0) return 0;
-  return (stats.nulls / stats.count) * 100;
-}
-
-export function getUniquePercentage(stats: ColumnStats): number {
-  if (stats.count === 0) return 0;
-  return (stats.uniques / stats.count) * 100;
-}
-
-// --- Raw Data Types ---
 
 export interface RawColumn {
   name: string;
@@ -96,18 +99,14 @@ export interface RawDataset {
   metadata: Record<string, unknown>;
 }
 
-// --- Enriched Column ---
-
 export interface EnrichedColumn extends InferredColumn {
   stats: ColumnStats;
 }
 
-// --- Geometry Types ---
-
 export interface GeometryInfo {
   type: string;
-  bounds: [number, number, number, number]; // [minLon, minLat, maxLon, maxLat]
-  centroid: [number, number]; // [lon, lat]
+  bounds: [number, number, number, number];
+  centroid: [number, number];
   crs?: string;
   featureCount?: number;
 }
@@ -117,29 +116,6 @@ export function computeCentroid(
 ): [number, number] {
   return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
 }
-
-export function isValidBounds(
-  bounds: [number, number, number, number]
-): boolean {
-  return (
-    bounds[0] < bounds[2] &&
-    bounds[1] < bounds[3] &&
-    bounds[0] >= -180 &&
-    bounds[2] <= 180 &&
-    bounds[1] >= -90 &&
-    bounds[3] <= 90
-  );
-}
-
-export function computeBoundsArea(
-  bounds: [number, number, number, number]
-): number {
-  const width = bounds[2] - bounds[0];
-  const height = bounds[3] - bounds[1];
-  return width * height;
-}
-
-// --- Validation Types ---
 
 export interface ValidationResult {
   isValid: boolean;
@@ -167,8 +143,6 @@ export function mergeValidationResults(
     warnings: results.flatMap((r) => r.warnings)
   };
 }
-
-// --- GeoArrow Metadata ---
 
 export interface GeoArrowMetadata {
   version: string;
@@ -203,29 +177,6 @@ export function isGeoArrowMetadata(obj: unknown): obj is GeoArrowMetadata {
   return typeof columns === 'object' && columns !== null;
 }
 
-export function extractBBox(
-  metadata: GeoArrowMetadata
-): [number, number, number, number] | undefined {
-  const primaryColumn = metadata.primary_column;
-  const columnMetadata = metadata.columns[primaryColumn];
-  return columnMetadata?.bbox;
-}
-
-export function extractGeometryTypes(metadata: GeoArrowMetadata): string[] {
-  const primaryColumn = metadata.primary_column;
-  const columnMetadata = metadata.columns[primaryColumn];
-  return columnMetadata?.geometry_types || [];
-}
-
-export function extractPrimaryGeometryType(
-  metadata: GeoArrowMetadata
-): string | undefined {
-  const types = extractGeometryTypes(metadata);
-  return types.length > 0 ? types[0] : undefined;
-}
-
-// --- Column Analysis ---
-
 export interface ColumnAnalysis {
   name?: string;
   type?: ColumnType | string;
@@ -250,8 +201,6 @@ export interface ColumnAnalysis {
   dateInfo?: { earliest: Date; latest: Date; range: string };
 }
 
-// --- Public API Types ---
-
 export interface ColumnInfo {
   name: string;
   type: 'number' | 'string' | 'date' | 'boolean' | 'geometry';
@@ -266,17 +215,7 @@ export interface ColumnInfo {
 export interface GeoColumnInfo {
   index: number;
   columnName: string;
-  type:
-    | 'latitude'
-    | 'longitude'
-    | 'country_name'
-    | 'iso2'
-    | 'iso3'
-    | 'region'
-    | 'city'
-    | 'coordinates'
-    | 'location_name'
-    | 'unknown';
+  type: `${GeoLocationType}`;
   confidence: number;
   isValid?: boolean;
 }
@@ -290,17 +229,7 @@ export interface AnalysisResult {
   warnings: string[];
 }
 
-// --- Dataset Result (main output) ---
-
-export type FileFormat =
-  | 'csv'
-  | 'geojson'
-  | 'shapefile'
-  | 'geopackage'
-  | 'geoparquet'
-  | 'kml'
-  | 'kmz'
-  | 'unknown';
+export type FileFormat = `${FileFormatEnum}`;
 
 export interface DatasetMetadata {
   processedAt: Date;
@@ -336,8 +265,6 @@ export interface DatasetResult {
   geoColumn?: string;
 }
 
-// --- ProcessedDataset (public API compatibility) ---
-
 export interface ProcessedDatasetAnalysisResult {
   columns: ColumnInfo[];
   geoColumns: GeoColumnInfo[] | unknown[];
@@ -356,13 +283,7 @@ export interface ProcessedDataset {
   rowCount: number;
   columns: ColumnInfo[];
   analysis: ProcessedDatasetAnalysisResult;
-  geometry?:
-    | 'Point'
-    | 'LineString'
-    | 'Polygon'
-    | 'MultiPoint'
-    | 'MultiLineString'
-    | 'MultiPolygon';
+  geometry?: `${GeometryTypeEnum}`;
   bounds?: { minLat: number; maxLat: number; minLon: number; maxLon: number };
   duckdbTableName?: string;
   createdAt: Date;
@@ -376,13 +297,9 @@ export interface ProcessedDataset {
   };
 }
 
-// --- Pipeline Context ---
-
 export interface PipelineContext {
   duck: typeof Duck;
 }
-
-// --- Uploaded File Payload ---
 
 export interface UploadedFilePayload {
   id: string;
@@ -395,9 +312,8 @@ export interface UploadedFilePayload {
   deepAnalysis?: DataAnalysisResult;
   preparedGeoJSON?: string;
   relatedFileObjects?: File[];
+  relatedFilesData?: Record<string, ArrayBuffer | number[]>;
 }
-
-// --- DuckDB Analytics Column (internal) ---
 
 export interface DuckAnalyticsColumn {
   name: string;
@@ -412,6 +328,18 @@ export interface DuckAnalyticsColumn {
   stddev?: number | string;
 }
 
-// --- File Info ---
-
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;
+
+export interface ZipDatasetResult {
+  datasets: DatasetResult[];
+  sourceZipName: string;
+  totalFiles: number;
+  processedFiles: number;
+  skippedFiles: string[];
+}
+
+export function isZipDatasetResult(
+  result: DatasetResult | ZipDatasetResult
+): result is ZipDatasetResult {
+  return 'datasets' in result && Array.isArray(result.datasets);
+}

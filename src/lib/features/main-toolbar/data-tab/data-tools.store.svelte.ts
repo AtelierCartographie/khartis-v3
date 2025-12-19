@@ -1,4 +1,9 @@
-import { DataToolType } from './data-tab.types';
+export enum DataToolType {
+  None = 'none',
+  Search = 'search',
+  Filters = 'filters',
+  Calculator = 'calculator'
+}
 
 interface DataToolsState {
   activeTool: DataToolType;
