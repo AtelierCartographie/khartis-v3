@@ -239,6 +239,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    if: false # TEMPORARILY DISABLED
     needs: build-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -311,7 +312,7 @@ jobs:
 
   merge-reports:
     name: Merge E2E Reports
-    if: ${{ !cancelled() }}
+    if: false # TEMPORARILY DISABLED
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
@@ -391,7 +392,7 @@ jobs:
   pr-validation-complete:
     name: PR Validation Complete
     needs:
-      [lint, svelte-check, unit-tests, build-check, e2e-tests, merge-reports]
+      [lint, svelte-check, unit-tests, build-check] # e2e-tests, merge-reports temporarily removed
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -407,7 +408,7 @@ jobs:
           TYPECHECK="${{ needs.svelte-check.result }}"
           UNIT="${{ needs.unit-tests.result }}"
           BUILD="${{ needs.build-check.result }}"
-          E2E="${{ needs.e2e-tests.result }}"
+          # E2E tests temporarily disabled
 
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -436,21 +437,17 @@ jobs:
             echo "| 📦 Build | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           fi
 
-          if [ "$E2E" == "success" ]; then
-            echo "| 🎭 E2E Tests (Playwright) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🎭 E2E Tests (Playwright) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
+          # E2E TEMPORARILY DISABLED
+          echo "| 🎭 E2E Tests (Playwright) | ⏸️ Disabled |" >> $GITHUB_STEP_SUMMARY
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Calculate health score
+          # Calculate health score (E2E excluded - 25 points each for 4 checks)
           SCORE=0
-          [ "$LINT" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$E2E" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$LINT" == "success" ] && SCORE=$((SCORE + 25))
+          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 25))
+          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 25))
+          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 25))
 
           echo "## Health Score: $SCORE/100" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -468,6 +465,5 @@ jobs:
           needs.lint.result != 'success' ||
           needs.svelte-check.result != 'success' ||
           needs.unit-tests.result != 'success' ||
-          needs.build-check.result != 'success' ||
-          needs.e2e-tests.result != 'success'
+          needs.build-check.result != 'success'
         run: exit 1

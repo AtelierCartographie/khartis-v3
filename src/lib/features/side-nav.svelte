@@ -14,7 +14,14 @@
     SideNavItems,
     Theme
   } from 'carbon-components-svelte';
-  import { CopyFile, Launch, Save, TrashCan } from 'carbon-icons-svelte';
+  import {
+    CopyFile,
+    DocumentAdd,
+    FolderOpen,
+    Launch,
+    Save,
+    TrashCan
+  } from 'carbon-icons-svelte';
   import DeleteConfirmModal from './commons/components/delete-confirm-modal.svelte';
   import DuplicateProjectModal from './commons/components/duplicate-project-modal.svelte';
   import Separator from './commons/components/separator.svelte';
@@ -63,23 +70,25 @@
             <Button
               size="small"
               kind="ghost"
+              icon={DocumentAdd}
               class="menu-bar-item"
               data-testid="sidenav-new-project"
               on:click={sideNav.handleNewProject}
             >
-              {m.sidenav_new_project()}
               <span class="shortcut-icon">⇧⌘N</span>
+              {m.sidenav_new_project()}
             </Button>
 
             <Button
               size="small"
               kind="ghost"
+              icon={FolderOpen}
               class="menu-bar-item"
               data-testid="sidenav-open-project"
               on:click={sideNav.handleOpenProject}
             >
-              {m.sidenav_open_project()}
               <span class="shortcut-icon">⇧⌘O</span>
+              {m.sidenav_open_project()}
             </Button>
 
             <Button
@@ -91,8 +100,8 @@
               disabled={!projectStore.currentProject}
               on:click={sideNav.handleSaveProject}
             >
-              {m.sidenav_save_project()}
               <span class="shortcut-icon">⌘S</span>
+              {m.sidenav_save_project()}
             </Button>
 
             <Button
@@ -282,8 +291,8 @@
   }
 
   .shortcut-icon {
-    font-weight: bold;
-    font-size: 0.6rem;
-    color: var(--cds-text-02);
+    font-size: 0.65rem;
+    color: var(--cds-text-03);
+    margin-right: var(--cds-spacing-03);
   }
 </style>

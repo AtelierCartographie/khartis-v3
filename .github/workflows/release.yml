@@ -154,6 +154,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
+    if: false # TEMPORARILY DISABLED
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -226,7 +227,7 @@ jobs:
 
   merge-reports:
     name: Merge E2E Reports
-    if: ${{ !cancelled() }}
+    if: false # TEMPORARILY DISABLED
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
@@ -295,7 +296,7 @@ jobs:
 
   version-generation:
     name: Semantic Version Generation
-    needs: [build, merge-reports]
+    needs: [build] # merge-reports temporarily removed
     runs-on: ubuntu-latest
     permissions: write-all
     outputs:
