@@ -1,5 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -109,7 +112,7 @@ export async function analyse(
           try {
             summary_general = (await executeQuery(
               ctx.connection,
-              `FROM summary_general(${table}, "${d.name}")`,
+              `FROM summary_general(${table}, "${escapeIdentifier(d.name as string)}")`,
               { useProxy: false }
             )) as ArrowTableLike;
           } catch (e) {
@@ -120,17 +123,18 @@ export async function analyse(
             );
           }
 
+          const escapedColName = escapeIdentifier(d.name as string);
           switch (type) {
             case 'numeric': {
               const [numeric, hist] = await Promise.all([
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_numeric(${analysisTable}, "${d.name}")`,
+                  `FROM summary_numeric(${analysisTable}, "${escapedColName}")`,
                   { useProxy: false }
                 ) as Promise<ArrowTableLike>,
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${d.name}")`
+                  `FROM histogram_numeric(${analysisTable}, "${escapedColName}")`
                 )
               ]);
               summary_numeric = numeric;
@@ -142,12 +146,12 @@ export async function analyse(
               const [dateSum, histDate] = await Promise.all([
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_date(${analysisTable}, "${d.name}")`,
+                  `FROM summary_date(${analysisTable}, "${escapedColName}")`,
                   { useProxy: false }
                 ) as Promise<ArrowTableLike>,
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_date(${analysisTable}, "${d.name}")`
+                  `FROM histogram_date(${analysisTable}, "${escapedColName}")`
                 )
               ]);
               summary_date = dateSum;
@@ -159,7 +163,7 @@ export async function analyse(
               const [histStr] = await Promise.all([
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_categorical(${analysisTable}, "${d.name}")`
+                  `FROM histogram_categorical(${analysisTable}, "${escapedColName}")`
                 )
               ]);
               histogram = histStr;

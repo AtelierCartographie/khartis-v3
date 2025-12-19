@@ -1,7 +1,11 @@
-import {
-  BasemapLayerType,
-  JoinStatus
-} from '$lib/features/commons/constants/ui.constants';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+import type {
+  JoinEntity,
+  JoinStats
+} from '$lib/features/main-toolbar/data-tab/components/join-accordion.types';
+
+export type { JoinEntity };
+export type JoinQuality = JoinStats;
 
 export interface BasemapLayer {
   title?: string;
@@ -40,23 +44,6 @@ export interface BasemapSuggestion extends BasemapMetadata {
 export interface JoinMapping {
   dataColumn: string;
   basemapColumn: string;
-}
-
-export interface JoinEntity {
-  dataValue: string;
-  basemapValue?: string;
-  status: JoinStatus;
-  matches?: string[];
-  matchCount?: number;
-}
-
-export interface JoinQuality {
-  joinedCount: number;
-  toVerifyCount: number;
-  duplicateCount: number;
-  unrecognizedCount: number;
-  entities: JoinEntity[];
-  totalEntities: number;
 }
 
 export interface BasemapCatalog {

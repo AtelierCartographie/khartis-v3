@@ -1,6 +1,8 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { join_macros } from '$lib/features/duckdb/macros/join';
 import type { JoinEntity, JoinStats } from '../components';
 
 export interface ComputeJoinStatsOptions {
@@ -36,13 +38,20 @@ export async function computeDatasetJoinStats(
     targetColumn
   });
 
+  await Duck.query(join_macros);
+
+  const escapedSourceCol = escapeIdentifier(sourceColumn);
+  const escapedTargetCol = escapeIdentifier(targetColumn);
+  const escapedSourceTable = escapeIdentifier(sourceTableName);
+  const escapedTargetTable = escapeIdentifier(targetTableName);
+
   const joinAnalysisQuery = `
     WITH source_data AS (
       SELECT
-        CAST("${sourceColumn}" AS VARCHAR) as source_val,
-        LOWER(CAST("${sourceColumn}" AS VARCHAR)) as normalized_val
-      FROM "${sourceTableName}"
-      WHERE "${sourceColumn}" IS NOT NULL
+        CAST("${escapedSourceCol}" AS VARCHAR) as source_val,
+        normalize_text_join(CAST("${escapedSourceCol}" AS VARCHAR)) as normalized_val
+      FROM "${escapedSourceTable}"
+      WHERE "${escapedSourceCol}" IS NOT NULL
     ),
     source_with_counts AS (
       SELECT
@@ -53,10 +62,10 @@ export async function computeDatasetJoinStats(
     ),
     target_normalized AS (
       SELECT DISTINCT
-        CAST("${targetColumn}" AS VARCHAR) as target_val,
-        LOWER(CAST("${targetColumn}" AS VARCHAR)) as normalized_target
-      FROM "${targetTableName}"
-      WHERE "${targetColumn}" IS NOT NULL
+        CAST("${escapedTargetCol}" AS VARCHAR) as target_val,
+        normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) as normalized_target
+      FROM "${escapedTargetTable}"
+      WHERE "${escapedTargetCol}" IS NOT NULL
     )
     SELECT DISTINCT
       s.source_val,
@@ -101,21 +110,21 @@ export async function computeDatasetJoinStats(
       ),
       target_normalized AS (
         SELECT DISTINCT
-          CAST("${targetColumn}" AS VARCHAR) as target_val,
-          LOWER(CAST("${targetColumn}" AS VARCHAR)) as normalized_target
-        FROM "${targetTableName}"
-        WHERE "${targetColumn}" IS NOT NULL
+          CAST("${escapedTargetCol}" AS VARCHAR) as target_val,
+          normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) as normalized_target
+        FROM "${escapedTargetTable}"
+        WHERE "${escapedTargetCol}" IS NOT NULL
       )
       SELECT
         u.source_val,
         t.target_val,
-        levenshtein(LOWER(u.source_val), t.normalized_target) as distance
+        levenshtein(normalize_text_join(u.source_val), t.normalized_target) as distance
       FROM unmatched u
       CROSS JOIN target_normalized t
       WHERE
-        levenshtein(LOWER(u.source_val), t.normalized_target) <= 2
-        OR t.normalized_target LIKE '%' || LOWER(u.source_val) || '%'
-        OR LOWER(u.source_val) LIKE '%' || t.normalized_target || '%'
+        levenshtein(normalize_text_join(u.source_val), t.normalized_target) <= 2
+        OR t.normalized_target LIKE '%' || normalize_text_join(u.source_val) || '%'
+        OR normalize_text_join(u.source_val) LIKE '%' || t.normalized_target || '%'
       ORDER BY u.source_val, distance
     `;
 
@@ -158,7 +167,8 @@ export async function computeDatasetJoinStats(
     unrecognizedCount: entities.filter(
       (e) => e.status === JoinStatus.UNRECOGNIZED
     ).length,
-    entities
+    entities,
+    totalEntities: entities.length
   };
 
   logger.success('Dataset join stats computed', LogCategory.DATA, {
