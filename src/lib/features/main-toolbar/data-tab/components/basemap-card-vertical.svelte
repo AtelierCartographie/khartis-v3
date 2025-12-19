@@ -113,35 +113,35 @@
   }
 
   .basemap-card.border-default {
-    border: 1px solid var(--cds-layer-01);
+    border: 1px solid var(--cds-pale-blue);
   }
 
   .basemap-card.variant-gray.border-default {
-    border: 1px solid var(--cds-border-subtle);
+    border: 1px solid var(--cds-medium-gray);
   }
 
   .basemap-card.border-2.border-selected {
-    border: 2px solid var(--cds-interactive-01);
+    border: 2px solid var(--cds-blue);
   }
 
   .basemap-card.variant-gray.border-2.border-selected {
-    border: 2px solid var(--cds-text-02);
+    border: 2px solid var(--cds-dark-gray);
   }
 
   .basemap-card:not(.variant-gray):hover .top-section {
-    background-color: var(--cds-layer-01);
+    background-color: var(--cds-pale-blue);
   }
 
   .basemap-card:not(.variant-gray):hover .content-section {
-    background-color: var(--cds-layer-01);
+    background-color: var(--cds-pale-blue);
   }
 
   .basemap-card.variant-gray:hover .top-section {
-    background-color: var(--cds-layer-02);
+    background-color: var(--cds-light-gray);
   }
 
   .basemap-card.variant-gray:hover .content-section {
-    background-color: var(--cds-layer-02);
+    background-color: var(--cds-light-gray);
   }
 
   .basemap-card:focus {
@@ -160,7 +160,7 @@
   }
 
   .top-section :global(svg) {
-    color: var(--cds-interactive-01);
+    color: var(--cds-blue);
   }
 
   .variant-gray .top-section :global(svg) {
@@ -172,7 +172,7 @@
     font-weight: 600;
     line-height: 1.2;
     margin: 0.25rem 0 0;
-    color: var(--cds-interactive-01);
+    color: var(--cds-blue);
   }
 
   .variant-gray .ratio-label {
@@ -181,7 +181,7 @@
 
   .preview-label {
     font-size: 0.75rem;
-    color: var(--cds-interactive-01);
+    color: var(--cds-blue);
   }
 
   .variant-gray .preview-label {
@@ -192,13 +192,13 @@
     display: flex;
     flex-direction: column;
     padding: 1rem;
-    background-color: var(--cds-layer-01);
+    background-color: var(--cds-pale-blue);
     gap: 0.375rem;
     flex: 1;
   }
 
   .variant-gray .content-section {
-    background-color: var(--cds-layer-02);
+    background-color: var(--cds-light-gray);
   }
 
   .title-row {
@@ -212,7 +212,7 @@
     margin: 0;
     font-size: 0.875rem;
     font-weight: 700;
-    color: var(--cds-link-primary);
+    color: var(--cds-dark-blue);
     line-height: 1.3;
     flex: 1;
   }
@@ -247,7 +247,7 @@
   .card-description {
     margin: 0;
     font-size: 0.75rem;
-    color: var(--cds-link-primary);
+    color: var(--cds-dark-blue);
     line-height: 1.4;
   }
 
@@ -260,7 +260,7 @@
     justify-content: space-between;
     align-items: center;
     font-size: 0.75rem;
-    color: var(--cds-link-primary);
+    color: var(--cds-dark-blue);
     margin-top: 0.5rem;
   }
 
@@ -284,19 +284,19 @@
     flex-direction: column;
     gap: 0.375rem;
     padding: 0.75rem 1rem;
-    background-color: var(--cds-layer-01);
-    border-top: 1px solid var(--cds-link-primary);
+    background-color: var(--cds-pale-blue);
+    border-top: 1px solid var(--cds-dark-blue);
   }
 
   .variant-gray .match-section {
-    background-color: var(--cds-layer-02);
-    border-top: 1px solid var(--cds-text-02);
+    background-color: var(--cds-light-gray);
+    border-top: 1px solid var(--cds-dark-gray);
   }
 
   .match-label {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--cds-link-primary);
+    color: var(--cds-dark-blue);
   }
 
   .variant-gray .match-label {
@@ -306,7 +306,7 @@
   .match-value {
     font-size: 0.875rem;
     font-weight: 700;
-    color: var(--cds-link-primary);
+    color: var(--cds-dark-blue);
   }
 
   .variant-gray .match-value {
@@ -323,10 +323,10 @@
   }
 
   .match-section :global(.bx--progress-bar__bar) {
-    background-color: var(--cds-interactive-01);
+    background-color: var(--cds-blue);
   }
 
   .variant-gray .match-section :global(.bx--progress-bar__bar) {
-    background-color: var(--cds-text-02);
+    background-color: var(--cds-dark-gray);
   }
 </style>

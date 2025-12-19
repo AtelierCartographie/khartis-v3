@@ -1,5 +1,6 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     BasemapLayerType,
     BasemapSource
@@ -24,10 +25,8 @@
   import {
     Button,
     ComboBox,
-    ContentSwitcher,
     FileUploaderDropContainer,
     InlineNotification,
-    Switch,
     TextArea,
     TextInput,
     Toggle
@@ -53,8 +52,8 @@
   } from './components';
   import BasemapCardVertical from './components/basemap-card-vertical.svelte';
   import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
-  import { computeDatasetJoinStats } from './services/join-stats.service';
   import type { GeoComboBoxItem } from './data-tab.shared.types';
+  import { computeDatasetJoinStats } from './services/join-stats.service';
 
   let suggestionsExpanded = $state(true);
 
@@ -180,6 +179,12 @@
   });
 
   const basemaps = $derived(basemapCatalogService.basemaps);
+
+  const basemapTabItems = [
+    { icon: Catalog, label: m.basemap_catalog(), iconSize: 20 },
+    { icon: Upload, label: m.basemap_import(), iconSize: 20 },
+    { icon: Globe, label: m.basemap_osm(), iconSize: 20 }
+  ];
 
   async function handleFileUpload(files: readonly File[]) {
     if (!files || files.length === 0) return;
@@ -1003,19 +1008,12 @@
 
     {#if overlayBasemapEnabled}
       <div class="toggle-content">
-        <ContentSwitcher bind:selectedIndex={basemapTabIndex}>
-          <Switch>
-            <Catalog size={16} />
-            <span>{m.basemap_catalog()}</span>
-          </Switch>
-          <Switch>
-            <Upload size={16} />
-            <span>{m.basemap_import()}</span>
-          </Switch>
-          <Switch>
-            <Globe size={16} />
-          </Switch>
-        </ContentSwitcher>
+        <ToggleTabs
+          activeIndex={basemapTabIndex}
+          items={basemapTabItems}
+          onChange={(index) => (basemapTabIndex = index)}
+          className="basemap-tabs"
+        />
 
         {#if basemapTabIndex === 0}
           <!-- Catalogue -->
@@ -1097,9 +1095,9 @@
 
   .toggle-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04);
+    padding: var(--cds-spacing-05);
     cursor: pointer;
     background-color: white;
   }
@@ -1131,7 +1129,7 @@
   }
 
   .toggle-content {
-    padding: 0 var(--cds-spacing-04) var(--cds-spacing-04);
+    padding: var(--cds-spacing-04) var(--cds-spacing-04);
     border-top: 1px solid var(--cds-border-subtle);
     display: flex;
     flex-direction: column;
@@ -1296,14 +1294,9 @@
     gap: var(--cds-spacing-04);
   }
 
-  :global(#enrich-data-step .bx--content-switcher) {
-    margin-bottom: 0;
-  }
-
-  :global(#enrich-data-step .bx--content-switcher-btn) {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
+  :global(.basemap-tabs) {
+    width: 100%;
+    max-width: none;
   }
 
   .expandable-section {

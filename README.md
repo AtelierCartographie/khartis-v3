@@ -137,6 +137,7 @@ Old extension versions are automatically cleaned up when upgrading.
 
 ```bash
 pnpm test:unit              # Run all unit tests
+pnpm test:unit:ui           # Run with Vitest UI
 pnpm test:unit path/to/file # Run specific test file
 ```
 
@@ -144,19 +145,29 @@ pnpm test:unit path/to/file # Run specific test file
 
 ```bash
 pnpm test:e2e               # Run all E2E tests
+pnpm test:e2e:ui            # Run with Playwright UI
 pnpm test:e2e --headed      # Run with visible browser
-pnpm test:e2e --ui          # Run with Playwright UI
 ```
 
 **Structure:**
 
 ```
 e2e/
-├── features/                    # Tests by feature
-│   ├── create-project.spec.ts   # Project creation (8 tests)
-│   └── side-nav.spec.ts         # Side navigation (9 tests)
-├── utils/test-helpers.ts        # Shared helpers
-└── mocks/csv/                   # Test data
+├── global-setup.ts              # Playwright global setup
+├── helpers.ts                   # Shared test helpers
+├── imports/                     # File import tests by format
+│   ├── csv.spec.ts
+│   ├── geojson.spec.ts
+│   ├── geopackage.spec.ts
+│   ├── gpx.spec.ts
+│   ├── kml.spec.ts
+│   ├── kmz.spec.ts
+│   ├── parquet.spec.ts
+│   ├── shapefile.spec.ts
+│   ├── tsv.spec.ts
+│   └── zip.spec.ts
+├── project-modal.spec.ts        # Project creation modal
+└── side-nav.spec.ts             # Side navigation
 ```
 
 **Test data selectors:** Tests use `data-testid` attributes for stability.
@@ -180,6 +191,7 @@ e2e/
   - Developer Guide: `docs/DEVELOPER_GUIDE.md`
   - Visualization: `docs/VISUALIZATION.md`
   - Basemaps: `docs/BASEMAPS.md`
+  - PWA Configuration: `docs/PWA_CONFIGURATION.md`
   - Testing: `docs/TESTING.md`
   - Reference: `docs/REFERENCE.md`
 
