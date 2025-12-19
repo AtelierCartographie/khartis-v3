@@ -248,9 +248,9 @@ class CsvProcessor extends FileProcessor {
   ): Promise<void> {
     try {
       const duplicateResult = (await Duck.query(
-        `SELECT COUNT(*) - COUNT(DISTINCT hash(*)) as duplicate_count FROM "${tableName}"`,
+        `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
         { format: 'array' }
-      )) as Array<{ duplicate_count: number }>;
+      )) as Array<{ duplicate_count: bigint | number }>;
       const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
 
       this.callbacks.onDataUpdate(fileId, {
