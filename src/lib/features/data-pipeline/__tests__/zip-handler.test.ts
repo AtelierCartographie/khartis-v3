@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   extractZip,
+  getNonShapefileFilesFromArchive,
   getShapefileFilesFromArchive,
   getSupportedFilesFromArchive,
-  isZipFile
+  isZipFile,
+  type ExtractedFile
 } from '../utils/zip-handler';
 import { ZIP_TEST_FILES, loadTestFile } from './test-file-loader';
 
@@ -174,5 +176,100 @@ describe('ZIP Handler - Error handling', () => {
 
     const result = await extractZip(emptyZip);
     expect(result.files).toHaveLength(0);
+  });
+});
+
+describe('ZIP Handler - getNonShapefileFilesFromArchive', () => {
+  function createMockFile(name: string): ExtractedFile {
+    return {
+      name,
+      path: name,
+      content: new Uint8Array([])
+    };
+  }
+
+  it('should include CSV with same basename as shapefile', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('regions.shp'),
+      createMockFile('regions.shx'),
+      createMockFile('regions.dbf'),
+      createMockFile('regions.prj'),
+      createMockFile('regions.csv')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files, 'regions');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('regions.csv');
+  });
+
+  it('should include GeoJSON with same basename as shapefile', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('data.shp'),
+      createMockFile('data.shx'),
+      createMockFile('data.dbf'),
+      createMockFile('data.geojson')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files, 'data');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('data.geojson');
+  });
+
+  it('should exclude shapefile extensions even with same basename', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('regions.shp'),
+      createMockFile('regions.shx'),
+      createMockFile('regions.dbf'),
+      createMockFile('regions.prj'),
+      createMockFile('regions.cpg')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files, 'regions');
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('should include files with different basename', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('regions.shp'),
+      createMockFile('regions.shx'),
+      createMockFile('regions.dbf'),
+      createMockFile('data.csv'),
+      createMockFile('other.geojson')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files, 'regions');
+
+    expect(result).toHaveLength(2);
+    expect(result.map((f) => f.name)).toContain('data.csv');
+    expect(result.map((f) => f.name)).toContain('other.geojson');
+  });
+
+  it('should return all supported files when no shapefile basename provided', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('data.csv'),
+      createMockFile('regions.geojson'),
+      createMockFile('readme.md')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files);
+
+    expect(result.length).toBe(2);
+  });
+
+  it('should handle case-insensitive basename matching', () => {
+    const files: ExtractedFile[] = [
+      createMockFile('REGIONS.shp'),
+      createMockFile('REGIONS.shx'),
+      createMockFile('REGIONS.dbf'),
+      createMockFile('regions.csv')
+    ];
+
+    const result = getNonShapefileFilesFromArchive(files, 'REGIONS');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe('regions.csv');
   });
 });

@@ -98,7 +98,7 @@ function validateMapExportPrerequisites(): void {
 }
 
 function getDataFormatConfig(format: DataExportFormat): {
-  format: 'csv' | 'geojson' | 'json';
+  format: 'csv' | 'geojson' | 'json' | 'csv-geo';
   extension: string;
 } {
   switch (format) {
@@ -107,6 +107,6 @@ function getDataFormatConfig(format: DataExportFormat): {
     case 'geojson':
       return { format: 'geojson', extension: 'geojson' };
     case 'csv-geo':
-      return { format: 'json', extension: 'json' };
+      return { format: 'csv-geo', extension: 'csv' };
   }
 }

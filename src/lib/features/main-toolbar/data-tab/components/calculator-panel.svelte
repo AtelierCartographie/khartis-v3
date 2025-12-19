@@ -4,7 +4,6 @@
     Link,
     Select,
     SelectItem,
-    TextArea,
     TextInput,
     InlineNotification
   } from 'carbon-components-svelte';
@@ -13,6 +12,9 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
+  import AutocompleteTextarea, {
+    type Suggestion
+  } from '$lib/features/commons/components/autocomplete-textarea.svelte';
 
   interface Props {
     tableName?: string;
@@ -37,6 +39,73 @@
   let isTesting = $state(false);
 
   const hasData = $derived(columns.length > 0);
+
+  const autocompleteSuggestions = $derived.by((): Suggestion[] => {
+    const variableSuggestions: Suggestion[] = columns.map((col) => ({
+      label: col.name,
+      value: col.name,
+      type: 'variable' as const,
+      description: col.type || 'colonne'
+    }));
+
+    const functionSuggestions: Suggestion[] = [
+      {
+        label: 'AVG',
+        value: 'AVG("")',
+        type: 'function' as const,
+        description: m.calc_function_average()
+      },
+      {
+        label: 'SUM',
+        value: 'SUM("")',
+        type: 'function' as const,
+        description: m.calc_function_sum()
+      },
+      {
+        label: 'MIN',
+        value: 'MIN("")',
+        type: 'function' as const,
+        description: m.calc_function_min()
+      },
+      {
+        label: 'MAX',
+        value: 'MAX("")',
+        type: 'function' as const,
+        description: m.calc_function_max()
+      },
+      {
+        label: 'POWER',
+        value: 'POWER("", 2)',
+        type: 'function' as const,
+        description: m.calc_function_power()
+      },
+      {
+        label: 'ROUND',
+        value: 'ROUND("", 2)',
+        type: 'function' as const,
+        description: m.calc_function_round()
+      },
+      {
+        label: 'CONCAT',
+        value: 'CONCAT("", \'\')',
+        type: 'function' as const,
+        description: m.calc_function_concat()
+      },
+      {
+        label: 'SUBSTRING',
+        value: 'SUBSTRING("", 1, 3)',
+        type: 'function' as const,
+        description: m.calc_function_extract()
+      }
+    ];
+
+    return [...variableSuggestions, ...functionSuggestions];
+  });
+
+  function handleFormulaChange(newValue: string) {
+    formula = newValue;
+    dataToolsStore.setCalculatorFormula(formula);
+  }
 
   const OPERATORS = [
     { label: '+', value: ' + ' },
@@ -87,7 +156,7 @@
     const fn = FUNCTIONS.find((f) => f.value === selectedFunction);
     if (!fn) return;
 
-    const col = selectedVariable || 'colonne';
+    const col = selectedVariable || m.calc_column_default();
     const template = fn.template.replace('{col}', `"${col}"`);
     formula += template;
     dataToolsStore.setCalculatorFormula(formula);
@@ -105,10 +174,11 @@
         tableName,
         formula
       );
-      testResult = `Exemple : ${String(result)}`;
+      testResult = m.calc_test_result_label({ result: String(result) });
       dataToolsStore.setCalculatorTestResult(result);
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : 'Expression invalide';
+      errorMessage =
+        err instanceof Error ? err.message : m.error_calc_expression_invalid();
       dataToolsStore.setCalculatorError(errorMessage);
     } finally {
       isTesting = false;
@@ -117,7 +187,7 @@
 
   async function handleCalculate() {
     if (!tableName || !variableName.trim() || !formula.trim()) {
-      errorMessage = 'Nom et formule requis';
+      errorMessage = m.error_calc_name_formula_required();
       return;
     }
 
@@ -136,7 +206,8 @@
       dataToolsStore.resetCalculator();
       onColumnCreated?.();
     } catch (err) {
-      errorMessage = err instanceof Error ? err.message : 'Échec du calcul';
+      errorMessage =
+        err instanceof Error ? err.message : m.error_calc_execution_failed();
       dataToolsStore.setCalculatorError(errorMessage);
     }
   }
@@ -162,11 +233,13 @@
     </div>
 
     <div class="field-group">
-      <TextArea
+      <AutocompleteTextarea
+        bind:value={formula}
+        suggestions={autocompleteSuggestions}
         rows={4}
         labelText={m.calc_formula()}
         placeholder={m.calc_formula_placeholder()}
-        bind:value={formula}
+        onchange={handleFormulaChange}
       />
     </div>
 

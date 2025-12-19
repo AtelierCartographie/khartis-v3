@@ -28,6 +28,33 @@ import type {
   UploadedFile
 } from './create-project.types';
 
+function cleanFileForStorage(file: UploadedFile): UploadedFile {
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    fileType: file.fileType,
+    status: file.status,
+    uploadProgress: file.uploadProgress,
+    errorMessage: file.errorMessage,
+    validation: file.validation,
+    parsedData: file.parsedData,
+    content: file.content,
+    preparedGeoJSON: file.preparedGeoJSON,
+    duplicates: file.duplicates,
+    statistics: file.statistics,
+    sourceType: file.sourceType,
+    deepAnalysis: file.deepAnalysis,
+    geoMatchResult: file.geoMatchResult,
+    relatedFiles: file.relatedFiles,
+    relatedFilesData: file.relatedFilesData,
+    columnTransformations: file.columnTransformations,
+    duckdbTableName: file.duckdbTableName,
+    sourceArchive: file.sourceArchive
+  };
+}
+
 class ProjectStore {
   private _state = $state<ProjectState>({
     currentProject: undefined,
@@ -118,32 +145,7 @@ class ProjectStore {
         (f) => f.id === file.id || f.name === file.name
       );
       if (!exists) {
-        const fileCopy = {
-          id: file.id,
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          fileType: file.fileType,
-          status: file.status,
-          uploadProgress: file.uploadProgress,
-          errorMessage: file.errorMessage,
-          validation: file.validation,
-          parsedData: file.parsedData,
-          content: file.content,
-          preparedGeoJSON: file.preparedGeoJSON,
-          duplicates: file.duplicates,
-          statistics: file.statistics,
-          sourceType: file.sourceType,
-          deepAnalysis: file.deepAnalysis,
-          geoMatchResult: file.geoMatchResult,
-          relatedFileObjects: file.relatedFileObjects,
-          originalFile: file.originalFile,
-          relatedFiles: file.relatedFiles,
-          relatedFilesData: file.relatedFilesData,
-          columnTransformations: file.columnTransformations,
-          duckdbTableName: file.duckdbTableName,
-          sourceArchive: file.sourceArchive
-        };
+        const fileCopy = cleanFileForStorage(file);
 
         this._state.currentProject = {
           ...this._state.currentProject,
@@ -408,6 +410,8 @@ class ProjectStore {
 
     const sanitizedName = sanitizeProjectName(name);
 
+    const cleanedFiles = files.map(cleanFileForStorage);
+
     const project: KhartisProject = {
       id: crypto.randomUUID(),
       manifest: {
@@ -418,7 +422,7 @@ class ProjectStore {
         format: 'kh'
       },
       data: {
-        sourceFiles: files
+        sourceFiles: cleanedFiles
       }
     };
 
@@ -448,6 +452,8 @@ class ProjectStore {
       this._state.lastSaved = new Date();
       this._state.history = [];
       this._state.historyIndex = -1;
+
+      this.addToHistory('Project loaded', project);
 
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
@@ -616,6 +622,8 @@ class ProjectStore {
       this._state.history = [];
       this._state.historyIndex = -1;
 
+      this.addToHistory('Project imported', project);
+
       await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
 
       await dataOrchestratorService.onProjectChanged();
@@ -699,10 +707,9 @@ class ProjectStore {
     const entry = this._state.history[this._state.historyIndex];
 
     if (entry.snapshot) {
-      this._state.currentProject = {
-        ...this._state.currentProject!,
-        ...entry.snapshot
-      };
+      this._state.currentProject = JSON.parse(
+        JSON.stringify(entry.snapshot)
+      ) as KhartisProject;
       this.markDirty();
     }
   }
@@ -716,10 +723,9 @@ class ProjectStore {
     const entry = this._state.history[this._state.historyIndex];
 
     if (entry.snapshot) {
-      this._state.currentProject = {
-        ...this._state.currentProject!,
-        ...entry.snapshot
-      };
+      this._state.currentProject = JSON.parse(
+        JSON.stringify(entry.snapshot)
+      ) as KhartisProject;
       this.markDirty();
     }
   }
@@ -742,10 +748,15 @@ class ProjectStore {
       );
     }
 
+    const projectToSnapshot = snapshot || this._state.currentProject;
+    const clonedSnapshot = projectToSnapshot
+      ? (JSON.parse(JSON.stringify(projectToSnapshot)) as KhartisProject)
+      : undefined;
+
     const entry: ProjectHistoryEntry = {
       timestamp: new Date(),
       action,
-      snapshot: snapshot || this._state.currentProject
+      snapshot: clonedSnapshot
     };
 
     this._state.history.push(entry);

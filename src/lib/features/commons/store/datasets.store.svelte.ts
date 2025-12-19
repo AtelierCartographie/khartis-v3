@@ -1,12 +1,15 @@
 import type {
   DatasetResult,
-  EnrichedColumn
+  EnrichedColumn,
+  ZipDatasetResult
 } from '$lib/features/data-pipeline';
 import {
   ColumnType,
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
+import * as m from '$lib/paraglide/messages';
+import { showWarning } from '../utils/notification.utils.svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { DuplicateFileError } from '../errors/pipeline.errors';
 import { LogCategory, logger } from '../utils/logger';
@@ -213,6 +216,13 @@ class DatasetsStore {
         this._state.selectedDatasetId = newDatasets[0].id;
       }
 
+      const geoDatasets = newDatasets.filter((d) => d.geometry);
+      if (geoDatasets.length > 0) {
+        await this.createVisualizationsForGeoDatasets(geoDatasets);
+      }
+
+      this.notifySkippedFiles(results);
+
       logger.success(
         `All ${files.length} files processed successfully`,
         LogCategory.STORE
@@ -315,6 +325,11 @@ class DatasetsStore {
           pendingResolvers.forEach((resolve) => resolve(dataset.id));
           this.pendingDatasetResolvers.delete(dataset.sourceFileId);
         }
+      }
+
+      const geoDatasets = datasets.filter((d) => d.geometry);
+      if (geoDatasets.length > 0) {
+        await this.createVisualizationsForGeoDatasets(geoDatasets);
       }
 
       return addedDataset;
@@ -759,6 +774,56 @@ class DatasetsStore {
     this._state.selectedDatasetId = undefined;
     this._state.error = undefined;
     this._state.hiddenColumns.clear();
+  }
+
+  async createVisualizationsForGeoDatasets(
+    datasets: DatasetResult[]
+  ): Promise<void> {
+    const { visualizationStore, VisualizationType } =
+      await import('./visualization.store.svelte');
+
+    for (const dataset of datasets) {
+      if (dataset.geometry) {
+        const existingViz = visualizationStore.getVisualizationsByDataset(
+          dataset.id
+        );
+        if (existingViz.length === 0) {
+          visualizationStore.createVisualization(
+            VisualizationType.CHOROPLETH,
+            dataset.id,
+            dataset.name
+          );
+          logger.debug(
+            `Created visualization for geo dataset: ${dataset.name}`,
+            LogCategory.STORE
+          );
+        }
+      }
+    }
+  }
+
+  private notifySkippedFiles(
+    results: (DatasetResult | ZipDatasetResult)[]
+  ): void {
+    const allSkippedFiles: string[] = [];
+
+    for (const result of results) {
+      if (isZipDatasetResult(result) && result.skippedFiles.length > 0) {
+        allSkippedFiles.push(...result.skippedFiles);
+      }
+    }
+
+    if (allSkippedFiles.length > 0) {
+      showWarning(
+        m.warning_zip_files_skipped_title(),
+        m.warning_zip_files_skipped_message({
+          files: allSkippedFiles.join(', ')
+        })
+      );
+      logger.warn('Some files from ZIP were skipped', LogCategory.STORE, {
+        skippedFiles: allSkippedFiles
+      });
+    }
   }
 }
 

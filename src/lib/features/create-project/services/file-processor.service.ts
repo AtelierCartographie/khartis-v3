@@ -13,6 +13,63 @@ import { showWarning } from '$lib/features/commons/utils/notification.utils.svel
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
+function detectFileTypeFromName(filename: string): FileType {
+  const ext = filename.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'csv':
+      return FileType.CSV;
+    case 'tsv':
+    case 'txt':
+      return FileType.TSV;
+    case 'geojson':
+    case 'json':
+      return FileType.GEOJSON;
+    case 'shp':
+      return FileType.SHAPEFILE;
+    case 'gpkg':
+      return FileType.GEOPACKAGE;
+    case 'geoparquet':
+    case 'parquet':
+      return FileType.GEOPARQUET;
+    case 'arrow':
+      return FileType.ARROW;
+    case 'kml':
+      return FileType.KML;
+    case 'kmz':
+      return FileType.KMZ;
+    case 'gpx':
+      return FileType.GPX;
+    case 'zip':
+      return FileType.ZIP;
+    default:
+      return FileType.UNKNOWN;
+  }
+}
+
+function getMimeTypeFromFileType(fileType: FileType): string {
+  switch (fileType) {
+    case FileType.CSV:
+      return 'text/csv';
+    case FileType.TSV:
+      return 'text/tab-separated-values';
+    case FileType.GEOJSON:
+      return 'application/geo+json';
+    case FileType.GEOPACKAGE:
+      return 'application/geopackage+sqlite3';
+    case FileType.GEOPARQUET:
+    case FileType.ARROW:
+      return 'application/octet-stream';
+    case FileType.KML:
+      return 'application/vnd.google-earth.kml+xml';
+    case FileType.KMZ:
+      return 'application/vnd.google-earth.kmz';
+    case FileType.GPX:
+      return 'application/gpx+xml';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 const ERROR_FILE_PROCESSING = () => m.error_file_processing();
 const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
@@ -144,6 +201,15 @@ class CsvProcessor extends FileProcessor {
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
     const headers = columns.map((col) => col.name);
+
+    if (rowCount === 0) {
+      this.callbacks.onStatusChange(
+        uploadedFile.id,
+        FileStatus.ERROR,
+        m.pipeline_error_header_only()
+      );
+      return;
+    }
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
@@ -442,25 +508,7 @@ class ZipProcessor extends FileProcessor {
     Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
   ): Promise<void> {
     const result = zipResult as {
-      datasets: Array<{
-        id: string;
-        name: string;
-        tableName: string;
-        columns: Array<{
-          name: string;
-          type: string;
-          stats: {
-            count?: number;
-            nulls?: number;
-            uniques?: number;
-            min?: unknown;
-            max?: unknown;
-            mean?: number;
-          };
-        }>;
-        rowCount: number;
-        fileSize?: number;
-      }>;
+      datasets: DatasetResult[];
       sourceZipName: string;
     };
     const datasets = result.datasets;
@@ -468,9 +516,13 @@ class ZipProcessor extends FileProcessor {
 
     for (let i = 0; i < datasets.length; i++) {
       const dataset = datasets[i];
-      const { tableName, columns, rowCount, name, fileSize } = dataset;
+      const { tableName, columns, rowCount, name, fileSize, geometry } =
+        dataset;
       const headers = columns.map((col) => col.name);
       const progressBase = (i / totalDatasets) * 100;
+
+      const detectedFileType = detectFileTypeFromName(name);
+      const detectedMimeType = getMimeTypeFromFileType(detectedFileType);
 
       const statistics = buildColumnStatistics(
         columns as ColumnInfo[],
@@ -496,10 +548,25 @@ class ZipProcessor extends FileProcessor {
         { sampleSize: Math.min(100, dataMatrix.length) }
       );
 
+      if (geometry) {
+        deepAnalysis.geoDetection = {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              columnName: 'geom',
+              type: 'unknown',
+              confidence: 1,
+              index: 0
+            }
+          ],
+          warnings: []
+        };
+      }
+
       if (i === 0) {
         this.callbacks.onDataUpdate(uploadedFile.id, {
           name,
-          fileType: FileType.CSV,
+          fileType: detectedFileType,
           parsedData: tabularData,
           statistics,
           content: undefined,
@@ -514,8 +581,8 @@ class ZipProcessor extends FileProcessor {
           id: crypto.randomUUID(),
           name,
           size: fileSize ?? 0,
-          type: 'text/csv',
-          fileType: FileType.CSV,
+          type: detectedMimeType,
+          fileType: detectedFileType,
           status: FileStatus.COMPLETE,
           sourceType: uploadedFile.sourceType,
           parsedData: tabularData,

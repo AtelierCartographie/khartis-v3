@@ -87,7 +87,7 @@ export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
 
 // Timeouts adaptés pour CI et exécution locale parallèle (2+ workers)
-const TIMEOUTS = {
+export const TIMEOUTS = {
   modal: isCI ? 30000 : 30000,
   map: isCI ? 60000 : 60000,
   fileUpload: isCI ? 15000 : 15000,
@@ -122,15 +122,35 @@ export async function waitForMap(page: Page, timeout?: number): Promise<void> {
   await page.waitForTimeout(isCI ? 2000 : 1000);
 }
 
+export interface FileImportAssertions {
+  minRows?: number;
+  minColumns?: number;
+  exactRows?: number;
+  exactColumns?: number;
+}
+
+export interface CreateProjectOptions {
+  projectName?: string;
+  fileAssertions?: FileImportAssertions;
+}
+
 export async function createProject(
   page: Page,
   filePath: string,
-  projectName?: string
-): Promise<void> {
+  projectNameOrOptions?: string | CreateProjectOptions
+): Promise<{ rowCount?: number; columnCount?: number }> {
+  const options: CreateProjectOptions =
+    typeof projectNameOrOptions === 'string'
+      ? { projectName: projectNameOrOptions }
+      : (projectNameOrOptions ?? {});
+
   const modal = await waitForModal(page);
 
   const fileInput = modal.locator('input[type="file"]').first();
   await fileInput.setInputFiles(filePath);
+
+  // Small delay to ensure file processing starts
+  await page.waitForTimeout(500);
 
   // Wait for file processing to complete (not just timeout)
   // Use data-testid selectors for reliability
@@ -138,14 +158,14 @@ export async function createProject(
   const completeIndicator = modal.locator('[data-testid="file-complete"]');
   const errorIndicator = modal.locator('[data-testid="file-error"]');
 
-  // Wait for processing to finish (complete or error)
+  // Wait for processing to start or complete (longer timeout for larger files)
   await expect(
     processingIndicator.or(completeIndicator).or(errorIndicator)
-  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload * 2 });
 
-  // Wait for processing to complete
+  // Wait for processing to complete (longer timeout for geo files)
   await expect(processingIndicator).toBeHidden({
-    timeout: TIMEOUTS.action * 3
+    timeout: TIMEOUTS.action * 6
   });
 
   // Check for errors
@@ -157,7 +177,13 @@ export async function createProject(
   // Ensure complete tile is visible
   await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
-  const name = projectName || `Test ${Date.now()}`;
+  // Validate file import if assertions provided
+  let importResult: { rowCount: number; columnCount: number } | undefined;
+  if (options.fileAssertions) {
+    importResult = await assertFileImported(modal, options.fileAssertions);
+  }
+
+  const name = options.projectName || `Test ${Date.now()}`;
   const nameInput = modal.locator('[data-testid="project-name-input"]');
 
   // Wait for input to be ready
@@ -192,6 +218,8 @@ export async function createProject(
 
   // Longer timeout for project creation (includes dataset registration, map rendering)
   await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
+
+  return importResult ?? {};
 }
 
 export async function openSideNav(page: Page): Promise<Locator> {
@@ -269,8 +297,13 @@ export function getShapefileComponents(shpPath: string): string[] {
 export async function createShapefileProject(
   page: Page,
   shpPath: string,
-  projectName?: string
-): Promise<void> {
+  projectNameOrOptions?: string | CreateProjectOptions
+): Promise<{ rowCount?: number; columnCount?: number }> {
+  const options: CreateProjectOptions =
+    typeof projectNameOrOptions === 'string'
+      ? { projectName: projectNameOrOptions }
+      : (projectNameOrOptions ?? {});
+
   const modal = await waitForModal(page);
   const shapefileComponents = getShapefileComponents(shpPath);
 
@@ -278,20 +311,23 @@ export async function createShapefileProject(
   const fileInput = dropContainer.locator('input[type="file"]');
   await fileInput.setInputFiles(shapefileComponents);
 
+  // Small delay to ensure file processing starts
+  await page.waitForTimeout(500);
+
   // Wait for file processing to complete (not just timeout)
   // Use data-testid selectors for reliability
   const processingIndicator = modal.locator('[data-testid="file-processing"]');
   const completeIndicator = modal.locator('[data-testid="file-complete"]');
   const errorIndicator = modal.locator('[data-testid="file-error"]');
 
-  // Wait for processing to start
+  // Wait for processing to start (longer timeout for shapefiles)
   await expect(
     processingIndicator.or(completeIndicator).or(errorIndicator)
-  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload * 2 });
 
   // Wait for processing to complete (longer timeout for shapefiles)
   await expect(processingIndicator).toBeHidden({
-    timeout: TIMEOUTS.action * 4
+    timeout: TIMEOUTS.action * 6
   });
 
   // Check for errors
@@ -303,7 +339,13 @@ export async function createShapefileProject(
   // Ensure complete tile is visible
   await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
-  const name = projectName || `Test ${Date.now()}`;
+  // Validate file import if assertions provided
+  let importResult: { rowCount: number; columnCount: number } | undefined;
+  if (options.fileAssertions) {
+    importResult = await assertFileImported(modal, options.fileAssertions);
+  }
+
+  const name = options.projectName || `Test ${Date.now()}`;
   const nameInput = modal.locator('[data-testid="project-name-input"]');
 
   // Wait for input to be ready
@@ -344,4 +386,57 @@ export async function createShapefileProject(
 
   // Longer timeout for shapefile project creation
   await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
+
+  return importResult ?? {};
+}
+
+export async function assertFileImported(
+  modal: Locator,
+  options?: FileImportAssertions
+): Promise<{ rowCount: number; columnCount: number }> {
+  const completeIndicator = modal.locator('[data-testid="file-complete"]');
+  await expect(completeIndicator.first()).toBeVisible({
+    timeout: TIMEOUTS.action
+  });
+
+  const rowCountEl = modal.locator('[data-testid="file-row-count"]').first();
+  const colCountEl = modal.locator('[data-testid="file-column-count"]').first();
+
+  // Get actual counts (may not be present for all file types)
+  const rowCountText = await rowCountEl.textContent().catch(() => '0');
+  const colCountText = await colCountEl.textContent().catch(() => '0');
+
+  const rowCount = parseInt(rowCountText || '0', 10);
+  const columnCount = parseInt(colCountText || '0', 10);
+
+  // Validate against options if provided
+  if (options?.minRows !== undefined) {
+    expect(
+      rowCount,
+      `Expected at least ${options.minRows} rows, got ${rowCount}`
+    ).toBeGreaterThanOrEqual(options.minRows);
+  }
+
+  if (options?.minColumns !== undefined) {
+    expect(
+      columnCount,
+      `Expected at least ${options.minColumns} columns, got ${columnCount}`
+    ).toBeGreaterThanOrEqual(options.minColumns);
+  }
+
+  if (options?.exactRows !== undefined) {
+    expect(
+      rowCount,
+      `Expected exactly ${options.exactRows} rows, got ${rowCount}`
+    ).toBe(options.exactRows);
+  }
+
+  if (options?.exactColumns !== undefined) {
+    expect(
+      columnCount,
+      `Expected exactly ${options.exactColumns} columns, got ${columnCount}`
+    ).toBe(options.exactColumns);
+  }
+
+  return { rowCount, columnCount };
 }

@@ -25,6 +25,7 @@ export enum GeoLocationType {
   COUNTRY_NAME = 'country_name',
   ISO2 = 'iso2',
   ISO3 = 'iso3',
+  NUTS = 'nuts',
   REGION = 'region',
   CITY = 'city',
   COORDINATES = 'coordinates',

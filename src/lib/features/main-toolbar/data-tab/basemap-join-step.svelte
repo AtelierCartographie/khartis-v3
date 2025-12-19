@@ -14,6 +14,7 @@
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+  import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type {
@@ -48,6 +49,7 @@
   import { onMount } from 'svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import BasemapCardVertical from './components/basemap-card-vertical.svelte';
+  import BasemapSuggestionModal from './components/basemap-suggestion-modal.svelte';
   import SectionHeaderWithIcon from './components/section-header-with-icon.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
 
@@ -89,6 +91,7 @@
   let importedBasemap = $state<BasemapMetadata | null>(null);
   let isDragging = $state(false);
   let fileInputRef = $state<HTMLInputElement | null>(null);
+  let showSuggestionModal = $state(false);
 
   const acceptedExtensions = [
     '.geojson',
@@ -98,8 +101,6 @@
     '.kml',
     '.parquet'
   ];
-
-  const DEFAULT_OSM_STYLE = 'osm-standard';
 
   let searchQuery = $state('');
   let selectedYear = $state('all');
@@ -520,10 +521,7 @@
   }
 
   function handleSuggestBasemap() {
-    window.open(
-      'https://github.com/sciences-po/khartis-v3/issues/new?labels=basemap-suggestion',
-      '_blank'
-    );
+    showSuggestionModal = true;
   }
 
   function handleGoToVisualize() {
@@ -1189,6 +1187,11 @@
   <!-- Join Assisted Section - always visible when basemap selected -->
   {@render joinAssistedSection()}
 </section>
+
+<BasemapSuggestionModal
+  bind:open={showSuggestionModal}
+  onClose={() => (showSuggestionModal = false)}
+/>
 
 <style>
   #basemap-join-step {

@@ -87,6 +87,8 @@ export enum OSMSourceId {
   RASTER = 'osm-raster-source'
 }
 
+export const DEFAULT_OSM_STYLE = 'standard';
+
 export enum MapLibreLayerType {
   RASTER = 'raster',
   BACKGROUND = 'background'

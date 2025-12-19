@@ -82,15 +82,44 @@ function extractEntriesFromArrowTable(
 
 function buildTooltipHtml(entries: TooltipEntry[]): string {
   const visibleEntries = entries.slice(0, MAX_TOOLTIP_ENTRIES);
-  const hiddenCount = Math.max(0, entries.length - MAX_TOOLTIP_ENTRIES);
+  const hiddenEntries = entries.slice(MAX_TOOLTIP_ENTRIES);
+  const hiddenCount = hiddenEntries.length;
 
   let html = '<div style="display:flex;flex-direction:column;gap:4px;">';
+
+  // Visible entries
   for (const entry of visibleEntries) {
     html += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${entry.key}</span><span style="font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${entry.value}</span></div>`;
   }
+
+  // Accordion for hidden entries
   if (hiddenCount > 0) {
-    html += `<div style="color:#525252;font-style:italic;font-size:11px;margin-top:4px;">+${hiddenCount} more...</div>`;
+    const accordionId = `tooltip-accordion-${Date.now()}`;
+    html += `
+      <div id="${accordionId}" class="tooltip-accordion" style="margin-top:4px;">
+        <button
+          onclick="this.parentElement.classList.toggle('open')"
+          style="background:none;border:none;cursor:pointer;color:#525252;font-style:italic;font-size:11px;padding:2px 0;display:flex;align-items:center;gap:4px;"
+        >
+          <span style="display:inline-block;transition:transform 0.2s;transform:rotate(0deg);" class="chevron">▶</span>
+          +${hiddenCount} more...
+        </button>
+        <div class="accordion-content" style="display:none;margin-top:4px;padding-left:8px;border-left:2px solid #e0e0e0;">`;
+
+    // Hidden entries
+    for (const entry of hiddenEntries) {
+      html += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${entry.key}</span><span style="font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${entry.value}</span></div>`;
+    }
+
+    html += `
+        </div>
+      </div>
+      <style>
+        .tooltip-accordion.open .accordion-content { display: block !important; }
+        .tooltip-accordion.open .chevron { transform: rotate(90deg) !important; }
+      </style>`;
   }
+
   html += '</div>';
 
   return html;

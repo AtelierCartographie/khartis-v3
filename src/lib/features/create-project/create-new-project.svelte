@@ -393,8 +393,71 @@
                 {/if}
               </Button>
             </div>
+          {:else if file.status === FileStatus.INCOMPLETE}
+            {@const fileTag = getFileTypeTag(file.fileType)}
+            <div data-testid="file-incomplete">
+              <Tile class="file-incomplete-tile">
+                <div class="file-header">
+                  <div class="file-info">
+                    <DocumentBlank
+                      size={20}
+                      class="file-icon file-icon-warning"
+                    />
+                    <div class="file-details">
+                      <div class="file-name">{file.name}</div>
+                      <div class="file-size">{formatFileSize(file.size)}</div>
+                      <div class="file-tags">
+                        <Tag size="sm" type={fileTag.color}>
+                          {fileTag.label}
+                        </Tag>
+                        <Tag size="sm" type="warm-gray">
+                          {m.shapefile_incomplete_title()}
+                        </Tag>
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    size="small"
+                    kind="ghost"
+                    iconDescription="Remove file"
+                    icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
+                    disabled={deletingFileIds.has(file.id)}
+                    on:click={() => handleRemoveFile(file.id)}
+                  >
+                    {#if deletingFileIds.has(file.id)}
+                      <Loading small withOverlay={false} />
+                    {/if}
+                  </Button>
+                </div>
+
+                {#if true}
+                  {@const requiredExts = ['.shp', '.shx', '.dbf']}
+                  {@const optionalExts = ['.prj', '.cpg']}
+                  {@const presentExts =
+                    file.relatedFiles?.map((f) =>
+                      f.substring(f.lastIndexOf('.')).toLowerCase()
+                    ) || []}
+                  <div class="shapefile-components">
+                    {#each requiredExts as ext (ext)}
+                      {@const isPresent = presentExts.includes(ext)}
+                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >
+                    {/each}
+                    {#each optionalExts as ext (ext)}
+                      {@const isPresent = presentExts.includes(ext)}
+                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >
+                    {/each}
+                  </div>
+                {/if}
+              </Tile>
+            </div>
           {:else if file.status === FileStatus.COMPLETE}
             {@const fileTag = getFileTypeTag(file.fileType)}
+            {@const rowCount = file.deepAnalysis?.rowCount ?? 0}
+            {@const columnCount = file.deepAnalysis?.columnCount ?? 0}
             <div data-testid="file-complete">
               <Tile class="file-complete-tile">
                 <div class="file-header">
@@ -402,7 +465,20 @@
                     <DocumentBlank size={20} class="file-icon" />
                     <div class="file-details">
                       <div class="file-name">{file.name}</div>
-                      <div class="file-size">{formatFileSize(file.size)}</div>
+                      <div class="file-size">
+                        {formatFileSize(file.size)}
+                        {#if rowCount > 0}
+                          <span class="file-stats">
+                            · <span data-testid="file-row-count"
+                              >{rowCount}</span
+                            >
+                            lignes ·
+                            <span data-testid="file-column-count"
+                              >{columnCount}</span
+                            > colonnes
+                          </span>
+                        {/if}
+                      </div>
                       <div class="file-tags">
                         <Tag size="sm" type={fileTag.color}>
                           {fileTag.label}
@@ -424,14 +500,26 @@
                   </Button>
                 </div>
 
-                {#if file.relatedFiles && file.relatedFiles.length > 0}
-                  <div class="related-files-tags">
-                    <span class="related-files-label">Related files:</span>
-                    <div class="tags-container">
-                      {#each file.relatedFiles as relatedFile, idx (idx)}
-                        <Tag size="sm" type="gray">{relatedFile}</Tag>
-                      {/each}
-                    </div>
+                {#if file.fileType === FileType.SHAPEFILE && file.relatedFiles && file.relatedFiles.length > 0}
+                  {@const requiredExts = ['.shp', '.shx', '.dbf']}
+                  {@const optionalExts = ['.prj', '.cpg']}
+                  {@const presentExts =
+                    file.relatedFiles?.map((f) =>
+                      f.substring(f.lastIndexOf('.')).toLowerCase()
+                    ) || []}
+                  <div class="shapefile-components">
+                    {#each requiredExts as ext (ext)}
+                      {@const isPresent = presentExts.includes(ext)}
+                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >
+                    {/each}
+                    {#each optionalExts as ext (ext)}
+                      {@const isPresent = presentExts.includes(ext)}
+                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >
+                    {/each}
                   </div>
                 {/if}
 
@@ -532,6 +620,16 @@
     background: var(--cds-layer-01);
   }
 
+  .file-incomplete-tile :global(.bx--tile) {
+    padding: var(--cds-spacing-04);
+    border: 1px solid var(--cds-support-warning);
+    background: var(--cds-layer-01);
+  }
+
+  .file-icon-warning {
+    color: var(--cds-support-warning) !important;
+  }
+
   .file-header {
     display: flex;
     justify-content: space-between;
@@ -580,20 +678,12 @@
     color: var(--cds-text-secondary);
   }
 
-  .related-files-tags {
+  .file-stats {
+    color: var(--cds-text-helper);
+  }
+
+  .shapefile-components {
     margin-top: var(--cds-spacing-04);
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .related-files-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--cds-text-secondary);
-  }
-
-  .tags-container {
     display: flex;
     flex-wrap: wrap;
     gap: var(--cds-spacing-02);
