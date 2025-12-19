@@ -391,8 +391,7 @@ jobs:
 
   pr-validation-complete:
     name: PR Validation Complete
-    needs:
-      [lint, svelte-check, unit-tests, build-check] # e2e-tests, merge-reports temporarily removed
+    needs: [lint, svelte-check, unit-tests, build-check] # e2e-tests, merge-reports temporarily removed
     if: always()
     runs-on: ubuntu-latest
     steps:
