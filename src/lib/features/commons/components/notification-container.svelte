@@ -41,11 +41,11 @@
 <style>
   .notification-container {
     position: fixed;
-    top: 64px;
+    bottom: 16px;
     right: 16px;
     z-index: 10000;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     gap: 8px;
     max-width: 400px;
     pointer-events: none;
