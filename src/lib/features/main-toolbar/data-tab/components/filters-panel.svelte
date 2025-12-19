@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     Button,
+    NumberInput,
     Select,
     SelectItem,
     TextInput,
@@ -282,11 +283,11 @@
         </div>
       {:else if currentOperator.requiresLimit}
         <div class="field-group">
-          <TextInput
+          <NumberInput
             size="sm"
             labelText={m.filter_count()}
-            type="number"
-            placeholder="5"
+            min={1}
+            max={1000}
             bind:value={newFilter.limit}
           />
         </div>
@@ -346,7 +347,7 @@
     align-items: center;
     padding: var(--cds-spacing-03);
     background: var(--cds-ui-02);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
   }
 
   .stats-text {

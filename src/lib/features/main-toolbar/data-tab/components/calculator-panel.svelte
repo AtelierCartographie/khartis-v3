@@ -394,7 +394,7 @@
     color: var(--cds-text-02);
     background: var(--cds-ui-02);
     padding: var(--cds-spacing-03);
-    border-radius: 4px;
+    border-radius: var(--cds-spacing-02);
     margin: 0;
   }
 
