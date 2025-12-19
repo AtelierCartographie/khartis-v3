@@ -537,6 +537,49 @@ class DuckDBOrchestratorService {
     }
   }
 
+  async getRowPosition(
+    tableName: string,
+    rowId: number,
+    options?: {
+      orderBy?: string | null;
+      order?: 'ASC' | 'DESC' | null;
+    }
+  ): Promise<number> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    try {
+      const whereClause = buildFilterWhereClause(this._filters.get(tableName));
+      const filterPart = whereClause ? `WHERE ${whereClause}` : '';
+      const orderPart =
+        options?.orderBy && options?.order
+          ? `ORDER BY "${options.orderBy}" ${options.order}`
+          : 'ORDER BY __id ASC';
+
+      const query = `
+        WITH ordered AS (
+          SELECT __id, ROW_NUMBER() OVER (${orderPart}) - 1 as position
+          FROM "${tableName}"
+          ${filterPart}
+        )
+        SELECT position FROM ordered WHERE __id = ${rowId}
+      `;
+
+      const result = (await Duck.query(query)) as ArrowTableLike;
+      if (result.numRows > 0) {
+        const row = result.get(0);
+        return Number(row.position);
+      }
+      return -1;
+    } catch (error) {
+      logger.error('Error getting row position', LogCategory.DUCKDB, error);
+      return -1;
+    }
+  }
+
   async getRowStats(tableName: string): Promise<FilterStats> {
     if (!this.initialized) {
       await this.initialize();

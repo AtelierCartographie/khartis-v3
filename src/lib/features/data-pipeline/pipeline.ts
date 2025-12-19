@@ -1,3 +1,4 @@
+import { DataValidationError } from '$lib/features/commons/errors/pipeline.errors';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
@@ -19,6 +20,7 @@ import { detectDecimalSeparator } from './utils/decimal-detector';
 import {
   createFileFromExtracted,
   extractZip,
+  getNonShapefileFilesFromArchive,
   getShapefileFilesFromArchive,
   getSupportedFilesFromArchive,
   isZipFile
@@ -103,7 +105,7 @@ function createCompanionFilesFromUpload(
   return companionFiles.length > 0 ? companionFiles : undefined;
 }
 
-export const Pipeline = {
+const Pipeline = {
   get initialized() {
     return initialized;
   },
@@ -137,6 +139,13 @@ export const Pipeline = {
       fileName: file.name,
       fileType: file.type
     });
+
+    const validation = await validateFile(file);
+    if (!validation.isValid) {
+      throw new DataValidationError(validation.errors[0], undefined, {
+        errors: validation.errors
+      });
+    }
 
     try {
       if (isZipFile(file)) {
@@ -493,7 +502,67 @@ export const Pipeline = {
           durationMs: (performance.now() - start).toFixed(2)
         });
 
-        return dataset;
+        const otherFiles = getNonShapefileFilesFromArchive(
+          extraction.files,
+          extraction.shapefileBaseName
+        );
+
+        if (otherFiles.length === 0) {
+          return dataset;
+        }
+
+        logger.info(
+          'ZIP contains additional files besides shapefile',
+          LogCategory.DATA,
+          {
+            shapefileBaseName: extraction.shapefileBaseName,
+            additionalFiles: otherFiles.map((f) => f.name)
+          }
+        );
+
+        const additionalDatasets: DatasetResult[] = [];
+        const skippedOtherFiles: string[] = [];
+
+        for (const extractedFileInfo of otherFiles) {
+          try {
+            const extractedFile = createFileFromExtracted(extractedFileInfo);
+            const additionalDataset = await processFileInternal(
+              ctx,
+              extractedFile,
+              {
+                originalName: extractedFileInfo.name
+              }
+            );
+
+            additionalDataset.sourceFileId = file.name;
+            additionalDataset.name = extractedFileInfo.name;
+
+            additionalDatasets.push(additionalDataset);
+          } catch (error) {
+            logger.warn(
+              'Failed to process additional file from ZIP',
+              LogCategory.DATA,
+              {
+                fileName: extractedFileInfo.name,
+                error
+              }
+            );
+            skippedOtherFiles.push(extractedFileInfo.name);
+          }
+        }
+
+        if (additionalDatasets.length === 0) {
+          return dataset;
+        }
+
+        const allDatasets = [dataset, ...additionalDatasets];
+        return {
+          datasets: allDatasets,
+          sourceZipName: file.name,
+          totalFiles: otherFiles.length + 1,
+          processedFiles: allDatasets.length,
+          skippedFiles: skippedOtherFiles
+        } satisfies ZipDatasetResult;
       }
 
       const supportedFiles = getSupportedFilesFromArchive(extraction.files);

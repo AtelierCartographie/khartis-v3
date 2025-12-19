@@ -67,12 +67,17 @@ describe('projscreen', () => {
   });
 
   describe('get_max_scale', () => {
+    const FIT_BOUNDS_PADDING_FACTOR = 0.92;
+
     it('should calculate scale for landscape canvas', () => {
       const scale = get_max_scale(
         { width: 1200, height: 800 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo(800 / 1200000, 10);
+      expect(scale).toBeCloseTo(
+        (800 / 1200000) * FIT_BOUNDS_PADDING_FACTOR,
+        10
+      );
     });
 
     it('should calculate scale for portrait canvas', () => {
@@ -80,7 +85,10 @@ describe('projscreen', () => {
         { width: 800, height: 1200 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo(800 / 1100000, 10);
+      expect(scale).toBeCloseTo(
+        (800 / 1100000) * FIT_BOUNDS_PADDING_FACTOR,
+        10
+      );
     });
 
     it('should return 1 for zero-dimension bbox', () => {

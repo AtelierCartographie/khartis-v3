@@ -53,6 +53,8 @@ export async function readTabular(
   let { tablename } = options;
   const decimal_separator =
     options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
+  const thousands_separator = options.thousands_separator;
+  const header = options.header ?? true;
   const format = options.format ?? DUCK_CONST.DEFAULT.FORMAT_TABULAR;
   let filename: string;
   let fileid: string;
@@ -98,7 +100,19 @@ export async function readTabular(
         }
         if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
           const escapedFileId = escapeSqlString(fileid);
-          const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`;
+
+          const csvOptions: string[] = [
+            `header=${header}`,
+            `decimal_separator="${decimal_separator}"`,
+            'normalize_names=true',
+            `nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES}`
+          ];
+
+          if (thousands_separator) {
+            csvOptions.push(`thousands_separator="${thousands_separator}"`);
+          }
+
+          const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
           await executeQuery(ctx.connection, query, {
             format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
           });

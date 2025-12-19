@@ -105,6 +105,8 @@ export interface FileWithId extends File {
 export interface ReadTabularOptions {
   tablename?: string;
   decimal_separator?: string;
+  thousands_separator?: string;
+  header?: boolean;
   format?: string;
 }
 

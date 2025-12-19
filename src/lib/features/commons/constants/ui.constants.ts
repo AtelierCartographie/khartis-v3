@@ -33,7 +33,8 @@ export enum FileStatus {
   PROCESSING = 'processing',
   COMPLETE = 'complete',
   EDIT = 'edit',
-  ERROR = 'error'
+  ERROR = 'error',
+  INCOMPLETE = 'incomplete'
 }
 
 export enum ExampleCategory {

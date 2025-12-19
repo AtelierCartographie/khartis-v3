@@ -18,7 +18,6 @@
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
-  import { basemapService } from './services/basemap.service.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
 
   let containerRef: HTMLDivElement;
@@ -308,8 +307,6 @@
     const start = performance.now();
     logger.info('Initializing main map view', LogCategory.MAP);
 
-    await basemapService.initialize();
-
     if (selectedDataset?.geometry) {
       const result = await convertDatasetToGeoJSON(selectedDataset);
       if (result) {
@@ -377,8 +374,7 @@
   {#if !isMapReady}
     <div
       class="skeleton-loader"
-      style="width: {formatState.width + 32}px; height: {formatState.height +
-        32}px;"
+      style="width: {formatState.width}px; height: {formatState.height}px;"
       out:fade={{ duration: 300, easing: cubicOut }}
     >
       <SkeletonPlaceholder style="width: 100%; height: 100%;" />

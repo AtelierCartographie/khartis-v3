@@ -2,11 +2,16 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import { Duck, RefineOperation } from '$lib/features/duckdb';
+  import {
+    Duck,
+    RefineOperation,
+    duckDBOrchestrator
+  } from '$lib/features/duckdb';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
+    InlineNotification,
     Modal,
     TextInput
   } from 'carbon-components-svelte';
@@ -19,7 +24,7 @@
   import { useTableFilters } from './hooks/use-table-filters.svelte';
   import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
-  import { TABLE_ROW_HEIGHT } from './types';
+  import { DOM_UPDATE_DELAY_MS, TABLE_ROW_HEIGHT } from './types';
 
   import TableColumnHeader from './components/TableColumnHeader.svelte';
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
@@ -165,6 +170,11 @@
     }
   });
 
+  const affectedVisualizations = $derived.by(() => {
+    if (!columnToDelete) return [];
+    return columnOps.getAffectedVisualizations(columnToDelete);
+  });
+
   const rowSelection = useRowSelection({
     onSelectionChange: (ids, count) => {
       onSelectionChange?.(ids, count);
@@ -292,21 +302,33 @@
   });
 
   $effect(() => {
-    if (currentCell && filters.numRows > 0) {
-      untrack(() => {
-        // Scroll vertical to the row
-        virtualScroll.goToId(currentCell.rowId);
+    if (currentCell && filters.numRows > 0 && tableName) {
+      const rowId = currentCell.rowId;
+      const columnName = currentCell.columnName;
+      const currentSortColumn = sort.sortColumn;
+      const currentSortOrder = sort.sortOrder;
+      const currentTableName = tableName;
 
-        // Scroll horizontal to the column after DOM update
+      untrack(async () => {
+        const position = await duckDBOrchestrator.getRowPosition(
+          currentTableName,
+          rowId,
+          { orderBy: currentSortColumn, order: currentSortOrder }
+        );
+
+        if (position >= 0) {
+          await virtualScroll.goToPosition(position);
+        }
+
         setTimeout(() => {
-          const cellSelector = `td[data-column="${currentCell.columnName}"]`;
+          const cellSelector = `td[data-column="${columnName}"]`;
           const cell = tableContainer?.querySelector(cellSelector);
           cell?.scrollIntoView({
             behavior: 'smooth',
             inline: 'center',
             block: 'nearest'
           });
-        }, 50);
+        }, DOM_UPDATE_DELAY_MS);
       });
     }
   });
@@ -518,10 +540,10 @@
 <!-- Delete Column Confirmation Modal -->
 <Modal
   bind:open={deleteConfirmOpen}
-  modalHeading="Supprimer la colonne"
-  primaryButtonText="Supprimer"
+  modalHeading={m.delete_column_title()}
+  primaryButtonText={m.delete_column_confirm()}
   primaryButtonDisabled={false}
-  secondaryButtonText="Annuler"
+  secondaryButtonText={m.cancel()}
   danger
   on:click:button--primary={handleDeleteConfirm}
   on:click:button--secondary={() => {
@@ -535,9 +557,19 @@
   size="sm"
 >
   <p>
-    Êtes-vous sûr de vouloir supprimer la colonne
-    <strong>{columnToDelete}</strong> ? Cette action est irréversible.
+    {m.delete_column_message({ column: columnToDelete ?? '' })}
   </p>
+  {#if affectedVisualizations.length > 0}
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      hideCloseButton
+      title={m.delete_column_warning_title({
+        count: affectedVisualizations.length
+      })}
+      subtitle={affectedVisualizations.map((v) => v.name).join(', ')}
+    />
+  {/if}
 </Modal>
 
 <style>

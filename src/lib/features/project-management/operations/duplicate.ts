@@ -5,7 +5,7 @@ export function duplicateProject(
   original: KhartisProject,
   name: string
 ): KhartisProject {
-  const clone = structuredClone(original);
+  const clone = JSON.parse(JSON.stringify(original)) as KhartisProject;
   const now = new Date();
   const sanitizedName = sanitizeProjectName(name);
 

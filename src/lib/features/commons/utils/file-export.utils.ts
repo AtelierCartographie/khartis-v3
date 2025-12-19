@@ -193,12 +193,109 @@ export function exportToJson(data: unknown): Blob {
   return new Blob([jsonString], { type: 'application/json' });
 }
 
+async function exportDatasetsToCsvWithGeometry(
+  datasets: ProcessedDataset[]
+): Promise<Blob> {
+  const allData: Record<string, unknown>[] = [];
+
+  for (const dataset of datasets) {
+    for (const row of dataset.data) {
+      const exportRow: Record<string, unknown> = {};
+
+      for (const col of dataset.columns) {
+        if (col.type === 'geometry') {
+          const geometry = row[col.name];
+          if (geometry && typeof geometry === 'object') {
+            exportRow['geometry_wkt'] = geometryToWkt(geometry);
+          }
+        } else {
+          exportRow[col.name] = row[col.name];
+        }
+      }
+
+      if (datasets.length > 1) {
+        exportRow['_source_dataset'] = dataset.name;
+      }
+
+      allData.push(exportRow);
+    }
+  }
+
+  const allHeaders = Array.from(
+    new Set(allData.flatMap((row) => Object.keys(row)))
+  );
+
+  return exportToCsv(allData, allHeaders);
+}
+
+function geometryToWkt(geometry: unknown): string {
+  if (!geometry || typeof geometry !== 'object') {
+    return '';
+  }
+
+  const geom = geometry as { type?: string; coordinates?: unknown };
+  const type = geom.type;
+  const coords = geom.coordinates;
+
+  if (!type || !coords) {
+    return '';
+  }
+
+  switch (type) {
+    case 'Point':
+      return `POINT(${formatCoords(coords)})`;
+    case 'MultiPoint':
+      return `MULTIPOINT(${formatMultiCoords(coords as unknown[][])})`;
+    case 'LineString':
+      return `LINESTRING(${formatLineCoords(coords as unknown[])})`;
+    case 'MultiLineString':
+      return `MULTILINESTRING(${formatMultiLineCoords(coords as unknown[][])})`;
+    case 'Polygon':
+      return `POLYGON(${formatPolygonCoords(coords as unknown[][])})`;
+    case 'MultiPolygon':
+      return `MULTIPOLYGON(${formatMultiPolygonCoords(coords as unknown[][][])})`;
+    default:
+      return JSON.stringify(geometry);
+  }
+}
+
+function formatCoords(coords: unknown): string {
+  if (Array.isArray(coords) && coords.length >= 2) {
+    return `${coords[0]} ${coords[1]}`;
+  }
+  return '';
+}
+
+function formatMultiCoords(coords: unknown[][]): string {
+  return coords.map((c) => `(${formatCoords(c)})`).join(', ');
+}
+
+function formatLineCoords(coords: unknown[]): string {
+  return coords.map((c) => formatCoords(c)).join(', ');
+}
+
+function formatMultiLineCoords(coords: unknown[][]): string {
+  return coords.map((line) => `(${formatLineCoords(line)})`).join(', ');
+}
+
+function formatPolygonCoords(coords: unknown[][]): string {
+  return coords.map((ring) => `(${formatLineCoords(ring)})`).join(', ');
+}
+
+function formatMultiPolygonCoords(coords: unknown[][][]): string {
+  return coords.map((poly) => `(${formatPolygonCoords(poly)})`).join(', ');
+}
+
 export async function exportProcessedDatasets(
   datasets: ProcessedDataset[],
-  format: 'csv' | 'geojson' | 'json' = 'json'
+  format: 'csv' | 'geojson' | 'json' | 'csv-geo' = 'json'
 ): Promise<Blob> {
   if (datasets.length === 0) {
     throw new Error('No datasets to export');
+  }
+
+  if (format === 'csv-geo') {
+    return exportDatasetsToCsvWithGeometry(datasets);
   }
 
   if (format === 'csv') {

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import { onMount, untrack } from 'svelte';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
@@ -20,6 +19,7 @@
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import type { DeckMapProps } from '../types';
+  import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
 
   let {
     jsTable,
@@ -34,7 +34,6 @@
   const MAX_WAIT_FOR_DATA_MS = 5000;
 
   let mapContainer: HTMLDivElement;
-  let worldBaseTable = $state<ArrowTable | null>(null);
   let hasCalledOnReady = $state(false);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -97,10 +96,6 @@
         }
       }
     },
-    onWorldBaseLoaded: (table) => {
-      worldBaseTable = table;
-      mapLayers.updateLayers(jsTable, userGeoJSON);
-    },
     onZoom: () => mapInstanceStore.updateZoomFromMap(),
     onMoveEnd: () => mapPosition.savePosition()
   });
@@ -117,7 +112,7 @@
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
     getIsMapLoaded: () => mapInit.isMapLoaded,
-    getWorldBaseTable: () => worldBaseTable,
+    getWorldBaseTable: () => null,
     getDatasetId: () => mapState.datasetId,
     buildLayerContext: () => mapState.buildLayerContext()
   });
@@ -151,7 +146,6 @@
   });
 
   $effect(() => {
-    void worldBaseTable;
     void osmBasemapStore.tileConfig;
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
@@ -282,6 +276,7 @@
     class="map-canvas"
     style="width: {width}px; height: {height}px;"
   ></div>
+  <GeoIndicationsOverlay />
 </div>
 
 <style>
@@ -290,13 +285,12 @@
     flex-shrink: 0;
     background-color: var(--cds-ui-background);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-    padding: 16px;
   }
 
   .map-canvas {
     position: relative;
     overflow: hidden;
-    background-color: #f0f0f0;
+    background-color: #ffffff;
   }
 
   .map-canvas :global(canvas) {

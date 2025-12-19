@@ -12,6 +12,5 @@ export {
   getOSMTileConfig,
   isOSMBasemap
 } from './services/osm-tile.service';
-export * from './stores';
 export * from './styling';
 export type * from './types';
