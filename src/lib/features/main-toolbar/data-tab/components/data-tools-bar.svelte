@@ -6,7 +6,10 @@
     Calculator,
     TrashCan,
     Reset,
-    Maximize
+    Maximize,
+    Settings,
+    ChartHistogram,
+    ViewOff
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
@@ -15,16 +18,24 @@
     onDelete?: () => void;
     onReset?: () => void;
     onExpand?: () => void;
+    onCsvOptions?: () => void;
+    onToggleSummaryPlots?: () => void;
     deleteDisabled?: boolean;
     selectionCount?: number;
+    showCsvOptions?: boolean;
+    showSummaryPlots?: boolean;
   }
 
   let {
     onDelete,
     onReset,
     onExpand,
+    onCsvOptions,
+    onToggleSummaryPlots,
     deleteDisabled = true,
-    selectionCount = 0
+    selectionCount = 0,
+    showCsvOptions = false,
+    showSummaryPlots = true
   }: Props = $props();
 
   const hasSelection = $derived(selectionCount > 0);
@@ -91,6 +102,25 @@
       iconDescription={m.data_tool_reset_icon()}
       tooltipPosition="bottom"
       on:click={() => onReset?.()}
+    />
+    {#if showCsvOptions}
+      <Button
+        kind="ghost"
+        size="small"
+        icon={Settings}
+        iconDescription={m.csv_options_button()}
+        tooltipPosition="bottom"
+        on:click={() => onCsvOptions?.()}
+      />
+    {/if}
+    <Button
+      kind="ghost"
+      size="small"
+      icon={showSummaryPlots ? ChartHistogram : ViewOff}
+      iconDescription={m.data_toggle_summary_plots()}
+      tooltipPosition="bottom"
+      class={showSummaryPlots ? 'active' : ''}
+      on:click={() => onToggleSummaryPlots?.()}
     />
   </div>
   <div class="tools-right">

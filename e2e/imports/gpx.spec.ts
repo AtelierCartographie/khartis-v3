@@ -18,7 +18,10 @@ test.describe('GPX Import', () => {
       'star_arrets_physiques_actifs',
       'star_arrets_physiques_actifs.gpx'
     );
-    await createProject(page, gpxPath, `GPX STAR ${Date.now()}`);
+    await createProject(page, gpxPath, {
+      projectName: `GPX STAR ${Date.now()}`,
+      fileAssertions: { minRows: 100, minColumns: 3 }
+    });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

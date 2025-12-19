@@ -18,7 +18,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'fossil-fuel-subsidies-gdp-2021.csv');
-      await createProject(page, csvPath, `CSV fossil-fuel ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV fossil-fuel ${Date.now()}`,
+        fileAssertions: { minRows: 50, minColumns: 4 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -35,7 +38,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'naissances-par-commune-departement-et-region-2018.csv'
       );
-      await createProject(page, csvPath, `CSV naissances ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV naissances ${Date.now()}`,
+        fileAssertions: { minRows: 1000, minColumns: 5 }
+      });
       await waitForMap(page, 90000);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -47,7 +53,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'world-bank-rural-pop.csv');
-      await createProject(page, csvPath, `CSV world-bank ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV world-bank ${Date.now()}`,
+        fileAssertions: { minRows: 50, minColumns: 5 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -59,7 +68,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'sites-seveso-idf.csv');
-      await createProject(page, csvPath, `CSV seveso ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV seveso ${Date.now()}`,
+        fileAssertions: { minRows: 10, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -75,7 +87,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'csv-malformed--with-100-columns.csv');
-      await createProject(page, csvPath, `CSV 100cols ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV 100cols ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 100 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -92,7 +107,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'csv-malformed--with-duplicated-column-name.csv'
       );
-      await createProject(page, csvPath, `CSV dupcol ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV dupcol ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 5 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -106,7 +124,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'csv-malformed--with-empty-columns.csv');
-      await createProject(page, csvPath, `CSV emptycol ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV emptycol ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -120,7 +141,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'csv-malformed--with-empty-lines.csv');
-      await createProject(page, csvPath, `CSV emptylines ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV emptylines ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -137,7 +161,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'csv-malformed--with-european-numeric-format.csv'
       );
-      await createProject(page, csvPath, `CSV euronum ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV euronum ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -154,7 +181,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'csv-malformed--with-special-characters.csv'
       );
-      await createProject(page, csvPath, `CSV special ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV special ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -168,7 +198,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'csv-malformed--with-null-variations.csv');
-      await createProject(page, csvPath, `CSV nulls ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV nulls ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -185,7 +218,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'csv-malformed--with-numeric-all-edge-cases.csv'
       );
-      await createProject(page, csvPath, `CSV numedge ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV numedge ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -202,7 +238,10 @@ test.describe('CSV Import', () => {
         CSV_PATH,
         'csv-malformed--with-numeric-formats-mixed.csv'
       );
-      await createProject(page, csvPath, `CSV nummix ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV nummix ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -254,7 +293,10 @@ test.describe('CSV Import', () => {
       const errorTracker = await freshStart(page);
 
       const csvPath = join(CSV_PATH, 'csv-malformed--with-no-header.csv');
-      await createProject(page, csvPath, `CSV noheader ${Date.now()}`);
+      await createProject(page, csvPath, {
+        projectName: `CSV noheader ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 3 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();

@@ -330,6 +330,15 @@
       <div class="summary-plot">
         {#if plotElement}
           <SummaryPlot svgElement={plotElement} />
+          <!-- Afficher le compteur uniques sous le plot pour colonnes numériques/date -->
+          {#if analysis.uniques !== undefined && analysis.uniques > 0 && analysis.type_simple !== 'string'}
+            <span
+              class="unique-count unique-count-secondary"
+              title="Nombre de valeurs distinctes"
+            >
+              {analysis.uniques} uniques
+            </span>
+          {/if}
         {:else if analysis.type_simple === 'string'}
           <span class="unique-count" style="background-color: {typeStyle.color}"
             >{analysis.uniques ?? 0} uniques</span
@@ -532,6 +541,17 @@
     border-radius: 12px;
     font-size: 9px;
     font-weight: 500;
+  }
+
+  .unique-count-secondary {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background-color: var(--cds-ui-02);
+    color: var(--cds-text-02);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 8px;
   }
 
   .warning-badge {

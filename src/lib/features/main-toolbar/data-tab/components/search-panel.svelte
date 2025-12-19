@@ -243,13 +243,9 @@
     if (searchStats.exactCount > 0) {
       parts.push(m.search_exact_results({ count: searchStats.exactCount }));
     }
-    if (searchStats.containsCount > 0) {
-      parts.push(
-        m.search_contains_results({ count: searchStats.containsCount })
-      );
-    }
-    if (searchStats.fuzzyCount > 0) {
-      parts.push(m.search_partial_results({ count: searchStats.fuzzyCount }));
+    const partialCount = searchStats.containsCount + searchStats.fuzzyCount;
+    if (partialCount > 0) {
+      parts.push(m.search_partial_results({ count: partialCount }));
     }
     return parts.join(', ');
   });

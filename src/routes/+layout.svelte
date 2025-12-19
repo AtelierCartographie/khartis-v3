@@ -13,6 +13,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
   import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
@@ -39,6 +40,18 @@
   };
 
   onMount(() => {
+    // Auto-detect browser language on first load (if no cookie is set)
+    const hasCookie = document.cookie.includes(cookieName);
+    if (!hasCookie && typeof navigator !== 'undefined') {
+      const browserLang = navigator.language?.split('-')[0];
+      if (
+        browserLang &&
+        locales.includes(browserLang as (typeof locales)[number])
+      ) {
+        setLocale(browserLang as (typeof locales)[number]);
+      }
+    }
+
     handleResize();
     window.addEventListener('resize', handleResize);
 

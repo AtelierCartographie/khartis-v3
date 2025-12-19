@@ -3,26 +3,32 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
+  import { m } from '$lib/paraglide/messages.js';
   import { Button } from 'carbon-components-svelte';
   import { ChevronLeft } from 'carbon-icons-svelte';
 </script>
 
 {#if globalState.isMobileView && !globalState.isMobileToolbarOpen}
-  <Button
-    kind="secondary"
-    size="small"
-    icon={ChevronLeft}
-    iconDescription="Ouvrir le panneau"
-    on:click={() => globalActions.openMobileToolbar()}
-  />
+  <div class="open-panel-button-wrapper">
+    <Button
+      kind="primary"
+      size="small"
+      icon={ChevronLeft}
+      iconDescription={m.open_panel_tooltip()}
+      on:click={() => globalActions.openMobileToolbar()}
+    />
+  </div>
 {/if}
 
 <style>
-  :global(.bx--btn--secondary.bx--btn--sm) {
+  .open-panel-button-wrapper {
     position: fixed;
     top: calc(var(--cds-header-height) + var(--cds-spacing-03));
     right: var(--cds-spacing-03);
     z-index: 800;
+  }
+
+  .open-panel-button-wrapper :global(.bx--btn) {
     min-height: 32px;
     padding: 0 var(--cds-spacing-03);
   }

@@ -1,5 +1,9 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
+  visualizationStore,
+  type VisualizationConfig
+} from '$lib/features/commons/store/visualization.store.svelte';
+import {
   changeColumnType,
   dropColumn
 } from '$lib/features/duckdb/orchestrator/column-ops';
@@ -34,6 +38,7 @@ export interface UseColumnOperationsReturn {
   handleHide: (columnName: string) => void;
   handleDelete: (columnName: string) => Promise<void>;
   isColumnHidden: (columnName: string) => boolean;
+  getAffectedVisualizations: (columnName: string) => VisualizationConfig[];
 }
 
 function getValue<T>(prop: T | (() => T)): T {
@@ -144,6 +149,12 @@ export function useColumnOperations(
     }
   }
 
+  function getAffectedVisualizations(
+    columnName: string
+  ): VisualizationConfig[] {
+    return visualizationStore.getVisualizationsUsingColumn(columnName);
+  }
+
   return {
     get visibleColumns() {
       return visibleColumns;
@@ -153,7 +164,8 @@ export function useColumnOperations(
     handleChangeType,
     handleHide,
     handleDelete,
-    isColumnHidden
+    isColumnHidden,
+    getAffectedVisualizations
   };
 }
 

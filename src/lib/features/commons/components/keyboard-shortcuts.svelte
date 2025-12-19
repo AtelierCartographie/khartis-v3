@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { globalActions, globalState } from '../store/global.svelte';
   import { mapInstanceStore } from '../store/map-instance.store.svelte';
+  import { createProjectActions } from '../store/create-project.store.svelte';
+  import { projectStore } from '../store/project.store.svelte';
   import { ToolbarState, ToolbarStep } from '../types/global';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
@@ -89,6 +91,21 @@
       isMapZoomActive = !isMapZoomActive;
     }
 
+    function handleNewProject(): void {
+      createProjectActions.selectTab(1);
+      globalState.isCreateProjectModalOpen = true;
+    }
+
+    function handleOpenProject(): void {
+      createProjectActions.selectTab(2);
+      globalState.isCreateProjectModalOpen = true;
+    }
+
+    async function handleSaveProject(): Promise<void> {
+      if (!projectStore.currentProject) return;
+      await projectStore.saveCurrentProject();
+    }
+
     function handleKeyDown(event: KeyboardEvent): void {
       const target = event.target as HTMLElement;
 
@@ -120,6 +137,28 @@
       if (event.altKey && event.key === 'z') {
         event.preventDefault();
         handleZoomModeToggle();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
+        if (event.key === 'n' || event.key === 'N') {
+          event.preventDefault();
+          handleNewProject();
+          return;
+        }
+        if (event.key === 'o' || event.key === 'O') {
+          event.preventDefault();
+          handleOpenProject();
+          return;
+        }
+      }
+
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        (event.key === 's' || event.key === 'S')
+      ) {
+        event.preventDefault();
+        handleSaveProject();
       }
     }
 

@@ -17,7 +17,10 @@ test.describe('Shapefile Import', () => {
       const errorTracker = await freshStart(page);
 
       const zipPath = join(ZIP_PATH, 'shapefile-complete.zip');
-      await createProject(page, zipPath, `SHP via ZIP ${Date.now()}`);
+      await createProject(page, zipPath, {
+        projectName: `SHP via ZIP ${Date.now()}`,
+        fileAssertions: { minRows: 1, minColumns: 1 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -37,11 +40,10 @@ test.describe('Shapefile Import', () => {
         'ne_50m',
         'ne_50m_admin_0_countries_lakes.shp'
       );
-      await createShapefileProject(
-        page,
-        shpPath,
-        `SHP NaturalEarth ${Date.now()}`
-      );
+      await createShapefileProject(page, shpPath, {
+        projectName: `SHP NaturalEarth ${Date.now()}`,
+        fileAssertions: { minRows: 100, minColumns: 5 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -59,7 +61,10 @@ test.describe('Shapefile Import', () => {
         'lignes-du-reseau-star-de-rennes-metropole',
         'lignes-du-reseau-star-de-rennes-metropole.shp'
       );
-      await createShapefileProject(page, shpPath, `SHP STAR ${Date.now()}`);
+      await createShapefileProject(page, shpPath, {
+        projectName: `SHP STAR ${Date.now()}`,
+        fileAssertions: { minRows: 10, minColumns: 2 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -76,7 +81,10 @@ test.describe('Shapefile Import', () => {
         'mos_foncier_agrege_com',
         'mos_foncier_agrege_com.shp'
       );
-      await createShapefileProject(page, shpPath, `SHP MOS ${Date.now()}`);
+      await createShapefileProject(page, shpPath, {
+        projectName: `SHP MOS ${Date.now()}`,
+        fileAssertions: { minRows: 1000, minColumns: 5 }
+      });
       await waitForMap(page);
 
       await expect(page.locator('.map-container').first()).toBeVisible();
@@ -94,7 +102,10 @@ test.describe('Shapefile Import', () => {
         'Marines-regionsEEZ_land_union_v3_202003',
         'EEZ_Land_v3_202030.shp'
       );
-      await createShapefileProject(page, shpPath, `SHP Marines ${Date.now()}`);
+      await createShapefileProject(page, shpPath, {
+        projectName: `SHP Marines ${Date.now()}`,
+        fileAssertions: { minRows: 100, minColumns: 5 }
+      });
       await waitForMap(page, 120000);
 
       await expect(page.locator('.map-container').first()).toBeVisible();

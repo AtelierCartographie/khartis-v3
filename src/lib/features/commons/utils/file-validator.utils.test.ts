@@ -560,21 +560,33 @@ describe('FileValidator', () => {
       expect(result.isValid).toBe(true);
     });
 
-    it('should detect incomplete shapefile groups', () => {
+    it('should allow any shapefile components (validation deferred)', () => {
+      // Shapefile validation is deferred to processShapefileGroup to support progressive import
       const files = [
         new File(['shp'], 'boundaries.shp', {
           type: 'application/x-shapefile'
         })
-        // Missing .shx and .dbf
       ];
       const result = FileValidator.validateMultiple(files);
 
-      expect(
-        result.globalErrors.some(
-          (e) => e.includes('Incomplete') || e.includes('shapefile')
-        )
-      ).toBe(true);
-      expect(result.isValid).toBe(false);
+      expect(result.globalErrors.length).toBe(0);
+      expect(result.isValid).toBe(true);
+    });
+
+    it('should allow shapefile components without .shp (handled later)', () => {
+      // Individual shapefile components are allowed - validation happens in processShapefileGroup
+      const files = [
+        new File(['dbf'], 'boundaries.dbf', {
+          type: 'application/x-dbf'
+        }),
+        new File(['shx'], 'boundaries.shx', {
+          type: 'application/octet-stream'
+        })
+      ];
+      const result = FileValidator.validateMultiple(files);
+
+      expect(result.globalErrors.length).toBe(0);
+      expect(result.isValid).toBe(true);
     });
 
     it('should return individual file validation results', () => {

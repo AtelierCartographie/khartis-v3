@@ -16,7 +16,10 @@ test.describe('GeoPackage Import', () => {
     const errorTracker = await freshStart(page);
 
     const gpkgPath = join(GPKG_PATH, 'compagnies-herault-l93.gpkg');
-    await createProject(page, gpkgPath, `GPKG Herault ${Date.now()}`);
+    await createProject(page, gpkgPath, {
+      projectName: `GPKG Herault ${Date.now()}`,
+      fileAssertions: { minRows: 10, minColumns: 3 }
+    });
     await waitForMap(page);
 
     await expect(page.locator('.map-container').first()).toBeVisible();
@@ -35,7 +38,10 @@ test.describe('GeoPackage Import', () => {
       'ADMIN-EXPRESS_4-0__GPKG_RGAF09UTM20_GLP_2025-12-05',
       'ADE_4-0_GPKG_RGAF09UTM20_GLP-ED2025-12-05.gpkg'
     );
-    await createProject(page, gpkgPath, `GPKG Guadeloupe ${Date.now()}`);
+    await createProject(page, gpkgPath, {
+      projectName: `GPKG Guadeloupe ${Date.now()}`,
+      fileAssertions: { minRows: 100, minColumns: 5 }
+    });
     await waitForMap(page, 120000);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

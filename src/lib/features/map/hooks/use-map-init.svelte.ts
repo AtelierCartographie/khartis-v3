@@ -1,13 +1,11 @@
 import { Deck, OrthographicView } from '@deck.gl/core';
 import type { DeckProps } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import maplibregl from 'maplibre-gl';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { BASEMAP_STYLES, DEFAULT_BASEMAP_STYLE } from '../constants';
 import { createTooltipHandler } from '../interactions';
-import { basemapService } from '../services/basemap.service.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 
 export type ViewMode = 'orthographic' | 'maplibre';
@@ -21,7 +19,6 @@ export interface MapInitConfig {
 
 export interface UseMapInitProps {
   onMapLoaded: () => void;
-  onWorldBaseLoaded: (table: ArrowTable) => void;
   onZoom: () => void;
   onMoveEnd: () => void;
 }
@@ -48,7 +45,7 @@ const DEFAULT_CONFIG: MapInitConfig = {
 const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: 'main', flipY: false });
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
-  const { onMapLoaded, onWorldBaseLoaded, onZoom, onMoveEnd } = props;
+  const { onMapLoaded, onZoom, onMoveEnd } = props;
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
@@ -106,7 +103,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           mapInstanceStore.setMapLoaded(true);
           logger.success('Deck.gl OrthographicView ready', LogCategory.MAP);
           onMapLoaded();
-          loadDefaultBasemap();
         }
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,7 +158,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
 
       onMapLoaded();
-      loadDefaultBasemap();
 
       requestAnimationFrame(() => {
         map?.resize();
@@ -173,17 +168,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     map.on('moveend', onMoveEnd);
     map.on('zoomend', onMoveEnd);
     currentViewMode = 'maplibre';
-  }
-
-  function loadDefaultBasemap(): void {
-    basemapService.loadDefaultBasemap().then((basemap) => {
-      if (basemap?.geometryTable) {
-        onWorldBaseLoaded(basemap.geometryTable);
-        logger.info('World base layer loaded', LogCategory.MAP, {
-          rows: basemap.geometryTable.numRows
-        });
-      }
-    });
   }
 
   function initialize(

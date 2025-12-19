@@ -1,6 +1,7 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     Button,
     Checkbox,
@@ -16,8 +17,16 @@
     Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { Add } from 'carbon-icons-svelte';
+  import { Add, ArrowsHorizontal } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+
+  let selectedViz = $derived(visualizationStore.selectedVisualization);
+
+  function handleInvertPalette() {
+    if (selectedViz?.id) {
+      visualizationStore.invertPalette(selectedViz.id);
+    }
+  }
 
   const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
   const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
@@ -201,6 +210,13 @@
           <div class="palette">
             <div class="swatch" style="--from:#b3d4ff; --to:#001d6c"></div>
             <span>Palette de couleurs</span>
+            <Button
+              kind="ghost"
+              size="small"
+              icon={ArrowsHorizontal}
+              iconDescription={m.invert_palette_tooltip()}
+              on:click={handleInvertPalette}
+            />
           </div>
         </Column>
       </Row>
@@ -355,6 +371,13 @@
           <div class="palette">
             <div class="swatch" style="--from:#ffb3b3; --to:#6c0000"></div>
             <span>Palette de couleurs</span>
+            <Button
+              kind="ghost"
+              size="small"
+              icon={ArrowsHorizontal}
+              iconDescription={m.invert_palette_tooltip()}
+              on:click={handleInvertPalette}
+            />
           </div>
         </Column>
       </Row>
@@ -508,6 +531,13 @@
           <div class="palette">
             <div class="swatch" style="--from:#b3e5ff; --to:#003d6c"></div>
             <span>Palette de couleurs</span>
+            <Button
+              kind="ghost"
+              size="small"
+              icon={ArrowsHorizontal}
+              iconDescription={m.invert_palette_tooltip()}
+              on:click={handleInvertPalette}
+            />
           </div>
         </Column>
       </Row>

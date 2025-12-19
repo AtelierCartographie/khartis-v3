@@ -87,6 +87,62 @@ export const createProjectActions = {
     return projectFiles.some((f) => f.name === fileName);
   },
 
+  findIncompleteShapefile(baseName: string): UploadedFile | undefined {
+    return createProjectState.newProject.uploadedFiles.find(
+      (f) =>
+        f.status === FileStatus.INCOMPLETE &&
+        f.shapefileBaseName?.toLowerCase() === baseName.toLowerCase()
+    );
+  },
+
+  async mergeIntoIncompleteShapefile(
+    incompleteFile: UploadedFile,
+    newFiles: File[],
+    sourceType: DataSourceType
+  ): Promise<void> {
+    const existingFileObjects = incompleteFile.relatedFileObjects ?? [];
+    const allFiles = [...existingFileObjects, ...newFiles];
+
+    const baseName = incompleteFile.shapefileBaseName!;
+    const presentExtensions = allFiles.map((f) => {
+      const ext = f.name.toLowerCase().split('.').pop();
+      return ext ? `.${ext}` : '';
+    });
+
+    const requiredExtensions = ['.shp', '.shx', '.dbf'];
+    const stillMissing = requiredExtensions.filter(
+      (ext) => !presentExtensions.includes(ext)
+    );
+
+    if (stillMissing.length === 0) {
+      const fileIndex =
+        createProjectState.newProject.uploadedFiles.indexOf(incompleteFile);
+      if (fileIndex !== -1) {
+        createProjectState.newProject.uploadedFiles.splice(fileIndex, 1);
+      }
+
+      await this.processShapefileGroup(baseName, allFiles, sourceType);
+
+      logger.info('Incomplete shapefile completed', LogCategory.FILE, {
+        baseName,
+        fileCount: allFiles.length
+      });
+    } else {
+      // Update the incomplete file with new files and recalculate missing
+      incompleteFile.relatedFileObjects = allFiles;
+      incompleteFile.relatedFiles = allFiles.map((f) => f.name);
+      incompleteFile.missingShapefileComponents = stillMissing;
+      incompleteFile.size = allFiles.reduce((sum, f) => sum + f.size, 0);
+      incompleteFile.validation = {
+        isValid: false,
+        errors: [],
+        warnings: [
+          m.shapefile_incomplete_message({ missing: stillMissing.join(', ') })
+        ]
+      };
+    }
+  },
+
   async processFiles(
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
@@ -94,13 +150,33 @@ export const createProjectActions = {
     this.setProcessingFiles(true, files.length);
 
     try {
-      const validationResult =
-        CreateProjectValidationService.validateFiles(files);
-
-      createProjectState.newProject.validationErrors =
-        validationResult.globalErrors;
-
       const fileGroups = groupShapefiles(files);
+
+      for (const [baseName, groupFiles] of fileGroups) {
+        const incompleteShapefile = this.findIncompleteShapefile(baseName);
+        if (incompleteShapefile) {
+          await this.mergeIntoIncompleteShapefile(
+            incompleteShapefile,
+            groupFiles,
+            sourceType
+          );
+          fileGroups.delete(baseName);
+        }
+      }
+
+      if (fileGroups.size === 0) {
+        return;
+      }
+
+      const remainingFiles = Array.from(fileGroups.values()).flat();
+      const validationResult =
+        CreateProjectValidationService.validateFiles(remainingFiles);
+
+      const nonShapefileErrors = validationResult.globalErrors.filter(
+        (err) => !err.includes('Incomplete shapefile')
+      );
+      createProjectState.newProject.validationErrors = nonShapefileErrors;
+
       const duplicates: string[] = [];
       const toProcess: SvelteMap<string, File[]> = new SvelteMap();
 
@@ -115,59 +191,78 @@ export const createProjectActions = {
         }
       }
 
-      if (!validationResult.isValid) {
-        for (const [baseName, groupFiles] of toProcess) {
-          const mainFile =
-            groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
-          const mainFileName = mainFile.name;
-          const fileValidation = validationResult.results.get(mainFileName);
+      for (const [baseName, groupFiles] of toProcess) {
+        const mainFile =
+          groupFiles.find((f) => f.name.endsWith('.shp')) || groupFiles[0];
+        const mainFileName = mainFile.name;
+        const fileValidation = validationResult.results.get(mainFileName);
 
-          const shapefileGlobalError = validationResult.globalErrors.find(
-            (err) => err.includes(`Shapefile "${baseName}"`)
-          );
+        const shapefileGlobalError = validationResult.globalErrors.find((err) =>
+          err.includes(`Incomplete shapefile "${baseName}"`)
+        );
 
-          const errors: string[] = [];
-          const warnings: string[] = [];
+        const hasShapefileError = !!shapefileGlobalError;
+        const hasOtherErrors =
+          fileValidation && fileValidation.errors.length > 0;
 
-          if (fileValidation) {
-            errors.push(...fileValidation.errors);
-            warnings.push(...fileValidation.warnings);
-          }
+        if (hasShapefileError && !hasOtherErrors) {
+          const missingMatch =
+            shapefileGlobalError.match(/Missing files: (.*)/);
+          const missingComponents = missingMatch
+            ? missingMatch[1].split(', ').map((s) => s.trim())
+            : [];
 
-          if (shapefileGlobalError) {
-            errors.push(
-              shapefileGlobalError.replace(
-                `Shapefile "${baseName}" incomplet. `,
-                ''
-              )
-            );
-          }
-
-          if (errors.length > 0 || warnings.length > 0) {
-            const errorFile: UploadedFile = {
-              id: crypto.randomUUID(),
-              name: mainFileName,
-              size: mainFile.size,
-              status: FileStatus.ERROR,
-              uploadProgress: 100,
-              type: mainFile.type,
-              fileType: mainFile.name.endsWith('.shp')
-                ? FileType.SHAPEFILE
-                : FileType.UNKNOWN,
-              sourceType,
-              relatedFiles: groupFiles
-                .filter((f) => f !== mainFile)
-                .map((f) => f.name),
-              validation: {
-                isValid: errors.length === 0,
-                errors,
-                warnings
-              }
-            };
-            this.addUploadedFile(errorFile);
-          }
+          const incompleteFile: UploadedFile = {
+            id: crypto.randomUUID(),
+            name: mainFileName,
+            size: mainFile.size,
+            status: FileStatus.INCOMPLETE,
+            uploadProgress: 100,
+            type: mainFile.type,
+            fileType: FileType.SHAPEFILE,
+            sourceType,
+            relatedFiles: groupFiles
+              .filter((f) => f !== mainFile)
+              .map((f) => f.name),
+            relatedFileObjects: groupFiles,
+            shapefileBaseName: baseName,
+            missingShapefileComponents: missingComponents,
+            validation: {
+              isValid: false,
+              errors: [],
+              warnings: [
+                m.shapefile_incomplete_message({
+                  missing: missingComponents.join(', ')
+                })
+              ]
+            }
+          };
+          this.addUploadedFile(incompleteFile);
+          toProcess.delete(baseName);
+        } else if (hasOtherErrors) {
+          const errorFile: UploadedFile = {
+            id: crypto.randomUUID(),
+            name: mainFileName,
+            size: mainFile.size,
+            status: FileStatus.ERROR,
+            uploadProgress: 100,
+            type: mainFile.type,
+            fileType: mainFile.name.endsWith('.shp')
+              ? FileType.SHAPEFILE
+              : FileType.UNKNOWN,
+            sourceType,
+            relatedFiles: groupFiles
+              .filter((f) => f !== mainFile)
+              .map((f) => f.name),
+            validation: {
+              isValid: false,
+              errors: fileValidation.errors,
+              warnings: fileValidation.warnings
+            }
+          };
+          this.addUploadedFile(errorFile);
+          toProcess.delete(baseName);
         }
-        return;
       }
 
       if (duplicates.length > 0) {
@@ -242,26 +337,6 @@ export const createProjectActions = {
       return;
     }
 
-    const mainFile = files.find((f) => f.name.endsWith('.shp'));
-    if (!mainFile) {
-      const errorFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: baseName,
-        size: files.reduce((sum, f) => sum + f.size, 0),
-        type: 'application/x-shapefile',
-        fileType: FileType.SHAPEFILE,
-        status: FileStatus.ERROR,
-        errorMessage: m.error_shapefile_missing_shp(),
-        sourceType
-      };
-      this.addUploadedFile(errorFile);
-      showError(
-        m.error_shapefile_invalid_title(),
-        m.error_shapefile_missing_shp()
-      );
-      return;
-    }
-
     const requiredExtensions = ['.shp', '.shx', '.dbf'];
     const fileExtensions = files.map(
       (f) => '.' + f.name.split('.').pop()?.toLowerCase()
@@ -271,48 +346,36 @@ export const createProjectActions = {
     );
 
     if (missingExtensions.length > 0) {
-      const errorFile: UploadedFile = {
+      // Create INCOMPLETE file - show all present files and what's missing
+      const incompleteFile: UploadedFile = {
         id: crypto.randomUUID(),
         name: baseName,
         size: files.reduce((sum, f) => sum + f.size, 0),
         type: 'application/x-shapefile',
         fileType: FileType.SHAPEFILE,
-        status: FileStatus.ERROR,
-        errorMessage: m.error_shapefile_missing_components({
-          components: missingExtensions.join(', ')
-        }),
-        sourceType
+        status: FileStatus.INCOMPLETE,
+        sourceType,
+        shapefileBaseName: baseName,
+        missingShapefileComponents: missingExtensions,
+        relatedFileObjects: files,
+        relatedFiles: files.map((f) => f.name),
+        validation: {
+          isValid: false,
+          errors: [],
+          warnings: [
+            m.shapefile_incomplete_message({
+              missing: missingExtensions.join(', ')
+            })
+          ]
+        }
       };
-      this.addUploadedFile(errorFile);
-      showError(
-        m.error_shapefile_incomplete_title(),
-        m.error_shapefile_missing_components({
-          components: missingExtensions.join(', ')
-        })
-      );
+      this.addUploadedFile(incompleteFile);
+      // No flash message - warning shown in form
       return;
     }
 
-    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'));
-
-    if (!shpFile) {
-      const errorFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: baseName,
-        size: files.reduce((sum, f) => sum + f.size, 0),
-        type: 'application/x-shapefile',
-        fileType: FileType.SHAPEFILE,
-        status: FileStatus.ERROR,
-        errorMessage: m.error_shapefile_no_shp_found(),
-        sourceType
-      };
-      this.addUploadedFile(errorFile);
-      showError(
-        m.error_shapefile_processing_failed_title(),
-        m.error_shapefile_no_shp_found()
-      );
-      return;
-    }
+    // At this point all required files are present (we returned early if any missing)
+    const shpFile = files.find((f) => f.name.toLowerCase().endsWith('.shp'))!;
 
     const relatedFilesData: Record<string, ArrayBuffer> = {};
     let shpContent: ArrayBuffer = new ArrayBuffer(0);

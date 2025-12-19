@@ -1,5 +1,6 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import { FileType } from '$lib/features/commons/store/create-project.types';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
@@ -15,6 +16,9 @@
   } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import CalculatorPanel from './components/calculator-panel.svelte';
+  import CsvOptionsModal, {
+    type CsvOptions
+  } from './components/csv-options-modal.svelte';
   import DataToolPanel from './components/data-tool-panel.svelte';
   import DataToolsBar from './components/data-tools-bar.svelte';
   import ExpandedTableModal from './components/expanded-table-modal.svelte';
@@ -55,6 +59,32 @@
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
+  let csvOptionsModalOpen = $state(false);
+  let showSummaryPlots = $state(true);
+  let currentCsvOptions = $state<CsvOptions>({
+    header: true,
+    decimalSeparator: '.',
+    thousandsSeparator: undefined
+  });
+
+  const isCsvFile = $derived.by(() => {
+    if (!selectedDataset) return false;
+    const format = selectedDataset.format?.toLowerCase();
+    if (format === 'csv') return true;
+    const sf = projectStore.currentProject?.data?.sourceFiles?.find(
+      (f: { id: string }) => f.id === selectedDataset.sourceFileId
+    );
+    return sf?.fileType === FileType.CSV;
+  });
+
+  const sourceFile = $derived.by(() => {
+    if (!selectedDataset) return null;
+    return (
+      projectStore.currentProject?.data?.sourceFiles?.find(
+        (f: { id: string }) => f.id === selectedDataset.sourceFileId
+      ) || null
+    );
+  });
 
   const hasNullableColumns = $derived(
     processedDataset
@@ -70,6 +100,42 @@
 
   function handleOpenReset() {
     resetModalOpen = true;
+  }
+
+  function handleOpenCsvOptions() {
+    csvOptionsModalOpen = true;
+  }
+
+  async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
+    if (!sourceFile || !currentDuckTable || !selectedDataset) {
+      throw new Error('No source file or table available');
+    }
+
+    const file = sourceFile.originalFile;
+    if (!file) {
+      throw new Error('Original file not available for re-import');
+    }
+
+    try {
+      await Duck.read_tabular(file, {
+        tablename: currentDuckTable,
+        header: options.header,
+        decimal_separator: options.decimalSeparator,
+        thousands_separator: options.thousandsSeparator
+      });
+
+      currentCsvOptions = options;
+      duckDBOrchestrator.bumpDatasetsVersion();
+      refreshTable();
+
+      showSuccess(m.csv_options_reimport_success(), '');
+    } catch (error) {
+      showError(
+        m.csv_options_reimport_error(),
+        error instanceof Error ? error.message : ''
+      );
+      throw error;
+    }
   }
 
   let searchHighlight = $state<SearchHighlightResult>({
@@ -281,12 +347,25 @@
       onConfirm={handleDeleteRows}
     />
 
+    {#if isCsvFile}
+      <CsvOptionsModal
+        open={csvOptionsModalOpen}
+        currentOptions={currentCsvOptions}
+        onClose={() => (csvOptionsModalOpen = false)}
+        onApply={handleApplyCsvOptions}
+      />
+    {/if}
+
     <!-- Barre d'outils -->
     <DataToolsBar
       onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
+      onCsvOptions={handleOpenCsvOptions}
+      onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
       selectionCount={selectedRowIds.length}
+      showCsvOptions={isCsvFile && !!sourceFile?.originalFile}
+      showSummaryPlots={showSummaryPlots}
     />
   {/if}
 
@@ -296,7 +375,7 @@
         dataset={processedDataset}
         tableName={currentDuckTable || undefined}
         datasetVersion={duckDBDatasetsVersion}
-        showSummaryPlots={true}
+        showSummaryPlots={showSummaryPlots}
         cellHighlights={searchHighlight.cellHighlights}
         currentCell={searchHighlight.currentCell}
         highlightedRowIds={searchHighlight.highlightedRowIds}

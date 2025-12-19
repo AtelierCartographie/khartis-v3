@@ -7,6 +7,7 @@ export interface GeoColumnResult {
     | 'country_name'
     | 'iso2'
     | 'iso3'
+    | 'nuts'
     | 'region'
     | 'city'
     | 'coordinates'
@@ -30,6 +31,7 @@ const COLUMN_NAME_PATTERNS = {
   country: /^(country[\s_]?(name|code)?|pays|nation|state|etat)$/i,
   iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
   iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
+  nuts: /^(nuts[\s_]?(code|id|2|3)?|code[\s_]?nuts|nuts[\s_]?level[\s_]?\d?)$/i,
   region:
     /^(region|province|department|departement|county|oblast|prefecture)$/i,
   city: /^(city|ville|town|commune|municipality|ciudad|stadt)$/i,
@@ -49,6 +51,10 @@ const VALUE_PATTERNS = {
   },
   iso2: (value: string) => /^[A-Z]{2}$/.test(value.trim().toUpperCase()),
   iso3: (value: string) => /^[A-Z]{3}$/.test(value.trim().toUpperCase()),
+  nuts: (value: string) => {
+    const v = value.trim().toUpperCase();
+    return /^[A-Z]{2}[A-Z0-9]{1,3}$/.test(v);
+  },
   coordinates: (value: string) => {
     return (
       /^-?\d+\.?\d*\s*,\s*-?\d+\.?\d*$/.test(value) ||
@@ -102,6 +108,45 @@ const CITY_SAMPLES = [
   'MILAN',
   'KRAKOW',
   'MANCHESTER'
+] as const;
+
+const NUTS_SAMPLES = [
+  'FR10',
+  'FR21',
+  'FR22',
+  'FR23',
+  'FR24',
+  'FR25',
+  'DE11',
+  'DE12',
+  'DE13',
+  'DE21',
+  'DE30',
+  'DEA1',
+  'ES11',
+  'ES12',
+  'ES13',
+  'ES21',
+  'ES30',
+  'ES51',
+  'ITF1',
+  'ITF2',
+  'ITF3',
+  'ITC1',
+  'ITC4',
+  'ITH3',
+  'PL21',
+  'PL22',
+  'PL41',
+  'PL51',
+  'PL61',
+  'PL71',
+  'NL11',
+  'NL12',
+  'NL13',
+  'NL21',
+  'NL22',
+  'NL31'
 ] as const;
 
 export const GeoColumnDetector = {
@@ -257,6 +302,29 @@ export const GeoColumnDetector = {
       };
     }
 
+    const nutsMatch =
+      stringValues.filter((v) => VALUE_PATTERNS.nuts(v)).length /
+      stringValues.length;
+    if (nutsMatch > 0.8) {
+      return {
+        type: 'nuts',
+        confidence: nutsMatch,
+        matchedPatterns: ['Value pattern: NUTS code']
+      };
+    }
+
+    const nutsSampleMatch = GeoColumnDetector.matchAgainstSamples(
+      stringValues,
+      NUTS_SAMPLES
+    );
+    if (nutsSampleMatch > 0.4) {
+      return {
+        type: 'nuts',
+        confidence: Math.min(nutsSampleMatch * 1.5, 0.9),
+        matchedPatterns: ['Value pattern: Known NUTS codes']
+      };
+    }
+
     const latMatch =
       stringValues.filter((v) => VALUE_PATTERNS.latitude(v)).length /
       stringValues.length;
@@ -350,6 +418,7 @@ export const GeoColumnDetector = {
       'country_name',
       'iso3',
       'iso2',
+      'nuts',
       'region',
       'city',
       'coordinates',
@@ -374,6 +443,7 @@ export const GeoColumnDetector = {
       country_name: 'Noms de pays',
       iso2: 'Codes pays ISO Alpha-2',
       iso3: 'Codes pays ISO Alpha-3',
+      nuts: 'Codes NUTS (régions européennes)',
       region: 'Régions ou provinces',
       city: 'Villes ou communes',
       coordinates: 'Coordonnées géographiques',
