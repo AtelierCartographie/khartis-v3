@@ -114,16 +114,6 @@ export function getProjectionById(id: string): ProjectionInfo | undefined {
   return PROJECTIONS.find((p) => p.id === id);
 }
 
-export function getProjectionsByCategory(
-  category: ProjectionInfo['category']
-): ProjectionInfo[] {
-  return PROJECTIONS.filter((p) => p.category === category);
-}
-
-export function getRecommendedProjections(): ProjectionInfo[] {
-  return PROJECTIONS.filter((p) => p.recommended);
-}
-
 export function suggestProjection(
   bounds: [[number, number], [number, number]]
 ): string {
@@ -227,21 +217,4 @@ export function fitProjectionToGeoJSON(
   ]);
 
   return projection;
-}
-
-export function getBoundsFromGeoJSON(
-  geojson: ProjectableGeoJSON
-): [[number, number], [number, number]] {
-  const bounds = d3geo.geoBounds(geojson);
-  return bounds as [[number, number], [number, number]];
-}
-
-export function getCentroidFromGeoJSON(
-  geojson: ProjectableGeoJSON
-): [number, number] {
-  return d3geo.geoCentroid(geojson);
-}
-
-export function getAreaFromGeoJSON(geojson: ProjectableGeoJSON): number {
-  return d3geo.geoArea(geojson);
 }

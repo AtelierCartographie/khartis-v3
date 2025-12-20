@@ -44,112 +44,112 @@ type ProjectionActions = {
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
-const { state, actions, getState } = createToolStore<
-  ProjectionState,
-  ProjectionActions
->(DEFAULT_STATE, (s) => {
-  const setSelected = (projectionId: string) => {
-    s.selected = projectionId;
-  };
+const { actions } = createToolStore<ProjectionState, ProjectionActions>(
+  DEFAULT_STATE,
+  (s) => {
+    const setSelected = (projectionId: string) => {
+      s.selected = projectionId;
+    };
 
-  return {
-    setSelected,
-    setViewMode: (mode: ViewMode) => {
-      s.viewMode = mode;
-    },
-    setCenter: (longitude: number, latitude: number) => {
-      s.center = [longitude, latitude];
-      s.longitude = longitude;
-      s.latitude = latitude;
-    },
-    setRotation: (rotation: number) => {
-      s.rotation = rotation;
-    },
-    setScale: (scale: number) => {
-      s.scale = Math.max(0.1, Math.min(10, scale));
-    },
-    suggestProjectionForCurrentData: () => {
-      const geoDatasets = datasetsStore.getDatasetsByType(true);
-      if (geoDatasets.length === 0) return;
+    return {
+      setSelected,
+      setViewMode: (mode: ViewMode) => {
+        s.viewMode = mode;
+      },
+      setCenter: (longitude: number, latitude: number) => {
+        s.center = [longitude, latitude];
+        s.longitude = longitude;
+        s.latitude = latitude;
+      },
+      setRotation: (rotation: number) => {
+        s.rotation = rotation;
+      },
+      setScale: (scale: number) => {
+        s.scale = Math.max(0.1, Math.min(10, scale));
+      },
+      suggestProjectionForCurrentData: () => {
+        const geoDatasets = datasetsStore.getDatasetsByType(true);
+        if (geoDatasets.length === 0) return;
 
-      const firstDataset = geoDatasets[0];
-      if (!firstDataset.geometry?.bounds) return;
+        const firstDataset = geoDatasets[0];
+        if (!firstDataset.geometry?.bounds) return;
 
-      const bounds: [[number, number], [number, number]] = [
-        [firstDataset.geometry.bounds[0], firstDataset.geometry.bounds[1]],
-        [firstDataset.geometry.bounds[2], firstDataset.geometry.bounds[3]]
-      ];
+        const bounds: [[number, number], [number, number]] = [
+          [firstDataset.geometry.bounds[0], firstDataset.geometry.bounds[1]],
+          [firstDataset.geometry.bounds[2], firstDataset.geometry.bounds[3]]
+        ];
 
-      const suggested = suggestProjection(bounds);
-      setSelected(suggested);
-    },
-    applyProjectionToDataset: (
-      datasetId: string,
-      width: number,
-      height: number
-    ): FeatureCollection | null => {
-      const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
-      if (!dataset || !dataset.data) return null;
+        const suggested = suggestProjection(bounds);
+        setSelected(suggested);
+      },
+      applyProjectionToDataset: (
+        datasetId: string,
+        width: number,
+        height: number
+      ): FeatureCollection | null => {
+        const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
+        if (!dataset || !dataset.data) return null;
 
-      const features: Feature<Geometry, Record<string, unknown>>[] =
-        dataset.data
-          .map((d) => {
-            if (!isGeometryCandidate(d.geometry)) {
-              return null;
-            }
-            return {
-              type: 'Feature' as const,
-              geometry: d.geometry,
-              properties: d as Record<string, unknown>
-            };
-          })
-          .filter(
-            (feature): feature is Feature<Geometry, Record<string, unknown>> =>
-              feature !== null
+        const features: Feature<Geometry, Record<string, unknown>>[] =
+          dataset.data
+            .map((d) => {
+              if (!isGeometryCandidate(d.geometry)) {
+                return null;
+              }
+              return {
+                type: 'Feature' as const,
+                geometry: d.geometry,
+                properties: d as Record<string, unknown>
+              };
+            })
+            .filter(
+              (
+                feature
+              ): feature is Feature<Geometry, Record<string, unknown>> =>
+                feature !== null
+            );
+
+        if (features.length === 0) {
+          return null;
+        }
+
+        const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
+          type: 'FeatureCollection',
+          features
+        };
+
+        if (s.autoFit) {
+          const projection = fitProjectionToGeoJSON(
+            geojson,
+            s.selected,
+            width,
+            height
           );
 
-      if (features.length === 0) {
-        return null;
-      }
+          const projected = projectGeoJSON(geojson, s.selected, {
+            scale: projection.scale(),
+            translate: projection.translate(),
+            rotate: [s.rotation, 0, 0],
+            center: s.center
+          });
 
-      const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
-        type: 'FeatureCollection',
-        features
-      };
-
-      if (s.autoFit) {
-        const projection = fitProjectionToGeoJSON(
-          geojson,
-          s.selected,
-          width,
-          height
-        );
+          return projected.type === 'FeatureCollection' ? projected : null;
+        }
 
         const projected = projectGeoJSON(geojson, s.selected, {
-          scale: projection.scale(),
-          translate: projection.translate(),
+          scale: (s.scale || 1) * 100,
+          translate: [width / 2, height / 2],
           rotate: [s.rotation, 0, 0],
-          center: s.center
+          center: s.center || [s.longitude, s.latitude]
         });
 
         return projected.type === 'FeatureCollection' ? projected : null;
+      },
+      getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
+        return getProjectionById(s.selected);
       }
+    };
+  }
+);
 
-      const projected = projectGeoJSON(geojson, s.selected, {
-        scale: (s.scale || 1) * 100,
-        translate: [width / 2, height / 2],
-        rotate: [s.rotation, 0, 0],
-        center: s.center || [s.longitude, s.latitude]
-      });
-
-      return projected.type === 'FeatureCollection' ? projected : null;
-    },
-    getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
-      return getProjectionById(s.selected);
-    }
-  };
-});
-
-export const projectionState = state;
 export const projectionActions = actions;
-export const getProjectionState = getState;

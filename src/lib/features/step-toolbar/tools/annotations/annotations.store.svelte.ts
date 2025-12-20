@@ -49,7 +49,7 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   caption: { fontSize: 10, bold: false, italic: true }
 };
 
-const { state, actions, getState } = createToolStore<
+const { actions, getState } = createToolStore<
   AnnotationsState,
   AnnotationsActions
 >(DEFAULT_STATE, (s) => ({
@@ -135,6 +135,5 @@ const { state, actions, getState } = createToolStore<
   }
 }));
 
-export const annotationsState = state;
 export const annotationsActions = actions;
 export const getAnnotationsState = getState;

@@ -194,21 +194,6 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   return newTable;
 }
 
-export async function readDuckDBTableAsArrow(
-  tableName: string
-): Promise<ArrowTable> {
-  if (!Duck) {
-    throw new Error('DuckDB not initialized');
-  }
-
-  const result = await Duck.query(`SELECT * FROM "${tableName}"`, {
-    format: 'arrow-ipc'
-  });
-
-  const table = tableFromIPC(result as Uint8Array);
-  return table;
-}
-
 export async function readGeoParquetViaDuckDB(
   arrayBuffer: ArrayBuffer,
   tableName: string

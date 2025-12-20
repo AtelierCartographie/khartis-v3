@@ -199,6 +199,3 @@ export async function initDuckDB(): Promise<void> {
 
   await duckInitPromise;
 }
-
-// Duck is an object singleton, not a type - export as typeof
-export type DuckDB = typeof Duck;
