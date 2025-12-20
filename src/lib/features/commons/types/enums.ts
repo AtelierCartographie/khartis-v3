@@ -13,10 +13,7 @@ export enum TextAlign {
 
 export enum ButtonKind {
   Primary = 'primary',
-  Secondary = 'secondary',
-  Ghost = 'ghost',
-  Danger = 'danger',
-  Tertiary = 'tertiary'
+  Ghost = 'ghost'
 }
 
 export enum SimplificationSource {

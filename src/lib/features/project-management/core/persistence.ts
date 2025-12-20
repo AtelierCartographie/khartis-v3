@@ -37,10 +37,6 @@ export async function openDatabase(): Promise<IDBDatabase> {
   return database;
 }
 
-export function getDatabase(): IDBDatabase | null {
-  return db;
-}
-
 async function ensureDb(): Promise<IDBDatabase> {
   if (!db) {
     return openDatabase();

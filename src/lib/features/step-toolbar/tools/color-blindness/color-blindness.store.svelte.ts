@@ -7,7 +7,7 @@ const DEFAULT_STATE: ColorBlindnessState = {
   enabled: false
 };
 
-const { state, actions, getState } = createToolStore<
+const { actions, getState } = createToolStore<
   ColorBlindnessState,
   {
     toggleEnabled: () => void;
@@ -22,10 +22,5 @@ const { state, actions, getState } = createToolStore<
   }
 }));
 
-export const colorBlindnessState = state;
 export const colorBlindnessActions = actions;
 export const getColorBlindnessState = getState;
-
-export function isSimulationActive(): boolean {
-  return state.enabled && state.simulationType !== ColorBlindnessType.NONE;
-}
