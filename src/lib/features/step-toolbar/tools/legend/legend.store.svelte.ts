@@ -51,43 +51,44 @@ type LegendActions = {
   ) => void;
 };
 
-const { state, actions, getState } = createToolStore<
-  LegendState,
-  LegendActions
->(DEFAULT_STATE, (s) => ({
-  addLegendItem: (item: Omit<LegendItem, 'id'>): LegendItem => {
-    const newItem: LegendItem = {
-      ...item,
-      id: `legend-${Date.now()}`
-    };
-    s.items = [...s.items, newItem];
-    return newItem;
-  },
-  removeLegendItem: (id: string) => {
-    s.items = s.items.filter((item) => item.id !== id);
-  },
-  updateLegendItem: (id: string, updates: Partial<LegendItem>) => {
-    s.items = s.items.map((item) =>
-      item.id === id ? { ...item, ...updates } : item
-    );
-  },
-  toggleLegendVisibility: () => {
-    s.visible = !s.visible;
-  },
-  setPosition: (position: LegendPosition) => {
-    s.position = position;
-  },
-  setActiveTab: (tab: LegendTab) => {
-    s.activeTab = tab;
-  },
-  updateStyle: (updates: Partial<LegendStyle>) => {
-    Object.assign(s.style, updates);
-  },
-  updateBackground: (updates: Partial<LegendState['style']['background']>) => {
-    Object.assign(s.style.background, updates);
-  }
-}));
+const { actions, getState } = createToolStore<LegendState, LegendActions>(
+  DEFAULT_STATE,
+  (s) => ({
+    addLegendItem: (item: Omit<LegendItem, 'id'>): LegendItem => {
+      const newItem: LegendItem = {
+        ...item,
+        id: `legend-${Date.now()}`
+      };
+      s.items = [...s.items, newItem];
+      return newItem;
+    },
+    removeLegendItem: (id: string) => {
+      s.items = s.items.filter((item) => item.id !== id);
+    },
+    updateLegendItem: (id: string, updates: Partial<LegendItem>) => {
+      s.items = s.items.map((item) =>
+        item.id === id ? { ...item, ...updates } : item
+      );
+    },
+    toggleLegendVisibility: () => {
+      s.visible = !s.visible;
+    },
+    setPosition: (position: LegendPosition) => {
+      s.position = position;
+    },
+    setActiveTab: (tab: LegendTab) => {
+      s.activeTab = tab;
+    },
+    updateStyle: (updates: Partial<LegendStyle>) => {
+      Object.assign(s.style, updates);
+    },
+    updateBackground: (
+      updates: Partial<LegendState['style']['background']>
+    ) => {
+      Object.assign(s.style.background, updates);
+    }
+  })
+);
 
-export const legendState = state;
 export const legendActions = actions;
 export const getLegendState = getState;

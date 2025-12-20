@@ -33,46 +33,6 @@ export class DataValidationError extends PipelineError {
 }
 
 /**
- * File grouping errors (e.g., incomplete shapefiles)
- */
-export class FileGroupError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly missingFiles: string[],
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'FILE_GROUP_ERROR', { missingFiles, ...details });
-  }
-}
-
-/**
- * Size limit errors
- */
-export class SizeLimitError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly actualSize: number,
-    public readonly maxSize: number,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'SIZE_LIMIT_ERROR', { actualSize, maxSize, ...details });
-  }
-}
-
-/**
- * Expression/formula evaluation errors
- */
-export class ExpressionError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly expression?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'EXPRESSION_ERROR', { expression, ...details });
-  }
-}
-
-/**
  * File parsing errors
  */
 export class ParseError extends PipelineError {
@@ -99,46 +59,10 @@ export class DuckDBError extends PipelineError {
 }
 
 /**
- * Geographic matching errors
- */
-export class GeoMatchError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly matchRate?: number,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'GEO_MATCH_ERROR', { matchRate, ...details });
-  }
-}
-
-/**
- * Type inference errors
- */
-export class TypeInferenceError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly column?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'TYPE_INFERENCE_ERROR', { column, ...details });
-  }
-}
-
-/**
  * Helper function to check if an error is a pipeline error
  */
 export function isPipelineError(error: unknown): error is PipelineError {
   return error instanceof PipelineError;
-}
-
-/**
- * Helper function to get error code from any error
- */
-export function getErrorCode(error: unknown): string {
-  if (isPipelineError(error)) {
-    return error.code;
-  }
-  return 'UNKNOWN_ERROR';
 }
 
 /**
@@ -165,19 +89,6 @@ export class DuplicateFileError extends NonFatalError {
     details?: Record<string, unknown>
   ) {
     super(message, 'DUPLICATE_FILE', { fileName, ...details });
-  }
-}
-
-/**
- * Data quality warning (non-fatal)
- */
-export class DataQualityWarning extends NonFatalError {
-  constructor(
-    message: string,
-    public readonly warnings: string[],
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'DATA_QUALITY_WARNING', { warnings, ...details });
   }
 }
 

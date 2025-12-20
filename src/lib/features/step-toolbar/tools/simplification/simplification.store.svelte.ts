@@ -35,7 +35,7 @@ type SimplificationActions = {
   undoLastSimplification: () => boolean;
 };
 
-const { state, actions, getState } = createToolStore<
+const { actions, getState } = createToolStore<
   SimplificationState,
   SimplificationActions
 >(DEFAULT_STATE, (s) => {
@@ -116,6 +116,5 @@ const { state, actions, getState } = createToolStore<
   };
 });
 
-export const simplificationState = state;
 export const simplificationActions = actions;
 export const getSimplificationState = getState;

@@ -36,21 +36,3 @@ export const CACHE_CONSTANTS = {
   GEO_PARQUET_RETRY_DELAY_MS: 15,
   PARQUET_MAGIC: new Uint8Array([0x50, 0x41, 0x52, 0x31]) // PAR1
 } as const;
-
-export const SYSTEM_COLUMNS = {
-  ROW_ID: '__id',
-  GEOMETRY: 'geom',
-  GEOMETRY_ALT: 'geometry',
-  GEOMETRY_UPPERCASE: 'GEOMETRY'
-} as const;
-
-export const ANALYSIS_CONSTANTS = {
-  SAMPLE_THRESHOLD: 50000,
-  BATCH_SIZE: 5,
-  SAMPLE_VIEW_SUFFIX: '_sample_'
-} as const;
-
-export const TABLE_NAME_PREFIXES = {
-  CSV: 'csv',
-  GEO: 'geo'
-} as const;

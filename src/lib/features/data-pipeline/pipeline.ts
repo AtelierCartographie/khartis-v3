@@ -4,8 +4,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile, isParquetFile } from './constants';
-import { validateFile } from './core/validators';
 import { detectFileFormat, generateTableName } from './core/parsers';
+import { validateFile } from './core/validators';
 import { buildDatasetFromDuckTable } from './operations/analysis';
 import type {
   DatasetResult,
@@ -764,4 +764,3 @@ async function processFileInternal(
 }
 
 export const dataPipeline = Pipeline;
-export type DataPipeline = typeof Pipeline;

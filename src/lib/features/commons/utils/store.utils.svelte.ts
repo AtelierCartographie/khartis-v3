@@ -1,18 +1,3 @@
-export function createResetFunction<T extends object>(
-  state: T,
-  defaultState: T
-): () => void {
-  return () => Object.assign(state, structuredClone(defaultState));
-}
-
-export function createSetStateFunction<T extends object>(
-  state: T
-): (newState: Partial<T>) => void {
-  return (newState: Partial<T>) => {
-    Object.assign(state, newState);
-  };
-}
-
 export type BaseActions<T extends object> = {
   setState: (newState: Partial<T>) => void;
   reset: () => void;

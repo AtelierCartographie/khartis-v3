@@ -1,12 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
-import type { GeoJSONFeature } from '$lib/types/data';
-import {
-  isGeoJSONFeature,
-  isGeoJSONFeatureCollection,
-  isTabularData
-} from '$lib/types/data';
-import type { UploadedFile } from '../store/create-project.types';
 import { escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 
@@ -120,40 +113,6 @@ export async function exportDatasetToCsv(
   });
 
   return exportToCsv(data, headers);
-}
-
-export function exportDatasetToGeoJson(dataset: ProcessedDataset): Blob {
-  if (!dataset.geometry) {
-    throw new Error('Dataset does not contain geometry data');
-  }
-
-  const features = dataset.data.map((row) => {
-    const properties: Record<string, unknown> = {};
-    dataset.columns
-      .filter((col) => col.type !== 'geometry')
-      .forEach((col) => {
-        properties[col.name] = row[col.name];
-      });
-
-    const geometryColumn = dataset.columns.find(
-      (col) => col.type === 'geometry'
-    );
-    const geometry = geometryColumn ? row[geometryColumn.name] : null;
-
-    return {
-      type: 'Feature' as const,
-      geometry,
-      properties
-    };
-  });
-
-  const geojson = {
-    type: 'FeatureCollection',
-    features
-  };
-
-  const jsonString = JSON.stringify(geojson, null, 2);
-  return new Blob([jsonString], { type: 'application/geo+json' });
 }
 
 export function exportToGeoJson(data: unknown): Blob {
@@ -427,89 +386,6 @@ export async function exportProcessedDatasets(
   };
 
   return exportToJson(exportData);
-}
-
-export async function exportProjectData(
-  files: UploadedFile[],
-  format: 'csv' | 'geojson' | 'json' = 'json'
-): Promise<Blob> {
-  const validFiles = files.filter(
-    (f) => f.status === 'complete' && f.parsedData
-  );
-
-  if (validFiles.length === 0) {
-    throw new Error('No valid data to export');
-  }
-
-  if (format === 'csv') {
-    const allData: Record<string, unknown>[] = [];
-
-    for (const file of validFiles) {
-      if (file.parsedData) {
-        if (isTabularData(file.parsedData)) {
-          allData.push(...file.parsedData);
-        } else if (isGeoJSONFeatureCollection(file.parsedData)) {
-          const flatData = file.parsedData.features.map((f) => ({
-            ...f.properties,
-            geometry_type: f.geometry?.type,
-            coordinates: serializeGeometryCoordinates(f.geometry)
-          }));
-          allData.push(...flatData);
-        }
-      }
-    }
-
-    return exportToCsv(allData);
-  }
-
-  if (format === 'geojson') {
-    const allFeatures: unknown[] = [];
-
-    for (const file of validFiles) {
-      if (file.parsedData) {
-        if (isGeoJSONFeatureCollection(file.parsedData)) {
-          allFeatures.push(...file.parsedData.features);
-        } else if (isGeoJSONFeature(file.parsedData)) {
-          allFeatures.push(file.parsedData);
-        }
-      }
-    }
-
-    return exportToGeoJson({
-      type: 'FeatureCollection',
-      features: allFeatures
-    });
-  }
-
-  const exportData = {
-    exportDate: new Date().toISOString(),
-    files: validFiles.map((f) => ({
-      name: f.name,
-      type: f.fileType,
-      size: f.size,
-      data: f.parsedData
-    }))
-  };
-
-  return exportToJson(exportData);
-}
-
-function serializeGeometryCoordinates(
-  geometry: GeoJSONFeature['geometry']
-): string | undefined {
-  if (!geometry || typeof geometry !== 'object') {
-    return undefined;
-  }
-
-  if ('coordinates' in geometry) {
-    return JSON.stringify((geometry as { coordinates?: unknown }).coordinates);
-  }
-
-  if ('geometries' in geometry) {
-    return JSON.stringify((geometry as { geometries?: unknown }).geometries);
-  }
-
-  return JSON.stringify(geometry);
 }
 
 export function downloadFile(blob: Blob, filename: string): void {

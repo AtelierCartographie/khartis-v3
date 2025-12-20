@@ -100,21 +100,6 @@ export function validateShapefileSet(
   };
 }
 
-export function groupShapefileComponents(files: File[]): Map<string, File[]> {
-  const groups = new Map<string, File[]>();
-
-  for (const file of files) {
-    if (!isShapefileComponent(file.name)) continue;
-
-    const baseName = getBaseName(file.name).toLowerCase();
-    const existing = groups.get(baseName) ?? [];
-    existing.push(file);
-    groups.set(baseName, existing);
-  }
-
-  return groups;
-}
-
 export function getShapefileValidationMessage(
   validation: ShapefileValidation
 ): {
@@ -156,12 +141,4 @@ export function canProcessShapefile(validation: ShapefileValidation): boolean {
   return (
     validation.hasMinimumRequired && validation.requiredMissing.length === 0
   );
-}
-
-export function getShapefileFiles(files: File[], baseName: string): File[] {
-  const baseNameLower = baseName.toLowerCase();
-  return files.filter((f) => {
-    const fileBaseName = getBaseName(f.name).toLowerCase();
-    return fileBaseName === baseNameLower && isShapefileComponent(f.name);
-  });
 }

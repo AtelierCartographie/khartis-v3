@@ -2,7 +2,6 @@ import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
-import type { BasemapAttribute } from '../types/basemap.types';
 
 function escapeIdentifier(name: string): string {
   return name.replace(/"/g, '""');
@@ -106,59 +105,5 @@ export async function generateCustomBasemapAttributes(
       error
     );
     throw error;
-  }
-}
-
-export async function clearCustomBasemapAttributes(
-  basemapId?: string
-): Promise<void> {
-  const duck = Duck;
-  if (!duck) {
-    throw new DuckDBError('DuckDB not initialized');
-  }
-  try {
-    if (basemapId) {
-      const safeBasemapId = escapeSqlString(basemapId);
-      await duck.query(`
-        DELETE FROM custom_basemap_attributes
-        WHERE basemap = '${safeBasemapId}'
-      `);
-    } else {
-      await duck.query(`DROP TABLE IF EXISTS custom_basemap_attributes`);
-    }
-  } catch (error) {
-    logger.error(
-      'Failed to clear custom basemap attributes',
-      LogCategory.MAP,
-      error
-    );
-  }
-}
-
-export async function getBasemapAttributes(
-  basemapId: string
-): Promise<BasemapAttribute[]> {
-  const duck = Duck;
-  if (!duck) {
-    throw new DuckDBError('DuckDB not initialized');
-  }
-  try {
-    const safeBasemapId = escapeSqlString(basemapId);
-    const rows = (await duck.query(
-      `
-      SELECT *
-      FROM custom_basemap_attributes
-      WHERE basemap = '${safeBasemapId}'
-    `,
-      { format: 'array', useProxy: false }
-    )) as BasemapAttribute[];
-    return rows;
-  } catch (error) {
-    logger.error(
-      `Failed to get attributes for basemap ${basemapId}`,
-      LogCategory.MAP,
-      error
-    );
-    return [];
   }
 }

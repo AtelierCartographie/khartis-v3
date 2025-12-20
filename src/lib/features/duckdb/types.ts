@@ -164,9 +164,6 @@ export interface SearchStats {
   results: CellSearchResult[];
 }
 
-// Alias for backwards compatibility
-export type SearchResultWithScore = CellSearchResult;
-
 // --- Cache Types ---
 
 export interface CacheState {

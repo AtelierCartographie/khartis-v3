@@ -7,12 +7,7 @@ export enum LogLevel {
 }
 
 export enum LogCategory {
-  AUTH = 'AUTH',
   PERSISTENCE = 'PERSIST',
-  CACHE = 'CACHE',
-  LOAD = 'LOAD',
-  SYNC = 'SYNC',
-  TEST_MODE = 'TEST_MODE',
   NOTIFICATION = 'NOTIFICATION',
   FILE = 'FILE',
   DATA = 'DATA',
@@ -23,9 +18,6 @@ export enum LogCategory {
   MAP = 'MAP',
   UI = 'UI',
   EXPORT = 'EXPORT',
-  IMPORT = 'IMPORT',
-  GEOLOCATION = 'GEOLOCATION',
-  JOIN = 'JOIN',
   ERROR_HANDLER = 'ERROR',
   SYSTEM = 'SYSTEM'
 }

@@ -15,19 +15,6 @@ export enum FormatMode {
   CUSTOM = 'custom'
 }
 
-export enum SymbolShape {
-  CIRCLE = 'circle',
-  SQUARE = 'square',
-  TRIANGLE = 'triangle',
-  DIAMOND = 'diamond'
-}
-
-export enum SymbolScale {
-  LINEAR = 'linear',
-  SQRT = 'sqrt',
-  LOG = 'log'
-}
-
 export enum FileStatus {
   UPLOADING = 'uploading',
   PROCESSING = 'processing',
@@ -78,12 +65,6 @@ export enum StrokeStyle {
   DOTTED = 'dotted'
 }
 
-export enum SimplifiedGeometryType {
-  POINT = 'point',
-  LINE = 'line',
-  POLYGON = 'polygon'
-}
-
 export enum AnnotationKind {
   TEXT = 'text',
   SHAPE = 'shape',
@@ -124,34 +105,6 @@ export enum InsetMapType {
 export enum DistanceUnit {
   KILOMETERS = 'kilometers',
   MILES = 'miles'
-}
-
-export enum ArrowGeometryEncoding {
-  GEOJSON = 'geojson',
-  OGC_WKB = 'ogc.wkb'
-}
-
-export enum VisualizationType {
-  CHOROPLETH = 'choropleth',
-  PROPORTIONAL = 'proportional',
-  CATEGORICAL = 'categorical',
-  BIVARIATE = 'bivariate',
-  COMBINED = 'combined',
-  SIMPLE = 'simple',
-  FLOW = 'flow'
-}
-
-export enum DataTabStep {
-  CONTROL = 'control',
-  GEOLOCATE = 'geolocate',
-  JOIN = 'join',
-  ENRICH = 'enrich'
-}
-
-export enum WorkflowMode {
-  TABULAR = 'tabular',
-  GEOGRAPHIC = 'geographic',
-  AUTO = 'auto'
 }
 
 export enum GeoreferenceType {
@@ -198,24 +151,6 @@ export enum LegendTab {
 export enum ViewMode {
   LIST = 'list',
   GRID = 'grid'
-}
-
-export enum AnnotationStylePreset {
-  DEFAULT = 'default',
-  NOTE = 'note',
-  TITLE = 'title',
-  SUBTITLE = 'subtitle',
-  CAPTION = 'caption'
-}
-
-export enum SemioType {
-  GEOID = 'geoid',
-  GEOLAT = 'geolat',
-  GEOLON = 'geolon',
-  QTA = 'QTA',
-  QTR = 'QTR',
-  QL = 'QL',
-  QLO = 'QLO'
 }
 
 export enum SimplificationTarget {

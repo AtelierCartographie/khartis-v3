@@ -11,12 +11,6 @@ export interface ZoomState {
   pageZoomStep: number;
 }
 
-export interface DataButton {
-  id: string;
-  label: string;
-  isSelected: boolean;
-}
-
 export interface GlobalState {
   settingPanel: boolean;
   mainPanel: boolean;
@@ -61,9 +55,3 @@ export type ProjectionFilterId =
   | 'Discontinue';
 
 export type ProjectionViewMode = 'list' | 'grid';
-
-export enum ProjectionSection {
-  Main = 'main',
-  Other = 'other',
-  Settings = 'settings'
-}
