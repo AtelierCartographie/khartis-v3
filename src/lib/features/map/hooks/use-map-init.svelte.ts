@@ -7,6 +7,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { BASEMAP_STYLES, DEFAULT_BASEMAP_STYLE } from '../constants';
 import { createTooltipHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
+import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 
 export type ViewMode = 'orthographic' | 'maplibre';
 
@@ -150,6 +151,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         new maplibregl.ScaleControl({ maxWidth: 100, unit: 'metric' }),
         'bottom-left'
       );
+
+      map.setProjection({ type: mapProjectionStore.projection });
 
       isMapLoaded = true;
       mapInstanceStore.setMapInstance(map);
