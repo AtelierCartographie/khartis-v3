@@ -90,9 +90,7 @@ export interface SavedProjectMetadata {
 
 export enum ProjectStorageKey {
   CURRENT = 'khartis_current_project',
-  METADATA = 'khartis_projects_metadata',
-  AUTOSAVE = 'khartis_autosave',
-  PREFERENCES = 'khartis_preferences'
+  METADATA = 'khartis_projects_metadata'
 }
 
 export interface AutoSaveConfig {

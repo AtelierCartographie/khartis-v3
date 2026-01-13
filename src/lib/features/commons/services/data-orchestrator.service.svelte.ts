@@ -1,7 +1,4 @@
-import type {
-  DatasetResult,
-  GeoJSONFeatureCollection as ParserGeoJSONFeatureCollection
-} from '$lib/features/data-pipeline';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import {
@@ -221,10 +218,10 @@ class DataOrchestratorService {
 
   private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
     try {
-      let geojsonObject: ParserGeoJSONFeatureCollection;
+      let geojsonObject: GeoJSONFeatureCollection;
 
       if (file.parsedData && isGeoJSONFeatureCollection(file.parsedData)) {
-        geojsonObject = file.parsedData as ParserGeoJSONFeatureCollection;
+        geojsonObject = file.parsedData as GeoJSONFeatureCollection;
       } else {
         throw new Error(
           'KML files should be processed by the data pipeline, not here'

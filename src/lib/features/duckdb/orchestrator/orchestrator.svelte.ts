@@ -3,6 +3,7 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
+import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import * as m from '$lib/paraglide/messages';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import {
@@ -638,7 +639,16 @@ class DuckDBOrchestratorService {
 
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    return Duck.analyse(tableName, { force });
+    const analysis = await Duck.analyse(tableName, { force });
+
+    return analysis.map((col) => {
+      const semioResult = detectSemioType(col);
+      return {
+        ...col,
+        semioType: semioResult.semioType,
+        semioScore: semioResult.semioScore
+      };
+    });
   }
 
   async renameColumn(

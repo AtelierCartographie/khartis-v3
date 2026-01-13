@@ -109,7 +109,7 @@ export async function readTabular(
           ];
 
           if (thousands_separator) {
-            csvOptions.push(`thousands_separator="${thousands_separator}"`);
+            csvOptions.push(`thousands="${thousands_separator}"`);
           }
 
           const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;

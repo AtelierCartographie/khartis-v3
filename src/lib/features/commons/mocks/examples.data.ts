@@ -132,10 +132,6 @@ export function getExamplesByCategory(
   return EXAMPLE_PROJECTS.filter((example) => example.category === category);
 }
 
-export function getExampleById(id: string): ExampleProject | undefined {
-  return EXAMPLE_PROJECTS.find((example) => example.id === id);
-}
-
 export async function loadExampleData(
   example: ExampleProject
 ): Promise<unknown> {
