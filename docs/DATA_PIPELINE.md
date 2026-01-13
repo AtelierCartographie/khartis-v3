@@ -129,12 +129,13 @@ src/lib/features/duckdb/
 │   └── cache-manager.ts     # describe, rowcount, geoparquet
 ├── operations/              # Data operations
 │   ├── analysis.ts          # analyse, describeColumns
-│   ├── search.ts            # searchInTable
+│   ├── search.ts            # searchInTable (2-phase + cache)
 │   ├── join.ts              # join_by_id, apply_join_association
 │   ├── filters.ts           # add_filter, apply_filters
 │   └── table-ops.ts         # describe_table, get_row_count, drop_rows
 ├── macros/                  # SQL macros
-│   ├── analyse.ts, breaks.ts, join.ts, search.ts
+│   ├── analyse.ts, breaks.ts, join.ts
+│   └── search.ts            # searchExact, searchFuzzy
 └── orchestrator/            # Reactive Svelte 5 service
     ├── orchestrator.svelte.ts
     ├── dataset-state.ts     # Dataset state management
