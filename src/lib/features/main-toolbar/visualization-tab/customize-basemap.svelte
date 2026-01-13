@@ -3,6 +3,7 @@
   import { Column, Grid, Row } from 'carbon-components-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
+  import MapProjectionSelector from './map-projection-selector.svelte';
 </script>
 
 <section id="customize-basemap">
@@ -14,6 +15,7 @@
     <Row>
       <Column sm={4} md={8} lg={16}>
         <BasemapStyleSelector />
+        <MapProjectionSelector />
       </Column>
     </Row>
   </Grid>

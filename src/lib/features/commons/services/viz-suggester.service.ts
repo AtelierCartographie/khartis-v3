@@ -11,6 +11,11 @@
  */
 
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  detectSemioType,
+  SEMIO_TYPES,
+  type SemioType
+} from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 
 // ===========================
@@ -25,14 +30,7 @@ export type GeometryType =
   | 'MultiLineString'
   | 'MultiPolygon';
 export type SimplifiedGeometryType = 'point' | 'line' | 'polygon';
-export type SemioType =
-  | 'geoid'
-  | 'geolat'
-  | 'geolon'
-  | 'QTA'
-  | 'QTR'
-  | 'QL'
-  | 'QLO';
+export type { SemioType };
 
 export interface VizSuggestion {
   id: string;
@@ -51,19 +49,8 @@ export interface EnrichedColumn extends ColumnAnalysis {
   score: number;
 }
 
-// ===========================
-// CONSTANTES
-// ===========================
-
-const SEMIO_TYPES = {
-  GEOID: 'geoid' as const,
-  GEOLAT: 'geolat' as const,
-  GEOLON: 'geolon' as const,
-  QTA: 'QTA' as const, // Absolute Quantitative
-  QTR: 'QTR' as const, // Relative Quantitative
-  QL: 'QL' as const, // Qualitative
-  QLO: 'QLO' as const // Ordered Qualitative
-};
+// Re-export SEMIO_TYPES for backwards compatibility
+export { SEMIO_TYPES };
 
 /**
  * Cartographic visualization criteria
@@ -288,182 +275,47 @@ export class VizSuggesterService {
   }
 
   /**
-   * Determines the semiological type of a column
+   * Determines the semiological type of a column using the shared detectSemioType function
    */
   private getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
-    const results: Array<{ semioType: SemioType; score: number }> = [];
-
-    // Calculated indicators
-    const totalCount = this.getTotalCount(column);
-    const uniqueCount = this.getUniqueCount(column);
-    const shareUniques = totalCount > 0 ? uniqueCount / totalCount : 0;
-    const nullCount = this.getNullCount(column);
-    const shareNulls = totalCount > 0 ? nullCount / totalCount : 0;
-
-    const min =
-      typeof column.stats?.min === 'number' ? (column.stats?.min as number) : 0;
-    const max =
-      typeof column.stats?.max === 'number' ? (column.stats?.max as number) : 0;
-
-    // Keyword detection in column name
-    // Split by non-alphanumeric characters to properly detect keywords separated by underscores
     const columnName = column.name ?? '';
-    const lowerName = columnName.toLowerCase();
-    const nameParts = lowerName.split(/[^a-zA-Z0-9%]/);
-
-    const idWords = nameParts.some((p) => ['id', 'code', 'iso'].includes(p));
-    const latWords = nameParts.some((p) => ['lat', 'latitude'].includes(p));
-    const lonWords = nameParts.some((p) =>
-      ['lon', 'lng', 'longitude'].includes(p)
-    );
-    const ratioWords = nameParts.some((p) =>
-      ['ratio', 'rate', 'percent', 'pct', '%', 'pour', 'taux'].includes(p)
-    );
-    const rankWords = nameParts.some((p) =>
-      ['rank', 'order', 'niveau', 'level'].includes(p)
-    );
-
-    // Simplified heuristics (no access to share_integers/floats from original DuckDB)
-    const extentMagnitude = max > 0 ? Math.log10(max / Math.max(min, 1)) : 0;
-
     const columnType = (column.type ?? 'string').toString();
 
-    switch (columnType) {
-      case 'number':
-      case 'integer':
-      case 'bigint':
-        results.push(
-          this.isQTA({ uniqueCount, extentMagnitude }),
-          this.isQTR({ ratioWords, extentMagnitude, min, max }),
-          this.isQL({ shareUniques, uniqueCount }),
-          this.isQLO({ rankWords }),
-          this.isGeoID({ shareUniques, shareNulls, idWords }),
-          this.isGeoLat({ latWords, min, max }),
-          this.isGeoLon({ lonWords, min, max })
-        );
-        break;
+    const analysisLike = {
+      name: columnName,
+      type_simple: this.mapTypeToSimple(columnType),
+      count: this.getTotalCount(column),
+      uniques: this.getUniqueCount(column),
+      nulls: this.getNullCount(column),
+      min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
+      max: typeof column.stats?.max === 'number' ? column.stats.max : undefined
+    };
 
-      case 'boolean':
-        results.push({ semioType: SEMIO_TYPES.QL, score: 2 });
-        break;
-
-      case 'string':
-      case 'text':
-        results.push(
-          this.isQL({ shareUniques, uniqueCount }),
-          this.isQLO({ rankWords }),
-          this.isGeoID({ shareUniques, shareNulls, idWords })
-        );
-        break;
-
-      case 'date': {
-        const semioType = uniqueCount <= 10 ? SEMIO_TYPES.QL : SEMIO_TYPES.QTR;
-        results.push({ semioType, score: 2 });
-        break;
-      }
-
-      default:
-        results.push({ semioType: SEMIO_TYPES.QL, score: 0 });
-    }
-
-    // Selection of best semiological type
-    const best = results.sort((a, b) => b.score - a.score)[0];
-
-    // Penalty if QL column with only 1 value
-    if (best.semioType === SEMIO_TYPES.QL && uniqueCount === 1) {
-      best.score = 0;
-    }
+    const { semioType, semioScore } = detectSemioType(analysisLike);
 
     return {
       ...column,
       name: columnName || '(column)',
       type: columnType,
-      semioType: best.semioType,
-      score: best.score
+      semioType,
+      score: semioScore
     };
   }
 
-  // ===========================
-  // SEMIO TYPING HEURISTICS
-  // ===========================
-
-  private isQTA(indicators: { uniqueCount: number; extentMagnitude: number }): {
-    semioType: SemioType;
-    score: number;
-  } {
-    let score = 0;
-    // Heuristic: many unique values + large range = QTA
-    if (indicators.uniqueCount > 20) score += 1;
-    if (indicators.extentMagnitude >= 2) score += 2;
-    return { semioType: SEMIO_TYPES.QTA, score };
-  }
-
-  private isQTR(indicators: {
-    ratioWords: boolean;
-    extentMagnitude: number;
-    min: number;
-    max: number;
-  }): { semioType: SemioType; score: number } {
-    let score = 0;
-    if (indicators.ratioWords) score += 3;
-    if (indicators.extentMagnitude <= 2) score += 1;
-    if (indicators.min < 0 && indicators.max > 0) score += 0.5; // Cross zero
-    return { semioType: SEMIO_TYPES.QTR, score };
-  }
-
-  private isQL(indicators: { shareUniques: number; uniqueCount: number }): {
-    semioType: SemioType;
-    score: number;
-  } {
-    let score = 0;
-    if (indicators.shareUniques <= 0.2) score += 2;
-    if (indicators.uniqueCount <= 10) score += 1;
-    return { semioType: SEMIO_TYPES.QL, score };
-  }
-
-  private isQLO(indicators: { rankWords: boolean }): {
-    semioType: SemioType;
-    score: number;
-  } {
-    let score = 0;
-    if (indicators.rankWords) score += 4;
-    return { semioType: SEMIO_TYPES.QLO, score };
-  }
-
-  private isGeoID(indicators: {
-    shareUniques: number;
-    shareNulls: number;
-    idWords: boolean;
-  }): { semioType: SemioType; score: number } {
-    let score = 0;
-    if (indicators.shareUniques >= 0.9) score += 1;
-    if (indicators.shareNulls <= 0.1) score += 1.5;
-    if (indicators.idWords && indicators.shareUniques >= 0.5) score += 4;
-    return { semioType: SEMIO_TYPES.GEOID, score };
-  }
-
-  private isGeoLat(indicators: {
-    latWords: boolean;
-    min: number;
-    max: number;
-  }): { semioType: SemioType; score: number } {
-    let score = 0;
-    if (indicators.latWords) score += 4;
-    if (Math.abs(indicators.min) < 90 && Math.abs(indicators.max) < 90)
-      score += 2;
-    return { semioType: SEMIO_TYPES.GEOLAT, score };
-  }
-
-  private isGeoLon(indicators: {
-    lonWords: boolean;
-    min: number;
-    max: number;
-  }): { semioType: SemioType; score: number } {
-    let score = 0;
-    if (indicators.lonWords) score += 4;
-    if (Math.abs(indicators.min) < 180 && Math.abs(indicators.max) < 180)
-      score += 2;
-    return { semioType: SEMIO_TYPES.GEOLON, score };
+  private mapTypeToSimple(columnType: string): 'numeric' | 'date' | 'string' {
+    switch (columnType) {
+      case 'number':
+      case 'integer':
+      case 'bigint':
+        return 'numeric';
+      case 'date':
+        return 'date';
+      case 'string':
+      case 'text':
+      case 'boolean':
+      default:
+        return 'string';
+    }
   }
 
   // ===========================

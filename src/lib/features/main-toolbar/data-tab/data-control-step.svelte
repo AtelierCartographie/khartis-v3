@@ -7,6 +7,8 @@
     showError,
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
+  import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
+  import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
@@ -111,7 +113,18 @@
       throw new Error('No source file or table available');
     }
 
-    const file = sourceFile.originalFile;
+    let file = sourceFile.originalFile;
+
+    if (!file && sourceFile.content) {
+      const content =
+        typeof sourceFile.content === 'string'
+          ? sourceFile.content
+          : new TextDecoder().decode(sourceFile.content as ArrayBuffer);
+      file = new File([content], sourceFile.name, {
+        type: sourceFile.type || 'text/csv'
+      });
+    }
+
     if (!file) {
       throw new Error('Original file not available for re-import');
     }
@@ -123,6 +136,15 @@
         decimal_separator: options.decimalSeparator,
         thousands_separator: options.thousandsSeparator
       });
+
+      const duckColumns = (await Duck.analyse(currentDuckTable, {
+        force: true
+      })) as DuckAnalyticsColumn[];
+      const newColumns = enrichColumns(duckColumns);
+      const newRowCount = await Duck.get_row_count(currentDuckTable);
+
+      datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
+      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();
@@ -364,7 +386,8 @@
       onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
       selectionCount={selectedRowIds.length}
-      showCsvOptions={isCsvFile && !!sourceFile?.originalFile}
+      showCsvOptions={isCsvFile &&
+        !!(sourceFile?.originalFile || sourceFile?.content)}
       showSummaryPlots={showSummaryPlots}
     />
   {/if}
