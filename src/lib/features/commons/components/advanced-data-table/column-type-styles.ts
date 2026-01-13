@@ -19,3 +19,17 @@ export function getColumnTypeStyle(
   }
   return COLUMN_TYPE_STYLES.string;
 }
+
+export interface SemioBadgeStyle {
+  color: string;
+  tooltip: string;
+}
+
+export const SEMIO_BADGE_STYLES: Record<string, SemioBadgeStyle> = {
+  geoid: {
+    color: '#24a148',
+    tooltip: 'Identifiant géographique potentiel'
+  }
+} as const;
+
+export const GEOID_SCORE_THRESHOLD = 4;

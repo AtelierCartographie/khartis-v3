@@ -33,17 +33,6 @@ export function filterLayersByType(layers: Layer[], type: LayerType): Layer[] {
   return layers.filter((layer) => layer.type === type);
 }
 
-export function createDragHandler<T>(
-  setState: (state: T) => void,
-  getState: () => T,
-  property: keyof T
-) {
-  return (value: T[keyof T]) => {
-    const currentState = getState();
-    setState({ ...currentState, [property]: value });
-  };
-}
-
 export function resetDragState<
   T extends { dragIndex: null; dragOverIndex: null }
 >(setState: (state: T) => void): void {

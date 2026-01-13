@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/routes/**/*.svelte",
+    "src/routes/**/+*.{js,ts}",
+    "src/hooks.server.ts",
+    "src/app.d.ts",
+    "vite.config.ts",
+    "svelte.config.js",
+    "playwright.config.ts",
+    "eslint.config.js",
+    "pwa-assets.config.js",
+    "commitlint.config.js",
+    "scripts/**/*.sh"
+  ],
+  "project": ["src/**/*.{ts,js,svelte}"],
+  "ignore": [
+    "**/*.d.ts",
+    "src/lib/features/data-pipeline/__tests__/test-file-loader.ts"
+  ],
+  "ignoreDependencies": ["@commitlint/cli"],
+  "ignoreBinaries": ["semantic-release", "run"],
+  "ignoreExportsUsedInFile": true,
+  "rules": {
+    "enumMembers": "off"
+  }
+}

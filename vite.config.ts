@@ -9,6 +9,25 @@ export default defineConfig(({ mode }) => {
   const basePath = env.BASE_PATH || '';
 
   return {
+    server: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
+    },
+    build: {
+      target: 'esnext'
+    },
+    optimizeDeps: {
+      include: [
+        '@duckdb/duckdb-wasm',
+        'maplibre-gl',
+        '@deck.gl/core',
+        '@deck.gl/layers',
+        'apache-arrow'
+      ],
+      exclude: ['@geoarrow/geoparquet-wasm']
+    },
     plugins: [
       sveltekit(),
       paraglideVitePlugin({

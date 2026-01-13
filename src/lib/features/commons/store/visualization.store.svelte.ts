@@ -8,8 +8,7 @@ export enum VisualizationType {
   CHOROPLETH = 'choropleth',
   PROPORTIONAL = 'proportional',
   CATEGORICAL = 'categorical',
-  BIVARIATE = 'bivariate',
-  COMBINED = 'combined'
+  BIVARIATE = 'bivariate'
 }
 
 export enum ClassificationMethod {

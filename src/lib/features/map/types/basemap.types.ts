@@ -27,23 +27,9 @@ export interface BasemapMetadata {
   isCustom?: boolean;
 }
 
-export interface BasemapAttribute {
-  raw: string;
-  id: string;
-  variant: string;
-  normalized: string;
-  basemap: string;
-  basemap_count: number;
-}
-
 export interface BasemapSuggestion extends BasemapMetadata {
   matchScore: number;
   matchReason: string;
-}
-
-export interface JoinMapping {
-  dataColumn: string;
-  basemapColumn: string;
 }
 
 export interface BasemapCatalog {

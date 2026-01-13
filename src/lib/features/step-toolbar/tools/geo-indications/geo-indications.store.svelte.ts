@@ -57,7 +57,7 @@ type GeoIndicationsActions = {
   setInsetMapContrast: (contrast: number) => void;
 };
 
-const { state, actions, getState } = createToolStore<
+const { state, actions } = createToolStore<
   GeoIndicationsState,
   GeoIndicationsActions
 >(DEFAULT_STATE, (s) => ({
@@ -128,4 +128,3 @@ const { state, actions, getState } = createToolStore<
 
 export const geoIndicationsState = state;
 export const geoIndicationsActions = actions;
-export const getGeoIndicationsState = getState;
