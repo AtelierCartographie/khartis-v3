@@ -287,8 +287,7 @@ export class VizSuggesterService {
       count: this.getTotalCount(column),
       uniques: this.getUniqueCount(column),
       nulls: this.getNullCount(column),
-      min:
-        typeof column.stats?.min === 'number' ? column.stats.min : undefined,
+      min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
       max: typeof column.stats?.max === 'number' ? column.stats.max : undefined
     };
 

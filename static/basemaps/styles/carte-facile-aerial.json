@@ -43,19 +43,19 @@
     {
       "id": "background",
       "type": "background",
-      "paint": {"background-color": "#153B56"}
+      "paint": { "background-color": "#153B56" }
     },
     {
       "id": "photographies_aeriennes",
       "type": "raster",
       "source": "Ortho IGN",
       "minzoom": 0,
-      "layout": {"visibility": "visible"}
+      "layout": { "visibility": "visible" }
     },
     {
       "id": "Ferre souterrain - voie normale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "minzoom": 0,
@@ -88,7 +88,7 @@
     {
       "id": "Ferre souterrain - trait perpendic épais",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "minzoom": 0,
@@ -113,7 +113,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0.3, 17, 0]
       }
@@ -121,7 +126,7 @@
     {
       "id": "Ferre souterrain - voie etroite",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "minzoom": 0,
@@ -148,7 +153,7 @@
     {
       "id": "Ferre souterrain - trait perpendic fin",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "minzoom": 0,
@@ -167,7 +172,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0.3, 17, 0]
       }
@@ -175,7 +185,7 @@
     {
       "id": "Ferre souterrain - voie service",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "minzoom": 0,
@@ -196,7 +206,7 @@
     {
       "id": "Ferre souterrain - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "maxzoom": 18,
@@ -216,7 +226,7 @@
     {
       "id": "Ferre souterrain - 2 trait perpendic - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sou",
       "maxzoom": 18,
@@ -228,7 +238,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 17]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 17]
+          ]
+        },
         "line-dasharray": [0.2, 0.2, 0.2, 6],
         "line-opacity": ["interpolate", ["linear"], ["zoom"], 16, 0.3, 17, 0]
       }
@@ -236,7 +251,7 @@
     {
       "id": "Chemin souterrain - piste cyclable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 13,
@@ -248,7 +263,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1.1], [15, 1.7], [16, 2], [17, 3.5]]},
+        "line-width": {
+          "stops": [
+            [14, 1.1],
+            [15, 1.7],
+            [16, 2],
+            [17, 3.5]
+          ]
+        },
         "line-dasharray": [6, 2],
         "line-opacity": [
           "interpolate",
@@ -268,7 +290,7 @@
     {
       "id": "Chemin souterrain - filet exterieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 14,
@@ -280,7 +302,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1.75], [15, 3], [16, 4.2], [17, 9.5]]},
+        "line-width": {
+          "stops": [
+            [14, 1.75],
+            [15, 3],
+            [16, 4.2],
+            [17, 9.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -299,7 +328,7 @@
     {
       "id": "Chemin souterrain - filet interieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 14,
@@ -311,7 +340,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.9], [16, 2.7], [17, 5.8]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.9],
+            [16, 2.7],
+            [17, 5.8]
+          ]
+        },
         "line-dasharray": [1, 0.2],
         "line-opacity": [
           "interpolate",
@@ -331,7 +367,7 @@
     {
       "id": "Chemin souterrain - Rue pietonne",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 14,
@@ -343,7 +379,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2]
+          ]
+        },
         "line-dasharray": [1, 3],
         "line-opacity": [
           "interpolate",
@@ -363,7 +406,7 @@
     {
       "id": "Chemin souterrain - sentier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 13,
@@ -375,7 +418,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2]
+          ]
+        },
         "line-dasharray": [4, 3],
         "line-opacity": [
           "interpolate",
@@ -395,7 +445,7 @@
     {
       "id": "Chemin souterrain - chemin",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sou",
       "minzoom": 12,
@@ -407,7 +457,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -426,7 +483,7 @@
     {
       "id": "Routier souterrain - filet interieur - route non revetu carrosable restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -439,7 +496,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -458,7 +522,7 @@
     {
       "id": "Routier souterrain - filet interieur - route non revetu carrosable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -470,7 +534,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -489,7 +560,7 @@
     {
       "id": "Routier souterrain - filet interieur - bretelle autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 12,
@@ -511,7 +582,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[12, 1.5], [14, 2.6], [15, 5.2], [16, 6.7], [17, 10.8]]
+          "stops": [
+            [12, 1.5],
+            [14, 2.6],
+            [15, 5.2],
+            [16, 6.7],
+            [17, 10.8]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -531,7 +608,7 @@
     {
       "id": "Routier souterrain - filet interieur - route non classee restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -543,7 +620,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -562,7 +646,7 @@
     {
       "id": "Routier souterrain - filet interieur - route non classee",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -574,7 +658,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -593,7 +684,7 @@
     {
       "id": "Routier souterrain - filet interieur - route locale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -614,7 +705,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 1.3], [14, 2.3], [15, 4.1], [16, 6.1], [17, 13.1]]
+          "stops": [
+            [9, 1.3],
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.1],
+            [17, 13.1]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -634,7 +731,7 @@
     {
       "id": "Routier souterrain - filet interieur - route locale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 11,
@@ -647,7 +744,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 2], [14, 3.5], [15, 6], [16, 8.4], [17, 18.3]]
+          "stops": [
+            [9, 2],
+            [14, 3.5],
+            [15, 6],
+            [16, 8.4],
+            [17, 18.3]
+          ]
         },
         "line-dasharray": [2, 2],
         "line-opacity": [
@@ -668,7 +771,7 @@
     {
       "id": "Routier souterrain - filet interieur - route regionale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -716,7 +819,7 @@
     {
       "id": "Routier souterrain - filet interieur - route regionale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 10,
@@ -758,7 +861,7 @@
     {
       "id": "Routier souterrain - filet interieur - route principale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -807,7 +910,7 @@
     {
       "id": "Routier souterrain - filet interieur - route principale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 10,
@@ -849,7 +952,7 @@
     {
       "id": "Routier souterrain - filet interieur - autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 5,
@@ -890,7 +993,7 @@
     {
       "id": "Routier souterrain - filet interieur - autoroute en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sou",
       "minzoom": 10,
@@ -932,7 +1035,7 @@
     {
       "id": "Chemin a niveau - piste cyclable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 13,
@@ -945,7 +1048,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1.1], [15, 1.7], [16, 2], [17, 3.5], [18, 6]]
+          "stops": [
+            [14, 1.1],
+            [15, 1.7],
+            [16, 2],
+            [17, 3.5],
+            [18, 6]
+          ]
         },
         "line-dasharray": [6, 2],
         "line-opacity": [
@@ -966,7 +1075,7 @@
     {
       "id": "Chemin a niveau - filet exterieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 14,
@@ -977,7 +1086,14 @@
         "line-join": "round"
       },
       "paint": {
-        "line-width": {"stops": [[14, 1.75], [15, 3], [16, 4.2], [17, 9.5]]},
+        "line-width": {
+          "stops": [
+            [14, 1.75],
+            [15, 3],
+            [16, 4.2],
+            [17, 9.5]
+          ]
+        },
         "line-color": "rgba(187, 187, 187, 1)",
         "line-opacity": [
           "interpolate",
@@ -997,7 +1113,7 @@
     {
       "id": "Chemin a niveau - filet interieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 14,
@@ -1009,7 +1125,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.9], [16, 2.7], [17, 5.8]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.9],
+            [16, 2.7],
+            [17, 5.8]
+          ]
+        },
         "line-dasharray": [1, 0.2],
         "line-opacity": [
           "interpolate",
@@ -1029,7 +1152,7 @@
     {
       "id": "Chemin a niveau - Rue pietonne",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 14,
@@ -1042,7 +1165,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 5]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 5]
+          ]
         },
         "line-dasharray": [1, 3],
         "line-opacity": [
@@ -1063,7 +1192,7 @@
     {
       "id": "Chemin a niveau - sentier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 13,
@@ -1076,7 +1205,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 6]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 6]
+          ]
         },
         "line-dasharray": [4, 3],
         "line-opacity": [
@@ -1097,7 +1232,7 @@
     {
       "id": "Chemin a niveau - chemin",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin",
       "minzoom": 12,
@@ -1110,7 +1245,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 7]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 7]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -1130,7 +1271,7 @@
     {
       "id": "Routier a niveau - filet interieur - route non revetu carrosable restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 0,
@@ -1142,7 +1283,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -1161,7 +1309,7 @@
     {
       "id": "Routier a niveau - filet interieur - route non revetu carrosable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1173,7 +1321,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -1192,7 +1347,7 @@
     {
       "id": "Routier a niveau - filet interieur - bretelle autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 12,
@@ -1214,7 +1369,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[12, 1.5], [14, 2.6], [15, 5.2], [16, 6.7], [17, 10.8]]
+          "stops": [
+            [12, 1.5],
+            [14, 2.6],
+            [15, 5.2],
+            [16, 6.7],
+            [17, 10.8]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -1234,7 +1395,7 @@
     {
       "id": "Routier a niveau - filet interieur - route non classee restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1246,7 +1407,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -1265,7 +1433,7 @@
     {
       "id": "Routier a niveau - filet interieur - route non classee",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1277,7 +1445,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -1296,7 +1471,7 @@
     {
       "id": "Routier a niveau - filet interieur - route locale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1317,7 +1492,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 1.3], [14, 2.3], [15, 4.1], [16, 6.1], [17, 13.1]]
+          "stops": [
+            [9, 1.3],
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.1],
+            [17, 13.1]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -1337,7 +1518,7 @@
     {
       "id": "Routier a niveau - filet interieur - route locale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 11,
@@ -1350,7 +1531,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 2], [14, 3.5], [15, 6], [16, 8.4], [17, 18.3]]
+          "stops": [
+            [9, 2],
+            [14, 3.5],
+            [15, 6],
+            [16, 8.4],
+            [17, 18.3]
+          ]
         },
         "line-dasharray": [2, 2],
         "line-opacity": [
@@ -1371,7 +1558,7 @@
     {
       "id": "Routier a niveau - filet interieur - route regionale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 6,
@@ -1419,7 +1606,7 @@
     {
       "id": "Routier a niveau - filet interieur - route regionale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 10,
@@ -1460,7 +1647,7 @@
     {
       "id": "Routier a niveau - filet interieur - route principale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1508,7 +1695,7 @@
     {
       "id": "Routier a niveau - filet interieur - route principale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 10,
@@ -1549,7 +1736,7 @@
     {
       "id": "Routier a niveau - filet interieur - autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 5,
@@ -1589,7 +1776,7 @@
     {
       "id": "Routier a niveau - filet interieur - autoroute en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route",
       "minzoom": 8,
@@ -1602,7 +1789,14 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[4, 0.7], [9, 3.5], [14, 7.5], [15, 11], [16, 15], [17, 26]]
+          "stops": [
+            [4, 0.7],
+            [9, 3.5],
+            [14, 7.5],
+            [15, 11],
+            [16, 15],
+            [17, 26]
+          ]
         },
         "line-dasharray": [2, 2],
         "line-opacity": [
@@ -1623,7 +1817,7 @@
     {
       "id": "Ferre a niveau - voie normale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1665,7 +1859,7 @@
     {
       "id": "Ferre a niveau - voie normale trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1688,7 +1882,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -1708,7 +1907,7 @@
     {
       "id": "Ferre a niveau - voie etroite",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1739,7 +1938,7 @@
     {
       "id": "Ferre a niveau - voie etroite trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1751,7 +1950,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -1771,7 +1975,7 @@
     {
       "id": "Ferre a niveau - voie service",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 14,
@@ -1803,7 +2007,7 @@
     {
       "id": "Ferre a niveau - voie en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1836,7 +2040,7 @@
     {
       "id": "Ferre a niveau - voie en construction trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "minzoom": 10,
@@ -1849,7 +2053,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -1869,7 +2078,7 @@
     {
       "id": "Ferre a niveau - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "filter": ["in", "symbo", "FUNI_CREMAILLERE", "TRANSPORT_URBAIN"],
@@ -1899,7 +2108,7 @@
     {
       "id": "Ferre a niveau - 2 trait perpendic - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre",
       "filter": ["in", "symbo", "FUNI_CREMAILLERE", "TRANSPORT_URBAIN"],
@@ -1910,7 +2119,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 17]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 17]
+          ]
+        },
         "line-dasharray": [0.2, 0.2, 0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -1930,7 +2144,7 @@
     {
       "id": "Chemin superieur - piste cyclable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 13,
@@ -1943,7 +2157,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1.1], [15, 1.7], [16, 2], [17, 3.5], [18, 6]]
+          "stops": [
+            [14, 1.1],
+            [15, 1.7],
+            [16, 2],
+            [17, 3.5],
+            [18, 6]
+          ]
         },
         "line-dasharray": [6, 2],
         "line-opacity": [
@@ -1964,7 +2184,7 @@
     {
       "id": "Chemin superieur - filet exterieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 14,
@@ -1976,7 +2196,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1.75], [15, 3], [16, 4.2], [17, 9.5]]},
+        "line-width": {
+          "stops": [
+            [14, 1.75],
+            [15, 3],
+            [16, 4.2],
+            [17, 9.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -1995,7 +2222,7 @@
     {
       "id": "Chemin superieur - filet interieur - escalier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 14,
@@ -2007,7 +2234,14 @@
       },
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
-        "line-width": {"stops": [[14, 1], [15, 1.9], [16, 2.7], [17, 5.8]]},
+        "line-width": {
+          "stops": [
+            [14, 1],
+            [15, 1.9],
+            [16, 2.7],
+            [17, 5.8]
+          ]
+        },
         "line-dasharray": [1, 0.2],
         "line-opacity": [
           "interpolate",
@@ -2027,7 +2261,7 @@
     {
       "id": "Chemin superieur - Rue pietonne",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 14,
@@ -2040,7 +2274,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 5]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 5]
+          ]
         },
         "line-dasharray": [1, 3],
         "line-opacity": [
@@ -2061,7 +2301,7 @@
     {
       "id": "Chemin superieur - sentier",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 13,
@@ -2074,7 +2314,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 6]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 6]
+          ]
         },
         "line-dasharray": [4, 3],
         "line-opacity": [
@@ -2095,7 +2341,7 @@
     {
       "id": "Chemin superieur - chemin",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_chemin_sup",
       "minzoom": 12,
@@ -2108,7 +2354,13 @@
       "paint": {
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": {
-          "stops": [[14, 1], [15, 1.2], [16, 1.4], [17, 2], [18, 7]]
+          "stops": [
+            [14, 1],
+            [15, 1.2],
+            [16, 1.4],
+            [17, 2],
+            [18, 7]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -2128,7 +2380,7 @@
     {
       "id": "Routier superieur - filet interieur - route non revetu carrosable restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2140,7 +2392,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -2159,7 +2418,7 @@
     {
       "id": "Routier superieur - filet interieur - route non revetu carrosable",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2171,7 +2430,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -2190,7 +2456,7 @@
     {
       "id": "Routier superieur - filet interieur - bretelle autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 12,
@@ -2212,7 +2478,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[12, 1.5], [14, 2.6], [15, 5.2], [16, 6.7], [17, 10.8]]
+          "stops": [
+            [12, 1.5],
+            [14, 2.6],
+            [15, 5.2],
+            [16, 6.7],
+            [17, 10.8]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -2232,7 +2504,7 @@
     {
       "id": "Routier superieur - filet interieur - route non classee restreint",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2244,7 +2516,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -2263,7 +2542,7 @@
     {
       "id": "Routier superieur - filet interieur - route non classee",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2275,7 +2554,14 @@
       },
       "paint": {
         "line-color": "#e5e5e5",
-        "line-width": {"stops": [[14, 2.3], [15, 4.1], [16, 6.3], [17, 13.5]]},
+        "line-width": {
+          "stops": [
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.3],
+            [17, 13.5]
+          ]
+        },
         "line-opacity": [
           "interpolate",
           ["linear"],
@@ -2294,7 +2580,7 @@
     {
       "id": "Routier superieur - filet interieur - route locale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2315,7 +2601,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 1.3], [14, 2.3], [15, 4.1], [16, 6.1], [17, 13.1]]
+          "stops": [
+            [9, 1.3],
+            [14, 2.3],
+            [15, 4.1],
+            [16, 6.1],
+            [17, 13.1]
+          ]
         },
         "line-opacity": [
           "interpolate",
@@ -2335,7 +2627,7 @@
     {
       "id": "Routier superieur - filet interieur - route locale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 11,
@@ -2348,7 +2640,13 @@
       "paint": {
         "line-color": "#e5e5e5",
         "line-width": {
-          "stops": [[9, 2], [14, 3.5], [15, 6], [16, 8.4], [17, 18.3]]
+          "stops": [
+            [9, 2],
+            [14, 3.5],
+            [15, 6],
+            [16, 8.4],
+            [17, 18.3]
+          ]
         },
         "line-dasharray": [2, 2],
         "line-opacity": [
@@ -2369,7 +2667,7 @@
     {
       "id": "Routier superieur - filet interieur - route regionale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2417,7 +2715,7 @@
     {
       "id": "Routier superieur - filet interieur - route regionale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 10,
@@ -2458,7 +2756,7 @@
     {
       "id": "Routier superieur - filet interieur - route principale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2507,7 +2805,7 @@
     {
       "id": "Routier superieur - filet interieur - route principale en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 10,
@@ -2548,7 +2846,7 @@
     {
       "id": "Routier superieur - filet interieur - autoroute",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 5,
@@ -2589,7 +2887,7 @@
     {
       "id": "Routier superieur - filet interieur - autoroute en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_route_sup",
       "minzoom": 10,
@@ -2631,7 +2929,7 @@
     {
       "id": "Ferre superieur - voie normale",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2673,7 +2971,7 @@
     {
       "id": "Ferre superieur - voie normale trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2696,7 +2994,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -2716,7 +3019,7 @@
     {
       "id": "Ferre superieur - voie etroite",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2753,7 +3056,7 @@
     {
       "id": "Ferre superieur - voie etroite trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2771,7 +3074,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -2791,7 +3099,7 @@
     {
       "id": "Ferre superieur - voie service",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 14,
@@ -2823,7 +3131,7 @@
     {
       "id": "Ferre superieur - voie en construction",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2856,7 +3164,7 @@
     {
       "id": "Ferre superieur - voie en construction trait perpendic",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "minzoom": 10,
@@ -2869,7 +3177,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 14.7]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 14.7]
+          ]
+        },
         "line-dasharray": [0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -2889,7 +3202,7 @@
     {
       "id": "Ferre superieur - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "filter": ["in", "symbo", "FUNI_CREMAILLERE_SUP", "TRANSPORT_URBAIN_SUP"],
@@ -2919,7 +3232,7 @@
     {
       "id": "Ferre superieur - 2 trait perpendic - funic/urbain",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "ferre_sup",
       "filter": ["in", "symbo", "FUNI_CREMAILLERE_SUP", "TRANSPORT_URBAIN_SUP"],
@@ -2930,7 +3243,12 @@
       },
       "paint": {
         "line-color": "#FFFFFF",
-        "line-width": {"stops": [[10, 3.5], [17, 17]]},
+        "line-width": {
+          "stops": [
+            [10, 3.5],
+            [17, 17]
+          ]
+        },
         "line-dasharray": [0.2, 0.2, 0.2, 6],
         "line-opacity": [
           "interpolate",
@@ -2950,7 +3268,7 @@
     {
       "id": "liaison routiere - Bac Liaison Maritime",
       "type": "line",
-      "metadata": {"cartefacile:group": "streets"},
+      "metadata": { "cartefacile:group": "streets" },
       "source": "plan_ign",
       "source-layer": "routier_liaison",
       "minzoom": 8,
@@ -2963,7 +3281,12 @@
       },
       "paint": {
         "line-color": "rgba(2, 21, 36, 1)",
-        "line-width": {"stops": [[8, 1.4], [13, 2.9]]},
+        "line-width": {
+          "stops": [
+            [8, 1.4],
+            [13, 2.9]
+          ]
+        },
         "line-dasharray": [2, 2],
         "line-opacity": 0.3
       }
@@ -3849,7 +4172,12 @@
       "layout": {
         "symbol-placement": "line",
         "text-field": "{texte}",
-        "text-size": {"stops": [[6, 8], [15, 14]]},
+        "text-size": {
+          "stops": [
+            [6, 8],
+            [15, 14]
+          ]
+        },
         "text-anchor": "center",
         "text-keep-upright": true,
         "text-max-angle": 45,
@@ -3887,7 +4215,7 @@
     {
       "id": "toponyme - odonyme abrégé",
       "type": "symbol",
-      "metadata": {"cartefacile:group": "street_labels"},
+      "metadata": { "cartefacile:group": "street_labels" },
       "source": "plan_ign",
       "source-layer": "toponyme_routier_odonyme_lin",
       "minzoom": 15,
@@ -3910,7 +4238,7 @@
     {
       "id": "toponyme - odonyme desabrégé",
       "type": "symbol",
-      "metadata": {"cartefacile:group": "street_labels"},
+      "metadata": { "cartefacile:group": "street_labels" },
       "source": "plan_ign",
       "source-layer": "toponyme_routier_odonyme_lin",
       "minzoom": 15,
@@ -4104,7 +4432,12 @@
         "visibility": "visible",
         "symbol-placement": "point",
         "text-field": "{texte}",
-        "text-size": {"stops": [[15, 11], [17, 13.5]]},
+        "text-size": {
+          "stops": [
+            [15, 11],
+            [17, 13.5]
+          ]
+        },
         "text-anchor": "center",
         "text-padding": 1,
         "text-font": ["Noto Sans Bold"]
@@ -4128,7 +4461,12 @@
         "visibility": "visible",
         "symbol-placement": "point",
         "text-field": "{texte}",
-        "text-size": {"stops": [[15, 11], [17, 13.5]]},
+        "text-size": {
+          "stops": [
+            [15, 11],
+            [17, 13.5]
+          ]
+        },
         "text-anchor": "center",
         "text-padding": 1,
         "text-font": ["Noto Sans Bold"],
@@ -4687,7 +5025,12 @@
         "visibility": "visible",
         "symbol-placement": "point",
         "text-field": "{texte}",
-        "text-size": {"stops": [[7.5, 12], [12, 14]]},
+        "text-size": {
+          "stops": [
+            [7.5, 12],
+            [12, 14]
+          ]
+        },
         "text-allow-overlap": false,
         "text-anchor": "center",
         "text-padding": 1,
@@ -4953,7 +5296,12 @@
       "layout": {
         "visibility": "visible",
         "text-field": "{texte}",
-        "text-size": {"stops": [[1, 10], [2, 15]]},
+        "text-size": {
+          "stops": [
+            [1, 10],
+            [2, 15]
+          ]
+        },
         "text-anchor": "center",
         "text-padding": 1,
         "text-transform": "uppercase",
