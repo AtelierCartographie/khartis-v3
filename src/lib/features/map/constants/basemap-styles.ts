@@ -3,10 +3,9 @@ import { MapLibreLayerType } from './map.constants';
 
 export enum BasemapStyle {
   BLANK_WHITE = 'blank-white',
-  CARTO_POSITRON = 'carto-positron',
-  CARTO_DARK_MATTER = 'carto-dark',
-  CARTO_VOYAGER = 'carto-voyager',
-  OSM_LIBERTY = 'osm-liberty'
+  CARTE_FACILE_DESATURATED = 'carte-facile-desaturated',
+  CARTE_FACILE_SIMPLE = 'carte-facile-simple',
+  CARTE_FACILE_AERIAL = 'carte-facile-aerial'
 }
 
 const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
@@ -29,13 +28,12 @@ export const BASEMAP_STYLES: Record<
   string | maplibregl.StyleSpecification
 > = {
   [BasemapStyle.BLANK_WHITE]: BLANK_WHITE_STYLE,
-  [BasemapStyle.CARTO_POSITRON]:
-    'https://basemaps.cartocdn.com/gl/positron-nolabels-gl-style/style.json',
-  [BasemapStyle.CARTO_DARK_MATTER]:
-    'https://basemaps.cartocdn.com/gl/dark-matter-nolabels-gl-style/style.json',
-  [BasemapStyle.CARTO_VOYAGER]:
-    'https://basemaps.cartocdn.com/gl/voyager-nolabels-gl-style/style.json',
-  [BasemapStyle.OSM_LIBERTY]: 'https://tiles.openfreemap.org/styles/liberty'
+  [BasemapStyle.CARTE_FACILE_DESATURATED]:
+    '/basemaps/styles/carte-facile-desaturated.json',
+  [BasemapStyle.CARTE_FACILE_SIMPLE]:
+    '/basemaps/styles/carte-facile-simple.json',
+  [BasemapStyle.CARTE_FACILE_AERIAL]:
+    '/basemaps/styles/carte-facile-aerial.json'
 };
 
-export const DEFAULT_BASEMAP_STYLE = BasemapStyle.BLANK_WHITE;
+export const DEFAULT_BASEMAP_STYLE = BasemapStyle.CARTE_FACILE_DESATURATED;

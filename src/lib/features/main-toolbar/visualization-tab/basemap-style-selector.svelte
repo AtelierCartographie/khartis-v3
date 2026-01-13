@@ -1,29 +1,24 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages';
+  import * as m from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   const basemapOptions = [
     {
-      value: BasemapStyle.CARTO_POSITRON,
-      label: 'Carto Positron',
-      description: 'Clean light background'
+      value: BasemapStyle.CARTE_FACILE_DESATURATED,
+      label: m.basemap_desaturated(),
+      description: m.basemap_desaturated_desc()
     },
     {
-      value: BasemapStyle.CARTO_DARK_MATTER,
-      label: 'Carto Dark Matter',
-      description: 'Dark background for contrast'
+      value: BasemapStyle.CARTE_FACILE_SIMPLE,
+      label: m.basemap_simple(),
+      description: m.basemap_simple_desc()
     },
     {
-      value: BasemapStyle.CARTO_VOYAGER,
-      label: 'Carto Voyager',
-      description: 'Balanced color scheme'
-    },
-    {
-      value: BasemapStyle.OSM_LIBERTY,
-      label: 'OSM Liberty',
-      description: 'Open source OpenStreetMap'
+      value: BasemapStyle.CARTE_FACILE_AERIAL,
+      label: m.basemap_aerial(),
+      description: m.basemap_aerial_desc()
     }
   ];
 
