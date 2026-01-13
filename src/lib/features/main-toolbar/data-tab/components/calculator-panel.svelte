@@ -50,26 +50,26 @@
 
     const functionSuggestions: Suggestion[] = [
       {
-        label: 'AVG',
-        value: 'AVG("")',
+        label: 'list_avg',
+        value: 'list_avg(["", ""])',
         type: 'function' as const,
         description: m.calc_function_average()
       },
       {
-        label: 'SUM',
-        value: 'SUM("")',
+        label: 'list_sum',
+        value: 'list_sum(["", ""])',
         type: 'function' as const,
         description: m.calc_function_sum()
       },
       {
-        label: 'MIN',
-        value: 'MIN("")',
+        label: 'least',
+        value: 'least("", "")',
         type: 'function' as const,
         description: m.calc_function_min()
       },
       {
-        label: 'MAX',
-        value: 'MAX("")',
+        label: 'greatest',
+        value: 'greatest("", "")',
         type: 'function' as const,
         description: m.calc_function_max()
       },
@@ -115,10 +115,26 @@
   ];
 
   const FUNCTIONS = $derived([
-    { label: m.calc_function_average(), value: 'AVG', template: 'AVG({col})' },
-    { label: m.calc_function_sum(), value: 'SUM', template: 'SUM({col})' },
-    { label: m.calc_function_min(), value: 'MIN', template: 'MIN({col})' },
-    { label: m.calc_function_max(), value: 'MAX', template: 'MAX({col})' },
+    {
+      label: m.calc_function_average(),
+      value: 'list_avg',
+      template: 'list_avg([{col}, ""])'
+    },
+    {
+      label: m.calc_function_sum(),
+      value: 'list_sum',
+      template: 'list_sum([{col}, ""])'
+    },
+    {
+      label: m.calc_function_min(),
+      value: 'least',
+      template: 'least({col}, "")'
+    },
+    {
+      label: m.calc_function_max(),
+      value: 'greatest',
+      template: 'greatest({col}, "")'
+    },
     {
       label: m.calc_function_power(),
       value: 'POWER',
