@@ -18,6 +18,10 @@ class BasemapStyleStore {
     return BASEMAP_STYLES[this._state.selectedStyle];
   }
 
+  get requiresMapLibre(): boolean {
+    return this._state.selectedStyle !== BasemapStyle.BLANK_WHITE;
+  }
+
   setStyle(style: BasemapStyle): void {
     this._state.selectedStyle = style;
   }
