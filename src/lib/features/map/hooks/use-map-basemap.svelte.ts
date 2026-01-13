@@ -3,6 +3,7 @@ import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.sto
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
   createOSMRasterSource,
   createOSMRasterLayer
@@ -11,15 +12,17 @@ import {
 export interface UseMapBasemapProps {
   getMap: () => MapLibreMap | null;
   getIsMapLoaded: () => boolean;
+  onProjectionChanged?: () => void;
 }
 
 export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
+  syncProjection: () => void;
 }
 
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
-  const { getMap, getIsMapLoaded } = props;
+  const { getMap, getIsMapLoaded, onProjectionChanged } = props;
 
   function syncBasemapStyle(): void {
     const map = getMap();
@@ -75,8 +78,23 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
   }
 
+  function syncProjection(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded()) return;
+
+    const projection = mapProjectionStore.projection;
+    map.setProjection({ type: projection });
+
+    logger.debug('Map projection changed', LogCategory.MAP, { projection });
+
+    if (onProjectionChanged) {
+      setTimeout(() => onProjectionChanged(), 10);
+    }
+  }
+
   return {
     syncBasemapStyle,
-    syncOSMRasterLayer
+    syncOSMRasterLayer,
+    syncProjection
   };
 }
