@@ -8,9 +8,14 @@
   import ChartMultitype from 'carbon-icons-svelte/lib/ChartMultitype.svelte';
   import ViewOff from 'carbon-icons-svelte/lib/ViewOff.svelte';
   import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
+  import Link from 'carbon-icons-svelte/lib/Link.svelte';
   import type { ColumnInfo } from '../types';
   import { getPlotForColumn } from '../histogram.utils';
-  import { getColumnTypeStyle } from '../column-type-styles';
+  import {
+    getColumnTypeStyle,
+    SEMIO_BADGE_STYLES,
+    GEOID_SCORE_THRESHOLD
+  } from '../column-type-styles';
   import Portal from './Portal.svelte';
 
   export type ColumnType = 'text' | 'number' | 'date' | 'boolean';
@@ -65,6 +70,11 @@
   );
 
   const typeStyle = $derived(getColumnTypeStyle(analysis?.type_simple));
+
+  const showGeoidBadge = $derived(
+    analysis?.semioType === 'geoid' &&
+      (analysis?.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD
+  );
 
   interface ColumnWarning {
     type: 'nulls' | 'duplicates' | 'low_uniques';
@@ -158,6 +168,15 @@
           {typeStyle.label}
         {/if}
       </span>
+      {#if showGeoidBadge}
+        <span
+          class="semio-badge"
+          style="--badge-color: {SEMIO_BADGE_STYLES.geoid.color}"
+          title={SEMIO_BADGE_STYLES.geoid.tooltip}
+        >
+          <Link size={16} />
+        </span>
+      {/if}
       <span
         class="col-name"
         style="color: {typeStyle.color}"
@@ -383,6 +402,18 @@
     font-weight: 600;
     background-color: var(--badge-color);
     color: #fff;
+    flex-shrink: 0;
+  }
+
+  .semio-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 18px;
+    border-radius: 3px;
+    background-color: var(--badge-color);
+    color: white;
     flex-shrink: 0;
   }
 

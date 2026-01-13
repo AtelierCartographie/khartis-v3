@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'fs';
-import { join, basename, extname } from 'path';
+import { readFileSync, readdirSync } from 'fs';
+import { basename, extname, join } from 'path';
 
 const TEST_DATASETS_ROOT = join(process.cwd(), 'tests-datasets');
 
@@ -22,14 +22,6 @@ export function loadTestFile(relativePath: string): File {
   return new File([buffer], fileName, { type: mimeType });
 }
 
-export function loadTestFileFromPath(fullPath: string): File {
-  const buffer = readFileSync(fullPath);
-  const fileName = basename(fullPath);
-  const mimeType = getMimeType(fileName);
-
-  return new File([buffer], fileName, { type: mimeType });
-}
-
 export function listTestFiles(category: keyof typeof TEST_PATHS): string[] {
   const dirPath = TEST_PATHS[category];
   return readdirSync(dirPath)
@@ -37,34 +29,8 @@ export function listTestFiles(category: keyof typeof TEST_PATHS): string[] {
     .map((f) => join(dirPath, f));
 }
 
-export function listCSVFiles(): string[] {
-  return listTestFiles('CSV').filter((f) => f.endsWith('.csv'));
-}
-
 export function listGeoJSONFiles(): string[] {
   return listTestFiles('GEOJSON').filter((f) => f.endsWith('.geojson'));
-}
-
-export function listZIPFiles(): string[] {
-  return listTestFiles('ZIP').filter((f) => f.endsWith('.zip'));
-}
-
-export function getShapefileBundle(shpDirName: string): string[] {
-  const shpDir = join(TEST_PATHS.SHP, shpDirName);
-  const files = readdirSync(shpDir);
-  const shpExtensions = [
-    '.shp',
-    '.shx',
-    '.dbf',
-    '.prj',
-    '.cpg',
-    '.sbn',
-    '.sbx'
-  ];
-
-  return files
-    .filter((f) => shpExtensions.some((ext) => f.toLowerCase().endsWith(ext)))
-    .map((f) => join(shpDir, f));
 }
 
 export function getMimeType(filename: string): string {
@@ -90,14 +56,6 @@ export function getMimeType(filename: string): string {
   };
 
   return mimeTypes[ext] || 'application/octet-stream';
-}
-
-export function getFileStats(filePath: string): { size: number; name: string } {
-  const stats = statSync(filePath);
-  return {
-    size: stats.size,
-    name: basename(filePath)
-  };
 }
 
 export const CSV_TEST_FILES = {
@@ -134,13 +92,6 @@ export const ZIP_TEST_FILES = {
   SHAPEFILE: 'zip/shapefile-complete.zip'
 } as const;
 
-export const SHP_TEST_BUNDLES = {
-  NE_50M: 'ne_50m',
-  STAR_LINES: 'lignes-du-reseau-star-de-rennes-metropole',
-  MOS_FONCIER: 'mos_foncier_agrege_com',
-  EEZ: 'Marines-regionsEEZ_land_union_v3_202003'
-} as const;
-
 export const GPKG_TEST_FILES = {
   COMPAGNIES_HERAULT: 'gpkg/compagnies-herault-l93.gpkg',
   ADMIN_EXPRESS_GLP:
@@ -155,15 +106,3 @@ export const GPX_TEST_FILES = {
 export const KML_TEST_FILES = {
   AIRES_COVOITURAGE: 'kml-kmz/aires-covoiturage/aires-covoiturage.kml'
 } as const;
-
-export function listGPKGFiles(): string[] {
-  return Object.values(GPKG_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
-}
-
-export function listGPXFiles(): string[] {
-  return Object.values(GPX_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
-}
-
-export function listKMLFiles(): string[] {
-  return Object.values(KML_TEST_FILES).map((p) => join(TEST_DATASETS_ROOT, p));
-}

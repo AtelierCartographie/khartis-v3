@@ -1,5 +1,4 @@
 export { createFileFromUpload, dataPipeline } from './pipeline';
-export type { DataPipeline } from './pipeline';
 
 export {
   ColumnType,
@@ -39,17 +38,9 @@ export type {
   ZipDatasetResult
 } from './types';
 
-export { PIPELINE_CONST, isGeospatialFile, isTabularFile } from './constants';
+export { PIPELINE_CONST, isGeospatialFile } from './constants';
 
-export {
-  ParserError,
-  canParseFile,
-  detectFileFormat,
-  generateTableName,
-  parseFile,
-  parseGeoFile,
-  parseTabular
-} from './core/parsers';
+export { detectFileFormat, generateTableName } from './core/parsers';
 
 export {
   validateFile,
@@ -64,11 +55,6 @@ export {
   readGeoParquet,
   tableHasGeoArrowMetadata
 } from './io/geoparquet-reader';
-
-export type {
-  GeoJSONFeature,
-  GeoJSONFeatureCollection
-} from './utils/geojson-converter';
 
 export {
   describeGeojsonStructure,

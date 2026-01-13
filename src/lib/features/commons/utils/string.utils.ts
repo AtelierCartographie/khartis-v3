@@ -41,35 +41,3 @@ export function sanitizeDisplayName(filename: string): string {
   const parts = filename.split(pathSeparators);
   return parts[parts.length - 1];
 }
-
-/**
- * Normalise une chaîne pour la comparaison (enlève accents, espaces, ponctuation)
- * Utilisé pour le matching de données géographiques
- * @param value La chaîne à normaliser
- * @param caseSensitive Si vrai, conserve la casse (défaut: false)
- * @returns La chaîne normalisée
- */
-export function normalizeForMatching(
-  value: string,
-  caseSensitive: boolean = false
-): string {
-  if (!value) return '';
-
-  let normalized = value.toString().trim();
-
-  // Remove accents using NFD + diacritics removal
-  normalized = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-
-  // Apply case if necessary
-  if (!caseSensitive) {
-    normalized = normalized.toLowerCase();
-  }
-
-  // Remove punctuation and special characters (keep letters, digits and spaces)
-  normalized = normalized.replace(/[^a-z0-9\s]/gi, '');
-
-  // Normalize multiple spaces into one
-  normalized = normalized.replace(/\s+/g, ' ').trim();
-
-  return normalized;
-}

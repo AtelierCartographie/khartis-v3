@@ -18,6 +18,7 @@
   } from '../core';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
+  import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import type { DeckMapProps } from '../types';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
 
@@ -82,7 +83,10 @@
 
   const mapInit = useMapInit({
     onMapLoaded: () => {
-      if (osmBasemapStore.isActive && mapInit.viewMode === 'orthographic') {
+      const shouldUseMapLibre =
+        osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
+
+      if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
         mapInit.switchToMapLibreMode();
         return;
       }
@@ -129,7 +133,8 @@
 
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
-    getIsMapLoaded: () => mapInit.isMapLoaded
+    getIsMapLoaded: () => mapInit.isMapLoaded,
+    onProjectionChanged: () => mapLayers.updateLayers(jsTable, userGeoJSON)
   });
 
   const mapBounds = useMapBounds({
@@ -159,13 +164,16 @@
 
   $effect(() => {
     const osmActive = osmBasemapStore.isActive;
+    const requiresMapLibre = basemapStyleStore.requiresMapLibre;
 
     untrack(() => {
       if (!mapInit.isMapLoaded) return;
 
-      if (osmActive && mapInit.viewMode === 'orthographic') {
+      const shouldUseMapLibre = osmActive || requiresMapLibre;
+
+      if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
         mapInit.switchToMapLibreMode();
-      } else if (!osmActive && mapInit.viewMode === 'maplibre') {
+      } else if (!shouldUseMapLibre && mapInit.viewMode === 'maplibre') {
         mapInit.switchToOrthographicMode();
       }
     });
@@ -250,8 +258,16 @@
     untrack(() => mapBasemap.syncBasemapStyle());
   });
 
+  $effect(() => {
+    void mapProjectionStore.projection;
+    untrack(() => mapBasemap.syncProjection());
+  });
+
   onMount(() => {
-    mapInit.initialize(mapContainer);
+    const initialViewMode = basemapStyleStore.requiresMapLibre
+      ? 'maplibre'
+      : 'orthographic';
+    mapInit.initialize(mapContainer, initialViewMode);
 
     updateCanvasSize();
 

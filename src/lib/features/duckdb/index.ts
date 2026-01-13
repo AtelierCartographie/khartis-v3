@@ -31,7 +31,6 @@ export type {
   ReadGeofileOptions,
   ReadLinkOptions,
   ReadTabularOptions,
-  SearchResultWithScore,
   SearchStats,
   TableMetadata
 } from './types';

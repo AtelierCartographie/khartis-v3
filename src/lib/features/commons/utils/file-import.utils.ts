@@ -22,36 +22,6 @@ export type ColumnStatSummary = {
 export { DataSourceType, FileType } from '../store/create-project.types';
 export { formatFileSize } from './format.utils';
 
-export const MAX_FILE_SIZE = 50 * 1024 * 1024;
-
-export const SUPPORTED_EXTENSIONS = {
-  tabular: ['.csv', '.tsv', '.txt'],
-  geospatial: [
-    '.geojson',
-    '.json',
-    '.shp',
-    '.shx',
-    '.dbf',
-    '.prj',
-    '.cpg',
-    '.gpkg',
-    '.geoparquet',
-    '.gpq'
-  ]
-};
-
-export const MIME_TYPES = {
-  csv: ['text/csv', 'application/csv', 'text/plain'],
-  geojson: ['application/geo+json', 'application/json'],
-  shapefile: ['application/octet-stream', 'application/x-shapefile'],
-  geopackage: ['application/geopackage+sqlite3', 'application/octet-stream'],
-  geoparquet: [
-    'application/geoparquet',
-    'application/octet-stream',
-    'application/x-parquet'
-  ]
-};
-
 export function detectFileType(file: File): FileType {
   const extension = file.name.toLowerCase().split('.').pop() || '';
   const mimeType = file.type.toLowerCase();
@@ -109,39 +79,6 @@ export function detectFileType(file: File): FileType {
   }
 
   return FileType.UNKNOWN;
-}
-
-export function validateFile(file: File): FileValidation {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  if (file.size > MAX_FILE_SIZE) {
-    errors.push(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`);
-  }
-
-  if (file.size === 0) {
-    errors.push('File is empty');
-  }
-
-  const fileType = detectFileType(file);
-  if (fileType === FileType.UNKNOWN) {
-    warnings.push('Unknown file type. File may not be supported');
-  }
-
-  const extension = file.name.toLowerCase().split('.').pop() || '';
-  const allExtensions = [
-    ...SUPPORTED_EXTENSIONS.tabular,
-    ...SUPPORTED_EXTENSIONS.geospatial
-  ];
-  if (!allExtensions.some((ext) => ext.slice(1) === extension)) {
-    warnings.push(`File extension .${extension} may not be fully supported`);
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings
-  };
 }
 
 export function isShapefileComponent(filename: string): boolean {

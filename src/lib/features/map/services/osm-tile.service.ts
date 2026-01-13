@@ -70,22 +70,6 @@ export function getOSMTileConfig(
   return config;
 }
 
-export function generateTileURL(
-  urlTemplate: string,
-  z: number,
-  x: number,
-  y: number
-): string {
-  const subdomains = ['a', 'b', 'c'];
-  const subdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-
-  return urlTemplate
-    .replace('{s}', subdomain)
-    .replace('{z}', z.toString())
-    .replace('{x}', x.toString())
-    .replace('{y}', y.toString());
-}
-
 export function createOSMRasterSource(config: OSMTileConfig) {
   return {
     type: MapLibreLayerType.RASTER as const,

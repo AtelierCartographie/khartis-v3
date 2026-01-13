@@ -5,7 +5,8 @@
     Select,
     SelectItem,
     TextInput,
-    InlineNotification
+    InlineNotification,
+    InlineLoading
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onMount, onDestroy } from 'svelte';
@@ -15,8 +16,8 @@
   import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
 
-  const SEARCH_DEBOUNCE_MS = 300;
-  const MIN_SEARCH_LENGTH = 2;
+  const SEARCH_DEBOUNCE_MS = 500;
+  const MIN_SEARCH_LENGTH = 3;
 
   export type CellHighlightType = 'exact' | 'contains' | 'partial';
 
@@ -59,6 +60,8 @@
   });
   let currentResultIndex = $state(0);
   let isSearching = $state(false);
+  let isSearchInProgress = $state(false);
+  let pendingSearchQuery = $state<string | null>(null);
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   onDestroy(() => {
@@ -144,6 +147,14 @@
       return;
     }
 
+    if (isSearchInProgress) {
+      pendingSearchQuery = trimmedQuery;
+      return;
+    }
+
+    isSearchInProgress = true;
+    const queryAtStart = trimmedQuery;
+
     try {
       const columnFilter = searchSource === 'all' ? undefined : searchSource;
       const stats = await duckDBOrchestrator.searchInTable(
@@ -151,6 +162,11 @@
         trimmedQuery,
         { threshold: 0.85, column: columnFilter }
       );
+
+      if (searchQuery.trim() !== queryAtStart) {
+        return;
+      }
+
       searchStats = stats;
       currentResultIndex = stats.results.length > 0 ? 0 : -1;
 
@@ -177,7 +193,20 @@
       logger.error('Search failed', LogCategory.UI, error);
       clearSearchResults();
     } finally {
+      isSearchInProgress = false;
       isSearching = false;
+
+      if (pendingSearchQuery && pendingSearchQuery !== queryAtStart) {
+        const pending = pendingSearchQuery;
+        pendingSearchQuery = null;
+        if (
+          pending === searchQuery.trim() &&
+          pending.length >= MIN_SEARCH_LENGTH
+        ) {
+          isSearching = true;
+          executeSearch();
+        }
+      }
     }
   }
 
@@ -233,9 +262,9 @@
   const hasResults = $derived(searchStats.totalCount > 0);
   const hasData = $derived(columns.length > 0);
   const hasExactMatches = $derived(searchStats.exactCount > 0);
+  const isSampled = $derived(searchStats.isSampled === true);
 
   const resultCountText = $derived(() => {
-    if (isSearching) return m.search_loading();
     if (!searchQuery.trim()) return '';
     if (!hasResults) return m.search_no_results();
 
@@ -290,8 +319,23 @@
     </div>
 
     <div class="results-info">
-      <span class="result-count">{resultCountText()}</span>
+      {#if isSearching || isSearchInProgress}
+        <div class="loading-container">
+          <InlineLoading description={m.search_loading()} />
+        </div>
+      {:else}
+        <span class="result-count">{resultCountText()}</span>
+      {/if}
     </div>
+
+    {#if isSampled}
+      <InlineNotification
+        kind="warning"
+        lowContrast
+        hideCloseButton
+        subtitle={m.search_large_table_warning()}
+      />
+    {/if}
 
     <div class="results-navigation">
       <span class="result-text">{navigationText}</span>
@@ -355,6 +399,12 @@
 
   .results-info {
     padding: var(--cds-spacing-02) 0;
+    min-height: 2rem;
+  }
+
+  .loading-container {
+    display: flex;
+    align-items: center;
   }
 
   .result-count {

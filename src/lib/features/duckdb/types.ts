@@ -57,6 +57,8 @@ export interface AnalysisResult {
   nulls?: number;
   duplicates?: number;
   count?: number;
+  semioType?: 'geoid' | 'geolat' | 'geolon' | 'QTA' | 'QTR' | 'QL' | 'QLO';
+  semioScore?: number;
   [key: string]: unknown;
 }
 
@@ -162,10 +164,8 @@ export interface SearchStats {
   fuzzyCount: number; // score > threshold && score < 0.99
   totalCount: number;
   results: CellSearchResult[];
+  isSampled?: boolean; // true if search was performed on a sample (large table)
 }
-
-// Alias for backwards compatibility
-export type SearchResultWithScore = CellSearchResult;
 
 // --- Cache Types ---
 
