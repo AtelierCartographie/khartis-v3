@@ -70,12 +70,32 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const ERROR_FILE_PROCESSING = () => m.error_file_processing();
 const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
 const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
+
+function getReadableErrorMessage(error: unknown): string {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  if (
+    errorMessage.includes('Multiple layers') ||
+    errorMessage.includes('more than one layer')
+  ) {
+    return m.pipeline_error_geopackage_multiple_layers();
+  }
+
+  if (
+    errorMessage.includes('Could not open file') ||
+    errorMessage.includes('Invalid file') ||
+    errorMessage.includes('not a valid')
+  ) {
+    return m.pipeline_error_file_unreadable();
+  }
+
+  return m.pipeline_error_generic();
+}
 
 import {
   buildColumnStatistics,
@@ -117,8 +137,7 @@ export class FileProcessorService {
           error
         }
       );
-      const message =
-        error instanceof Error ? error.message : ERROR_FILE_PROCESSING();
+      const message = getReadableErrorMessage(error);
       this.callbacks.onStatusChange(uploadedFile.id, FileStatus.ERROR, message);
     }
   }

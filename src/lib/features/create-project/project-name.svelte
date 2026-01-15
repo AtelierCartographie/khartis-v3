@@ -61,7 +61,16 @@
 
     hasTriedSubmit = true;
 
-    if (!hasValidName) {
+    let effectiveName = projectName.trim();
+    if (!effectiveName) {
+      effectiveName = m.project_name_placeholder();
+      createProjectActions.setProjectName(effectiveName);
+      localProjectName = effectiveName;
+    }
+
+    const nameIsValid =
+      CreateProjectValidationService.validateProjectName(effectiveName).isValid;
+    if (!nameIsValid) {
       return;
     }
 
@@ -74,7 +83,7 @@
     creationStep = m.create_project_processing_status();
 
     try {
-      const safeName = sanitizeProjectName(projectName.trim());
+      const safeName = sanitizeProjectName(effectiveName);
 
       creationStep = m.create_project_processing_status();
       await projectStore.createProject(safeName, validFiles);
