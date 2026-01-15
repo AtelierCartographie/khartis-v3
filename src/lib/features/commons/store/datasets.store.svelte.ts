@@ -16,6 +16,8 @@ import { LogCategory, logger } from '../utils/logger';
 import { ProcessingSemaphore } from '../utils/processing-semaphore';
 import { sanitizeTextInput } from '../utils/sanitize.utils';
 import type { UploadedFile } from './create-project.types';
+import { DataSourceType, FileType } from './create-project.types';
+import { FileStatus } from '../constants/ui.constants';
 import { projectStore } from './project.store.svelte';
 
 function createDatasetFromPreprocessedFile(file: UploadedFile): DatasetResult {
@@ -81,6 +83,7 @@ function createDatasetFromPreprocessedFile(file: UploadedFile): DatasetResult {
 interface DatasetsState {
   datasets: DatasetResult[];
   selectedDatasetId?: string;
+  enabledDatasetIds: SvelteSet<string>;
   isProcessing: boolean;
   error?: string;
   hiddenColumns: Map<string, Set<string>>;
@@ -89,6 +92,7 @@ interface DatasetsState {
 class DatasetsStore {
   private _state = $state<DatasetsState>({
     datasets: [],
+    enabledDatasetIds: new SvelteSet<string>(),
     isProcessing: false,
     hiddenColumns: new Map()
   });
@@ -124,6 +128,36 @@ class DatasetsStore {
     return this._state.isProcessing;
   }
 
+  get enabledDatasets(): DatasetResult[] {
+    return this._state.datasets.filter((d) =>
+      this._state.enabledDatasetIds.has(d.id)
+    );
+  }
+
+  get enabledDatasetIds(): Set<string> {
+    return this._state.enabledDatasetIds;
+  }
+
+  isDatasetEnabled(datasetId: string): boolean {
+    return this._state.enabledDatasetIds.has(datasetId);
+  }
+
+  toggleDatasetVisibility(datasetId: string): void {
+    if (this._state.enabledDatasetIds.has(datasetId)) {
+      this._state.enabledDatasetIds.delete(datasetId);
+    } else {
+      this._state.enabledDatasetIds.add(datasetId);
+    }
+  }
+
+  enableDataset(datasetId: string): void {
+    this._state.enabledDatasetIds.add(datasetId);
+  }
+
+  disableDataset(datasetId: string): void {
+    this._state.enabledDatasetIds.delete(datasetId);
+  }
+
   private startProcessing(): void {
     this.activeOperations++;
     this._state.isProcessing = true;
@@ -138,6 +172,7 @@ class DatasetsStore {
 
   addProcessedDataset(dataset: DatasetResult): void {
     this._state.datasets = [...this._state.datasets, dataset];
+    this._state.enabledDatasetIds.add(dataset.id);
     if (!this._state.selectedDatasetId) {
       this._state.selectedDatasetId = dataset.id;
     }
@@ -211,6 +246,10 @@ class DatasetsStore {
       );
 
       this._state.datasets = [...this._state.datasets, ...newDatasets];
+
+      for (const dataset of newDatasets) {
+        this._state.enabledDatasetIds.add(dataset.id);
+      }
 
       if (newDatasets.length > 0 && !this._state.selectedDatasetId) {
         this._state.selectedDatasetId = newDatasets[0].id;
@@ -310,6 +349,7 @@ class DatasetsStore {
           );
         } else {
           this._state.datasets = [...this._state.datasets, dataset];
+          this._state.enabledDatasetIds.add(dataset.id);
         }
 
         if (!this._state.selectedDatasetId) {
@@ -367,6 +407,7 @@ class DatasetsStore {
       this._state.selectedDatasetId = newSelectedId;
     }
 
+    this._state.enabledDatasetIds.delete(datasetId);
     this._state.datasets = filteredDatasets;
   }
 
@@ -520,6 +561,13 @@ class DatasetsStore {
       logger.warn('Source file not found for reset', LogCategory.STORE, {
         datasetId,
         sourceFileId: dataset.sourceFileId
+      });
+      return false;
+    }
+
+    if (sourceFile.isVirtualCopy) {
+      logger.warn('Cannot reset a duplicated dataset', LogCategory.STORE, {
+        datasetId
       });
       return false;
     }
@@ -766,11 +814,31 @@ class DatasetsStore {
         `CREATE TABLE "${newTableName}" AS SELECT * FROM "${dataset.tableName}"`
       );
 
+      const originalFile = projectStore.currentProject?.data?.sourceFiles?.find(
+        (f) => f.id === dataset.sourceFileId
+      );
+
+      const virtualFileId = crypto.randomUUID();
+      const virtualFile: UploadedFile = {
+        id: virtualFileId,
+        name: copyName,
+        size: originalFile?.size ?? 0,
+        type: originalFile?.type ?? 'application/octet-stream',
+        fileType: originalFile?.fileType ?? FileType.UNKNOWN,
+        status: FileStatus.COMPLETE,
+        sourceType: DataSourceType.COPY,
+        isVirtualCopy: true,
+        originalSourceFileId: dataset.sourceFileId
+      };
+
+      projectStore.addVirtualSourceFile(virtualFile);
+
       const newDataset: DatasetResult = {
         ...dataset,
         id: newId,
         name: copyName,
         tableName: newTableName,
+        sourceFileId: virtualFileId,
         columns: [...dataset.columns],
         metadata: {
           ...dataset.metadata,
@@ -793,7 +861,8 @@ class DatasetsStore {
       logger.success('Dataset duplicated successfully', LogCategory.STORE, {
         originalId: datasetId,
         newId,
-        newTableName
+        newTableName,
+        virtualFileId
       });
 
       return newId;
@@ -808,6 +877,7 @@ class DatasetsStore {
   clear(): void {
     this._state.datasets = [];
     this._state.selectedDatasetId = undefined;
+    this._state.enabledDatasetIds.clear();
     this._state.error = undefined;
     this._state.hiddenColumns.clear();
   }

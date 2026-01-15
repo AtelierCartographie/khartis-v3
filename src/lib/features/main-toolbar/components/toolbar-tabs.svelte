@@ -13,7 +13,9 @@
     OverflowMenuVertical,
     Copy,
     Edit,
-    TrashCan
+    TrashCan,
+    View,
+    ViewOff
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { SvelteMap } from 'svelte/reactivity';
@@ -377,6 +379,27 @@
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength - 3) + '...';
   };
+
+  function isTabVisible(sourceFileId: string): boolean {
+    const datasets = getDatasetsForTab(sourceFileId);
+    return datasets.some((d) => datasetsStore.isDatasetEnabled(d.id));
+  }
+
+  function toggleTabVisibility(sourceFileId: string, event: Event): void {
+    event.stopPropagation();
+    const datasets = getDatasetsForTab(sourceFileId);
+    const anyEnabled = datasets.some((d) =>
+      datasetsStore.isDatasetEnabled(d.id)
+    );
+
+    for (const dataset of datasets) {
+      if (anyEnabled) {
+        datasetsStore.disableDataset(dataset.id);
+      } else {
+        datasetsStore.enableDataset(dataset.id);
+      }
+    }
+  }
 </script>
 
 <div
@@ -398,7 +421,12 @@
         datasetCount > 1 && selectedDataset
           ? selectedDataset.name
           : fileInfo.name}
-      <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
+      {@const tabVisible = isTabVisible(dataButton.id)}
+      <div
+        class="tab-button-wrapper"
+        class:hidden-layer={!tabVisible}
+        use:registerTab={dataButton.id}
+      >
         <Button
           isSelected={dataButton.isSelected}
           kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
@@ -432,6 +460,18 @@
               </Tag>
             {/if}
           </div>
+          <button
+            class="visibility-toggle"
+            onclick={(e: MouseEvent) => toggleTabVisibility(dataButton.id, e)}
+            aria-label={tabVisible ? 'Masquer la couche' : 'Afficher la couche'}
+            title={tabVisible ? 'Masquer la couche' : 'Afficher la couche'}
+          >
+            {#if tabVisible}
+              <View size={16} />
+            {:else}
+              <ViewOff size={16} />
+            {/if}
+          </button>
           <button
             class="tab-menu-button"
             onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
@@ -628,9 +668,9 @@
 
   .tab-button-wrapper :global(.tab-button) {
     position: relative;
-    padding-right: var(--cds-spacing-08);
-    min-width: 100px;
-    max-width: 220px;
+    padding-right: calc(var(--cds-spacing-08) + 24px);
+    min-width: 120px;
+    max-width: 250px;
   }
 
   .tab-content {
@@ -709,6 +749,43 @@
 
   .tab-menu-button:hover :global(svg) {
     fill: var(--cds-text-01);
+  }
+
+  .visibility-toggle {
+    position: absolute;
+    right: calc(var(--cds-spacing-03) + 24px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    padding: var(--cds-spacing-02);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--cds-border-radius);
+    transition: background-color 0.15s ease;
+    z-index: 10;
+  }
+
+  .visibility-toggle:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .visibility-toggle :global(svg) {
+    fill: var(--cds-text-02);
+  }
+
+  .visibility-toggle:hover :global(svg) {
+    fill: var(--cds-text-01);
+  }
+
+  .hidden-layer {
+    opacity: 0.5;
+  }
+
+  .hidden-layer .tab-label {
+    text-decoration: line-through;
   }
 
   .tab-context-menu {

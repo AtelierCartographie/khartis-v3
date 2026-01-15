@@ -9,6 +9,7 @@
   import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
   import { onMount } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import { cubicOut } from 'svelte/easing';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
@@ -26,11 +27,14 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let displayTable = $state<ArrowTable | null>(null);
-  let displayGeoJSON = $state<FeatureCollection | null>(null);
-  let displayDatasetId = $state<string | undefined>(undefined);
+  let displayTables = $state<SvelteMap<string, ArrowTable>>(
+    new SvelteMap<string, ArrowTable>()
+  );
+  let displayGeoJSONs = $state<SvelteMap<string, FeatureCollection>>(
+    new SvelteMap<string, FeatureCollection>()
+  );
 
-  const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
 
@@ -91,18 +95,9 @@
     }
   }
 
-  function clearDisplay(): void {
-    displayTable = null;
-    displayGeoJSON = null;
-    displayDatasetId = undefined;
-    logger.info('Cleared map display - showing empty map', LogCategory.MAP);
-  }
-
-  function setWaitingForData(datasetId: string): void {
-    displayTable = null;
-    displayGeoJSON = null;
-    displayDatasetId = datasetId;
-    logger.info('Waiting for data to load', LogCategory.MAP, { datasetId });
+  function removeDatasetFromDisplay(datasetId: string): void {
+    displayTables.delete(datasetId);
+    displayGeoJSONs.delete(datasetId);
   }
 
   async function loadJoinedBasemap(
@@ -111,10 +106,10 @@
     tableName: string
   ): Promise<void> {
     const start = performance.now();
-    const datasetIdAtStart = dataset.id;
+    const datasetId = dataset.id;
 
     logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
-      datasetId: datasetIdAtStart,
+      datasetId,
       joinedBasemap,
       tableName
     });
@@ -125,78 +120,129 @@
         joinedBasemap
       );
 
-      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
-          'Dataset changed during joined basemap load, ignoring',
+          'Dataset no longer enabled, ignoring joined basemap',
           LogCategory.MAP,
-          {
-            loadedDatasetId: datasetIdAtStart,
-            currentSelectedId: datasetsStore.selectedDataset?.id
-          }
+          { datasetId }
         );
         return;
       }
 
       if (joinedTable) {
-        displayTable = joinedTable;
-        displayGeoJSON = null;
-        displayDatasetId = datasetIdAtStart;
+        displayTables.set(datasetId, joinedTable);
+        displayGeoJSONs.delete(datasetId);
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
+          datasetId,
           rows: joinedTable.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
-        logger.warn(
-          'No joined data returned, clearing display',
-          LogCategory.MAP
-        );
-        clearDisplay();
+        logger.warn('No joined data returned for dataset', LogCategory.MAP, {
+          datasetId
+        });
+        removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
-      clearDisplay();
+      removeDatasetFromDisplay(dataset.id);
     }
   }
 
-  async function loadGPSData(datasetId: string): Promise<void> {
+  async function loadGPSData(
+    datasetId: string,
+    duckDBDatasetId: string
+  ): Promise<void> {
     const start = performance.now();
-    const datasetIdAtStart = datasetId;
 
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
-      datasetId: datasetIdAtStart
+      datasetId,
+      duckDBDatasetId
     });
 
     try {
       const { table } =
-        await duckDBOrchestrator.getGPSArrowTable(datasetIdAtStart);
+        await duckDBOrchestrator.getGPSArrowTable(duckDBDatasetId);
 
-      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
-          'Dataset changed during GPS data load, ignoring',
+          'Dataset no longer enabled, ignoring GPS data',
           LogCategory.MAP,
-          {
-            loadedDatasetId: datasetIdAtStart,
-            currentSelectedId: datasetsStore.selectedDataset?.id
-          }
+          { datasetId }
         );
         return;
       }
 
       if (table) {
-        displayTable = table;
-        displayGeoJSON = null;
-        displayDatasetId = datasetIdAtStart;
+        displayTables.set(datasetId, table);
+        displayGeoJSONs.delete(datasetId);
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
+          datasetId,
           rows: table.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
-        logger.warn('No GPS data returned, clearing display', LogCategory.MAP);
-        clearDisplay();
+        logger.warn('No GPS data returned for dataset', LogCategory.MAP, {
+          datasetId
+        });
+        removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load GPS data', LogCategory.MAP, error);
-      clearDisplay();
+      removeDatasetFromDisplay(datasetId);
+    }
+  }
+
+  async function loadDatasetForDisplay(dataset: DatasetResult): Promise<void> {
+    const datasetId = dataset.id;
+
+    if (dataset.geometry) {
+      const result = await convertDatasetToGeoJSON(dataset);
+
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
+        logger.debug(
+          'Dataset no longer enabled, ignoring result',
+          LogCategory.MAP,
+          { datasetId }
+        );
+        return;
+      }
+
+      if (result) {
+        if ('numRows' in result) {
+          displayTables.set(datasetId, result);
+          displayGeoJSONs.delete(datasetId);
+          logger.info(
+            'Dataset added to display as Arrow table',
+            LogCategory.MAP,
+            {
+              datasetId,
+              rows: result.numRows
+            }
+          );
+        } else if ('features' in result) {
+          displayGeoJSONs.set(datasetId, result);
+          displayTables.delete(datasetId);
+          logger.info('Dataset added to display as GeoJSON', LogCategory.MAP, {
+            datasetId,
+            features: result.features.length
+          });
+        }
+      }
+    } else {
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+        dataset.sourceFileId
+      );
+
+      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+        await loadGPSData(datasetId, duckDBDataset.id);
+      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+        await loadJoinedBasemap(
+          dataset,
+          duckDBDataset.joinedBasemap,
+          duckDBDataset.tableName
+        );
+      }
     }
   }
 
@@ -209,89 +255,64 @@
     hasError = false;
     errorMessage = null;
 
-    if (selectedDataset) {
-      const currentDatasetId = selectedDataset.id;
+    const currentEnabledIds = new Set(enabledDatasets.map((d) => d.id));
 
-      logger.debug('Map reacting to dataset change', LogCategory.MAP, {
-        datasetId: currentDatasetId
-      });
+    logger.debug('Map reacting to enabled datasets change', LogCategory.MAP, {
+      enabledCount: currentEnabledIds.size
+    });
 
-      if (selectedDataset.geometry) {
-        convertDatasetToGeoJSON(selectedDataset).then((result) => {
-          if (datasetsStore.selectedDataset?.id !== currentDatasetId) {
-            logger.debug(
-              'Dataset changed during async load, ignoring result',
-              LogCategory.MAP,
-              {
-                loadedDatasetId: currentDatasetId,
-                currentSelectedId: datasetsStore.selectedDataset?.id
-              }
-            );
-            return;
-          }
-
-          if (result) {
-            if ('numRows' in result) {
-              displayTable = result;
-              displayGeoJSON = null;
-              displayDatasetId = currentDatasetId;
-              logger.info(
-                'Map display updated with Arrow table',
-                LogCategory.MAP,
-                {
-                  rows: result.numRows
-                }
-              );
-            } else if ('features' in result) {
-              displayTable = null;
-              displayGeoJSON = result;
-              displayDatasetId = currentDatasetId;
-              logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
-                features: result.features.length
-              });
-            }
-          } else {
-            setWaitingForData(currentDatasetId);
-          }
+    for (const tableId of displayTables.keys()) {
+      if (!currentEnabledIds.has(tableId)) {
+        displayTables.delete(tableId);
+        logger.debug('Removed disabled dataset from tables', LogCategory.MAP, {
+          datasetId: tableId
         });
-      } else {
-        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-          selectedDataset.sourceFileId
-        );
-
-        if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-          loadGPSData(duckDBDataset.id);
-        } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
-          loadJoinedBasemap(
-            selectedDataset,
-            duckDBDataset.joinedBasemap,
-            duckDBDataset.tableName
-          );
-        } else {
-          setWaitingForData(currentDatasetId);
-        }
       }
-    } else {
-      clearDisplay();
+    }
+    for (const geojsonId of displayGeoJSONs.keys()) {
+      if (!currentEnabledIds.has(geojsonId)) {
+        displayGeoJSONs.delete(geojsonId);
+        logger.debug(
+          'Removed disabled dataset from GeoJSONs',
+          LogCategory.MAP,
+          {
+            datasetId: geojsonId
+          }
+        );
+      }
+    }
+
+    for (const dataset of enabledDatasets) {
+      const alreadyLoaded =
+        displayTables.has(dataset.id) || displayGeoJSONs.has(dataset.id);
+      if (!alreadyLoaded) {
+        loadDatasetForDisplay(dataset);
+      }
     }
   });
 
   $effect(() => {
     const osmBasemap = activeOSMBasemap;
-    if (isInitializing || !osmBasemap || !selectedDataset) {
+    if (isInitializing || !osmBasemap) {
       return;
     }
 
-    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      selectedDataset.sourceFileId
-    );
+    for (const dataset of enabledDatasets) {
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+        dataset.sourceFileId
+      );
 
-    if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-      logger.info('OSM basemap activated, loading GPS data', LogCategory.MAP, {
-        datasetId: duckDBDataset.id,
-        osmBasemap: osmBasemap.file
-      });
-      loadGPSData(duckDBDataset.id);
+      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+        logger.info(
+          'OSM basemap activated, loading GPS data',
+          LogCategory.MAP,
+          {
+            datasetId: dataset.id,
+            osmBasemap: osmBasemap.file
+          }
+        );
+        loadGPSData(dataset.id, duckDBDataset.id);
+      }
     }
   });
 
@@ -305,45 +326,19 @@
 
   async function initializeMap() {
     const start = performance.now();
-    logger.info('Initializing main map view', LogCategory.MAP);
+    logger.info('Initializing main map view', LogCategory.MAP, {
+      enabledCount: enabledDatasets.length
+    });
 
-    if (selectedDataset?.geometry) {
-      const result = await convertDatasetToGeoJSON(selectedDataset);
-      if (result) {
-        if ('numRows' in result) {
-          displayTable = result;
-          displayGeoJSON = null;
-          displayDatasetId = selectedDataset.id;
-        } else if ('features' in result) {
-          displayTable = null;
-          displayGeoJSON = result;
-          displayDatasetId = selectedDataset.id;
-        }
-      } else {
-        setWaitingForData(selectedDataset.id);
-      }
-    } else if (selectedDataset) {
-      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-        selectedDataset.sourceFileId
-      );
-
-      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-        await loadGPSData(duckDBDataset.id);
-      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
-        await loadJoinedBasemap(
-          selectedDataset,
-          duckDBDataset.joinedBasemap,
-          duckDBDataset.tableName
-        );
-      } else {
-        setWaitingForData(selectedDataset.id);
-      }
-    } else {
-      clearDisplay();
-    }
+    const loadPromises = enabledDatasets.map((dataset) =>
+      loadDatasetForDisplay(dataset)
+    );
+    await Promise.all(loadPromises);
 
     logger.success('Main map data ready', LogCategory.MAP, {
-      durationMs: (performance.now() - start).toFixed(2)
+      durationMs: (performance.now() - start).toFixed(2),
+      tablesLoaded: displayTables.size,
+      geoJSONsLoaded: displayGeoJSONs.size
     });
     isInitializing = false;
   }
@@ -399,9 +394,8 @@
   {:else if !isInitializing}
     <div class="thematic-map-wrapper" class:visible={isMapReady}>
       <ThematicMap
-        jsTable={displayTable}
-        userGeoJSON={displayGeoJSON}
-        datasetId={displayDatasetId}
+        tables={displayTables}
+        geoJSONs={displayGeoJSONs}
         width={formatState.width}
         height={formatState.height}
         onReady={handleMapReady}

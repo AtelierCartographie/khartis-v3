@@ -183,6 +183,26 @@ class ProjectStore {
     await this.saveCurrentProject();
   }
 
+  addVirtualSourceFile(file: UploadedFile): void {
+    if (!this._state.currentProject?.data) {
+      return;
+    }
+
+    if (!this._state.currentProject.data.sourceFiles) {
+      this._state.currentProject.data.sourceFiles = [];
+    }
+
+    this._state.currentProject = {
+      ...this._state.currentProject,
+      data: {
+        ...this._state.currentProject.data,
+        sourceFiles: [...this._state.currentProject.data.sourceFiles, file]
+      }
+    };
+
+    this.markAsDirty();
+  }
+
   async removeFileFromProject(fileId: string): Promise<void> {
     if (!this._state.currentProject?.data?.sourceFiles) {
       return;
