@@ -87,9 +87,8 @@ export interface DeckTooltipInfo {
 // =============================================================================
 
 export interface DeckMapProps {
-  jsTable: ArrowTable | null;
-  userGeoJSON: FeatureCollection | null;
-  datasetId?: string;
+  tables: Map<string, ArrowTable>;
+  geoJSONs: Map<string, FeatureCollection>;
   width: number;
   height: number;
   onReady?: () => void;
