@@ -10,9 +10,12 @@
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import {
     Duck,
+    duckDBOrchestrator,
     validateGPSColumns,
+    type AnalysisResult,
     type GPSValidationResult
   } from '$lib/features/duckdb';
+  import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
@@ -26,6 +29,27 @@
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
   const geoDetection = $derived(selectedDataset?.geoDetection);
+
+  let columnAnalysis = $state<AnalysisResult[]>([]);
+  let columnAnalysisLoaded = $state(false);
+  let previousAutoSelectedColumn = $state<string | null>(null);
+
+  async function loadColumnAnalysis() {
+    if (!selectedDataset?.tableName) {
+      columnAnalysis = [];
+      columnAnalysisLoaded = false;
+      return;
+    }
+    try {
+      columnAnalysis = await duckDBOrchestrator.getFullAnalysis(
+        selectedDataset.tableName
+      );
+      columnAnalysisLoaded = true;
+    } catch {
+      columnAnalysis = [];
+      columnAnalysisLoaded = false;
+    }
+  }
 
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
@@ -53,13 +77,38 @@
       });
   });
 
+  const bestGeoidColumn = $derived(() => {
+    const geoidColumns = columnAnalysis
+      .filter(
+        (col) =>
+          col.semioType === 'geoid' &&
+          (col.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD
+      )
+      .sort((a, b) => (b.semioScore ?? 0) - (a.semioScore ?? 0));
+
+    if (geoidColumns.length > 0) {
+      return dataFieldItems().find(
+        (item) => item.columnName === geoidColumns[0].name
+      );
+    }
+    return undefined;
+  });
+
   const suggestedColumn = $derived(() => {
+    const geoid = bestGeoidColumn();
+    if (geoid) return geoid;
+
     const suggested = geoDetection?.suggestedPrimaryGeoColumn;
     if (!suggested) return undefined;
 
     return dataFieldItems().find(
       (item) => item.columnName === suggested.columnName
     );
+  });
+
+  const isGeoidSuggested = $derived(() => {
+    const geoid = bestGeoidColumn();
+    return geoid !== undefined && suggestedColumn() === geoid;
   });
 
   const latitudeColumns = $derived(() => {
@@ -133,6 +182,8 @@
       latitudeFieldId = undefined;
       longitudeFieldId = undefined;
       activeTabIndex = 0;
+      columnAnalysisLoaded = false;
+      previousAutoSelectedColumn = null;
       dataTabActions.setGeolocationState({
         geoReference: GeoreferenceType.ENTITIES,
         linkedVariable: null,
@@ -140,6 +191,13 @@
         latitudeColumn: undefined,
         longitudeColumn: undefined
       });
+    }
+  });
+
+  $effect(() => {
+    const tableName = selectedDataset?.tableName;
+    if (tableName) {
+      loadColumnAnalysis();
     }
   });
 
@@ -195,11 +253,25 @@
     const linkedVar = dataTabState.geolocation.linkedVariable;
     const linkedName = dataTabState.geolocation.linkedVariableName;
     const suggested = suggestedColumn();
+    const geoid = bestGeoidColumn();
 
     if (linkedVar === null && !linkedName && suggested) {
+      previousAutoSelectedColumn = suggested.columnName;
       dataTabActions.setGeolocationState({
         linkedVariable: suggested.id,
         linkedVariableName: suggested.columnName
+      });
+    } else if (
+      columnAnalysisLoaded &&
+      geoid &&
+      previousAutoSelectedColumn &&
+      linkedName === previousAutoSelectedColumn &&
+      geoid.columnName !== previousAutoSelectedColumn
+    ) {
+      previousAutoSelectedColumn = geoid.columnName;
+      dataTabActions.setGeolocationState({
+        linkedVariable: geoid.id,
+        linkedVariableName: geoid.columnName
       });
     }
   });
@@ -329,16 +401,30 @@
     </div>
 
     {#if activeTabIndex === 0 && suggestedColumn()}
-      <InlineNotification
-        title={m.geo_column_detected_title()}
-        subtitle={m.geo_column_detected_subtitle({
-          column: suggestedColumn()!.columnName,
-          confidence: Math.round(suggestedColumn()!.confidence * 100).toString()
-        })}
-        kind="success"
-        lowContrast
-        hideCloseButton={false}
-      />
+      {#if isGeoidSuggested()}
+        <InlineNotification
+          title={m.geo_geoid_detected_title()}
+          subtitle={m.geo_geoid_detected_subtitle({
+            column: suggestedColumn()!.columnName
+          })}
+          kind="success"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {:else}
+        <InlineNotification
+          title={m.geo_column_detected_title()}
+          subtitle={m.geo_column_detected_subtitle({
+            column: suggestedColumn()!.columnName,
+            confidence: Math.round(
+              suggestedColumn()!.confidence * 100
+            ).toString()
+          })}
+          kind="success"
+          lowContrast
+          hideCloseButton={false}
+        />
+      {/if}
     {/if}
 
     {#if activeTabIndex === 1 && latitudeColumns().length > 0 && longitudeColumns().length > 0}

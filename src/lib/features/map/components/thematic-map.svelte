@@ -22,14 +22,18 @@
   import type { DeckMapProps } from '../types';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
 
-  let {
-    jsTable,
-    userGeoJSON,
-    datasetId,
-    width,
-    height,
-    onReady
-  }: DeckMapProps = $props();
+  let { tables, geoJSONs, width, height, onReady }: DeckMapProps = $props();
+
+  const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
+  const firstTable = $derived(
+    tables.size > 0 ? tables.values().next().value : null
+  );
+  const firstGeoJSON = $derived(
+    geoJSONs.size > 0 ? geoJSONs.values().next().value : null
+  );
+  const firstDatasetId = $derived(
+    tables.size > 0 ? tables.keys().next().value : undefined
+  );
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
@@ -91,8 +95,8 @@
         return;
       }
 
-      if (jsTable || userGeoJSON) {
-        mapLayers.updateLayers(jsTable, userGeoJSON);
+      if (hasData) {
+        mapLayers.updateLayers(tables, geoJSONs);
       } else {
         startMaxWaitTimeout();
         if (mapBounds.shouldRestorePosition) {
@@ -117,8 +121,8 @@
     getDeckInstance: () => mapInit.deckInstance,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getWorldBaseTable: () => null,
-    getDatasetId: () => mapState.datasetId,
-    buildLayerContext: () => mapState.buildLayerContext()
+    getActiveVisualizations: () => mapState.activeVisualizations,
+    buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz)
   });
 
   function updateCanvasSize() {
@@ -134,13 +138,13 @@
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
-    onProjectionChanged: () => mapLayers.updateLayers(jsTable, userGeoJSON)
+    onProjectionChanged: () => mapLayers.updateLayers(tables, geoJSONs)
   });
 
   const mapBounds = useMapBounds({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
-    getDatasetId: () => mapState.datasetId,
+    getDatasetId: () => firstDatasetId,
     onBoundsUpdated: (zoom) => {
       mapInstanceStore.setBaseZoomLevel(zoom);
     },
@@ -155,7 +159,7 @@
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
     if (mapInit.isMapLoaded && hasDeckContext) {
-      untrack(() => mapLayers.updateLayers(jsTable, userGeoJSON));
+      untrack(() => mapLayers.updateLayers(tables, geoJSONs));
     }
     if (mapInit.isMapLoaded && mapInit.map) {
       untrack(() => mapBasemap.syncOSMRasterLayer());
@@ -180,9 +184,9 @@
   });
 
   $effect(() => {
-    if (jsTable && mapInit.isMapLoaded) {
+    if (firstTable && mapInit.isMapLoaded) {
       if (mapInit.viewMode === 'orthographic') {
-        const bounds = calculateBoundsFromGeoArrow(jsTable);
+        const bounds = calculateBoundsFromGeoArrow(firstTable);
         if (bounds) {
           const [[minX, minY], [maxX, maxY]] = bounds as [
             [number, number],
@@ -190,39 +194,39 @@
           ];
           untrack(() => {
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            mapLayers.updateLayers(jsTable, userGeoJSON);
+            mapLayers.updateLayers(tables, geoJSONs);
           });
           triggerOnReady();
         } else {
-          const geoMetadata = jsTable.schema.metadata?.get('geo');
+          const geoMetadata = firstTable.schema.metadata?.get('geo');
           if (geoMetadata) {
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-              mapLayers.updateLayers(jsTable, userGeoJSON);
+              mapLayers.updateLayers(tables, geoJSONs);
             });
             triggerOnReady();
           }
         }
       } else if (mapInit.map) {
-        untrack(() => mapBounds.fitToArrowBounds(jsTable, datasetId));
+        untrack(() => mapBounds.fitToArrowBounds(firstTable, firstDatasetId));
       }
     }
   });
 
   $effect(() => {
-    if (userGeoJSON && mapInit.isMapLoaded) {
+    if (firstGeoJSON && mapInit.isMapLoaded) {
       if (mapInit.viewMode === 'maplibre' && mapInit.map) {
-        untrack(() => mapBounds.fitToGeoJSONBounds(userGeoJSON));
+        untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
       } else if (mapInit.viewMode === 'orthographic') {
         untrack(() => {
-          const bounds = calculateBoundsFromGeoJSON(userGeoJSON);
+          const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
               [number, number],
               [number, number]
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            mapLayers.updateLayers(jsTable, userGeoJSON);
+            mapLayers.updateLayers(tables, geoJSONs);
           }
         });
         triggerOnReady();
@@ -233,8 +237,8 @@
   });
 
   $effect(() => {
-    if (!jsTable && !userGeoJSON && mapInit.isMapLoaded) {
-      untrack(() => mapLayers.updateLayers(null, null));
+    if (!hasData && mapInit.isMapLoaded) {
+      untrack(() => mapLayers.updateLayers(tables, geoJSONs));
     }
   });
 
@@ -247,7 +251,7 @@
             mapInit.map?.resize();
           }
           updateCanvasSize();
-          mapLayers.updateLayers(jsTable, userGeoJSON);
+          mapLayers.updateLayers(tables, geoJSONs);
         });
       }, 50);
     }
@@ -277,7 +281,7 @@
         if (mapInit.viewMode === 'maplibre') {
           mapInit.map?.resize();
         }
-        mapLayers.updateLayers(jsTable, userGeoJSON);
+        mapLayers.updateLayers(tables, geoJSONs);
       }
     });
     resizeObserver.observe(mapContainer);

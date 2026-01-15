@@ -25,7 +25,8 @@ export enum FileType {
 export enum DataSourceType {
   FILE_UPLOAD = 'file_upload',
   PASTE = 'paste',
-  URL = 'url'
+  URL = 'url',
+  COPY = 'copy'
 }
 
 export interface FileValidation {
@@ -88,6 +89,8 @@ export interface UploadedFile {
   duckdbTableName?: string;
   shapefileBaseName?: string;
   missingShapefileComponents?: string[];
+  isVirtualCopy?: boolean;
+  originalSourceFileId?: string;
 }
 
 export interface ExampleProject {
