@@ -1,3 +1,5 @@
+import { SearchSource } from '../constants';
+
 export enum DataToolType {
   None = 'none',
   Search = 'search',
@@ -8,7 +10,7 @@ export enum DataToolType {
 interface DataToolsState {
   activeTool: DataToolType;
   searchQuery: string;
-  searchSource: string;
+  searchSource: SearchSource | string;
   replaceValue: string;
   calculatorName: string;
   calculatorFormula: string;
@@ -16,119 +18,122 @@ interface DataToolsState {
   calculatorError: string | null;
 }
 
-class DataToolsStore {
-  private _state = $state<DataToolsState>({
-    activeTool: DataToolType.None,
-    searchQuery: '',
-    searchSource: 'all',
-    replaceValue: '',
-    calculatorName: '',
-    calculatorFormula: '',
-    calculatorTestResult: null,
-    calculatorError: null
-  });
+const state = $state<DataToolsState>({
+  activeTool: DataToolType.None,
+  searchQuery: '',
+  searchSource: SearchSource.ALL,
+  replaceValue: '',
+  calculatorName: '',
+  calculatorFormula: '',
+  calculatorTestResult: null,
+  calculatorError: null
+});
 
-  get activeTool() {
-    return this._state.activeTool;
-  }
-
-  get isOpen() {
-    return this._state.activeTool !== DataToolType.None;
-  }
-
-  get searchQuery() {
-    return this._state.searchQuery;
-  }
-
-  get searchSource() {
-    return this._state.searchSource;
-  }
-
-  get replaceValue() {
-    return this._state.replaceValue;
-  }
-
-  get calculatorName() {
-    return this._state.calculatorName;
-  }
-
-  get calculatorFormula() {
-    return this._state.calculatorFormula;
-  }
-
-  get calculatorTestResult() {
-    return this._state.calculatorTestResult;
-  }
-
-  get calculatorError() {
-    return this._state.calculatorError;
-  }
-
-  openTool(tool: DataToolType) {
-    this._state.activeTool = tool;
-  }
-
-  closeTool() {
-    this._state.activeTool = DataToolType.None;
-  }
-
-  toggleTool(tool: DataToolType) {
-    this._state.activeTool =
-      this._state.activeTool === tool ? DataToolType.None : tool;
-  }
-
-  setSearchQuery(query: string) {
-    this._state.searchQuery = query;
-  }
-
-  setSearchSource(source: string) {
-    this._state.searchSource = source;
-  }
-
-  setReplaceValue(value: string) {
-    this._state.replaceValue = value;
-  }
-
-  setCalculatorName(name: string) {
-    this._state.calculatorName = name;
-  }
-
-  setCalculatorFormula(formula: string) {
-    this._state.calculatorFormula = formula;
-  }
-
-  appendToFormula(text: string) {
-    this._state.calculatorFormula += text;
-  }
-
-  setCalculatorTestResult(result: unknown) {
-    this._state.calculatorTestResult = result;
-    this._state.calculatorError = null;
-  }
-
-  setCalculatorError(error: string | null) {
-    this._state.calculatorError = error;
-    this._state.calculatorTestResult = null;
-  }
-
-  resetCalculator() {
-    this._state.calculatorName = '';
-    this._state.calculatorFormula = '';
-    this._state.calculatorTestResult = null;
-    this._state.calculatorError = null;
-  }
-
-  resetSearch() {
-    this._state.searchQuery = '';
-    this._state.searchSource = 'all';
-    this._state.replaceValue = '';
-  }
-
-  reset() {
-    this._state.activeTool = DataToolType.None;
-    this.resetSearch();
-    this.resetCalculator();
-  }
+function openTool(tool: DataToolType) {
+  state.activeTool = tool;
 }
 
-export const dataToolsStore = new DataToolsStore();
+function closeTool() {
+  state.activeTool = DataToolType.None;
+}
+
+function toggleTool(tool: DataToolType) {
+  state.activeTool = state.activeTool === tool ? DataToolType.None : tool;
+}
+
+function setSearchQuery(query: string) {
+  state.searchQuery = query;
+}
+
+function setSearchSource(source: SearchSource | string) {
+  state.searchSource = source;
+}
+
+function setReplaceValue(value: string) {
+  state.replaceValue = value;
+}
+
+function setCalculatorName(name: string) {
+  state.calculatorName = name;
+}
+
+function setCalculatorFormula(formula: string) {
+  state.calculatorFormula = formula;
+}
+
+function appendToFormula(text: string) {
+  state.calculatorFormula += text;
+}
+
+function setCalculatorTestResult(result: unknown) {
+  state.calculatorTestResult = result;
+  state.calculatorError = null;
+}
+
+function setCalculatorError(error: string | null) {
+  state.calculatorError = error;
+  state.calculatorTestResult = null;
+}
+
+function resetCalculator() {
+  state.calculatorName = '';
+  state.calculatorFormula = '';
+  state.calculatorTestResult = null;
+  state.calculatorError = null;
+}
+
+function resetSearch() {
+  state.searchQuery = '';
+  state.searchSource = SearchSource.ALL;
+  state.replaceValue = '';
+}
+
+function reset() {
+  state.activeTool = DataToolType.None;
+  resetSearch();
+  resetCalculator();
+}
+
+export const dataToolsStore = {
+  get activeTool() {
+    return state.activeTool;
+  },
+  get isOpen() {
+    return state.activeTool !== DataToolType.None;
+  },
+  get searchQuery() {
+    return state.searchQuery;
+  },
+  get searchSource() {
+    return state.searchSource;
+  },
+  get replaceValue() {
+    return state.replaceValue;
+  },
+  get calculatorName() {
+    return state.calculatorName;
+  },
+  get calculatorFormula() {
+    return state.calculatorFormula;
+  },
+  get calculatorTestResult() {
+    return state.calculatorTestResult;
+  },
+  get calculatorError() {
+    return state.calculatorError;
+  },
+  openTool,
+  closeTool,
+  toggleTool,
+  setSearchQuery,
+  setSearchSource,
+  setReplaceValue,
+  setCalculatorName,
+  setCalculatorFormula,
+  appendToFormula,
+  setCalculatorTestResult,
+  setCalculatorError,
+  resetCalculator,
+  resetSearch,
+  reset
+};

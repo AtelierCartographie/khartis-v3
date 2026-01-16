@@ -106,6 +106,16 @@
       await projectStore.saveCurrentProject();
     }
 
+    function handleDuplicateProject(): void {
+      if (!projectStore.currentProject) return;
+      globalState.isDuplicateModalOpen = true;
+    }
+
+    function handleDeleteProject(): void {
+      if (!projectStore.currentProject) return;
+      globalState.isDeleteModalOpen = true;
+    }
+
     function handleKeyDown(event: KeyboardEvent): void {
       const target = event.target as HTMLElement;
 
@@ -149,6 +159,16 @@
         if (event.key === 'o' || event.key === 'O') {
           event.preventDefault();
           handleOpenProject();
+          return;
+        }
+        if (event.key === 'd' || event.key === 'D') {
+          event.preventDefault();
+          handleDuplicateProject();
+          return;
+        }
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          handleDeleteProject();
           return;
         }
       }

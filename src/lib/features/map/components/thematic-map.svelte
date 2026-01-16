@@ -1,9 +1,13 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+  import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
   import { globalState } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { visualizationStore } from '../../commons/store/visualization.store.svelte';
   import {
     useMapBasemap,
     useMapBounds,
@@ -16,6 +20,8 @@
     calculateBoundsFromGeoArrow,
     calculateBoundsFromGeoJSON
   } from '../core';
+  import { basemapService } from '../services/basemap.service.svelte';
+  import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
@@ -42,6 +48,43 @@
   let hasCalledOnReady = $state(false);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let worldBaseTable = $state<ArrowTable | null>(null);
+  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let isSwitchingViewMode = $state(false);
+  let pendingLayerUpdate = $state(false);
+  let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const RESIZE_DEBOUNCE_MS = 150;
+  const LAYER_UPDATE_DEBOUNCE_MS = 50;
+
+  let scheduleCount = 0;
+
+  function scheduleLayerUpdate(): void {
+    scheduleCount++;
+    console.log(`[SCHEDULE] scheduleLayerUpdate called #${scheduleCount}`, {
+      isSwitchingViewMode,
+      isStyleLoading: mapBasemap.isStyleLoading,
+      pendingLayerUpdate
+    });
+    console.trace('[SCHEDULE] Call stack for #' + scheduleCount);
+
+    if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
+      console.log(`[SCHEDULE] Deferred - pendingLayerUpdate = true`);
+      pendingLayerUpdate = true;
+      return;
+    }
+    if (layerUpdateTimeoutId) {
+      console.log(`[SCHEDULE] Debounced - clearing previous timeout`);
+      clearTimeout(layerUpdateTimeoutId);
+    }
+    layerUpdateTimeoutId = setTimeout(() => {
+      layerUpdateTimeoutId = null;
+      if (mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading) {
+        console.log(`[SCHEDULE] Executing updateLayers from timeout`);
+        mapLayers.updateLayers(tables, geoJSONs);
+      }
+    }, LAYER_UPDATE_DEBOUNCE_MS);
+  }
 
   function triggerOnReady() {
     if (hasCalledOnReady) return;
@@ -91,12 +134,13 @@
         osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
 
       if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
+        isSwitchingViewMode = true;
         mapInit.switchToMapLibreMode();
         return;
       }
 
       if (hasData) {
-        mapLayers.updateLayers(tables, geoJSONs);
+        scheduleLayerUpdate();
       } else {
         startMaxWaitTimeout();
         if (mapBounds.shouldRestorePosition) {
@@ -119,8 +163,9 @@
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
+    getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
-    getWorldBaseTable: () => null,
+    getWorldBaseTable: () => worldBaseTable,
     getActiveVisualizations: () => mapState.activeVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz)
   });
@@ -138,7 +183,19 @@
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
-    onProjectionChanged: () => mapLayers.updateLayers(tables, geoJSONs)
+    onProjectionChanged: () => {
+      if (!isSwitchingViewMode && !mapBasemap.isStyleLoading) {
+        scheduleLayerUpdate();
+      }
+    },
+    onStyleLoaded: () => {
+      console.log('[CALLBACK] onStyleLoaded fired', { pendingLayerUpdate });
+      mapBasemap.syncOSMRasterLayer();
+      if (pendingLayerUpdate) {
+        pendingLayerUpdate = false;
+        scheduleLayerUpdate();
+      }
+    }
   });
 
   const mapBounds = useMapBounds({
@@ -158,10 +215,13 @@
     void osmBasemapStore.tileConfig;
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
-    if (mapInit.isMapLoaded && hasDeckContext) {
-      untrack(() => mapLayers.updateLayers(tables, geoJSONs));
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+
+    if (hasDeckContext && canUpdate) {
+      untrack(() => scheduleLayerUpdate());
     }
-    if (mapInit.isMapLoaded && mapInit.map) {
+    if (mapInit.map && canUpdate) {
       untrack(() => mapBasemap.syncOSMRasterLayer());
     }
   });
@@ -171,20 +231,36 @@
     const requiresMapLibre = basemapStyleStore.requiresMapLibre;
 
     untrack(() => {
-      if (!mapInit.isMapLoaded) return;
+      if (!mapInit.isMapLoaded) {
+        return;
+      }
 
       const shouldUseMapLibre = osmActive || requiresMapLibre;
 
       if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
+        isSwitchingViewMode = true;
         mapInit.switchToMapLibreMode();
       } else if (!shouldUseMapLibre && mapInit.viewMode === 'maplibre') {
+        isSwitchingViewMode = true;
         mapInit.switchToOrthographicMode();
       }
     });
   });
 
   $effect(() => {
-    if (firstTable && mapInit.isMapLoaded) {
+    if (mapInit.isMapLoaded && isSwitchingViewMode) {
+      isSwitchingViewMode = false;
+      if (pendingLayerUpdate) {
+        pendingLayerUpdate = false;
+        scheduleLayerUpdate();
+      }
+    }
+  });
+
+  $effect(() => {
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (firstTable && canUpdate) {
       if (mapInit.viewMode === 'orthographic') {
         const bounds = calculateBoundsFromGeoArrow(firstTable);
         if (bounds) {
@@ -194,7 +270,7 @@
           ];
           untrack(() => {
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            mapLayers.updateLayers(tables, geoJSONs);
+            scheduleLayerUpdate();
           });
           triggerOnReady();
         } else {
@@ -202,7 +278,7 @@
           if (geoMetadata) {
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-              mapLayers.updateLayers(tables, geoJSONs);
+              scheduleLayerUpdate();
             });
             triggerOnReady();
           }
@@ -214,7 +290,9 @@
   });
 
   $effect(() => {
-    if (firstGeoJSON && mapInit.isMapLoaded) {
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (firstGeoJSON && canUpdate) {
       if (mapInit.viewMode === 'maplibre' && mapInit.map) {
         untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
       } else if (mapInit.viewMode === 'orthographic') {
@@ -226,7 +304,7 @@
               [number, number]
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            mapLayers.updateLayers(tables, geoJSONs);
+            scheduleLayerUpdate();
           }
         });
         triggerOnReady();
@@ -237,21 +315,33 @@
   });
 
   $effect(() => {
-    if (!hasData && mapInit.isMapLoaded) {
-      untrack(() => mapLayers.updateLayers(tables, geoJSONs));
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (!hasData && canUpdate) {
+      untrack(() => scheduleLayerUpdate());
+    }
+  });
+
+  $effect(() => {
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (worldBaseTable && canUpdate) {
+      untrack(() => scheduleLayerUpdate());
     }
   });
 
   $effect(() => {
     const pageZoom = globalState.zoom.pageZoomLevel;
-    if (pageZoom && mapInit.isMapLoaded) {
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (pageZoom && canUpdate) {
       setTimeout(() => {
         untrack(() => {
           if (mapInit.viewMode === 'maplibre') {
             mapInit.map?.resize();
           }
           updateCanvasSize();
-          mapLayers.updateLayers(tables, geoJSONs);
+          scheduleLayerUpdate();
         });
       }, 50);
     }
@@ -259,6 +349,7 @@
 
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
+    console.log('[EFFECT] basemapStyleStore.selectedStyleUrl changed');
     untrack(() => mapBasemap.syncBasemapStyle());
   });
 
@@ -267,6 +358,60 @@
     untrack(() => mapBasemap.syncProjection());
   });
 
+  $effect(() => {
+    void basemapLayersStore.layers;
+
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (canUpdate) {
+      untrack(() => scheduleLayerUpdate());
+    }
+  });
+
+  const visualizationFingerprint = $derived(
+    JSON.stringify(
+      visualizationStore.activeVisualizations.map((v) => ({
+        id: v.id,
+        style: v.style,
+        classification: v.classification
+      }))
+    )
+  );
+
+  $effect(() => {
+    void visualizationFingerprint;
+
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (canUpdate) {
+      untrack(() => scheduleLayerUpdate());
+    }
+  });
+
+  const dataFingerprint = $derived(`${tables.size}-${geoJSONs.size}`);
+
+  $effect(() => {
+    void dataFingerprint;
+
+    const canUpdate =
+      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    if (canUpdate) {
+      untrack(() => scheduleLayerUpdate());
+    }
+  });
+
+  async function loadWorldBasemap(): Promise<void> {
+    const loaded = await basemapService.loadDefaultBasemap();
+    if (loaded) {
+      worldBaseTable = loaded.geometryTable;
+      const canUpdate =
+        mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+      if (canUpdate) {
+        scheduleLayerUpdate();
+      }
+    }
+  }
+
   onMount(() => {
     const initialViewMode = basemapStyleStore.requiresMapLibre
       ? 'maplibre'
@@ -274,15 +419,26 @@
     mapInit.initialize(mapContainer, initialViewMode);
 
     updateCanvasSize();
+    loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
       updateCanvasSize();
-      if (mapInit.isMapLoaded) {
-        if (mapInit.viewMode === 'maplibre') {
-          mapInit.map?.resize();
-        }
-        mapLayers.updateLayers(tables, geoJSONs);
+
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
       }
+
+      resizeTimeoutId = setTimeout(() => {
+        const canUpdate =
+          mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+        if (canUpdate) {
+          if (mapInit.viewMode === 'maplibre') {
+            mapInit.map?.resize();
+          }
+          scheduleLayerUpdate();
+        }
+        resizeTimeoutId = null;
+      }, RESIZE_DEBOUNCE_MS);
     });
     resizeObserver.observe(mapContainer);
 
@@ -291,6 +447,12 @@
       mapInit.destroy();
       if (maxWaitTimeoutId) {
         clearTimeout(maxWaitTimeoutId);
+      }
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+      if (layerUpdateTimeoutId) {
+        clearTimeout(layerUpdateTimeoutId);
       }
     };
   });
@@ -302,6 +464,15 @@
     class="map-canvas"
     style="width: {width}px; height: {height}px;"
   ></div>
+  {#if isSwitchingViewMode}
+    <div
+      class="view-mode-loader"
+      style="width: {width}px; height: {height}px;"
+      transition:fade={{ duration: 200 }}
+    >
+      <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+    </div>
+  {/if}
   <GeoIndicationsOverlay />
 </div>
 
@@ -321,6 +492,19 @@
 
   .map-canvas :global(canvas) {
     display: block;
+  }
+
+  .view-mode-loader {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  .view-mode-loader :global(.bx--skeleton__placeholder) {
+    width: 100%;
+    height: 100%;
   }
 
   :global(.maplibregl-ctrl-attrib) {

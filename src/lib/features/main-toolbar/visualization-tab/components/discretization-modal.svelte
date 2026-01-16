@@ -1,0 +1,141 @@
+<script lang="ts">
+  import { Modal } from 'carbon-components-svelte';
+  import * as m from '$lib/paraglide/messages';
+  import DiscretizationPanel from './discretization-panel.svelte';
+  import {
+    ClassificationMethod,
+    type ClassificationConfig,
+    type VisualizationConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
+
+  type PanelMethod =
+    | 'jenks'
+    | 'quantile'
+    | 'equal-interval'
+    | 'stddev'
+    | 'manual';
+
+  interface ClassBreak {
+    min: number;
+    max: number;
+    count: number;
+    color: string;
+  }
+
+  interface Props {
+    open?: boolean;
+    visualization?: VisualizationConfig;
+    onclose?: () => void;
+    onchange?: (classification: Partial<ClassificationConfig>) => void;
+  }
+
+  let {
+    open = $bindable(false),
+    visualization,
+    onclose,
+    onchange
+  }: Props = $props();
+
+  function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
+    const mapping: Record<ClassificationMethod, PanelMethod> = {
+      [ClassificationMethod.JENKS]: 'jenks',
+      [ClassificationMethod.QUANTILES]: 'quantile',
+      [ClassificationMethod.EQUAL_INTERVAL]: 'equal-interval',
+      [ClassificationMethod.STANDARD_DEVIATION]: 'stddev',
+      [ClassificationMethod.MANUAL]: 'manual'
+    };
+    return mapping[method] ?? 'quantile';
+  }
+
+  function panelMethodToStoreMethod(method: PanelMethod): ClassificationMethod {
+    const mapping: Record<PanelMethod, ClassificationMethod> = {
+      jenks: ClassificationMethod.JENKS,
+      quantile: ClassificationMethod.QUANTILES,
+      'equal-interval': ClassificationMethod.EQUAL_INTERVAL,
+      stddev: ClassificationMethod.STANDARD_DEVIATION,
+      manual: ClassificationMethod.MANUAL
+    };
+    return mapping[method] ?? ClassificationMethod.QUANTILES;
+  }
+
+  let currentMethod = $state<PanelMethod>(
+    storeMethodToPanelMethod(
+      visualization?.classification?.method ?? ClassificationMethod.QUANTILES
+    )
+  );
+  let currentNumClasses = $state(
+    visualization?.classification?.numClasses ??
+      visualization?.classification?.classes ??
+      5
+  );
+  let currentBreaks = $state<ClassBreak[]>([]);
+  let currentBreakpoint = $state<number | null>(
+    visualization?.classification?.breakpointValue ?? null
+  );
+
+  $effect(() => {
+    if (visualization?.classification) {
+      currentMethod = storeMethodToPanelMethod(
+        visualization.classification.method ?? ClassificationMethod.QUANTILES
+      );
+      currentNumClasses =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        5;
+      currentBreakpoint = visualization.classification.breakpointValue ?? null;
+    }
+  });
+
+  function handleMethodChange(method: PanelMethod) {
+    currentMethod = method;
+    notifyChange();
+  }
+
+  function handleClassesChange(num: number) {
+    currentNumClasses = num;
+    notifyChange();
+  }
+
+  function handleBreakpointChange(value: number | null) {
+    currentBreakpoint = value;
+    notifyChange();
+  }
+
+  function handleBreaksChange(breaks: ClassBreak[]) {
+    currentBreaks = breaks;
+    notifyChange();
+  }
+
+  function notifyChange() {
+    onchange?.({
+      method: panelMethodToStoreMethod(currentMethod),
+      classes: currentNumClasses,
+      numClasses: currentNumClasses,
+      breakpointValue: currentBreakpoint
+    });
+  }
+
+  function handleClose() {
+    open = false;
+    onclose?.();
+  }
+</script>
+
+<Modal
+  bind:open={open}
+  modalHeading={m.discretization()}
+  passiveModal
+  size="sm"
+  on:close={handleClose}
+>
+  <DiscretizationPanel
+    bind:method={currentMethod}
+    bind:numClasses={currentNumClasses}
+    bind:breaks={currentBreaks}
+    bind:breakpointValue={currentBreakpoint}
+    onmethodchange={handleMethodChange}
+    onclasseschange={handleClassesChange}
+    onbreakpointchange={handleBreakpointChange}
+    onbreakschange={handleBreaksChange}
+  />
+</Modal>

@@ -46,7 +46,9 @@ export function createPointLayers(
     strokeOpacity,
     statistics,
     categoryColorMap,
-    modelMatrix
+    modelMatrix,
+    projectionSuffix,
+    beforeId
   } = ctx;
   const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
@@ -55,7 +57,14 @@ export function createPointLayers(
   const useCategoricalColor = viz && shouldApplyCategorical(viz);
   const { min: minValue, max: maxValue } = statistics;
 
-  const layerId = createLayerId(DeckLayerId.POINT_LAYER, datasetId);
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
+  const layerId = createLayerId(
+    DeckLayerId.POINT_LAYER,
+    datasetId,
+    projectionSuffix
+      ? `${projectionSuffix}-${styleFingerprint}`
+      : styleFingerprint
+  );
 
   const isNativeGeoArrowPoint =
     arrowExtension &&
@@ -132,6 +141,7 @@ export function createPointLayers(
         pickable: true,
         autoHighlight: false,
         ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
         updateTriggers: {
           getFillColor: [
             useCategoricalColor,
@@ -187,6 +197,7 @@ export function createPointLayers(
     pickable: true,
     autoHighlight: false,
     ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
     updateTriggers: {
       getFillColor: [
         useCategoricalColor,
@@ -215,7 +226,15 @@ export function createLineLayers(
   geometryInfo: GeometryInfo,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { datasetId, fillColor, fillOpacity, strokeWidth, modelMatrix } = ctx;
+  const {
+    datasetId,
+    fillColor,
+    fillOpacity,
+    strokeWidth,
+    modelMatrix,
+    projectionSuffix,
+    beforeId
+  } = ctx;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -224,7 +243,14 @@ export function createLineLayers(
     isGeoJsonEncoded
   } = geometryInfo;
 
-  const layerId = createLayerId(DeckLayerId.LINE_LAYER, datasetId);
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}`;
+  const layerId = createLayerId(
+    DeckLayerId.LINE_LAYER,
+    datasetId,
+    projectionSuffix
+      ? `${projectionSuffix}-${styleFingerprint}`
+      : styleFingerprint
+  );
 
   const isNativeGeoArrowLine =
     arrowExtension &&
@@ -249,6 +275,7 @@ export function createLineLayers(
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
       updateTriggers: {
         getColor: [fillColor, fillOpacity],
         getWidth: [strokeWidth]
@@ -303,6 +330,7 @@ export function createLineLayers(
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
       updateTriggers: {
         getLineColor: [fillColor, fillOpacity],
         getLineWidth: [strokeWidth]
@@ -324,7 +352,9 @@ export function createPolygonLayers(
     fillOpacity,
     strokeWidth,
     strokeOpacity,
-    modelMatrix
+    modelMatrix,
+    projectionSuffix,
+    beforeId
   } = ctx;
   const {
     geoColumn,
@@ -335,7 +365,14 @@ export function createPolygonLayers(
   } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
-  const layerId = createLayerId(DeckLayerId.POLYGON_LAYER, datasetId);
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
+  const layerId = createLayerId(
+    DeckLayerId.POLYGON_LAYER,
+    datasetId,
+    projectionSuffix
+      ? `${projectionSuffix}-${styleFingerprint}`
+      : styleFingerprint
+  );
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     logger.info(
@@ -369,7 +406,12 @@ export function createPolygonLayers(
             viz.classification!.breaks!,
             viz.classification!.colors!
           )
-        : fillColor;
+        : ([fillColor[0], fillColor[1], fillColor[2], 255] as [
+            number,
+            number,
+            number,
+            number
+          ]);
 
     const polygonProps: ConstructorParameters<
       typeof geodecklayers.GeoArrowPolygonLayer
@@ -386,6 +428,7 @@ export function createPolygonLayers(
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
       updateTriggers: {
         getFillColor: [
           useChoropleth,
@@ -429,6 +472,12 @@ export function createPolygonLayers(
     hasVisualization: Boolean(viz)
   });
 
+  const defaultFillWithAlpha = [
+    fillColor[0],
+    fillColor[1],
+    fillColor[2],
+    255
+  ] as [number, number, number, number];
   const geoJsonFillColor =
     useChoropleth && viz
       ? createGeoJsonChoroplethColorAccessor(
@@ -437,7 +486,7 @@ export function createPolygonLayers(
           viz.classification!.colors!,
           fillColor
         )
-      : fillColor;
+      : defaultFillWithAlpha;
 
   return [
     new GeoJsonLayer({
@@ -451,6 +500,7 @@ export function createPolygonLayers(
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
       updateTriggers: {
         getFillColor: [
           useChoropleth,
@@ -555,24 +605,44 @@ export function createGeoJsonLayers(
   geojson: FeatureCollection,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const { fillColor, strokeColor, fillOpacity, strokeWidth, modelMatrix } = ctx;
+  const {
+    datasetId,
+    fillColor,
+    strokeColor,
+    fillOpacity,
+    strokeWidth,
+    strokeOpacity,
+    modelMatrix,
+    projectionSuffix,
+    beforeId
+  } = ctx;
+
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
+  const layerId = createLayerId(
+    DeckLayerId.GEOJSON_LAYER,
+    datasetId,
+    projectionSuffix
+      ? `${projectionSuffix}-${styleFingerprint}`
+      : styleFingerprint
+  );
 
   return [
     new GeoJsonLayer({
-      id: DeckLayerId.GEOJSON_LAYER,
+      id: layerId,
       data: geojson,
       filled: true,
       stroked: true,
-      getFillColor: [...fillColor, fillOpacity * 255],
-      getLineColor: strokeColor,
+      getFillColor: [...fillColor, Math.round(fillOpacity * 255)],
+      getLineColor: withOpacity(strokeColor, strokeOpacity),
       getLineWidth: strokeWidth,
-      lineWidthMinPixels: strokeWidth,
+      lineWidthMinPixels: Math.max(1, strokeWidth),
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
       updateTriggers: {
         getFillColor: [fillColor, fillOpacity],
-        getLineColor: [strokeColor],
+        getLineColor: [strokeColor, strokeOpacity],
         getLineWidth: [strokeWidth]
       }
     })

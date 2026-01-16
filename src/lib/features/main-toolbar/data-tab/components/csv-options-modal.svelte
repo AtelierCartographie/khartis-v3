@@ -1,12 +1,12 @@
 <script lang="ts">
+  import * as m from '$lib/paraglide/messages';
   import {
+    InlineLoading,
     Modal,
-    Toggle,
     Select,
     SelectItem,
-    InlineLoading
+    Toggle
   } from 'carbon-components-svelte';
-  import * as m from '$lib/paraglide/messages';
 
   export interface CsvOptions {
     header: boolean;
@@ -118,7 +118,7 @@
 
     {#if isApplying}
       <div class="loading">
-        <InlineLoading description="Reloading..." />
+        <InlineLoading description={m.csv_options_reloading()} />
       </div>
     {/if}
   </div>

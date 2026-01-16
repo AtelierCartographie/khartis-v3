@@ -13,6 +13,9 @@
     icon?: Snippet;
     showToggle?: boolean;
     toggleChecked?: boolean;
+    toggleDisabled?: boolean;
+    disabled?: boolean;
+    disabledReason?: string;
     onToggleChange?: (checked: boolean) => void;
   }
 
@@ -24,33 +27,60 @@
     icon,
     showToggle = false,
     toggleChecked = false,
+    toggleDisabled = false,
+    disabled = false,
+    disabledReason,
     onToggleChange
   }: Props = $props();
 
+  const isControlled = Boolean(onToggleChange);
+  let internalToggleChecked = $state<boolean>(toggleChecked);
+  const effectiveToggleChecked = $derived(
+    isControlled ? toggleChecked : internalToggleChecked
+  );
+
   let expanded = $state<boolean>(untrack(() => defaultOpen));
+  let prevToggleChecked = $state<boolean>(effectiveToggleChecked);
+
+  $effect(() => {
+    if (showToggle && prevToggleChecked !== effectiveToggleChecked) {
+      prevToggleChecked = effectiveToggleChecked;
+      expanded = effectiveToggleChecked;
+    }
+  });
 
   const dispatch = createEventDispatcher<{ toggle: { expanded: boolean } }>();
 
   function toggle(): void {
+    if (disabled) return;
+    if (showToggle && !effectiveToggleChecked) return;
     expanded = !expanded;
     dispatch('toggle', { expanded });
   }
 
   function handleToggleChange(event: CustomEvent): void {
     event.stopPropagation();
-    onToggleChange?.(event.detail.toggled);
+    const newValue = event.detail.toggled;
+    if (isControlled) {
+      onToggleChange?.(newValue);
+    } else {
+      internalToggleChecked = newValue;
+    }
   }
 </script>
 
-<div class="section-container">
+<div class="section-container" class:disabled={disabled}>
   <div
     class="section-header"
-    class:expanded={expanded}
-    class:collapsed={!expanded}
+    class:expanded={expanded && !disabled}
+    class:collapsed={!expanded || disabled}
+    class:disabled={disabled}
     role="button"
-    tabindex="0"
-    aria-expanded={expanded}
+    tabindex={disabled ? -1 : 0}
+    aria-expanded={expanded && !disabled}
+    aria-disabled={disabled}
     aria-label={m.section_toggle()}
+    title={disabled && disabledReason ? disabledReason : undefined}
     onclick={toggle}
     onkeydown={(e: KeyboardEvent) =>
       (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle())}
@@ -64,7 +94,8 @@
       >
         <Toggle
           size="sm"
-          toggled={toggleChecked}
+          toggled={effectiveToggleChecked}
+          disabled={toggleDisabled || disabled}
           on:toggle={handleToggleChange}
           hideLabel
           labelA=""
@@ -85,7 +116,11 @@
 
     <div class="section-actions"></div>
 
-    <span class="section-chevron" aria-hidden="true">
+    <span
+      class="section-chevron"
+      class:toggle-off={showToggle && !effectiveToggleChecked}
+      aria-hidden="true"
+    >
       {#if expanded}
         <ChevronDown />
       {:else}
@@ -94,7 +129,7 @@
     </span>
   </div>
 
-  {#if expanded}
+  {#if expanded && !disabled}
     <div class="section-body">
       {@render children?.()}
     </div>
@@ -106,7 +141,6 @@
     border: 1px solid var(--cds-border-subtle);
     margin-bottom: var(--cds-spacing-05);
     border-radius: 2px;
-    overflow: hidden;
     background: transparent;
   }
 
@@ -172,13 +206,17 @@
     margin-left: var(--cds-spacing-03);
   }
 
+  .section-chevron.toggle-off {
+    opacity: 0.4;
+  }
+
   .section-body {
     padding: var(--cds-spacing-03);
     background-color: var(--cds-ui-02);
     border-top: 1px solid var(--cds-border-subtle);
   }
 
-  .section-header:hover {
+  .section-header:hover:not(.disabled) {
     background-color: var(--cds-hover-ui);
   }
 
@@ -186,7 +224,23 @@
     color: var(--cds-link-02);
   }
 
-  .section-header:active .section-title {
+  .section-header:active:not(.disabled) .section-title {
     color: var(--cds-link-02);
+  }
+
+  .section-container.disabled {
+    opacity: 0.5;
+  }
+
+  .section-header.disabled {
+    cursor: not-allowed;
+  }
+
+  .section-header.disabled .section-title {
+    color: var(--cds-text-disabled);
+  }
+
+  .section-header.disabled .section-chevron {
+    color: var(--cds-icon-disabled);
   }
 </style>

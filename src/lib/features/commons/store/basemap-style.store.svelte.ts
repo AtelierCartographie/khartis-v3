@@ -1,8 +1,8 @@
 import type maplibregl from 'maplibre-gl';
 import {
-  BASEMAP_STYLES,
   BasemapStyle,
-  DEFAULT_BASEMAP_STYLE
+  DEFAULT_BASEMAP_STYLE,
+  getBasemapStyle
 } from '../../map/constants/basemap-styles';
 
 class BasemapStyleStore {
@@ -15,7 +15,7 @@ class BasemapStyleStore {
   }
 
   get selectedStyleUrl(): string | maplibregl.StyleSpecification {
-    return BASEMAP_STYLES[this._state.selectedStyle];
+    return getBasemapStyle(this._state.selectedStyle);
   }
 
   get requiresMapLibre(): boolean {
@@ -23,6 +23,18 @@ class BasemapStyleStore {
   }
 
   setStyle(style: BasemapStyle): void {
+    this._state.selectedStyle = style;
+  }
+
+  reset(): void {
+    this._state.selectedStyle = DEFAULT_BASEMAP_STYLE;
+  }
+
+  restoreFromSerialized(style: BasemapStyle): void {
+    if (!style || !Object.values(BasemapStyle).includes(style)) {
+      this.reset();
+      return;
+    }
     this._state.selectedStyle = style;
   }
 }

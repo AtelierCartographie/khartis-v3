@@ -7,6 +7,7 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
+  import * as m from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
 
   interface Props {
@@ -98,11 +99,13 @@
 
 <Modal
   primaryButtonDisabled={!canImport || isLoading}
-  secondaryButtonText="Annuler"
+  secondaryButtonText={m.cancel()}
   secondaryButtonDisabled={isLoading}
   open={open}
-  modalHeading="Ajouter des données au projet"
-  primaryButtonText={isLoading ? 'Ajout en cours...' : 'Ajouter au projet'}
+  modalHeading={m.add_data_modal_title()}
+  primaryButtonText={isLoading
+    ? m.add_data_modal_loading()
+    : m.add_data_modal_confirm()}
   size="sm"
   on:click:button--secondary={closeModal}
   on:click:button--primary={handleImport}

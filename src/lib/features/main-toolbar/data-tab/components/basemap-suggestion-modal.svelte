@@ -1,12 +1,12 @@
 <script lang="ts">
+  import * as m from '$lib/paraglide/messages';
   import {
     Modal,
-    TextInput,
-    TextArea,
     Select,
-    SelectItem
+    SelectItem,
+    TextArea,
+    TextInput
   } from 'carbon-components-svelte';
-  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     open: boolean;
@@ -174,7 +174,7 @@
       <div class="form-group half">
         <TextInput
           labelText={m.basemap_suggestion_link()}
-          placeholder="https://..."
+          placeholder={m.url_placeholder_ellipsis()}
           bind:value={dataLink}
         />
       </div>

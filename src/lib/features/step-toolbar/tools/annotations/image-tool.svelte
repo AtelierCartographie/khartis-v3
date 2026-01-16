@@ -54,7 +54,7 @@
   <Row>
     <Column>
       <Button kind="primary" icon={Add} on:click={triggerFileDialog}>
-        Importer une image
+        {m.annotations_import_image()}
       </Button>
       <div class="visually-hidden" bind:this={hiddenUploader}>
         <FileUploader
@@ -89,7 +89,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText={m.annotations_opacity?.() || 'Opacité'}
+          labelText={m.annotations_opacity()}
           value={(defaultStyle.opacity ?? 1) * 100}
           min={0}
           max={100}
@@ -117,11 +117,11 @@
               selected.type === AnnotationKind.IMAGE &&
               annotationsActions.removeAnnotation(selected.id)}
           >
-            Supprimer l’image
+            {m.annotations_delete_image()}
           </Button>
         {:else}
           <Button kind="danger-tertiary" icon={TrashCan} disabled>
-            Supprimer l’image
+            {m.annotations_delete_image()}
           </Button>
         {/if}
       </div>

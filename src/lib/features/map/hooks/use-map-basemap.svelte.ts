@@ -13,36 +13,100 @@ export interface UseMapBasemapProps {
   getMap: () => MapLibreMap | null;
   getIsMapLoaded: () => boolean;
   onProjectionChanged?: () => void;
+  onStyleLoaded?: () => void;
 }
 
 export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
   syncProjection: () => void;
+  readonly isStyleLoading: boolean;
 }
 
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
-  const { getMap, getIsMapLoaded, onProjectionChanged } = props;
+  const { getMap, getIsMapLoaded, onProjectionChanged, onStyleLoaded } = props;
+
+  function getStyleKey(style: string | StyleSpecification): string {
+    if (typeof style === 'string') {
+      return style;
+    }
+    return style.name || 'inline-style';
+  }
+
+  const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
+  let lastAppliedStyleKey = $state<string | null>(currentStyleKey);
+  let isStyleLoading = $state(false);
+  let styleLoadHandler: (() => void) | null = null;
+
+  console.log('[BASEMAP] useMapBasemap initialized', {
+    lastAppliedStyleKey: currentStyleKey
+  });
 
   function syncBasemapStyle(): void {
     const map = getMap();
+    console.log('[BASEMAP] syncBasemapStyle called', {
+      hasMap: !!map,
+      isMapLoaded: getIsMapLoaded(),
+      isStyleLoading
+    });
+
     if (!map || !getIsMapLoaded()) return;
 
-    const style = basemapStyleStore.selectedStyleUrl;
-    const currentStyle = map.getStyle();
-    const shouldUpdate =
-      typeof style === 'string'
-        ? currentStyle?.sprite !== style
-        : currentStyle?.name !== (style as StyleSpecification).name;
-
-    if (shouldUpdate) {
-      map.setStyle(style);
+    if (isStyleLoading) {
+      console.log('[BASEMAP] Style is still loading, skipping sync');
+      logger.debug('Style is still loading, skipping sync', LogCategory.MAP);
+      return;
     }
+
+    const style = basemapStyleStore.selectedStyleUrl;
+    const styleKey = getStyleKey(style);
+
+    if (styleKey === lastAppliedStyleKey) {
+      console.log('[BASEMAP] Style already applied, skipping', { styleKey });
+      return;
+    }
+
+    console.log('[BASEMAP] Applying new style', {
+      from: lastAppliedStyleKey,
+      to: styleKey
+    });
+    logger.debug('Changing basemap style', LogCategory.MAP, {
+      from: lastAppliedStyleKey,
+      to: styleKey
+    });
+
+    isStyleLoading = true;
+
+    if (styleLoadHandler) {
+      map.off('styledata', styleLoadHandler);
+    }
+
+    styleLoadHandler = () => {
+      console.log('[BASEMAP] styledata event received, style loaded');
+      isStyleLoading = false;
+      lastAppliedStyleKey = styleKey;
+      logger.debug('Basemap style loaded', LogCategory.MAP, { styleKey });
+
+      if (styleLoadHandler) {
+        map.off('styledata', styleLoadHandler);
+        styleLoadHandler = null;
+      }
+
+      if (onStyleLoaded) {
+        console.log('[BASEMAP] Calling onStyleLoaded callback after 50ms');
+        setTimeout(() => onStyleLoaded(), 50);
+      }
+    };
+
+    map.once('styledata', styleLoadHandler);
+
+    console.log('[BASEMAP] Calling map.setStyle()');
+    map.setStyle(style);
   }
 
   function syncOSMRasterLayer(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded()) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading) return;
 
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
     const tileConfig = osmBasemapStore.tileConfig;
@@ -95,6 +159,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   return {
     syncBasemapStyle,
     syncOSMRasterLayer,
-    syncProjection
+    syncProjection,
+    get isStyleLoading() {
+      return isStyleLoading;
+    }
   };
 }

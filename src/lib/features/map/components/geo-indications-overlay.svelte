@@ -3,9 +3,10 @@
     DistanceUnit,
     OrientationIndicatorStyle
   } from '$lib/features/commons/constants/ui.constants';
+  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { geoIndicationsState } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
-  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const KM_TO_MILES = 0.621371;
@@ -54,7 +55,11 @@
 <div class="geo-indications-overlay">
   {#if geoIndicationsState.scale.enabled}
     <div class="scale-bar">
-      <svg width={scaleWidth + 20} height="30" aria-label="Scale bar">
+      <svg
+        width={scaleWidth + 20}
+        height="30"
+        aria-label={m.geo_scale_bar_aria()}
+      >
         <line
           x1="10"
           y1="20"
@@ -99,7 +104,7 @@
         width={orientationSize}
         height={orientationSize}
         viewBox="0 0 40 50"
-        aria-label="North indicator"
+        aria-label={m.geo_north_indicator_aria()}
       >
         {#if geoIndicationsState.orientation.style === OrientationIndicatorStyle.ARROW}
           <polygon

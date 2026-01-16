@@ -115,6 +115,8 @@ export interface LayerContext {
   statistics: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
   modelMatrix?: Matrix4 | null;
+  projectionSuffix?: string;
+  beforeId?: string;
 }
 
 // =============================================================================

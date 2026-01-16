@@ -1,5 +1,6 @@
 <script lang="ts">
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import * as m from '$lib/paraglide/messages';
   import type { HighlightType } from '../advanced-data-table.svelte';
   import type { ColumnInfo, TableRow } from '../types';
 
@@ -83,7 +84,7 @@
       data-column={col.name}
     >
       {#if isNull}
-        <span class="null-value">—</span>
+        <span class="null-value" title={m.cell_null_value_tooltip()}>—</span>
       {:else}
         {formatValue(value, col.type)}
       {/if}

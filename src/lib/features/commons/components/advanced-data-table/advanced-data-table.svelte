@@ -432,11 +432,11 @@
 
   {#if tableData.error}
     <div class="error-message">
-      <p>Erreur: {tableData.error}</p>
+      <p>{m.error_prefix()}{tableData.error}</p>
     </div>
   {:else if showEmptyState}
     <div class="empty-state">
-      <p>Aucune donnée disponible</p>
+      <p>{m.no_data_available()}</p>
     </div>
   {:else if showFilteredEmptyState}
     <div class="empty-state">
@@ -508,9 +508,9 @@
 <!-- Rename Column Modal -->
 <Modal
   bind:open={renameModalOpen}
-  modalHeading="Renommer la colonne"
-  primaryButtonText="Confirmer"
-  secondaryButtonText="Annuler"
+  modalHeading={m.column_rename_title()}
+  primaryButtonText={m.column_rename_confirm()}
+  secondaryButtonText={m.cancel()}
   on:click:button--primary={handleRenameConfirm}
   on:click:button--secondary={() => {
     renameModalOpen = false;
@@ -526,13 +526,12 @@
 >
   <div class="rename-modal-content">
     <p class="rename-modal-description">
-      Entrez le nouveau nom pour la colonne
-      <strong>{columnToRename}</strong>
+      {m.column_rename_description({ column: columnToRename ?? '' })}
     </p>
     <TextInput
       bind:value={newColumnName}
-      labelText="Nouveau nom"
-      placeholder="Nom de la colonne"
+      labelText={m.column_rename_label()}
+      placeholder={m.column_rename_placeholder()}
     />
   </div>
 </Modal>

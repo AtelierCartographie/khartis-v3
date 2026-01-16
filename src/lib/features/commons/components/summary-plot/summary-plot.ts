@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import * as Plot from '@observablehq/plot';
 
 interface HistogramBin {
@@ -336,7 +337,9 @@ function create_plot_categorical(
             Plot.stackX({
               text: (d: CategoryHistogramItem) =>
                 d.category === 'unique'
-                  ? `${d.count.toLocaleString()} valeurs uniques`
+                  ? m.summary_plot_unique_values({
+                      count: d.count.toLocaleString()
+                    })
                   : `${d.category}`,
               lineWidth: 12,
               x: 'count',
@@ -354,11 +357,18 @@ function create_plot_categorical(
       label_layer([0.1, 0.15], 1),
       has_one_category
         ? null
-        : Plot.text([(uniques ?? 0).toLocaleString() + ' catégories'], {
-            frameAnchor: 'bottom-left',
-            dy: 10,
-            fill: text_color
-          }),
+        : Plot.text(
+            [
+              m.summary_plot_categories({
+                count: (uniques ?? 0).toLocaleString()
+              })
+            ],
+            {
+              frameAnchor: 'bottom-left',
+              dy: 10,
+              fill: text_color
+            }
+          ),
 
       // INTERACTIVITY
       // Highlight bar with fixed pointer-events

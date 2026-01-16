@@ -96,7 +96,7 @@ export function useMapState(): UseMapStateReturn {
       datasetId: viz.datasetId,
       fillColor: colors.fill,
       strokeColor: colors.stroke,
-      fillOpacity: viz.style.fillOpacity ?? 0.6,
+      fillOpacity: viz.style.fillOpacity ?? 1,
       strokeWidth: viz.style.strokeWidth ?? 1,
       strokeOpacity: viz.style.strokeOpacity ?? 1,
       statistics,

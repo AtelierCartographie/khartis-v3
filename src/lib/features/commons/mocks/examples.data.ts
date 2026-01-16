@@ -1,5 +1,6 @@
 import { base } from '$app/paths';
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
+import * as m from '$lib/paraglide/messages';
 import type { ExampleProject } from '../store/create-project.types';
 
 export interface ExampleCategoryConfig {
@@ -20,10 +21,9 @@ export const EXAMPLE_CATEGORIES: ExampleCategoryConfig[] = [
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
   {
     id: 'world-population',
-    title: 'Population Europe 2023',
-    subtitle: 'Carte choroplèthe de la population par pays',
-    description:
-      'Visualisation de la répartition de la population européenne avec une palette séquentielle',
+    title: m.example_world_population_title(),
+    subtitle: m.example_world_population_subtitle(),
+    description: m.example_world_population_description(),
     category: ExampleCategory.POLYGONS,
     thumbnail: '/examples/world-population-thumb.png',
     dataUrl: '/examples/data/countries-population-simple.csv',
@@ -37,15 +37,18 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         palette: 'Blues'
       }
     ],
-    tags: ['population', 'europe', 'choroplèthe']
+    tags: [
+      m.example_tag_population(),
+      m.example_tag_europe(),
+      m.example_tag_choropleth()
+    ]
   },
 
   {
     id: 'european-cities',
-    title: 'Villes européennes',
-    subtitle: 'Symboles proportionnels des principales villes',
-    description:
-      'Représentation des villes européennes avec des cercles proportionnels à la population',
+    title: m.example_european_cities_title(),
+    subtitle: m.example_european_cities_subtitle(),
+    description: m.example_european_cities_description(),
     category: ExampleCategory.SYMBOLS,
     thumbnail: '/examples/european-cities-thumb.png',
     dataUrl: '/examples/data/european-cities.csv',
@@ -60,15 +63,18 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         color: '#E6142D'
       }
     ],
-    tags: ['villes', 'europe', 'symboles']
+    tags: [
+      m.example_tag_cities(),
+      m.example_tag_europe(),
+      m.example_tag_symbols()
+    ]
   },
 
   {
     id: 'world-countries-map',
-    title: 'Carte du monde',
-    subtitle: 'Pays du monde avec géométries',
-    description:
-      'Visualisation des frontières de tous les pays du monde avec données GeoJSON',
+    title: m.example_world_countries_title(),
+    subtitle: m.example_world_countries_subtitle(),
+    description: m.example_world_countries_description(),
     category: ExampleCategory.POLYGONS,
     thumbnail: '/examples/world-countries-thumb.png',
     dataUrl: '/examples/data/world-countries.geojson',
@@ -80,15 +86,18 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         strokeWidth: 1
       }
     ],
-    tags: ['monde', 'pays', 'frontières']
+    tags: [
+      m.example_tag_world(),
+      m.example_tag_countries(),
+      m.example_tag_borders()
+    ]
   },
 
   {
     id: 'gdp-evolution',
-    title: 'Évolution du PIB',
-    subtitle: 'Carte bivariée PIB et croissance',
-    description:
-      'Analyse combinée du PIB par habitant et du taux de croissance',
+    title: m.example_gdp_evolution_title(),
+    subtitle: m.example_gdp_evolution_subtitle(),
+    description: m.example_gdp_evolution_description(),
     category: ExampleCategory.HYBRIDS,
     thumbnail: '/examples/gdp-evolution-thumb.png',
     dataUrl: '/examples/data/gdp-growth-2023.csv',
@@ -101,14 +110,18 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         palette: 'PurpleGreen'
       }
     ],
-    tags: ['économie', 'PIB', 'bivariée']
+    tags: [
+      m.example_tag_economy(),
+      m.example_tag_gdp(),
+      m.example_tag_bivariate()
+    ]
   },
 
   {
     id: 'transport-flows',
-    title: 'Flux de transport',
-    subtitle: 'Lignes de transport européennes',
-    description: 'Visualisation des flux de transport avec lignes',
+    title: m.example_transport_flows_title(),
+    subtitle: m.example_transport_flows_subtitle(),
+    description: m.example_transport_flows_description(),
     category: ExampleCategory.LINES,
     thumbnail: '/examples/transport-flows-thumb.png',
     dataUrl: '/examples/data/transport-flows.geojson',
@@ -119,7 +132,11 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
         curved: true
       }
     ],
-    tags: ['transport', 'flux', 'lignes']
+    tags: [
+      m.example_tag_transport(),
+      m.example_tag_flows(),
+      m.example_tag_lines()
+    ]
   }
 ];
 
@@ -137,7 +154,7 @@ export async function loadExampleData(
 ): Promise<unknown> {
   try {
     if (!example.dataUrl) {
-      throw new Error('Example data URL is missing');
+      throw new Error(m.error_example_data_url_missing());
     }
     const url = example.dataUrl.startsWith('/')
       ? `${base}${example.dataUrl}`
@@ -145,7 +162,9 @@ export async function loadExampleData(
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to load example data: ${response.statusText}`);
+      throw new Error(
+        m.error_example_data_load_failed({ status: response.statusText })
+      );
     }
 
     const contentType = response.headers.get('content-type');
@@ -156,6 +175,6 @@ export async function loadExampleData(
       return await response.text();
     }
   } catch (error) {
-    throw new Error(`Error loading example "${example.title}": ${error}`);
+    throw new Error(`${m.error_example_load_failed()}: ${String(error)}`);
   }
 }

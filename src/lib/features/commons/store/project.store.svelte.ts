@@ -1,3 +1,5 @@
+import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type {
   KhartisProject,
   LayoutConfig,
@@ -15,6 +17,12 @@ import {
   projectRepository,
   projectStorage
 } from '$lib/features/project-management';
+import { bigIntReplacer } from '$lib/features/project-management/utils/json-helpers';
+import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { geoIndicationsActions } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import { projectionActions } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../services/data-orchestrator.service.svelte';
 import { downloadFile } from '../utils/file-export.utils';
@@ -23,11 +31,12 @@ import { showError } from '../utils/notification.utils.svelte';
 import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { generateProjectFilename } from '../utils/string.utils';
 import { ProjectValidator } from '../utils/validation.utils';
+import { basemapStyleStore } from './basemap-style.store.svelte';
 import type {
   ColumnTransformation,
   UploadedFile
 } from './create-project.types';
-import { bigIntReplacer } from '$lib/features/project-management/utils/json-helpers';
+import { visualizationStore } from './visualization.store.svelte';
 
 function cleanFileForStorage(file: UploadedFile): UploadedFile {
   return {
@@ -433,6 +442,16 @@ class ProjectStore {
 
     const cleanedFiles = files.map(cleanFileForStorage);
 
+    basemapLayersStore.resetToDefaults();
+    basemapStyleStore.reset();
+    mapProjectionStore.reset();
+    visualizationStore.clear();
+    annotationsActions.reset();
+    formatActions.reset();
+    legendActions.reset();
+    geoIndicationsActions.reset();
+    projectionActions.reset();
+
     const project: KhartisProject = {
       id: crypto.randomUUID(),
       manifest: {
@@ -757,6 +776,16 @@ class ProjectStore {
     this._state.lastSaved = undefined;
     this._state.history = [];
     this._state.historyIndex = -1;
+
+    basemapLayersStore.resetToDefaults();
+    basemapStyleStore.reset();
+    mapProjectionStore.reset();
+    visualizationStore.clear();
+    annotationsActions.reset();
+    formatActions.reset();
+    legendActions.reset();
+    geoIndicationsActions.reset();
+    projectionActions.reset();
 
     await projectStorage.remove(ProjectStorageKey.CURRENT);
   }

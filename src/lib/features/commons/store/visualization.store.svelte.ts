@@ -2,6 +2,13 @@ import type {
   DatasetResult,
   ProcessedDataset
 } from '$lib/features/data-pipeline';
+import {
+  FillMode,
+  MissingDataShape,
+  ShapeType,
+  StrokeMode,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
 import { datasetsStore } from './datasets.store.svelte';
 
 export enum VisualizationType {
@@ -19,18 +26,44 @@ export enum ClassificationMethod {
   STANDARD_DEVIATION = 'standard_deviation'
 }
 
+export interface VisualizationModes {
+  symbol: SymbolMode;
+  fill: FillMode;
+  stroke: StrokeMode;
+}
+
+export interface ClassificationConfig {
+  method: ClassificationMethod;
+  classes: number;
+  numClasses?: number;
+  breaks?: number[];
+  colors?: string[];
+  labels?: string[];
+  breakpointValue?: number | null;
+}
+
+export interface MissingDataConfig {
+  show: boolean;
+  shape: MissingDataShape;
+  size: number;
+  color: string;
+  pattern?: boolean;
+}
+
 export interface VisualizationConfig {
   id: string;
   name: string;
   type: VisualizationType;
   datasetId: string;
   enabled: boolean;
+  modes?: VisualizationModes;
   style: {
     fillColor?: string | string[];
     fillOpacity?: number;
     strokeColor?: string;
     strokeWidth?: number;
     strokeOpacity?: number;
+    strokeDashed?: boolean;
   };
   mapping: {
     valueColumn?: string;
@@ -39,19 +72,16 @@ export interface VisualizationConfig {
     colorColumn?: string;
     geometryColumn?: string;
   };
-  classification?: {
-    method: ClassificationMethod;
-    classes: number;
-    breaks?: number[];
-    colors?: string[];
-    labels?: string[];
-  };
+  classification?: ClassificationConfig;
   symbols?: {
-    type: 'circle' | 'square' | 'triangle' | 'diamond';
+    type: ShapeType;
+    size?: number;
     minSize: number;
     maxSize: number;
     sizeScale: 'linear' | 'sqrt' | 'log';
+    opacity?: number;
   };
+  missingData?: MissingDataConfig;
 }
 
 interface VisualizationState {
@@ -98,18 +128,12 @@ class VisualizationStore {
       type,
       datasetId,
       enabled: true,
+      modes: this.getDefaultModes(type),
       style: this.getDefaultStyle(type),
       mapping: this.getDefaultMapping(type, dataset),
       classification: this.getDefaultClassification(type),
-      symbols:
-        type === VisualizationType.PROPORTIONAL
-          ? {
-              type: 'circle',
-              minSize: 5,
-              maxSize: 50,
-              sizeScale: 'sqrt'
-            }
-          : undefined
+      symbols: this.getDefaultSymbols(type),
+      missingData: this.getDefaultMissingData()
     };
 
     this._state.visualizations.push(config);
@@ -119,15 +143,37 @@ class VisualizationStore {
     return config;
   }
 
+  updateModes(id: string, modes: Partial<VisualizationModes>): void {
+    this._state.visualizations = this._state.visualizations.map((v) =>
+      v.id === id
+        ? { ...v, modes: { ...v.modes, ...modes } as VisualizationModes }
+        : v
+    );
+  }
+
+  updateSymbols(
+    id: string,
+    symbols: Partial<VisualizationConfig['symbols']>
+  ): void {
+    this._state.visualizations = this._state.visualizations.map((v) =>
+      v.id === id && v.symbols
+        ? { ...v, symbols: { ...v.symbols, ...symbols } }
+        : v
+    );
+  }
+
+  updateMissingData(id: string, missingData: Partial<MissingDataConfig>): void {
+    this._state.visualizations = this._state.visualizations.map((v) =>
+      v.id === id && v.missingData
+        ? { ...v, missingData: { ...v.missingData, ...missingData } }
+        : v
+    );
+  }
+
   updateVisualization(id: string, updates: Partial<VisualizationConfig>): void {
-    const index = this._state.visualizations.findIndex((v) => v.id === id);
-    if (index >= 0) {
-      this._state.visualizations[index] = {
-        ...this._state.visualizations[index],
-        ...updates,
-        id
-      };
-    }
+    this._state.visualizations = this._state.visualizations.map((v) =>
+      v.id === id ? { ...v, ...updates, id } : v
+    );
   }
 
   duplicateVisualization(id: string): VisualizationConfig | null {
@@ -206,10 +252,18 @@ class VisualizationStore {
   }
 
   invertPalette(id: string): void {
-    const viz = this._state.visualizations.find((v) => v.id === id);
-    if (viz?.classification?.colors) {
-      viz.classification.colors = [...viz.classification.colors].reverse();
-    }
+    this._state.visualizations = this._state.visualizations.map((v) => {
+      if (v.id === id && v.classification?.colors) {
+        return {
+          ...v,
+          classification: {
+            ...v.classification,
+            colors: [...v.classification.colors].reverse()
+          }
+        };
+      }
+      return v;
+    });
   }
 
   getVisualizationsByDataset(datasetId: string): VisualizationConfig[] {
@@ -332,6 +386,68 @@ class VisualizationStore {
     return undefined;
   }
 
+  private getDefaultModes(type: VisualizationType): VisualizationModes {
+    switch (type) {
+      case VisualizationType.PROPORTIONAL:
+        return {
+          symbol: SymbolMode.PROPORTIONAL,
+          fill: FillMode.UNIQUE,
+          stroke: StrokeMode.UNIQUE
+        };
+      case VisualizationType.CATEGORICAL:
+        return {
+          symbol: SymbolMode.CATEGORIES,
+          fill: FillMode.CATEGORIES,
+          stroke: StrokeMode.NONE
+        };
+      case VisualizationType.CHOROPLETH:
+        return {
+          symbol: SymbolMode.UNIQUE,
+          fill: FillMode.CLASSES,
+          stroke: StrokeMode.UNIQUE
+        };
+      default:
+        return {
+          symbol: SymbolMode.UNIQUE,
+          fill: FillMode.UNIQUE,
+          stroke: StrokeMode.NONE
+        };
+    }
+  }
+
+  private getDefaultSymbols(
+    type: VisualizationType
+  ): VisualizationConfig['symbols'] | undefined {
+    if (type === VisualizationType.PROPORTIONAL) {
+      return {
+        type: ShapeType.POINT,
+        size: 12,
+        minSize: 5,
+        maxSize: 50,
+        sizeScale: 'sqrt',
+        opacity: 0.8
+      };
+    }
+    return {
+      type: ShapeType.POINT,
+      size: 12,
+      minSize: 5,
+      maxSize: 50,
+      sizeScale: 'linear',
+      opacity: 0.8
+    };
+  }
+
+  private getDefaultMissingData(): MissingDataConfig {
+    return {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 2,
+      color: '#c6c6c6',
+      pattern: false
+    };
+  }
+
   calculateBreaks(
     datasetId: string,
     columnName: string,
@@ -421,6 +537,18 @@ class VisualizationStore {
     this._state.visualizations = [];
     this._state.selectedVisualizationId = undefined;
     this._state.activeVisualizationIds.clear();
+  }
+
+  restoreFromSerialized(settings: {
+    visualizations: VisualizationConfig[];
+    selectedVisualizationId?: string;
+    activeVisualizationIds: string[];
+  }): void {
+    this._state.visualizations = settings.visualizations || [];
+    this._state.selectedVisualizationId = settings.selectedVisualizationId;
+    this._state.activeVisualizationIds = new Set(
+      settings.activeVisualizationIds || []
+    );
   }
 }
 

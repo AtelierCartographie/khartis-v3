@@ -1,3 +1,4 @@
+import { goto } from '$app/navigation';
 import {
   StylingTools,
   ToolbarState,
@@ -14,6 +15,7 @@ import { projectStore } from './project.store.svelte';
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
 const MOBILE_BREAKPOINT_VALUE = 1024;
+const TAB_QUERY_PARAM = 'tab';
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -21,6 +23,8 @@ class GlobalStore {
     mainPanel: true,
     isSideNavOpen: false,
     isCreateProjectModalOpen: false,
+    isDuplicateModalOpen: false,
+    isDeleteModalOpen: false,
     selectedStep: ToolbarStep.Data,
     selectedTool: undefined,
     toolbarState: ToolbarState.Full,
@@ -186,6 +190,22 @@ class GlobalStore {
     this._state.isCreateProjectModalOpen = value;
   }
 
+  get isDuplicateModalOpen() {
+    return this._state.isDuplicateModalOpen;
+  }
+
+  set isDuplicateModalOpen(value: boolean) {
+    this._state.isDuplicateModalOpen = value;
+  }
+
+  get isDeleteModalOpen() {
+    return this._state.isDeleteModalOpen;
+  }
+
+  set isDeleteModalOpen(value: boolean) {
+    this._state.isDeleteModalOpen = value;
+  }
+
   get selectedStep() {
     return this._state.selectedStep;
   }
@@ -257,13 +277,42 @@ class GlobalStore {
     this._state.isMobileToolbarOpen = !this._state.isMobileToolbarOpen;
   }
 
-  setNavigationState(selectedStep: ToolbarStep): void {
+  setNavigationState(selectedStep: ToolbarStep, updateUrl = true): void {
     this.selectedStep = selectedStep;
 
     if (selectedStep === ToolbarStep.Styling)
       this.toolbarState = ToolbarState.Collapsed;
     else if (this.toolbarState === ToolbarState.Collapsed)
       this.toolbarState = ToolbarState.Full;
+
+    if (updateUrl && typeof window !== 'undefined') {
+      this.syncTabToUrl(selectedStep);
+    }
+  }
+
+  private syncTabToUrl(step: ToolbarStep): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set(TAB_QUERY_PARAM, step);
+    goto(url.toString(), { replaceState: true, keepFocus: true });
+  }
+
+  initializeFromUrl(): void {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const tabParam = url.searchParams.get(TAB_QUERY_PARAM);
+
+    if (tabParam && this.isValidToolbarStep(tabParam)) {
+      this.setNavigationState(tabParam as ToolbarStep, false);
+    }
+  }
+
+  private isValidToolbarStep(value: string): value is ToolbarStep {
+    return (
+      value === ToolbarStep.Data ||
+      value === ToolbarStep.Visualizations ||
+      value === ToolbarStep.Styling
+    );
   }
 
   setToolbarState(state: ToolbarState): void {
@@ -271,7 +320,9 @@ class GlobalStore {
   }
 
   selectDataButton(id: string): void {
-    if (this._selectedDataButtonId === id) return;
+    if (this._selectedDataButtonId === id) {
+      return;
+    }
     this._selectedDataButtonId = id;
 
     if (typeof window !== 'undefined') {
@@ -279,6 +330,19 @@ class GlobalStore {
     }
 
     this.ensureDatasetSelectionForSourceFile(id);
+    this.syncMapVisibilityWithSelectedTab(id);
+  }
+
+  private syncMapVisibilityWithSelectedTab(selectedSourceFileId: string): void {
+    const allDatasets = datasetsStore.datasets;
+
+    for (const dataset of allDatasets) {
+      if (dataset.sourceFileId === selectedSourceFileId) {
+        datasetsStore.enableDataset(dataset.id);
+      } else {
+        datasetsStore.disableDataset(dataset.id);
+      }
+    }
   }
 
   setProjectionFilter(id: ProjectionFilterId): void {
@@ -353,7 +417,8 @@ export const globalActions = {
   setMobileView: globalState.setMobileView.bind(globalState),
   openMobileToolbar: globalState.openMobileToolbar.bind(globalState),
   closeMobileToolbar: globalState.closeMobileToolbar.bind(globalState),
-  toggleMobileToolbar: globalState.toggleMobileToolbar.bind(globalState)
+  toggleMobileToolbar: globalState.toggleMobileToolbar.bind(globalState),
+  initializeFromUrl: globalState.initializeFromUrl.bind(globalState)
 };
 
 export const MOBILE_BREAKPOINT = 1024;

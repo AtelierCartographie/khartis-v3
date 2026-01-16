@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {
     InlineNotification,
@@ -8,11 +9,12 @@
   } from 'carbon-components-svelte';
   import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
-  import { onMount } from 'svelte';
-  import { SvelteMap } from 'svelte/reactivity';
+  import { onMount, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
+  import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
   import {
     formatActions,
@@ -27,6 +29,10 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
+  let isResizing = $state(false);
+  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  const TOOLBAR_TRANSITION_MS = 600;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -248,6 +254,8 @@
 
   $effect(() => {
     void duckDBDatasetsVersion;
+    const currentEnabledDatasets = enabledDatasets;
+
     if (isInitializing) {
       return;
     }
@@ -255,34 +263,25 @@
     hasError = false;
     errorMessage = null;
 
-    const currentEnabledIds = new Set(enabledDatasets.map((d) => d.id));
+    const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-    logger.debug('Map reacting to enabled datasets change', LogCategory.MAP, {
-      enabledCount: currentEnabledIds.size
-    });
+    const tableIdsToRemove = [...displayTables.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
 
-    for (const tableId of displayTables.keys()) {
-      if (!currentEnabledIds.has(tableId)) {
-        displayTables.delete(tableId);
-        logger.debug('Removed disabled dataset from tables', LogCategory.MAP, {
-          datasetId: tableId
-        });
-      }
-    }
-    for (const geojsonId of displayGeoJSONs.keys()) {
-      if (!currentEnabledIds.has(geojsonId)) {
-        displayGeoJSONs.delete(geojsonId);
-        logger.debug(
-          'Removed disabled dataset from GeoJSONs',
-          LogCategory.MAP,
-          {
-            datasetId: geojsonId
-          }
-        );
-      }
+    for (const tableId of tableIdsToRemove) {
+      displayTables.delete(tableId);
     }
 
-    for (const dataset of enabledDatasets) {
+    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
+
+    for (const geojsonId of geojsonIdsToRemove) {
+      displayGeoJSONs.delete(geojsonId);
+    }
+
+    for (const dataset of currentEnabledDatasets) {
       const alreadyLoaded =
         displayTables.has(dataset.id) || displayGeoJSONs.has(dataset.id);
       if (!alreadyLoaded) {
@@ -317,6 +316,25 @@
   });
 
   let resizeObserver: ResizeObserver | null = null;
+
+  $effect(() => {
+    void globalState.toolbarState;
+
+    untrack(() => {
+      if (!isMapReady) return;
+
+      isResizing = true;
+
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+
+      resizeTimeoutId = setTimeout(() => {
+        isResizing = false;
+        resizeTimeoutId = null;
+      }, TOOLBAR_TRANSITION_MS);
+    });
+  });
 
   function handleContainerResize() {
     if (!containerRef) return;
@@ -355,6 +373,9 @@
 
     return () => {
       resizeObserver?.disconnect();
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
     };
   });
 
@@ -384,9 +405,8 @@
       </div>
       <InlineNotification
         kind="error"
-        title="Erreur de chargement"
-        subtitle={errorMessage ??
-          'Une erreur est survenue lors du chargement de la carte'}
+        title={m.error_loading_title()}
+        subtitle={errorMessage ?? m.error_loading_subtitle()}
         hideCloseButton
         lowContrast
       />
@@ -400,6 +420,7 @@
         height={formatState.height}
         onReady={handleMapReady}
       />
+      <div class="resize-overlay" class:active={isResizing}></div>
     </div>
   {/if}
 </div>
@@ -417,10 +438,25 @@
   .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
+    position: relative;
   }
 
   .thematic-map-wrapper.visible {
     opacity: 1;
+  }
+
+  .resize-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--cds-ui-background, #f4f4f4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .resize-overlay.active {
+    opacity: 1;
+    transition: none;
   }
 
   .skeleton-loader {

@@ -20,3 +20,13 @@ export {
   createWorldBaseLayer,
   type LayerContext
 } from './layer-factory';
+
+export {
+  createBasemapLayers,
+  createEquateurLayer,
+  createFrontieresLayer,
+  createMeridiensLayer,
+  createMersLayer,
+  createTerreLayer,
+  getBasemapLayerOrder
+} from './basemap-layers';

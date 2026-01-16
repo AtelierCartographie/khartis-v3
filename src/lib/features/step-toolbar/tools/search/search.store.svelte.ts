@@ -1,26 +1,27 @@
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import type { SearchState } from './search.types';
 
 const FIXTURE_RESULTS = [
   {
     id: 'var-population',
-    text: 'Population totale par région',
-    location: 'Variables > Numérique'
+    text: m.search_fixture_population(),
+    location: m.search_location_numeric()
   },
   {
     id: 'var-gdp',
-    text: 'PIB par habitant',
-    location: 'Variables > Numérique'
+    text: m.search_fixture_gdp(),
+    location: m.search_location_numeric()
   },
   {
     id: 'var-country',
-    text: 'Nom du pays',
-    location: 'Variables > Texte'
+    text: m.search_fixture_country(),
+    location: m.search_location_text()
   },
   {
     id: 'var-region',
-    text: 'Région administrative',
-    location: 'Variables > Catégorielle'
+    text: m.search_fixture_region(),
+    location: m.search_location_categorical()
   }
 ];
 
@@ -37,9 +38,9 @@ const DEFAULT_STATE: SearchState = {
 };
 
 const SOURCE_MAP: Record<string, string> = {
-  numeric: 'Numérique',
-  categorical: 'Catégorielle',
-  text: 'Texte'
+  numeric: m.search_source_numeric(),
+  categorical: m.search_source_categorical(),
+  text: m.search_source_text()
 };
 
 type SearchActions = {

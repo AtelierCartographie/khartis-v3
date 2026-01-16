@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import {
   GeoColumnDetector,
   type GeoDetectionResult
@@ -539,7 +540,7 @@ export const DeepDataValidator = {
     const severeIssues = qualityIssues.filter((i) => i.severity === 'error');
     if (severeIssues.length > 0) {
       suggestions.push(
-        `${severeIssues.length} critical issue(s) detected. Fix them before continuing.`
+        m.data_quality_critical_issues({ count: severeIssues.length })
       );
     }
 
@@ -558,26 +559,35 @@ export const DeepDataValidator = {
   formatQualityReport(analysis: DataAnalysisResult): string {
     const lines: string[] = [];
 
-    lines.push("=== RAPPORT D'ANALYSE DES DONNÉES ===\n");
+    lines.push(m.data_quality_report_title());
     lines.push(
-      `Lignes: ${analysis.rowCount} | Colonnes: ${analysis.columnCount}`
+      m.data_quality_report_counts({
+        rows: analysis.rowCount,
+        columns: analysis.columnCount
+      })
     );
     lines.push(
-      `Temps de traitement estimé: ${analysis.estimatedProcessingTime}ms\n`
+      m.data_quality_report_estimated_time({
+        ms: analysis.estimatedProcessingTime ?? 0
+      })
     );
 
     if (analysis.geoDetection.hasGeoColumns) {
-      lines.push('COLONNES GÉOGRAPHIQUES DÉTECTÉES:');
+      lines.push(m.data_quality_report_geo_columns_title());
       analysis.geoDetection.geoColumns.forEach((col) => {
         lines.push(
-          `  - ${col.columnName}: ${col.type} (confiance: ${(col.confidence * 100).toFixed(0)}%)`
+          m.data_quality_report_geo_column_item({
+            column: col.columnName,
+            type: col.type,
+            confidence: (col.confidence * 100).toFixed(0)
+          })
         );
       });
       lines.push('');
     }
 
     if (analysis.qualityIssues.length > 0) {
-      lines.push('PROBLÈMES DE QUALITÉ:');
+      lines.push(m.data_quality_report_quality_issues_title());
       analysis.qualityIssues.forEach((issue) => {
         const icon =
           issue.severity === 'error'
@@ -585,18 +595,24 @@ export const DeepDataValidator = {
             : issue.severity === 'warning'
               ? '⚠️'
               : 'ℹ️';
-        lines.push(`  ${icon} ${issue.message}`);
+        lines.push(
+          m.data_quality_report_issue_item({ icon, message: issue.message })
+        );
         if (issue.suggestion) {
-          lines.push(`     → ${issue.suggestion}`);
+          lines.push(
+            m.data_quality_report_issue_suggestion({
+              suggestion: issue.suggestion
+            })
+          );
         }
       });
       lines.push('');
     }
 
     if (analysis.suggestions.length > 0) {
-      lines.push('SUGGESTIONS:');
+      lines.push(m.data_quality_report_suggestions_title());
       analysis.suggestions.forEach((suggestion) => {
-        lines.push(`  • ${suggestion}`);
+        lines.push(m.data_quality_report_suggestion_item({ suggestion }));
       });
     }
 

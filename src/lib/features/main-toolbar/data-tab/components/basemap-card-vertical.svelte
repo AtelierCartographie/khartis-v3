@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import { m } from '$lib/paraglide/messages';
-  import { ProgressBar } from 'carbon-components-svelte';
+  import { ProgressBar, Tag } from 'carbon-components-svelte';
   import { Calendar, Checkmark, Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
@@ -76,8 +76,8 @@
       </div>
     </div>
 
-    {#if basemap.description}
-      <p class="card-description">{basemap.description}</p>
+    {#if basemap.level}
+      <Tag size="sm" type={isGray ? 'gray' : 'blue'}>{basemap.level}</Tag>
     {/if}
 
     <div class="metadata-row">

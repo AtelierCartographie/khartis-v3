@@ -110,9 +110,7 @@ class DataOrchestratorService {
         .find((d) => d.sourceFileId === fileId);
       if (duckDataset) {
         await duckDBOrchestrator.dropTable(duckDataset.tableName);
-
         await this.cleanupDuckDBResources(duckDataset.tableName);
-
         this._geometryDatasetsVersion++;
       }
 
@@ -121,7 +119,6 @@ class DataOrchestratorService {
     }
 
     this.processedFileIds.delete(fileId);
-
     this.cleanupOrphanedDatasets();
   }
 
