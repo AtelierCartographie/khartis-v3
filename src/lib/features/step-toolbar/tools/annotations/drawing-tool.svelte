@@ -1,13 +1,14 @@
 <script lang="ts">
+  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     AnnotationKind,
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
-  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     createColorValue,
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     Column,
@@ -93,13 +94,19 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <p class="field-label">Type</p>
+      <p class="field-label">{m.annotations_type()}</p>
       <RadioButtonGroup
         selected={drawingType}
         on:change={handleDrawingTypeChange}
       >
-        <RadioButton labelText="Ligne" value={DrawingType.LINE} />
-        <RadioButton labelText="Zone" value={DrawingType.ZONE} />
+        <RadioButton
+          labelText={m.annotations_drawing_line()}
+          value={DrawingType.LINE}
+        />
+        <RadioButton
+          labelText={m.annotations_drawing_area()}
+          value={DrawingType.ZONE}
+        />
       </RadioButtonGroup>
     </Column>
   </Row>
@@ -107,12 +114,9 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">
-          Ajouter un dessin ou sélectionner un élément existant pour le modifier
-          ci-dessous.
-        </p>
+        <p class="helper">{m.annotations_drawing_helper()}</p>
         <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
-          Ajouter un dessin
+          {m.annotations_add_drawing()}
         </Button>
       </div>
     </Column>
@@ -122,7 +126,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Épaisseur"
+          labelText={m.thickness()}
           value={defaultStyle.strokeWidth || 2}
           min={1}
           max={10}
@@ -138,7 +142,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Lissage (%)"
+          labelText={m.annotations_smoothness()}
           value={defaultStyle.smoothness ?? 50}
           min={0}
           max={100}
@@ -154,7 +158,7 @@
     <Column>
       <div class="section">
         <div class="toggle-row">
-          <span class="toggle-label">Pointillés</span>
+          <span class="toggle-label">{m.dashed()}</span>
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
@@ -167,8 +171,8 @@
               });
             }}
           >
-            <span slot="labelA">Oui</span>
-            <span slot="labelB">Non</span>
+            <span slot="labelA">{m.yes()}</span>
+            <span slot="labelB">{m.no()}</span>
           </Toggle>
         </div>
       </div>
@@ -183,7 +187,7 @@
           hue={hue}
           saturation={saturation}
           lightness={lightness}
-          triggerLabel="Couleur"
+          triggerLabel={m.color()}
           onValidate={({
             hex,
             hue,
@@ -211,7 +215,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Opacité"
+          labelText={m.opacity()}
           value={(defaultStyle.opacity ?? 1) * 100}
           min={0}
           max={100}
@@ -240,11 +244,11 @@
               selected.type === AnnotationKind.DRAWING &&
               annotationsActions.removeAnnotation(selected.id)}
           >
-            Supprimer le dessin
+            {m.annotations_delete_drawing()}
           </Button>
         {:else}
           <Button kind="danger-tertiary" icon={TrashCan} disabled
-            >Supprimer le dessin</Button
+            >{m.annotations_delete_drawing()}</Button
           >
         {/if}
       </div>

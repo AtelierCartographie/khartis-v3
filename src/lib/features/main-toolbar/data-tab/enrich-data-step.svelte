@@ -1,10 +1,7 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import {
-    BasemapLayerType,
-    BasemapSource
-  } from '$lib/features/commons/constants/ui.constants';
+  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
@@ -20,7 +17,11 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-  import { generateCustomBasemapAttributes } from '$lib/features/map/utils/generate-basemap-attributes';
+  import {
+    createOSMBasemap,
+    loadBasemapFromUrl,
+    processBasemapImport
+  } from '$lib/features/map/utils/basemap-import.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -382,77 +383,8 @@
     basemapImportError = null;
 
     try {
-      await Duck.register_files([file]);
+      const { basemap: customBasemap } = await processBasemapImport(file);
 
-      const tableNameResult = await Duck.read_geofile(file, {
-        tablename: `custom_basemap_${Date.now()}`
-      });
-      const tableName =
-        typeof tableNameResult === 'string'
-          ? tableNameResult
-          : (tableNameResult?.name ??
-            `custom_basemap_${Date.now().toString(36)}`);
-
-      const analysis = await Duck.analyse(tableName);
-
-      const bboxQuery = (await Duck.query(
-        `SELECT
-          ST_XMin(ST_Extent(geom)) as minX,
-          ST_YMin(ST_Extent(geom)) as minY,
-          ST_XMax(ST_Extent(geom)) as maxX,
-          ST_YMax(ST_Extent(geom)) as maxY
-        FROM "${tableName}"`,
-        { format: 'array' }
-      )) as Array<{
-        minX: number | null;
-        minY: number | null;
-        maxX: number | null;
-        maxY: number | null;
-      }>;
-      const bounds = bboxQuery[0];
-
-      if (
-        !bounds ||
-        bounds.minX === null ||
-        bounds.minY === null ||
-        bounds.maxX === null ||
-        bounds.maxY === null
-      ) {
-        throw new Error(m.basemap_import_modal_error_invalid_geometry());
-      }
-
-      const geomTypeQuery = (await Duck.query(
-        `SELECT DISTINCT ST_GeometryType(geom) as geom_type FROM "${tableName}" LIMIT 1`,
-        { format: 'array' }
-      )) as Array<{ geom_type?: string }>;
-      const geomType = geomTypeQuery[0]?.geom_type?.toLowerCase() ?? 'polygon';
-
-      const layerType: BasemapLayerType = geomType.includes('point')
-        ? BasemapLayerType.POINT
-        : geomType.includes('line')
-          ? BasemapLayerType.LINE
-          : BasemapLayerType.POLYGON;
-
-      const customBasemap: BasemapMetadata = {
-        file: tableName,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        description: m.basemap_custom_description(),
-        source: m.basemap_custom_source(),
-        date: new Date().getFullYear().toString(),
-        bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-        projection: 'EPSG:4326',
-        layers: [
-          {
-            name: 'geom',
-            type: layerType,
-            count:
-              Number(analysis.find((col) => col.name === 'geom')?.count) || 0
-          }
-        ],
-        isCustom: true
-      };
-
-      await generateCustomBasemapAttributes(tableName, customBasemap.file);
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
@@ -476,14 +408,7 @@
     basemapImportError = null;
 
     try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const blob = await response.blob();
-      const urlParts = url.split('/');
-      const fileName = urlParts[urlParts.length - 1] || 'basemap.geojson';
-      const file = new File([blob], fileName, {
-        type: blob.type || 'application/geo+json'
-      });
+      const file = await loadBasemapFromUrl(url);
       await handleBasemapImportFile(file);
     } catch (err) {
       logger.error('Error loading basemap URL', LogCategory.MAP, err);
@@ -495,17 +420,7 @@
   }
 
   function handleSelectOSM() {
-    const osmBasemap: BasemapMetadata = {
-      file: `osm_${DEFAULT_OSM_STYLE}_${Date.now()}`,
-      title: m.osm_basemap_title({ style: 'OpenStreetMap' }),
-      description: m.osm_basemap_description(),
-      source: m.osm_basemap_source(),
-      date: new Date().getFullYear().toString(),
-      bbox: [-180, -90, 180, 90],
-      projection: 'EPSG:3857',
-      layers: [{ name: 'base', type: BasemapLayerType.POLYGON }],
-      isCustom: true
-    };
+    const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
     osmBasemapStore.setOSMBasemap(osmBasemap);
     dataTabActions.setBasemapJoinState({
@@ -758,7 +673,7 @@
       <button
         class="toggle-chevron"
         onclick={() => (joinTabularEnabled = !joinTabularEnabled)}
-        aria-label="Toggle section"
+        aria-label={m.section_toggle()}
       >
         {#if joinTabularEnabled}
           <ChevronUp size={20} />
@@ -804,7 +719,7 @@
             <div class="url-input-row">
               <TextInput
                 bind:value={onlineUrlValue}
-                placeholder="https://"
+                placeholder={m.url_placeholder()}
                 size="sm"
               />
               <Button
@@ -996,7 +911,7 @@
       <button
         class="toggle-chevron"
         onclick={() => (overlayBasemapEnabled = !overlayBasemapEnabled)}
-        aria-label="Toggle section"
+        aria-label={m.section_toggle()}
       >
         {#if overlayBasemapEnabled}
           <ChevronUp size={20} />

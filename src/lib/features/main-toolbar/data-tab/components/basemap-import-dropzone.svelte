@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     InlineNotification,
@@ -10,8 +12,6 @@
     Launch,
     Upload
   } from 'carbon-icons-svelte';
-  import * as m from '$lib/paraglide/messages';
-  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
   interface Props {
     acceptedExtensions?: string[];
@@ -116,7 +116,11 @@
   <div class="url-import-section">
     <span class="url-label">{m.basemap_import_url_label()}</span>
     <div class="url-import-row">
-      <TextInput bind:value={urlInput} placeholder="https://" size="sm" />
+      <TextInput
+        bind:value={urlInput}
+        placeholder={m.url_placeholder()}
+        size="sm"
+      />
       <Button
         kind="tertiary"
         icon={CloudUpload}
@@ -154,7 +158,7 @@
     <Button
       kind="ghost"
       icon={Launch}
-      iconDescription="En savoir plus"
+      iconDescription={m.learn_more()}
       href="https://www.sciencespo.fr/cartographie/khartis/docs"
       target="_blank"
       size="small"

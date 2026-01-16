@@ -9,7 +9,16 @@ import type {
   ColumnTransformation,
   UploadedFile
 } from '$lib/features/commons/store/create-project.types';
+import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
+import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import type { MapProjectionType } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type { AnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+import type { FormatState } from '$lib/features/step-toolbar/tools/format/format.types';
+import type { GeoIndicationsState } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.types';
+import type { LegendState } from '$lib/features/step-toolbar/tools/legend/legend.types';
+import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
 
 /**
  * Serialized project data structure (JSON-safe)
@@ -43,6 +52,35 @@ export interface SerializedBasemapAttribute {
 }
 
 /**
+ * Basemap settings for serialization (CDC 2.B.3)
+ */
+export interface SerializedBasemapSettings {
+  layers: BasemapLayerConfig[];
+  style: BasemapStyle;
+  mapProjection: MapProjectionType;
+}
+
+/**
+ * Visualization settings for serialization (CDC 2.B.2)
+ */
+export interface SerializedVisualizationSettings {
+  visualizations: VisualizationConfig[];
+  selectedVisualizationId?: string;
+  activeVisualizationIds: string[];
+}
+
+/**
+ * Layout/Habillage settings for serialization (CDC 2.C)
+ */
+export interface SerializedLayoutSettings {
+  format: FormatState;
+  annotations: Omit<AnnotationsState, 'selectedId' | 'textContent'>;
+  legend: Omit<LegendState, 'activeTab'>;
+  geoIndications: GeoIndicationsState;
+  projection: Omit<ProjectionState, 'viewMode' | 'autoFit'>;
+}
+
+/**
  * Serialized project data (files and datasets)
  */
 export interface SerializedProjectData {
@@ -51,6 +89,9 @@ export interface SerializedProjectData {
     metadata: BasemapMetadata[];
     attributes: SerializedBasemapAttribute[];
   };
+  basemapSettings?: SerializedBasemapSettings;
+  visualizationSettings?: SerializedVisualizationSettings;
+  layoutSettings?: SerializedLayoutSettings;
   [key: string]: unknown;
 }
 

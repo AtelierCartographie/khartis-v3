@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import {
@@ -15,14 +16,13 @@
     type AnalysisResult,
     type GPSValidationResult
   } from '$lib/features/duckdb';
-  import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import { Launch, Location, Map } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { dataTabStore } from './data-tab.store.svelte';
   import type { GeoComboBoxItem } from './data-tab.shared.types';
+  import { dataTabStore } from './data-tab.store.svelte';
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const processedDataset = $derived.by(() =>
@@ -440,8 +440,8 @@
     {#if activeTabIndex === 1 && gpsValidation?.warning}
       <InlineNotification
         title={gpsValidation.possibleInversion
-          ? 'Inversion lat/lon détectée'
-          : 'Attention'}
+          ? m.geo_coords_inversion_detected()
+          : m.warning_title()}
         subtitle={gpsValidation.warning}
         kind="warning"
         lowContrast

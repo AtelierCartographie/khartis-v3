@@ -1,4 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import * as m from '$lib/paraglide/messages';
 import type { Geometry, Position } from 'geojson';
 import {
   getCategoricalColorMap,
@@ -383,7 +384,7 @@ export function exportMapToSvg(
   }
 
   svgContent += `  </g>
-  <text x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="#666666" opacity="0.7">Réalisé avec Khartis</text>
+  <text x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="#666666" opacity="0.7">${m.map_export_signature()}</text>
 </svg>`;
 
   return new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
@@ -421,7 +422,7 @@ export function exportMapToJpg(
 
           ctx.font = '12px Arial, sans-serif';
           ctx.fillStyle = 'rgba(102, 102, 102, 0.7)';
-          ctx.fillText('Réalisé avec Khartis', 10, opts.height - 10);
+          ctx.fillText(m.map_export_signature(), 10, opts.height - 10);
 
           canvas.toBlob(
             (blob) => {

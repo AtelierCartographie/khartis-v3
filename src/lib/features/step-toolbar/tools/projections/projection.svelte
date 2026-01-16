@@ -18,7 +18,7 @@
       <ProjectionMain />
     </ExpandableSection>
 
-    <ExpandableSection title="Autres projections">
+    <ExpandableSection title={m.projection_other_title()}>
       {#snippet icon()}
         <FileStorage size={20} />
       {/snippet}
@@ -26,7 +26,7 @@
       <ProjectionOther />
     </ExpandableSection>
 
-    <ExpandableSection title="Paramètres">
+    <ExpandableSection title={m.projection_settings_title()}>
       {#snippet icon()}
         <FileStorage size={20} />
       {/snippet}

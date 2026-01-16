@@ -79,7 +79,7 @@
     {#if globalState.toolbarState === ToolbarState.Compact}
       <Button
         kind="ghost"
-        iconDescription="Agrandir"
+        iconDescription={m.toolbar_expand()}
         icon={ChevronLeft}
         on:click={() => setToolbar(ToolbarState.Full)}
       />
@@ -88,7 +88,7 @@
     {#if globalState.toolbarState === ToolbarState.Collapsed}
       <Button
         kind="ghost"
-        iconDescription="Agrandir"
+        iconDescription={m.toolbar_expand()}
         disabled={globalState.selectedStep === ToolbarStep.Styling}
         icon={ChevronLeft}
         on:click={() => setToolbar(ToolbarState.Full)}
@@ -96,7 +96,7 @@
     {:else}
       <Button
         kind="ghost"
-        iconDescription="Réduire"
+        iconDescription={m.toolbar_collapse()}
         tooltipAlignment="start"
         icon={ChevronRight}
         on:click={() => setToolbar(ToolbarState.Collapsed)}
@@ -105,8 +105,8 @@
       <Button
         kind="ghost"
         iconDescription={globalState.toolbarState === ToolbarState.Compact
-          ? 'Agrandir'
-          : 'Compacte'}
+          ? m.toolbar_expand()
+          : m.toolbar_compact()}
         icon={Table}
         on:click={() =>
           setToolbar(
@@ -153,24 +153,24 @@
           complete={dataTabStore.hasCompletedStep[0]}
           label={m.data_tab_control()}
           description={dataTabStore.hasCompletedStep[0]
-            ? 'Données contrôlées'
-            : 'Vérifiez et nettoyez vos données'}
+            ? m.data_step_status_controlled()
+            : m.data_step_status_clean()}
         />
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[1]}
           disabled={!dataTabStore.canNavigateToStep[1]}
           label={m.data_tab_geolocate()}
           description={dataTabStore.hasCompletedStep[1]
-            ? 'Géolocalisation effectuée'
-            : 'Sélectionnez les colonnes géographiques'}
+            ? m.geolocation_status_done()
+            : m.geolocation_status_pending()}
         />
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[2]}
           disabled={!dataTabStore.canNavigateToStep[2]}
           label={m.data_tab_join()}
           description={dataTabStore.hasCompletedStep[2]
-            ? 'Jointure réalisée'
-            : 'Associez vos données au fond de carte'}
+            ? m.join_status_done()
+            : m.join_status_pending()}
         />
 
         <Button
@@ -182,14 +182,14 @@
           tooltipAlignment="end"
           iconDescription={!derivedToolbarState.canVisualize
             ? dataCompleteness.missingSteps.join(', ')
-            : 'Passer à la visualisation'}
+            : m.go_to_visualization()}
           size="small">{m.data_tab_visualize()}</Button
         >
       </ProgressIndicator>
 
       {#if projectStore.isDirty}
         <div class="mt-2 text-xs text-gray-600">
-          ⚠️ Modifications non sauvegardées
+          ⚠️ {m.unsaved_changes_notice()}
         </div>
       {/if}
     </footer>

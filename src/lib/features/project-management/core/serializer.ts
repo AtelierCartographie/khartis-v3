@@ -1,14 +1,37 @@
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
+import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import {
+  annotationsActions,
+  getAnnotationsState
+} from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import {
+  formatActions,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  geoIndicationsActions,
+  geoIndicationsState
+} from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+import {
+  getLegendState,
+  legendActions
+} from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import { projectionActions } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import type {
   SerializedBasemapAttribute,
+  SerializedLayoutSettings,
   SerializedProject,
   SerializedProjectData,
-  SerializedUploadedFile
+  SerializedUploadedFile,
+  SerializedVisualizationSettings
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
 import { bigIntReplacer } from '../utils/json-helpers';
@@ -106,6 +129,51 @@ export async function serializeProjectData(
     }
   }
 
+  serialized.basemapSettings = {
+    layers: basemapLayersStore.layers,
+    style: basemapStyleStore.selectedStyle,
+    mapProjection: mapProjectionStore.projection
+  };
+
+  const visualizations = visualizationStore.visualizations;
+  if (visualizations.length > 0) {
+    serialized.visualizationSettings = {
+      visualizations,
+      selectedVisualizationId: visualizationStore.selectedVisualization?.id,
+      activeVisualizationIds: visualizationStore.activeVisualizations.map(
+        (v) => v.id
+      )
+    } satisfies SerializedVisualizationSettings;
+  }
+
+  const annotationsState = getAnnotationsState();
+  const formatState = getFormatState();
+  const legendState = getLegendState();
+
+  serialized.layoutSettings = {
+    format: formatState,
+    annotations: {
+      items: annotationsState.items,
+      activeType: annotationsState.activeType,
+      predefinedStyle: annotationsState.predefinedStyle,
+      defaultStyle: annotationsState.defaultStyle
+    },
+    legend: {
+      items: legendState.items,
+      position: legendState.position,
+      visible: legendState.visible,
+      style: legendState.style
+    },
+    geoIndications: geoIndicationsState,
+    projection: {
+      selected: projectionActions.getCurrentProjectionInfo()?.id || 'mercator',
+      longitude: 0,
+      latitude: 0,
+      rotation: 0,
+      scale: 1
+    }
+  } satisfies SerializedLayoutSettings;
+
   return serialized;
 }
 
@@ -160,6 +228,103 @@ export async function deserializeProjectData(
       logger.error(
         'Failed to restore custom basemaps',
         LogCategory.DATA,
+        error
+      );
+    }
+  }
+
+  if (data.basemapSettings) {
+    try {
+      const { layers, style, mapProjection } = data.basemapSettings;
+      if (layers) {
+        basemapLayersStore.restoreFromSerialized(layers);
+      }
+      if (style) {
+        basemapStyleStore.restoreFromSerialized(style);
+      }
+      if (mapProjection) {
+        mapProjectionStore.restoreFromSerialized(mapProjection);
+      }
+      logger.debug('Basemap settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore basemap settings',
+        LogCategory.PROJECT,
+        error
+      );
+    }
+  }
+
+  if (data.visualizationSettings) {
+    try {
+      visualizationStore.restoreFromSerialized(data.visualizationSettings);
+      logger.debug('Visualization settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore visualization settings',
+        LogCategory.PROJECT,
+        error
+      );
+    }
+  }
+
+  if (data.layoutSettings) {
+    try {
+      const { format, annotations, legend, geoIndications, projection } =
+        data.layoutSettings;
+
+      if (format) {
+        formatActions.setState(format);
+      }
+
+      if (annotations) {
+        annotationsActions.setState({
+          items: annotations.items,
+          activeType: annotations.activeType,
+          predefinedStyle: annotations.predefinedStyle,
+          defaultStyle: annotations.defaultStyle,
+          selectedId: null,
+          textContent: ''
+        });
+      }
+
+      if (legend) {
+        legendActions.setState({
+          items: legend.items,
+          position: legend.position,
+          visible: legend.visible,
+          style: legend.style
+        });
+      }
+
+      if (geoIndications) {
+        geoIndicationsActions.setState(geoIndications);
+      }
+
+      if (projection) {
+        projectionActions.setSelected(projection.selected);
+        if (
+          projection.longitude !== undefined &&
+          projection.latitude !== undefined
+        ) {
+          projectionActions.setCenter(
+            projection.longitude,
+            projection.latitude
+          );
+        }
+        if (projection.rotation !== undefined) {
+          projectionActions.setRotation(projection.rotation);
+        }
+        if (projection.scale !== undefined) {
+          projectionActions.setScale(projection.scale);
+        }
+      }
+
+      logger.debug('Layout settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore layout settings',
+        LogCategory.PROJECT,
         error
       );
     }

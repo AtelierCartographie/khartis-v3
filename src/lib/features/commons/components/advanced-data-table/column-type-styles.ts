@@ -20,15 +20,17 @@ export function getColumnTypeStyle(
   return COLUMN_TYPE_STYLES.string;
 }
 
+import * as m from '$lib/paraglide/messages';
+
 export interface SemioBadgeStyle {
   color: string;
-  tooltip: string;
+  tooltip: () => string;
 }
 
 export const SEMIO_BADGE_STYLES: Record<string, SemioBadgeStyle> = {
   geoid: {
     color: '#24a148',
-    tooltip: 'Identifiant géographique potentiel'
+    tooltip: () => m.semio_geoid_tooltip()
   }
 } as const;
 

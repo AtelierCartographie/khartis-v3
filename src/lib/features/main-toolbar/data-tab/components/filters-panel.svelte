@@ -1,13 +1,13 @@
 <script lang="ts">
   import {
     Button,
-    NumberInput,
     Select,
     SelectItem,
     TextInput,
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { ColumnType } from '$lib/features/data-pipeline';
@@ -283,13 +283,15 @@
         </div>
       {:else if currentOperator.requiresLimit}
         <div class="field-group">
-          <NumberInput
-            size="sm"
-            labelText={m.filter_count()}
-            min={1}
-            max={1000}
-            bind:value={newFilter.limit}
-          />
+          <div class="labeled-input">
+            <label class="input-label">{m.filter_count()}</label>
+            <CompactNumberInput
+              bind:value={newFilter.limit}
+              min={1}
+              max={1000}
+              width="100%"
+            />
+          </div>
         </div>
       {/if}
 
@@ -371,6 +373,18 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .labeled-input {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+  }
+
+  .input-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 400;
   }
 
   .form-actions {

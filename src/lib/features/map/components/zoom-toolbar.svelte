@@ -3,11 +3,11 @@
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
   import Separator from '../../commons/components/separator.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
-  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import {
     globalActions,
     globalState
   } from '../../commons/store/global.svelte';
+  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
 
   let activeTabIndex: number = $state(0);
 
@@ -77,8 +77,7 @@
   <div class="zoom-section">
     <div
       class="zoom-display"
-      title="Click to reset zoom
-Shortcuts: Ctrl/Cmd + Plus/Minus to zoom, Ctrl/Cmd + 0 to reset, Alt + Z to switch mode"
+      title={m.zoom_reset_title()}
       onclick={handleResetZoom}
       onkeydown={handleKeyDown}
       role="button"
@@ -88,13 +87,13 @@ Shortcuts: Ctrl/Cmd + Plus/Minus to zoom, Ctrl/Cmd + 0 to reset, Alt + Z to swit
     </div>
 
     <div class="zoom-controls">
-      <button class="zoom-button" onclick={handleZoomOut} title="Zoom out">
+      <button class="zoom-button" onclick={handleZoomOut} title={m.zoom_out()}>
         <Subtract size={16} />
       </button>
 
       <Separator orientation="vertical" />
 
-      <button class="zoom-button" onclick={handleZoomIn} title="Zoom in">
+      <button class="zoom-button" onclick={handleZoomIn} title={m.zoom_in()}>
         <Add size={16} />
       </button>
     </div>

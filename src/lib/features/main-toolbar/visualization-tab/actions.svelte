@@ -1,12 +1,21 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages.js';
+  import * as m from '$lib/paraglide/messages';
   import { Button, Link } from 'carbon-components-svelte';
   import { Edit } from 'carbon-icons-svelte';
+  import { mainToolbarActions } from '../main-toolbar.state.svelte';
+
+  function handleNavigateToStyling() {
+    mainToolbarActions.navigateToStyling();
+  }
 </script>
 
 <section class="actions">
-  <Button kind="primary" size="lg" icon={Edit} class="create-btn"
-    >{m.create_visualization_button()}</Button
+  <Button
+    kind="primary"
+    size="field"
+    icon={Edit}
+    class="create-btn"
+    on:click={handleNavigateToStyling}>{m.create_visualization_button()}</Button
   >
 
   <div class="learn-more">
@@ -20,12 +29,15 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--cds-spacing-04);
-  }
 
-  :global(.create-btn) {
-    --btn-height: 48px;
-    height: var(--btn-height);
-    padding-inline: var(--cds-spacing-06);
+    :global(.create-btn) {
+      align-items: center;
+      gap: var(--cds-spacing-03);
+    }
+
+    :global(.create-btn .bx--btn__icon) {
+      margin-left: var(--cds-spacing-03);
+    }
   }
 
   .learn-more {

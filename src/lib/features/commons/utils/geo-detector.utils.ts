@@ -1,3 +1,5 @@
+import * as m from '$lib/paraglide/messages';
+
 export interface GeoColumnResult {
   index: number;
   columnName: string;
@@ -148,6 +150,23 @@ const NUTS_SAMPLES = [
   'NL22',
   'NL31'
 ] as const;
+
+export const GPS_COLUMN_PATTERNS = {
+  latitude: COLUMN_NAME_PATTERNS.latitude,
+  longitude: COLUMN_NAME_PATTERNS.longitude
+} as const;
+
+export function hasGPSCoordinateColumns(
+  columns: Array<{ name: string }>
+): boolean {
+  const hasLat = columns.some((col) =>
+    GPS_COLUMN_PATTERNS.latitude.test(col.name)
+  );
+  const hasLon = columns.some((col) =>
+    GPS_COLUMN_PATTERNS.longitude.test(col.name)
+  );
+  return hasLat && hasLon;
+}
 
 export const GeoColumnDetector = {
   async detectGeoColumns(
@@ -438,18 +457,18 @@ export const GeoColumnDetector = {
 
   getGeoColumnDescription(column: GeoColumnResult): string {
     const descriptions: Record<GeoColumnResult['type'], string> = {
-      latitude: 'Coordonnées de latitude',
-      longitude: 'Coordonnées de longitude',
-      country_name: 'Noms de pays',
-      iso2: 'Codes pays ISO Alpha-2',
-      iso3: 'Codes pays ISO Alpha-3',
-      nuts: 'Codes NUTS (régions européennes)',
-      region: 'Régions ou provinces',
-      city: 'Villes ou communes',
-      coordinates: 'Coordonnées géographiques',
-      unknown: 'Type géographique non déterminé'
+      latitude: m.geo_detector_latitude(),
+      longitude: m.geo_detector_longitude(),
+      country_name: m.geo_detector_country_name(),
+      iso2: m.geo_detector_iso2(),
+      iso3: m.geo_detector_iso3(),
+      nuts: m.geo_detector_nuts(),
+      region: m.geo_detector_region(),
+      city: m.geo_detector_city(),
+      coordinates: m.geo_detector_coordinates(),
+      unknown: m.geo_detector_unknown()
     };
 
-    return descriptions[column.type] || 'Colonne géographique';
+    return descriptions[column.type] || m.geo_detector_default();
   }
 } as const;

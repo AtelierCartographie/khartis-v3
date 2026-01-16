@@ -17,6 +17,7 @@ import {
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
+import * as m from '$lib/paraglide/messages';
 
 // ===========================
 // TYPES
@@ -59,147 +60,147 @@ export { SEMIO_TYPES };
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'symbols_uniques',
-    label: 'Symboles uniques',
+    label: m.viz_suggestion_symbols_uniques(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_colorful_QL',
-    label: 'Aplats de couleur (qualitatif)',
+    label: m.viz_suggestion_polygons_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['polygon']
   },
   {
     id: 'choropleth',
-    label: 'Choroplèthe',
+    label: m.viz_suggestion_choropleth(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_uniques_colorful_QTR',
-    label: 'Symboles colorés (quantitatif relatif)',
+    label: m.viz_suggestion_symbols_unique_colorful_qtr(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_differents',
-    label: 'Symboles différents (qualitatif)',
+    label: m.viz_suggestion_symbols_different_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QL',
-    label: 'Symboles colorés (qualitatif)',
+    label: m.viz_suggestion_symbols_unique_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional',
-    label: 'Symboles proportionnels',
+    label: m.viz_suggestion_symbols_proportional(),
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QL',
-    label: 'Symboles proportionnels colorés (qualitatif)',
+    label: m.viz_suggestion_symbols_proportional_colorful_ql(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QTR',
-    label: 'Symboles proportionnels colorés (quantitatif)',
+    label: m.viz_suggestion_symbols_proportional_colorful_qtr(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_double',
-    label: 'Double symboles proportionnels',
+    label: m.viz_suggestion_symbols_proportional_double(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_uniques',
-    label: 'Polygones uniques',
+    label: m.viz_suggestion_polygons_unique(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['polygon']
   },
   {
     id: 'lines_uniques',
-    label: 'Lignes uniques',
+    label: m.viz_suggestion_lines_unique(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QL',
-    label: 'Lignes colorées (qualitatif)',
+    label: m.viz_suggestion_lines_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QTR',
-    label: 'Lignes colorées (quantitatif)',
+    label: m.viz_suggestion_lines_colorful_qtr(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional',
-    label: 'Lignes proportionnelles',
+    label: m.viz_suggestion_lines_proportional(),
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QL',
-    label: 'Lignes proportionnelles colorées (qualitatif)',
+    label: m.viz_suggestion_lines_proportional_colorful_ql(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QTR',
-    label: 'Lignes proportionnelles colorées (quantitatif)',
+    label: m.viz_suggestion_lines_proportional_colorful_qtr(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['line']
   },
   {
     id: 'polygons_colorful_QLO',
-    label: 'Aplats de couleur (qualitatif ordonné)',
+    label: m.viz_suggestion_polygons_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_differents_QLO',
-    label: 'Symboles différents (qualitatif ordonné)',
+    label: m.viz_suggestion_symbols_different_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QLO',
-    label: 'Symboles colorés (qualitatif ordonné)',
+    label: m.viz_suggestion_symbols_unique_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'lines_colorful_QLO',
-    label: 'Lignes colorées (qualitatif ordonné)',
+    label: m.viz_suggestion_lines_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['line']

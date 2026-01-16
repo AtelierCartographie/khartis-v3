@@ -2,7 +2,6 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import clsx from 'clsx';
-  import { onMount } from 'svelte';
   import BasemapJoinStep from './basemap-join-step.svelte';
   import DataControlStep from './data-control-step.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
@@ -12,10 +11,6 @@
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);
 
   $effect(() => {
-    dataTabStore.updateNavigationPermissions();
-  });
-
-  onMount(() => {
     dataTabStore.updateNavigationPermissions();
   });
 </script>

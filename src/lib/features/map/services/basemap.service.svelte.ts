@@ -6,15 +6,32 @@ import { LogCategory, logger } from '../../commons/utils/logger';
 import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
+import type {
+  FeatureCollection,
+  Point,
+  Polygon,
+  MultiPolygon,
+  LineString,
+  MultiLineString
+} from 'geojson';
 import {
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
 
+interface AdditionalBasemapData {
+  lakesData: FeatureCollection<Polygon | MultiPolygon> | null;
+  riversData: FeatureCollection<LineString | MultiLineString> | null;
+  citiesData: FeatureCollection<Point> | null;
+}
+
 const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
 const GEOMETRY_BASE_PATH = `${base}/basemaps/geometry/`;
 const DEFAULT_BASEMAP_ID = 'world-countries-50m';
+const LAKES_FILE = 'ne_110m_lakes';
+const RIVERS_FILE = 'ne_110m_rivers_lake_centerlines';
+const CITIES_FILE = 'ne_110m_populated_places_simple';
 
 interface LoadedBasemap {
   metadata: BasemapMetadata;
@@ -31,6 +48,12 @@ class BasemapService {
 
   private _basemapCache = new SvelteMap<string, LoadedBasemap>();
 
+  private _additionalData: AdditionalBasemapData = {
+    lakesData: null,
+    riversData: null,
+    citiesData: null
+  };
+
   async initialize(): Promise<void> {
     try {
       logger.info('Initializing basemap service', LogCategory.MAP);
@@ -44,6 +67,14 @@ class BasemapService {
           LogCategory.MAP
         );
       }
+
+      this.loadAdditionalLayers().catch((err) => {
+        logger.warn(
+          'Failed to load additional basemap layers',
+          LogCategory.MAP,
+          err
+        );
+      });
 
       logger.success('Basemap service initialized', LogCategory.MAP, {
         basemapCount: this._availableBasemaps.length
@@ -343,6 +374,96 @@ class BasemapService {
 
   get currentLayers(): Map<string, ArrowTable> {
     return this._currentBasemap?.layerTables ?? new Map();
+  }
+
+  get lakesData(): FeatureCollection<Polygon | MultiPolygon> | null {
+    return this._additionalData.lakesData;
+  }
+
+  get riversData(): FeatureCollection<LineString | MultiLineString> | null {
+    return this._additionalData.riversData;
+  }
+
+  get citiesData(): FeatureCollection<Point> | null {
+    return this._additionalData.citiesData;
+  }
+
+  async loadAdditionalLayers(): Promise<void> {
+    await Promise.all([
+      this.loadLakesData(),
+      this.loadRiversData(),
+      this.loadCitiesData()
+    ]);
+  }
+
+  private async loadLakesData(): Promise<void> {
+    if (this._additionalData.lakesData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${LAKES_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Lakes data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.lakesData = geojson as FeatureCollection<
+        Polygon | MultiPolygon
+      >;
+      logger.debug('Lakes data loaded', LogCategory.MAP, {
+        features: this._additionalData.lakesData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load lakes data', LogCategory.MAP, error);
+    }
+  }
+
+  private async loadRiversData(): Promise<void> {
+    if (this._additionalData.riversData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${RIVERS_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Rivers data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.riversData = geojson as FeatureCollection<
+        LineString | MultiLineString
+      >;
+      logger.debug('Rivers data loaded', LogCategory.MAP, {
+        features: this._additionalData.riversData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load rivers data', LogCategory.MAP, error);
+    }
+  }
+
+  private async loadCitiesData(): Promise<void> {
+    if (this._additionalData.citiesData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${CITIES_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Cities data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.citiesData = geojson as FeatureCollection<Point>;
+      logger.debug('Cities data loaded', LogCategory.MAP, {
+        features: this._additionalData.citiesData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load cities data', LogCategory.MAP, error);
+    }
   }
 
   reset(): void {

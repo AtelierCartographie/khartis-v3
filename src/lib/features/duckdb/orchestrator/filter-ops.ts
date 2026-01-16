@@ -3,6 +3,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import type {
   DataTableFilter,
   DataTableFilterInput,
@@ -36,9 +37,7 @@ export function assertFilterValue(
   operator: FilterOperator
 ): void {
   if (value === undefined || value === null || `${value}`.trim() === '') {
-    throw new DuckDBError(
-      `Une valeur est nécessaire pour l'opérateur "${operator}"`
-    );
+    throw new DuckDBError(m.filter_value_required({ operator }));
   }
 }
 
@@ -53,7 +52,7 @@ export function buildFilterSQL(
   const buildTopFilter = (direction: 'ASC' | 'DESC'): string => {
     const limit = Number(filter.limit ?? filter.value);
     if (!Number.isFinite(limit) || limit <= 0) {
-      throw new DuckDBError('Veuillez préciser un nombre pour le filtre "top"');
+      throw new DuckDBError(m.filter_top_requires_number());
     }
     return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };
@@ -81,9 +80,7 @@ export function buildFilterSQL(
 
     case 'between':
       if (filter.value === undefined || filter.secondaryValue === undefined) {
-        throw new DuckDBError(
-          'Deux valeurs sont nécessaires pour un filtre "compris entre"'
-        );
+        throw new DuckDBError(m.filter_between_requires_two_values());
       }
       return `${columnRef} BETWEEN ${value} AND ${secondValue}`;
 
@@ -100,7 +97,9 @@ export function buildFilterSQL(
       return `(${columnRef} IS NOT NULL AND TRIM(${columnRef}::TEXT) <> '')`;
 
     default:
-      throw new DuckDBError(`Unsupported filter operator: ${filter.operator}`);
+      throw new DuckDBError(
+        m.filter_operator_unsupported({ operator: filter.operator })
+      );
   }
 }
 
@@ -110,7 +109,10 @@ export function describeFilter(filter: DataTableFilterInput): string {
   const valueLabel = typeof value === 'number' ? value : String(value).trim();
   const betweenLabel =
     filter.secondaryValue !== undefined
-      ? `${valueLabel} et ${filter.secondaryValue}`
+      ? m.filter_between_values({
+          first: valueLabel,
+          second: String(filter.secondaryValue)
+        })
       : valueLabel;
 
   switch (filter.operator) {
@@ -121,7 +123,7 @@ export function describeFilter(filter: DataTableFilterInput): string {
       return `${column} ≤ ${valueLabel}`;
 
     case 'contains':
-      return `${column} contient "${valueLabel}"`;
+      return m.filter_label_contains({ column, value: valueLabel });
 
     case 'equals':
       return `${column} = ${valueLabel}`;
@@ -130,22 +132,31 @@ export function describeFilter(filter: DataTableFilterInput): string {
       return `${column} ≠ ${valueLabel}`;
 
     case 'between':
-      return `${column} entre ${betweenLabel}`;
+      return m.filter_label_between({ column, value: betweenLabel });
 
     case 'top_asc':
-      return `Top ${filter.limit ?? filter.value} valeurs les plus basses de ${column}`;
+      return m.filter_label_top_asc({
+        limit: String(filter.limit ?? filter.value ?? ''),
+        column
+      });
 
     case 'top_desc':
-      return `Top ${filter.limit ?? filter.value} valeurs les plus hautes de ${column}`;
+      return m.filter_label_top_desc({
+        limit: String(filter.limit ?? filter.value ?? ''),
+        column
+      });
 
     case 'empty':
-      return `${column} vide`;
+      return m.filter_label_empty({ column });
 
     case 'not_empty':
-      return `${column} non vide`;
+      return m.filter_label_not_empty({ column });
 
     default:
-      return `${column} (${filter.operator})`;
+      return m.filter_label_fallback({
+        column,
+        operator: filter.operator
+      });
   }
 }
 
@@ -155,7 +166,7 @@ export function createFilterRecord(
   filterId: string
 ): DataTableFilter {
   if (!input.column) {
-    throw new DuckDBError('Column is required for filters');
+    throw new DuckDBError(m.filter_column_required());
   }
 
   const sql = buildFilterSQL(tableName, input);

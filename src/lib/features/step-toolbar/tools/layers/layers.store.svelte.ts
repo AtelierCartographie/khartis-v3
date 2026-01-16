@@ -1,12 +1,13 @@
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import { SvelteSet } from 'svelte/reactivity';
 import type { Layer, LayersState } from './layers.types';
 
 const FIXTURE_LAYERS: Layer[] = [
   {
     id: 'texts',
-    name: 'Textes',
+    name: m.layers_texts(),
     visible: true,
     type: 'visualization',
     color: '#22c55e',
@@ -15,7 +16,7 @@ const FIXTURE_LAYERS: Layer[] = [
   },
   {
     id: 'symbols',
-    name: 'Symboles',
+    name: m.layers_symbols(),
     visible: true,
     type: 'visualization',
     color: '#22c55e',
@@ -24,7 +25,7 @@ const FIXTURE_LAYERS: Layer[] = [
   },
   {
     id: 'borders',
-    name: 'Frontières',
+    name: m.layers_borders(),
     visible: true,
     type: 'geographic',
     color: '#dc2626',
@@ -33,7 +34,7 @@ const FIXTURE_LAYERS: Layer[] = [
   },
   {
     id: 'equator',
-    name: 'Équateur',
+    name: m.layers_equator(),
     visible: false,
     type: 'geographic',
     color: '#dc2626',

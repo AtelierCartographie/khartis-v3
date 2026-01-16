@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FilterStats } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     filterStats: FilterStats;
@@ -13,10 +14,11 @@
 {#if hasActiveFilters}
   <div class="table-header">
     <div class="table-info">
-      <span class="filter-count">
-        {filterStats.filtered.toLocaleString('fr-FR')} / {filterStats.total.toLocaleString(
-          'fr-FR'
-        )} lignes
+      <span class="filter-count" title={m.filter_count_tooltip()}>
+        {m.filter_count_display({
+          filtered: filterStats.filtered.toLocaleString('fr-FR'),
+          total: filterStats.total.toLocaleString('fr-FR')
+        })}
       </span>
     </div>
   </div>
