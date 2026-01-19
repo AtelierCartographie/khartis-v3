@@ -68,13 +68,13 @@
     await saveImmediately();
   }
 
-  async function handleTiledBasemapToggle(checked: boolean) {
+  function handleTiledBasemapToggle(checked: boolean) {
     if (checked) {
       basemapStyleStore.setStyle(BasemapStyle.CARTE_FACILE_DESATURATED);
     } else {
       basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
     }
-    await saveImmediately();
+    markProjectDirty();
   }
 
   function handleTerreChange(updates: Partial<TerreLayerConfig>) {

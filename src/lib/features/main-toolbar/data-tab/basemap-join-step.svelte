@@ -102,7 +102,11 @@
       }
     });
 
-    if (selectedDataset && datasetIdForOrchestrator && dataTabState.geolocation.linkedVariableName) {
+    if (
+      selectedDataset &&
+      datasetIdForOrchestrator &&
+      dataTabState.geolocation.linkedVariableName
+    ) {
       try {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -204,7 +208,11 @@
         }
       });
 
-      if (selectedDataset && datasetIdForOrchestrator && dataTabState.geolocation.linkedVariableName) {
+      if (
+        selectedDataset &&
+        datasetIdForOrchestrator &&
+        dataTabState.geolocation.linkedVariableName
+      ) {
         try {
           const stats = await duckDBOrchestrator.computeJoinStats(
             datasetIdForOrchestrator,
@@ -275,7 +283,11 @@
     }
 
     try {
-      await duckDBOrchestrator.finalizeJoin(datasetIdForOrchestrator, osmBasemap, '');
+      await duckDBOrchestrator.finalizeJoin(
+        datasetIdForOrchestrator,
+        osmBasemap,
+        ''
+      );
       dataTabStore.markStepComplete(2);
       logger.success('OSM basemap activated with GPS mode', LogCategory.MAP);
     } catch (error) {
@@ -293,7 +305,11 @@
   }
 
   async function handleApplyCorrections() {
-    if (!selectedDataset || !datasetIdForOrchestrator || !dataTabState.geolocation.linkedVariableName)
+    if (
+      !selectedDataset ||
+      !datasetIdForOrchestrator ||
+      !dataTabState.geolocation.linkedVariableName
+    )
       return;
 
     const corrections: Record<string, string> = {};
@@ -330,7 +346,11 @@
   }
 
   async function handleFinalizeJoin() {
-    if (!selectedDataset || !datasetIdForOrchestrator || !dataTabState.geolocation.linkedVariableName)
+    if (
+      !selectedDataset ||
+      !datasetIdForOrchestrator ||
+      !dataTabState.geolocation.linkedVariableName
+    )
       return;
 
     const basemap = allBasemaps.find((b) => b.file === basemapSelected);
@@ -408,7 +428,11 @@
             }
           }
 
-          if (selectedDataset && datasetIdForOrchestrator && dataTabState.geolocation.linkedVariableName) {
+          if (
+            selectedDataset &&
+            datasetIdForOrchestrator &&
+            dataTabState.geolocation.linkedVariableName
+          ) {
             const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
             if (basemap) {
               try {

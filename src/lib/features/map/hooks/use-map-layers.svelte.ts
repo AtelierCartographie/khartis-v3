@@ -147,10 +147,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         additionalData
       );
       layers.push(...basemapLayers);
-      console.log(`[LAYERS] Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`);
+      console.log(
+        `[LAYERS] Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`
+      );
     }
 
-    console.log(`[LAYERS] Processing ${activeVisualizations.length} visualizations`);
+    console.log(
+      `[LAYERS] Processing ${activeVisualizations.length} visualizations`
+    );
     for (const viz of activeVisualizations) {
       const vizStart = performance.now();
       const datasetId = viz.datasetId;
@@ -166,7 +170,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         const geojsonStart = performance.now();
         const geojsonLayers = createGeoJsonLayers(geojson, ctx);
         layers.push(...geojsonLayers);
-        console.log(`[LAYERS] GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${(geojson.features?.length || 0)} features)`);
+        console.log(
+          `[LAYERS] GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`
+        );
       } else if (table) {
         const geoMetadata = table.schema.metadata?.get('geo');
         if (!geoMetadata) {
@@ -180,15 +186,23 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         const arrowStart = performance.now();
         const arrowLayers = createDeckLayers(table, ctx);
         layers.push(...arrowLayers);
-        console.log(`[LAYERS] Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`);
+        console.log(
+          `[LAYERS] Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`
+        );
       }
-      console.log(`[LAYERS] Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`);
+      console.log(
+        `[LAYERS] Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`
+      );
     }
 
     const setStart = performance.now();
     setLayers(layers);
-    console.log(`[LAYERS] setLayers took ${(performance.now() - setStart).toFixed(1)}ms`);
-    console.log(`[LAYERS] updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`);
+    console.log(
+      `[LAYERS] setLayers took ${(performance.now() - setStart).toFixed(1)}ms`
+    );
+    console.log(
+      `[LAYERS] updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`
+    );
 
     logger.success('Deck.gl layers applied', LogCategory.MAP, {
       layerCount: layers.length,
