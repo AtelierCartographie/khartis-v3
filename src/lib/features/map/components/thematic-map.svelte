@@ -70,13 +70,16 @@
   function scheduleLayerUpdate(source?: string): void {
     scheduleCount++;
     const now = performance.now();
-    console.log(`[PERF] scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`, {
-      isSwitchingViewMode,
-      isStyleLoading: mapBasemap.isStyleLoading,
-      pendingLayerUpdate,
-      tablesSize: tables.size,
-      geoJSONsSize: geoJSONs.size
-    });
+    console.log(
+      `[PERF] scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`,
+      {
+        isSwitchingViewMode,
+        isStyleLoading: mapBasemap.isStyleLoading,
+        pendingLayerUpdate,
+        tablesSize: tables.size,
+        geoJSONsSize: geoJSONs.size
+      }
+    );
 
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
       console.log(`[PERF] Deferred (pending=true) from: ${source}`);
@@ -89,11 +92,17 @@
     }
     layerUpdateTimeoutId = setTimeout(() => {
       layerUpdateTimeoutId = null;
-      if (mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading) {
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        !mapBasemap.isStyleLoading
+      ) {
         console.log(`[PERF] Executing updateLayers from: ${source}`);
         const start = performance.now();
         mapLayers.updateLayers(tables, geoJSONs);
-        console.log(`[PERF] updateLayers took ${(performance.now() - start).toFixed(1)}ms`);
+        console.log(
+          `[PERF] updateLayers took ${(performance.now() - start).toFixed(1)}ms`
+        );
       }
     }, LAYER_UPDATE_DEBOUNCE_MS);
   }
@@ -253,9 +262,11 @@
 
       if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
         isSwitchingViewMode = true;
+        mapBasemap.cleanup();
         mapInit.switchToMapLibreMode();
       } else if (!shouldUseMapLibre && mapInit.viewMode === 'maplibre') {
         isSwitchingViewMode = true;
+        mapBasemap.cleanup();
         mapInit.switchToOrthographicMode();
       }
     });
@@ -370,8 +381,18 @@
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
     logEffect('basemapStyleStore.selectedStyleUrl');
-    console.log('[PERF] basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle');
-    untrack(() => mapBasemap.syncBasemapStyle());
+    untrack(() => {
+      if (isSwitchingViewMode) {
+        console.log(
+          '[PERF] basemapStyleStore.selectedStyleUrl changed but switching view mode, skipping syncBasemapStyle'
+        );
+        return;
+      }
+      console.log(
+        '[PERF] basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle'
+      );
+      mapBasemap.syncBasemapStyle();
+    });
   });
 
   $effect(() => {
@@ -429,7 +450,9 @@
     console.log('[PERF] loadWorldBasemap started');
     const start = performance.now();
     const loaded = await basemapService.loadDefaultBasemap();
-    console.log(`[PERF] loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`);
+    console.log(
+      `[PERF] loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`
+    );
     if (loaded) {
       worldBaseTable = loaded.geometryTable;
       // Note: isStyleLoading check is handled inside scheduleLayerUpdate()

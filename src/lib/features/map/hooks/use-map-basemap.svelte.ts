@@ -20,6 +20,7 @@ export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
   syncProjection: () => void;
+  cleanup: () => void;
   readonly isStyleLoading: boolean;
 }
 
@@ -81,7 +82,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
     styleLoadHandler = () => {
       const loadTime = performance.now() - styleLoadStartTime;
-      console.log(`[BASEMAP] Style loaded in ${loadTime.toFixed(1)}ms`, { styleKey });
+      console.log(`[BASEMAP] Style loaded in ${loadTime.toFixed(1)}ms`, {
+        styleKey
+      });
       isStyleLoading = false;
       lastAppliedStyleKey = styleKey;
       logger.debug('Basemap style loaded', LogCategory.MAP, { styleKey });
@@ -93,7 +96,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
       if (onStyleLoaded) {
         console.log('[BASEMAP] Calling onStyleLoaded callback');
-        setTimeout(() => onStyleLoaded(), 50);
+        onStyleLoaded();
       }
     };
 
@@ -154,10 +157,22 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
   }
 
+  function cleanup(): void {
+    const map = getMap();
+    if (map && styleLoadHandler) {
+      map.off('styledata', styleLoadHandler);
+      styleLoadHandler = null;
+    }
+    isStyleLoading = false;
+    lastAppliedStyleKey = null;
+    logger.debug('Basemap hook cleanup completed', LogCategory.MAP);
+  }
+
   return {
     syncBasemapStyle,
     syncOSMRasterLayer,
     syncProjection,
+    cleanup,
     get isStyleLoading() {
       return isStyleLoading;
     }

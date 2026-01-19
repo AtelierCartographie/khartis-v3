@@ -26,12 +26,10 @@
       : BasemapStyle.CARTE_FACILE_DESATURATED
   );
 
-  async function handleStyleChange(value: BasemapStyle): Promise<void> {
+  function handleStyleChange(value: BasemapStyle): void {
     selectedStyle = value;
     basemapStyleStore.setStyle(value);
-    if (projectStore.currentProject) {
-      await projectStore.saveCurrentProject();
-    }
+    projectStore.markAsDirty();
   }
 </script>
 
