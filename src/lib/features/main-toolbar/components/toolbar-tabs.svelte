@@ -24,6 +24,8 @@
   import clsx from 'clsx';
   import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
+  import { dataTabStore } from '../data-tab/data-tab.store.svelte';
+  import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
 
@@ -63,10 +65,26 @@
     return datasets.find((d) => d.isSelected) ?? datasets[0];
   }
 
+  function resetDataTabStores() {
+    dataTabStore.reset();
+    dataToolsStore.reset();
+  }
+
   function handleSelectDataset(datasetId: string, event: Event) {
     event.stopPropagation();
+    const previousDatasetId = datasetsStore.selectedDatasetId;
     datasetsStore.selectDataset(datasetId);
+    if (previousDatasetId !== datasetId) {
+      resetDataTabStores();
+    }
     closeTabMenu();
+  }
+
+  function handleTabClick(sourceFileId: string, isCurrentlySelected: boolean) {
+    if (!isCurrentlySelected) {
+      resetDataTabStores();
+      globalActions.selectDataButton(sourceFileId);
+    }
   }
 
   let datasetToDelete = $state<{ id: string; name: string } | null>(null);
@@ -402,11 +420,7 @@
         <Button
           isSelected={dataButton.isSelected}
           kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-          on:click={() => {
-            if (!dataButton.isSelected) {
-              globalActions.selectDataButton(dataButton.id);
-            }
-          }}
+          on:click={() => handleTabClick(dataButton.id, dataButton.isSelected)}
           class="tab-button"
           title={displayName}
         >

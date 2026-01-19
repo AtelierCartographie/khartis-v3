@@ -3,12 +3,15 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
+  import { dataTabStore } from '../data-tab/data-tab.store.svelte';
+  import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
 
   interface Props {
     open: boolean;
@@ -58,6 +61,9 @@
         await projectStore.addFilesToProject(validFiles);
         const lastFile = validFiles[validFiles.length - 1];
         if (lastFile?.id) {
+          dataTabActions.reset();
+          dataTabStore.reset();
+          dataToolsStore.reset();
           globalActions.selectDataButton(lastFile.id);
         }
 

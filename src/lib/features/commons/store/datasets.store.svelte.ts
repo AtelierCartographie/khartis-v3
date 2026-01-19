@@ -19,6 +19,7 @@ import type { UploadedFile } from './create-project.types';
 import { DataSourceType, FileType } from './create-project.types';
 import { FileStatus } from '../constants/ui.constants';
 import { projectStore } from './project.store.svelte';
+import { dataTabActions } from './data-tab.store.svelte';
 
 function createDatasetFromPreprocessedFile(file: UploadedFile): DatasetResult {
   const statistics = file.statistics as Record<
@@ -392,7 +393,10 @@ class DatasetsStore {
   selectDataset(datasetId: string): void {
     const dataset = this._state.datasets.find((d) => d.id === datasetId);
 
-    if (dataset) {
+    if (dataset && this._state.selectedDatasetId !== datasetId) {
+      this._state.selectedDatasetId = datasetId;
+      dataTabActions.reset();
+    } else if (dataset) {
       this._state.selectedDatasetId = datasetId;
     }
   }
