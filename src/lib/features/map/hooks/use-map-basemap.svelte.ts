@@ -37,10 +37,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   let lastAppliedStyleKey = $state<string | null>(currentStyleKey);
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
-
-  console.log('[BASEMAP] useMapBasemap initialized', {
-    lastAppliedStyleKey: currentStyleKey
-  });
+  let styleLoadStartTime = 0;
 
   function syncBasemapStyle(): void {
     const map = getMap();
@@ -53,7 +50,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     if (!map || !getIsMapLoaded()) return;
 
     if (isStyleLoading) {
-      console.log('[BASEMAP] Style is still loading, skipping sync');
+      console.log('[BASEMAP] Style still loading, skipping');
       logger.debug('Style is still loading, skipping sync', LogCategory.MAP);
       return;
     }
@@ -76,13 +73,15 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     });
 
     isStyleLoading = true;
+    styleLoadStartTime = performance.now();
 
     if (styleLoadHandler) {
       map.off('styledata', styleLoadHandler);
     }
 
     styleLoadHandler = () => {
-      console.log('[BASEMAP] styledata event received, style loaded');
+      const loadTime = performance.now() - styleLoadStartTime;
+      console.log(`[BASEMAP] Style loaded in ${loadTime.toFixed(1)}ms`, { styleKey });
       isStyleLoading = false;
       lastAppliedStyleKey = styleKey;
       logger.debug('Basemap style loaded', LogCategory.MAP, { styleKey });
@@ -93,13 +92,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
 
       if (onStyleLoaded) {
-        console.log('[BASEMAP] Calling onStyleLoaded callback after 50ms');
+        console.log('[BASEMAP] Calling onStyleLoaded callback');
         setTimeout(() => onStyleLoaded(), 50);
       }
     };
 
     map.once('styledata', styleLoadHandler);
-
     console.log('[BASEMAP] Calling map.setStyle()');
     map.setStyle(style);
   }

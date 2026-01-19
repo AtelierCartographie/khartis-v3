@@ -128,9 +128,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     initialStyleKey =
       typeof style === 'string' ? style : style.name || 'inline-style';
 
-    console.log('[INIT] initializeMapLibre called', {
-      styleKey: initialStyleKey
-    });
     logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
 
     containerRef = container;
@@ -155,8 +152,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     map.on('load', () => {
       if (!map) return;
-
-      console.log('[INIT] MapLibre load event fired');
 
       deckOverlay = new MapboxOverlay({
         interleaved: true,

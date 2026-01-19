@@ -58,30 +58,42 @@
   const LAYER_UPDATE_DEBOUNCE_MS = 50;
 
   let scheduleCount = 0;
+  let effectTriggerLog: string[] = [];
 
-  function scheduleLayerUpdate(): void {
+  function logEffect(name: string): void {
+    effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
+    if (effectTriggerLog.length > 50) {
+      effectTriggerLog.shift();
+    }
+  }
+
+  function scheduleLayerUpdate(source?: string): void {
     scheduleCount++;
-    console.log(`[SCHEDULE] scheduleLayerUpdate called #${scheduleCount}`, {
+    const now = performance.now();
+    console.log(`[PERF] scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`, {
       isSwitchingViewMode,
       isStyleLoading: mapBasemap.isStyleLoading,
-      pendingLayerUpdate
+      pendingLayerUpdate,
+      tablesSize: tables.size,
+      geoJSONsSize: geoJSONs.size
     });
-    console.trace('[SCHEDULE] Call stack for #' + scheduleCount);
 
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
-      console.log(`[SCHEDULE] Deferred - pendingLayerUpdate = true`);
+      console.log(`[PERF] Deferred (pending=true) from: ${source}`);
       pendingLayerUpdate = true;
       return;
     }
     if (layerUpdateTimeoutId) {
-      console.log(`[SCHEDULE] Debounced - clearing previous timeout`);
+      console.log(`[PERF] Debounced (clearing timeout) from: ${source}`);
       clearTimeout(layerUpdateTimeoutId);
     }
     layerUpdateTimeoutId = setTimeout(() => {
       layerUpdateTimeoutId = null;
       if (mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading) {
-        console.log(`[SCHEDULE] Executing updateLayers from timeout`);
+        console.log(`[PERF] Executing updateLayers from: ${source}`);
+        const start = performance.now();
         mapLayers.updateLayers(tables, geoJSONs);
+        console.log(`[PERF] updateLayers took ${(performance.now() - start).toFixed(1)}ms`);
       }
     }, LAYER_UPDATE_DEBOUNCE_MS);
   }
@@ -184,16 +196,17 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     onProjectionChanged: () => {
-      if (!isSwitchingViewMode && !mapBasemap.isStyleLoading) {
-        scheduleLayerUpdate();
+      // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
+      if (!isSwitchingViewMode) {
+        scheduleLayerUpdate('onProjectionChanged');
       }
     },
     onStyleLoaded: () => {
-      console.log('[CALLBACK] onStyleLoaded fired', { pendingLayerUpdate });
+      console.log('[PERF] onStyleLoaded callback fired');
       mapBasemap.syncOSMRasterLayer();
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
-        scheduleLayerUpdate();
+        scheduleLayerUpdate('onStyleLoaded-pending');
       }
     }
   });
@@ -213,13 +226,14 @@
 
   $effect(() => {
     void osmBasemapStore.tileConfig;
+    logEffect('osmBasemapStore.tileConfig');
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
 
     if (hasDeckContext && canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      untrack(() => scheduleLayerUpdate('effect:tileConfig'));
     }
     if (mapInit.map && canUpdate) {
       untrack(() => mapBasemap.syncOSMRasterLayer());
@@ -249,18 +263,20 @@
 
   $effect(() => {
     if (mapInit.isMapLoaded && isSwitchingViewMode) {
+      console.log('[PERF] View mode switch completed');
       isSwitchingViewMode = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
-        scheduleLayerUpdate();
+        scheduleLayerUpdate('effect:viewModeSwitchComplete');
       }
     }
   });
 
   $effect(() => {
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
+      logEffect('firstTable');
       if (mapInit.viewMode === 'orthographic') {
         const bounds = calculateBoundsFromGeoArrow(firstTable);
         if (bounds) {
@@ -270,7 +286,7 @@
           ];
           untrack(() => {
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            scheduleLayerUpdate();
+            scheduleLayerUpdate('effect:firstTable-bounds');
           });
           triggerOnReady();
         } else {
@@ -278,7 +294,7 @@
           if (geoMetadata) {
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-              scheduleLayerUpdate();
+              scheduleLayerUpdate('effect:firstTable-metadata');
             });
             triggerOnReady();
           }
@@ -290,9 +306,10 @@
   });
 
   $effect(() => {
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
+      logEffect('firstGeoJSON');
       if (mapInit.viewMode === 'maplibre' && mapInit.map) {
         untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
       } else if (mapInit.viewMode === 'orthographic') {
@@ -304,7 +321,7 @@
               [number, number]
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            scheduleLayerUpdate();
+            scheduleLayerUpdate('effect:firstGeoJSON');
           }
         });
         triggerOnReady();
@@ -315,33 +332,36 @@
   });
 
   $effect(() => {
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (!hasData && canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      logEffect('noData');
+      untrack(() => scheduleLayerUpdate('effect:noData'));
     }
   });
 
   $effect(() => {
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (worldBaseTable && canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      logEffect('worldBaseTable');
+      untrack(() => scheduleLayerUpdate('effect:worldBaseTable'));
     }
   });
 
   $effect(() => {
     const pageZoom = globalState.zoom.pageZoomLevel;
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (pageZoom && canUpdate) {
+      logEffect('pageZoom');
       setTimeout(() => {
         untrack(() => {
           if (mapInit.viewMode === 'maplibre') {
             mapInit.map?.resize();
           }
           updateCanvasSize();
-          scheduleLayerUpdate();
+          scheduleLayerUpdate('effect:pageZoom');
         });
       }, 50);
     }
@@ -349,22 +369,25 @@
 
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
-    console.log('[EFFECT] basemapStyleStore.selectedStyleUrl changed');
+    logEffect('basemapStyleStore.selectedStyleUrl');
+    console.log('[PERF] basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle');
     untrack(() => mapBasemap.syncBasemapStyle());
   });
 
   $effect(() => {
     void mapProjectionStore.projection;
+    logEffect('mapProjectionStore.projection');
     untrack(() => mapBasemap.syncProjection());
   });
 
   $effect(() => {
     void basemapLayersStore.layers;
+    logEffect('basemapLayersStore.layers');
 
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      untrack(() => scheduleLayerUpdate('effect:basemapLayers'));
     }
   });
 
@@ -380,11 +403,12 @@
 
   $effect(() => {
     void visualizationFingerprint;
+    logEffect('visualizationFingerprint');
 
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      untrack(() => scheduleLayerUpdate('effect:visualizationFingerprint'));
     }
   });
 
@@ -392,22 +416,26 @@
 
   $effect(() => {
     void dataFingerprint;
+    logEffect('dataFingerprint');
 
-    const canUpdate =
-      mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
+    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
-      untrack(() => scheduleLayerUpdate());
+      untrack(() => scheduleLayerUpdate('effect:dataFingerprint'));
     }
   });
 
   async function loadWorldBasemap(): Promise<void> {
+    console.log('[PERF] loadWorldBasemap started');
+    const start = performance.now();
     const loaded = await basemapService.loadDefaultBasemap();
+    console.log(`[PERF] loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`);
     if (loaded) {
       worldBaseTable = loaded.geometryTable;
-      const canUpdate =
-        mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+      // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
+      const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
       if (canUpdate) {
-        scheduleLayerUpdate();
+        scheduleLayerUpdate('loadWorldBasemap');
       }
     }
   }
@@ -429,13 +457,13 @@
       }
 
       resizeTimeoutId = setTimeout(() => {
-        const canUpdate =
-          mapInit.isMapLoaded && !isSwitchingViewMode && !mapBasemap.isStyleLoading;
+        // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
+        const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           if (mapInit.viewMode === 'maplibre') {
             mapInit.map?.resize();
           }
-          scheduleLayerUpdate();
+          scheduleLayerUpdate('resizeObserver');
         }
         resizeTimeoutId = null;
       }, RESIZE_DEBOUNCE_MS);
