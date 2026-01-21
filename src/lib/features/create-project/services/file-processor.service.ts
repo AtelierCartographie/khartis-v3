@@ -3,6 +3,7 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
+import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import {
   readFileContent,
   validateGeospatialFile
@@ -14,7 +15,7 @@ import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
 function detectFileTypeFromName(filename: string): FileType {
-  const ext = filename.toLowerCase().split('.').pop();
+  const ext = getFileExtension(filename);
   switch (ext) {
     case 'csv':
       return FileType.CSV;

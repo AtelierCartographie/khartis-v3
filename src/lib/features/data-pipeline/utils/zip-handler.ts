@@ -2,6 +2,7 @@ import {
   IGNORED_FILE_PREFIXES,
   SHAPEFILE_EXTENSIONS
 } from '$lib/features/commons/constants/ui.constants';
+import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { unzip, type Unzipped, type FlateError } from 'fflate';
@@ -33,11 +34,6 @@ function shouldIgnoreFile(path: string): boolean {
 
 function getFileName(path: string): string {
   return path.split('/').pop() || path;
-}
-
-function getFileExtension(name: string): string {
-  const lastDot = name.lastIndexOf('.');
-  return lastDot >= 0 ? name.slice(lastDot).toLowerCase() : '';
 }
 
 export async function extractZip(file: File): Promise<ZipExtractionResult> {
@@ -107,7 +103,7 @@ function detectShapefileInArchive(files: ExtractedFile[]): {
   if (shpFiles.length === 1) {
     const baseName = shpFiles[0].name.replace(/\.shp$/i, '');
     const hasCompanions = files.some((f) => {
-      const ext = getFileExtension(f.name);
+      const ext = getFileExtensionWithDot(f.name);
       return (
         ext !== '.shp' &&
         (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
@@ -130,7 +126,7 @@ export function createFileFromExtracted(
   extracted: ExtractedFile,
   mimeType?: string
 ): File {
-  const ext = getFileExtension(extracted.name);
+  const ext = getFileExtensionWithDot(extracted.name);
   const detectedMime = mimeType || getMimeTypeForExtension(ext);
   const arrayBuffer = extracted.content.buffer.slice(
     extracted.content.byteOffset,
@@ -168,7 +164,7 @@ export function getShapefileFilesFromArchive(
 ): ExtractedFile[] {
   const baseNameLower = baseName.toLowerCase();
   return files.filter((f) => {
-    const ext = getFileExtension(f.name);
+    const ext = getFileExtensionWithDot(f.name);
     const fileBaseName = f.name.replace(ext, '').toLowerCase();
     return (
       (SHAPEFILE_EXTENSIONS as readonly string[]).includes(ext) &&
@@ -196,7 +192,7 @@ export function getSupportedFilesFromArchive(
   ];
 
   return files.filter((f) => {
-    const ext = getFileExtension(f.name);
+    const ext = getFileExtensionWithDot(f.name);
     return supportedExtensions.includes(ext);
   });
 }
@@ -211,7 +207,7 @@ export function getNonShapefileFilesFromArchive(
   const baseNameLower = shapefileBaseName.toLowerCase();
 
   return supportedFiles.filter((f) => {
-    const ext = getFileExtension(f.name);
+    const ext = getFileExtensionWithDot(f.name);
     const fileBaseName = f.name.replace(ext, '').toLowerCase();
 
     if (fileBaseName === baseNameLower) {

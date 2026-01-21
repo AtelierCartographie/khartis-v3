@@ -1,7 +1,9 @@
-import { Deck, OrthographicView } from '@deck.gl/core';
+import { Deck, OrthographicView, View } from '@deck.gl/core';
 import type { DeckProps } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import maplibregl from 'maplibre-gl';
+
+type DeckInstance = Deck<View | View[] | null>;
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -10,6 +12,20 @@ import { createTooltipHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import type { DeckOrthographicViewStateMap } from '../types';
+
+interface OrthographicViewStateChangeParams {
+  viewId: string;
+  viewState: DeckOrthographicViewStateMap;
+  interactionState: {
+    inTransition?: boolean;
+    isDragging?: boolean;
+    isPanning?: boolean;
+    isRotating?: boolean;
+    isZooming?: boolean;
+  };
+  oldViewState?: DeckOrthographicViewStateMap;
+}
 
 export type ViewMode = 'orthographic' | 'maplibre';
 
@@ -33,7 +49,7 @@ export interface UseMapInitReturn {
   switchToOrthographicMode: () => void;
   readonly map: maplibregl.Map | null;
   readonly deckOverlay: MapboxOverlay | null;
-  readonly deckInstance: Deck | null;
+  readonly deckInstance: DeckInstance | null;
   readonly isMapLoaded: boolean;
   readonly viewMode: ViewMode;
 }
@@ -52,7 +68,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
-  let deckInstance = $state<Deck | null>(null);
+  let deckInstance = $state<DeckInstance | null>(null);
   let isMapLoaded = $state(false);
   const shouldUseMapLibre =
     osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
@@ -73,6 +89,19 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     };
     projectionStore.updateCanvasSize(canvasSize);
 
+    const handleViewStateChange = ({
+      viewState
+    }: OrthographicViewStateChangeParams): DeckOrthographicViewStateMap => {
+      if (viewState.main) {
+        mapInstanceStore.updateDeckViewState({
+          target: viewState.main.target,
+          zoom: viewState.main.zoom
+        });
+      }
+      onZoom();
+      return viewState;
+    };
+
     deckInstance = new Deck({
       parent: container,
       views: [ORTHOGRAPHIC_VIEW],
@@ -88,24 +117,14 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       height: '100%',
       controller: true,
       layers: [],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      getTooltip: createTooltipHandler() as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onViewStateChange: ({ viewState }: { viewState: any }) => {
-        if (viewState.main) {
-          mapInstanceStore.updateDeckViewState({
-            target: viewState.main.target,
-            zoom: viewState.main.zoom
-          });
-        }
-        onZoom();
-        return viewState;
-      },
+      getTooltip: createTooltipHandler(),
+      onViewStateChange: handleViewStateChange as DeckProps<
+        [OrthographicView]
+      >['onViewStateChange'],
       onResize: ({ width, height }) => {
         projectionStore.updateCanvasSize({ width, height });
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any as Deck;
+    });
 
     currentViewMode = 'orthographic';
 

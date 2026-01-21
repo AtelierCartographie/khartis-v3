@@ -1,5 +1,9 @@
 <script lang="ts">
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import {
+    formatValueByType,
+    isNumericType
+  } from '$lib/features/commons/utils/format.utils';
   import * as m from '$lib/paraglide/messages';
   import type { HighlightType } from '../advanced-data-table.svelte';
   import type { ColumnInfo, TableRow } from '../types';
@@ -32,31 +36,6 @@
       onToggleSelection?.(rowId);
     }
   }
-
-  function isNumericType(type: string): boolean {
-    return (
-      type === 'number' ||
-      type === 'integer' ||
-      type === 'bigint' ||
-      type === 'numeric'
-    );
-  }
-
-  function formatValue(value: unknown, columnType: string): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-
-    if (columnType === 'date' && value instanceof Date) {
-      return value.toLocaleDateString('fr-FR');
-    }
-
-    if (isNumericType(columnType)) {
-      return Number(value).toLocaleString('fr-FR');
-    }
-
-    return String(value);
-  }
 </script>
 
 <tr
@@ -86,7 +65,7 @@
       {#if isNull}
         <span class="null-value" title={m.cell_null_value_tooltip()}>—</span>
       {:else}
-        {formatValue(value, col.type)}
+        {formatValueByType(value, col.type)}
       {/if}
     </td>
   {/each}

@@ -1383,5 +1383,10 @@
   "position_bottom": "Bottom",
   "position_left": "Left",
   "position_right": "Right",
-  "dashed_line": "Dashed line"
+  "dashed_line": "Dashed line",
+  "error_corrections_failed_title": "Corrections partially applied",
+  "error_corrections_failed_message": "{count} corrections failed",
+  "error_geometry_conversion_title": "Geometry conversion error",
+  "error_geometry_conversion_message": "Unable to convert geometry for display. The map may appear empty.",
+  "error_invalid_mapping_value": "Invalid mapping value"
 }

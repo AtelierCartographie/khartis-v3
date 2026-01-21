@@ -2,6 +2,24 @@ import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 
+// Re-export Deck.gl types for proper typing
+export type {
+  PickingInfo,
+  ViewStateChangeParameters,
+  OrthographicViewState
+} from '@deck.gl/core';
+
+// TooltipContent type (matches @deck.gl/core internal type, not publicly exported)
+export type TooltipContent =
+  | null
+  | string
+  | {
+      text?: string;
+      html?: string;
+      className?: string;
+      style?: Partial<CSSStyleDeclaration>;
+    };
+
 // Re-export basemap types for backwards compatibility
 export type {
   BasemapCatalog,
@@ -80,6 +98,21 @@ export interface DeckTooltipInfo {
   picked?: boolean;
   x?: number;
   y?: number;
+}
+
+// =============================================================================
+// Deck.gl Orthographic View State Types
+// =============================================================================
+
+export interface OrthographicMainViewState {
+  target: [number, number, number];
+  zoom: number;
+  minZoom?: number;
+  maxZoom?: number;
+}
+
+export interface DeckOrthographicViewStateMap {
+  main: OrthographicMainViewState;
 }
 
 // =============================================================================

@@ -1,5 +1,5 @@
+import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 
@@ -330,4 +330,53 @@ export async function exportTableToGeoParquet(
   Duck: DuckDBClientForArrow
 ): Promise<Uint8Array> {
   return Duck.copy_to_geoparquet_as_buffer(tableName);
+}
+
+export async function getArrowTableWithCache(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  extractMetadata: (table: Table) => GeoArrowMetadata | null,
+  getCachedTable: () => Table | undefined,
+  setCache: (table: Table, metadata: GeoArrowMetadata | null) => void
+): Promise<Table> {
+  const cached = getCachedTable();
+  if (cached) {
+    return cached;
+  }
+
+  const { arrowTableWithMetadata, geoArrowMetadata } =
+    await createArrowTableWithMetadata(tableName, Duck, extractMetadata);
+
+  setCache(arrowTableWithMetadata, geoArrowMetadata);
+
+  return arrowTableWithMetadata;
+}
+
+export async function getArrowTableDirect(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  getCachedTable: () => Table | undefined,
+  setCache: (table: Table) => void
+): Promise<Table> {
+  const cached = getCachedTable();
+  if (cached) {
+    logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
+      tableName
+    });
+    return cached;
+  }
+
+  const baseTable = await fetchArrowTableWithGeometry(tableName, Duck);
+  const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
+    baseTable,
+    tableName,
+    Duck
+  );
+
+  setCache(tableWithMetadata);
+  logger.info('Cached Arrow table with metadata', LogCategory.DUCKDB, {
+    tableName
+  });
+
+  return tableWithMetadata;
 }

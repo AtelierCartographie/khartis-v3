@@ -1,13 +1,10 @@
+import { formatValue } from '$lib/features/commons/utils/format.utils';
+import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { ReservedColumnName } from '../constants';
-import type {
-  DeckTooltipInfo,
-  TooltipEntry,
-  TooltipResult,
-  TooltipStyle
-} from '../types';
+import type { TooltipContent, TooltipEntry } from '../types';
 
-const DEFAULT_TOOLTIP_STYLE: TooltipStyle = {
+const DEFAULT_TOOLTIP_STYLE: Partial<CSSStyleDeclaration> = {
   backgroundColor: 'rgba(255, 255, 255, 0.95)',
   color: '#161616',
   padding: '8px 12px',
@@ -22,15 +19,7 @@ const DEFAULT_TOOLTIP_STYLE: TooltipStyle = {
 const MAX_TOOLTIP_ENTRIES = 10;
 
 export function formatTooltipValue(value: unknown): string {
-  if (value === null || value === undefined) return '—';
-  if (typeof value === 'bigint') return Number(value).toLocaleString('fr-FR');
-  if (typeof value === 'number') {
-    if (Number.isInteger(value)) return value.toLocaleString('fr-FR');
-    return value.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  }
-  if (value instanceof Date) return value.toLocaleDateString('fr-FR');
-  const str = String(value);
-  return str.length > 50 ? str.slice(0, 47) + '...' : str;
+  return formatValue(value);
 }
 
 function isReservedColumn(columnName: string): boolean {
@@ -125,7 +114,7 @@ function buildTooltipHtml(entries: TooltipEntry[]): string {
   return html;
 }
 
-export function getTooltip(info: DeckTooltipInfo): TooltipResult | null {
+export function getTooltip(info: PickingInfo): TooltipContent {
   if (!info.picked || info.index === undefined || info.index === -1) {
     return null;
   }
@@ -156,6 +145,6 @@ export function getTooltip(info: DeckTooltipInfo): TooltipResult | null {
   };
 }
 
-export function createTooltipHandler() {
-  return (info: DeckTooltipInfo) => getTooltip(info);
+export function createTooltipHandler(): (info: PickingInfo) => TooltipContent {
+  return (info: PickingInfo) => getTooltip(info);
 }

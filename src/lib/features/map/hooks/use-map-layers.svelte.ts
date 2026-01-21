@@ -75,7 +75,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   ): void {
     updateCount++;
     const totalStart = performance.now();
-    console.log(`[LAYERS] updateLayers #${updateCount} started`, {
+    logger.debug(`updateLayers #${updateCount} started`, LogCategory.MAP, {
       tablesSize: tables.size,
       geoJSONsSize: geoJSONs.size
     });
@@ -85,7 +85,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const map = getMap();
 
     if ((!deckOverlay && !deckInstance) || !getIsMapLoaded()) {
-      console.log(`[LAYERS] Early return - no deck context`);
+      logger.debug('Early return - no deck context', LogCategory.MAP);
       return;
     }
 
@@ -147,13 +147,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         additionalData
       );
       layers.push(...basemapLayers);
-      console.log(
-        `[LAYERS] Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`
+      logger.debug(
+        `Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`,
+        LogCategory.MAP
       );
     }
 
-    console.log(
-      `[LAYERS] Processing ${activeVisualizations.length} visualizations`
+    logger.debug(
+      `Processing ${activeVisualizations.length} visualizations`,
+      LogCategory.MAP
     );
     for (const viz of activeVisualizations) {
       const vizStart = performance.now();
@@ -170,8 +172,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         const geojsonStart = performance.now();
         const geojsonLayers = createGeoJsonLayers(geojson, ctx);
         layers.push(...geojsonLayers);
-        console.log(
-          `[LAYERS] GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`
+        logger.debug(
+          `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
+          LogCategory.MAP
         );
       } else if (table) {
         const geoMetadata = table.schema.metadata?.get('geo');
@@ -186,22 +189,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         const arrowStart = performance.now();
         const arrowLayers = createDeckLayers(table, ctx);
         layers.push(...arrowLayers);
-        console.log(
-          `[LAYERS] Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`
+        logger.debug(
+          `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
+          LogCategory.MAP
         );
       }
-      console.log(
-        `[LAYERS] Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`
+      logger.debug(
+        `Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`,
+        LogCategory.MAP
       );
     }
 
     const setStart = performance.now();
     setLayers(layers);
-    console.log(
-      `[LAYERS] setLayers took ${(performance.now() - setStart).toFixed(1)}ms`
+    logger.debug(
+      `setLayers took ${(performance.now() - setStart).toFixed(1)}ms`,
+      LogCategory.MAP
     );
-    console.log(
-      `[LAYERS] updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`
+    logger.debug(
+      `updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`,
+      LogCategory.MAP
     );
 
     logger.success('Deck.gl layers applied', LogCategory.MAP, {

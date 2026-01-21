@@ -1,6 +1,8 @@
-import type { Deck } from '@deck.gl/core';
+import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+
+type DeckInstance = Deck<View | View[] | null>;
 
 interface DeckViewState {
   target: [number, number, number];
@@ -23,7 +25,7 @@ class MapInstanceStore {
   private _state = $state<{
     map: MapLibreMap | null;
     deckOverlay: MapboxOverlay | null;
-    deckInstance: Deck | null;
+    deckInstance: DeckInstance | null;
     isMapLoaded: boolean;
     zoomLevel: number;
     baseZoomLevel: number;
@@ -62,7 +64,7 @@ class MapInstanceStore {
     this._state.deckOverlay = overlay;
   }
 
-  setDeckInstance(instance: Deck | null) {
+  setDeckInstance(instance: DeckInstance | null) {
     this._state.deckInstance = instance;
   }
 

@@ -1,3 +1,4 @@
+import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
 import type { KhartisProject } from '../types';
 
@@ -5,7 +6,7 @@ export function duplicateProject(
   original: KhartisProject,
   name: string
 ): KhartisProject {
-  const clone = JSON.parse(JSON.stringify(original)) as KhartisProject;
+  const clone = deepClone(original);
   const now = new Date();
   const sanitizedName = sanitizeProjectName(name);
 

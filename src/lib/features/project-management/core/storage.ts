@@ -1,6 +1,9 @@
+import {
+  safeJsonParse,
+  safeJsonStringify
+} from '$lib/features/commons/utils/clone.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import localforage from 'localforage';
-import { safeJsonParse, safeJsonStringify } from '../utils/json-helpers';
 
 export async function saveToStorage<T>(key: string, data: T): Promise<void> {
   try {
