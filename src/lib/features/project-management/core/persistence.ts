@@ -1,7 +1,7 @@
+import { bigIntReplacer } from '$lib/features/commons/utils/clone.utils';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
-import { bigIntReplacer } from '../utils/json-helpers';
 import { deserialize, prepareForIndexedDB } from './serializer';
 import { loadFromStorage, saveToStorage } from './storage';
 

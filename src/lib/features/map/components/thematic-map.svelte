@@ -6,6 +6,7 @@
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
   import { globalState } from '../../commons/store/global.svelte';
+  import { LogCategory, logger } from '../../commons/utils/logger';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { visualizationStore } from '../../commons/store/visualization.store.svelte';
   import {
@@ -55,7 +56,7 @@
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const RESIZE_DEBOUNCE_MS = 150;
-  const LAYER_UPDATE_DEBOUNCE_MS = 50;
+  const LAYER_UPDATE_DEBOUNCE_MS = 100;
 
   let scheduleCount = 0;
   let effectTriggerLog: string[] = [];
@@ -70,8 +71,9 @@
   function scheduleLayerUpdate(source?: string): void {
     scheduleCount++;
     const now = performance.now();
-    console.log(
-      `[PERF] scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`,
+    logger.debug(
+      `scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`,
+      LogCategory.MAP,
       {
         isSwitchingViewMode,
         isStyleLoading: mapBasemap.isStyleLoading,
@@ -82,12 +84,15 @@
     );
 
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
-      console.log(`[PERF] Deferred (pending=true) from: ${source}`);
+      logger.debug(`Deferred (pending=true) from: ${source}`, LogCategory.MAP);
       pendingLayerUpdate = true;
       return;
     }
     if (layerUpdateTimeoutId) {
-      console.log(`[PERF] Debounced (clearing timeout) from: ${source}`);
+      logger.debug(
+        `Debounced (clearing timeout) from: ${source}`,
+        LogCategory.MAP
+      );
       clearTimeout(layerUpdateTimeoutId);
     }
     layerUpdateTimeoutId = setTimeout(() => {
@@ -97,11 +102,12 @@
         !isSwitchingViewMode &&
         !mapBasemap.isStyleLoading
       ) {
-        console.log(`[PERF] Executing updateLayers from: ${source}`);
+        logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
         const start = performance.now();
         mapLayers.updateLayers(tables, geoJSONs);
-        console.log(
-          `[PERF] updateLayers took ${(performance.now() - start).toFixed(1)}ms`
+        logger.debug(
+          `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
+          LogCategory.MAP
         );
       }
     }, LAYER_UPDATE_DEBOUNCE_MS);
@@ -211,7 +217,7 @@
       }
     },
     onStyleLoaded: () => {
-      console.log('[PERF] onStyleLoaded callback fired');
+      logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -274,7 +280,7 @@
 
   $effect(() => {
     if (mapInit.isMapLoaded && isSwitchingViewMode) {
-      console.log('[PERF] View mode switch completed');
+      logger.debug('View mode switch completed', LogCategory.MAP);
       isSwitchingViewMode = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -383,13 +389,15 @@
     logEffect('basemapStyleStore.selectedStyleUrl');
     untrack(() => {
       if (isSwitchingViewMode) {
-        console.log(
-          '[PERF] basemapStyleStore.selectedStyleUrl changed but switching view mode, skipping syncBasemapStyle'
+        logger.debug(
+          'basemapStyleStore.selectedStyleUrl changed but switching view mode, skipping syncBasemapStyle',
+          LogCategory.MAP
         );
         return;
       }
-      console.log(
-        '[PERF] basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle'
+      logger.debug(
+        'basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle',
+        LogCategory.MAP
       );
       mapBasemap.syncBasemapStyle();
     });
@@ -401,57 +409,31 @@
     untrack(() => mapBasemap.syncProjection());
   });
 
-  $effect(() => {
-    void basemapLayersStore.layers;
-    logEffect('basemapLayersStore.layers');
-
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
-    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-    if (canUpdate) {
-      untrack(() => scheduleLayerUpdate('effect:basemapLayers'));
-    }
+  // Consolidated layer update trigger - combines visualization, basemap layers, and data changes
+  const layerUpdateTrigger = $derived({
+    vizVersion: visualizationStore.version,
+    basemapVersion: basemapLayersStore.version,
+    dataSize: `${tables.size}-${geoJSONs.size}`
   });
 
-  const visualizationFingerprint = $derived(
-    JSON.stringify(
-      visualizationStore.activeVisualizations.map((v) => ({
-        id: v.id,
-        style: v.style,
-        classification: v.classification
-      }))
-    )
-  );
-
   $effect(() => {
-    void visualizationFingerprint;
-    logEffect('visualizationFingerprint');
+    void layerUpdateTrigger;
+    logEffect('layerUpdateTrigger');
 
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
-      untrack(() => scheduleLayerUpdate('effect:visualizationFingerprint'));
-    }
-  });
-
-  const dataFingerprint = $derived(`${tables.size}-${geoJSONs.size}`);
-
-  $effect(() => {
-    void dataFingerprint;
-    logEffect('dataFingerprint');
-
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
-    const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-    if (canUpdate) {
-      untrack(() => scheduleLayerUpdate('effect:dataFingerprint'));
+      untrack(() => scheduleLayerUpdate('effect:layerUpdateTrigger'));
     }
   });
 
   async function loadWorldBasemap(): Promise<void> {
-    console.log('[PERF] loadWorldBasemap started');
+    logger.debug('loadWorldBasemap started', LogCategory.MAP);
     const start = performance.now();
     const loaded = await basemapService.loadDefaultBasemap();
-    console.log(
-      `[PERF] loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`
+    logger.debug(
+      `loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`,
+      LogCategory.MAP
     );
     if (loaded) {
       worldBaseTable = loaded.geometryTable;

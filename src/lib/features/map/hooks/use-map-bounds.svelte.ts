@@ -7,6 +7,7 @@ import {
   calculateBoundsFromGeoArrow,
   calculateBoundsFromGeoJSON
 } from '../core';
+import { MAP_TIMING } from '../constants/timing.constants';
 
 export interface UseMapBoundsProps {
   getMap: () => MapLibreMap | null;
@@ -24,8 +25,6 @@ export interface UseMapBoundsReturn {
   setShouldRestorePosition: (value: boolean) => void;
   resetFitState: () => void;
 }
-
-const DEBOUNCE_DELAY_MS = 300;
 
 export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   const {
@@ -48,7 +47,10 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
       return;
     }
 
-    map.fitBounds(bounds, { padding: 50, duration: 0 });
+    map.fitBounds(bounds, {
+      padding: MAP_TIMING.FITBOUNDS_PADDING_PX,
+      duration: 0
+    });
 
     const onMoveEnd = () => {
       if (map) {
@@ -62,7 +64,10 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     map.once('moveend', onMoveEnd);
   }
 
-  const debouncedFitBounds = debounce(executeFitBounds, DEBOUNCE_DELAY_MS);
+  const debouncedFitBounds = debounce(
+    executeFitBounds,
+    MAP_TIMING.FITBOUNDS_DEBOUNCE_MS
+  );
 
   function handleBoundsUpdate(bounds: LngLatBoundsLike): void {
     debouncedFitBounds(bounds);

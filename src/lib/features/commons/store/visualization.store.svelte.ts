@@ -9,6 +9,8 @@ import {
   StrokeMode,
   SymbolMode
 } from '$lib/features/main-toolbar/constants';
+import { deepClone } from '../utils/clone.utils';
+import { generateDuplicateName } from '../utils/naming.utils';
 import { datasetsStore } from './datasets.store.svelte';
 
 export enum VisualizationType {
@@ -88,13 +90,23 @@ interface VisualizationState {
   visualizations: VisualizationConfig[];
   selectedVisualizationId?: string;
   activeVisualizationIds: Set<string>;
+  version: number;
 }
 
 class VisualizationStore {
   private _state = $state<VisualizationState>({
     visualizations: [],
-    activeVisualizationIds: new Set()
+    activeVisualizationIds: new Set(),
+    version: 0
   });
+
+  get version() {
+    return this._state.version;
+  }
+
+  private incrementVersion() {
+    this._state.version++;
+  }
 
   get visualizations() {
     return this._state.visualizations;
@@ -139,6 +151,7 @@ class VisualizationStore {
     this._state.visualizations.push(config);
     this._state.selectedVisualizationId = config.id;
     this._state.activeVisualizationIds.add(config.id);
+    this.incrementVersion();
 
     return config;
   }
@@ -149,6 +162,7 @@ class VisualizationStore {
         ? { ...v, modes: { ...v.modes, ...modes } as VisualizationModes }
         : v
     );
+    this.incrementVersion();
   }
 
   updateSymbols(
@@ -160,6 +174,7 @@ class VisualizationStore {
         ? { ...v, symbols: { ...v.symbols, ...symbols } }
         : v
     );
+    this.incrementVersion();
   }
 
   updateMissingData(id: string, missingData: Partial<MissingDataConfig>): void {
@@ -168,12 +183,26 @@ class VisualizationStore {
         ? { ...v, missingData: { ...v.missingData, ...missingData } }
         : v
     );
+    this.incrementVersion();
+  }
+
+  updateClassification(
+    id: string,
+    classification: Partial<ClassificationConfig>
+  ): void {
+    this._state.visualizations = this._state.visualizations.map((v) =>
+      v.id === id && v.classification
+        ? { ...v, classification: { ...v.classification, ...classification } }
+        : v
+    );
+    this.incrementVersion();
   }
 
   updateVisualization(id: string, updates: Partial<VisualizationConfig>): void {
     this._state.visualizations = this._state.visualizations.map((v) =>
       v.id === id ? { ...v, ...updates, id } : v
     );
+    this.incrementVersion();
   }
 
   duplicateVisualization(id: string): VisualizationConfig | null {
@@ -182,44 +211,21 @@ class VisualizationStore {
       return null;
     }
 
-    const duplicateName = this.generateDuplicateName(original.name);
+    const existingNames = this._state.visualizations.map((v) => v.name);
+    const duplicatedName = generateDuplicateName(original.name, existingNames);
 
     const duplicate: VisualizationConfig = {
-      ...(JSON.parse(JSON.stringify(original)) as VisualizationConfig),
+      ...deepClone(original),
       id: crypto.randomUUID(),
-      name: duplicateName
+      name: duplicatedName
     };
 
     this._state.visualizations.push(duplicate);
     this._state.selectedVisualizationId = duplicate.id;
     this._state.activeVisualizationIds.add(duplicate.id);
+    this.incrementVersion();
 
     return duplicate;
-  }
-
-  private generateDuplicateName(originalName: string): string {
-    const baseMatch = originalName.match(/^(.*?)(?:\s*\((\d+)\))?$/);
-    const baseName = baseMatch?.[1] || originalName;
-
-    const existingNumbers: number[] = [];
-
-    this._state.visualizations.forEach((viz) => {
-      const match = viz.name.match(
-        new RegExp(
-          `^${baseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\((\\d+)\\)$`
-        )
-      );
-      if (match) {
-        existingNumbers.push(parseInt(match[1], 10));
-      }
-    });
-
-    if (existingNumbers.length === 0) {
-      return `${baseName} (1)`;
-    }
-
-    const nextNumber = Math.max(...existingNumbers) + 1;
-    return `${baseName} (${nextNumber})`;
   }
 
   removeVisualization(id: string): void {
@@ -234,6 +240,7 @@ class VisualizationStore {
     }
 
     this._state.visualizations = filteredVisualizations;
+    this.incrementVersion();
   }
 
   toggleVisualization(id: string): void {
@@ -242,6 +249,7 @@ class VisualizationStore {
     } else {
       this._state.activeVisualizationIds.add(id);
     }
+    this.incrementVersion();
   }
 
   selectVisualization(id: string): void {
@@ -264,6 +272,7 @@ class VisualizationStore {
       }
       return v;
     });
+    this.incrementVersion();
   }
 
   getVisualizationsByDataset(datasetId: string): VisualizationConfig[] {
@@ -448,95 +457,11 @@ class VisualizationStore {
     };
   }
 
-  calculateBreaks(
-    datasetId: string,
-    columnName: string,
-    method: ClassificationMethod,
-    classes: number
-  ): number[] {
-    const values = datasetsStore
-      .getColumnValues(datasetId, columnName)
-      .filter((v): v is number => typeof v === 'number' && !isNaN(v))
-      .sort((a, b) => a - b);
-
-    if (values.length === 0) return [];
-
-    const min = values[0];
-    const max = values[values.length - 1];
-
-    switch (method) {
-      case ClassificationMethod.EQUAL_INTERVAL:
-        return this.equalIntervalBreaks(min, max, classes);
-
-      case ClassificationMethod.QUANTILES:
-        return this.quantileBreaks(values, classes);
-
-      case ClassificationMethod.JENKS:
-        return this.jenksBreaks(values, classes);
-
-      case ClassificationMethod.STANDARD_DEVIATION:
-        return this.standardDeviationBreaks(values, classes);
-
-      default:
-        return this.quantileBreaks(values, classes);
-    }
-  }
-
-  private equalIntervalBreaks(
-    min: number,
-    max: number,
-    classes: number
-  ): number[] {
-    const interval = (max - min) / classes;
-    const breaks = [min];
-
-    for (let i = 1; i < classes; i++) {
-      breaks.push(min + interval * i);
-    }
-    breaks.push(max);
-
-    return breaks;
-  }
-
-  private quantileBreaks(values: number[], classes: number): number[] {
-    const breaks = [];
-    const step = values.length / classes;
-
-    for (let i = 0; i <= classes; i++) {
-      const index = Math.min(Math.floor(i * step), values.length - 1);
-      breaks.push(values[index]);
-    }
-
-    return Array.from(new Set(breaks));
-  }
-
-  private jenksBreaks(values: number[], classes: number): number[] {
-    return this.quantileBreaks(values, classes);
-  }
-
-  private standardDeviationBreaks(values: number[], classes: number): number[] {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
-    const variance = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
-    const stdDev = Math.sqrt(variance);
-
-    const breaks = [Math.min(...values)];
-    const halfClasses = Math.floor(classes / 2);
-
-    for (let i = -halfClasses; i <= halfClasses; i++) {
-      if (i !== -halfClasses) {
-        breaks.push(mean + i * stdDev);
-      }
-    }
-    breaks.push(Math.max(...values));
-
-    return breaks.sort((a, b) => a - b);
-  }
-
   clear(): void {
     this._state.visualizations = [];
     this._state.selectedVisualizationId = undefined;
     this._state.activeVisualizationIds.clear();
+    this.incrementVersion();
   }
 
   restoreFromSerialized(settings: {
@@ -549,6 +474,7 @@ class VisualizationStore {
     this._state.activeVisualizationIds = new Set(
       settings.activeVisualizationIds || []
     );
+    this.incrementVersion();
   }
 }
 

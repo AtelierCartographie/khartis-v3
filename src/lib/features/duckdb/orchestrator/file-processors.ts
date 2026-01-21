@@ -1,11 +1,9 @@
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  geoParquetReader,
-  type GeoArrowMetadata
-} from '$lib/features/data-pipeline';
+import { geoParquetReader } from '$lib/features/data-pipeline';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
 import type { Table } from 'apache-arrow/Arrow';
 import {

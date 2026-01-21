@@ -1,6 +1,7 @@
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import { deepCloneWithBigInt } from '$lib/features/commons/utils/clone.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
@@ -34,7 +35,6 @@ import type {
   SerializedVisualizationSettings
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
-import { bigIntReplacer } from '../utils/json-helpers';
 
 export async function serialize(
   project: KhartisProject
@@ -521,5 +521,5 @@ export async function prepareForIndexedDB(
   project: KhartisProject
 ): Promise<SerializedProject> {
   const serialized = await serialize(project);
-  return JSON.parse(JSON.stringify(serialized, bigIntReplacer));
+  return deepCloneWithBigInt(serialized);
 }

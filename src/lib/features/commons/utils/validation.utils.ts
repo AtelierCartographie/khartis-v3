@@ -1,10 +1,16 @@
 import * as m from '$lib/paraglide/messages';
 import localforage from 'localforage';
-import {
-  STORAGE_LIMITS,
-  type ValidationResult
-} from '../configs/validation.config';
+import { STORAGE_LIMITS } from '../configs/validation.config';
 import { LogCategory, logger } from './logger';
+
+export type { ValidationResult } from '$lib/features/data-pipeline/types';
+export {
+  validationSuccess,
+  validationFailure,
+  mergeValidationResults
+} from '$lib/features/data-pipeline/types';
+
+import type { ValidationResult } from '$lib/features/data-pipeline/types';
 
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;

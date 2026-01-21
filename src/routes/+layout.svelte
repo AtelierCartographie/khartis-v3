@@ -10,10 +10,13 @@
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+
+  initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';

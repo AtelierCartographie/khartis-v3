@@ -5,7 +5,8 @@
     visualizationStore,
     type VisualizationConfig,
     type VisualizationModes,
-    type MissingDataConfig
+    type MissingDataConfig,
+    type ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import FillConfig from './components/fill-config.svelte';
@@ -65,6 +66,12 @@
       visualizationStore.updateMissingData(selectedViz.id, updates);
     }
   }
+
+  function handleClassificationChange(updates: Partial<ClassificationConfig>) {
+    if (selectedViz?.id) {
+      visualizationStore.updateClassification(selectedViz.id, updates);
+    }
+  }
 </script>
 
 <section id="configure-visualization">
@@ -81,6 +88,7 @@
     onModesChange={handleModesChange}
     onSymbolsChange={handleSymbolsChange}
     onMissingDataChange={handleMissingDataChange}
+    onClassificationChange={handleClassificationChange}
     onInvertPalette={handleInvertPalette}
   />
 
@@ -99,6 +107,7 @@
     onStyleChange={handleStyleChange}
     onModesChange={handleModesChange}
     onMissingDataChange={handleMissingDataChange}
+    onClassificationChange={handleClassificationChange}
     onInvertPalette={handleInvertPalette}
   />
 
@@ -108,6 +117,7 @@
     onStyleChange={handleStyleChange}
     onModesChange={handleModesChange}
     onMissingDataChange={handleMissingDataChange}
+    onClassificationChange={handleClassificationChange}
     onInvertPalette={handleInvertPalette}
   />
 

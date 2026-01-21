@@ -4,6 +4,8 @@ import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import * as m from '$lib/paraglide/messages';
 import {
   ArrowExtension,
   createLayerId,
@@ -99,6 +101,10 @@ export function createPointLayers(
         {
           encoding: arrowExtension
         }
+      );
+      showWarning(
+        m.error_geometry_conversion_title(),
+        m.error_geometry_conversion_message()
       );
       return [];
     }
@@ -309,6 +315,10 @@ export function createLineLayers(
       encoding: arrowExtension,
       geoColumn
     });
+    showWarning(
+      m.error_geometry_conversion_title(),
+      m.error_geometry_conversion_message()
+    );
     return [];
   }
 
@@ -463,6 +473,10 @@ export function createPolygonLayers(
     logger.warn('Failed to convert geometry to GeoJSON', LogCategory.MAP, {
       encoding: arrowExtension
     });
+    showWarning(
+      m.error_geometry_conversion_title(),
+      m.error_geometry_conversion_message()
+    );
     return [];
   }
 

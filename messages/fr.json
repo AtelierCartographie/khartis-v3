@@ -1383,5 +1383,10 @@
   "position_bottom": "Bas",
   "position_left": "Gauche",
   "position_right": "Droite",
-  "dashed_line": "Ligne pointillée"
+  "dashed_line": "Ligne pointillée",
+  "error_corrections_failed_title": "Corrections partiellement appliquees",
+  "error_corrections_failed_message": "{count} corrections ont echoue",
+  "error_geometry_conversion_title": "Erreur de conversion geometrique",
+  "error_geometry_conversion_message": "Impossible de convertir la geometrie pour l'affichage. La carte peut apparaitre vide.",
+  "error_invalid_mapping_value": "Valeur de correspondance invalide"
 }

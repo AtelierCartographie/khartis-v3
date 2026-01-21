@@ -3,6 +3,7 @@ import {
   type ValidationResult
 } from '../configs/validation.config';
 import { FileType } from '../store/create-project.types';
+import { getFileExtension } from './file.utils';
 import { LogCategory, logger } from './logger';
 
 export interface FileValidationConfig {
@@ -217,7 +218,7 @@ export const FileValidator = {
       }
     }
 
-    const extension = FileValidator.getFileExtension(file.name);
+    const extension = getFileExtension(file.name);
     if (!extension) {
       result.warnings.push('File without extension');
     } else if (!config.allowedExtensions.includes(extension)) {
@@ -237,7 +238,7 @@ export const FileValidator = {
   },
 
   detectFileType(file: File): FileType {
-    const extension = FileValidator.getFileExtension(file.name);
+    const extension = getFileExtension(file.name);
     const mimeType = file.type?.toLowerCase() || '';
 
     if (extension === 'csv' || mimeType.includes('csv')) {
@@ -308,7 +309,7 @@ export const FileValidator = {
         break;
 
       case FileType.SHAPEFILE: {
-        const ext = FileValidator.getFileExtension(file.name);
+        const ext = getFileExtension(file.name);
         if (ext === 'shp' && file.size < 100) {
           result.warnings.push('SHP file suspiciously small');
         }
@@ -465,7 +466,7 @@ export const FileValidator = {
     result: DetailedValidationResult
   ): Promise<void> {
     const view = new DataView(buffer);
-    const ext = FileValidator.getFileExtension(file.name);
+    const ext = getFileExtension(file.name);
 
     if (ext === 'shp' && buffer.byteLength >= 4) {
       const magic = view.getUint32(0, false);
@@ -538,10 +539,6 @@ export const FileValidator = {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join(' ')
       .toUpperCase();
-  },
-
-  getFileExtension(filename: string): string {
-    return filename.toLowerCase().split('.').pop() || '';
   },
 
   validateURL(url: string): DetailedValidationResult {

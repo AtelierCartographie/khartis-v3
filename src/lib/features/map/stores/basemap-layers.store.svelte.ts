@@ -1,3 +1,4 @@
+import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import {
   BasemapDottedPattern,
   BasemapRepresentation,
@@ -195,11 +196,21 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
 ];
 
 function cloneDefaults(): BasemapLayerConfig[] {
-  return JSON.parse(JSON.stringify(DEFAULT_LAYERS)) as BasemapLayerConfig[];
+  return deepClone(DEFAULT_LAYERS);
 }
 
 class BasemapLayersStore {
   private _layers = $state<BasemapLayerConfig[]>(cloneDefaults());
+
+  private _version = $state(0);
+
+  get version(): number {
+    return this._version;
+  }
+
+  private incrementVersion(): void {
+    this._version++;
+  }
 
   get layers(): BasemapLayerConfig[] {
     return this._layers;
@@ -221,6 +232,7 @@ class BasemapLayersStore {
     this._layers = this._layers.map((l) =>
       l.id === id ? { ...l, visible } : l
     );
+    this.incrementVersion();
   }
 
   updateLayer<T extends BasemapLayerId>(
@@ -230,19 +242,20 @@ class BasemapLayersStore {
     this._layers = this._layers.map((l) =>
       l.id === id ? { ...l, ...updates } : l
     );
+    this.incrementVersion();
   }
 
   resetToDefaults(): void {
     this._layers = cloneDefaults();
+    this.incrementVersion();
   }
 
   resetLayer(id: BasemapLayerId): void {
     const defaultLayer = DEFAULT_LAYERS.find((l) => l.id === id);
     const index = this._layers.findIndex((l) => l.id === id);
     if (defaultLayer && index !== -1) {
-      this._layers[index] = JSON.parse(
-        JSON.stringify(defaultLayer)
-      ) as BasemapLayerConfig;
+      this._layers[index] = deepClone(defaultLayer);
+      this.incrementVersion();
     }
   }
 
@@ -251,7 +264,8 @@ class BasemapLayersStore {
       this.resetToDefaults();
       return;
     }
-    this._layers = JSON.parse(JSON.stringify(layers)) as BasemapLayerConfig[];
+    this._layers = deepClone(layers);
+    this.incrementVersion();
   }
 }
 

@@ -1,0 +1,262 @@
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
+import type {
+  DatasetResult,
+  PipelineContext,
+  ZipDatasetResult
+} from '../types';
+import {
+  createFileFromExtracted,
+  extractZip,
+  type ExtractedFile,
+  getNonShapefileFilesFromArchive,
+  getShapefileFilesFromArchive,
+  getSupportedFilesFromArchive
+} from '../utils/zip-handler';
+import { processFileInternal } from './file-processor';
+
+export async function processZipFile(
+  ctx: PipelineContext,
+  file: File
+): Promise<DatasetResult | ZipDatasetResult> {
+  const start = performance.now();
+
+  logger.info('Processing ZIP archive', LogCategory.DATA, {
+    fileName: file.name,
+    fileSize: file.size
+  });
+
+  try {
+    const extraction = await extractZip(file);
+
+    if (extraction.isShapefileArchive && extraction.shapefileBaseName) {
+      return processShapefileArchive(ctx, file, extraction, start);
+    }
+
+    return processGenericZip(ctx, file, extraction, start);
+  } catch (error) {
+    logger.error('Failed to process ZIP archive', LogCategory.DATA, {
+      fileName: file.name,
+      error
+    });
+    throw error;
+  }
+}
+
+async function processShapefileArchive(
+  ctx: PipelineContext,
+  file: File,
+  extraction: Awaited<ReturnType<typeof extractZip>>,
+  start: number
+): Promise<DatasetResult | ZipDatasetResult> {
+  logger.info('ZIP contains shapefile archive', LogCategory.DATA, {
+    baseName: extraction.shapefileBaseName,
+    fileCount: extraction.files.length
+  });
+
+  const shapefileFiles = getShapefileFilesFromArchive(
+    extraction.files,
+    extraction.shapefileBaseName!
+  );
+
+  const shpExtracted = shapefileFiles.find((f) =>
+    f.name.toLowerCase().endsWith('.shp')
+  );
+  if (!shpExtracted) {
+    throw new Error(m.pipeline_error_shp_not_found());
+  }
+
+  const shpFile = createFileFromExtracted(shpExtracted);
+  const companionFiles = shapefileFiles
+    .filter((f) => !f.name.toLowerCase().endsWith('.shp'))
+    .map((f) => createFileFromExtracted(f));
+
+  const dataset = await processFileInternal(ctx, shpFile, {
+    originalName: `${extraction.shapefileBaseName}.shp`,
+    companionFiles
+  });
+
+  dataset.sourceFileId = file.name;
+  dataset.name = extraction.shapefileBaseName!;
+
+  logger.success('Shapefile from ZIP processed', LogCategory.DATA, {
+    datasetId: dataset.id,
+    baseName: extraction.shapefileBaseName,
+    durationMs: (performance.now() - start).toFixed(2)
+  });
+
+  const otherFiles = getNonShapefileFilesFromArchive(
+    extraction.files,
+    extraction.shapefileBaseName!
+  );
+
+  if (otherFiles.length === 0) {
+    return dataset;
+  }
+
+  return processAdditionalFiles(ctx, file, dataset, otherFiles, start);
+}
+
+async function processAdditionalFiles(
+  ctx: PipelineContext,
+  file: File,
+  shapefileDataset: DatasetResult,
+  otherFiles: Awaited<ReturnType<typeof extractZip>>['files'],
+  start: number
+): Promise<DatasetResult | ZipDatasetResult> {
+  logger.info(
+    'ZIP contains additional files besides shapefile',
+    LogCategory.DATA,
+    {
+      shapefileBaseName: shapefileDataset.name,
+      additionalFiles: otherFiles.map((f) => f.name)
+    }
+  );
+
+  const additionalDatasets: DatasetResult[] = [];
+  const skippedOtherFiles: string[] = [];
+
+  for (const extractedFileInfo of otherFiles) {
+    try {
+      const extractedFile = createFileFromExtracted(extractedFileInfo);
+      const additionalDataset = await processFileInternal(ctx, extractedFile, {
+        originalName: extractedFileInfo.name
+      });
+
+      additionalDataset.sourceFileId = file.name;
+      additionalDataset.name = extractedFileInfo.name;
+
+      additionalDatasets.push(additionalDataset);
+    } catch (error) {
+      logger.warn(
+        'Failed to process additional file from ZIP',
+        LogCategory.DATA,
+        {
+          fileName: extractedFileInfo.name,
+          error
+        }
+      );
+      skippedOtherFiles.push(extractedFileInfo.name);
+    }
+  }
+
+  if (additionalDatasets.length === 0) {
+    return shapefileDataset;
+  }
+
+  const allDatasets = [shapefileDataset, ...additionalDatasets];
+  return {
+    datasets: allDatasets,
+    sourceZipName: file.name,
+    totalFiles: otherFiles.length + 1,
+    processedFiles: allDatasets.length,
+    skippedFiles: skippedOtherFiles
+  } satisfies ZipDatasetResult;
+}
+
+async function processGenericZip(
+  ctx: PipelineContext,
+  file: File,
+  extraction: Awaited<ReturnType<typeof extractZip>>,
+  start: number
+): Promise<DatasetResult | ZipDatasetResult> {
+  const supportedFiles = getSupportedFilesFromArchive(extraction.files);
+
+  if (supportedFiles.length === 0) {
+    throw new Error(m.pipeline_error_no_supported_files());
+  }
+
+  if (supportedFiles.length === 1) {
+    return processSingleFileFromZip(ctx, file, supportedFiles[0], start);
+  }
+
+  return processMultipleFilesFromZip(ctx, file, supportedFiles, start);
+}
+
+async function processSingleFileFromZip(
+  ctx: PipelineContext,
+  zipFile: File,
+  extractedFileInfo: ExtractedFile,
+  start: number
+): Promise<DatasetResult> {
+  const extractedFile = createFileFromExtracted(extractedFileInfo);
+
+  const dataset = await processFileInternal(ctx, extractedFile, {
+    originalName: extractedFileInfo.name
+  });
+
+  dataset.sourceFileId = zipFile.name;
+  dataset.name = extractedFileInfo.name;
+
+  logger.success('File from ZIP processed', LogCategory.DATA, {
+    datasetId: dataset.id,
+    extractedFile: extractedFileInfo.name,
+    durationMs: (performance.now() - start).toFixed(2)
+  });
+
+  return dataset;
+}
+
+async function processMultipleFilesFromZip(
+  ctx: PipelineContext,
+  zipFile: File,
+  supportedFiles: ExtractedFile[],
+  start: number
+): Promise<ZipDatasetResult> {
+  logger.info('ZIP contains multiple files, processing all', LogCategory.DATA, {
+    fileCount: supportedFiles.length,
+    files: supportedFiles.map((f) => f.name)
+  });
+
+  const datasets: DatasetResult[] = [];
+  const skippedFiles: string[] = [];
+
+  for (const extractedFileInfo of supportedFiles) {
+    try {
+      const extractedFile = createFileFromExtracted(extractedFileInfo);
+      const dataset = await processFileInternal(ctx, extractedFile, {
+        originalName: extractedFileInfo.name
+      });
+
+      dataset.sourceFileId = zipFile.name;
+      dataset.name = extractedFileInfo.name;
+      datasets.push(dataset);
+
+      logger.debug('Processed file from ZIP', LogCategory.DATA, {
+        fileName: extractedFileInfo.name,
+        datasetId: dataset.id
+      });
+    } catch (error) {
+      logger.warn(
+        'Failed to process file from ZIP, skipping',
+        LogCategory.DATA,
+        {
+          fileName: extractedFileInfo.name,
+          error
+        }
+      );
+      skippedFiles.push(extractedFileInfo.name);
+    }
+  }
+
+  if (datasets.length === 0) {
+    throw new Error(m.pipeline_error_no_supported_files());
+  }
+
+  const result: ZipDatasetResult = {
+    datasets,
+    sourceZipName: zipFile.name,
+    totalFiles: supportedFiles.length,
+    processedFiles: datasets.length,
+    skippedFiles
+  };
+
+  logger.success('ZIP archive processed', LogCategory.DATA, {
+    sourceZip: zipFile.name,
+    processedCount: datasets.length,
+    skippedCount: skippedFiles.length,
+    durationMs: (performance.now() - start).toFixed(2)
+  });
+
+  return result;
+}

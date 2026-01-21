@@ -292,3 +292,52 @@ export async function getJoinedArrowTable(
 
   return arrowTable;
 }
+
+interface ArrowTableLike {
+  get(index: number): Record<string, unknown>;
+  numRows: number;
+}
+
+export async function joinDataWithBasemap(
+  dataTableName: string,
+  dataColumnName: string,
+  basemapTableName: string,
+  basemapColumnName: string,
+  Duck: DuckDBClientForJoin
+): Promise<string> {
+  const start = performance.now();
+
+  logger.info('Joining data with basemap in DuckDB', LogCategory.DUCKDB, {
+    dataTableName,
+    basemapTableName,
+    dataColumnName,
+    basemapColumnName
+  });
+
+  const joinedTableName = `joined_${Date.now().toString(36)}`;
+
+  await Duck.query(`
+    CREATE TABLE "${joinedTableName}" AS
+    SELECT
+      b.*,
+      d.* EXCLUDE ("${dataColumnName}")
+    FROM "${basemapTableName}" b
+    INNER JOIN "${dataTableName}" d
+    ON LOWER(TRIM(b."${basemapColumnName}")) = LOWER(TRIM(d."${dataColumnName}"))
+  `);
+
+  const countResult = (await Duck.query(`
+    SELECT COUNT(*) as count FROM "${joinedTableName}"
+  `)) as ArrowTableLike;
+
+  const countRow = countResult.get(0) as Record<string, unknown>;
+  const joinedCount = Number(countRow?.count) || 0;
+
+  logger.success('DuckDB basemap join completed', LogCategory.DUCKDB, {
+    joinedTableName,
+    joinedCount,
+    durationMs: (performance.now() - start).toFixed(2)
+  });
+
+  return joinedTableName;
+}

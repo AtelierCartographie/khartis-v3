@@ -1,6 +1,6 @@
 import { FileType } from '$lib/features/commons/store/create-project.types';
+import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { Table } from 'apache-arrow/Arrow';
 
