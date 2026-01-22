@@ -1,6 +1,10 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
+  import {
+    Button,
+    OverflowMenu,
+    OverflowMenuItem
+  } from 'carbon-components-svelte';
   import {
     Draggable,
     Settings,
@@ -16,6 +20,9 @@
     isDragOver: boolean;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
+    onRenameLayer?: (layerId: string) => void;
+    onDuplicateLayer?: (layerId: string) => void;
+    onDeleteLayer?: (layerId: string) => void;
     onDragStart: (index: number) => void;
     onDragOver: (index: number) => void;
     onDragEnd: () => void;
@@ -29,6 +36,9 @@
     isDragOver,
     onToggleVisibility,
     onOpenSettings,
+    onRenameLayer,
+    onDuplicateLayer,
+    onDeleteLayer,
     onDragStart,
     onDragOver,
     onDragEnd,
@@ -107,6 +117,22 @@
         iconDescription={m.layers_settings()}
         onclick={handleOpenSettings}
       />
+
+      <OverflowMenu size="sm" flipped iconDescription={m.layers_more_options()}>
+        <OverflowMenuItem
+          text={m.layers_rename()}
+          on:click={() => onRenameLayer?.(layer.id)}
+        />
+        <OverflowMenuItem
+          text={m.layers_duplicate()}
+          on:click={() => onDuplicateLayer?.(layer.id)}
+        />
+        <OverflowMenuItem
+          danger
+          text={m.layers_delete()}
+          on:click={() => onDeleteLayer?.(layer.id)}
+        />
+      </OverflowMenu>
     </div>
   </div>
 </div>

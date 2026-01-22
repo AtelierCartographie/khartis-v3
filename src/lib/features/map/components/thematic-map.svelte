@@ -28,6 +28,7 @@
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import type { DeckMapProps } from '../types';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
+  import LegendOverlay from './legend-overlay.svelte';
 
   let { tables, geoJSONs, width, height, onReady }: DeckMapProps = $props();
 
@@ -507,6 +508,7 @@
     </div>
   {/if}
   <GeoIndicationsOverlay />
+  <LegendOverlay />
 </div>
 
 <style>

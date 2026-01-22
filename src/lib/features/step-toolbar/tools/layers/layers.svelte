@@ -67,7 +67,29 @@
     store.toggleLayerVisibility(layerId);
   }
 
-  function handleOpenSettings(_layerId: string): void {}
+  function handleOpenSettings(_layerId: string): void {
+    // TODO: Navigate to visualization settings when layer-visualization link is implemented
+  }
+
+  function handleRenameLayer(layerId: string): void {
+    const layer = layers.find((l) => l.id === layerId);
+    if (!layer) return;
+
+    const newName = prompt(m.layers_rename_prompt(), layer.name);
+    if (newName && newName.trim() !== '') {
+      store.updateLayer(layerId, { name: newName.trim() });
+    }
+  }
+
+  function handleDuplicateLayer(layerId: string): void {
+    store.duplicateLayer(layerId);
+  }
+
+  function handleDeleteLayer(layerId: string): void {
+    if (confirm(m.layers_delete_confirm())) {
+      store.removeLayer(layerId);
+    }
+  }
 
   function reorderLayers(
     type: LayerType,
@@ -175,6 +197,9 @@
           isSubSection={true}
           onToggleVisibility={handleToggleVisibility}
           onOpenSettings={handleOpenSettings}
+          onRenameLayer={handleRenameLayer}
+          onDuplicateLayer={handleDuplicateLayer}
+          onDeleteLayer={handleDeleteLayer}
           onReorderLayer={getReorderFunction(section.type)}
         />
       {/if}
