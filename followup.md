@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 23 janvier 2026
+> Dernière mise à jour : 22 janvier 2026
 
 ---
 

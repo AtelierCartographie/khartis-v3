@@ -30,6 +30,45 @@ export function getBasemapAttributesId(basemap: BasemapMetadata): string {
   return basemap.file.replace(/\.(parquet|geojson)$/i, '');
 }
 
+async function ensureBasemapAttributesLoaded(
+  Duck: DuckDBClientForJoin
+): Promise<void> {
+  const tableCheck = (await Duck.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
+    { format: 'array' }
+  )) as Array<{ table_name: string }>;
+
+  if (!tableCheck || tableCheck.length === 0) {
+    const { basemapService } =
+      await import('$lib/features/map/services/basemap.service.svelte');
+    await basemapService.initialize();
+
+    const recheck = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
+
+    if (!recheck || recheck.length === 0) {
+      throw new Error(
+        'basemap_attributes table could not be loaded. Check network connectivity and basemap files.'
+      );
+    }
+  }
+}
+
+async function checkJoinResultsExist(
+  tableName: string,
+  Duck: DuckDBClientForJoin
+): Promise<boolean> {
+  const joinResultsTable = `${tableName}_join_results`;
+  const escapedTableName = escapeSqlString(joinResultsTable);
+  const check = (await Duck.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableName}'`,
+    { format: 'array' }
+  )) as Array<{ table_name: string }>;
+  return check && check.length > 0;
+}
+
 export async function computeJoinStats(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
@@ -37,19 +76,9 @@ export async function computeJoinStats(
   Duck: DuckDBClientForJoin
 ): Promise<JoinQuality> {
   await Duck.query(join_macros);
+  await ensureBasemapAttributesLoaded(Duck);
 
   const basemapId = getBasemapAttributesId(basemap);
-
-  const tableCheck = (await Duck.query(
-    `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
-    { format: 'array' }
-  )) as Array<{ table_name: string }>;
-
-  if (!tableCheck || tableCheck.length === 0) {
-    throw new Error(
-      'basemap_attributes table not loaded. Ensure basemapService.loadAttributes() was called.'
-    );
-  }
 
   const joinTableView = `basemap_join_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const escapedBasemapId = escapeSqlString(basemapId);
@@ -156,17 +185,23 @@ export async function applyJoinCorrections(
   await Duck.query(`DROP TABLE "${correctionsTable}"`);
 }
 
+export interface FinalizeJoinOptions {
+  skipJoinComputation?: boolean;
+}
+
 export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
-  Duck: DuckDBClientForJoin
+  Duck: DuckDBClientForJoin,
+  options?: FinalizeJoinOptions
 ): Promise<FinalizeJoinResult> {
   const start = performance.now();
   logger.info('Finalizing join for dataset', LogCategory.DATA, {
     datasetId: dataset.id,
     basemap: basemap.file,
-    geoColumn
+    geoColumn,
+    skipJoinComputation: options?.skipJoinComputation
   });
 
   if (isOSMBasemap(basemap)) {
@@ -184,11 +219,17 @@ export async function finalizeJoin(
 
   await Duck.query(join_macros);
 
-  await Duck.join_by_id(dataset.tableName, geoColumn, {
-    basemaps_table: 'basemap_attributes'
-  });
+  const joinTableExists = await checkJoinResultsExist(dataset.tableName, Duck);
 
-  await Duck.apply_join_association(dataset.tableName, basemap.file);
+  if (!options?.skipJoinComputation && !joinTableExists) {
+    await ensureBasemapAttributesLoaded(Duck);
+    await Duck.join_by_id(dataset.tableName, geoColumn, {
+      basemaps_table: 'basemap_attributes'
+    });
+  }
+
+  const basemapId = getBasemapAttributesId(basemap);
+  await Duck.apply_join_association(dataset.tableName, basemapId);
 
   const joinedCountResult = (await Duck.query(
     `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE basemap_id IS NOT NULL`,

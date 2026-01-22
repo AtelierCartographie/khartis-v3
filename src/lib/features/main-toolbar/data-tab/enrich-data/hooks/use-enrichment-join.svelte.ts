@@ -265,6 +265,8 @@ export function useEnrichmentJoin(
         enrichColumns: enrichmentColumns
       });
 
+      const oldTableName = geoTableName;
+
       const enrichColsSelect = enrichmentColumns
         .map((col) => `e."${col}"`)
         .join(', ');
@@ -315,6 +317,23 @@ export function useEnrichmentJoin(
         newTable: enrichedTableName,
         addedColumns: enrichmentColumns
       });
+
+      if (
+        oldTableName !== enrichedTableName &&
+        oldTableName.includes('_enriched_')
+      ) {
+        try {
+          await Duck.query(`DROP TABLE IF EXISTS "${oldTableName}"`);
+          logger.debug('Dropped old enriched table', LogCategory.DATA, {
+            oldTableName
+          });
+        } catch (dropError) {
+          logger.warn('Failed to drop old enriched table', LogCategory.DATA, {
+            oldTableName,
+            error: dropError
+          });
+        }
+      }
 
       resetJoinState();
       onJoinFinalized();
