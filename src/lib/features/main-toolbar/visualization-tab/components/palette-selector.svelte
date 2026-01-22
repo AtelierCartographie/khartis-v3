@@ -11,10 +11,11 @@
     Tile
   } from 'carbon-components-svelte';
   import { ArrowsHorizontal, Checkmark } from 'carbon-icons-svelte';
+  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   type PaletteType = 'sequential' | 'diverging' | 'qualitative';
 
-  interface Palette {
+  export interface Palette {
     id: string;
     name: string;
     colors: string[];
@@ -26,16 +27,20 @@
     selectedPaletteId?: string;
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
+    numClasses?: number;
     onselect?: (palette: Palette) => void;
     oninvert?: () => void;
+    onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
   }
 
   let {
-    selectedPaletteId = 'blues',
+    selectedPaletteId = $bindable('blues'),
     paletteType = $bindable<PaletteType>('sequential'),
     colorBlindFilter = $bindable(false),
+    numClasses = 5,
     onselect,
-    oninvert
+    oninvert,
+    onClassificationChange
   }: Props = $props();
 
   const sequentialPalettes: Palette[] = [
@@ -174,9 +179,53 @@
     return palettes;
   });
 
+  function interpolateColors(colors: string[], count: number): string[] {
+    if (colors.length === count) return colors;
+    if (colors.length >= count) return colors.slice(0, count);
+
+    const result: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      const idx = t * (colors.length - 1);
+      const lowIdx = Math.floor(idx);
+      const highIdx = Math.min(lowIdx + 1, colors.length - 1);
+      const frac = idx - lowIdx;
+
+      if (frac === 0) {
+        result.push(colors[lowIdx]);
+      } else {
+        const c1 = hexToRgb(colors[lowIdx]);
+        const c2 = hexToRgb(colors[highIdx]);
+        const r = Math.round(c1.r + (c2.r - c1.r) * frac);
+        const g = Math.round(c1.g + (c2.g - c1.g) * frac);
+        const b = Math.round(c1.b + (c2.b - c1.b) * frac);
+        result.push(rgbToHex(r, g, b));
+      }
+    }
+    return result;
+  }
+
+  function hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        }
+      : { r: 0, g: 0, b: 0 };
+  }
+
+  function rgbToHex(r: number, g: number, b: number): string {
+    return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
+
   function selectPalette(palette: Palette) {
     selectedPaletteId = palette.id;
     onselect?.(palette);
+
+    const interpolatedColors = interpolateColors(palette.colors, numClasses);
+    onClassificationChange?.({ colors: interpolatedColors });
   }
 
   function buildGradient(colors: string[]): string {

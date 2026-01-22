@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 14 janvier 2026
+> Dernière mise à jour : 23 janvier 2026
 
 ---
 
@@ -22,8 +22,8 @@
 | 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                        |
 | 2.A.5 Tableau de données     | **95%**  | 🔌 Recherche sur carte (UI prête)                     |
 | 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                        |
-| 2.B.1-2.B.2 Visualisations   | **30%**  | 🔌 configure-visualization.svelte orphelin            |
-| 2.B.3-2.B.4 Outils           | **35%**  | 🔧 Couches non rendues, simplification stub           |
+| 2.B.1-2.B.2 Visualisations   | **70%**  | ✅ Primitives connectées au store, rendu Deck.gl OK   |
+| 2.B.3-2.B.4 Outils           | **50%**  | ✅ Basemap layers connecté, simplification stub       |
 | 2.C Habillage                | **35%**  | 🔌 Légende/annotations: UI prêtes, overlays manquants |
 | 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                      |
 | 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                        |
@@ -33,9 +33,17 @@
 | 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                        |
 | 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code                |
 
-### Avancement global : 73%
+### Avancement global : 78%
 
-> ⚠️ **Note importante** : Le blocage principal est dans **configure-visualization.svelte** (940 lignes) qui utilise des `$state` locaux jamais persistés au `visualizationStore`. Le store et Deck.gl sont prêts, mais l'UI ne synchronise pas.
+> ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
+> - **polygons-config.svelte** : fill/stroke colors, opacity, modes → store
+> - **symbols-config.svelte** : size, shape, color → Deck.gl ScatterplotLayer
+> - **lines-config.svelte** : thickness, dashed, color → Deck.gl PathLayer
+> - **labels-config.svelte** : font, size, color, position → Deck.gl TextLayer
+> - **fill-config.svelte** : fill color, opacity → store
+> - **palette-selector.svelte** : sélection + interpolation couleurs → store → rendu
+> - **basemap-layers-control.svelte** : toggle/opacity/colors → basemapLayersStore → MapLibre
+> - **discretization-modal.svelte** : méthode, classes, breaks manuels → classification.service → store
 
 ---
 
@@ -133,16 +141,16 @@
 | Limite propositions + afficher plus | ✅     |                                        |
 | Score correspondance affiché        | 🔧     |                                        |
 
-### 2.B.2.b Paramétrer la visualisation — 25%
+### 2.B.2.b Paramétrer la visualisation — 85%
 
-| Fonctionnalité                  | Statut | Note                                       |
-| ------------------------------- | ------ | ------------------------------------------ |
-| Réglages par primitives         | 🔌     | UI $state local, jamais persisté au store  |
-| Afficher/masquer primitives     | 🔌     | Accordéon toggle, pas de logique réelle    |
-| Taille, épaisseur, forme        | 🔌     | Sliders présents, non connectés            |
-| Filtrer primitives              | ⚠️     | 50%                                        |
-| configure-visualization → store | 🔧     | **Critique** - 940 lignes UI orphelines    |
-| Connexion au rendu Deck.gl      | ⚠️     | Lit store OK, mais UI n'écrit pas au store |
+| Fonctionnalité                  | Statut | Note                                                 |
+| ------------------------------- | ------ | ---------------------------------------------------- |
+| Réglages par primitives         | ✅     | Tous connectés (polygons, symbols, lines, labels)    |
+| Afficher/masquer primitives     | ✅     | Accordéon toggle connecté au store                   |
+| Taille, épaisseur, forme        | ✅     | Sliders connectés via callbacks                      |
+| Filtrer primitives              | ⚠️     | 50%                                                  |
+| configure-visualization → store | ✅     | Mapping + classification + style connectés           |
+| Connexion au rendu Deck.gl      | ✅     | Store synchronisé, breaks calculés, rendu fonctionne |
 
 ### 2.B.2.c Personnalisation des couleurs — 40%
 
@@ -159,22 +167,22 @@
 | Motifs personnalisables           | 🔧     |                               |
 | Inversion palette                 | ✅     |                               |
 
-### 2.B.2.d Discrétisation — 20%
+### 2.B.2.d Discrétisation — 60%
 
-| Fonctionnalité                 | Statut | Note                              |
-| ------------------------------ | ------ | --------------------------------- |
-| Sélection méthode              | 🔌     | UI prête, non connecté            |
-| Nombre de classes              | 🔌     | UI prête, non connecté            |
-| Equal-interval                 | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Quantile                       | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Std Deviation                  | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Manuel                         | 🔌     | Store prêt, non connecté au rendu |
-| Jenks (fallback sur Quantiles) | ⚠️     | 20%                               |
-| Saisie manuelle bornes         | ⚠️     | 30%                               |
-| Valeur de rupture (divergent)  | 🔧     |                                   |
-| Diagramme fréquences           | 🔧     |                                   |
-| Définition méthode (aide)      | 🔧     |                                   |
-| calculateBreaks() appelé       | 🔧     | **Critique** - jamais appelé      |
+| Fonctionnalité                 | Statut | Note                                          |
+| ------------------------------ | ------ | --------------------------------------------- |
+| Sélection méthode              | ✅     | UI connectée au service classification        |
+| Nombre de classes              | ✅     | UI connectée au service classification        |
+| Equal-interval                 | ✅     | Algo DuckDB appelé via classification.service |
+| Quantile                       | ✅     | Algo DuckDB appelé via classification.service |
+| Std Deviation                  | ✅     | Algo DuckDB appelé via classification.service |
+| Manuel                         | ⚠️     | Store prêt, saisie manuelle à finaliser       |
+| Jenks (fallback sur Quantiles) | ✅     | Utilise kmeans DuckDB                         |
+| Saisie manuelle bornes         | ⚠️     | 30%                                           |
+| Valeur de rupture (divergent)  | 🔧     |                                               |
+| Diagramme fréquences           | 🔧     |                                               |
+| Définition méthode (aide)      | 🔧     |                                               |
+| calculateBreaks() appelé       | ✅     | Service classification.service.ts fonctionnel |
 
 ### 2.B.2.e Légende — 15%
 
@@ -184,20 +192,20 @@
 | Légende superposée sur la carte           | 🔧     | Overlay manquant                 |
 | Légende auto-créée lors de visualisation  | 🔧     |                                  |
 
-### 2.B.3 Personnaliser le fond de carte — 15%
+### 2.B.3 Personnaliser le fond de carte — 60%
 
-| Fonctionnalité                            | Statut | Note                                    |
-| ----------------------------------------- | ------ | --------------------------------------- |
-| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty |
-| Épaisseur contours (basemap)              | 🔧     | Non implémenté                          |
-| Opacité (basemap)                         | 🔧     | Non implémenté                          |
-| Couches multiples                         | 🔌     | Fixture data seulement                  |
-| Afficher/masquer couches                  | 🔌     | UI toggle, pas de rendu réel            |
-| Couleur contours                          | 🔧     |                                         |
-| Personnalisation par couche               | 🔧     |                                         |
-| Couleur fond polygones                    | 🔧     |                                         |
-| Pointillés                                | 🔧     |                                         |
-| Ombre portée                              | 🔧     |                                         |
+| Fonctionnalité                            | Statut | Note                                       |
+| ----------------------------------------- | ------ | ------------------------------------------ |
+| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty    |
+| Épaisseur contours (basemap)              | ✅     | Connecté via basemapLayersStore            |
+| Opacité (basemap)                         | ✅     | Connecté via basemapLayersStore            |
+| Couches multiples                         | ✅     | 9 couches configurables                    |
+| Afficher/masquer couches                  | ✅     | Toggle connecté à basemapLayersStore       |
+| Couleur contours                          | ✅     | Color picker connecté                      |
+| Personnalisation par couche               | ✅     | Chaque couche a ses propres paramètres     |
+| Couleur fond polygones                    | ✅     | fillColor connecté au store                |
+| Pointillés                                | 🔧     |                                            |
+| Ombre portée                              | 🔧     |                                            |
 
 #### 2.B.3.a Couches additionnelles — 5%
 
@@ -545,8 +553,8 @@
 
 ## Résumé des 🔌 (UI prête, à connecter)
 
-### Blocage critique #1 : configure-visualization.svelte
+### ✅ Blocage critique #1 résolu : configure-visualization.svelte
 
-Le composant de 940 lignes utilise des `$state` locaux qui ne sont **jamais synchronisés** avec `visualizationStore`. Les changements sont perdus à l'unmount.
+~~Le composant de 940 lignes utilise des `$state` locaux qui ne sont **jamais synchronisés** avec `visualizationStore`. Les changements sont perdus à l'unmount.~~
 
-**Solution** : Remplacer chaque `let variable = $state(value)` par des appels à `visualizationStore.updateVisualization()`.
+**Résolu** : Tous les composants de configuration utilisent maintenant des callbacks (`onStyleChange`, `onLabelsChange`, `onClassificationChange`, etc.) qui mettent à jour le `visualizationStore`. Le `basemap-layers-control.svelte` utilise directement `basemapLayersStore` avec `$derived` pour la lecture réactive.

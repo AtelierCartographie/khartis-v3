@@ -8,6 +8,10 @@
     type MissingDataConfig,
     type ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    calculateBreaks,
+    generateColorsForBreaks
+  } from '$lib/features/commons/services/classification.service';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import FillConfig from './components/fill-config.svelte';
   import LabelsConfig from './components/labels-config.svelte';
@@ -17,6 +21,7 @@
   import TextsConfig from './components/texts-config.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
+  let lastComputedKey = $state<string>('');
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -72,6 +77,70 @@
       visualizationStore.updateClassification(selectedViz.id, updates);
     }
   }
+
+  function handleMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    if (selectedViz?.id) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        mapping: { ...selectedViz.mapping, ...updates }
+      });
+      if (updates.valueColumn) {
+        computeBreaksForVisualization();
+      }
+    }
+  }
+
+  async function computeBreaksForVisualization() {
+    if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
+      return;
+    }
+
+    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${selectedViz.classification?.method}-${selectedViz.classification?.numClasses}`;
+    if (computeKey === lastComputedKey) {
+      return;
+    }
+    lastComputedKey = computeKey;
+
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.id === selectedViz.datasetId
+    );
+    if (!dataset?.sourceFileId) {
+      return;
+    }
+
+    const method = selectedViz.classification?.method;
+    const numClasses = selectedViz.classification?.numClasses ?? 5;
+
+    if (!method) {
+      return;
+    }
+
+    const result = await calculateBreaks({
+      datasetId: dataset.sourceFileId,
+      columnName: selectedViz.mapping.valueColumn,
+      method,
+      numClasses
+    });
+
+    if (result && selectedViz?.id) {
+      const colors = generateColorsForBreaks(numClasses);
+      visualizationStore.updateClassification(selectedViz.id, {
+        breaks: result.breaks,
+        colors
+      });
+    }
+  }
+
+  $effect(() => {
+    if (
+      selectedViz?.mapping.valueColumn &&
+      selectedViz?.classification?.method &&
+      !selectedViz?.classification?.breaks?.length
+    ) {
+      computeBreaksForVisualization();
+    }
+  });
 </script>
 
 <section id="configure-visualization">
@@ -108,6 +177,7 @@
     onModesChange={handleModesChange}
     onMissingDataChange={handleMissingDataChange}
     onClassificationChange={handleClassificationChange}
+    onMappingChange={handleMappingChange}
     onInvertPalette={handleInvertPalette}
   />
 

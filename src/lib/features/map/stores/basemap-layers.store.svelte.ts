@@ -199,37 +199,43 @@ function cloneDefaults(): BasemapLayerConfig[] {
   return deepClone(DEFAULT_LAYERS);
 }
 
-class BasemapLayersStore {
-  private _layers = $state<BasemapLayerConfig[]>(cloneDefaults());
+interface BasemapLayersState {
+  layers: BasemapLayerConfig[];
+  version: number;
+}
 
-  private _version = $state(0);
+class BasemapLayersStore {
+  private _state = $state<BasemapLayersState>({
+    layers: cloneDefaults(),
+    version: 0
+  });
 
   get version(): number {
-    return this._version;
+    return this._state.version;
   }
 
   private incrementVersion(): void {
-    this._version++;
+    this._state.version++;
   }
 
   get layers(): BasemapLayerConfig[] {
-    return this._layers;
+    return this._state.layers;
   }
 
   get visibleLayers(): BasemapLayerConfig[] {
-    return this._layers.filter((l) => l.visible);
+    return this._state.layers.filter((l) => l.visible);
   }
 
   getLayer<T extends BasemapLayerId>(
     id: T
   ): Extract<BasemapLayerConfig, { id: T }> | undefined {
-    return this._layers.find((l) => l.id === id) as
+    return this._state.layers.find((l) => l.id === id) as
       | Extract<BasemapLayerConfig, { id: T }>
       | undefined;
   }
 
   setLayerVisibility(id: BasemapLayerId, visible: boolean): void {
-    this._layers = this._layers.map((l) =>
+    this._state.layers = this._state.layers.map((l) =>
       l.id === id ? { ...l, visible } : l
     );
     this.incrementVersion();
@@ -239,22 +245,22 @@ class BasemapLayersStore {
     id: T,
     updates: Partial<Omit<Extract<BasemapLayerConfig, { id: T }>, 'id'>>
   ): void {
-    this._layers = this._layers.map((l) =>
+    this._state.layers = this._state.layers.map((l) =>
       l.id === id ? { ...l, ...updates } : l
     );
     this.incrementVersion();
   }
 
   resetToDefaults(): void {
-    this._layers = cloneDefaults();
+    this._state.layers = cloneDefaults();
     this.incrementVersion();
   }
 
   resetLayer(id: BasemapLayerId): void {
     const defaultLayer = DEFAULT_LAYERS.find((l) => l.id === id);
-    const index = this._layers.findIndex((l) => l.id === id);
+    const index = this._state.layers.findIndex((l) => l.id === id);
     if (defaultLayer && index !== -1) {
-      this._layers[index] = deepClone(defaultLayer);
+      this._state.layers[index] = deepClone(defaultLayer);
       this.incrementVersion();
     }
   }
@@ -264,7 +270,7 @@ class BasemapLayersStore {
       this.resetToDefaults();
       return;
     }
-    this._layers = deepClone(layers);
+    this._state.layers = deepClone(layers);
     this.incrementVersion();
   }
 }
