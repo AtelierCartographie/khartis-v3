@@ -338,7 +338,18 @@
           dataTabState.geolocation.linkedVariableName
         );
         dataTabActions.setJoinStats(stats);
-        await handleFinalizeJoin();
+
+        await duckDBOrchestrator.finalizeJoin(
+          datasetIdForOrchestrator,
+          basemap,
+          dataTabState.geolocation.linkedVariableName,
+          { skipJoinComputation: true }
+        );
+        dataTabStore.markStepComplete(2);
+        logger.success(
+          'Corrections applied and join finalized',
+          LogCategory.MAP
+        );
       }
     } catch (error) {
       logger.error('Failed to apply corrections', LogCategory.MAP, error);

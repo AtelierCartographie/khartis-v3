@@ -260,7 +260,8 @@ export const duckDBOrchestrator = {
   async finalizeJoin(
     datasetId: string,
     basemap: BasemapMetadata,
-    geoColumn: string
+    geoColumn: string,
+    options?: joinOps.FinalizeJoinOptions
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
@@ -273,7 +274,8 @@ export const duckDBOrchestrator = {
         dataset,
         basemap,
         geoColumn,
-        Duck
+        Duck,
+        options
       );
 
       datasetOps.updateDatasetJoinInfo(dataset.id, result);
