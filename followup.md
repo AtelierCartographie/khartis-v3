@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 22 janvier 2026
+> Dernière mise à jour : 22 janvier 2026 - 18h30
 
 ---
 
@@ -22,9 +22,9 @@
 | 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                        |
 | 2.A.5 Tableau de données     | **95%**  | 🔌 Recherche sur carte (UI prête)                     |
 | 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                        |
-| 2.B.1-2.B.2 Visualisations   | **70%**  | ✅ Primitives connectées au store, rendu Deck.gl OK   |
-| 2.B.3-2.B.4 Outils           | **50%**  | ✅ Basemap layers connecté, simplification stub       |
-| 2.C Habillage                | **35%**  | 🔌 Légende/annotations: UI prêtes, overlays manquants |
+| 2.B.1-2.B.2 Visualisations   | **85%**  | ✅ Suggestions→viz complet, légende overlay OK        |
+| 2.B.3-2.B.4 Outils           | **75%**  | ✅ Basemap layers 85%, calques CRUD complet           |
+| 2.C Habillage                | **55%**  | ✅ Légende overlay fonctionnel, annotations 🔌        |
 | 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                      |
 | 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                        |
 | 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                               |
@@ -33,7 +33,7 @@
 | 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                        |
 | 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code                |
 
-### Avancement global : 78%
+### Avancement global : 82%
 
 > ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
 > - **polygons-config.svelte** : fill/stroke colors, opacity, modes → store
@@ -119,27 +119,27 @@
 
 ## 2.B. Visualisations
 
-### 2.B.1 Création de visualisations — 40%
+### 2.B.1 Création de visualisations — 95%
 
-| Fonctionnalité                         | Statut | Note                       |
-| -------------------------------------- | ------ | -------------------------- |
-| Visualisations multiples               | ✅     |                            |
-| Nommage par défaut avec incrémentation | ✅     |                            |
-| Renommer/dupliquer/supprimer           | ✅     |                            |
-| Choix jeu de données                   | ✅     |                            |
-| Création auto visualisation            | ⚠️     | 80% - manque déclenchement |
-| Connexion au visualizationStore        | 🔧     |                            |
+| Fonctionnalité                         | Statut | Note                              |
+| -------------------------------------- | ------ | --------------------------------- |
+| Visualisations multiples               | ✅     |                                   |
+| Nommage par défaut avec incrémentation | ✅     |                                   |
+| Renommer/dupliquer/supprimer           | ✅     |                                   |
+| Choix jeu de données                   | ✅     |                                   |
+| Création auto visualisation            | ✅     | handleCreateVisualization complet |
+| Connexion au visualizationStore        | ✅     | Multi-colonnes gérées             |
 
-### 2.B.2.a Suggestions de visualisations — 50%
+### 2.B.2.a Suggestions de visualisations — 95%
 
-| Fonctionnalité                      | Statut | Note                                   |
-| ----------------------------------- | ------ | -------------------------------------- |
-| Service viz-suggester.ts (20 types) | ✅     | Service complet, 11+ tests             |
-| UI connectée au service             | ✅     | Suggestions affichées dans UI          |
-| Créer viz depuis suggestion         | 🔌     | Manque onClick → createVisualization() |
-| Vignette aperçu générique           | ⚠️     | 50%                                    |
-| Limite propositions + afficher plus | ✅     |                                        |
-| Score correspondance affiché        | 🔧     |                                        |
+| Fonctionnalité                      | Statut | Note                                        |
+| ----------------------------------- | ------ | ------------------------------------------- |
+| Service viz-suggester.ts (21 types) | ✅     | Service complet, 11+ tests                  |
+| UI connectée au service             | ✅     | Suggestions affichées dans UI               |
+| Créer viz depuis suggestion         | ✅     | mapSuggestionToType() mappe les 21 IDs      |
+| Vignette aperçu générique           | ⚠️     | 50%                                         |
+| Limite propositions + afficher plus | ✅     |                                             |
+| Score correspondance affiché        | 🔧     |                                             |
 
 ### 2.B.2.b Paramétrer la visualisation — 85%
 
@@ -167,7 +167,7 @@
 | Motifs personnalisables           | 🔧     |                               |
 | Inversion palette                 | ✅     |                               |
 
-### 2.B.2.d Discrétisation — 60%
+### 2.B.2.d Discrétisation — 75%
 
 | Fonctionnalité                 | Statut | Note                                          |
 | ------------------------------ | ------ | --------------------------------------------- |
@@ -176,21 +176,23 @@
 | Equal-interval                 | ✅     | Algo DuckDB appelé via classification.service |
 | Quantile                       | ✅     | Algo DuckDB appelé via classification.service |
 | Std Deviation                  | ✅     | Algo DuckDB appelé via classification.service |
-| Manuel                         | ⚠️     | Store prêt, saisie manuelle à finaliser       |
+| Manuel                         | ⚠️     | UI fonctionne, validation manquante           |
 | Jenks (fallback sur Quantiles) | ✅     | Utilise kmeans DuckDB                         |
-| Saisie manuelle bornes         | ⚠️     | 30%                                           |
-| Valeur de rupture (divergent)  | 🔧     |                                               |
-| Diagramme fréquences           | 🔧     |                                               |
-| Définition méthode (aide)      | 🔧     |                                               |
+| Saisie manuelle bornes         | ⚠️     | 75% - fonctionne mais pas de validation       |
+| Valeur de rupture (divergent)  | 🔌     | UI prête, rendu palette manquant              |
+| Diagramme fréquences           | ✅     | Histogramme SVG complet                       |
+| Définition méthode (aide)      | ✅     | getMethodDescription() pour chaque méthode    |
 | calculateBreaks() appelé       | ✅     | Service classification.service.ts fonctionnel |
 
-### 2.B.2.e Légende — 15%
+### 2.B.2.e Légende — 90%
 
-| Fonctionnalité                            | Statut | Note                             |
-| ----------------------------------------- | ------ | -------------------------------- |
-| Légende configurable dans panneau latéral | 🔌     | UI+Store prêts, pas sur la carte |
-| Légende superposée sur la carte           | 🔧     | Overlay manquant                 |
-| Légende auto-créée lors de visualisation  | 🔧     |                                  |
+| Fonctionnalité                            | Statut | Note                                  |
+| ----------------------------------------- | ------ | ------------------------------------- |
+| Légende configurable dans panneau latéral | ✅     | UI+Store complets, 2 onglets          |
+| Légende superposée sur la carte           | ✅     | legend-overlay.svelte intégré         |
+| Style (police, taille, fond, opacité)     | ✅     | Connecté via legendStore              |
+| Position (4 coins)                        | ✅     | LegendPosition enum                   |
+| Légende auto-créée lors de visualisation  | 🔧     | À implémenter                         |
 
 ### 2.B.3 Personnaliser le fond de carte — 60%
 
@@ -207,18 +209,18 @@
 | Pointillés                                | 🔧     |                                            |
 | Ombre portée                              | 🔧     |                                            |
 
-#### 2.B.3.a Couches additionnelles — 5%
+#### 2.B.3.a Couches additionnelles — 85%
 
-| Couche               | Définie | Rendu | Note                 |
-| -------------------- | ------- | ----- | -------------------- |
-| Terre (earth)        | 🔧      | 🔧    | Non trouvé           |
-| Mers/Océans          | 🔧      | 🔧    | Non trouvé           |
-| Équateur             | 🔌      | 🔧    | UI toggle, non rendu |
-| Méridiens/Parallèles | 🔧      | 🔧    | Non trouvé           |
-| Frontières/Limites   | 🔌      | 🔧    | UI toggle, non rendu |
-| Lacs et rivières     | 🔧      | 🔧    |                      |
-| Relief               | 🔧      | 🔧    |                      |
-| Villes/Capitales     | 🔧      | 🔧    |                      |
+| Couche               | Store | UI  | Rendu | Note                           |
+| -------------------- | ----- | --- | ----- | ------------------------------ |
+| Terre (earth)        | ✅    | ✅  | ✅    | createTerreLayers() complet    |
+| Mers/Océans          | ✅    | ✅  | ✅    | createMersLayer() complet      |
+| Équateur             | ✅    | ✅  | ✅    | createEquateurLayer() complet  |
+| Méridiens/Parallèles | ✅    | ✅  | ✅    | createMeridiensLayer() complet |
+| Frontières/Limites   | ✅    | ✅  | ✅    | createFrontieresLayer() complet|
+| Lacs et rivières     | ✅    | ✅  | ✅    | GeoJSON chargés async          |
+| Relief               | ✅    | ✅  | 🔧    | Stub (DEM data manquant)       |
+| Villes/Capitales     | ✅    | ✅  | ✅    | 4 symboles, 4 catégories       |
 
 ### 2.B.4.a Recherche — 50%
 
@@ -230,17 +232,19 @@
 | Remplacer                       | ⚠️     | 50%                          |
 | Options avancées (regex, casse) | ⚠️     | 30%                          |
 
-### 2.B.4.b Calques — 70%
+### 2.B.4.b Calques — 95%
 
-| Fonctionnalité                    | Statut | Note |
-| --------------------------------- | ------ | ---- |
-| Calque par visualisation          | ✅     |      |
-| Sous-calques par primitive        | ✅     |      |
-| Code couleur + icône              | ✅     |      |
-| Afficher/masquer                  | ✅     |      |
-| Déplacement calques (Drag & Drop) | ✅     |      |
-| Renommer/dupliquer/supprimer      | 🔧     |      |
-| Raccourci paramétrage             | ⚠️     | 50%  |
+| Fonctionnalité                    | Statut | Note                          |
+| --------------------------------- | ------ | ----------------------------- |
+| Calque par visualisation          | ✅     |                               |
+| Sous-calques par primitive        | ✅     |                               |
+| Code couleur + icône              | ✅     |                               |
+| Afficher/masquer                  | ✅     |                               |
+| Déplacement calques (Drag & Drop) | ✅     |                               |
+| Renommer                          | ✅     | OverflowMenu + prompt         |
+| Dupliquer                         | ✅     | OverflowMenu + store.duplicate|
+| Supprimer                         | ✅     | OverflowMenu + confirm        |
+| Raccourci paramétrage             | ⚠️     | 50% - handler stub            |
 
 ### 2.B.4.c Projections — 80%
 
@@ -304,18 +308,18 @@
 | Redistribution auto éléments | ✅     |      |
 | Magnétisme (snapToGrid)      | 🔧     |      |
 
-### 2.C.2.b Légende — 20%
+### 2.C.2.b Légende — 90%
 
-| Fonctionnalité           | Statut | Note                           |
-| ------------------------ | ------ | ------------------------------ |
-| Édition contenu légendes | 🔌     | UI prête, pas rendue sur carte |
-| Afficher/masquer         | 🔌     | Store prêt, overlay manquant   |
-| Titre, sous-titre, note  | 🔌     | UI prête, overlay manquant     |
-| Style (police, taille)   | 🔌     | UI prête, overlay manquant     |
-| Arrière-plan             | 🔌     | UI prête, overlay manquant     |
-| Opacité                  | 🔌     | UI prête, overlay manquant     |
-| Rendu overlay sur carte  | 🔧     | **Bloquant**                   |
-| Pastille incitation      | ⚠️     | 20%                            |
+| Fonctionnalité           | Statut | Note                              |
+| ------------------------ | ------ | --------------------------------- |
+| Édition contenu légendes | ✅     | Titre, sous-titre, note par item  |
+| Afficher/masquer         | ✅     | Toggle dans UI + rendu conditionnel |
+| Titre, sous-titre, note  | ✅     | Édition inline dans légende.svelte |
+| Style (police, taille)   | ✅     | Onglet STYLE avec sliders         |
+| Arrière-plan             | ✅     | Toggle + Color Picker HSL         |
+| Opacité                  | ✅     | Slider 0-100%                     |
+| Rendu overlay sur carte  | ✅     | legend-overlay.svelte intégré     |
+| Pastille incitation      | ⚠️     | 20%                               |
 
 ### 2.C.2.c Indications géographiques — 60%
 
@@ -547,7 +551,7 @@
 
 ---
 
-### Avancement global : 73%
+### Avancement global : 82%
 
 ---
 

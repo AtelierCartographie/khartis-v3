@@ -10,6 +10,9 @@
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     onReorderLayer?: (dragIndex: number, hoverIndex: number) => void;
+    onRenameLayer?: (layerId: string) => void;
+    onDuplicateLayer?: (layerId: string) => void;
+    onDeleteLayer?: (layerId: string) => void;
   }
 
   const {
@@ -17,7 +20,10 @@
     isSubSection = false,
     onToggleVisibility,
     onOpenSettings,
-    onReorderLayer
+    onReorderLayer,
+    onRenameLayer,
+    onDuplicateLayer,
+    onDeleteLayer
   }: Props = $props();
 
   let dragState = $state<DragState>({
@@ -62,6 +68,9 @@
             index={index}
             onToggleVisibility={onToggleVisibility}
             onOpenSettings={onOpenSettings}
+            onRenameLayer={onRenameLayer}
+            onDuplicateLayer={onDuplicateLayer}
+            onDeleteLayer={onDeleteLayer}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
