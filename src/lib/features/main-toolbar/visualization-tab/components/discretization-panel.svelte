@@ -186,8 +186,11 @@
             >{m.discretization_breakpoint_value()}</label
           >
           <CompactNumberInput
-            bind:value={breakpointValue}
-            onchange={(v) => onbreakpointchange?.(v)}
+            value={breakpointValue ?? 0}
+            onchange={(v) => {
+              breakpointValue = v ?? null;
+              onbreakpointchange?.(v ?? null);
+            }}
             width="100%"
           />
         </div>

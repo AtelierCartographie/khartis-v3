@@ -23,36 +23,126 @@
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import type {
+    VisualizationConfig,
+    MissingDataConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
+
+  interface LabelsStyle {
+    textSize?: number;
+    textOpacity?: number;
+    textColor?: string;
+    labelPosition?: LabelPosition;
+    labelBgColor?: string;
+    labelBgOpacity?: number;
+    labelStrokeType?: LabelStrokeType;
+    labelStrokeColor?: string;
+    textColumn?: string;
+    secondaryTextColumn?: string;
+  }
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
+    onLabelsChange?: (updates: Partial<LabelsStyle>) => void;
+    onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
   }
 
   let {
     dataFields = [],
-    visualization: _visualization,
-    onStyleChange: _onStyleChange
+    visualization,
+    onStyleChange,
+    onLabelsChange,
+    onMissingDataChange
   }: Props = $props();
 
   let textFieldId = $state<number>(0);
   let textSecondaryFieldId = $state<number>(0);
   let textSize = $state<number>(VISUALIZATION_DEFAULTS.textSize);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
+  let textColor = $state<string>('black');
+  let labelBgColor = $state<string>('none');
   let labelBgOpacity = $state<number>(0);
   let labelStrokeType = $state<LabelStrokeType>(LabelStrokeType.NONE);
+  let labelStrokeColor = $state<string>('white');
   let labelPosition = $state<LabelPosition>(LabelPosition.CENTER);
   let showMissingData = $state<boolean>(true);
   let missingText = $state<string>(m.missing_data_text());
+  let enabled = $state<boolean>(false);
+
+  function handleTextSizeChange(value: number) {
+    textSize = value;
+    onLabelsChange?.({ textSize: value });
+  }
+
+  function handleTextOpacityChange(value: number) {
+    textOpacity = value;
+    onLabelsChange?.({ textOpacity: value / 100 });
+  }
+
+  function handleTextColorChange(value: string) {
+    textColor = value;
+    onLabelsChange?.({ textColor: value });
+  }
+
+  function handleLabelPositionChange(value: LabelPosition) {
+    labelPosition = value;
+    onLabelsChange?.({ labelPosition: value });
+  }
+
+  function handleLabelBgColorChange(value: string) {
+    labelBgColor = value;
+    onLabelsChange?.({ labelBgColor: value });
+  }
+
+  function handleLabelBgOpacityChange(value: number) {
+    labelBgOpacity = value;
+    onLabelsChange?.({ labelBgOpacity: value / 100 });
+  }
+
+  function handleLabelStrokeTypeChange(value: LabelStrokeType) {
+    labelStrokeType = value;
+    onLabelsChange?.({ labelStrokeType: value });
+  }
+
+  function handleLabelStrokeColorChange(value: string) {
+    labelStrokeColor = value;
+    onLabelsChange?.({ labelStrokeColor: value });
+  }
+
+  function handleTextFieldChange(id: number) {
+    textFieldId = id;
+    const field = dataFields[id];
+    if (field) {
+      onLabelsChange?.({ textColumn: field.text });
+    }
+  }
+
+  function handleSecondaryTextFieldChange(id: number) {
+    textSecondaryFieldId = id;
+    const field = dataFields[id];
+    if (field) {
+      onLabelsChange?.({ secondaryTextColumn: field.text });
+    }
+  }
+
+  function handleShowMissingDataChange(checked: boolean) {
+    showMissingData = checked;
+    onMissingDataChange?.({ show: checked });
+  }
+
+  function handleToggleChange(checked: boolean) {
+    enabled = checked;
+  }
 </script>
 
 <ExpandableSection
   title={m.labels_title()}
   defaultOpen={false}
   showToggle
-  toggleChecked={true}
+  toggleChecked={enabled}
+  onToggleChange={handleToggleChange}
 >
   <Grid padding noGutter>
     <Row>
@@ -66,7 +156,7 @@
         <ComboBox
           items={dataFields}
           selectedId={textFieldId}
-          on:select={(e) => (textFieldId = e.detail.selectedId)}
+          on:select={(e) => handleTextFieldChange(e.detail.selectedId)}
           placeholder={m.text_according()}
           labelText=""
         />
@@ -80,7 +170,15 @@
         />
       </Column>
       <Column sm={4} md={8} lg={8}>
-        <Select id="label-color" labelText={m.color()}>
+        <Select
+          id="label-color"
+          labelText={m.color()}
+          selected={textColor}
+          on:change={(e) => {
+            const target = e.target as HTMLSelectElement;
+            handleTextColorChange(target.value);
+          }}
+        >
           <SelectItem value="black" text={m.color_black()} />
           <SelectItem value="blue" text={m.color_blue()} />
           <SelectItem value="gray" text={m.color_gray()} />
@@ -93,7 +191,11 @@
         <Select
           id="label-position"
           labelText={m.label_position()}
-          bind:selected={labelPosition}
+          selected={labelPosition}
+          on:change={(e) => {
+            const target = e.target as HTMLSelectElement;
+            handleLabelPositionChange(target.value as LabelPosition);
+          }}
         >
           <SelectItem value={LabelPosition.CENTER} text={m.position_center()} />
           <SelectItem value={LabelPosition.TOP} text={m.position_top()} />
@@ -109,7 +211,7 @@
         <ComboBox
           items={dataFields}
           selectedId={textSecondaryFieldId}
-          on:select={(e) => (textSecondaryFieldId = e.detail.selectedId)}
+          on:select={(e) => handleSecondaryTextFieldChange(e.detail.selectedId)}
           placeholder={m.secondary_text()}
           labelText=""
         />
@@ -121,7 +223,8 @@
         <Checkbox
           id="show-missing-data"
           labelText={m.show_no_data()}
-          bind:checked={showMissingData}
+          checked={showMissingData}
+          on:check={(e) => handleShowMissingDataChange(e.detail)}
         />
       </Column>
     </Row>
@@ -150,14 +253,16 @@
             min={SLIDER_LIMITS.textSize.min}
             max={SLIDER_LIMITS.textSize.max}
             step={1}
-            bind:value={textSize}
+            value={textSize}
             hideTextInput
+            on:change={(e) => handleTextSizeChange(e.detail)}
           />
         </div>
       </Column>
       <Column sm={4} md={8} lg={3}>
         <CompactNumberInput
-          bind:value={textSize}
+          value={textSize}
+          onchange={handleTextSizeChange}
           min={SLIDER_LIMITS.textSize.min}
           max={SLIDER_LIMITS.textSize.max}
           width="100%"
@@ -176,7 +281,8 @@
               min={SLIDER_LIMITS.opacity.min}
               max={SLIDER_LIMITS.opacity.max}
               step={1}
-              bind:value={textOpacity}
+              value={textOpacity}
+              on:change={(e) => handleTextOpacityChange(e.detail)}
             />
           </div>
           <span class="max">100</span>
@@ -192,7 +298,15 @@
 
     <Row>
       <Column sm={4} md={8} lg={8}>
-        <Select id="label-bg-color" labelText={m.color()}>
+        <Select
+          id="label-bg-color"
+          labelText={m.color()}
+          selected={labelBgColor}
+          on:change={(e) => {
+            const target = e.target as HTMLSelectElement;
+            handleLabelBgColorChange(target.value);
+          }}
+        >
           <SelectItem value="none" text={m.none()} />
           <SelectItem value="white" text={m.color_white()} />
           <SelectItem value="gray" text={m.color_gray()} />
@@ -208,7 +322,8 @@
               min={SLIDER_LIMITS.opacity.min}
               max={SLIDER_LIMITS.opacity.max}
               step={1}
-              bind:value={labelBgOpacity}
+              value={labelBgOpacity}
+              on:change={(e) => handleLabelBgOpacityChange(e.detail)}
             />
           </div>
           <span class="max">100</span>
@@ -224,7 +339,12 @@
 
     <Row>
       <Column sm={4} md={8} lg={8}>
-        <RadioButtonGroup legendText="" bind:selected={labelStrokeType}>
+        <RadioButtonGroup
+          legendText=""
+          selected={labelStrokeType}
+          on:change={(e) =>
+            handleLabelStrokeTypeChange(e.detail as LabelStrokeType)}
+        >
           <RadioButton
             id="label-stroke-none"
             value={LabelStrokeType.NONE}
@@ -241,7 +361,12 @@
         <Select
           id="label-stroke-color"
           labelText={m.color()}
+          selected={labelStrokeColor}
           disabled={labelStrokeType === LabelStrokeType.NONE}
+          on:change={(e) => {
+            const target = e.target as HTMLSelectElement;
+            handleLabelStrokeColorChange(target.value);
+          }}
         >
           <SelectItem value="white" text={m.color_white()} />
           <SelectItem value="black" text={m.color_black()} />

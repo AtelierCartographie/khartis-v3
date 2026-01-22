@@ -45,6 +45,9 @@
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onInvertPalette?: () => void;
   }
 
@@ -56,12 +59,40 @@
     onModesChange,
     onMissingDataChange: _onMissingDataChange,
     onClassificationChange,
+    onMappingChange,
     onInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
-  const sequentialPalette = ['#c8ddf0', '#78a9cf', '#2171b5', '#084594'];
+
+  $effect(() => {
+    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.valueColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedFieldId = fieldIndex;
+      }
+    }
+  });
+
+  function handleFieldSelect(fieldId: number) {
+    selectedFieldId = fieldId;
+    const field = dataFields[fieldId];
+    if (field && onMappingChange) {
+      onMappingChange({ valueColumn: field.text });
+    }
+  }
+
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? [
+      '#c8ddf0',
+      '#78a9cf',
+      '#2171b5',
+      '#084594'
+    ]
+  );
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
@@ -254,7 +285,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedFieldId}
+          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -265,7 +297,7 @@
       />
       <PalettePreview
         label={m.color_palette()}
-        colors={sequentialPalette}
+        colors={currentPalette}
         oninvert={onInvertPalette}
       />
     {:else if fillMode === FillMode.CATEGORIES}

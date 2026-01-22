@@ -7,6 +7,11 @@
     type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    calculateBreaks,
+    generateColorsForBreaks
+  } from '$lib/features/commons/services/classification.service';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
   type PanelMethod =
     | 'jenks'
@@ -35,6 +40,8 @@
     onclose,
     onchange
   }: Props = $props();
+
+  let isCalculating = $state(false);
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -86,14 +93,74 @@
     }
   });
 
+  $effect(() => {
+    if (
+      open &&
+      visualization?.datasetId &&
+      visualization?.mapping.valueColumn
+    ) {
+      computeBreaks();
+    }
+  });
+
+  async function computeBreaks() {
+    if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
+      return;
+    }
+
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.id === visualization.datasetId
+    );
+    if (!dataset?.sourceFileId) {
+      return;
+    }
+
+    isCalculating = true;
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: visualization.mapping.valueColumn,
+        method: panelMethodToStoreMethod(currentMethod),
+        numClasses: currentNumClasses
+      });
+
+      if (result) {
+        const colors = generateColorsForBreaks(currentNumClasses);
+        const allBreaks = [result.min, ...result.breaks, result.max];
+
+        currentBreaks = result.counts.map((count, i) => ({
+          min: allBreaks[i],
+          max: allBreaks[i + 1],
+          count,
+          color: colors[i] || colors[colors.length - 1]
+        }));
+
+        onchange?.({
+          method: panelMethodToStoreMethod(currentMethod),
+          classes: currentNumClasses,
+          numClasses: currentNumClasses,
+          breaks: result.breaks,
+          colors,
+          breakpointValue: currentBreakpoint
+        });
+      }
+    } finally {
+      isCalculating = false;
+    }
+  }
+
   function handleMethodChange(method: PanelMethod) {
     currentMethod = method;
-    notifyChange();
+    if (method !== 'manual') {
+      computeBreaks();
+    } else {
+      notifyChange();
+    }
   }
 
   function handleClassesChange(num: number) {
     currentNumClasses = num;
-    notifyChange();
+    computeBreaks();
   }
 
   function handleBreakpointChange(value: number | null) {
@@ -103,7 +170,14 @@
 
   function handleBreaksChange(breaks: ClassBreak[]) {
     currentBreaks = breaks;
-    notifyChange();
+    const breakValues = breaks.slice(0, -1).map((b) => b.max);
+    onchange?.({
+      method: panelMethodToStoreMethod(currentMethod),
+      classes: currentNumClasses,
+      numClasses: currentNumClasses,
+      breaks: breakValues,
+      breakpointValue: currentBreakpoint
+    });
   }
 
   function notifyChange() {

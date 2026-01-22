@@ -10,148 +10,171 @@
     Globe,
     ChartLine
   } from 'carbon-icons-svelte';
+  import {
+    basemapLayersStore,
+    type BasemapLayerId,
+    type BasemapLayerConfig
+  } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
-  interface BasemapLayer {
-    id: string;
+  interface LayerUIConfig {
+    id: BasemapLayerId;
     name: string;
     icon: typeof Earth;
-    visible: boolean;
-    opacity: number;
-    color?: string;
-    strokeColor?: string;
-    strokeWidth?: number;
+    hasColor: boolean;
+    hasStroke: boolean;
   }
 
-  interface Props {
-    layers?: BasemapLayer[];
-    onlayerchange?: (layer: BasemapLayer) => void;
+  const LAYER_UI_CONFIG: LayerUIConfig[] = [
+    {
+      id: 'terre',
+      name: 'Terre',
+      icon: Earth,
+      hasColor: true,
+      hasStroke: true
+    },
+    {
+      id: 'mers',
+      name: 'Mers / Océans',
+      icon: Globe,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'lacs',
+      name: 'Lacs',
+      icon: WatsonHealthStackedMove,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'rivieres',
+      name: 'Rivières',
+      icon: WatsonHealthStackedMove,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'relief',
+      name: 'Relief',
+      icon: ChartLine,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'equateur',
+      name: 'Équateur',
+      icon: TextAlignJustify,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'meridiens',
+      name: 'Méridiens / Parallèles',
+      icon: TextAlignJustify,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'frontieres',
+      name: 'Frontières / Limites',
+      icon: Road,
+      hasColor: true,
+      hasStroke: false
+    },
+    {
+      id: 'villes',
+      name: 'Villes',
+      icon: Location,
+      hasColor: true,
+      hasStroke: false
+    }
+  ];
+
+  const layers = $derived(basemapLayersStore.layers);
+
+  let expandedLayerId = $state<BasemapLayerId | null>(null);
+
+  function getLayerConfig(id: BasemapLayerId): BasemapLayerConfig | undefined {
+    return layers.find((l) => l.id === id);
   }
 
-  let {
-    layers = $bindable<BasemapLayer[]>([
-      {
-        id: 'land',
-        name: 'Terre',
-        icon: Earth,
-        visible: true,
-        opacity: 100,
-        color: '#f5f5f5'
-      },
-      {
-        id: 'oceans',
-        name: 'Mers / Océans',
-        icon: Globe,
-        visible: true,
-        opacity: 100,
-        color: '#d4e4f7'
-      },
-      {
-        id: 'lakes',
-        name: 'Lacs et rivières',
-        icon: WatsonHealthStackedMove,
-        visible: true,
-        opacity: 80,
-        color: '#a8d4f0'
-      },
-      {
-        id: 'relief',
-        name: 'Relief',
-        icon: ChartLine,
-        visible: false,
-        opacity: 50,
-        color: '#e8dcc8'
-      },
-      {
-        id: 'equator',
-        name: 'Équateur',
-        icon: TextAlignJustify,
-        visible: false,
-        opacity: 100,
-        strokeColor: '#ff6b6b',
-        strokeWidth: 1
-      },
-      {
-        id: 'graticule',
-        name: 'Méridiens / Parallèles',
-        icon: TextAlignJustify,
-        visible: false,
-        opacity: 50,
-        strokeColor: '#cccccc',
-        strokeWidth: 0.5
-      },
-      {
-        id: 'borders',
-        name: 'Frontières / Limites',
-        icon: Road,
-        visible: true,
-        opacity: 100,
-        strokeColor: '#999999',
-        strokeWidth: 1
-      },
-      {
-        id: 'cities',
-        name: 'Villes',
-        icon: Location,
-        visible: false,
-        opacity: 100,
-        color: '#333333'
-      },
-      {
-        id: 'labels',
-        name: 'Étiquettes',
-        icon: TextAlignJustify,
-        visible: false,
-        opacity: 100,
-        color: '#333333'
-      }
-    ]),
-    onlayerchange
-  }: Props = $props();
+  function getLayerColor(layer: BasemapLayerConfig): string | undefined {
+    if ('fillColor' in layer) return layer.fillColor;
+    if ('color' in layer) return layer.color;
+    return undefined;
+  }
 
-  let expandedLayerId = $state<string | null>(null);
+  function getLayerOpacity(layer: BasemapLayerConfig): number {
+    if ('fillOpacity' in layer) return layer.fillOpacity;
+    if ('opacity' in layer) return layer.opacity;
+    return 100;
+  }
 
-  function toggleLayerVisibility(layerId: string) {
-    const layer = layers.find((l) => l.id === layerId);
+  function getLayerStrokeColor(layer: BasemapLayerConfig): string | undefined {
+    if ('strokeColor' in layer) return layer.strokeColor;
+    return undefined;
+  }
+
+  function getLayerStrokeWidth(layer: BasemapLayerConfig): number | undefined {
+    if ('strokeThickness' in layer) return layer.strokeThickness;
+    if ('thickness' in layer) return layer.thickness;
+    return undefined;
+  }
+
+  function toggleLayerVisibility(layerId: BasemapLayerId) {
+    const layer = getLayerConfig(layerId);
     if (layer) {
-      layer.visible = !layer.visible;
-      onlayerchange?.(layer);
+      basemapLayersStore.setLayerVisibility(layerId, !layer.visible);
     }
   }
 
-  function toggleExpanded(layerId: string) {
+  function toggleExpanded(layerId: BasemapLayerId) {
     expandedLayerId = expandedLayerId === layerId ? null : layerId;
   }
 
-  function updateLayerOpacity(layerId: string, opacity: number) {
-    const layer = layers.find((l) => l.id === layerId);
-    if (layer) {
-      layer.opacity = opacity;
-      onlayerchange?.(layer);
+  function updateLayerOpacity(layerId: BasemapLayerId, opacity: number) {
+    const layer = getLayerConfig(layerId);
+    if (!layer) return;
+
+    if ('fillOpacity' in layer) {
+      basemapLayersStore.updateLayer(layerId, {
+        fillOpacity: opacity
+      } as never);
+    } else if ('opacity' in layer) {
+      basemapLayersStore.updateLayer(layerId, { opacity } as never);
     }
   }
 
-  function updateLayerColor(layerId: string, color: string) {
-    const layer = layers.find((l) => l.id === layerId);
-    if (layer) {
-      layer.color = color;
-      onlayerchange?.(layer);
+  function updateLayerColor(layerId: BasemapLayerId, color: string) {
+    const layer = getLayerConfig(layerId);
+    if (!layer) return;
+
+    if ('fillColor' in layer) {
+      basemapLayersStore.updateLayer(layerId, { fillColor: color } as never);
+    } else if ('color' in layer) {
+      basemapLayersStore.updateLayer(layerId, { color } as never);
     }
   }
 
-  function updateLayerStrokeColor(layerId: string, color: string) {
-    const layer = layers.find((l) => l.id === layerId);
-    if (layer) {
-      layer.strokeColor = color;
-      onlayerchange?.(layer);
+  function updateLayerStrokeColor(layerId: BasemapLayerId, color: string) {
+    basemapLayersStore.updateLayer(layerId, { strokeColor: color } as never);
+  }
+
+  function updateLayerStrokeWidth(layerId: BasemapLayerId, width: number) {
+    const layer = getLayerConfig(layerId);
+    if (!layer) return;
+
+    if ('strokeThickness' in layer) {
+      basemapLayersStore.updateLayer(layerId, {
+        strokeThickness: width
+      } as never);
+    } else if ('thickness' in layer) {
+      basemapLayersStore.updateLayer(layerId, { thickness: width } as never);
     }
   }
 
-  function updateLayerStrokeWidth(layerId: string, width: number) {
-    const layer = layers.find((l) => l.id === layerId);
-    if (layer) {
-      layer.strokeWidth = width;
-      onlayerchange?.(layer);
-    }
+  function handleResetLayers() {
+    basemapLayersStore.resetToDefaults();
   }
 </script>
 
@@ -164,134 +187,147 @@
   </div>
 
   <div class="layers-list">
-    {#each layers as layer (layer.id)}
-      {@const IconComponent = layer.icon}
-      <div class="layer-item" class:expanded={expandedLayerId === layer.id}>
-        <div class="layer-main">
-          <button
-            type="button"
-            class="layer-toggle"
-            class:visible={layer.visible}
-            onclick={() => toggleLayerVisibility(layer.id)}
-            aria-label={layer.visible ? m.layers_hide() : m.layers_show()}
-          >
-            <div class="visibility-indicator"></div>
-          </button>
+    {#each LAYER_UI_CONFIG as uiConfig (uiConfig.id)}
+      {@const layer = getLayerConfig(uiConfig.id)}
+      {@const IconComponent = uiConfig.icon}
+      {#if layer}
+        {@const layerColor = getLayerColor(layer)}
+        {@const layerOpacity = getLayerOpacity(layer)}
+        {@const layerStrokeColor = getLayerStrokeColor(layer)}
+        {@const layerStrokeWidth = getLayerStrokeWidth(layer)}
+        <div
+          class="layer-item"
+          class:expanded={expandedLayerId === uiConfig.id}
+        >
+          <div class="layer-main">
+            <button
+              type="button"
+              class="layer-toggle"
+              class:visible={layer.visible}
+              onclick={() => toggleLayerVisibility(uiConfig.id)}
+              aria-label={layer.visible ? m.layers_hide() : m.layers_show()}
+            >
+              <div class="visibility-indicator"></div>
+            </button>
 
-          <div class="layer-icon">
-            <IconComponent size={16} />
+            <div class="layer-icon">
+              <IconComponent size={16} />
+            </div>
+
+            <span class="layer-name" class:dimmed={!layer.visible}
+              >{uiConfig.name}</span
+            >
+
+            <button
+              type="button"
+              class="layer-expand"
+              class:active={expandedLayerId === uiConfig.id}
+              onclick={() => toggleExpanded(uiConfig.id)}
+              aria-label={m.layers_settings()}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12">
+                <path
+                  d="M2 4l4 4 4-4"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  fill="none"
+                />
+              </svg>
+            </button>
           </div>
 
-          <span class="layer-name" class:dimmed={!layer.visible}
-            >{layer.name}</span
-          >
-
-          <button
-            type="button"
-            class="layer-expand"
-            class:active={expandedLayerId === layer.id}
-            onclick={() => toggleExpanded(layer.id)}
-            aria-label={m.layers_settings()}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <path
-                d="M2 4l4 4 4-4"
-                stroke="currentColor"
-                stroke-width="2"
-                fill="none"
-              />
-            </svg>
-          </button>
-        </div>
-
-        {#if expandedLayerId === layer.id}
-          <div class="layer-settings">
-            <Grid padding noGutter>
-              <Row>
-                <Column sm={4} md={8} lg={16}>
-                  <div class="slider-row">
-                    <span class="setting-label">{m.opacity()}</span>
-                    <Slider
-                      min={0}
-                      max={100}
-                      step={1}
-                      value={layer.opacity}
-                      hideTextInput
-                      on:change={(e) => updateLayerOpacity(layer.id, e.detail)}
-                    />
-                    <span class="setting-value">{layer.opacity}%</span>
-                  </div>
-                </Column>
-              </Row>
-
-              {#if layer.color !== undefined}
-                <Row>
-                  <Column sm={4} md={8} lg={16}>
-                    <div class="color-row">
-                      <span class="setting-label">{m.background()}</span>
-                      <input
-                        type="color"
-                        class="color-input"
-                        value={layer.color}
-                        oninput={(e: Event) => {
-                          const target = e.target as HTMLInputElement;
-                          updateLayerColor(layer.id, target.value);
-                        }}
-                      />
-                      <span class="color-value">{layer.color}</span>
-                    </div>
-                  </Column>
-                </Row>
-              {/if}
-
-              {#if layer.strokeColor !== undefined}
-                <Row>
-                  <Column sm={4} md={8} lg={16}>
-                    <div class="color-row">
-                      <span class="setting-label">{m.stroke()}</span>
-                      <input
-                        type="color"
-                        class="color-input"
-                        value={layer.strokeColor}
-                        oninput={(e: Event) => {
-                          const target = e.target as HTMLInputElement;
-                          updateLayerStrokeColor(layer.id, target.value);
-                        }}
-                      />
-                      <span class="color-value">{layer.strokeColor}</span>
-                    </div>
-                  </Column>
-                </Row>
-              {/if}
-
-              {#if layer.strokeWidth !== undefined}
+          {#if expandedLayerId === uiConfig.id}
+            <div class="layer-settings">
+              <Grid padding noGutter>
                 <Row>
                   <Column sm={4} md={8} lg={16}>
                     <div class="slider-row">
-                      <span class="setting-label">{m.thickness()}</span>
+                      <span class="setting-label">{m.opacity()}</span>
                       <Slider
                         min={0}
-                        max={5}
-                        step={0.5}
-                        value={layer.strokeWidth}
+                        max={100}
+                        step={1}
+                        value={layerOpacity}
                         hideTextInput
                         on:change={(e) =>
-                          updateLayerStrokeWidth(layer.id, e.detail)}
+                          updateLayerOpacity(uiConfig.id, e.detail)}
                       />
-                      <span class="setting-value">{layer.strokeWidth}px</span>
+                      <span class="setting-value">{layerOpacity}%</span>
                     </div>
                   </Column>
                 </Row>
-              {/if}
-            </Grid>
-          </div>
-        {/if}
-      </div>
+
+                {#if layerColor !== undefined}
+                  <Row>
+                    <Column sm={4} md={8} lg={16}>
+                      <div class="color-row">
+                        <span class="setting-label">{m.background()}</span>
+                        <input
+                          type="color"
+                          class="color-input"
+                          value={layerColor}
+                          oninput={(e: Event) => {
+                            const target = e.target as HTMLInputElement;
+                            updateLayerColor(uiConfig.id, target.value);
+                          }}
+                        />
+                        <span class="color-value">{layerColor}</span>
+                      </div>
+                    </Column>
+                  </Row>
+                {/if}
+
+                {#if layerStrokeColor !== undefined}
+                  <Row>
+                    <Column sm={4} md={8} lg={16}>
+                      <div class="color-row">
+                        <span class="setting-label">{m.stroke()}</span>
+                        <input
+                          type="color"
+                          class="color-input"
+                          value={layerStrokeColor}
+                          oninput={(e: Event) => {
+                            const target = e.target as HTMLInputElement;
+                            updateLayerStrokeColor(uiConfig.id, target.value);
+                          }}
+                        />
+                        <span class="color-value">{layerStrokeColor}</span>
+                      </div>
+                    </Column>
+                  </Row>
+                {/if}
+
+                {#if layerStrokeWidth !== undefined}
+                  <Row>
+                    <Column sm={4} md={8} lg={16}>
+                      <div class="slider-row">
+                        <span class="setting-label">{m.thickness()}</span>
+                        <Slider
+                          min={0}
+                          max={5}
+                          step={0.5}
+                          value={layerStrokeWidth}
+                          hideTextInput
+                          on:change={(e) =>
+                            updateLayerStrokeWidth(uiConfig.id, e.detail)}
+                        />
+                        <span class="setting-value">{layerStrokeWidth}px</span>
+                      </div>
+                    </Column>
+                  </Row>
+                {/if}
+              </Grid>
+            </div>
+          {/if}
+        </div>
+      {/if}
     {/each}
   </div>
 
   <div class="footer">
-    <Button kind="ghost" size="small">Réinitialiser les couches</Button>
+    <Button kind="ghost" size="small" on:click={handleResetLayers}
+      >{m.reset_layers()}</Button
+    >
   </div>
 </div>
 

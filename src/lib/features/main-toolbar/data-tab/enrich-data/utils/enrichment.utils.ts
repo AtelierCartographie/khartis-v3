@@ -114,7 +114,13 @@ export const ACCEPTED_BASEMAP_EXTENSIONS = [
 ];
 
 export function enrichJoinStatsWithTargetOptions(
-  stats: { entities: Array<{ status: string; matches?: string[]; selectedMapping?: string }> },
+  stats: {
+    entities: Array<{
+      status: string;
+      matches?: string[];
+      selectedMapping?: string;
+    }>;
+  },
   allTargetOptions: string[]
 ): void {
   stats.entities = stats.entities.map((entity) => {
