@@ -43,6 +43,7 @@
     "knip": "knip",
     "test:unit": "NODE_OPTIONS='--max-old-space-size=4096' vitest",
     "test:unit:ui": "NODE_OPTIONS='--max-old-space-size=4096' vitest --ui",
+    "test:integration": "NODE_OPTIONS='--max-old-space-size=4096' vitest run --project server -- pipeline-integration",
     "test": "pnpm run test:unit -- --run && pnpm run test:e2e",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
@@ -54,6 +55,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.3.1",
     "@commitlint/config-conventional": "^20.3.1",
+    "@duckdb/node-api": "1.4.3-r.3",
     "@eslint/compat": "^2.0.1",
     "@eslint/js": "^9.39.2",
     "@inlang/cli": "^3.1.4",
