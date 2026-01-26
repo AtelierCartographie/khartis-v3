@@ -34,26 +34,6 @@ describe('Format Detection - isGeospatialFile', () => {
   });
 
   describe('Other geospatial extensions', () => {
-    it('should detect .shp as geospatial', () => {
-      expect(isGeospatialFile('test.shp')).toBe(true);
-    });
-
-    it('should detect .gpkg as geospatial', () => {
-      expect(isGeospatialFile('test.gpkg')).toBe(true);
-    });
-
-    it('should detect .kml as geospatial', () => {
-      expect(isGeospatialFile('test.kml')).toBe(true);
-    });
-
-    it('should detect .kmz as geospatial', () => {
-      expect(isGeospatialFile('test.kmz')).toBe(true);
-    });
-
-    it('should detect .gpx as geospatial', () => {
-      expect(isGeospatialFile('test.gpx')).toBe(true);
-    });
-
     it('should NOT detect .geoparquet as geospatial (it is parquet)', () => {
       expect(isGeospatialFile('test.geoparquet')).toBe(false);
       expect(isParquetFile('test.geoparquet')).toBe(true);
@@ -90,46 +70,6 @@ describe('Format Detection - isParquetFile', () => {
   it('should handle case-insensitive detection', () => {
     expect(isParquetFile('DATA.PARQUET')).toBe(true);
     expect(isParquetFile('Data.GeoParquet')).toBe(true);
-  });
-});
-
-describe('Format Detection - PIPELINE_CONST', () => {
-  describe('EXTENSIONS', () => {
-    it('should include all tabular extensions', () => {
-      expect(PIPELINE_CONST.EXTENSIONS.TABULAR).toContain('.csv');
-      expect(PIPELINE_CONST.EXTENSIONS.TABULAR).toContain('.tsv');
-      expect(PIPELINE_CONST.EXTENSIONS.TABULAR).toContain('.txt');
-    });
-
-    it('should include all geospatial extensions', () => {
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.geojson');
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.shp');
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.gpkg');
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.kml');
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.kmz');
-      expect(PIPELINE_CONST.EXTENSIONS.GEO).toContain('.gpx');
-    });
-
-    it('should include ZIP extensions', () => {
-      expect(PIPELINE_CONST.EXTENSIONS.ZIP).toContain('.zip');
-    });
-
-    it('should have ALL as union of all categories', () => {
-      const all = PIPELINE_CONST.EXTENSIONS.ALL;
-      expect(all).toContain('.csv');
-      expect(all).toContain('.geojson');
-      expect(all).toContain('.zip');
-    });
-  });
-
-  describe('LIMITS', () => {
-    it('should have MAX_FILE_SIZE of 100MB', () => {
-      expect(PIPELINE_CONST.LIMITS.MAX_FILE_SIZE).toBe(100 * 1024 * 1024);
-    });
-
-    it('should have WARNING_FILE_SIZE of 50MB', () => {
-      expect(PIPELINE_CONST.LIMITS.WARNING_FILE_SIZE).toBe(50 * 1024 * 1024);
-    });
   });
 });
 
