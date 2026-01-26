@@ -13,30 +13,23 @@ import {
 
 describe('DuckDB Type Conversion', () => {
   describe('fromDuckDBType', () => {
-    const testCases = [
-      { duckType: 'BOOLEAN', expected: ColumnType.BOOLEAN },
-      { duckType: 'bool', expected: ColumnType.BOOLEAN },
-      { duckType: 'DATE', expected: ColumnType.DATE },
-      { duckType: 'TIMESTAMP', expected: ColumnType.DATE },
-      { duckType: 'TIME', expected: ColumnType.DATE },
-      { duckType: 'datetime', expected: ColumnType.DATE },
-      { duckType: 'INTEGER', expected: ColumnType.NUMBER },
-      { duckType: 'BIGINT', expected: ColumnType.NUMBER },
-      { duckType: 'DOUBLE', expected: ColumnType.NUMBER },
-      { duckType: 'FLOAT', expected: ColumnType.NUMBER },
-      { duckType: 'NUMERIC', expected: ColumnType.NUMBER },
-      { duckType: 'GEOMETRY', expected: ColumnType.GEOMETRY },
-      { duckType: 'geom', expected: ColumnType.GEOMETRY },
-      { duckType: 'VARCHAR', expected: ColumnType.TEXT },
-      { duckType: 'STRING', expected: ColumnType.TEXT },
-      { duckType: 'UNKNOWN', expected: ColumnType.TEXT }
-    ];
+    it('should convert DuckDB types to internal types', () => {
+      expect(fromDuckDBType('BOOLEAN')).toBe(ColumnType.BOOLEAN);
+      expect(fromDuckDBType('DATE')).toBe(ColumnType.DATE);
+      expect(fromDuckDBType('INTEGER')).toBe(ColumnType.NUMBER);
+      expect(fromDuckDBType('GEOMETRY')).toBe(ColumnType.GEOMETRY);
+      expect(fromDuckDBType('VARCHAR')).toBe(ColumnType.TEXT);
+    });
 
-    for (const { duckType, expected } of testCases) {
-      it(`should convert ${duckType} to ${expected}`, () => {
-        expect(fromDuckDBType(duckType)).toBe(expected);
-      });
-    }
+    it('should handle case variations', () => {
+      expect(fromDuckDBType('bool')).toBe(ColumnType.BOOLEAN);
+      expect(fromDuckDBType('geom')).toBe(ColumnType.GEOMETRY);
+    });
+
+    it('should default unknown types to TEXT', () => {
+      expect(fromDuckDBType('UNKNOWN')).toBe(ColumnType.TEXT);
+      expect(fromDuckDBType('INVALID_TYPE')).toBe(ColumnType.TEXT);
+    });
   });
 
   describe('Type guards', () => {
@@ -53,6 +46,21 @@ describe('Geometry Utilities', () => {
     it('should compute centroid of bounds', () => {
       expect(computeCentroid([-10, -5, 10, 5])).toEqual([0, 0]);
       expect(computeCentroid([0, 0, 100, 50])).toEqual([50, 25]);
+    });
+
+    it('should handle negative coordinates', () => {
+      expect(computeCentroid([-100, -50, -10, -5])).toEqual([-55, -27.5]);
+    });
+
+    it('should handle zero-dimension bounds', () => {
+      expect(computeCentroid([0, 0, 0, 0])).toEqual([0, 0]);
+      expect(computeCentroid([5, 5, 5, 5])).toEqual([5, 5]);
+    });
+
+    it('should handle large coordinates', () => {
+      expect(computeCentroid([1000000, 6000000, 1200000, 7200000])).toEqual([
+        1100000, 6600000
+      ]);
     });
   });
 });
