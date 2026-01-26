@@ -1,4 +1,4 @@
-import type { Deck, Layer } from '@deck.gl/core';
+import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
@@ -15,10 +15,11 @@ import {
   createGeoJsonLayers
 } from '../layers';
 import type { DeckDataRow, LayerContext } from '../types';
+import type { DeckInstance } from './use-map-init.svelte';
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
-  getDeckInstance: () => Deck | null;
+  getDeckInstance: () => DeckInstance | null;
   getMap: () => MapLibreMap | null;
   getIsMapLoaded: () => boolean;
   getWorldBaseTable: () => ArrowTable | null;

@@ -284,8 +284,11 @@
       {:else if currentOperator.requiresLimit}
         <div class="field-group">
           <div class="labeled-input">
-            <label class="input-label">{m.filter_count()}</label>
+            <label class="input-label" for="filter-count-input"
+              >{m.filter_count()}</label
+            >
             <CompactNumberInput
+              id="filter-count-input"
               bind:value={newFilter.limit}
               min={1}
               max={1000}

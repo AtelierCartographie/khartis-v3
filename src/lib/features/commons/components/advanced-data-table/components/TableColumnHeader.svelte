@@ -16,10 +16,8 @@
     SEMIO_BADGE_STYLES
   } from '../column-type-styles';
   import { getPlotForColumn } from '../histogram.utils';
-  import type { ColumnInfo } from '../types';
+  import type { ColumnInfo, ColumnType } from '../types';
   import Portal from './Portal.svelte';
-
-  export type ColumnType = 'text' | 'number' | 'date' | 'boolean';
 
   interface Props {
     column: ColumnInfo;

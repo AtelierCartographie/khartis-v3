@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 22 janvier 2026 - 18h30
+> Dernière mise à jour : 26 janvier 2026 - 16h30
 
 ---
 
@@ -17,25 +17,26 @@
 
 ## Résumé global
 
-| Section                      | %        | Reste à faire                                         |
-| ---------------------------- | -------- | ----------------------------------------------------- |
-| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                        |
-| 2.A.5 Tableau de données     | **95%**  | 🔌 Recherche sur carte (UI prête)                     |
-| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                        |
-| 2.B.1-2.B.2 Visualisations   | **85%**  | ✅ Suggestions→viz complet, légende overlay OK        |
-| 2.B.3-2.B.4 Outils           | **75%**  | ✅ Basemap layers 85%, calques CRUD complet           |
-| 2.C Habillage                | **55%**  | ✅ Légende overlay fonctionnel, annotations 🔌        |
-| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                      |
-| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                        |
-| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                               |
-| 2.G Aide                     | **40%**  | 🔧 Créer pages annexes + documentation                |
-| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG            |
-| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                        |
-| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code                |
+| Section                      | %        | Reste à faire                                  |
+| ---------------------------- | -------- | ---------------------------------------------- |
+| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                 |
+| 2.A.5 Tableau de données     | **90%**  | 🔌 Recherche sur carte + resize panneau        |
+| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                 |
+| 2.B.1-2.B.2 Visualisations   | **85%**  | ✅ Suggestions→viz complet, légende overlay OK |
+| 2.B.3-2.B.4 Outils           | **75%**  | ✅ Basemap layers 85%, calques CRUD complet    |
+| 2.C Habillage                | **40%**  | ✅ Légende overlay fonctionnel, annotations 🔌 |
+| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                               |
+| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                 |
+| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                        |
+| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation         |
+| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG     |
+| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                 |
+| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code         |
 
 ### Avancement global : 82%
 
 > ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
+>
 > - **polygons-config.svelte** : fill/stroke colors, opacity, modes → store
 > - **symbols-config.svelte** : size, shape, color → Deck.gl ScatterplotLayer
 > - **lines-config.svelte** : thickness, dashed, color → Deck.gl PathLayer
@@ -71,11 +72,11 @@
 | Changement de type par l'utilisateur                                   | ✅     |
 | Codes NUTS (régions européennes)                                       | ✅     |
 
-### 2.A.5 Tableau de données — 95%
+### 2.A.5 Tableau de données — 90%
 
 | Fonctionnalité                                                                  | Statut | Note                    |
 | ------------------------------------------------------------------------------- | ------ | ----------------------- |
-| Panneau latéral taille variable                                                 | ⚠️     |                         |
+| Panneau latéral taille variable                                                 | 🔌     | UI prête, resize non implémenté |
 | Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                         |
 | Agrandissement taille prédéfinie                                                | ✅     |                         |
 | Code graphique par type de colonne                                              | ✅     |                         |
@@ -132,14 +133,14 @@
 
 ### 2.B.2.a Suggestions de visualisations — 95%
 
-| Fonctionnalité                      | Statut | Note                                        |
-| ----------------------------------- | ------ | ------------------------------------------- |
-| Service viz-suggester.ts (21 types) | ✅     | Service complet, 11+ tests                  |
-| UI connectée au service             | ✅     | Suggestions affichées dans UI               |
-| Créer viz depuis suggestion         | ✅     | mapSuggestionToType() mappe les 21 IDs      |
-| Vignette aperçu générique           | ⚠️     | 50%                                         |
-| Limite propositions + afficher plus | ✅     |                                             |
-| Score correspondance affiché        | 🔧     |                                             |
+| Fonctionnalité                      | Statut | Note                                   |
+| ----------------------------------- | ------ | -------------------------------------- |
+| Service viz-suggester.ts (21 types) | ✅     | Service complet, 11+ tests             |
+| UI connectée au service             | ✅     | Suggestions affichées dans UI          |
+| Créer viz depuis suggestion         | ✅     | mapSuggestionToType() mappe les 21 IDs |
+| Vignette aperçu générique           | ⚠️     | 50%                                    |
+| Limite propositions + afficher plus | ✅     |                                        |
+| Score correspondance affiché        | 🔧     |                                        |
 
 ### 2.B.2.b Paramétrer la visualisation — 85%
 
@@ -152,7 +153,7 @@
 | configure-visualization → store | ✅     | Mapping + classification + style connectés           |
 | Connexion au rendu Deck.gl      | ✅     | Store synchronisé, breaks calculés, rendu fonctionne |
 
-### 2.B.2.c Personnalisation des couleurs — 40%
+### 2.B.2.c Personnalisation des couleurs — 60%
 
 | Fonctionnalité                    | Statut | Note                          |
 | --------------------------------- | ------ | ----------------------------- |
@@ -161,9 +162,9 @@
 | Intensité (nuances)               | ✅     |                               |
 | Couleur personnalisée HSL         | ✅     |                               |
 | Code hexadécimal                  | ✅     |                               |
-| Suggestions palettes qualitatives | 🔧     |                               |
+| Suggestions palettes qualitatives | ✅     | 4 palettes dans palette-selector |
 | Palettes séquentielles            | ✅     | Connecté à Deck.gl            |
-| Palettes divergentes              | 🔧     |                               |
+| Palettes divergentes              | ✅     | 5 palettes dans palette-selector |
 | Motifs personnalisables           | 🔧     |                               |
 | Inversion palette                 | ✅     |                               |
 
@@ -186,41 +187,41 @@
 
 ### 2.B.2.e Légende — 90%
 
-| Fonctionnalité                            | Statut | Note                                  |
-| ----------------------------------------- | ------ | ------------------------------------- |
-| Légende configurable dans panneau latéral | ✅     | UI+Store complets, 2 onglets          |
-| Légende superposée sur la carte           | ✅     | legend-overlay.svelte intégré         |
-| Style (police, taille, fond, opacité)     | ✅     | Connecté via legendStore              |
-| Position (4 coins)                        | ✅     | LegendPosition enum                   |
-| Légende auto-créée lors de visualisation  | 🔧     | À implémenter                         |
+| Fonctionnalité                            | Statut | Note                          |
+| ----------------------------------------- | ------ | ----------------------------- |
+| Légende configurable dans panneau latéral | ✅     | UI+Store complets, 2 onglets  |
+| Légende superposée sur la carte           | ✅     | legend-overlay.svelte intégré |
+| Style (police, taille, fond, opacité)     | ✅     | Connecté via legendStore      |
+| Position (4 coins)                        | ✅     | LegendPosition enum           |
+| Légende auto-créée lors de visualisation  | 🔧     | À implémenter                 |
 
 ### 2.B.3 Personnaliser le fond de carte — 60%
 
-| Fonctionnalité                            | Statut | Note                                       |
-| ----------------------------------------- | ------ | ------------------------------------------ |
-| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty    |
-| Épaisseur contours (basemap)              | ✅     | Connecté via basemapLayersStore            |
-| Opacité (basemap)                         | ✅     | Connecté via basemapLayersStore            |
-| Couches multiples                         | ✅     | 9 couches configurables                    |
-| Afficher/masquer couches                  | ✅     | Toggle connecté à basemapLayersStore       |
-| Couleur contours                          | ✅     | Color picker connecté                      |
-| Personnalisation par couche               | ✅     | Chaque couche a ses propres paramètres     |
-| Couleur fond polygones                    | ✅     | fillColor connecté au store                |
-| Pointillés                                | 🔧     |                                            |
-| Ombre portée                              | 🔧     |                                            |
+| Fonctionnalité                            | Statut | Note                                    |
+| ----------------------------------------- | ------ | --------------------------------------- |
+| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty |
+| Épaisseur contours (basemap)              | ✅     | Connecté via basemapLayersStore         |
+| Opacité (basemap)                         | ✅     | Connecté via basemapLayersStore         |
+| Couches multiples                         | ✅     | 9 couches configurables                 |
+| Afficher/masquer couches                  | ✅     | Toggle connecté à basemapLayersStore    |
+| Couleur contours                          | ✅     | Color picker connecté                   |
+| Personnalisation par couche               | ✅     | Chaque couche a ses propres paramètres  |
+| Couleur fond polygones                    | ✅     | fillColor connecté au store             |
+| Pointillés                                | 🔧     |                                         |
+| Ombre portée                              | 🔧     |                                         |
 
 #### 2.B.3.a Couches additionnelles — 85%
 
-| Couche               | Store | UI  | Rendu | Note                           |
-| -------------------- | ----- | --- | ----- | ------------------------------ |
-| Terre (earth)        | ✅    | ✅  | ✅    | createTerreLayers() complet    |
-| Mers/Océans          | ✅    | ✅  | ✅    | createMersLayer() complet      |
-| Équateur             | ✅    | ✅  | ✅    | createEquateurLayer() complet  |
-| Méridiens/Parallèles | ✅    | ✅  | ✅    | createMeridiensLayer() complet |
-| Frontières/Limites   | ✅    | ✅  | ✅    | createFrontieresLayer() complet|
-| Lacs et rivières     | ✅    | ✅  | ✅    | GeoJSON chargés async          |
-| Relief               | ✅    | ✅  | 🔧    | Stub (DEM data manquant)       |
-| Villes/Capitales     | ✅    | ✅  | ✅    | 4 symboles, 4 catégories       |
+| Couche               | Store | UI  | Rendu | Note                            |
+| -------------------- | ----- | --- | ----- | ------------------------------- |
+| Terre (earth)        | ✅    | ✅  | ✅    | createTerreLayers() complet     |
+| Mers/Océans          | ✅    | ✅  | ✅    | createMersLayer() complet       |
+| Équateur             | ✅    | ✅  | ✅    | createEquateurLayer() complet   |
+| Méridiens/Parallèles | ✅    | ✅  | ✅    | createMeridiensLayer() complet  |
+| Frontières/Limites   | ✅    | ✅  | ✅    | createFrontieresLayer() complet |
+| Lacs et rivières     | ✅    | ✅  | ✅    | GeoJSON chargés async           |
+| Relief               | ✅    | ✅  | 🔧    | Stub (DEM data manquant)        |
+| Villes/Capitales     | ✅    | ✅  | ✅    | 4 symboles, 4 catégories        |
 
 ### 2.B.4.a Recherche — 50%
 
@@ -234,17 +235,17 @@
 
 ### 2.B.4.b Calques — 95%
 
-| Fonctionnalité                    | Statut | Note                          |
-| --------------------------------- | ------ | ----------------------------- |
-| Calque par visualisation          | ✅     |                               |
-| Sous-calques par primitive        | ✅     |                               |
-| Code couleur + icône              | ✅     |                               |
-| Afficher/masquer                  | ✅     |                               |
-| Déplacement calques (Drag & Drop) | ✅     |                               |
-| Renommer                          | ✅     | OverflowMenu + prompt         |
-| Dupliquer                         | ✅     | OverflowMenu + store.duplicate|
-| Supprimer                         | ✅     | OverflowMenu + confirm        |
-| Raccourci paramétrage             | ⚠️     | 50% - handler stub            |
+| Fonctionnalité                    | Statut | Note                           |
+| --------------------------------- | ------ | ------------------------------ |
+| Calque par visualisation          | ✅     |                                |
+| Sous-calques par primitive        | ✅     |                                |
+| Code couleur + icône              | ✅     |                                |
+| Afficher/masquer                  | ✅     |                                |
+| Déplacement calques (Drag & Drop) | ✅     |                                |
+| Renommer                          | ✅     | OverflowMenu + prompt          |
+| Dupliquer                         | ✅     | OverflowMenu + store.duplicate |
+| Supprimer                         | ✅     | OverflowMenu + confirm         |
+| Raccourci paramétrage             | ⚠️     | 50% - handler stub             |
 
 ### 2.B.4.c Projections — 80%
 
@@ -282,13 +283,13 @@
 
 ---
 
-## 2.C. Habillage — 35%
+## 2.C. Habillage — 40%
 
-### 2.C.1 Habillage prédéfini — 40%
+### 2.C.1 Habillage prédéfini — 55%
 
 | Fonctionnalité                                  | Statut | Note                           |
 | ----------------------------------------------- | ------ | ------------------------------ |
-| Légende configurable (panneau séparé)           | 🔌     | UI prête, pas rendue sur carte |
+| Légende configurable (panneau séparé)           | ✅     | legend-overlay intégré dans thematic-map |
 | Éléments supprimables                           | ✅     |                                |
 | Textes prédéfinis (4 styles)                    | ✅     |                                |
 | Éléments déplaçables                            | ⚠️     | 70%                            |
@@ -310,16 +311,16 @@
 
 ### 2.C.2.b Légende — 90%
 
-| Fonctionnalité           | Statut | Note                              |
-| ------------------------ | ------ | --------------------------------- |
-| Édition contenu légendes | ✅     | Titre, sous-titre, note par item  |
+| Fonctionnalité           | Statut | Note                                |
+| ------------------------ | ------ | ----------------------------------- |
+| Édition contenu légendes | ✅     | Titre, sous-titre, note par item    |
 | Afficher/masquer         | ✅     | Toggle dans UI + rendu conditionnel |
-| Titre, sous-titre, note  | ✅     | Édition inline dans légende.svelte |
-| Style (police, taille)   | ✅     | Onglet STYLE avec sliders         |
-| Arrière-plan             | ✅     | Toggle + Color Picker HSL         |
-| Opacité                  | ✅     | Slider 0-100%                     |
-| Rendu overlay sur carte  | ✅     | legend-overlay.svelte intégré     |
-| Pastille incitation      | ⚠️     | 20%                               |
+| Titre, sous-titre, note  | ✅     | Édition inline dans légende.svelte  |
+| Style (police, taille)   | ✅     | Onglet STYLE avec sliders           |
+| Arrière-plan             | ✅     | Toggle + Color Picker HSL           |
+| Opacité                  | ✅     | Slider 0-100%                       |
+| Rendu overlay sur carte  | ✅     | legend-overlay.svelte intégré       |
+| Pastille incitation      | ⚠️     | 20%                                 |
 
 ### 2.C.2.c Indications géographiques — 60%
 
@@ -385,7 +386,7 @@
 
 ---
 
-## 2.E. Sauvegarde — 95%
+## 2.E. Sauvegarde — 100%
 
 | Fonctionnalité                     | Statut |
 | ---------------------------------- | ------ |
@@ -411,14 +412,14 @@
 
 ---
 
-## 2.G. Aide et pages annexes — 40%
+## 2.G. Aide et pages annexes — 50%
 
 | Fonctionnalité                     | Statut |
 | ---------------------------------- | ------ |
-| Textes d'accompagnement (944 clés) | ✅     |
+| Textes d'accompagnement (1396 clés) | ✅     |
 | Facilité modification (Paraglide)  | ✅     |
 | Tooltips                           | ⚠️ 80% |
-| Liens vers aide externe            | ⚠️ 50% |
+| Liens vers aide externe            | ✅     |
 | Pages annexes (mentions légales)   | ⚠️ 20% |
 | Documentation utilisateur complète | 🔧     |
 
@@ -473,7 +474,7 @@
 
 | Fonctionnalité               | Statut |
 | ---------------------------- | ------ |
-| ARIA labels (46 occurrences) | ✅     |
+| ARIA labels (66 occurrences) | ✅     |
 | Navigation clavier (Carbon)  | ✅     |
 | Focus ring (Carbon)          | ✅     |
 | Audit WCAG AA                | 🔧     |

@@ -1,3 +1,5 @@
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
+
 // ToDo:
 // - verify handling of missing values in each method = should not be taken into account
 // - verify handling of time series
@@ -101,7 +103,7 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 );`;
 
 // By Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
-const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb := 10, threshold := 0.4) AS (
+const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE headtail(break, values_count) AS (
                     -- Initialization with break = average, values_count = number of observations
                     FROM query(tabname)
@@ -122,7 +124,7 @@ const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb
             SELECT list(break)[1:nb - 1] AS breaks
         );`;
 
-const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, nb := 10, threshold := 0.4) AS (
+const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE headtail(break, values_count, l_pct_head) AS (
                   FROM query(tabname)
                   SELECT avg("colname"),

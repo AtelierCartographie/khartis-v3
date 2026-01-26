@@ -1,4 +1,9 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import {
+  FILE_EXTENSIONS,
+  MIME_TYPE_PATTERNS,
+  TABULAR_DELIMITERS
+} from '$lib/features/commons/constants/file-types.constants';
 import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
@@ -26,55 +31,59 @@ export function detectFileType(file: File): FileType {
   const extension = file.name.toLowerCase().split('.').pop() || '';
   const mimeType = file.type.toLowerCase();
 
-  if (extension === 'csv' || mimeType.includes('csv')) {
+  if (
+    FILE_EXTENSIONS.CSV.includes(extension as never) ||
+    mimeType.includes(MIME_TYPE_PATTERNS.CSV)
+  ) {
     return FileType.CSV;
   }
 
-  if (extension === 'geojson' || extension === 'json') {
+  if (FILE_EXTENSIONS.GEOJSON.includes(extension as never)) {
     return FileType.GEOJSON;
   }
 
-  if (['shp', 'shx', 'dbf', 'prj', 'cpg'].includes(extension)) {
+  if (FILE_EXTENSIONS.SHAPEFILE.includes(extension as never)) {
     return FileType.SHAPEFILE;
   }
 
-  if (extension === 'gpkg') {
+  if (FILE_EXTENSIONS.GEOPACKAGE.includes(extension as never)) {
     return FileType.GEOPACKAGE;
   }
 
   if (
-    extension === 'geoparquet' ||
-    extension === 'gpq' ||
-    mimeType.includes('parquet')
+    FILE_EXTENSIONS.GEOPARQUET.includes(extension as never) ||
+    mimeType.includes(MIME_TYPE_PATTERNS.PARQUET)
   ) {
     return FileType.GEOPARQUET;
   }
 
-  if (extension === 'kml') {
+  if (FILE_EXTENSIONS.KML.includes(extension as never)) {
     return FileType.KML;
   }
 
-  if (extension === 'kmz') {
+  if (FILE_EXTENSIONS.KMZ.includes(extension as never)) {
     return FileType.KMZ;
   }
 
-  if (extension === 'gpx') {
+  if (FILE_EXTENSIONS.GPX.includes(extension as never)) {
     return FileType.GPX;
   }
 
-  if (extension === 'zip' || mimeType.includes('zip')) {
+  if (
+    FILE_EXTENSIONS.ZIP.includes(extension as never) ||
+    mimeType.includes(MIME_TYPE_PATTERNS.ZIP)
+  ) {
     return FileType.ZIP;
   }
 
-  if (extension === 'tsv' || mimeType.includes('tab-separated')) {
+  if (
+    FILE_EXTENSIONS.TSV.includes(extension as never) ||
+    mimeType.includes(MIME_TYPE_PATTERNS.TAB_SEPARATED)
+  ) {
     return FileType.TSV;
   }
 
-  if (extension === 'parquet') {
-    return FileType.GEOPARQUET;
-  }
-
-  if (extension === 'arrow') {
+  if (FILE_EXTENSIONS.ARROW.includes(extension as never)) {
     return FileType.ARROW;
   }
 
@@ -83,7 +92,7 @@ export function detectFileType(file: File): FileType {
 
 export function isShapefileComponent(filename: string): boolean {
   const extension = filename.toLowerCase().split('.').pop() || '';
-  return ['shp', 'shx', 'dbf', 'prj', 'cpg'].includes(extension);
+  return FILE_EXTENSIONS.SHAPEFILE.includes(extension as never);
 }
 
 export function getShapefileBaseName(filename: string): string {
@@ -240,7 +249,7 @@ export function extractDataFromPaste(pastedText: string): {
 
   // Check if it looks like tabular data (has delimiter in first line)
   const firstLine = trimmed.split('\n')[0];
-  const hasDelimiter = [',', ';', '\t', '|'].some((d) => firstLine.includes(d));
+  const hasDelimiter = TABULAR_DELIMITERS.some((d) => firstLine.includes(d));
 
   if (!hasDelimiter) return null;
 
