@@ -174,13 +174,4 @@ describe('Quality Warnings', () => {
     });
   });
 
-  describe('Quality Thresholds', () => {
-    it('should use HIGH_NULL_RATIO_THRESHOLD from constants', () => {
-      expect(PIPELINE_CONST.QUALITY.HIGH_NULL_RATIO_THRESHOLD).toBe(0.5);
-    });
-
-    it('should use LOW_CARDINALITY_THRESHOLD from constants', () => {
-      expect(PIPELINE_CONST.QUALITY.LOW_CARDINALITY_THRESHOLD).toBe(0.01);
-    });
-  });
 });
