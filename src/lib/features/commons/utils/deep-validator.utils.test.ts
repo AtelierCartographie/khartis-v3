@@ -141,22 +141,20 @@ describe('DeepDataValidator', () => {
 
     it('should detect date type from ISO format strings', async () => {
       const headers = ['dates'];
-      // Use date format with text month to ensure it's not parsed as numeric
       const data = [
-        ['January 1, 2023'],
-        ['February 15, 2023'],
-        ['March 31, 2023'],
-        ['April 20, 2024'],
-        ['May 10, 2023'],
-        ['June 15, 2024']
+        ['2023-01-01'],
+        ['2023-02-15'],
+        ['2023-03-31'],
+        ['2024-04-20'],
+        ['2023-05-10'],
+        ['2024-06-15']
       ];
 
       const result = await DeepDataValidator.analyzeDataContent(headers, data, {
         skipGeoDetection: true
       });
 
-      // These should be detected as either date or string (contains text)
-      expect(['date', 'string']).toContain(result.columns[0].type);
+      expect(result.columns[0].type).toBe('date');
     });
 
     it('should detect string type', async () => {
@@ -225,7 +223,6 @@ describe('DeepDataValidator', () => {
 
       it('should calculate median for even number of values', async () => {
         const headers = ['values'];
-        // Use decimal numbers to ensure numeric detection
         const data = [
           ['1.5'],
           ['2.5'],
@@ -243,11 +240,8 @@ describe('DeepDataValidator', () => {
           { skipGeoDetection: true }
         );
 
-        // With decimal values, should be detected as numeric
         expect(result.columns[0].type).toBe('numeric');
-        // Median should be defined and be a number
-        expect(result.columns[0].median).toBeDefined();
-        expect(typeof result.columns[0].median).toBe('number');
+        expect(result.columns[0].median).toBe(5.0);
       });
 
       it('should calculate standard deviation', async () => {
@@ -298,10 +292,9 @@ describe('DeepDataValidator', () => {
         );
 
         const col = result.columns[0];
-        // min and max should always be defined for any detected type
+        expect(col.type).toBe('date');
         expect(col.min).toBeDefined();
         expect(col.max).toBeDefined();
-        // The column should have been analyzed
         expect(col.uniqueCount).toBe(4);
       });
     });

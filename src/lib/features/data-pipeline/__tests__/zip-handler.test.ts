@@ -45,7 +45,8 @@ describe('ZIP Handler - extractZip', () => {
     const file = loadTestFile(ZIP_TEST_FILES.SINGLE_CSV);
     const result = await extractZip(file);
 
-    expect(result.files.length).toBeGreaterThan(0);
+    expect(result.files.length).toBe(1);
+    expect(result.files[0].name).toMatch(/\.csv$/);
     expect(result.isShapefileArchive).toBe(false);
   });
 
@@ -53,7 +54,8 @@ describe('ZIP Handler - extractZip', () => {
     const file = loadTestFile(ZIP_TEST_FILES.MULTIPLE_CSV);
     const result = await extractZip(file);
 
-    expect(result.files.length).toBeGreaterThan(1);
+    expect(result.files.length).toBeGreaterThanOrEqual(2);
+    expect(result.files.every((f) => f.name.endsWith('.csv'))).toBe(true);
     expect(result.isShapefileArchive).toBe(false);
   });
 
@@ -63,7 +65,8 @@ describe('ZIP Handler - extractZip', () => {
 
     expect(result.isShapefileArchive).toBe(true);
     expect(result.shapefileBaseName).toBeDefined();
-    expect(result.files.length).toBeGreaterThan(0);
+    expect(result.shapefileBaseName).toBeTruthy();
+    expect(result.files.some((f) => f.name.endsWith('.shp'))).toBe(true);
   });
 
   it('should extract files with correct names', async () => {
@@ -84,8 +87,9 @@ describe('ZIP Handler - getSupportedFilesFromArchive', () => {
     const result = await extractZip(file);
     const supported = getSupportedFilesFromArchive(result.files);
 
-    expect(supported.length).toBeGreaterThan(0);
-    expect(supported.some((f) => f.name.endsWith('.csv'))).toBe(true);
+    expect(supported.length).toBe(1);
+    expect(supported[0].name).toMatch(/\.csv$/);
+    expect(supported[0].content).toBeInstanceOf(Uint8Array);
   });
 
   it('should find multiple CSV files in archive', async () => {
@@ -93,7 +97,8 @@ describe('ZIP Handler - getSupportedFilesFromArchive', () => {
     const result = await extractZip(file);
     const supported = getSupportedFilesFromArchive(result.files);
 
-    expect(supported.length).toBeGreaterThan(1);
+    expect(supported.length).toBeGreaterThanOrEqual(2);
+    expect(supported.every((f) => f.name.endsWith('.csv'))).toBe(true);
   });
 
   it('should filter out unsupported files', async () => {
