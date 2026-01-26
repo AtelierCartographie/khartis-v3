@@ -97,7 +97,7 @@ export interface SerializedProjectData {
 
 /**
  * Serialized uploaded file structure
- * ArrayBuffer content is converted to number array for JSON serialization
+ * ArrayBuffer content is stored as Uint8Array (IndexedDB) or number[] (legacy JSON)
  */
 export interface SerializedUploadedFile {
   id: string;
@@ -110,7 +110,7 @@ export interface SerializedUploadedFile {
   validation?: unknown;
   sourceType?: string;
   relatedFiles?: string[];
-  relatedFilesData?: Record<string, number[]>;
+  relatedFilesData?: Record<string, number[] | Uint8Array>;
   uploadProgress?: number;
   parsedData?: unknown;
   statistics?: unknown;
@@ -120,7 +120,7 @@ export interface SerializedUploadedFile {
   geoMatchResult?: UploadedFile['geoMatchResult'];
   columnTransformations?: ColumnTransformation[];
   deletedRowIds?: number[];
-  content?: string | number[]; // string or ArrayBuffer as number[]
+  content?: string | number[] | Uint8Array;
   contentType?: 'string' | 'arraybuffer';
   // Join state persistence
   joinedBasemap?: string;
