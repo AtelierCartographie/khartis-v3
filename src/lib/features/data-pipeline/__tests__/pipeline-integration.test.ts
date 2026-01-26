@@ -31,67 +31,122 @@ function uniqueTableName(prefix: string): string {
   return `test_${prefix}_${++tableCounter}`;
 }
 
-// --- Test case definitions ---
+// ---------------------------------------------------------------------------
+// Test case definitions — every file in tests-datasets/ must appear here
+// ---------------------------------------------------------------------------
 
-interface FileTestCase {
+interface CsvTestCase {
   id: string;
   relativePath: string;
+  minRows: number;
+  minCols: number;
 }
 
-interface GeoTestCase extends FileTestCase {
+interface GeoTestCase {
+  id: string;
+  relativePath: string;
   format: string;
 }
 
-// CSV files that should import successfully with data
-const CSV_FILES: FileTestCase[] = [
-  { id: 'fossil-fuel', relativePath: 'csv/fossil-fuel-subsidies-gdp-2021.csv' },
+// CDC 2.A.1 — CSV files that should import with data
+const CSV_VALID: CsvTestCase[] = [
+  {
+    id: 'fossil-fuel',
+    relativePath: 'csv/fossil-fuel-subsidies-gdp-2021.csv',
+    minRows: 80,
+    minCols: 4
+  },
   {
     id: 'naissances',
-    relativePath: 'csv/naissances-par-commune-departement-et-region-2018.csv'
+    relativePath: 'csv/naissances-par-commune-departement-et-region-2018.csv',
+    minRows: 34_000,
+    minCols: 8
   },
-  { id: 'seveso', relativePath: 'csv/sites-seveso-idf.csv' },
-  { id: 'world-bank', relativePath: 'csv/world-bank-rural-pop.csv' },
-  { id: 'csv-options-header', relativePath: 'csv/test-csv-options-header.csv' },
+  {
+    id: 'seveso',
+    relativePath: 'csv/sites-seveso-idf.csv',
+    minRows: 90,
+    minCols: 3
+  },
+  {
+    id: 'world-bank',
+    relativePath: 'csv/world-bank-rural-pop.csv',
+    minRows: 200,
+    minCols: 5
+  },
+  {
+    id: 'csv-options-header',
+    relativePath: 'csv/test-csv-options-header.csv',
+    minRows: 1,
+    minCols: 2
+  },
   {
     id: 'csv-options-second-file',
-    relativePath: 'csv/test-csv-options-second-file.csv'
+    relativePath: 'csv/test-csv-options-second-file.csv',
+    minRows: 1,
+    minCols: 2
   },
   {
     id: 'csv-options-thousands',
-    relativePath: 'csv/test-csv-options-thousands.csv'
-  },
-  { id: 'no-header', relativePath: 'csv/csv-malformed--with-no-header.csv' },
-  {
-    id: 'empty-lines',
-    relativePath: 'csv/csv-malformed--with-empty-lines.csv'
-  },
-  {
-    id: 'empty-columns',
-    relativePath: 'csv/csv-malformed--with-empty-columns.csv'
-  },
-  {
-    id: 'duplicated-names',
-    relativePath: 'csv/csv-malformed--with-duplicated-column-name.csv'
-  },
-  {
-    id: '100-columns',
-    relativePath: 'csv/csv-malformed--with-100-columns.csv'
-  },
-  {
-    id: 'special-chars',
-    relativePath: 'csv/csv-malformed--with-special-characters.csv'
-  },
-  {
-    id: 'null-variations',
-    relativePath: 'csv/csv-malformed--with-null-variations.csv'
-  },
-  {
-    id: 'european-format',
-    relativePath: 'csv/csv-malformed--with-european-numeric-format.csv'
+    relativePath: 'csv/test-csv-options-thousands.csv',
+    minRows: 1,
+    minCols: 2
   }
 ];
 
-// Geo files that should import successfully with geometry
+// CSV files that are structurally problematic but should not crash
+const CSV_MALFORMED: CsvTestCase[] = [
+  {
+    id: 'no-header',
+    relativePath: 'csv/csv-malformed--with-no-header.csv',
+    minRows: 1,
+    minCols: 1
+  },
+  {
+    id: 'empty-lines',
+    relativePath: 'csv/csv-malformed--with-empty-lines.csv',
+    minRows: 1,
+    minCols: 1
+  },
+  {
+    id: 'empty-columns',
+    relativePath: 'csv/csv-malformed--with-empty-columns.csv',
+    minRows: 1,
+    minCols: 3
+  },
+  {
+    id: 'duplicated-names',
+    relativePath: 'csv/csv-malformed--with-duplicated-column-name.csv',
+    minRows: 1,
+    minCols: 4
+  },
+  {
+    id: '100-columns',
+    relativePath: 'csv/csv-malformed--with-100-columns.csv',
+    minRows: 1,
+    minCols: 90
+  },
+  {
+    id: 'special-chars',
+    relativePath: 'csv/csv-malformed--with-special-characters.csv',
+    minRows: 1,
+    minCols: 3
+  },
+  {
+    id: 'null-variations',
+    relativePath: 'csv/csv-malformed--with-null-variations.csv',
+    minRows: 1,
+    minCols: 5
+  },
+  {
+    id: 'european-format',
+    relativePath: 'csv/csv-malformed--with-european-numeric-format.csv',
+    minRows: 1,
+    minCols: 4
+  }
+];
+
+// CDC 2.A.2 — Geospatial files: GeoJSON, GeoPackage, Shapefile + extras (GPX, KML)
 const GEO_FILES: GeoTestCase[] = [
   {
     id: 'geojson-star-lines',
@@ -154,10 +209,10 @@ const GEO_FILES: GeoTestCase[] = [
   }
 ];
 
-// --- Tests ---
+// ---------------------------------------------------------------------------
 
 describe(
-  'Pipeline Integration - DuckDB file ingestion',
+  'Pipeline Integration — DuckDB file ingestion',
   { timeout: 120_000 },
   () => {
     let db: TestDuckDB;
@@ -170,114 +225,312 @@ describe(
       await destroyTestInstance(db);
     });
 
-    describe('CSV files', () => {
-      it.each(CSV_FILES)('should ingest $id', async ({ relativePath }) => {
-        const tableName = uniqueTableName('csv');
-        const filePath = join(ROOT, relativePath);
+    // -----------------------------------------------------------------------
+    // CDC 2.A.1 — Import tabulaire (CSV)
+    // -----------------------------------------------------------------------
 
-        await db.connection.run(csvReadSql(tableName, filePath));
+    describe('CDC 2.A.1 — CSV import', () => {
+      it.each(CSV_VALID)(
+        'should ingest $id (>= $minRows rows, >= $minCols cols)',
+        async ({ relativePath, minRows, minCols }) => {
+          const tableName = uniqueTableName('csv');
+          const filePath = join(ROOT, relativePath);
 
-        const rowCount = await getRowCount(db, tableName);
-        const columns = await getColumns(db, tableName);
+          await db.connection.run(csvReadSql(tableName, filePath));
 
-        expect(columns.length).toBeGreaterThan(0);
-        expect(rowCount).toBeGreaterThan(0);
+          const rowCount = await getRowCount(db, tableName);
+          const columns = await getColumns(db, tableName);
 
-        const describeResult = await query(
-          db,
-          `FROM describe_full('${tableName}')`
-        );
-        expect(describeResult.length).toBe(columns.length);
-        for (const col of describeResult) {
-          expect(col.name).toBeTruthy();
-          expect(col.type).toBeTruthy();
-          expect(col.type_js).toBeTruthy();
-          expect(col.type_simple).toBeTruthy();
+          expect(columns.length).toBeGreaterThanOrEqual(minCols);
+          expect(rowCount).toBeGreaterThanOrEqual(minRows);
+
+          // CDC 2.A.4 — type detection: every column must have a classified type
+          const described = await query(
+            db,
+            `FROM describe_full('${tableName}')`
+          );
+          expect(described.length).toBe(columns.length);
+          for (const col of described) {
+            expect(col.name).toBeTruthy();
+            expect(col.type).toBeTruthy();
+            expect(col.type_js).toBeTruthy();
+            expect([
+              'numeric',
+              'string',
+              'date',
+              'geometry',
+              'other'
+            ]).toContain(col.type_simple);
+          }
+
+          await dropTable(db, tableName);
         }
-
-        await dropTable(db, tableName);
-      });
+      );
     });
 
-    describe('CSV edge cases', () => {
-      it('should handle empty file (nothing.csv) without crashing', async () => {
+    // -----------------------------------------------------------------------
+    // CSV malformed / edge cases — must not crash, graceful handling
+    // -----------------------------------------------------------------------
+
+    describe('CSV malformed files — graceful handling', () => {
+      it.each(CSV_MALFORMED)(
+        'should handle $id without crashing (>= $minCols cols)',
+        async ({ relativePath, minCols }) => {
+          const tableName = uniqueTableName('csv_m');
+          const filePath = join(ROOT, relativePath);
+
+          await db.connection.run(csvReadSql(tableName, filePath));
+
+          const rowCount = await getRowCount(db, tableName);
+          const columns = await getColumns(db, tableName);
+
+          expect(columns.length).toBeGreaterThanOrEqual(minCols);
+          expect(rowCount).toBeGreaterThan(0);
+
+          await dropTable(db, tableName);
+        }
+      );
+
+      it('should handle 0-byte file without crashing', async () => {
         const tableName = uniqueTableName('csv_edge');
         const filePath = join(ROOT, 'csv/csv-malformed--with-nothing.csv');
 
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        const rowCount = await getRowCount(db, tableName);
-        const columns = await getColumns(db, tableName);
-
-        // 0-byte file: DuckDB creates a table with a placeholder column and 0 rows
-        expect(rowCount).toBe(0);
-        expect(columns.length).toBeGreaterThanOrEqual(0);
-
+        expect(await getRowCount(db, tableName)).toBe(0);
         await dropTable(db, tableName);
       });
 
-      it('should detect columns from header-only CSV with 0 data rows', async () => {
+      it('should detect columns from header-only file with 0 data rows', async () => {
         const tableName = uniqueTableName('csv_edge');
         const filePath = join(ROOT, 'csv/csv-malformed--with-header-only.csv');
 
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        const rowCount = await getRowCount(db, tableName);
         const columns = await getColumns(db, tableName);
-
-        // Header-only file: columns are detected, no data rows
         expect(columns.length).toBe(5);
-        expect(rowCount).toBe(0);
+        expect(await getRowCount(db, tableName)).toBe(0);
 
         await dropTable(db, tableName);
       });
 
-      it('should handle CSV with unquoted commas in numeric values (numeric-edge)', async () => {
+      it('should not crash on unquoted commas in numeric values', async () => {
         const tableName = uniqueTableName('csv_edge');
         const filePath = join(
           ROOT,
           'csv/csv-malformed--with-numeric-all-edge-cases.csv'
         );
 
-        // File contains values like "€ 1234,56" without quotes — the comma
-        // breaks CSV field parsing, causing DuckDB to misread the structure
+        // Commas inside unquoted fields break CSV structure — DuckDB does its best
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        const rowCount = await getRowCount(db, tableName);
-        const columns = await getColumns(db, tableName);
-
-        // DuckDB misreads the CSV structure due to unquoted commas in values:
-        // the field count varies per row, so DuckDB cannot reliably parse it
-        expect(columns.length).toBeGreaterThan(0);
-        expect(rowCount).toBeGreaterThanOrEqual(0);
-
+        expect((await getColumns(db, tableName)).length).toBeGreaterThan(0);
         await dropTable(db, tableName);
       });
 
-      it('should handle CSV with mixed numeric formats across columns (numeric-mixed)', async () => {
+      it('should not crash on mixed numeric formats', async () => {
         const tableName = uniqueTableName('csv_edge');
         const filePath = join(
           ROOT,
           'csv/csv-malformed--with-numeric-formats-mixed.csv'
         );
 
-        // File has unquoted values like "R$ 1.234,00" and "1,234,567" — commas
-        // inside unquoted fields break CSV structure
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        const rowCount = await getRowCount(db, tableName);
-        const columns = await getColumns(db, tableName);
+        expect((await getColumns(db, tableName)).length).toBeGreaterThan(0);
+        await dropTable(db, tableName);
+      });
+    });
 
-        expect(columns.length).toBeGreaterThan(0);
-        expect(rowCount).toBeGreaterThanOrEqual(0);
+    // -----------------------------------------------------------------------
+    // CDC 2.A.4 — Type detection (text, numeric, geo hints)
+    // -----------------------------------------------------------------------
+
+    describe('CDC 2.A.4 — type detection', () => {
+      it('should detect text and numeric columns on fossil-fuel CSV', async () => {
+        const tableName = uniqueTableName('type');
+        const filePath = join(ROOT, 'csv/fossil-fuel-subsidies-gdp-2021.csv');
+        await db.connection.run(csvReadSql(tableName, filePath));
+
+        const described = await query(db, `FROM describe_full('${tableName}')`);
+        const types = described.map((r) => r.type_simple as string);
+
+        expect(types).toContain('string');
+        expect(types).toContain('numeric');
+
+        await dropTable(db, tableName);
+      });
+
+      it('should detect semantic geo hints (id/code columns)', async () => {
+        const tableName = uniqueTableName('type');
+        const filePath = join(ROOT, 'csv/fossil-fuel-subsidies-gdp-2021.csv');
+        await db.connection.run(csvReadSql(tableName, filePath));
+
+        const described = await query(db, `FROM describe_full('${tableName}')`);
+        const codeCol = described.find((r) => r.name === 'code');
+        expect(codeCol).toBeTruthy();
+        expect(codeCol!.id_words).toBe(true);
+
+        await dropTable(db, tableName);
+      });
+
+      it('should recognize null variations as actual NULLs', async () => {
+        const tableName = uniqueTableName('type');
+        const filePath = join(
+          ROOT,
+          'csv/csv-malformed--with-null-variations.csv'
+        );
+        await db.connection.run(csvReadSql(tableName, filePath));
+
+        // CSV has: null, NULL, NA, N/A, #N/A, NaN, none, NONE, empty string
+        // With nullstr config, these should all become SQL NULL
+        // DuckDB normalize_names=true prefixes reserved words with _
+        const nullCount = await query(
+          db,
+          `SELECT count(*) - count("_value") AS nulls FROM "${tableName}"`
+        );
+        expect(Number(nullCount[0].nulls)).toBeGreaterThan(0);
+
+        await dropTable(db, tableName);
+      });
+
+      it('should handle empty columns (all NULLs)', async () => {
+        const tableName = uniqueTableName('type');
+        const filePath = join(
+          ROOT,
+          'csv/csv-malformed--with-empty-columns.csv'
+        );
+        await db.connection.run(csvReadSql(tableName, filePath));
+
+        const stats = await query(
+          db,
+          `SELECT count("empty_col1") AS filled FROM "${tableName}"`
+        );
+        expect(Number(stats[0].filled)).toBe(0);
+
+        await dropTable(db, tableName);
+      });
+
+      it('should disambiguate duplicated column names', async () => {
+        const tableName = uniqueTableName('type');
+        const filePath = join(
+          ROOT,
+          'csv/csv-malformed--with-duplicated-column-name.csv'
+        );
+        await db.connection.run(csvReadSql(tableName, filePath));
+
+        const columns = await getColumns(db, tableName);
+        const colNames = columns.map((c) => c.column_name);
+        const uniqueNames = new Set(colNames);
+
+        // DuckDB normalize_names should make all column names unique
+        expect(uniqueNames.size).toBe(colNames.length);
 
         await dropTable(db, tableName);
       });
     });
 
-    describe('Geospatial files', () => {
+    // -----------------------------------------------------------------------
+    // CDC 2.A.5.b — Column statistics (direct SQL, see note below)
+    //
+    // Note: analysis macros using query_table() + "colname" (summary_general,
+    // summary_numeric, histogram_*) cannot be tested here. DuckDB Node API v1.4
+    // resolves "colname" as a string literal, while DuckDB WASM (production)
+    // resolves it as a column reference. Only describe_full works in both.
+    // We test the equivalent SQL patterns directly.
+    // -----------------------------------------------------------------------
+
+    describe('CDC 2.A.5.b — column statistics', () => {
+      const statsTable = uniqueTableName('stats');
+
+      beforeAll(async () => {
+        const filePath = join(ROOT, 'csv/fossil-fuel-subsidies-gdp-2021.csv');
+        await db.connection.run(csvReadSql(statsTable, filePath));
+      });
+
+      afterAll(async () => {
+        await dropTable(db, statsTable);
+      });
+
+      it('should compute general stats (count, uniques, nulls)', async () => {
+        const stats = await query(
+          db,
+          `SELECT
+            count(*) AS total,
+            count("code") AS non_null,
+            count(DISTINCT "code") AS uniques,
+            count(*) - count("code") AS nulls
+          FROM "${statsTable}"`
+        );
+        expect(Number(stats[0].total)).toBeGreaterThan(0);
+        expect(Number(stats[0].non_null)).toBeGreaterThan(0);
+        expect(Number(stats[0].uniques)).toBeGreaterThan(1);
+        expect(Number(stats[0].nulls)).toBeGreaterThanOrEqual(0);
+      });
+
+      it('should compute numeric min / max / extent', async () => {
+        const cols = await getColumns(db, statsTable);
+        const numCol = cols.find(
+          (c) =>
+            c.data_type === 'DOUBLE' ||
+            c.data_type === 'FLOAT' ||
+            c.data_type === 'INTEGER' ||
+            c.data_type === 'BIGINT'
+        );
+        expect(numCol).toBeTruthy();
+
+        const stats = await query(
+          db,
+          `SELECT
+            min("${numCol!.column_name}") AS min_val,
+            max("${numCol!.column_name}") AS max_val,
+            max("${numCol!.column_name}") - min("${numCol!.column_name}") AS extent
+          FROM "${statsTable}"`
+        );
+        expect(Number(stats[0].min_val)).toBeLessThanOrEqual(
+          Number(stats[0].max_val)
+        );
+        expect(Number(stats[0].extent)).toBeGreaterThanOrEqual(0);
+      });
+
+      it('should build equi-width histogram bins', async () => {
+        const cols = await getColumns(db, statsTable);
+        const numCol = cols.find(
+          (c) =>
+            c.data_type === 'DOUBLE' ||
+            c.data_type === 'FLOAT' ||
+            c.data_type === 'INTEGER' ||
+            c.data_type === 'BIGINT'
+        );
+        expect(numCol).toBeTruthy();
+        const col = numCol!.column_name;
+
+        const bins = await query(
+          db,
+          `WITH bins AS (
+            SELECT equi_width_bins(MIN("${col}"), MAX("${col}"), 15, true) AS bins
+            FROM "${statsTable}"
+          ), agg AS (
+            SELECT list_sort(list_distinct(FIRST(bins))) AS bins, histogram("${col}", bins) AS histogram
+            FROM "${statsTable}", bins
+          )
+          FROM agg, UNNEST(agg.bins) AS u(bin)
+          SELECT bin, histogram[bin]::DOUBLE AS count`
+        );
+        expect(bins.length).toBeGreaterThan(0);
+        const total = bins.reduce((s, r) => s + Number(r.count), 0);
+        const rowCount = await getRowCount(db, statsTable);
+        expect(total).toBeLessThanOrEqual(rowCount);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // CDC 2.A.2 — Import géographique (GeoJSON, GeoPackage, Shapefile, GPX, KML)
+    // -----------------------------------------------------------------------
+
+    describe('CDC 2.A.2 — geospatial import', () => {
       it.each(GEO_FILES)(
-        'should ingest $id ($format)',
+        'should ingest $id ($format) with geometry + data columns',
         async ({ relativePath }) => {
           const tableName = uniqueTableName('geo');
           const filePath = join(ROOT, relativePath);
@@ -288,11 +541,16 @@ describe(
           expect(rowCount).toBeGreaterThan(0);
 
           const columns = await getColumns(db, tableName);
-          expect(columns.length).toBeGreaterThan(0);
 
+          // Must have at least one geometry column (CDC 2.A.2)
           const geomColumns = columns.filter((c) => c.data_type === 'GEOMETRY');
           expect(geomColumns.length).toBeGreaterThan(0);
 
+          // Must also have data columns (not just geometry)
+          const dataColumns = columns.filter((c) => c.data_type !== 'GEOMETRY');
+          expect(dataColumns.length).toBeGreaterThan(0);
+
+          // Geometry bounds must be extractable for map display
           const geomCol = geomColumns[0].column_name;
           const geoInfo = await getGeometryInfo(db, tableName, geomCol);
 
@@ -301,13 +559,19 @@ describe(
           expect(geoInfo.ymin).toEqual(expect.any(Number));
           expect(geoInfo.xmax).toEqual(expect.any(Number));
           expect(geoInfo.ymax).toEqual(expect.any(Number));
+          expect(geoInfo.xmax).toBeGreaterThanOrEqual(geoInfo.xmin!);
+          expect(geoInfo.ymax).toBeGreaterThanOrEqual(geoInfo.ymin!);
 
           await dropTable(db, tableName);
         }
       );
     });
 
-    describe('ZIP files', () => {
+    // -----------------------------------------------------------------------
+    // ZIP extraction — CDC 2.A.2 mentions Shapefile in ZIP
+    // -----------------------------------------------------------------------
+
+    describe('ZIP extraction + ingestion', () => {
       it('should extract and ingest single-csv.zip', async () => {
         const zipPath = join(ROOT, 'zip/single-csv.zip');
         const zipBuffer = readFileSync(zipPath);
@@ -332,9 +596,7 @@ describe(
             const tableName = uniqueTableName('zip_csv');
             await db.connection.run(csvReadSql(tableName, filePath));
 
-            const rowCount = await getRowCount(db, tableName);
-            expect(rowCount).toBeGreaterThan(0);
-
+            expect(await getRowCount(db, tableName)).toBeGreaterThan(0);
             await dropTable(db, tableName);
           }
         } finally {
@@ -366,9 +628,7 @@ describe(
             const tableName = uniqueTableName('zip_multi');
             await db.connection.run(csvReadSql(tableName, filePath));
 
-            const rowCount = await getRowCount(db, tableName);
-            expect(rowCount).toBeGreaterThan(0);
-
+            expect(await getRowCount(db, tableName)).toBeGreaterThan(0);
             await dropTable(db, tableName);
           }
         } finally {
@@ -376,7 +636,7 @@ describe(
         }
       });
 
-      it('should extract and ingest shapefile-complete.zip', async () => {
+      it('should extract and ingest shapefile-complete.zip (CDC 2.A.2)', async () => {
         const zipPath = join(ROOT, 'zip/shapefile-complete.zip');
         const zipBuffer = readFileSync(zipPath);
         const extracted = unzipSync(new Uint8Array(zipBuffer));
@@ -405,8 +665,7 @@ describe(
             geoReadSql(tableName, join(tmpDir, shpFile!))
           );
 
-          const rowCount = await getRowCount(db, tableName);
-          expect(rowCount).toBeGreaterThan(0);
+          expect(await getRowCount(db, tableName)).toBeGreaterThan(0);
 
           const columns = await getColumns(db, tableName);
           const geomColumns = columns.filter((c) => c.data_type === 'GEOMETRY');

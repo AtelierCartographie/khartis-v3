@@ -173,5 +173,4 @@ describe('Quality Warnings', () => {
       expect(warnings).toBeDefined();
     });
   });
-
 });
