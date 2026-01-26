@@ -103,7 +103,9 @@ describe('DuckDB Regex Patterns', () => {
     });
 
     it('should reject invalid date formats', () => {
-      expect(DUCK_CONST.REGEX.COLUMN_VALIDATION_DATE.test('2023-13-01T00:00:00')).toBe(true);
+      expect(
+        DUCK_CONST.REGEX.COLUMN_VALIDATION_DATE.test('2023-13-01T00:00:00')
+      ).toBe(true);
       expect(DUCK_CONST.REGEX.COLUMN_VALIDATION_DATE.test('not-a-date')).toBe(
         false
       );
@@ -116,4 +118,3 @@ describe('DuckDB Regex Patterns', () => {
     });
   });
 });
-

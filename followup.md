@@ -74,23 +74,23 @@
 
 ### 2.A.5 Tableau de données — 90%
 
-| Fonctionnalité                                                                  | Statut | Note                    |
-| ------------------------------------------------------------------------------- | ------ | ----------------------- |
+| Fonctionnalité                                                                  | Statut | Note                            |
+| ------------------------------------------------------------------------------- | ------ | ------------------------------- |
 | Panneau latéral taille variable                                                 | 🔌     | UI prête, resize non implémenté |
-| Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                         |
-| Agrandissement taille prédéfinie                                                | ✅     |                         |
-| Code graphique par type de colonne                                              | ✅     |                         |
-| Menu déroulante au clic (3 points)                                              | ✅     |                         |
-| Changer le type / Affiner / Renommer / Masquer / Supprimer                      | ✅     |                         |
-| Résumé statistique (uniques, nulls, doublons, histogramme, min/max)             | ✅     |                         |
-| Tri croissant/décroissant                                                       | ✅     |                         |
-| Barre de recherche + navigation résultats                                       | ✅     |                         |
-| Recherche sur carte (mise en lumière)                                           | 🔌     | UI prête, highlight map |
-| Rechercher/remplacer (Jaro-Winkler fuzzy matching)                              | ✅     |                         |
-| Filtres multiples avec opérateurs complets                                      | ✅     |                         |
-| Calculatrice (8 fonctions: AVG, SUM, MIN, MAX, POWER, ROUND, CONCAT, SUBSTRING) | ✅     |                         |
-| Suppression variables/lignes avec avertissement                                 | ✅     |                         |
-| Réinitialisation données (recharge depuis fichier original)                     | ✅     |                         |
+| Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                                 |
+| Agrandissement taille prédéfinie                                                | ✅     |                                 |
+| Code graphique par type de colonne                                              | ✅     |                                 |
+| Menu déroulante au clic (3 points)                                              | ✅     |                                 |
+| Changer le type / Affiner / Renommer / Masquer / Supprimer                      | ✅     |                                 |
+| Résumé statistique (uniques, nulls, doublons, histogramme, min/max)             | ✅     |                                 |
+| Tri croissant/décroissant                                                       | ✅     |                                 |
+| Barre de recherche + navigation résultats                                       | ✅     |                                 |
+| Recherche sur carte (mise en lumière)                                           | 🔌     | UI prête, highlight map         |
+| Rechercher/remplacer (Jaro-Winkler fuzzy matching)                              | ✅     |                                 |
+| Filtres multiples avec opérateurs complets                                      | ✅     |                                 |
+| Calculatrice (8 fonctions: AVG, SUM, MIN, MAX, POWER, ROUND, CONCAT, SUBSTRING) | ✅     |                                 |
+| Suppression variables/lignes avec avertissement                                 | ✅     |                                 |
+| Réinitialisation données (recharge depuis fichier original)                     | ✅     |                                 |
 
 ### 2.A.6-2.A.9 Géolocalisation et Jointure — 100%
 
@@ -155,18 +155,18 @@
 
 ### 2.B.2.c Personnalisation des couleurs — 60%
 
-| Fonctionnalité                    | Statut | Note                          |
-| --------------------------------- | ------ | ----------------------------- |
-| Panneau dédié couleurs            | ✅     |                               |
-| Filtre daltonisme (9 types UI)    | 🔌     | UI prête, CSS filter manquant |
-| Intensité (nuances)               | ✅     |                               |
-| Couleur personnalisée HSL         | ✅     |                               |
-| Code hexadécimal                  | ✅     |                               |
+| Fonctionnalité                    | Statut | Note                             |
+| --------------------------------- | ------ | -------------------------------- |
+| Panneau dédié couleurs            | ✅     |                                  |
+| Filtre daltonisme (9 types UI)    | 🔌     | UI prête, CSS filter manquant    |
+| Intensité (nuances)               | ✅     |                                  |
+| Couleur personnalisée HSL         | ✅     |                                  |
+| Code hexadécimal                  | ✅     |                                  |
 | Suggestions palettes qualitatives | ✅     | 4 palettes dans palette-selector |
-| Palettes séquentielles            | ✅     | Connecté à Deck.gl            |
+| Palettes séquentielles            | ✅     | Connecté à Deck.gl               |
 | Palettes divergentes              | ✅     | 5 palettes dans palette-selector |
-| Motifs personnalisables           | 🔧     |                               |
-| Inversion palette                 | ✅     |                               |
+| Motifs personnalisables           | 🔧     |                                  |
+| Inversion palette                 | ✅     |                                  |
 
 ### 2.B.2.d Discrétisation — 75%
 
@@ -287,15 +287,15 @@
 
 ### 2.C.1 Habillage prédéfini — 55%
 
-| Fonctionnalité                                  | Statut | Note                           |
-| ----------------------------------------------- | ------ | ------------------------------ |
+| Fonctionnalité                                  | Statut | Note                                     |
+| ----------------------------------------------- | ------ | ---------------------------------------- |
 | Légende configurable (panneau séparé)           | ✅     | legend-overlay intégré dans thematic-map |
-| Éléments supprimables                           | ✅     |                                |
-| Textes prédéfinis (4 styles)                    | ✅     |                                |
-| Éléments déplaçables                            | ⚠️     | 70%                            |
-| Placeholders textes (titre, sous-titre, source) | ✅     |                                |
-| Légende auto-créée avec visualisation           | 🔧     |                                |
-| Mention "Réalisé avec Khartis"                  | ✅     |                                |
+| Éléments supprimables                           | ✅     |                                          |
+| Textes prédéfinis (4 styles)                    | ✅     |                                          |
+| Éléments déplaçables                            | ⚠️     | 70%                                      |
+| Placeholders textes (titre, sous-titre, source) | ✅     |                                          |
+| Légende auto-créée avec visualisation           | 🔧     |                                          |
+| Mention "Réalisé avec Khartis"                  | ✅     |                                          |
 
 ### 2.C.2.a Format — 80%
 
@@ -414,14 +414,14 @@
 
 ## 2.G. Aide et pages annexes — 50%
 
-| Fonctionnalité                     | Statut |
-| ---------------------------------- | ------ |
+| Fonctionnalité                      | Statut |
+| ----------------------------------- | ------ |
 | Textes d'accompagnement (1396 clés) | ✅     |
-| Facilité modification (Paraglide)  | ✅     |
-| Tooltips                           | ⚠️ 80% |
-| Liens vers aide externe            | ✅     |
-| Pages annexes (mentions légales)   | ⚠️ 20% |
-| Documentation utilisateur complète | 🔧     |
+| Facilité modification (Paraglide)   | ✅     |
+| Tooltips                            | ⚠️ 80% |
+| Liens vers aide externe             | ✅     |
+| Pages annexes (mentions légales)    | ⚠️ 20% |
+| Documentation utilisateur complète  | 🔧     |
 
 ---
 
