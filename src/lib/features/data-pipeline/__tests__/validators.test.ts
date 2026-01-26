@@ -13,6 +13,7 @@ describe('File Validators', () => {
       const result = await validateFile(emptyFile);
       expect(result.isValid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toMatch(/empty|vide/i);
     });
 
     it('should reject file exceeding MAX_FILE_SIZE (100MB)', async () => {
@@ -23,7 +24,7 @@ describe('File Validators', () => {
       });
       const result = await validateFile(mockFile);
       expect(result.isValid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors.some((e) => e.includes('limit'))).toBe(true);
     });
 
     it('should warn for file above WARNING_FILE_SIZE (50MB)', async () => {
@@ -35,6 +36,7 @@ describe('File Validators', () => {
       const result = await validateFile(mockFile);
       expect(result.isValid).toBe(true);
       expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings[0]).toMatch(/51\.0.*M[Bo]/);
     });
 
     it('should accept valid file under limits', async () => {

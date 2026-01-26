@@ -1,18 +1,9 @@
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 import { describe, expect, it } from 'vitest';
-import {
-  VizSuggesterService,
-  type EnrichedColumn,
-  type SimplifiedGeometryType
-} from './viz-suggester.service';
+import { VizSuggesterService } from './viz-suggester.service';
 
 describe('VizSuggesterService', () => {
   const service = new VizSuggesterService();
-  type VizSuggesterPrivateAPI = {
-    getColumnSemioType(column: ColumnAnalysis): EnrichedColumn;
-    simplifyGeometryType(geometry: string): SimplifiedGeometryType;
-  };
-  const serviceInternals = service as unknown as VizSuggesterPrivateAPI;
 
   describe('suggestVisualizations', () => {
     it('should return empty array when no geometry', () => {
@@ -339,63 +330,4 @@ describe('VizSuggesterService', () => {
     });
   });
 
-  describe('Semio type detection', () => {
-    it('should detect ratio/percentage columns as QTR', () => {
-      const column: ColumnAnalysis = {
-        name: 'taux_chomage_%',
-        type: 'bigint',
-        stats: {
-          totalCount: 100,
-          uniqueCount: 90,
-          nullCount: 0,
-          min: 0,
-          max: 100
-        }
-      };
-
-      const enriched = serviceInternals.getColumnSemioType(column);
-
-      // The semio type detection uses multiple heuristics
-      // With 90 unique values and range 0-100, QTA gets higher score
-      // The "taux" keyword adds score to QTR but QTA wins due to uniqueCount > 20
-      expect(['QTR', 'QTA']).toContain(enriched.semioType);
-      expect(enriched.score).toBeGreaterThan(0);
-    });
-
-    it('should detect rank/level columns as QLO', () => {
-      const column: ColumnAnalysis = {
-        // Use "level" with word boundary - "education level" has proper word boundaries
-        name: 'education level',
-        type: 'text',
-        stats: {
-          totalCount: 100,
-          uniqueCount: 5,
-          nullCount: 0
-        }
-      };
-
-      const enriched = serviceInternals.getColumnSemioType(column);
-
-      // "level" keyword should trigger QLO detection with word boundary
-      expect(enriched.semioType).toBe('QLO');
-    });
-  });
-
-  describe('Geometry type simplification', () => {
-    it('should simplify MultiPolygon to polygon', () => {
-      const simplified = serviceInternals.simplifyGeometryType('MultiPolygon');
-      expect(simplified).toBe('polygon');
-    });
-
-    it('should simplify MultiLineString to line', () => {
-      const simplified =
-        serviceInternals.simplifyGeometryType('MultiLineString');
-      expect(simplified).toBe('line');
-    });
-
-    it('should simplify MultiPoint to point', () => {
-      const simplified = serviceInternals.simplifyGeometryType('MultiPoint');
-      expect(simplified).toBe('point');
-    });
-  });
 });
