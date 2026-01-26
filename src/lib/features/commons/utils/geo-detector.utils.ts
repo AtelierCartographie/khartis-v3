@@ -340,7 +340,10 @@ export const GeoColumnDetector = {
     if (nutsSampleMatch > GEO_DETECTION.LOW_MATCH_THRESHOLD) {
       return {
         type: 'nuts',
-        confidence: Math.min(nutsSampleMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.NEAR_CERTAIN),
+        confidence: Math.min(
+          nutsSampleMatch * GEO_DETECTION.MULTIPLIER_STRONG,
+          GEO_DETECTION.NEAR_CERTAIN
+        ),
         matchedPatterns: ['Value pattern: Known NUTS codes']
       };
     }
@@ -374,7 +377,10 @@ export const GeoColumnDetector = {
     if (countryMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'country_name',
-        confidence: Math.min(countryMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.EXCEPTIONAL),
+        confidence: Math.min(
+          countryMatch * GEO_DETECTION.MULTIPLIER_STRONG,
+          GEO_DETECTION.EXCEPTIONAL
+        ),
         matchedPatterns: ['Value pattern: Known country names']
       };
     }
@@ -386,7 +392,10 @@ export const GeoColumnDetector = {
     if (regionMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'region',
-        confidence: Math.min(regionMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.VERY_HIGH_CONFIDENCE),
+        confidence: Math.min(
+          regionMatch * GEO_DETECTION.MULTIPLIER_STRONG,
+          GEO_DETECTION.VERY_HIGH_CONFIDENCE
+        ),
         matchedPatterns: ['Value pattern: Known region names']
       };
     }
@@ -398,7 +407,10 @@ export const GeoColumnDetector = {
     if (cityMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'city',
-        confidence: Math.min(cityMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.VERY_HIGH_CONFIDENCE),
+        confidence: Math.min(
+          cityMatch * GEO_DETECTION.MULTIPLIER_STRONG,
+          GEO_DETECTION.VERY_HIGH_CONFIDENCE
+        ),
         matchedPatterns: ['Value pattern: Known city names']
       };
     }

@@ -42,20 +42,28 @@ export const GEOMETRY_TYPE_PAIRS = [
   { ogc: GEOMETRY_TYPES.POINT, wkt: GEOMETRY_WKT_TYPES.POINT },
   { ogc: GEOMETRY_TYPES.MULTI_POINT, wkt: GEOMETRY_WKT_TYPES.MULTI_POINT },
   { ogc: GEOMETRY_TYPES.LINE_STRING, wkt: GEOMETRY_WKT_TYPES.LINE_STRING },
-  { ogc: GEOMETRY_TYPES.MULTI_LINE_STRING, wkt: GEOMETRY_WKT_TYPES.MULTI_LINE_STRING },
+  {
+    ogc: GEOMETRY_TYPES.MULTI_LINE_STRING,
+    wkt: GEOMETRY_WKT_TYPES.MULTI_LINE_STRING
+  },
   { ogc: GEOMETRY_TYPES.POLYGON, wkt: GEOMETRY_WKT_TYPES.POLYGON },
   { ogc: GEOMETRY_TYPES.MULTI_POLYGON, wkt: GEOMETRY_WKT_TYPES.MULTI_POLYGON }
 ] as const;
 
 // Helper type for geometry type checking
-export type GeometryType = typeof ALL_GEOMETRY_TYPES[number];
-export type OGCGeometryType = typeof GEOMETRY_TYPES[keyof typeof GEOMETRY_TYPES];
-export type WKTGeometryType = typeof GEOMETRY_WKT_TYPES[keyof typeof GEOMETRY_WKT_TYPES];
+export type GeometryType = (typeof ALL_GEOMETRY_TYPES)[number];
+export type OGCGeometryType =
+  (typeof GEOMETRY_TYPES)[keyof typeof GEOMETRY_TYPES];
+export type WKTGeometryType =
+  (typeof GEOMETRY_WKT_TYPES)[keyof typeof GEOMETRY_WKT_TYPES];
 
 /**
  * Check if a type string matches a geometry type (OGC or WKT variant)
  */
-export function isGeometryType(type: string, geometryType: keyof typeof GEOMETRY_TYPES): boolean {
+export function isGeometryType(
+  type: string,
+  geometryType: keyof typeof GEOMETRY_TYPES
+): boolean {
   const ogc = GEOMETRY_TYPES[geometryType];
   const wkt = GEOMETRY_WKT_TYPES[geometryType];
   return type === ogc || type === wkt;
@@ -64,7 +72,10 @@ export function isGeometryType(type: string, geometryType: keyof typeof GEOMETRY
 /**
  * Check if any type in array matches a geometry type
  */
-export function hasGeometryType(types: string[], geometryType: keyof typeof GEOMETRY_TYPES): boolean {
+export function hasGeometryType(
+  types: string[],
+  geometryType: keyof typeof GEOMETRY_TYPES
+): boolean {
   return types.some((t) => isGeometryType(t, geometryType));
 }
 
@@ -72,7 +83,9 @@ export function hasGeometryType(types: string[], geometryType: keyof typeof GEOM
  * Normalize geometry type string to OGC format
  */
 export function normalizeGeometryType(type: string): OGCGeometryType | null {
-  const pair = GEOMETRY_TYPE_PAIRS.find((p) => p.ogc === type || p.wkt === type);
+  const pair = GEOMETRY_TYPE_PAIRS.find(
+    (p) => p.ogc === type || p.wkt === type
+  );
   return pair ? pair.ogc : null;
 }
 
@@ -87,12 +100,17 @@ export function isPointGeometry(type: string): boolean {
  * Check if geometry type is a line type (LineString or MultiLineString)
  */
 export function isLineGeometry(type: string): boolean {
-  return isGeometryType(type, 'LINE_STRING') || isGeometryType(type, 'MULTI_LINE_STRING');
+  return (
+    isGeometryType(type, 'LINE_STRING') ||
+    isGeometryType(type, 'MULTI_LINE_STRING')
+  );
 }
 
 /**
  * Check if geometry type is a polygon type (Polygon or MultiPolygon)
  */
 export function isPolygonGeometry(type: string): boolean {
-  return isGeometryType(type, 'POLYGON') || isGeometryType(type, 'MULTI_POLYGON');
+  return (
+    isGeometryType(type, 'POLYGON') || isGeometryType(type, 'MULTI_POLYGON')
+  );
 }

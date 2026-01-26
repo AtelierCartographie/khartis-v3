@@ -347,7 +347,9 @@ describe('VizSuggesterService', () => {
       const suggestions = service.suggestVisualizations(columns, 'MultiPoint');
 
       expect(suggestions.length).toBeGreaterThan(0);
-      expect(suggestions.some((s) => s.geometries.includes('point'))).toBe(true);
+      expect(suggestions.some((s) => s.geometries.includes('point'))).toBe(
+        true
+      );
     });
 
     it('should handle MultiLineString geometry', () => {
@@ -477,5 +479,4 @@ describe('VizSuggesterService', () => {
       }
     });
   });
-
 });

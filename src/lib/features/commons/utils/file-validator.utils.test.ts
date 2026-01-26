@@ -604,5 +604,4 @@ describe('FileValidator', () => {
       expect(result.isValid).toBe(false); // Overall invalid due to empty file
     });
   });
-
 });
