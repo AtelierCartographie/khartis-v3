@@ -65,20 +65,10 @@
     return mapping[method] ?? ClassificationMethod.QUANTILES;
   }
 
-  let currentMethod = $state<PanelMethod>(
-    storeMethodToPanelMethod(
-      visualization?.classification?.method ?? ClassificationMethod.QUANTILES
-    )
-  );
-  let currentNumClasses = $state(
-    visualization?.classification?.numClasses ??
-      visualization?.classification?.classes ??
-      5
-  );
+  let currentMethod = $state<PanelMethod>('quantile');
+  let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
-  let currentBreakpoint = $state<number | null>(
-    visualization?.classification?.breakpointValue ?? null
-  );
+  let currentBreakpoint = $state<number | null>(null);
 
   $effect(() => {
     if (visualization?.classification) {

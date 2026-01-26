@@ -13,8 +13,7 @@ import {
   RefineOperation
 } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../../utils/logger';
-import type { ColumnInfo } from '../types';
-import type { ColumnType } from '../components/TableColumnHeader.svelte';
+import type { ColumnInfo, ColumnType } from '../types';
 
 export interface UseColumnOperationsProps {
   tableName?: string | (() => string | undefined);

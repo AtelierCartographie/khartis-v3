@@ -33,14 +33,20 @@
     onToggleChange
   }: Props = $props();
 
-  const isControlled = Boolean(onToggleChange);
-  let internalToggleChecked = $state<boolean>(toggleChecked);
+  const isControlled = $derived(Boolean(onToggleChange));
+  let internalToggleChecked = $state<boolean>(false);
   const effectiveToggleChecked = $derived(
     isControlled ? toggleChecked : internalToggleChecked
   );
 
   let expanded = $state<boolean>(untrack(() => defaultOpen));
-  let prevToggleChecked = $state<boolean>(effectiveToggleChecked);
+  let prevToggleChecked = $state<boolean>(false);
+
+  $effect(() => {
+    if (!isControlled && toggleChecked !== internalToggleChecked) {
+      internalToggleChecked = toggleChecked;
+    }
+  });
 
   $effect(() => {
     if (showToggle && prevToggleChecked !== effectiveToggleChecked) {

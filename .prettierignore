@@ -5,3 +5,9 @@ pnpm-lock.yaml
 bun.lock
 bun.lockb
 SOTU.parquet
+
+# Auto-generated i18n files (Paraglide)
+src/paraglide/messages/
+src/paraglide/runtime.js
+src/paraglide/server.js
+src/paraglide/registry.js

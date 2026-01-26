@@ -19,7 +19,7 @@
   let hue = $state(0);
   let saturation = $state(100);
   let lightness = $state(50);
-  let hexValue = $state(color);
+  let hexValue = $state('#000000');
 
   $effect(() => {
     if (color && open) {

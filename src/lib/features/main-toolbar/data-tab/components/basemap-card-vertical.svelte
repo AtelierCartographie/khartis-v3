@@ -251,10 +251,6 @@
     line-height: 1.4;
   }
 
-  .variant-gray .card-description {
-    color: var(--cds-text-02);
-  }
-
   .metadata-row {
     display: flex;
     justify-content: space-between;

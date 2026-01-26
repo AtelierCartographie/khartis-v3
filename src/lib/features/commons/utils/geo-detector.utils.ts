@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { GEO_DETECTION } from '../constants/detection.constants';
 
 export interface GeoColumnResult {
   index: number;
@@ -200,7 +201,7 @@ export const GeoColumnDetector = {
           header,
           columnValues
         );
-        if (detection && detection.confidence > 0.5) {
+        if (detection && detection.confidence > GEO_DETECTION.MIN_CONFIDENCE) {
           results.push({
             ...detection,
             index: colIndex,
@@ -240,7 +241,7 @@ export const GeoColumnDetector = {
     for (const [type, pattern] of Object.entries(COLUMN_NAME_PATTERNS)) {
       if (pattern.test(header)) {
         const confidence = GeoColumnDetector.validateColumnValues(type, values);
-        if (confidence > 0.5) {
+        if (confidence > GEO_DETECTION.MIN_CONFIDENCE) {
           return {
             type: type as GeoColumnResult['type'],
             confidence,
@@ -264,10 +265,10 @@ export const GeoColumnDetector = {
         'latitude',
         values
       );
-      if (latConfidence > 0.5) {
+      if (latConfidence > GEO_DETECTION.MIN_CONFIDENCE) {
         return {
           type: 'latitude',
-          confidence: latConfidence * 0.8,
+          confidence: latConfidence * GEO_DETECTION.MULTIPLIER_MODERATE,
           sampleValues
         };
       }
@@ -278,10 +279,10 @@ export const GeoColumnDetector = {
         'longitude',
         values
       );
-      if (lonConfidence > 0.5) {
+      if (lonConfidence > GEO_DETECTION.MIN_CONFIDENCE) {
         return {
           type: 'longitude',
-          confidence: lonConfidence * 0.8,
+          confidence: lonConfidence * GEO_DETECTION.MULTIPLIER_MODERATE,
           sampleValues
         };
       }
@@ -302,7 +303,7 @@ export const GeoColumnDetector = {
     const iso2Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso2(v)).length /
       stringValues.length;
-    if (iso2Match > 0.8) {
+    if (iso2Match > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
         type: 'iso2',
         confidence: iso2Match,
@@ -313,7 +314,7 @@ export const GeoColumnDetector = {
     const iso3Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso3(v)).length /
       stringValues.length;
-    if (iso3Match > 0.8) {
+    if (iso3Match > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
         type: 'iso3',
         confidence: iso3Match,
@@ -324,7 +325,7 @@ export const GeoColumnDetector = {
     const nutsMatch =
       stringValues.filter((v) => VALUE_PATTERNS.nuts(v)).length /
       stringValues.length;
-    if (nutsMatch > 0.8) {
+    if (nutsMatch > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
         type: 'nuts',
         confidence: nutsMatch,
@@ -336,10 +337,10 @@ export const GeoColumnDetector = {
       stringValues,
       NUTS_SAMPLES
     );
-    if (nutsSampleMatch > 0.4) {
+    if (nutsSampleMatch > GEO_DETECTION.LOW_MATCH_THRESHOLD) {
       return {
         type: 'nuts',
-        confidence: Math.min(nutsSampleMatch * 1.5, 0.9),
+        confidence: Math.min(nutsSampleMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.NEAR_CERTAIN),
         matchedPatterns: ['Value pattern: Known NUTS codes']
       };
     }
@@ -347,7 +348,7 @@ export const GeoColumnDetector = {
     const latMatch =
       stringValues.filter((v) => VALUE_PATTERNS.latitude(v)).length /
       stringValues.length;
-    if (latMatch > 0.8) {
+    if (latMatch > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
         type: 'latitude',
         confidence: latMatch,
@@ -358,7 +359,7 @@ export const GeoColumnDetector = {
     const lonMatch =
       stringValues.filter((v) => VALUE_PATTERNS.longitude(v)).length /
       stringValues.length;
-    if (lonMatch > 0.8) {
+    if (lonMatch > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
         type: 'longitude',
         confidence: lonMatch,
@@ -370,10 +371,10 @@ export const GeoColumnDetector = {
       stringValues,
       COUNTRY_SAMPLES
     );
-    if (countryMatch > 0.3) {
+    if (countryMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'country_name',
-        confidence: Math.min(countryMatch * 1.5, 0.95),
+        confidence: Math.min(countryMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.EXCEPTIONAL),
         matchedPatterns: ['Value pattern: Known country names']
       };
     }
@@ -382,10 +383,10 @@ export const GeoColumnDetector = {
       stringValues,
       REGION_SAMPLES
     );
-    if (regionMatch > 0.3) {
+    if (regionMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'region',
-        confidence: Math.min(regionMatch * 1.5, 0.85),
+        confidence: Math.min(regionMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.VERY_HIGH_CONFIDENCE),
         matchedPatterns: ['Value pattern: Known region names']
       };
     }
@@ -394,10 +395,10 @@ export const GeoColumnDetector = {
       stringValues,
       CITY_SAMPLES
     );
-    if (cityMatch > 0.3) {
+    if (cityMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
         type: 'city',
-        confidence: Math.min(cityMatch * 1.5, 0.85),
+        confidence: Math.min(cityMatch * GEO_DETECTION.MULTIPLIER_STRONG, GEO_DETECTION.VERY_HIGH_CONFIDENCE),
         matchedPatterns: ['Value pattern: Known city names']
       };
     }
