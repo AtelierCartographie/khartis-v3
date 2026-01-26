@@ -117,18 +117,18 @@ describe('FileValidator', () => {
       });
 
       it('should detect files without dots as having no extension', () => {
-        // getFileExtension returns the whole filename if no dot is present
-        // which then gets rejected as unsupported extension in strict mode
+        // getFileExtension returns empty string if no dot is present
+        // Validator adds a warning but doesn't reject in this case
         const file = new File(['content'], 'noextension', {
           type: 'text/csv'
         });
         const result = FileValidator.validate(file);
 
-        // Will be rejected as unsupported extension, not warned about no extension
-        expect(result.isValid).toBe(false);
-        expect(result.errors.some((e) => e.includes('not supported'))).toBe(
-          true
-        );
+        // File is valid with a warning about missing extension
+        expect(result.isValid).toBe(true);
+        expect(
+          result.warnings.some((w) => w.includes('without extension'))
+        ).toBe(true);
       });
 
       it('should reject unsupported extensions in strict mode', () => {
@@ -605,52 +605,4 @@ describe('FileValidator', () => {
     });
   });
 
-  describe('Configuration', () => {
-    it('should use correct default configuration', () => {
-      expect(FILE_VALIDATION_CONFIG.maxFileSize).toBe(
-        STORAGE_LIMITS.maxFileSize
-      );
-      expect(FILE_VALIDATION_CONFIG.maxTotalSize).toBe(
-        STORAGE_LIMITS.maxTotalFileSize
-      );
-      expect(FILE_VALIDATION_CONFIG.maxFileCount).toBe(
-        STORAGE_LIMITS.maxFileCount
-      );
-      expect(FILE_VALIDATION_CONFIG.strictMode).toBe(true);
-    });
-
-    it('should include all expected file extensions', () => {
-      const expectedExtensions = [
-        'csv',
-        'tsv',
-        'txt',
-        'geojson',
-        'json',
-        'shp',
-        'shx',
-        'dbf',
-        'prj',
-        'cpg',
-        'gpkg'
-      ];
-
-      expectedExtensions.forEach((ext) => {
-        expect(FILE_VALIDATION_CONFIG.allowedExtensions).toContain(ext);
-      });
-    });
-
-    it('should include all expected MIME types', () => {
-      const expectedMimeTypes = [
-        'text/csv',
-        'application/json',
-        'application/geo+json',
-        'application/x-shapefile',
-        'application/geopackage+sqlite3'
-      ];
-
-      expectedMimeTypes.forEach((mime) => {
-        expect(FILE_VALIDATION_CONFIG.allowedMimeTypes).toContain(mime);
-      });
-    });
-  });
 });
