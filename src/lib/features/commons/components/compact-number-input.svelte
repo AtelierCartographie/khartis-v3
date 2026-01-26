@@ -6,6 +6,7 @@
     step?: number;
     width?: string;
     disabled?: boolean;
+    id?: string;
     onchange?: (value: number) => void;
   }
 
@@ -16,6 +17,7 @@
     step = 1,
     width = '64px',
     disabled = false,
+    id,
     onchange
   }: Props = $props();
 
@@ -41,6 +43,7 @@
 <div class="compact-number-input" style="--input-width: {width}">
   <input
     type="number"
+    id={id}
     min={min}
     max={max}
     step={step}

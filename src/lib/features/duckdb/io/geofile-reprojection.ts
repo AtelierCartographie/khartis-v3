@@ -1,3 +1,4 @@
+import { isPointGeometry } from '$lib/features/commons/constants/geometry.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type { Table as ArrowTable } from 'apache-arrow';
@@ -273,7 +274,7 @@ export async function applyProj4Reprojection(
   }
 
   const geomType = result.getChild('geom_type')?.get(0);
-  const isPoint = geomType === 'POINT' || geomType === 'MULTIPOINT';
+  const isPoint = typeof geomType === 'string' && isPointGeometry(geomType);
 
   if (isPoint) {
     await reprojectPointGeometries(ctx, tablename, geomCol, sourceCRS);

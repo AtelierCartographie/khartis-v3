@@ -2,9 +2,9 @@ import { Deck, OrthographicView, View } from '@deck.gl/core';
 import type { DeckProps } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
 import maplibregl from 'maplibre-gl';
-
-type DeckInstance = Deck<View | View[] | null>;
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+
+export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { BASEMAP_STYLES, BasemapStyle } from '../constants';

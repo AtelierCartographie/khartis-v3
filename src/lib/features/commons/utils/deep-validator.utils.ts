@@ -1,4 +1,5 @@
 import * as m from '$lib/paraglide/messages';
+import { DATA_VALIDATION } from '../constants/detection.constants';
 import {
   GeoColumnDetector,
   type GeoDetectionResult
@@ -365,7 +366,7 @@ export const DeepDataValidator = {
     const total = Object.values(types).reduce((a, b) => a + b, 0);
     if (total === 0) return 'string';
 
-    const threshold = total * 0.8;
+    const threshold = total * DATA_VALIDATION.ANOMALY_MULTIPLIER;
 
     if (types.date >= threshold) return 'date';
     if (types.numeric >= threshold) return 'numeric';
@@ -385,8 +386,8 @@ export const DeepDataValidator = {
     const date = new Date(strValue);
     return (
       !isNaN(date.getTime()) &&
-      date.getFullYear() > 1900 &&
-      date.getFullYear() < 2100
+      date.getFullYear() > DATA_VALIDATION.MIN_YEAR &&
+      date.getFullYear() < DATA_VALIDATION.MAX_YEAR
     );
   },
 
@@ -411,7 +412,7 @@ export const DeepDataValidator = {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     columns.forEach((column) => {
-      if (column.nullPercentage > 50) {
+      if (column.nullPercentage > DATA_VALIDATION.NULL_PERCENTAGE_THRESHOLD) {
         issues.push({
           severity: 'warning',
           column: column.name,

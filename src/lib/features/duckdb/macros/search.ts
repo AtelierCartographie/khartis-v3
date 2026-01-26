@@ -1,3 +1,5 @@
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
+
 const normalize_text_macro = `CREATE OR REPLACE MACRO normalize_text(s) AS (
 	lower(strip_accents(regexp_replace(trim(coalesce(s::VARCHAR, '')), '[^a-zA-Z0-9]', ' ', 'g')))
 );`;
@@ -42,7 +44,7 @@ const search_exact_macro = `CREATE OR REPLACE MACRO searchExact(tabname, search_
   LIMIT max_results
 );`;
 
-const search_fuzzy_macro = `CREATE OR REPLACE MACRO searchFuzzy(tabname, search_query, threshold := 0.85, max_results := 500) AS TABLE (
+const search_fuzzy_macro = `CREATE OR REPLACE MACRO searchFuzzy(tabname, search_query, threshold := ${FUZZY_SEARCH.DEFAULT_SIMILARITY}, max_results := 500) AS TABLE (
   WITH term_wrapper AS (
     SELECT normalize_text(search_query) AS term
   ),
