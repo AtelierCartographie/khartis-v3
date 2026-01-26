@@ -1,4 +1,4 @@
-import { bigIntReplacer } from '$lib/features/commons/utils/clone.utils';
+import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
@@ -168,8 +168,7 @@ async function removeFromMetadata(id: string): Promise<void> {
 }
 
 function calculateProjectSize(project: KhartisProject): number {
-  const json = JSON.stringify(project, bigIntReplacer);
-  return new Blob([json]).size;
+  return estimateProjectStorageSize(project);
 }
 
 export const projectRepository = {

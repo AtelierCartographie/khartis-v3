@@ -1,7 +1,7 @@
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-import { deepCloneWithBigInt } from '$lib/features/commons/utils/clone.utils';
+import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
@@ -35,12 +35,23 @@ import type {
   SerializedVisualizationSettings
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
+import {
+  serializeUploadedFile,
+  deserializeUploadedFile
+} from './file-serializer';
+export type { FileSerializationOptions } from './file-serializer';
+export { serializeUploadedFile, deserializeUploadedFile };
+
+interface SerializeOptions {
+  preserveBinary?: boolean;
+}
 
 export async function serialize(
-  project: KhartisProject
+  project: KhartisProject,
+  options?: SerializeOptions
 ): Promise<SerializedProject> {
   const serializedData = project.data
-    ? await serializeProjectData(project.data)
+    ? await serializeProjectData(project.data, options)
     : undefined;
 
   return {
@@ -84,7 +95,8 @@ export async function deserialize(
 }
 
 export async function serializeProjectData(
-  data: unknown
+  data: unknown,
+  options?: SerializeOptions
 ): Promise<SerializedProjectData | undefined> {
   if (!data) return undefined;
   if (typeof data !== 'object' || data === null) return undefined;
@@ -93,9 +105,29 @@ export async function serializeProjectData(
   const dataObj = data as Record<string, unknown>;
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
-    serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) =>
-      serializeUploadedFile(file)
-    );
+    serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
+      const serializedFile = serializeUploadedFile(file, {
+        preserveBinary: options?.preserveBinary
+      });
+
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
+      if (duckDBDataset) {
+        if (duckDBDataset.joinedBasemap) {
+          serializedFile.joinedBasemap = duckDBDataset.joinedBasemap;
+        }
+        if (duckDBDataset.geoColumn) {
+          serializedFile.geoColumn = duckDBDataset.geoColumn;
+        }
+        if (duckDBDataset.gpsMode) {
+          serializedFile.gpsMode = duckDBDataset.gpsMode;
+        }
+        if (duckDBDataset.gpsColumns) {
+          serializedFile.gpsColumns = duckDBDataset.gpsColumns;
+        }
+      }
+
+      return serializedFile;
+    });
   }
 
   const customBasemaps = basemapCatalogService.basemaps.filter(
@@ -333,193 +365,9 @@ export async function deserializeProjectData(
   return deserialized;
 }
 
-export function serializeUploadedFile(
-  file: UploadedFile
-): SerializedUploadedFile {
-  const serialized = {
-    id: file.id,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    fileType: file.fileType,
-    status: file.status,
-    errorMessage: file.errorMessage,
-    validation: file.validation,
-    sourceType: file.sourceType,
-    relatedFiles: file.relatedFiles,
-    uploadProgress: file.uploadProgress
-  } as SerializedUploadedFile;
-
-  if (file.parsedData) {
-    serialized.parsedData = file.parsedData;
-  }
-
-  if (file.statistics) {
-    serialized.statistics = file.statistics;
-  }
-
-  if (file.preparedGeoJSON) {
-    serialized.preparedGeoJSON = file.preparedGeoJSON;
-  }
-
-  if (file.duplicates) {
-    serialized.duplicates = file.duplicates;
-  }
-
-  if (file.deepAnalysis) {
-    serialized.deepAnalysis = file.deepAnalysis;
-  }
-
-  if (file.geoMatchResult) {
-    serialized.geoMatchResult = file.geoMatchResult;
-  }
-
-  if (file.content) {
-    if (typeof file.content === 'string') {
-      serialized.content = file.content;
-      serialized.contentType = 'string';
-    } else if (file.content instanceof ArrayBuffer) {
-      serialized.content = Array.from(new Uint8Array(file.content));
-      serialized.contentType = 'arraybuffer';
-    }
-  }
-
-  if (file.relatedFilesData) {
-    const serializedData: Record<string, number[]> = {};
-    for (const [name, buffer] of Object.entries(file.relatedFilesData)) {
-      serializedData[name] = Array.from(new Uint8Array(buffer));
-    }
-    serialized.relatedFilesData = serializedData;
-  }
-
-  if (file.columnTransformations && file.columnTransformations.length > 0) {
-    serialized.columnTransformations = file.columnTransformations;
-  }
-
-  if (file.deletedRowIds && file.deletedRowIds.length > 0) {
-    serialized.deletedRowIds = file.deletedRowIds;
-  }
-
-  const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
-  if (duckDBDataset) {
-    if (duckDBDataset.joinedBasemap) {
-      serialized.joinedBasemap = duckDBDataset.joinedBasemap;
-    }
-    if (duckDBDataset.geoColumn) {
-      serialized.geoColumn = duckDBDataset.geoColumn;
-    }
-    if (duckDBDataset.gpsMode) {
-      serialized.gpsMode = duckDBDataset.gpsMode;
-    }
-    if (duckDBDataset.gpsColumns) {
-      serialized.gpsColumns = duckDBDataset.gpsColumns;
-    }
-  }
-
-  if (file.sourceArchive) {
-    serialized.sourceArchive = file.sourceArchive;
-  }
-
-  if (file.duckdbTableName) {
-    serialized.duckdbTableName = file.duckdbTableName;
-  }
-
-  return serialized;
-}
-
-export function deserializeUploadedFile(
-  data: SerializedUploadedFile
-): UploadedFile {
-  const file = {
-    id: data.id,
-    name: data.name,
-    size: data.size,
-    type: data.type,
-    fileType: data.fileType as UploadedFile['fileType'],
-    status: data.status as UploadedFile['status'],
-    errorMessage: data.errorMessage,
-    validation: data.validation as UploadedFile['validation'],
-    sourceType: data.sourceType as UploadedFile['sourceType'],
-    relatedFiles: data.relatedFiles,
-    uploadProgress: data.uploadProgress
-  } as UploadedFile;
-
-  if (data.parsedData) {
-    file.parsedData = data.parsedData as UploadedFile['parsedData'];
-  }
-
-  if (data.statistics) {
-    file.statistics = data.statistics as UploadedFile['statistics'];
-  }
-
-  if (data.preparedGeoJSON) {
-    file.preparedGeoJSON = data.preparedGeoJSON;
-  }
-
-  if (data.duplicates) {
-    file.duplicates = data.duplicates;
-  }
-
-  if (data.deepAnalysis) {
-    file.deepAnalysis = data.deepAnalysis;
-  }
-
-  if (data.geoMatchResult) {
-    file.geoMatchResult = data.geoMatchResult;
-  }
-
-  if (data.content) {
-    if (data.contentType === 'string' && typeof data.content === 'string') {
-      file.content = data.content;
-    } else if (
-      data.contentType === 'arraybuffer' &&
-      Array.isArray(data.content)
-    ) {
-      file.content = new Uint8Array(data.content).buffer;
-    }
-  }
-
-  if (data.relatedFilesData) {
-    const relatedData: Record<string, ArrayBuffer> = {};
-    for (const [name, bytes] of Object.entries(data.relatedFilesData)) {
-      relatedData[name] = new Uint8Array(bytes).buffer;
-    }
-    file.relatedFilesData = relatedData;
-  }
-
-  if (data.columnTransformations) {
-    file.columnTransformations = data.columnTransformations;
-  }
-
-  if (data.deletedRowIds) {
-    file.deletedRowIds = data.deletedRowIds;
-  }
-
-  if (data.joinedBasemap) {
-    file.joinedBasemap = data.joinedBasemap;
-  }
-  if (data.geoColumn) {
-    file.geoColumn = data.geoColumn;
-  }
-  if (data.gpsMode) {
-    file.gpsMode = data.gpsMode;
-  }
-  if (data.gpsColumns) {
-    file.gpsColumns = data.gpsColumns;
-  }
-  if (data.sourceArchive) {
-    file.sourceArchive = data.sourceArchive;
-  }
-  if (data.duckdbTableName) {
-    file.duckdbTableName = data.duckdbTableName;
-  }
-
-  return file as UploadedFile;
-}
-
 export async function prepareForIndexedDB(
   project: KhartisProject
 ): Promise<SerializedProject> {
-  const serialized = await serialize(project);
-  return deepCloneWithBigInt(serialized);
+  const serialized = await serialize(project, { preserveBinary: true });
+  return deepCloneForStorage(serialized) as SerializedProject;
 }
