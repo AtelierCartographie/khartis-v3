@@ -29,14 +29,14 @@ describe('VizSuggesterService', () => {
     it('should suggest choropleth for polygon + numeric relative', () => {
       const columns: ColumnAnalysis[] = [
         {
-          name: 'unemployment rate',
-          type: 'bigint',
+          name: 'unemployment_rate',
+          type: 'number',
           stats: {
             totalCount: 100,
             uniqueCount: 90,
             nullCount: 0,
-            min: 0.05,
-            max: 0.25
+            min: 5,
+            max: 25
           }
         }
       ];
@@ -327,6 +327,154 @@ describe('VizSuggesterService', () => {
       expect(
         suggestions.every((s) => !s.columns?.includes('constant_column'))
       ).toBe(true);
+    });
+
+    it('should handle MultiPoint geometry', () => {
+      const columns: ColumnAnalysis[] = [
+        {
+          name: 'population',
+          type: 'bigint',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 90,
+            nullCount: 0,
+            min: 1000,
+            max: 10000000
+          }
+        }
+      ];
+
+      const suggestions = service.suggestVisualizations(columns, 'MultiPoint');
+
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions.some((s) => s.geometries.includes('point'))).toBe(true);
+    });
+
+    it('should handle MultiLineString geometry', () => {
+      const columns: ColumnAnalysis[] = [
+        {
+          name: 'traffic',
+          type: 'bigint',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 80,
+            nullCount: 0,
+            min: 100,
+            max: 10000
+          }
+        }
+      ];
+
+      const suggestions = service.suggestVisualizations(
+        columns,
+        'MultiLineString'
+      );
+
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions.some((s) => s.geometries.includes('line'))).toBe(true);
+    });
+
+    it('should handle MultiPolygon geometry', () => {
+      const columns: ColumnAnalysis[] = [
+        {
+          name: 'area',
+          type: 'number',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 95,
+            nullCount: 0,
+            min: 1,
+            max: 100
+          }
+        }
+      ];
+
+      const suggestions = service.suggestVisualizations(
+        columns,
+        'MultiPolygon'
+      );
+
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions.some((s) => s.geometries.includes('polygon'))).toBe(
+        true
+      );
+    });
+
+    it('should generate multiple suggestions for multiple columns', () => {
+      const columns: ColumnAnalysis[] = [
+        {
+          name: 'population',
+          type: 'bigint',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 90,
+            nullCount: 0,
+            min: 1000,
+            max: 10000000
+          }
+        },
+        {
+          name: 'region',
+          type: 'text',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 5,
+            nullCount: 0
+          }
+        }
+      ];
+
+      const suggestions = service.suggestVisualizations(columns, 'Point', {
+        maxSuggestions: 5
+      });
+
+      // With 2 columns, should generate multiple suggestions
+      expect(suggestions.length).toBeGreaterThan(0);
+      // Check that suggestions reference the columns
+      const hasColumnReferences = suggestions.some(
+        (s) =>
+          s.columns &&
+          (s.columns.includes('population') || s.columns.includes('region'))
+      );
+      expect(hasColumnReferences).toBe(true);
+    });
+
+    it('should return suggestions in order of relevance', () => {
+      const columns: ColumnAnalysis[] = [
+        {
+          name: 'col_high_nulls',
+          type: 'bigint',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 50,
+            nullCount: 50, // 50% nulls
+            min: 0,
+            max: 100
+          }
+        },
+        {
+          name: 'col_low_nulls',
+          type: 'bigint',
+          stats: {
+            totalCount: 100,
+            uniqueCount: 90,
+            nullCount: 5, // Only 5% nulls
+            min: 0,
+            max: 100
+          }
+        }
+      ];
+
+      const suggestions = service.suggestVisualizations(columns, 'Polygon');
+
+      // Suggestions should prioritize columns with fewer nulls
+      if (suggestions.length > 1) {
+        const firstSuggestion = suggestions[0];
+        if (firstSuggestion.columns && firstSuggestion.columns.length > 0) {
+          // First suggestion should use the better column
+          expect(firstSuggestion.columns).toContain('col_low_nulls');
+        }
+      }
     });
   });
 
