@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 26 janvier 2026 - 16h30
+> Dernière mise à jour : 28 janvier 2026
 
 ---
 
@@ -17,34 +17,36 @@
 
 ## Résumé global
 
-| Section                      | %        | Reste à faire                                  |
-| ---------------------------- | -------- | ---------------------------------------------- |
-| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                 |
-| 2.A.5 Tableau de données     | **90%**  | 🔌 Recherche sur carte + resize panneau        |
-| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                 |
-| 2.B.1-2.B.2 Visualisations   | **85%**  | ✅ Suggestions→viz complet, légende overlay OK |
-| 2.B.3-2.B.4 Outils           | **75%**  | ✅ Basemap layers 85%, calques CRUD complet    |
-| 2.C Habillage                | **40%**  | ✅ Légende overlay fonctionnel, annotations 🔌 |
-| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                               |
-| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                 |
-| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                        |
-| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation         |
-| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG     |
-| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                 |
-| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code         |
+| Section                      | %        | Reste à faire                                   |
+| ---------------------------- | -------- | ----------------------------------------------- |
+| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                  |
+| 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                                  |
+| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                  |
+| 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto      |
+| 2.B.3-2.B.4 Outils           | **80%**  | ✅ Basemap 85%, pointillés+ombre connectés      |
+| 2.C Habillage                | **45%**  | ✅ Légende auto, daltonisme SVG, annotations 🔌 |
+| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                |
+| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                  |
+| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                         |
+| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation          |
+| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG      |
+| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                  |
+| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code          |
 
-### Avancement global : 82%
+### Avancement global : 86%
 
 > ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
 >
-> - **polygons-config.svelte** : fill/stroke colors, opacity, modes → store
-> - **symbols-config.svelte** : size, shape, color → Deck.gl ScatterplotLayer
-> - **lines-config.svelte** : thickness, dashed, color → Deck.gl PathLayer
+> - **polygons-config.svelte** : fill/stroke colors, opacity, modes, primitive filter → store
+> - **symbols-config.svelte** : size, shape, color, primitive filter → Deck.gl ScatterplotLayer
+> - **lines-config.svelte** : thickness, dashed, color, primitive filter → Deck.gl PathLayer
 > - **labels-config.svelte** : font, size, color, position → Deck.gl TextLayer
 > - **fill-config.svelte** : fill color, opacity → store
 > - **palette-selector.svelte** : sélection + interpolation couleurs → store → rendu
 > - **basemap-layers-control.svelte** : toggle/opacity/colors → basemapLayersStore → MapLibre
 > - **discretization-modal.svelte** : méthode, classes, breaks manuels → classification.service → store
+> - **mapHighlightStore** : search results → dim non-matching features on map
+> - **resize-handle.svelte** : drag-to-resize data table panel height
 
 ---
 
@@ -72,25 +74,25 @@
 | Changement de type par l'utilisateur                                   | ✅     |
 | Codes NUTS (régions européennes)                                       | ✅     |
 
-### 2.A.5 Tableau de données — 90%
+### 2.A.5 Tableau de données — 100%
 
-| Fonctionnalité                                                                  | Statut | Note                            |
-| ------------------------------------------------------------------------------- | ------ | ------------------------------- |
-| Panneau latéral taille variable                                                 | 🔌     | UI prête, resize non implémenté |
-| Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                                 |
-| Agrandissement taille prédéfinie                                                | ✅     |                                 |
-| Code graphique par type de colonne                                              | ✅     |                                 |
-| Menu déroulante au clic (3 points)                                              | ✅     |                                 |
-| Changer le type / Affiner / Renommer / Masquer / Supprimer                      | ✅     |                                 |
-| Résumé statistique (uniques, nulls, doublons, histogramme, min/max)             | ✅     |                                 |
-| Tri croissant/décroissant                                                       | ✅     |                                 |
-| Barre de recherche + navigation résultats                                       | ✅     |                                 |
-| Recherche sur carte (mise en lumière)                                           | 🔌     | UI prête, highlight map         |
-| Rechercher/remplacer (Jaro-Winkler fuzzy matching)                              | ✅     |                                 |
-| Filtres multiples avec opérateurs complets                                      | ✅     |                                 |
-| Calculatrice (8 fonctions: AVG, SUM, MIN, MAX, POWER, ROUND, CONCAT, SUBSTRING) | ✅     |                                 |
-| Suppression variables/lignes avec avertissement                                 | ✅     |                                 |
-| Réinitialisation données (recharge depuis fichier original)                     | ✅     |                                 |
+| Fonctionnalité                                                                  | Statut | Note                                           |
+| ------------------------------------------------------------------------------- | ------ | ---------------------------------------------- |
+| Panneau latéral taille variable                                                 | ✅     | ResizeHandle drag-to-resize implémenté         |
+| Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                                                |
+| Agrandissement taille prédéfinie                                                | ✅     |                                                |
+| Code graphique par type de colonne                                              | ✅     |                                                |
+| Menu déroulante au clic (3 points)                                              | ✅     |                                                |
+| Changer le type / Affiner / Renommer / Masquer / Supprimer                      | ✅     |                                                |
+| Résumé statistique (uniques, nulls, doublons, histogramme, min/max)             | ✅     |                                                |
+| Tri croissant/décroissant                                                       | ✅     |                                                |
+| Barre de recherche + navigation résultats                                       | ✅     |                                                |
+| Recherche sur carte (mise en lumière)                                           | ✅     | mapHighlightStore → LayerContext → opacity dim |
+| Rechercher/remplacer (Jaro-Winkler fuzzy matching)                              | ✅     |                                                |
+| Filtres multiples avec opérateurs complets                                      | ✅     |                                                |
+| Calculatrice (8 fonctions: AVG, SUM, MIN, MAX, POWER, ROUND, CONCAT, SUBSTRING) | ✅     |                                                |
+| Suppression variables/lignes avec avertissement                                 | ✅     |                                                |
+| Réinitialisation données (recharge depuis fichier original)                     | ✅     |                                                |
 
 ### 2.A.6-2.A.9 Géolocalisation et Jointure — 100%
 
@@ -131,7 +133,7 @@
 | Création auto visualisation            | ✅     | handleCreateVisualization complet |
 | Connexion au visualizationStore        | ✅     | Multi-colonnes gérées             |
 
-### 2.B.2.a Suggestions de visualisations — 95%
+### 2.B.2.a Suggestions de visualisations — 100%
 
 | Fonctionnalité                      | Statut | Note                                   |
 | ----------------------------------- | ------ | -------------------------------------- |
@@ -140,35 +142,35 @@
 | Créer viz depuis suggestion         | ✅     | mapSuggestionToType() mappe les 21 IDs |
 | Vignette aperçu générique           | ⚠️     | 50%                                    |
 | Limite propositions + afficher plus | ✅     |                                        |
-| Score correspondance affiché        | 🔧     |                                        |
+| Score correspondance affiché        | ✅     | computeSuggestionScore() → badge %     |
 
-### 2.B.2.b Paramétrer la visualisation — 85%
+### 2.B.2.b Paramétrer la visualisation — 95%
 
 | Fonctionnalité                  | Statut | Note                                                 |
 | ------------------------------- | ------ | ---------------------------------------------------- |
 | Réglages par primitives         | ✅     | Tous connectés (polygons, symbols, lines, labels)    |
 | Afficher/masquer primitives     | ✅     | Accordéon toggle connecté au store                   |
 | Taille, épaisseur, forme        | ✅     | Sliders connectés via callbacks                      |
-| Filtrer primitives              | ⚠️     | 50%                                                  |
+| Filtrer primitives              | ✅     | togglePrimitiveFilter → layer-factory filtre geom    |
 | configure-visualization → store | ✅     | Mapping + classification + style connectés           |
 | Connexion au rendu Deck.gl      | ✅     | Store synchronisé, breaks calculés, rendu fonctionne |
 
-### 2.B.2.c Personnalisation des couleurs — 60%
+### 2.B.2.c Personnalisation des couleurs — 70%
 
-| Fonctionnalité                    | Statut | Note                             |
-| --------------------------------- | ------ | -------------------------------- |
-| Panneau dédié couleurs            | ✅     |                                  |
-| Filtre daltonisme (9 types UI)    | 🔌     | UI prête, CSS filter manquant    |
-| Intensité (nuances)               | ✅     |                                  |
-| Couleur personnalisée HSL         | ✅     |                                  |
-| Code hexadécimal                  | ✅     |                                  |
-| Suggestions palettes qualitatives | ✅     | 4 palettes dans palette-selector |
-| Palettes séquentielles            | ✅     | Connecté à Deck.gl               |
-| Palettes divergentes              | ✅     | 5 palettes dans palette-selector |
-| Motifs personnalisables           | 🔧     |                                  |
-| Inversion palette                 | ✅     |                                  |
+| Fonctionnalité                    | Statut | Note                               |
+| --------------------------------- | ------ | ---------------------------------- |
+| Panneau dédié couleurs            | ✅     |                                    |
+| Filtre daltonisme (9 types UI)    | ✅     | SVG feColorMatrix filter sur carte |
+| Intensité (nuances)               | ✅     |                                    |
+| Couleur personnalisée HSL         | ✅     |                                    |
+| Code hexadécimal                  | ✅     |                                    |
+| Suggestions palettes qualitatives | ✅     | 4 palettes dans palette-selector   |
+| Palettes séquentielles            | ✅     | Connecté à Deck.gl                 |
+| Palettes divergentes              | ✅     | 5 palettes dans palette-selector   |
+| Motifs personnalisables           | 🔧     |                                    |
+| Inversion palette                 | ✅     |                                    |
 
-### 2.B.2.d Discrétisation — 75%
+### 2.B.2.d Discrétisation — 95%
 
 | Fonctionnalité                 | Statut | Note                                          |
 | ------------------------------ | ------ | --------------------------------------------- |
@@ -177,38 +179,38 @@
 | Equal-interval                 | ✅     | Algo DuckDB appelé via classification.service |
 | Quantile                       | ✅     | Algo DuckDB appelé via classification.service |
 | Std Deviation                  | ✅     | Algo DuckDB appelé via classification.service |
-| Manuel                         | ⚠️     | UI fonctionne, validation manquante           |
+| Manuel                         | ✅     | Validation min>max + chevauchement            |
 | Jenks (fallback sur Quantiles) | ✅     | Utilise kmeans DuckDB                         |
-| Saisie manuelle bornes         | ⚠️     | 75% - fonctionne mais pas de validation       |
-| Valeur de rupture (divergent)  | 🔌     | UI prête, rendu palette manquant              |
+| Saisie manuelle bornes         | ✅     | Avec validation et messages d'erreur i18n     |
+| Valeur de rupture (divergent)  | ✅     | Palette divergente auto + recompute breaks    |
 | Diagramme fréquences           | ✅     | Histogramme SVG complet                       |
 | Définition méthode (aide)      | ✅     | getMethodDescription() pour chaque méthode    |
 | calculateBreaks() appelé       | ✅     | Service classification.service.ts fonctionnel |
 
-### 2.B.2.e Légende — 90%
+### 2.B.2.e Légende — 100%
 
-| Fonctionnalité                            | Statut | Note                          |
-| ----------------------------------------- | ------ | ----------------------------- |
-| Légende configurable dans panneau latéral | ✅     | UI+Store complets, 2 onglets  |
-| Légende superposée sur la carte           | ✅     | legend-overlay.svelte intégré |
-| Style (police, taille, fond, opacité)     | ✅     | Connecté via legendStore      |
-| Position (4 coins)                        | ✅     | LegendPosition enum           |
-| Légende auto-créée lors de visualisation  | 🔧     | À implémenter                 |
+| Fonctionnalité                            | Statut | Note                                      |
+| ----------------------------------------- | ------ | ----------------------------------------- |
+| Légende configurable dans panneau latéral | ✅     | UI+Store complets, 2 onglets              |
+| Légende superposée sur la carte           | ✅     | legend-overlay.svelte intégré             |
+| Style (police, taille, fond, opacité)     | ✅     | Connecté via legendStore                  |
+| Position (4 coins)                        | ✅     | LegendPosition enum                       |
+| Légende auto-créée lors de visualisation  | ✅     | legendActions.addLegendItem() auto-appelé |
 
-### 2.B.3 Personnaliser le fond de carte — 60%
+### 2.B.3 Personnaliser le fond de carte — 85%
 
-| Fonctionnalité                            | Statut | Note                                    |
-| ----------------------------------------- | ------ | --------------------------------------- |
-| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty |
-| Épaisseur contours (basemap)              | ✅     | Connecté via basemapLayersStore         |
-| Opacité (basemap)                         | ✅     | Connecté via basemapLayersStore         |
-| Couches multiples                         | ✅     | 9 couches configurables                 |
-| Afficher/masquer couches                  | ✅     | Toggle connecté à basemapLayersStore    |
-| Couleur contours                          | ✅     | Color picker connecté                   |
-| Personnalisation par couche               | ✅     | Chaque couche a ses propres paramètres  |
-| Couleur fond polygones                    | ✅     | fillColor connecté au store             |
-| Pointillés                                | 🔧     |                                         |
-| Ombre portée                              | 🔧     |                                         |
+| Fonctionnalité                            | Statut | Note                                         |
+| ----------------------------------------- | ------ | -------------------------------------------- |
+| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty      |
+| Épaisseur contours (basemap)              | ✅     | Connecté via basemapLayersStore              |
+| Opacité (basemap)                         | ✅     | Connecté via basemapLayersStore              |
+| Couches multiples                         | ✅     | 9 couches configurables                      |
+| Afficher/masquer couches                  | ✅     | Toggle connecté à basemapLayersStore         |
+| Couleur contours                          | ✅     | Color picker connecté                        |
+| Personnalisation par couche               | ✅     | Chaque couche a ses propres paramètres       |
+| Couleur fond polygones                    | ✅     | fillColor connecté au store                  |
+| Pointillés                                | ✅     | PathStyleExtension sur terre/frontieres/etc. |
+| Ombre portée                              | ✅     | Shadow layer sous terre (fillShadow config)  |
 
 #### 2.B.3.a Couches additionnelles — 85%
 
@@ -285,17 +287,17 @@
 
 ## 2.C. Habillage — 40%
 
-### 2.C.1 Habillage prédéfini — 55%
+### 2.C.1 Habillage prédéfini — 65%
 
-| Fonctionnalité                                  | Statut | Note                                     |
-| ----------------------------------------------- | ------ | ---------------------------------------- |
-| Légende configurable (panneau séparé)           | ✅     | legend-overlay intégré dans thematic-map |
-| Éléments supprimables                           | ✅     |                                          |
-| Textes prédéfinis (4 styles)                    | ✅     |                                          |
-| Éléments déplaçables                            | ⚠️     | 70%                                      |
-| Placeholders textes (titre, sous-titre, source) | ✅     |                                          |
-| Légende auto-créée avec visualisation           | 🔧     |                                          |
-| Mention "Réalisé avec Khartis"                  | ✅     |                                          |
+| Fonctionnalité                                  | Statut | Note                                      |
+| ----------------------------------------------- | ------ | ----------------------------------------- |
+| Légende configurable (panneau séparé)           | ✅     | legend-overlay intégré dans thematic-map  |
+| Éléments supprimables                           | ✅     |                                           |
+| Textes prédéfinis (4 styles)                    | ✅     |                                           |
+| Éléments déplaçables                            | ⚠️     | 70%                                       |
+| Placeholders textes (titre, sous-titre, source) | ✅     |                                           |
+| Légende auto-créée avec visualisation           | ✅     | legendActions.addLegendItem() auto-appelé |
+| Mention "Réalisé avec Khartis"                  | ✅     |                                           |
 
 ### 2.C.2.a Format — 80%
 
@@ -345,13 +347,13 @@
 | Placement, taille, opacité image         | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
 | Lissage, pointillé                       | 🔌  | 🔌    | ⚠️    |                                  |
 
-### 2.C.2.e Déficiences visuelles — 5%
+### 2.C.2.e Déficiences visuelles — 70%
 
-| Fonctionnalité                  | UI  | Rendu | Note                          |
-| ------------------------------- | --- | ----- | ----------------------------- |
-| Simulation daltonisme (9 types) | 🔌  | 🔧    | UI prête, CSS filter manquant |
-| Filtre CSS/SVG                  | 🔧  | 🔧    | Non implémenté                |
-| Export sans filtre              | 🔧  | 🔧    |                               |
+| Fonctionnalité                  | UI  | Rendu | Note                                       |
+| ------------------------------- | --- | ----- | ------------------------------------------ |
+| Simulation daltonisme (9 types) | ✅  | ✅    | SVG feColorMatrix sur thematic-map-wrapper |
+| Filtre CSS/SVG                  | ✅  | ✅    | color-blindness-filters.ts implémenté      |
+| Export sans filtre              | 🔧  | 🔧    |                                            |
 
 ---
 
@@ -416,7 +418,7 @@
 
 | Fonctionnalité                      | Statut |
 | ----------------------------------- | ------ |
-| Textes d'accompagnement (1396 clés) | ✅     |
+| Textes d'accompagnement (1398 clés) | ✅     |
 | Facilité modification (Paraglide)   | ✅     |
 | Tooltips                            | ⚠️ 80% |
 | Liens vers aide externe             | ✅     |
@@ -552,7 +554,7 @@
 
 ---
 
-### Avancement global : 82%
+### Avancement global : 86%
 
 ---
 

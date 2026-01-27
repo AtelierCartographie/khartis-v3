@@ -52,6 +52,14 @@ export interface MissingDataConfig {
   pattern?: boolean;
 }
 
+export type PrimitiveFilter = 'point' | 'line' | 'polygon';
+
+export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
+  'point',
+  'line',
+  'polygon'
+];
+
 export interface VisualizationConfig {
   id: string;
   name: string;
@@ -59,6 +67,7 @@ export interface VisualizationConfig {
   datasetId: string;
   enabled: boolean;
   modes?: VisualizationModes;
+  primitiveFilters?: PrimitiveFilter[];
   style: {
     fillColor?: string | string[];
     fillOpacity?: number;
@@ -162,6 +171,18 @@ class VisualizationStore {
         ? { ...v, modes: { ...v.modes, ...modes } as VisualizationModes }
         : v
     );
+    this.incrementVersion();
+  }
+
+  togglePrimitiveFilter(id: string, primitive: PrimitiveFilter): void {
+    this._state.visualizations = this._state.visualizations.map((v) => {
+      if (v.id !== id) return v;
+      const current = v.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+      const updated = current.includes(primitive)
+        ? current.filter((p) => p !== primitive)
+        : [...current, primitive];
+      return { ...v, primitiveFilters: updated.length > 0 ? updated : current };
+    });
     this.incrementVersion();
   }
 

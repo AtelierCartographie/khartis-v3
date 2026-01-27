@@ -6,7 +6,8 @@
     type VisualizationConfig,
     type VisualizationModes,
     type MissingDataConfig,
-    type ClassificationConfig
+    type ClassificationConfig,
+    type PrimitiveFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     calculateBreaks,
@@ -75,6 +76,12 @@
   function handleClassificationChange(updates: Partial<ClassificationConfig>) {
     if (selectedViz?.id) {
       visualizationStore.updateClassification(selectedViz.id, updates);
+    }
+  }
+
+  function handleFilterToggle(primitive: PrimitiveFilter) {
+    if (selectedViz?.id) {
+      visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
     }
   }
 
@@ -159,6 +166,7 @@
     onMissingDataChange={handleMissingDataChange}
     onClassificationChange={handleClassificationChange}
     onInvertPalette={handleInvertPalette}
+    onFilterToggle={() => handleFilterToggle('point')}
   />
 
   <FillConfig
@@ -179,6 +187,7 @@
     onClassificationChange={handleClassificationChange}
     onMappingChange={handleMappingChange}
     onInvertPalette={handleInvertPalette}
+    onFilterToggle={() => handleFilterToggle('polygon')}
   />
 
   <LinesConfig
@@ -189,6 +198,7 @@
     onMissingDataChange={handleMissingDataChange}
     onClassificationChange={handleClassificationChange}
     onInvertPalette={handleInvertPalette}
+    onFilterToggle={() => handleFilterToggle('line')}
   />
 
   <LabelsConfig

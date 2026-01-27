@@ -115,7 +115,9 @@
       });
 
       if (result) {
-        const colors = generateColorsForBreaks(currentNumClasses);
+        const paletteType =
+          currentBreakpoint !== null ? 'diverging' : 'sequential';
+        const colors = generateColorsForBreaks(currentNumClasses, paletteType);
         const allBreaks = [result.min, ...result.breaks, result.max];
 
         currentBreaks = result.counts.map((count, i) => ({
@@ -155,7 +157,7 @@
 
   function handleBreakpointChange(value: number | null) {
     currentBreakpoint = value;
-    notifyChange();
+    computeBreaks();
   }
 
   function handleBreaksChange(breaks: ClassBreak[]) {

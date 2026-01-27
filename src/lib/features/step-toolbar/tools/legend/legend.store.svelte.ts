@@ -3,28 +3,10 @@ import {
   LegendTab
 } from '$lib/features/commons/constants/ui.constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import * as m from '$lib/paraglide/messages';
 import type { LegendItem, LegendState, LegendStyle } from './legend.types';
 
 const DEFAULT_STATE: LegendState = {
-  items: [
-    {
-      id: 'legend-1',
-      name: m.legend_item_population(),
-      visible: true,
-      title: m.legend_title_population_by_region(),
-      subtitle: m.legend_subtitle_population_thousands(),
-      note: m.legend_note_data_2023()
-    },
-    {
-      id: 'legend-2',
-      name: m.legend_item_gdp(),
-      visible: true,
-      title: m.legend_title_gdp_per_capita(),
-      subtitle: m.legend_subtitle_in_euros(),
-      note: m.legend_note_source_insee()
-    }
-  ],
+  items: [],
   position: LegendPosition.TOP_RIGHT,
   visible: true,
   style: {

@@ -1371,6 +1371,8 @@
   "discretization_click_to_edit": "(click to edit)",
   "discretization_edit_bounds": "Edit bounds",
   "discretization_values": "values",
+  "discretization_error_min_greater_max": "Class {classNumber}: minimum is greater than maximum",
+  "discretization_error_overlapping": "Class {classNumber}: overlaps with previous class",
   "color_picker_title": "Color picker",
   "hue": "Hue",
   "saturation": "Saturation",
@@ -1394,5 +1396,7 @@
   "error_corrections_failed_message": "{count} corrections failed",
   "error_geometry_conversion_title": "Geometry conversion error",
   "error_geometry_conversion_message": "Unable to convert geometry for display. The map may appear empty.",
-  "error_invalid_mapping_value": "Invalid mapping value"
+  "error_invalid_mapping_value": "Invalid mapping value",
+  "no_variable": "No variable",
+  "map_collection": "Map collection"
 }

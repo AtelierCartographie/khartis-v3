@@ -393,17 +393,19 @@ export class VizSuggesterService {
     nbColumns: 1 | 2
   ): VizSuggestion[] {
     if (nbColumns === 1 && !Array.isArray(dataset)) {
-      // 1 column
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&
           viz.nbColumns === nbColumns &&
           viz.semioTypes.includes(dataset.semioType)
-      ).map((viz) => ({ ...viz, columns: [dataset.name] })) as VizSuggestion[];
+      ).map((viz) => ({
+        ...viz,
+        columns: [dataset.name],
+        score: this.computeSuggestionScore([dataset])
+      })) as VizSuggestion[];
     }
 
     if (nbColumns === 2 && Array.isArray(dataset) && dataset.length === 2) {
-      // 2 columns
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&
@@ -414,11 +416,20 @@ export class VizSuggesterService {
               viz.semioTypes[0] === dataset[1].semioType))
       ).map((viz) => ({
         ...viz,
-        columns: [dataset[0].name, dataset[1].name]
+        columns: [dataset[0].name, dataset[1].name],
+        score: this.computeSuggestionScore(dataset)
       })) as VizSuggestion[];
     }
 
     return [];
+  }
+
+  private computeSuggestionScore(columns: EnrichedColumn[]): number {
+    if (columns.length === 0) return 0;
+    const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
+    const avgScore = totalScore / columns.length;
+    const MAX_SEMIO_SCORE = 6.5;
+    return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
   }
 
   private getTotalCount(column: ColumnAnalysis): number {
