@@ -16,6 +16,8 @@
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
+  import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
+  import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
     formatState
@@ -24,6 +26,7 @@
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
 
   let containerRef: HTMLDivElement;
+  let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
@@ -383,6 +386,15 @@
     logger.success('Map fully rendered', LogCategory.MAP);
     isMapReady = true;
   }
+
+  const colorBlindnessState = $derived(getColorBlindnessState());
+
+  $effect(() => {
+    const simulationType = colorBlindnessState.simulationType;
+    if (thematicMapRef) {
+      applyColorBlindnessFilter(thematicMapRef, simulationType);
+    }
+  });
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -412,7 +424,11 @@
       />
     </div>
   {:else if !isInitializing}
-    <div class="thematic-map-wrapper" class:visible={isMapReady}>
+    <div
+      class="thematic-map-wrapper"
+      class:visible={isMapReady}
+      bind:this={thematicMapRef}
+    >
       <ThematicMap
         tables={displayTables}
         geoJSONs={displayGeoJSONs}

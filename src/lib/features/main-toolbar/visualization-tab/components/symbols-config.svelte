@@ -35,6 +35,7 @@
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     onInvertPalette?: () => void;
+    onFilterToggle?: () => void;
   }
 
   let {
@@ -45,7 +46,8 @@
     onSymbolsChange,
     onMissingDataChange,
     onClassificationChange,
-    onInvertPalette
+    onInvertPalette,
+    onFilterToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -102,7 +104,12 @@
   toggleChecked={true}
 >
   {#snippet icon()}
-    <button type="button" class="filter-btn" aria-label={m.filter_data()}>
+    <button
+      type="button"
+      class="filter-btn"
+      aria-label={m.filter_data()}
+      onclick={onFilterToggle}
+    >
       <Filter size={16} />
     </button>
   {/snippet}

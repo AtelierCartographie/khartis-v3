@@ -5,6 +5,7 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
+import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
 import type { LayerContext, RGBColor } from '../types';
 
@@ -100,7 +101,10 @@ export function useMapState(): UseMapStateReturn {
       strokeWidth: viz.style.strokeWidth ?? 1,
       strokeOpacity: viz.style.strokeOpacity ?? 1,
       statistics,
-      categoryColorMap
+      categoryColorMap,
+      highlightedRowIds: mapHighlightStore.hasHighlights
+        ? mapHighlightStore.highlightedRowIds
+        : undefined
     };
   }
 
