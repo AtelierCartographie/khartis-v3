@@ -16,6 +16,8 @@
     DataTableSkeleton,
     InlineNotification
   } from 'carbon-components-svelte';
+  import ResizeHandle from '$lib/features/commons/components/resize-handle.svelte';
+  import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import CalculatorPanel from './components/calculator-panel.svelte';
   import CsvOptionsModal, {
@@ -63,6 +65,22 @@
   let selectedRowIds = $state<number[]>([]);
   let csvOptionsModalOpen = $state(false);
   let showSummaryPlots = $state(true);
+  let customTableMaxRows = $state<number | undefined>(undefined);
+  const TABLE_ROW_HEIGHT = 32;
+  const MIN_TABLE_ROWS = 4;
+  const MAX_TABLE_ROWS = 40;
+
+  function handleTableResize(delta: number) {
+    const currentRows =
+      customTableMaxRows ??
+      Math.floor((window.innerHeight * 0.4) / TABLE_ROW_HEIGHT);
+    const rowsDelta = Math.round(delta / TABLE_ROW_HEIGHT);
+    const newRows = Math.max(
+      MIN_TABLE_ROWS,
+      Math.min(MAX_TABLE_ROWS, currentRows + rowsDelta)
+    );
+    customTableMaxRows = newRows;
+  }
   let currentCsvOptions = $state<CsvOptions>({
     header: true,
     decimalSeparator: '.',
@@ -315,6 +333,15 @@
   });
 
   $effect(() => {
+    const rowIds = searchHighlight.highlightedRowIds;
+    if (rowIds.length > 0) {
+      mapHighlightStore.setHighlightedRows(rowIds);
+    } else {
+      mapHighlightStore.clearHighlights();
+    }
+  });
+
+  $effect(() => {
     if (selectedDataset && currentDuckTable) {
       dataTabStore.markStepComplete(0);
     }
@@ -402,10 +429,12 @@
         cellHighlights={searchHighlight.cellHighlights}
         currentCell={searchHighlight.currentCell}
         highlightedRowIds={searchHighlight.highlightedRowIds}
+        maxRows={customTableMaxRows}
         isExpanded={false}
         isSelectable={true}
         onSelectionChange={handleSelectionChange}
       />
+      <ResizeHandle direction="vertical" onResize={handleTableResize} />
     {/key}
   {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
     <!-- Skeleton loader pendant le chargement ou batch processing -->

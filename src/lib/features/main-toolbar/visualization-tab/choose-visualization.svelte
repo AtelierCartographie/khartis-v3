@@ -10,6 +10,7 @@
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -193,6 +194,15 @@
       });
     }
 
+    legendActions.addLegendItem({
+      name: viz.name,
+      visible: true,
+      title: viz.name,
+      subtitle: suggestion.columns?.[0] ?? '',
+      note: '',
+      variableId: viz.id
+    });
+
     suggestionsExpanded = false;
     onCreateVisualization?.();
   }
@@ -250,12 +260,14 @@
             <div class="preview-icon">
               <ColorPalette size={32} />
             </div>
+            {#if suggestion.score != null}
+              <span class="preview-score">{suggestion.score}%</span>
+            {/if}
             <span class="preview-ratio"
               >{suggestion.nbColumns > 0
                 ? `${suggestion.nbColumns}:1`
                 : '1:1'}</span
             >
-            <span class="preview-label">Viz preview</span>
           </div>
 
           <div class="card-content">
@@ -287,7 +299,7 @@
                 {/each}
               {:else}
                 <div class="variable-row empty">
-                  <span class="no-variable">Aucune variable</span>
+                  <span class="no-variable">{m.no_variable()}</span>
                 </div>
               {/if}
             </div>
@@ -295,7 +307,7 @@
             {#if suggestion.nbColumns > 2}
               <div class="card-collection">
                 <ColorPalette size={16} />
-                <span>Collection de cartes</span>
+                <span>{m.map_collection()}</span>
               </div>
             {/if}
           </div>
@@ -402,15 +414,19 @@
     margin-bottom: var(--cds-spacing-02);
   }
 
+  .preview-score {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--cds-support-success, #198038);
+    background: var(--cds-support-success-inverse, #defbe6);
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-bottom: var(--cds-spacing-02);
+  }
+
   .preview-ratio {
     font-size: 0.875rem;
     font-weight: 600;
-  }
-
-  .preview-label {
-    font-size: 0.625rem;
-    color: var(--cds-text-02);
-    margin-top: var(--cds-spacing-01);
   }
 
   .card-content {

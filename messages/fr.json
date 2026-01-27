@@ -1371,6 +1371,8 @@
   "discretization_click_to_edit": "(cliquez pour éditer)",
   "discretization_edit_bounds": "Éditer les bornes",
   "discretization_values": "valeurs",
+  "discretization_error_min_greater_max": "Classe {classNumber} : le minimum est supérieur au maximum",
+  "discretization_error_overlapping": "Classe {classNumber} : chevauchement avec la classe précédente",
   "color_picker_title": "Sélecteur de couleur",
   "hue": "Teinte",
   "saturation": "Saturation",
@@ -1394,5 +1396,7 @@
   "error_corrections_failed_message": "{count} corrections ont echoue",
   "error_geometry_conversion_title": "Erreur de conversion geometrique",
   "error_geometry_conversion_message": "Impossible de convertir la geometrie pour l'affichage. La carte peut apparaitre vide.",
-  "error_invalid_mapping_value": "Valeur de correspondance invalide"
+  "error_invalid_mapping_value": "Valeur de correspondance invalide",
+  "no_variable": "Aucune variable",
+  "map_collection": "Collection de cartes"
 }

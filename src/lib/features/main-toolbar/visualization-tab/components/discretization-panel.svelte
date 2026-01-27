@@ -102,7 +102,33 @@
 
   function finishEditingBreak() {
     editingBreakIndex = null;
-    onbreakschange?.(breaks);
+    validationErrors = validateBreaks(breaks);
+    if (validationErrors.length === 0) {
+      onbreakschange?.(breaks);
+    }
+  }
+
+  let validationErrors = $state<string[]>([]);
+
+  function validateBreaks(breaksToValidate: ClassBreak[]): string[] {
+    const errors: string[] = [];
+
+    for (let i = 0; i < breaksToValidate.length; i++) {
+      const b = breaksToValidate[i];
+      if (b.min > b.max) {
+        errors.push(
+          m.discretization_error_min_greater_max({ classNumber: i + 1 })
+        );
+      }
+    }
+
+    for (let i = 1; i < breaksToValidate.length; i++) {
+      if (breaksToValidate[i].min < breaksToValidate[i - 1].max) {
+        errors.push(m.discretization_error_overlapping({ classNumber: i + 1 }));
+      }
+    }
+
+    return errors;
   }
 
   function updateBreakValue(
@@ -111,6 +137,7 @@
     value: number
   ) {
     breaks[index][field] = value;
+    validationErrors = validateBreaks(breaks);
   }
 </script>
 
@@ -284,6 +311,17 @@
         </div>
       {/each}
     </div>
+
+    {#if validationErrors.length > 0}
+      <div class="validation-errors">
+        {#each validationErrors as error (error)}
+          <div class="validation-error">
+            <Information size={16} />
+            <span>{error}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -499,5 +537,23 @@
     color: var(--cds-text-02);
     min-width: 40px;
     text-align: right;
+  }
+
+  .validation-errors {
+    margin-top: var(--cds-spacing-03);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+  }
+
+  .validation-error {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    color: var(--cds-support-error);
+    font-size: 0.75rem;
+    padding: var(--cds-spacing-02);
+    background: var(--cds-notification-error-background, #fff1f1);
+    border-radius: 4px;
   }
 </style>

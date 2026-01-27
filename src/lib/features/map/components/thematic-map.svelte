@@ -23,6 +23,7 @@
   } from '../core';
   import { basemapService } from '../services/basemap.service.svelte';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
+  import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
@@ -414,6 +415,7 @@
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
+    highlightVersion: mapHighlightStore.version,
     dataSize: `${tables.size}-${geoJSONs.size}`
   });
 

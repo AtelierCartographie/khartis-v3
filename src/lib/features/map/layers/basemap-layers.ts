@@ -104,7 +104,10 @@ export function createTerreLayers(
   const strokeOpacity = config.strokeOpacity / 100;
 
   const shadowSuffix = config.fillShadow ? '-shadow' : '';
-  const styleFingerprint = `${config.fillColor}-${config.fillOpacity}-${config.strokeColor}-${config.strokeOpacity}-${config.strokeThickness}${shadowSuffix}`;
+  const dottedSuffix = config.strokeDotted
+    ? `-dotted-${config.strokeDottedPattern}`
+    : '';
+  const styleFingerprint = `${config.fillColor}-${config.fillOpacity}-${config.strokeColor}-${config.strokeOpacity}-${config.strokeThickness}${shadowSuffix}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_TERRE,
     ctx.projectionSuffix,
@@ -112,9 +115,14 @@ export function createTerreLayers(
   );
   const baseProps = getBaseLayerProps(ctx);
 
+  const dashArray = config.strokeDotted
+    ? dottedPatternToDashArray(config.strokeDottedPattern)
+    : [0, 0];
+
   const updateTriggers = {
     getFillColor: [config.fillColor, config.fillOpacity],
-    getLineColor: [config.strokeColor, config.strokeOpacity]
+    getLineColor: [config.strokeColor, config.strokeOpacity],
+    getDashArray: [config.strokeDotted, config.strokeDottedPattern]
   };
 
   const layers: Layer<DeckDataRow>[] = [];
@@ -153,6 +161,10 @@ export function createTerreLayers(
         opacity: 1,
         lineWidthUnits: 'pixels',
         lineWidthScale: config.strokeThickness / 4,
+        extensions: config.strokeDotted
+          ? [new PathStyleExtension({ dash: true })]
+          : [],
+        getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,
@@ -195,6 +207,10 @@ export function createTerreLayers(
           getLineColor: withOpacity(strokeColor, strokeOpacity),
           lineWidthUnits: 'pixels',
           lineWidthMinPixels: config.strokeThickness,
+          extensions: config.strokeDotted
+            ? [new PathStyleExtension({ dash: true })]
+            : [],
+          getDashArray: dashArray,
           ...baseProps,
           updateTriggers: {
             ...updateTriggers,
@@ -287,7 +303,8 @@ export function createFrontieresLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}`;
+  const dottedSuffix = config.dotted ? `-dotted-${config.dottedPattern}` : '';
+  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_FRONTIERES,
     ctx.projectionSuffix,
@@ -295,8 +312,13 @@ export function createFrontieresLayer(
   );
   const baseProps = getBaseLayerProps(ctx);
 
+  const dashArray = config.dotted
+    ? dottedPatternToDashArray(config.dottedPattern)
+    : [0, 0];
+
   const updateTriggers = {
-    getLineColor: [config.color, config.opacity]
+    getLineColor: [config.color, config.opacity],
+    getDashArray: [config.dotted, config.dottedPattern]
   };
 
   if (
@@ -311,6 +333,8 @@ export function createFrontieresLayer(
       getLineColor: withOpacity(strokeColor, opacity),
       lineWidthUnits: 'pixels',
       lineWidthScale: config.thickness / 4,
+      extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+      getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
         ...updateTriggers,
@@ -330,6 +354,10 @@ export function createFrontieresLayer(
         getLineColor: withOpacity(strokeColor, opacity),
         lineWidthUnits: 'pixels',
         lineWidthMinPixels: config.thickness,
+        extensions: config.dotted
+          ? [new PathStyleExtension({ dash: true })]
+          : [],
+        getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,

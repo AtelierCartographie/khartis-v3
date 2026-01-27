@@ -49,6 +49,7 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onFilterToggle?: () => void;
   }
 
   let {
@@ -60,7 +61,8 @@
     onMissingDataChange: _onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette
+    onInvertPalette,
+    onFilterToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -257,7 +259,12 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button type="button" class="filter-btn" aria-label={m.filter_data()}>
+    <button
+      type="button"
+      class="filter-btn"
+      aria-label={m.filter_data()}
+      onclick={onFilterToggle}
+    >
       <Filter size={16} />
     </button>
   {/snippet}

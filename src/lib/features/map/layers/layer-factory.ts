@@ -13,7 +13,10 @@ import {
   GeometryType
 } from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
+
+const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,
@@ -43,15 +46,23 @@ export function createPointLayers(
     datasetId,
     fillColor,
     strokeColor,
-    fillOpacity,
+    fillOpacity: rawFillOpacity,
     strokeWidth,
-    strokeOpacity,
+    strokeOpacity: rawStrokeOpacity,
     statistics,
     categoryColorMap,
+    highlightedRowIds,
     modelMatrix,
     projectionSuffix,
     beforeId
   } = ctx;
+  const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
+  const fillOpacity = hasHighlights
+    ? rawFillOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : rawFillOpacity;
+  const strokeOpacity = hasHighlights
+    ? rawStrokeOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : rawStrokeOpacity;
   const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
@@ -59,7 +70,8 @@ export function createPointLayers(
   const useCategoricalColor = viz && shouldApplyCategorical(viz);
   const { min: minValue, max: maxValue } = statistics;
 
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
+  const highlightSuffix = hasHighlights ? `-hl${highlightedRowIds.size}` : '';
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}${highlightSuffix}`;
   const layerId = createLayerId(
     DeckLayerId.POINT_LAYER,
     datasetId,
@@ -235,12 +247,18 @@ export function createLineLayers(
   const {
     datasetId,
     fillColor,
-    fillOpacity,
+    fillOpacity: rawLineFillOpacity,
     strokeWidth,
+    highlightedRowIds: lineHighlightedRowIds,
     modelMatrix,
     projectionSuffix,
     beforeId
   } = ctx;
+  const hasLineHighlights =
+    lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
+  const fillOpacity = hasLineHighlights
+    ? rawLineFillOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : rawLineFillOpacity;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -249,7 +267,10 @@ export function createLineLayers(
     isGeoJsonEncoded
   } = geometryInfo;
 
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}`;
+  const lineHighlightSuffix = hasLineHighlights
+    ? `-hl${lineHighlightedRowIds.size}`
+    : '';
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}${lineHighlightSuffix}`;
   const layerId = createLayerId(
     DeckLayerId.LINE_LAYER,
     datasetId,
@@ -359,13 +380,22 @@ export function createPolygonLayers(
     datasetId,
     fillColor,
     strokeColor,
-    fillOpacity,
+    fillOpacity: rawPolyFillOpacity,
     strokeWidth,
-    strokeOpacity,
+    strokeOpacity: rawPolyStrokeOpacity,
+    highlightedRowIds: polyHighlightedRowIds,
     modelMatrix,
     projectionSuffix,
     beforeId
   } = ctx;
+  const hasPolyHighlights =
+    polyHighlightedRowIds && polyHighlightedRowIds.size > 0;
+  const fillOpacity = hasPolyHighlights
+    ? rawPolyFillOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : rawPolyFillOpacity;
+  const strokeOpacity = hasPolyHighlights
+    ? rawPolyStrokeOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : rawPolyStrokeOpacity;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -375,7 +405,10 @@ export function createPolygonLayers(
   } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
+  const polyHighlightSuffix = hasPolyHighlights
+    ? `-hl${polyHighlightedRowIds.size}`
+    : '';
+  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}${polyHighlightSuffix}`;
   const layerId = createLayerId(
     DeckLayerId.POLYGON_LAYER,
     datasetId,
@@ -680,6 +713,24 @@ export function createDeckLayers(
   }
 
   const resolvedGeometryType = geometryInfo.type;
+
+  const primitiveMap: Record<string, PrimitiveFilter> = {
+    [GeometryType.POINT]: 'point',
+    [GeometryType.MULTIPOINT]: 'point',
+    [GeometryType.LINESTRING]: 'line',
+    [GeometryType.MULTILINESTRING]: 'line',
+    [GeometryType.POLYGON]: 'polygon',
+    [GeometryType.MULTIPOLYGON]: 'polygon'
+  };
+
+  const primitive = primitiveMap[resolvedGeometryType];
+  if (
+    primitive &&
+    ctx.viz?.primitiveFilters &&
+    !ctx.viz.primitiveFilters.includes(primitive)
+  ) {
+    return [];
+  }
 
   switch (resolvedGeometryType) {
     case GeometryType.POINT:

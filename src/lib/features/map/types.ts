@@ -147,6 +147,7 @@ export interface LayerContext {
   strokeOpacity: number;
   statistics: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
+  highlightedRowIds?: Set<number>;
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   beforeId?: string;
