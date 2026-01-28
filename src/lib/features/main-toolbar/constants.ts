@@ -14,11 +14,6 @@ export enum SymbolMode {
   CATEGORIES = 'categories'
 }
 
-export enum SymbolsType {
-  UNIQUE = 'uniques',
-  PROPORTIONAL = 'proportionnels'
-}
-
 export enum ProportionalType {
   SINGLE = 'uniques',
   DOUBLE = 'doubles'
@@ -60,14 +55,6 @@ export enum MissingDataShape {
   SQUARE = 'square'
 }
 
-export enum ColorName {
-  BLUE = 'blue',
-  GRAY = 'gray',
-  WHITE = 'white',
-  BLACK = 'black',
-  NONE = 'none'
-}
-
 export enum ThicknessMode {
   UNIQUE = 'unique',
   GRADUATED = 'graduated',
@@ -104,14 +91,6 @@ export const DEFAULT_COLORS = {
   black: '#000000',
   gray: '#8d8d8d'
 } as const;
-
-export enum DiscretizationMethod {
-  EQUAL_INTERVAL = 'equal-interval',
-  QUANTILES = 'quantiles',
-  JENKS = 'jenks',
-  STDDEV = 'stddev',
-  MANUAL = 'manual'
-}
 
 export enum BasemapRemarquables {
   ALL = 'all',
@@ -174,15 +153,6 @@ export const BASEMAP_LAYER_CONFIG = {
   thickness: { min: 1, max: 20 },
   size: { min: 1, max: 100 }
 } as const;
-
-export enum PatternType {
-  NONE = 'none',
-  DIAGONAL = 'diagonal',
-  HORIZONTAL = 'horizontal',
-  VERTICAL = 'vertical',
-  DOTS = 'dots',
-  CROSS = 'cross'
-}
 
 export enum LabelPosition {
   CENTER = 'center',

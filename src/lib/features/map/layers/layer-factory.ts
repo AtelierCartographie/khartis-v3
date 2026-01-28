@@ -23,8 +23,6 @@ import {
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
 import {
-  BASE_FILL_COLOR,
-  BASE_STROKE_COLOR,
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
@@ -560,92 +558,6 @@ export function createPolygonLayers(
       }
     })
   ];
-}
-
-export function createWorldBaseLayer(
-  baseTable: ArrowTable,
-  ctx?: LayerContext
-): Layer<DeckDataRow> | null {
-  const geometryInfo = extractGeometryInfo(baseTable);
-  if (!geometryInfo) {
-    logger.warn('World base table missing geo metadata', LogCategory.MAP);
-    return null;
-  }
-
-  const modelMatrix = ctx?.modelMatrix;
-  const {
-    geoColumn,
-    isNativeGeoArrow,
-    encoding: arrowExtension
-  } = geometryInfo;
-
-  const isNativeGeoArrowPolygon =
-    arrowExtension &&
-    (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
-      arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
-
-  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
-    logger.debug('Using GeoArrowPolygonLayer for world base', LogCategory.MAP, {
-      encoding: arrowExtension,
-      rows: baseTable.numRows
-    });
-
-    const polygonProps: ConstructorParameters<
-      typeof geodecklayers.GeoArrowPolygonLayer
-    >[0] = {
-      id: DeckLayerId.WORLD_BASE_LAYER,
-      data: baseTable,
-      filled: true,
-      stroked: true,
-      getFillColor: [...BASE_FILL_COLOR, 255],
-      getLineColor: BASE_STROKE_COLOR,
-      opacity: 1,
-      lineWidthUnits: 'pixels',
-      lineWidthScale: 0.25,
-      pickable: false,
-      autoHighlight: false,
-      ...(modelMatrix && { modelMatrix })
-    };
-
-    return new geodecklayers.GeoArrowPolygonLayer(polygonProps);
-  }
-
-  try {
-    const geojsonData = arrowTableToGeoJSON(baseTable, geoColumn);
-
-    if (!geojsonData) {
-      logger.warn(
-        'Failed to convert world base table to GeoJSON',
-        LogCategory.MAP
-      );
-      return null;
-    }
-
-    logger.debug(
-      'Using GeoJsonLayer fallback for world base',
-      LogCategory.MAP,
-      {
-        encoding: arrowExtension,
-        featureCount: geojsonData.features.length
-      }
-    );
-
-    return new GeoJsonLayer({
-      id: DeckLayerId.WORLD_BASE_LAYER,
-      data: geojsonData,
-      getFillColor: [...BASE_FILL_COLOR, 255],
-      getLineColor: BASE_STROKE_COLOR,
-      opacity: 1,
-      lineWidthUnits: 'pixels',
-      lineWidthScale: 0.25,
-      pickable: false,
-      autoHighlight: false,
-      ...(modelMatrix && { modelMatrix })
-    });
-  } catch (error) {
-    logger.error('Failed to create world base layer', LogCategory.MAP, error);
-    return null;
-  }
 }
 
 export function createGeoJsonLayers(

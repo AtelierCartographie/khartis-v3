@@ -30,10 +30,3 @@ export const MIME_TYPE_PATTERNS = {
 
 // Delimiters for tabular data detection
 export const TABULAR_DELIMITERS = [',', ';', '\t', '|'] as const;
-
-// All valid shapefile component extensions
-export const SHAPEFILE_COMPONENTS = FILE_EXTENSIONS.SHAPEFILE;
-
-// Type helpers
-export type ShapefileExtension = (typeof FILE_EXTENSIONS.SHAPEFILE)[number];
-export type TabularDelimiter = (typeof TABULAR_DELIMITERS)[number];

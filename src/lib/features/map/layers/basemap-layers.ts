@@ -230,15 +230,6 @@ export function createTerreLayers(
   return [];
 }
 
-export function createTerreLayer(
-  worldBaseTable: ArrowTable,
-  config: TerreLayerConfig,
-  ctx: BasemapLayerContext
-): Layer<DeckDataRow> | null {
-  const layers = createTerreLayers(worldBaseTable, config, ctx);
-  return layers.length > 0 ? layers[layers.length - 1] : null;
-}
-
 export function createMersLayer(
   config: MersLayerConfig,
   ctx: BasemapLayerContext
@@ -868,18 +859,4 @@ export function createBasemapLayers(
   }
 
   return layers;
-}
-
-export function getBasemapLayerOrder(): DeckLayerId[] {
-  return [
-    DeckLayerId.BASEMAP_MERS,
-    DeckLayerId.BASEMAP_TERRE,
-    DeckLayerId.BASEMAP_LACS,
-    DeckLayerId.BASEMAP_RIVIERES,
-    DeckLayerId.BASEMAP_RELIEF,
-    DeckLayerId.BASEMAP_FRONTIERES,
-    DeckLayerId.BASEMAP_EQUATEUR,
-    DeckLayerId.BASEMAP_MERIDIENS,
-    DeckLayerId.BASEMAP_VILLES
-  ];
 }

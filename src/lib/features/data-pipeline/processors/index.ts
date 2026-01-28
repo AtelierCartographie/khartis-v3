@@ -14,7 +14,6 @@ export type {
   AnalysisResultForProcessor,
   DuckDBClient,
   FileProcessor,
-  FileProcessorFactory,
   FileProcessorRegistration,
   ProcessContext,
   ProcessorCallbacks,
@@ -24,14 +23,10 @@ export type {
 export {
   getProcessor,
   hasProcessor,
-  processWithRegistry,
   registerProcessor
 } from './processor-registry';
 
-export {
-  isProcessorsRegistered,
-  registerAllProcessors
-} from './register-processors';
+export { registerAllProcessors } from './register-processors';
 
 export {
   csvProcessor,

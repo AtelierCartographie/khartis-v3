@@ -11,7 +11,6 @@ export {
 export {
   getSelectedDataset,
   selectDataset,
-  getDatasetById,
   getDatasetBySourceFile,
   getDatasetsByType,
   getAllDatasets
@@ -22,8 +21,7 @@ export {
   toggleDatasetVisibility,
   enableDataset,
   disableDataset,
-  getEnabledDatasets,
-  getEnabledDatasetIds
+  getEnabledDatasets
 } from './datasets-visibility';
 
 export {

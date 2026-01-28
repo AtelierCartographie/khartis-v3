@@ -81,25 +81,6 @@ export interface TooltipStyle {
   maxWidth: string;
 }
 
-export interface TooltipResult {
-  html: string;
-  style: TooltipStyle;
-}
-
-export interface DeckTooltipInfo {
-  object?: unknown;
-  index?: number;
-  layer?: {
-    id?: string;
-    props?: {
-      data?: ArrowTable | FeatureCollection;
-    };
-  } | null;
-  picked?: boolean;
-  x?: number;
-  y?: number;
-}
-
 // =============================================================================
 // Deck.gl Orthographic View State Types
 // =============================================================================

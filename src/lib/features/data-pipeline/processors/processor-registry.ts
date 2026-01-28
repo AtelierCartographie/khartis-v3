@@ -3,8 +3,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   FileProcessor,
   FileProcessorRegistration,
-  ProcessContext,
-  ProcessorDataset
+  ProcessContext
 } from './file-processor.interface';
 
 export type { ProcessContext };
@@ -36,25 +35,4 @@ export function getProcessor(file: UploadedFile): FileProcessor | null {
 
 export function hasProcessor(file: UploadedFile): boolean {
   return getProcessor(file) !== null;
-}
-
-export async function processWithRegistry(
-  ctx: ProcessContext,
-  file: UploadedFile
-): Promise<ProcessorDataset> {
-  const processor = getProcessor(file);
-
-  if (!processor) {
-    throw new Error(
-      `No processor found for file type: ${file.fileType} (${file.name})`
-    );
-  }
-
-  logger.debug('Processing file with registry', LogCategory.DATA, {
-    fileType: file.fileType,
-    fileName: file.name,
-    processorTypes: processor.supportedFileTypes
-  });
-
-  return processor.process(ctx, file);
 }

@@ -1,3 +1,4 @@
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import {
   GeoColumnDetector,
   type GeoColumnResult,
@@ -124,7 +125,7 @@ export function enrichJoinStatsWithTargetOptions(
   allTargetOptions: string[]
 ): void {
   stats.entities = stats.entities.map((entity) => {
-    if (entity.status === 'to_verify') {
+    if (entity.status === JoinStatus.TO_VERIFY) {
       return {
         ...entity,
         basemapOptions: entity.matches?.length

@@ -1,5 +1,8 @@
 import { LogCategory, logger } from './logger';
 
+const DEFAULT_NOTIFICATION_TIMEOUT_MS = 5_000;
+const ERROR_NOTIFICATION_TIMEOUT_MS = 10_000;
+
 export enum NotificationType {
   SUCCESS = 'success',
   ERROR = 'error',
@@ -24,7 +27,7 @@ interface Notification extends NotificationOptions {
 class NotificationManager {
   private _notifications = $state<Notification[]>([]);
 
-  private defaultTimeout = 5000;
+  private defaultTimeout = DEFAULT_NOTIFICATION_TIMEOUT_MS;
 
   get notifications() {
     return this._notifications;
@@ -64,7 +67,7 @@ class NotificationManager {
     );
     return this.addNotification(NotificationType.ERROR, {
       ...options,
-      timeout: options.timeout ?? 10000
+      timeout: options.timeout ?? ERROR_NOTIFICATION_TIMEOUT_MS
     });
   }
 

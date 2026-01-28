@@ -11,10 +11,6 @@ export function deepClone<T>(obj: T, replacer?: JsonReplacer): T {
   return JSON.parse(JSON.stringify(obj, replacer)) as T;
 }
 
-export function deepCloneWithBigInt<T>(obj: T): T {
-  return deepClone(obj, bigIntReplacer);
-}
-
 export function safeJsonStringify(data: unknown): string {
   return JSON.stringify(data, bigIntReplacer);
 }

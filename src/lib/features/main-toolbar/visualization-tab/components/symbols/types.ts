@@ -4,8 +4,6 @@ import type {
   VisualizationConfig,
   VisualizationModes
 } from '$lib/features/commons/store/visualization.store.svelte';
-import type { ShapeType } from '../../../constants';
-
 export interface SymbolModeProps {
   dataFields: Array<{ id: number; text: string }>;
   visualization?: VisualizationConfig;
@@ -16,15 +14,4 @@ export interface SymbolModeProps {
   onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
   onInvertPalette?: () => void;
   onOpenDiscretization?: () => void;
-}
-
-export interface SymbolStyleState {
-  symbolSize: number;
-  symbolMaxSize: number;
-  symbolOpacity: number;
-  shapeType: ShapeType;
-  fillColor: string;
-  fillOpacity: number;
-  strokeColor: string;
-  strokeWidth: number;
 }

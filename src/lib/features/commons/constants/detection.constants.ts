@@ -55,10 +55,3 @@ export const FUZZY_SEARCH = {
   // Head-tail breaks classification threshold (40%)
   HEAD_TAIL_THRESHOLD: 0.4
 } as const;
-
-// Combined export
-export const DETECTION_THRESHOLDS = {
-  geo: GEO_DETECTION,
-  validation: DATA_VALIDATION,
-  search: FUZZY_SEARCH
-} as const;
