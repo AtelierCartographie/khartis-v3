@@ -7,8 +7,6 @@
 
 // Column type identifiers
 export const GEOMETRY_COLUMN_TYPE = 'GEOMETRY';
-export const GEOMETRY_COLUMN_NAMES = ['geom', 'geometry'] as const;
-
 // OGC Simple Features geometry types (PostGIS style)
 export const GEOMETRY_TYPES = {
   POINT: 'ST_Point',
@@ -50,13 +48,8 @@ export const GEOMETRY_TYPE_PAIRS = [
   { ogc: GEOMETRY_TYPES.MULTI_POLYGON, wkt: GEOMETRY_WKT_TYPES.MULTI_POLYGON }
 ] as const;
 
-// Helper type for geometry type checking
-export type GeometryType = (typeof ALL_GEOMETRY_TYPES)[number];
 export type OGCGeometryType =
   (typeof GEOMETRY_TYPES)[keyof typeof GEOMETRY_TYPES];
-export type WKTGeometryType =
-  (typeof GEOMETRY_WKT_TYPES)[keyof typeof GEOMETRY_WKT_TYPES];
-
 /**
  * Check if a type string matches a geometry type (OGC or WKT variant)
  */
@@ -80,37 +73,8 @@ export function hasGeometryType(
 }
 
 /**
- * Normalize geometry type string to OGC format
- */
-export function normalizeGeometryType(type: string): OGCGeometryType | null {
-  const pair = GEOMETRY_TYPE_PAIRS.find(
-    (p) => p.ogc === type || p.wkt === type
-  );
-  return pair ? pair.ogc : null;
-}
-
-/**
  * Check if geometry type is a point type (Point or MultiPoint)
  */
 export function isPointGeometry(type: string): boolean {
   return isGeometryType(type, 'POINT') || isGeometryType(type, 'MULTI_POINT');
-}
-
-/**
- * Check if geometry type is a line type (LineString or MultiLineString)
- */
-export function isLineGeometry(type: string): boolean {
-  return (
-    isGeometryType(type, 'LINE_STRING') ||
-    isGeometryType(type, 'MULTI_LINE_STRING')
-  );
-}
-
-/**
- * Check if geometry type is a polygon type (Polygon or MultiPolygon)
- */
-export function isPolygonGeometry(type: string): boolean {
-  return (
-    isGeometryType(type, 'POLYGON') || isGeometryType(type, 'MULTI_POLYGON')
-  );
 }

@@ -1,6 +1,1 @@
-export {
-  detectFileFormat,
-  generateTableName,
-  isBinaryFormat,
-  isTabularFormat
-} from './format-detector';
+export { detectFileFormat, generateTableName } from './format-detector';

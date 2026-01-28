@@ -1,3 +1,4 @@
+import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -97,7 +98,7 @@ export function useEnrichmentJoin(
       const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
 
       stats.entities = stats.entities.map((entity) => {
-        if (entity.status === 'to_verify') {
+        if (entity.status === JoinStatus.TO_VERIFY) {
           return {
             ...entity,
             basemapOptions: entity.matches?.length
@@ -128,7 +129,7 @@ export function useEnrichmentJoin(
     if (joinStats) {
       let toVerifyIndex = 0;
       const updatedEntities = joinStats.entities.map((entity) => {
-        if (entity.status === 'to_verify') {
+        if (entity.status === JoinStatus.TO_VERIFY) {
           if (toVerifyIndex === index) {
             toVerifyIndex++;
             return { ...entity, selectedMapping: value };
@@ -161,7 +162,7 @@ export function useEnrichmentJoin(
     try {
       const corrections: Record<string, string> = {};
       joinStats.entities
-        .filter((e) => e.status === 'to_verify' && e.selectedMapping)
+        .filter((e) => e.status === JoinStatus.TO_VERIFY && e.selectedMapping)
         .forEach((entity) => {
           corrections[entity.dataValue] = entity.selectedMapping!;
         });
@@ -198,7 +199,7 @@ export function useEnrichmentJoin(
       const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
 
       stats.entities = stats.entities.map((entity) => {
-        if (entity.status === 'to_verify') {
+        if (entity.status === JoinStatus.TO_VERIFY) {
           return {
             ...entity,
             basemapOptions: entity.matches?.length

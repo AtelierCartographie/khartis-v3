@@ -75,8 +75,6 @@ export interface FileProcessor {
   process(ctx: ProcessContext, file: UploadedFile): Promise<ProcessorDataset>;
 }
 
-export type FileProcessorFactory = () => FileProcessor;
-
 export interface FileProcessorRegistration {
   processor: FileProcessor;
   priority: number;

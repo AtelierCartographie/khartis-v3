@@ -6,10 +6,6 @@ import * as m from '$lib/paraglide/messages';
 
 export type { ValidationResult } from '$lib/features/data-pipeline/types';
 
-export interface ValidationResultWithAsync extends ValidationResult {
-  requiresAsyncValidation?: boolean;
-}
-
 export interface MultiFileValidationResult {
   isValid: boolean;
   globalErrors: string[];

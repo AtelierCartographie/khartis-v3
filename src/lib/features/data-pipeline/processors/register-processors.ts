@@ -20,7 +20,3 @@ export function registerAllProcessors(): void {
 
   registered = true;
 }
-
-export function isProcessorsRegistered(): boolean {
-  return registered;
-}

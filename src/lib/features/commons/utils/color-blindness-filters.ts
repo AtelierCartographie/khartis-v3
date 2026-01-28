@@ -118,12 +118,3 @@ function removeFilter(): void {
     existing.remove();
   }
 }
-
-export function getColorBlindnessFilterId(
-  type: ColorBlindnessType
-): string | null {
-  if (type === ColorBlindnessType.NONE) {
-    return null;
-  }
-  return SVG_FILTER_ID;
-}

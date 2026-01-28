@@ -1,3 +1,4 @@
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
@@ -24,7 +25,7 @@ export const mainToolbarState = $state<MainToolbarState>({ ...DEFAULT_STATE });
 export function getDerivedToolbarState() {
   const hasProject = !!projectStore.currentProject;
   const hasFiles = createProjectState.newProject.uploadedFiles.some(
-    (f) => f.status === 'complete'
+    (f) => f.status === FileStatus.COMPLETE
   );
   const projectName = projectStore.currentProject?.manifest.name || '';
 
@@ -87,7 +88,7 @@ export const mainToolbarActions = {
     }
 
     const files = projectStore.currentProject?.data?.sourceFiles || [];
-    const hasErrors = files.some((f) => f.status === 'error');
+    const hasErrors = files.some((f) => f.status === FileStatus.ERROR);
     if (hasErrors) {
       missingSteps.push('Fix file errors');
     }

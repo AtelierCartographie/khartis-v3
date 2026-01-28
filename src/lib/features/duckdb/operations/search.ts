@@ -46,10 +46,6 @@ function setCache(key: string, results: SearchStats): void {
   searchCache.set(key, { results, timestamp: Date.now() });
 }
 
-export function clearSearchCache(): void {
-  searchCache.clear();
-}
-
 export async function searchInTable(
   ctx: DuckDBContext,
   table: string,

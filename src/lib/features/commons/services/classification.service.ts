@@ -242,8 +242,3 @@ export function generateColorsForBreaks(
 
   return palettes[clampedClasses] || palettes[5];
 }
-
-export const classificationService = {
-  calculateBreaks,
-  generateColorsForBreaks
-};

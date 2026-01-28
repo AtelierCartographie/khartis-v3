@@ -299,15 +299,4 @@ export function updateDatasetJoinInfo(
   bumpDatasetsVersion();
 }
 
-export function clearDatasetArrowTable(tableName: string): void {
-  updateDatasets((datasets) => {
-    for (const ds of datasets.values()) {
-      if (ds.tableName === tableName) {
-        ds.arrowTableWithMetadata = undefined;
-        break;
-      }
-    }
-  });
-}
-
 export { findDatasetByIdOrSourceFile };

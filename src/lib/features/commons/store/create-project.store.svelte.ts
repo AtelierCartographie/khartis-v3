@@ -36,6 +36,8 @@ import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 import { visualizationStore } from './visualization.store.svelte';
 
+const FILE_FETCH_TIMEOUT_MS = 30_000;
+
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
 
@@ -574,7 +576,10 @@ export const createProjectActions = {
 
   async downloadRemoteFile(url: string, index: number): Promise<File> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      FILE_FETCH_TIMEOUT_MS
+    );
 
     try {
       const response = await fetch(url, { signal: controller.signal });

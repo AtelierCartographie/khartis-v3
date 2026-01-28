@@ -10,6 +10,7 @@
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { isNumericType } from '$lib/features/commons/utils/format.utils';
   import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
@@ -81,13 +82,7 @@
     const col = datasetColumns.find((c) => c.name === columnName);
     if (!col) return 'text';
     const type = String(col.type || '').toLowerCase();
-    if (
-      type === 'number' ||
-      type === 'numeric' ||
-      type === 'integer' ||
-      type === 'bigint'
-    )
-      return 'numeric';
+    if (isNumericType(type)) return 'numeric';
     if (type === 'date' || type === 'timestamp') return 'date';
     return 'text';
   }

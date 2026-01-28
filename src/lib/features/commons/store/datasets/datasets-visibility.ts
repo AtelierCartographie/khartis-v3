@@ -30,7 +30,3 @@ export function disableDataset(state: DatasetsState, datasetId: string): void {
 export function getEnabledDatasets(state: DatasetsState): DatasetResult[] {
   return state.datasets.filter((d) => state.enabledDatasetIds.has(d.id));
 }
-
-export function getEnabledDatasetIds(state: DatasetsState): Set<string> {
-  return state.enabledDatasetIds;
-}
