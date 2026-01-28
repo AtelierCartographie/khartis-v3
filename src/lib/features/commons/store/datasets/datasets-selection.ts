@@ -19,13 +19,6 @@ export function selectDataset(state: DatasetsState, datasetId: string): void {
   }
 }
 
-export function getDatasetById(
-  state: DatasetsState,
-  datasetId: string
-): DatasetResult | undefined {
-  return state.datasets.find((d) => d.id === datasetId);
-}
-
 export function getDatasetBySourceFile(
   state: DatasetsState,
   sourceFileId: string

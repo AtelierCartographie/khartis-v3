@@ -7,6 +7,7 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -126,8 +127,10 @@
 
         const hasErrors =
           stats.toVerifyCount > 0 ||
-          stats.entities.filter((e) => e.status === 'duplicate').length > 0 ||
-          stats.entities.filter((e) => e.status === 'unrecognized').length > 0;
+          stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE)
+            .length > 0 ||
+          stats.entities.filter((e) => e.status === JoinStatus.UNRECOGNIZED)
+            .length > 0;
 
         if (!hasErrors && stats.joinedCount > 0) {
           logger.info(

@@ -3,6 +3,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
@@ -42,7 +43,7 @@
 
     const validFiles = createProjectState.newProject.uploadedFiles.filter(
       (f) =>
-        f.status === 'complete' &&
+        f.status === FileStatus.COMPLETE &&
         (!f.validation?.errors || f.validation.errors.length === 0)
     );
 
@@ -81,7 +82,7 @@
   const hasValidFiles = $derived(
     createProjectState.newProject.uploadedFiles.some(
       (f) =>
-        f.status === 'complete' &&
+        f.status === FileStatus.COMPLETE &&
         (!f.validation?.errors || f.validation.errors.length === 0)
     )
   );
@@ -94,7 +95,7 @@
 
   const isProcessing = $derived(
     createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === 'processing'
+      (f) => f.status === FileStatus.PROCESSING
     )
   );
 

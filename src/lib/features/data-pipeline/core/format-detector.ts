@@ -29,19 +29,3 @@ export function detectFileFormat(name: string): FileFormat {
     return 'geoparquet';
   return 'unknown';
 }
-
-export function isTabularFormat(name: string): boolean {
-  const lower = name.toLowerCase();
-  return (
-    lower.endsWith('.csv') ||
-    lower.endsWith('.tsv') ||
-    lower.endsWith('.txt') ||
-    lower.endsWith('.parquet') ||
-    lower.endsWith('.arrow')
-  );
-}
-
-export function isBinaryFormat(name: string): boolean {
-  const lower = name.toLowerCase();
-  return lower.endsWith('.parquet') || lower.endsWith('.arrow');
-}
