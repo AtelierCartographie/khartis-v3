@@ -60,6 +60,8 @@
 
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
+  let deleteFilteredModalOpen = $state(false);
+  let filteredRowsToDelete = $state(0);
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
@@ -319,6 +321,43 @@
     }
   }
 
+  function handleOpenDeleteFilteredModal(count: number) {
+    filteredRowsToDelete = count;
+    deleteFilteredModalOpen = true;
+  }
+
+  async function handleDeleteFilteredRows() {
+    if (!currentDuckTable || !selectedDataset) return;
+
+    try {
+      const count =
+        await duckDBOrchestrator.deleteFilteredRows(currentDuckTable);
+
+      if (count > 0) {
+        const newRowCount = Duck
+          ? await Duck.get_row_count(currentDuckTable)
+          : 0;
+
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Deleted ${count} filtered rows (new total: ${newRowCount})`
+        );
+        datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+
+        refreshTable();
+        showSuccess(
+          m.rows_deleted_success_title(),
+          m.rows_deleted_success_message({ count })
+        );
+      }
+    } catch (error) {
+      showError(
+        m.rows_deleted_error_title(),
+        error instanceof Error ? error.message : m.rows_deleted_error_message()
+      );
+    }
+  }
+
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
 
@@ -376,6 +415,7 @@
         <FiltersPanel
           tableName={currentDuckTable || undefined}
           onFilterChange={refreshTable}
+          onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
       </DataToolPanel>
     {/if}
@@ -394,6 +434,12 @@
       bind:open={deleteModalOpen}
       rowCount={selectedRowIds.length}
       onConfirm={handleDeleteRows}
+    />
+
+    <DeleteRowsModal
+      bind:open={deleteFilteredModalOpen}
+      rowCount={filteredRowsToDelete}
+      onConfirm={handleDeleteFilteredRows}
     />
 
     {#if isCsvFile}

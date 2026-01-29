@@ -7,6 +7,7 @@
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
+  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -22,9 +23,10 @@
   interface Props {
     tableName?: string;
     onFilterChange?: () => void;
+    onDeleteFilteredRows?: (count: number) => void;
   }
 
-  let { tableName, onFilterChange }: Props = $props();
+  let { tableName, onFilterChange, onDeleteFilteredRows }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
@@ -45,6 +47,10 @@
   });
 
   const hasData = $derived(columns.length > 0);
+  const hasActiveFilters = $derived(
+    filters.length > 0 && filterStats.filtered < filterStats.total
+  );
+  const rowsToDelete = $derived(filterStats.total - filterStats.filtered);
 
   interface FilterOperatorDef {
     value: FilterOperator;
@@ -334,6 +340,18 @@
             </li>
           {/each}
         </ul>
+        {#if hasActiveFilters && onDeleteFilteredRows}
+          <div class="delete-filtered-action">
+            <Button
+              kind="danger-tertiary"
+              size="small"
+              icon={TrashCan}
+              on:click={() => onDeleteFilteredRows(rowsToDelete)}
+            >
+              {m.delete_filtered_rows({ count: rowsToDelete })}
+            </Button>
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -423,5 +441,11 @@
 
   .filter-item {
     display: flex;
+  }
+
+  .delete-filtered-action {
+    margin-top: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-03);
+    border-top: 1px solid var(--cds-border-subtle);
   }
 </style>
