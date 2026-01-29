@@ -7,10 +7,6 @@ import {
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
 import * as m from '$lib/paraglide/messages';
 
-// ===========================
-// TYPES
-// ===========================
-
 export type GeometryType =
   | 'Point'
   | 'LineString'
@@ -195,10 +191,6 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   }
 ] as const;
 
-// ===========================
-// SERVICE CLASS
-// ===========================
-
 export class VizSuggesterService {
   /**
    * Suggests visualizations adapted to the dataset
@@ -253,9 +245,6 @@ export class VizSuggesterService {
     return suggestions.slice(0, maxSuggestions);
   }
 
-  /**
-   * Simplifie le type de géométrie
-   */
   private simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
     if (geomType.includes('Point')) return 'point';
     if (geomType.includes('Line')) return 'line';
@@ -307,13 +296,6 @@ export class VizSuggesterService {
     }
   }
 
-  // ===========================
-  // SUGGESTIONS GENERATION
-  // ===========================
-
-  /**
-   * Generates viz suggestions based on enriched columns
-   */
   private generateSuggestions(
     columns: EnrichedColumn[],
     geometryType: SimplifiedGeometryType
@@ -372,9 +354,6 @@ export class VizSuggesterService {
     return unique;
   }
 
-  /**
-   * Search viz compatible with the semio type of columns
-   */
   private searchVizByType(
     dataset: EnrichedColumn | EnrichedColumn[],
     geometryType: SimplifiedGeometryType,

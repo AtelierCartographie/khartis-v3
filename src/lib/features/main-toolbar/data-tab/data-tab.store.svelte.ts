@@ -14,7 +14,7 @@ interface DataTabState {
 
 const state = $state<DataTabState>({
   activeStepIndex: 0,
-  canNavigateToStep: [true, true, true],
+  canNavigateToStep: [true, false, false],
   hasCompletedStep: [false, false, false],
   workflowMode: 'auto',
   primaryDatasetId: undefined,
@@ -81,13 +81,18 @@ function markStepComplete(index: number) {
 
 function updateNavigationPermissions() {
   state.canNavigateToStep[0] = true;
-  state.canNavigateToStep[1] = true;
-  state.canNavigateToStep[2] = true;
+
+  if (isGeographicMode()) {
+    state.canNavigateToStep[1] = state.hasCompletedStep[0];
+  } else {
+    state.canNavigateToStep[1] = state.hasCompletedStep[0];
+    state.canNavigateToStep[2] = state.hasCompletedStep[1];
+  }
 }
 
 function reset() {
   state.activeStepIndex = 0;
-  state.canNavigateToStep = [true, true, true];
+  state.canNavigateToStep = [true, false, false];
   state.hasCompletedStep = [false, false, false];
   state.workflowMode = 'auto';
   state.primaryDatasetId = undefined;

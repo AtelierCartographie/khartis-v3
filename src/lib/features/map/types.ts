@@ -2,7 +2,6 @@ import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 
-// Re-export Deck.gl types for proper typing
 export type {
   PickingInfo,
   ViewStateChangeParameters,
@@ -20,7 +19,6 @@ export type TooltipContent =
       style?: Partial<CSSStyleDeclaration>;
     };
 
-// Re-export basemap types for backwards compatibility
 export type {
   BasemapCatalog,
   BasemapLayer,
@@ -30,20 +28,12 @@ export type {
   JoinQuality
 } from './types/basemap.types';
 
-// =============================================================================
-// Core Map Types
-// =============================================================================
-
 export type DeckDataRow = Record<string, unknown>;
 
 export interface MapPosition {
   center: { lng: number; lat: number };
   zoom: number;
 }
-
-// =============================================================================
-// Geometry Types
-// =============================================================================
 
 export interface GeometryInfo {
   type: string;
@@ -54,24 +44,12 @@ export interface GeometryInfo {
   isGeoJsonEncoded: boolean;
 }
 
-// =============================================================================
-// Styling Types
-// =============================================================================
-
 export type RGBColor = [number, number, number];
-
-// =============================================================================
-// Tooltip Types
-// =============================================================================
 
 export interface TooltipEntry {
   key: string;
   value: string;
 }
-
-// =============================================================================
-// Deck.gl Orthographic View State Types
-// =============================================================================
 
 export interface OrthographicMainViewState {
   target: [number, number, number];
@@ -84,10 +62,6 @@ export interface DeckOrthographicViewStateMap {
   main: OrthographicMainViewState;
 }
 
-// =============================================================================
-// Map Component Props
-// =============================================================================
-
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   geoJSONs: Map<string, FeatureCollection>;
@@ -95,14 +69,6 @@ export interface DeckMapProps {
   height: number;
   onReady?: () => void;
 }
-
-// =============================================================================
-// Factory Types
-// =============================================================================
-
-// =============================================================================
-// Layer Context (for layer creation)
-// =============================================================================
 
 export interface LayerContext {
   viz:
@@ -121,10 +87,6 @@ export interface LayerContext {
   projectionSuffix?: string;
   beforeId?: string;
 }
-
-// =============================================================================
-// Projection Types
-// =============================================================================
 
 export type BBox = [number, number, number, number];
 

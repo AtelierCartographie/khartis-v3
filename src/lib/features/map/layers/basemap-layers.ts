@@ -57,16 +57,9 @@ function getBaseLayerProps(ctx: BasemapLayerContext): BaseLayerProps {
 
 function buildLayerId(
   layerType: DeckLayerId,
-  projectionSuffix: string | undefined,
-  styleFingerprint: string
+  projectionSuffix: string | undefined
 ): string {
-  return createLayerId(
-    layerType,
-    'basemap',
-    projectionSuffix
-      ? `${projectionSuffix}-${styleFingerprint}`
-      : styleFingerprint
-  );
+  return createLayerId(layerType, 'basemap', projectionSuffix || 'default');
 }
 
 function isGeoArrowPolygonEncoding(geometryInfo: GeometryInfo): boolean {
@@ -103,16 +96,7 @@ export function createTerreLayers(
   const fillOpacity = config.fillOpacity / 100;
   const strokeOpacity = config.strokeOpacity / 100;
 
-  const shadowSuffix = config.fillShadow ? '-shadow' : '';
-  const dottedSuffix = config.strokeDotted
-    ? `-dotted-${config.strokeDottedPattern}`
-    : '';
-  const styleFingerprint = `${config.fillColor}-${config.fillOpacity}-${config.strokeColor}-${config.strokeOpacity}-${config.strokeThickness}${shadowSuffix}${dottedSuffix}`;
-  const layerId = buildLayerId(
-    DeckLayerId.BASEMAP_TERRE,
-    ctx.projectionSuffix,
-    styleFingerprint
-  );
+  const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);
 
   const dashArray = config.strokeDotted
@@ -239,12 +223,7 @@ export function createMersLayer(
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const styleFingerprint = `${config.color}-${config.opacity}`;
-  const layerId = buildLayerId(
-    DeckLayerId.BASEMAP_MERS,
-    ctx.projectionSuffix,
-    styleFingerprint
-  );
+  const layerId = buildLayerId(DeckLayerId.BASEMAP_MERS, ctx.projectionSuffix);
 
   const oceanGeoJSON: FeatureCollection = {
     type: 'FeatureCollection',
@@ -294,12 +273,9 @@ export function createFrontieresLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const dottedSuffix = config.dotted ? `-dotted-${config.dottedPattern}` : '';
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_FRONTIERES,
-    ctx.projectionSuffix,
-    styleFingerprint
+    ctx.projectionSuffix
   );
   const baseProps = getBaseLayerProps(ctx);
 
@@ -374,12 +350,9 @@ export function createEquateurLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const dottedSuffix = config.dotted ? `-dotted-${config.dottedPattern}` : '';
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_EQUATEUR,
-    ctx.projectionSuffix,
-    styleFingerprint
+    ctx.projectionSuffix
   );
 
   const equatorGeoJSON: FeatureCollection = {
@@ -432,12 +405,9 @@ export function createMeridiensLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const dottedSuffix = config.dotted ? `-dotted-${config.dottedPattern}` : '';
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}-${config.remarquables}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_MERIDIENS,
-    ctx.projectionSuffix,
-    styleFingerprint
+    ctx.projectionSuffix
   );
 
   const stepMap: Record<string, [number, number]> = {
@@ -502,12 +472,7 @@ export function createLacsLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}`;
-  const layerId = buildLayerId(
-    DeckLayerId.BASEMAP_LACS,
-    ctx.projectionSuffix,
-    styleFingerprint
-  );
+  const layerId = buildLayerId(DeckLayerId.BASEMAP_LACS, ctx.projectionSuffix);
 
   return new GeoJsonLayer({
     id: layerId,
@@ -537,12 +502,9 @@ export function createRivieresLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const dottedSuffix = config.dotted ? `-dotted-${config.dottedPattern}` : '';
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.thickness}${dottedSuffix}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_RIVIERES,
-    ctx.projectionSuffix,
-    styleFingerprint
+    ctx.projectionSuffix
   );
 
   const dashArray = config.dotted
@@ -704,11 +666,9 @@ export function createVillesLayer(
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  const styleFingerprint = `${config.color}-${config.opacity}-${config.size}-${config.category}-${config.symbol}`;
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_VILLES,
-    ctx.projectionSuffix,
-    styleFingerprint
+    ctx.projectionSuffix
   );
 
   const isCircle = config.symbol === BasemapCitySymbol.POINT;

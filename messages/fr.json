@@ -1398,5 +1398,9 @@
   "error_geometry_conversion_message": "Impossible de convertir la geometrie pour l'affichage. La carte peut apparaitre vide.",
   "error_invalid_mapping_value": "Valeur de correspondance invalide",
   "no_variable": "Aucune variable",
-  "map_collection": "Collection de cartes"
+  "map_collection": "Collection de cartes",
+  "annotationImageAlt": "Annotation",
+  "data_tab_enrich": "Enrichir",
+  "enrich_status_done": "Enrichissement terminé",
+  "enrich_status_pending": "Enrichir vos données géographiques"
 }

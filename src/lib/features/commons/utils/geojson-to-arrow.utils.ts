@@ -56,7 +56,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
   const propertyTypes = new Map<string, Set<string>>();
   let hasGeometry = false;
 
-  // Scan all features to discover all properties and their types
   for (const feature of features) {
     if (feature.geometry) {
       hasGeometry = true;
@@ -68,7 +67,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
           propertyTypes.set(key, new Set());
         }
 
-        // Track the type of this value
         if (value === null || value === undefined) {
           propertyTypes.get(key)!.add('null');
         } else {
@@ -78,7 +76,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
     }
   }
 
-  // Infer Arrow data types based on observed types
   const fields = new Map<string, DataType>();
 
   for (const [key, types] of propertyTypes) {
@@ -89,11 +86,9 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
       // All values were null - default to Utf8
       fields.set(key, new Utf8());
     } else if (types.size === 1) {
-      // Homogeneous type
       const type = Array.from(types)[0];
 
       if (type === 'number') {
-        // Check if all numbers are integers
         const allIntegers = features.every((f) => {
           const val = f.properties?.[key];
           return (
@@ -106,7 +101,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
       } else if (type === 'boolean') {
         fields.set(key, new Bool());
       } else {
-        // string or other - default to Utf8
         fields.set(key, new Utf8());
       }
     } else {
@@ -131,26 +125,21 @@ export function extractColumnarData(
 ): ColumnData {
   const columns: ColumnData = {};
 
-  // Initialize column arrays
   for (const [key] of schema.fields) {
     columns[key] = [];
   }
 
-  // Add geometry column if present
   if (schema.hasGeometry) {
     columns['geom'] = [];
   }
 
-  // Extract values row by row
   for (const feature of features) {
-    // Extract property values
     for (const [key, dataType] of schema.fields) {
       const value = feature.properties?.[key];
 
       if (value === null || value === undefined) {
         columns[key].push(null);
       } else if (dataType instanceof Utf8) {
-        // Convert to string
         columns[key].push(String(value));
       } else if (dataType instanceof Float64) {
         columns[key].push(Number(value));
@@ -159,12 +148,10 @@ export function extractColumnarData(
       } else if (dataType instanceof Bool) {
         columns[key].push(Boolean(value));
       } else {
-        // Fallback - convert to string
         columns[key].push(String(value));
       }
     }
 
-    // Extract geometry as JSON string
     if (schema.hasGeometry) {
       if (feature.geometry) {
         columns['geom'].push(JSON.stringify(feature.geometry));
