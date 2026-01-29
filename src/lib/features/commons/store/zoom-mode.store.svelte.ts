@@ -1,4 +1,4 @@
-type ZoomMode = 'map' | 'page';
+export type ZoomMode = 'map' | 'page';
 
 class ZoomModeStore {
   private _mode = $state<ZoomMode>('map');
