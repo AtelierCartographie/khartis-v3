@@ -16,11 +16,12 @@
   } from 'carbon-components-svelte';
   import { Download } from 'carbon-icons-svelte';
   import { useExportModal } from './hooks';
-  import { MAP_FORMAT, DATA_FORMAT } from './types';
+  import { MAP_FORMAT, DATA_FORMAT, EXPORT_RESOLUTION } from './types';
   import type {
     MapExportFormat,
     DataExportFormat,
-    ExportTabType
+    ExportTabType,
+    ExportResolution
   } from './types';
 
   const modal = useExportModal();
@@ -108,10 +109,33 @@
                     <RadioTile light value={MAP_FORMAT.SVG}
                       >{m.download_map_svg()}</RadioTile
                     >
+                    <RadioTile light value={MAP_FORMAT.PNG}
+                      >{m.download_map_png()}</RadioTile
+                    >
                     <RadioTile light value={MAP_FORMAT.JPG}
                       >{m.download_map_jpg()}</RadioTile
                     >
                   </TileGroup>
+
+                  {#if modal.mapFormat !== MAP_FORMAT.SVG}
+                    <FormGroup legendText={m.download_map_resolution()}>
+                      <TileGroup
+                        selected={modal.resolution}
+                        on:select={(e) =>
+                          modal.setResolution(e.detail as ExportResolution)}
+                      >
+                        <RadioTile light value={EXPORT_RESOLUTION.HD_1080P}
+                          >{m.download_resolution_1080p()}</RadioTile
+                        >
+                        <RadioTile light value={EXPORT_RESOLUTION.QHD_2K}
+                          >{m.download_resolution_2k()}</RadioTile
+                        >
+                        <RadioTile light value={EXPORT_RESOLUTION.UHD_4K}
+                          >{m.download_resolution_4k()}</RadioTile
+                        >
+                      </TileGroup>
+                    </FormGroup>
+                  {/if}
                 </Column>
               </Row>
             </Grid>

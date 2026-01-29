@@ -7,8 +7,22 @@ import {
   getSizeForValue
 } from '../../map/utils/data-styling.utils';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
-import { hexToRgb } from './color-utils';
+import { hexToRgb, hslToHex } from './color-utils';
 import { LogCategory, logger } from './logger';
+import type {
+  Annotation,
+  AnnotationsState
+} from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+import type {
+  LegendItem,
+  LegendState,
+  LegendStyle
+} from '$lib/features/step-toolbar/tools/legend/legend.types';
+import {
+  AnnotationKind,
+  DrawingType,
+  LegendPosition
+} from '$lib/features/commons/constants/ui.constants';
 
 interface ExportOptions {
   width: number;
@@ -17,11 +31,30 @@ interface ExportOptions {
   backgroundColor: string;
 }
 
+const DEFAULT_EXPORT_WIDTH = 1920;
+const DEFAULT_EXPORT_HEIGHT = 1080;
+const DEFAULT_BACKGROUND_COLOR = '#ffffff';
+
+const LEGEND_WIDTH = 200;
+const LEGEND_HEIGHT = 150;
+const LEGEND_MARGIN = 20;
+
+const SVG_COLORS = {
+  DEFAULT_FILL: '#3b82f6',
+  DEFAULT_STROKE: '#1e40af',
+  BLACK: '#000000',
+  TEXT_PRIMARY: '#161616',
+  TEXT_SECONDARY: '#525252',
+  TEXT_MUTED: '#6f6f6f',
+  TEXT_LEGEND: '#333333',
+  SIGNATURE: '#666666'
+} as const;
+
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  width: 1920,
-  height: 1080,
+  width: DEFAULT_EXPORT_WIDTH,
+  height: DEFAULT_EXPORT_HEIGHT,
   includeBasemap: false,
-  backgroundColor: '#ffffff'
+  backgroundColor: DEFAULT_BACKGROUND_COLOR
 };
 
 interface GeometryBounds {
@@ -318,10 +351,300 @@ function getFeatureStyle(
   return { style: baseStyle, radius };
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function resolveColor(
+  color:
+    | string
+    | { hue: number; saturation: number; lightness: number }
+    | undefined,
+  defaultColor: string
+): string {
+  if (!color) return defaultColor;
+  if (typeof color === 'string') return color;
+  return hslToHex(color.hue, color.saturation, color.lightness);
+}
+
+function renderTextAnnotation(item: Annotation): string {
+  const { x, y } = item.position;
+  const style = item.style ?? {};
+  const content = String(item.content || '');
+  const fontSize = style.fontSize ?? 14;
+  const fontFamily = style.font ?? 'Arial';
+  const color = resolveColor(style.color, SVG_COLORS.BLACK);
+  const opacity = (style.opacity ?? 100) / 100;
+  const fontWeight = style.bold ? 'bold' : 'normal';
+  const fontStyle = style.italic ? 'italic' : 'normal';
+  const textDecoration = style.underlined ? 'underline' : 'none';
+
+  return `    <text x="${x}" y="${y}" font-family="${fontFamily}, sans-serif" font-size="${fontSize}" fill="${color}" opacity="${opacity}" font-weight="${fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}">${escapeHtml(content)}</text>`;
+}
+
+function renderShapeAnnotation(item: Annotation): string {
+  const { x, y } = item.position;
+  const shapeType = String(item.content ?? 'circle');
+  const style = item.style ?? {};
+  const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
+  const stroke = resolveColor(style.strokeColor, SVG_COLORS.DEFAULT_STROKE);
+  const strokeWidth = style.strokeWidth ?? 2;
+  const opacity = (style.opacity ?? 100) / 100;
+  const size = style.size ?? 50;
+
+  switch (shapeType) {
+    case 'circle':
+      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    case 'rectangle':
+      return `    <rect x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    case 'triangle': {
+      const h = size * 0.866;
+      const points = `${x},${y - h / 2} ${x - size / 2},${y + h / 2} ${x + size / 2},${y + h / 2}`;
+      return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    }
+    case 'arrow': {
+      const arrowPath = `M${x - size / 2},${y} L${x + size / 4},${y} L${x + size / 4},${y - size / 4} L${x + size / 2},${y} L${x + size / 4},${y + size / 4} L${x + size / 4},${y} Z`;
+      return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    }
+    case 'star': {
+      const outerR = size / 2;
+      const innerR = outerR * 0.4;
+      const points: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (Math.PI / 5) * i - Math.PI / 2;
+        points.push(`${x + r * Math.cos(angle)},${y + r * Math.sin(angle)}`);
+      }
+      return `    <polygon points="${points.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    }
+    default:
+      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+  }
+}
+
+function renderDrawingAnnotation(item: Annotation): string {
+  const points = Array.isArray(item.content) ? item.content : [];
+  if (points.length === 0) return '';
+
+  const style = item.style ?? {};
+  const stroke = resolveColor(style.strokeColor, SVG_COLORS.BLACK);
+  const fill =
+    style.drawingType === DrawingType.ZONE
+      ? resolveColor(style.fillColor, 'none')
+      : 'none';
+  const strokeWidth = style.strokeWidth ?? 2;
+  const opacity = (style.opacity ?? 100) / 100;
+
+  const pathData = points
+    .map(
+      (p: { x: number; y: number }, i: number) =>
+        `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`
+    )
+    .join(' ');
+
+  const closePath = style.drawingType === DrawingType.ZONE ? ' Z' : '';
+
+  return `    <path d="${pathData}${closePath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+}
+
+function renderImageAnnotation(item: Annotation): string {
+  const imgSrc = String(item.content ?? '');
+  if (!imgSrc) return '';
+
+  const { x, y } = item.position;
+  const size = item.style?.size ?? 100;
+  const opacity = (item.style?.opacity ?? 100) / 100;
+
+  return `    <image x="${x}" y="${y}" width="${size}" height="${size}" href="${imgSrc}" opacity="${opacity}"/>`;
+}
+
+function renderAnnotationItem(item: Annotation): string {
+  switch (item.type) {
+    case AnnotationKind.TEXT:
+      return renderTextAnnotation(item);
+    case AnnotationKind.SHAPE:
+      return renderShapeAnnotation(item);
+    case AnnotationKind.DRAWING:
+      return renderDrawingAnnotation(item);
+    case AnnotationKind.IMAGE:
+      return renderImageAnnotation(item);
+    default:
+      return '';
+  }
+}
+
+function renderAnnotationsToSvg(annotations: AnnotationsState): string {
+  const visibleItems = annotations.items.filter((i) => i.visible !== false);
+  if (visibleItems.length === 0) return '';
+
+  const elements = visibleItems
+    .map((item) => renderAnnotationItem(item))
+    .filter((e) => e !== '');
+
+  if (elements.length === 0) return '';
+
+  return `  <g id="annotations">\n${elements.join('\n')}\n  </g>\n`;
+}
+
+function calculateLegendPosition(
+  position: LegendPosition,
+  width: number,
+  height: number
+): { x: number; y: number } {
+  switch (position) {
+    case LegendPosition.TOP_LEFT:
+      return { x: LEGEND_MARGIN, y: LEGEND_MARGIN };
+    case LegendPosition.TOP_RIGHT:
+      return { x: width - LEGEND_WIDTH - LEGEND_MARGIN, y: LEGEND_MARGIN };
+    case LegendPosition.BOTTOM_LEFT:
+      return { x: LEGEND_MARGIN, y: height - LEGEND_HEIGHT - LEGEND_MARGIN };
+    case LegendPosition.BOTTOM_RIGHT:
+      return {
+        x: width - LEGEND_WIDTH - LEGEND_MARGIN,
+        y: height - LEGEND_HEIGHT - LEGEND_MARGIN
+      };
+    default:
+      return { x: width - LEGEND_WIDTH - LEGEND_MARGIN, y: LEGEND_MARGIN };
+  }
+}
+
+function renderLegendBackground(
+  style: LegendStyle,
+  width: number,
+  height: number
+): string {
+  if (!style.background.enabled) return '';
+
+  const bgColor = hslToHex(
+    style.background.color.hue,
+    style.background.color.saturation,
+    style.background.color.lightness
+  );
+  const opacity = style.background.opacity / 100;
+
+  return `    <rect x="0" y="0" width="${width}" height="${height}" fill="${bgColor}" opacity="${opacity}" rx="4"/>`;
+}
+
+function renderClassificationLegend(
+  viz: VisualizationConfig,
+  startY: number,
+  style: LegendStyle
+): string {
+  const colors = viz.classification?.colors ?? [];
+  const breaks = viz.classification?.breaks ?? [];
+  if (colors.length === 0) return '';
+
+  const elements: string[] = [];
+
+  colors.forEach((color, i) => {
+    const y = startY + i * 22;
+    elements.push(
+      `    <rect x="12" y="${y}" width="20" height="18" fill="${color}" rx="2"/>`
+    );
+
+    const minVal = i === 0 ? '' : (breaks[i - 1]?.toLocaleString() ?? '');
+    const maxVal = breaks[i]?.toLocaleString() ?? '';
+    const label = minVal && maxVal ? `${minVal} - ${maxVal}` : maxVal || minVal;
+
+    elements.push(
+      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_LEGEND}">${escapeHtml(label)}</text>`
+    );
+  });
+
+  return elements.join('\n');
+}
+
+function renderLegendContent(
+  items: LegendItem[],
+  visualizations: VisualizationConfig[],
+  style: LegendStyle
+): { content: string; height: number } {
+  let yOffset = 16;
+  const elements: string[] = [];
+
+  for (const item of items) {
+    const viz = item.variableId
+      ? visualizations.find((v) => v.id === item.variableId)
+      : undefined;
+
+    if (item.title) {
+      elements.push(
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${SVG_COLORS.TEXT_PRIMARY}">${escapeHtml(item.title)}</text>`
+      );
+      yOffset += style.fontSize + 10;
+    }
+
+    if (item.subtitle) {
+      elements.push(
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_SECONDARY}">${escapeHtml(item.subtitle)}</text>`
+      );
+      yOffset += style.fontSize + 6;
+    }
+
+    if (viz?.classification?.colors && viz.classification.colors.length > 0) {
+      const classLegend = renderClassificationLegend(viz, yOffset, style);
+      if (classLegend) {
+        elements.push(classLegend);
+        yOffset += viz.classification.colors.length * 22 + 8;
+      }
+    }
+
+    if (item.note) {
+      elements.push(
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${SVG_COLORS.TEXT_MUTED}" font-style="italic">${escapeHtml(item.note)}</text>`
+      );
+      yOffset += style.fontSize + 4;
+    }
+
+    yOffset += 12;
+  }
+
+  return { content: elements.join('\n'), height: yOffset + 8 };
+}
+
+function renderLegendToSvg(
+  legend: LegendState,
+  visualizations: VisualizationConfig[],
+  width: number,
+  height: number
+): string {
+  if (!legend.visible || legend.items.length === 0) return '';
+
+  const visibleItems = legend.items.filter((i) => i.visible);
+  if (visibleItems.length === 0) return '';
+
+  const { content, height: contentHeight } = renderLegendContent(
+    visibleItems,
+    visualizations,
+    legend.style
+  );
+
+  const legendHeight = Math.max(contentHeight, 60);
+  const { x, y } = calculateLegendPosition(legend.position, width, height);
+
+  const background = renderLegendBackground(
+    legend.style,
+    LEGEND_WIDTH,
+    legendHeight
+  );
+
+  return `  <g id="legend" transform="translate(${x}, ${y})">
+${background}
+${content}
+  </g>\n`;
+}
+
 export function exportMapToSvg(
   datasets: ProcessedDataset[],
   visualizations: VisualizationConfig[],
-  options: Partial<ExportOptions> = {}
+  options: Partial<ExportOptions> = {},
+  annotations?: AnnotationsState,
+  legend?: LegendState
 ): Blob {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
 
@@ -350,9 +673,10 @@ export function exportMapToSvg(
   const project = createProjection(bounds, opts.width, opts.height);
 
   let svgContent = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
-  <rect width="100%" height="100%" fill="${opts.backgroundColor}" />
-  <g id="map-layers">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
+  <defs></defs>
+  <rect id="background" width="100%" height="100%" fill="${opts.backgroundColor}"/>
+  <g id="basemap"></g>
 `;
 
   const enabledVisualizations = visualizations.filter((v) => v.enabled);
@@ -366,7 +690,8 @@ export function exportMapToSvg(
     );
     if (!geometryColumn) continue;
 
-    svgContent += `    <g id="${visualization.id}" class="visualization-layer">\n`;
+    const polygons: string[] = [];
+    const symbols: string[] = [];
 
     for (const row of dataset.data) {
       const geometry = row[geometryColumn.name] as Geometry | null | undefined;
@@ -376,15 +701,44 @@ export function exportMapToSvg(
       const svgElement = renderGeometryToSvg(geometry, project, style, radius);
 
       if (svgElement) {
-        svgContent += `      ${svgElement}\n`;
+        const isPolygon = ['Polygon', 'MultiPolygon'].includes(geometry.type);
+        const isLine = ['LineString', 'MultiLineString'].includes(
+          geometry.type
+        );
+        if (isPolygon || isLine) {
+          polygons.push(`        ${svgElement}`);
+        } else {
+          symbols.push(`        ${svgElement}`);
+        }
       }
     }
 
-    svgContent += `    </g>\n`;
+    svgContent += `  <g id="viz-${visualization.id}">
+    <g id="polygons">
+${polygons.join('\n')}
+    </g>
+    <g id="symbols">
+${symbols.join('\n')}
+    </g>
+    <g id="labels"></g>
+  </g>
+`;
   }
 
-  svgContent += `  </g>
-  <text x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="#666666" opacity="0.7">${m.map_export_signature()}</text>
+  if (annotations) {
+    svgContent += renderAnnotationsToSvg(annotations);
+  }
+
+  if (legend) {
+    svgContent += renderLegendToSvg(
+      legend,
+      visualizations,
+      opts.width,
+      opts.height
+    );
+  }
+
+  svgContent += `  <text id="signature" x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="${SVG_COLORS.SIGNATURE}" opacity="0.7">${m.map_export_signature()}</text>
 </svg>`;
 
   return new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
@@ -393,12 +747,20 @@ export function exportMapToSvg(
 export function exportMapToJpg(
   datasets: ProcessedDataset[],
   visualizations: VisualizationConfig[],
-  options: Partial<ExportOptions> = {}
+  options: Partial<ExportOptions> = {},
+  annotations?: AnnotationsState,
+  legend?: LegendState
 ): Promise<Blob> {
   return new Promise((resolve, reject) => {
     try {
       const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
-      const svgBlob = exportMapToSvg(datasets, visualizations, options);
+      const svgBlob = exportMapToSvg(
+        datasets,
+        visualizations,
+        options,
+        annotations,
+        legend
+      );
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -455,6 +817,72 @@ export function exportMapToJpg(
         LogCategory.EXPORT,
         error
       );
+      reject(error);
+    }
+  });
+}
+
+export function exportMapToPng(
+  datasets: ProcessedDataset[],
+  visualizations: VisualizationConfig[],
+  options: Partial<ExportOptions> = {},
+  annotations?: AnnotationsState,
+  legend?: LegendState
+): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    try {
+      const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+      const svgBlob = exportMapToSvg(
+        datasets,
+        visualizations,
+        options,
+        annotations,
+        legend
+      );
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const svgDataUrl = reader.result as string;
+        const img = new Image();
+
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = opts.width;
+          canvas.height = opts.height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Unable to get canvas context'));
+            return;
+          }
+
+          ctx.fillStyle = opts.backgroundColor;
+          ctx.fillRect(0, 0, opts.width, opts.height);
+          ctx.drawImage(img, 0, 0);
+
+          canvas.toBlob((blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to create PNG blob'));
+            }
+          }, 'image/png');
+        };
+
+        img.onerror = () => {
+          reject(new Error('Failed to load SVG image'));
+        };
+
+        img.src = svgDataUrl;
+      };
+
+      reader.onerror = () => {
+        reject(new Error('Failed to read SVG blob'));
+      };
+
+      reader.readAsDataURL(svgBlob);
+    } catch (error) {
+      logger.error('Failed to export PNG', LogCategory.EXPORT, error);
       reject(error);
     }
   });
