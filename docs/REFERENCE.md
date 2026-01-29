@@ -727,6 +727,47 @@ export const errorLogger = new ErrorLogger();
 - **Color palettes**: Accessibility filter flags unsafe combos
 - **Non-color encoding**: Patterns, shapes for color-blind users
 
+### Color-Blindness Simulation
+
+**Utility**: `src/lib/features/commons/utils/color-blindness-filters.ts`
+
+Applies SVG `feColorMatrix` filters to simulate 8 color-blindness types.
+
+| Type            | Description                     | Prevalence (M/F)                   |
+| --------------- | ------------------------------- | ---------------------------------- |
+| Protanopia      | Red-blind (dichromacy)          | 1% males, 0.01% females            |
+| Deuteranopia    | Green-blind (dichromacy)        | 1% males, 0.01% females            |
+| Tritanopia      | Blue-blind (dichromacy)         | <0.01% both                        |
+| Protanomaly     | Red-weak (anomalous trichromat) | 1% males, 0.03% females            |
+| Deuteranomaly   | Green-weak                      | 6% males, 0.4% females (most com) |
+| Tritanomaly     | Blue-weak                       | <0.01% both                        |
+| Achromatopsia   | Complete color-blind            | 0.003% both                        |
+| Achromatomaly   | Partial color-blind             | Rare                               |
+
+#### Usage
+
+```typescript
+import { applyColorBlindnessFilter } from '$lib/features/commons/utils/color-blindness-filters';
+import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+
+const mapElement = document.getElementById('map-container');
+
+// Apply filter
+applyColorBlindnessFilter(mapElement, ColorBlindnessType.DEUTERANOPIA);
+
+// Remove filter
+applyColorBlindnessFilter(mapElement, ColorBlindnessType.NONE);
+```
+
+#### Implementation
+
+- Creates hidden SVG element: `<svg id="khartis-svg-filters">`
+- Inserts `<filter>` + `<feColorMatrix>` with transformation matrix
+- Applies via CSS: `filter: url(#khartis-color-blindness-filter)`
+- Auto-removes old filter when switching types or disabling
+
+**Workflow**: User selects type in UI → `applyColorBlindnessFilter()` → entire map container recolored → validates palette accessibility
+
 ### Screen Readers
 
 - **Textual summaries**: Stats and map descriptions
