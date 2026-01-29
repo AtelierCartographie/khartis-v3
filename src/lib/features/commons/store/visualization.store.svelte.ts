@@ -10,9 +10,12 @@ import {
   SymbolMode
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
-import { generateDuplicateName } from '../utils/naming.utils';
+import {
+  generateDuplicateName,
+  generateUniqueNameWithCounter
+} from '../utils/naming.utils';
 import { datasetsStore } from './datasets.store.svelte';
-import { findById, updateById, removeById } from '../utils/array-helpers';
+import { findById, updateById } from '../utils/array-helpers';
 import {
   DEFAULT_STROKE_COLOR,
   DEFAULT_FILL_COLOR,
@@ -169,7 +172,12 @@ class VisualizationStore {
 
     const config: VisualizationConfig = {
       id: crypto.randomUUID(),
-      name: name || `${type} - ${dataset.name}`,
+      name:
+        name ||
+        generateUniqueNameWithCounter(
+          'Visualisation',
+          this._state.visualizations.map((v) => v.name)
+        ),
       type,
       datasetId,
       enabled: true,

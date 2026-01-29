@@ -716,6 +716,7 @@
   "filter_op_top_desc": "Top valeurs descendantes",
   "filter_op_empty": "Vide",
   "filter_op_not_empty": "Pas vide",
+  "delete_filtered_rows": "Supprimer {count} lignes filtrées",
   "calc_functions": "Fonctions",
   "calc_function_average": "Moyenne",
   "calc_function_sum": "Somme",
