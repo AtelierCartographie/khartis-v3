@@ -7,13 +7,29 @@
     iconSize?: number;
   }
 
-  export let activeIndex: number = 0;
-  export let items: ToggleItem[] = [];
-  export let onChange: (index: number) => void = () => {};
-  export let className: string = '';
-  export let activeClass: string = 'active';
-  export let fullWidthClass: string = 'full-width';
-  export let hideInactiveLabel: boolean = true;
+  interface Props {
+    activeIndex?: number;
+    items?: ToggleItem[];
+    onChange?: (index: number) => void;
+    className?: string;
+    activeClass?: string;
+    fullWidthClass?: string;
+    hideInactiveLabel?: boolean;
+  }
+
+  let {
+    activeIndex = 0,
+    items = [],
+    onChange = () => {},
+    className = '',
+    activeClass = 'active',
+    fullWidthClass = 'full-width',
+    hideInactiveLabel = true
+  }: Props = $props();
+
+  function handleClick(index: number): void {
+    onChange(index);
+  }
 </script>
 
 <div id="khartis-toggle-tabs" class="toggle-tabs {className}">
@@ -27,17 +43,11 @@
         : ''} {index === items.length - 1 && activeIndex === index
         ? 'expand-left'
         : ''}"
-      on:click={() => {
-        activeIndex = index;
-        onChange(index);
-      }}
+      onclick={() => handleClick(index)}
     >
       {#if item.icon}
-        <svelte:component
-          this={item.icon}
-          size={item.iconSize || 20}
-          class="toggle-icon"
-        />
+        {@const Icon = item.icon}
+        <Icon size={item.iconSize || 20} class="toggle-icon" />
       {/if}
       <span class:visually-hidden={hideInactiveLabel && activeIndex !== index}>
         {item.label}

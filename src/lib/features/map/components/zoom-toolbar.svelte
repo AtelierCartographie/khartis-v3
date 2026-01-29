@@ -8,8 +8,9 @@
     globalState
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
 
-  let activeTabIndex: number = $state(0);
+  const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
 
   const zoomItems = [
     {
@@ -25,7 +26,7 @@
   ];
 
   function handleZoomModeChange(index: number): void {
-    activeTabIndex = index;
+    zoomModeStore.setMode(index === 0 ? 'map' : 'page');
   }
 
   function handleZoomIn(): void {
@@ -69,7 +70,7 @@
 <nav id="khartis-zoom-toolbar" class="zoom-toolbar app-shadow">
   <ToggleTabs
     items={zoomItems}
-    bind:activeIndex={activeTabIndex}
+    activeIndex={activeTabIndex}
     onChange={handleZoomModeChange}
     className="zoom-mode-tabs"
   />
