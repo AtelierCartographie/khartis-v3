@@ -733,16 +733,16 @@ export const errorLogger = new ErrorLogger();
 
 Applies SVG `feColorMatrix` filters to simulate 8 color-blindness types.
 
-| Type            | Description                     | Prevalence (M/F)                   |
-| --------------- | ------------------------------- | ---------------------------------- |
-| Protanopia      | Red-blind (dichromacy)          | 1% males, 0.01% females            |
-| Deuteranopia    | Green-blind (dichromacy)        | 1% males, 0.01% females            |
-| Tritanopia      | Blue-blind (dichromacy)         | <0.01% both                        |
-| Protanomaly     | Red-weak (anomalous trichromat) | 1% males, 0.03% females            |
-| Deuteranomaly   | Green-weak                      | 6% males, 0.4% females (most com) |
-| Tritanomaly     | Blue-weak                       | <0.01% both                        |
-| Achromatopsia   | Complete color-blind            | 0.003% both                        |
-| Achromatomaly   | Partial color-blind             | Rare                               |
+| Type          | Description                     | Prevalence (M/F)                  |
+| ------------- | ------------------------------- | --------------------------------- |
+| Protanopia    | Red-blind (dichromacy)          | 1% males, 0.01% females           |
+| Deuteranopia  | Green-blind (dichromacy)        | 1% males, 0.01% females           |
+| Tritanopia    | Blue-blind (dichromacy)         | <0.01% both                       |
+| Protanomaly   | Red-weak (anomalous trichromat) | 1% males, 0.03% females           |
+| Deuteranomaly | Green-weak                      | 6% males, 0.4% females (most com) |
+| Tritanomaly   | Blue-weak                       | <0.01% both                       |
+| Achromatopsia | Complete color-blind            | 0.003% both                       |
+| Achromatomaly | Partial color-blind             | Rare                              |
 
 #### Usage
 

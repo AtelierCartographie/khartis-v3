@@ -68,17 +68,17 @@ function getProcessor(file: UploadedFile): FileProcessor | null;
 
 ### Registered Processors
 
-| Processor                | Types              | Priority | Notes                         |
-| ------------------------ | ------------------ | -------- | ----------------------------- |
-| csvProcessor             | CSV, TSV, TXT      | 100      | DuckDB `read_csv()` with opts |
-| geojsonProcessor         | GeoJSON            | 100      | DuckDB `ST_Read()`            |
-| gpkgProcessor            | GPKG               | 100      | Native DuckDB spatial         |
-| gpxProcessor             | GPX                | 100      | Convert → `ST_Read()`         |
-| kmlProcessor             | KML, KMZ           | 100      | Convert → `ST_Read()`         |
-| shapefileProcessor       | SHP bundle         | 90       | Requires .shp + .dbf + .shx   |
-| zipProcessor             | ZIP                | 50       | Extract → delegate            |
-| fallbackTextProcessor    | text/\*            | 0        | CSV fallback                  |
-| binaryFallbackStrategy   | Binary             | -100     | Validation-only               |
+| Processor              | Types         | Priority | Notes                         |
+| ---------------------- | ------------- | -------- | ----------------------------- |
+| csvProcessor           | CSV, TSV, TXT | 100      | DuckDB `read_csv()` with opts |
+| geojsonProcessor       | GeoJSON       | 100      | DuckDB `ST_Read()`            |
+| gpkgProcessor          | GPKG          | 100      | Native DuckDB spatial         |
+| gpxProcessor           | GPX           | 100      | Convert → `ST_Read()`         |
+| kmlProcessor           | KML, KMZ      | 100      | Convert → `ST_Read()`         |
+| shapefileProcessor     | SHP bundle    | 90       | Requires .shp + .dbf + .shx   |
+| zipProcessor           | ZIP           | 50       | Extract → delegate            |
+| fallbackTextProcessor  | text/\*       | 0        | CSV fallback                  |
+| binaryFallbackStrategy | Binary        | -100     | Validation-only               |
 
 Higher priority = checked first. ZIP (50) extracts before CSV (100) processes contents.
 
