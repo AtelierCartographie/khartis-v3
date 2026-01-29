@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 29 janvier 2026
+> Dernière mise à jour : 29 janvier 2026 (Ralph Loop #2)
 
 ---
 
@@ -17,23 +17,28 @@
 
 ## Résumé global
 
-| Section                      | %        | Reste à faire                                   |
-| ---------------------------- | -------- | ----------------------------------------------- |
-| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                  |
-| 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                                  |
-| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                  |
-| 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto      |
-| 2.B.3-2.B.4 Outils           | **85%**  | ✅ Basemap 85%, recherche+highlight 90%         |
-| 2.C Habillage                | **45%**  | ✅ Légende auto, daltonisme SVG, annotations 🔌 |
-| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                |
-| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                  |
-| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                         |
-| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation          |
-| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG      |
-| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                  |
-| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code          |
+| Section                      | %        | Reste à faire                               |
+| ---------------------------- | -------- | ------------------------------------------- |
+| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                              |
+| 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                              |
+| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                              |
+| 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto  |
+| 2.B.3-2.B.4 Outils           | **86%**  | ✅ Basemap 85%, calques 100%, recherche 90% |
+| 2.C Habillage                | **75%**  | ✅ Légende, daltonisme, annotations 85%     |
+| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                            |
+| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                              |
+| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                     |
+| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation      |
+| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG  |
+| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                              |
+| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code      |
 
-### Avancement global : 87%
+### Avancement global : 89% → 90%
+
+**Quick wins Ralph Loop #2** :
+
+1. Raccourci paramétrage calques (2.B.4.b) - Navigation + scroll vers configure
+2. i18n messages d'erreur export (+6 clés) - map-export & file-export utils
 
 > ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
 >
@@ -235,19 +240,19 @@
 | Remplacer                       | ✅     | replaceAll() dans search-panel.svelte         |
 | Options avancées (regex, casse) | ⚠️     | 30%                                           |
 
-### 2.B.4.b Calques — 95%
+### 2.B.4.b Calques — 100%
 
-| Fonctionnalité                    | Statut | Note                           |
-| --------------------------------- | ------ | ------------------------------ |
-| Calque par visualisation          | ✅     |                                |
-| Sous-calques par primitive        | ✅     |                                |
-| Code couleur + icône              | ✅     |                                |
-| Afficher/masquer                  | ✅     |                                |
-| Déplacement calques (Drag & Drop) | ✅     |                                |
-| Renommer                          | ✅     | OverflowMenu + prompt          |
-| Dupliquer                         | ✅     | OverflowMenu + store.duplicate |
-| Supprimer                         | ✅     | OverflowMenu + confirm         |
-| Raccourci paramétrage             | ⚠️     | 50% - handler stub             |
+| Fonctionnalité                    | Statut | Note                                                           |
+| --------------------------------- | ------ | -------------------------------------------------------------- |
+| Calque par visualisation          | ✅     |                                                                |
+| Sous-calques par primitive        | ✅     |                                                                |
+| Code couleur + icône              | ✅     |                                                                |
+| Afficher/masquer                  | ✅     |                                                                |
+| Déplacement calques (Drag & Drop) | ✅     |                                                                |
+| Renommer                          | ✅     | OverflowMenu + prompt                                          |
+| Dupliquer                         | ✅     | OverflowMenu + store.duplicate                                 |
+| Supprimer                         | ✅     | OverflowMenu + confirm                                         |
+| Raccourci paramétrage             | ✅     | selectVisualization + navigate + scroll (Quick win Ralph #2.1) |
 
 ### 2.B.4.c Projections — 80%
 
@@ -285,7 +290,7 @@
 
 ---
 
-## 2.C. Habillage — 40%
+## 2.C. Habillage — 75%
 
 ### 2.C.1 Habillage prédéfini — 65%
 
@@ -334,18 +339,18 @@
 | Carte en encart (globe)           | 🔌  | 🔧    | UI prête, rendu non implémenté |
 | Taille, couleur, zoom encart      | 🔌  | 🔧    | UI prête, rendu non implémenté |
 
-### 2.C.2.d Annotations — 15%
+### 2.C.2.d Annotations — 85%
 
-| Fonctionnalité                           | UI  | Store | Rendu | Note                             |
-| ---------------------------------------- | --- | ----- | ----- | -------------------------------- |
-| Texte + placement zone texte             | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Style prédéfini/personnalisé (4 styles)  | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Formes (flèche, rectangle, cercle, etc.) | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Réglages forme                           | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Dessin (ligne, zone)                     | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Image (jpg, png, gif, svg, webp)         | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Placement, taille, opacité image         | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Lissage, pointillé                       | 🔌  | 🔌    | ⚠️    |                                  |
+| Fonctionnalité                           | UI  | Store | Rendu | Note                            |
+| ---------------------------------------- | --- | ----- | ----- | ------------------------------- |
+| Texte + placement zone texte             | ✅  | ✅    | ✅    | annotation-overlay.svelte créé  |
+| Style prédéfini/personnalisé (4 styles)  | ✅  | ✅    | ✅    | Texte avec font, size, color    |
+| Formes (flèche, rectangle, cercle, etc.) | ✅  | ✅    | ✅    | 5 formes SVG rendues            |
+| Réglages forme                           | ✅  | ✅    | ✅    | Stroke, fill, width, dasharray  |
+| Dessin (ligne, zone)                     | ✅  | ✅    | ✅    | SVG path avec fill conditionnel |
+| Image (jpg, png, gif, svg, webp)         | ✅  | ✅    | ✅    | Rendu avec size et opacity      |
+| Placement, taille, opacité image         | ✅  | ✅    | ✅    | Position x/y fonctionnelle      |
+| Lissage, pointillé                       | ✅  | ✅    | ⚠️    | Pointillé OK, lissage 30%       |
 
 ### 2.C.2.e Déficiences visuelles — 70%
 
@@ -418,7 +423,7 @@
 
 | Fonctionnalité                      | Statut |
 | ----------------------------------- | ------ |
-| Textes d'accompagnement (1398 clés) | ✅     |
+| Textes d'accompagnement (1410 clés) | ✅     |
 | Facilité modification (Paraglide)   | ✅     |
 | Tooltips                            | ⚠️ 80% |
 | Liens vers aide externe             | ✅     |
@@ -554,7 +559,7 @@
 
 ---
 
-### Avancement global : 87%
+### Avancement global : 89%
 
 ---
 

@@ -132,6 +132,8 @@
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const dataCompleteness = mainToolbarActions.checkDataCompleteness()}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
+    {@const isGeographicMode = dataTabStore.isGeographicMode}
+    {@const canVisualizeNow = dataTabStore.isReadyForVisualization}
 
     <footer
       class={clsx(
@@ -156,32 +158,46 @@
             ? m.data_step_status_controlled()
             : m.data_step_status_clean()}
         />
-        <ProgressStep
-          complete={dataTabStore.hasCompletedStep[1]}
-          disabled={!dataTabStore.canNavigateToStep[1]}
-          label={m.data_tab_geolocate()}
-          description={dataTabStore.hasCompletedStep[1]
-            ? m.geolocation_status_done()
-            : m.geolocation_status_pending()}
-        />
-        <ProgressStep
-          complete={dataTabStore.hasCompletedStep[2]}
-          disabled={!dataTabStore.canNavigateToStep[2]}
-          label={m.data_tab_join()}
-          description={dataTabStore.hasCompletedStep[2]
-            ? m.join_status_done()
-            : m.join_status_pending()}
-        />
+
+        {#if isGeographicMode}
+          <ProgressStep
+            complete={dataTabStore.hasCompletedStep[1]}
+            disabled={!dataTabStore.canNavigateToStep[1]}
+            label={m.data_tab_enrich()}
+            description={dataTabStore.hasCompletedStep[1]
+              ? m.enrich_status_done()
+              : m.enrich_status_pending()}
+          />
+        {:else}
+          <ProgressStep
+            complete={dataTabStore.hasCompletedStep[1]}
+            disabled={!dataTabStore.canNavigateToStep[1]}
+            label={m.data_tab_geolocate()}
+            description={dataTabStore.hasCompletedStep[1]
+              ? m.geolocation_status_done()
+              : m.geolocation_status_pending()}
+          />
+          <ProgressStep
+            complete={dataTabStore.hasCompletedStep[2]}
+            disabled={!dataTabStore.canNavigateToStep[2]}
+            label={m.data_tab_join()}
+            description={dataTabStore.hasCompletedStep[2]
+              ? m.join_status_done()
+              : m.join_status_pending()}
+          />
+        {/if}
 
         <Button
           on:click={mainToolbarActions.navigateToVisualization}
-          disabled={!derivedToolbarState.canVisualize}
+          disabled={!canVisualizeNow}
           icon={ArrowRight}
           class="visualize-button"
           tooltipPosition="top"
           tooltipAlignment="end"
-          iconDescription={!derivedToolbarState.canVisualize
-            ? dataCompleteness.missingSteps.join(', ')
+          iconDescription={!canVisualizeNow
+            ? isGeographicMode
+              ? m.data_step_status_clean()
+              : m.join_status_pending()
             : m.go_to_visualization()}
           size="small">{m.data_tab_visualize()}</Button
         >

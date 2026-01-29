@@ -45,7 +45,7 @@ function toLonLat(position: Position): LonLat {
   const lon = position[0];
   const lat = position[1];
   if (typeof lon !== 'number' || typeof lat !== 'number') {
-    throw new Error('Invalid coordinate position');
+    throw new Error(m.error_invalid_coordinate_position());
   }
   return [lon, lat];
 }
@@ -327,7 +327,7 @@ export function exportMapToSvg(
 
   const geometricDatasets = datasets.filter((d) => d.geometry);
   if (geometricDatasets.length === 0) {
-    throw new Error('No geometric data to export');
+    throw new Error(m.error_no_geometric_data_export());
   }
 
   const bounds = geometricDatasets
@@ -344,7 +344,7 @@ export function exportMapToSvg(
     );
 
   if (!isFinite(bounds.minX)) {
-    throw new Error('Unable to calculate map bounds');
+    throw new Error(m.error_unable_calculate_map_bounds());
   }
 
   const project = createProjection(bounds, opts.width, opts.height);

@@ -14,6 +14,9 @@
     toggleLayerVisibility
   } from './layers.utils.js';
   import SectionHeader from './section-header.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { globalActions } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
 
   const store = layersActions;
   const currentState = $derived(layersState);
@@ -67,8 +70,23 @@
     store.toggleLayerVisibility(layerId);
   }
 
-  function handleOpenSettings(_layerId: string): void {
-    // TODO: Navigate to visualization settings when layer-visualization link is implemented
+  function handleOpenSettings(layerId: string): void {
+    const layer = layers.find((l) => l.id === layerId);
+    if (!layer || layer.type !== 'visualization') return;
+
+    // For visualization layers, the layer ID matches the visualization ID
+    visualizationStore.selectVisualization(layerId);
+
+    // Navigate to Visualizations tab
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+
+    // Scroll to configure section after navigation
+    setTimeout(() => {
+      const configureSection = document.querySelector(
+        '#khartis-viz-tab > div:nth-child(2)'
+      );
+      configureSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   }
 
   function handleRenameLayer(layerId: string): void {

@@ -555,7 +555,7 @@ class ZipProcessor extends FileProcessor {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
-        // empty
+        // Ignore errors - fallback to empty data
       }
 
       const tabularData = convertRowsToTabular(fullData);
