@@ -29,6 +29,7 @@
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import type { DeckMapProps } from '../types';
+  import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -298,6 +299,40 @@
   });
 
   $effect(() => {
+    const simplificationState = getSimplificationState();
+    const lastApplied = simplificationState.lastApplied;
+
+    if (lastApplied) {
+      logEffect('simplification:lastApplied');
+      logger.debug(
+        'Simplification applied, reloading basemap',
+        LogCategory.MAP
+      );
+
+      untrack(async () => {
+        const loaded = await basemapService.loadDefaultBasemap();
+        if (loaded) {
+          // Use simplified version if active
+          if (loaded.activeSimplificationLevel) {
+            const simplifiedTable = basemapService.getSimplifiedBasemapTable(
+              loaded.metadata.file,
+              loaded.activeSimplificationLevel
+            );
+            worldBaseTable = simplifiedTable ?? loaded.geometryTable;
+          } else {
+            worldBaseTable = loaded.geometryTable;
+          }
+
+          const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
+          if (canUpdate) {
+            scheduleLayerUpdate('effect:simplificationApplied');
+          }
+        }
+      });
+    }
+  });
+
+  $effect(() => {
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
@@ -445,7 +480,16 @@
       LogCategory.MAP
     );
     if (loaded) {
-      worldBaseTable = loaded.geometryTable;
+      // Use simplified version if active, otherwise use original
+      if (loaded.activeSimplificationLevel) {
+        const simplifiedTable = basemapService.getSimplifiedBasemapTable(
+          loaded.metadata.file,
+          loaded.activeSimplificationLevel
+        );
+        worldBaseTable = simplifiedTable ?? loaded.geometryTable;
+      } else {
+        worldBaseTable = loaded.geometryTable;
+      }
       // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
       const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
       if (canUpdate) {

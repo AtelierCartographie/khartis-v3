@@ -139,7 +139,9 @@ class DatasetsStore {
 
   updateDataset(
     datasetId: string,
-    updates: Partial<Pick<DatasetResult, 'tableName' | 'columns'>>
+    updates: Partial<
+      Pick<DatasetResult, 'tableName' | 'columns' | 'simplificationApplied'>
+    >
   ): void {
     updateDatasetFn(datasetsState, datasetId, updates);
   }

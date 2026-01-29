@@ -8,6 +8,15 @@ import type {
   SimplificationResult,
   SimplificationState
 } from './simplification.types';
+import { Duck } from '$lib/features/duckdb';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import {
+  simplifyGeometryTable,
+  calculateToleranceFromRate,
+  SIMPLIFICATION_TOLERANCE
+} from '$lib/features/duckdb/operations/simplification';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const DEFAULT_STATE: SimplificationState = {
   source: SimplificationSource.Basemap,
@@ -15,15 +24,6 @@ const DEFAULT_STATE: SimplificationState = {
   rate: 50,
   isProcessing: false
 };
-
-function getVertexReduction(level: SimplificationLevel): number {
-  const reductions = {
-    [SimplificationLevel.Low]: 25,
-    [SimplificationLevel.Medium]: 50,
-    [SimplificationLevel.High]: 75
-  };
-  return reductions[level];
-}
 
 type SimplificationActions = {
   setSource: (source: SimplificationSource) => void;
@@ -39,33 +39,103 @@ const { actions, getState } = createToolStore<
   SimplificationState,
   SimplificationActions
 >(DEFAULT_STATE, (s) => {
-  const performSimplification = (
+  const performSimplification = async (
     _geometryData?: unknown
   ): Promise<SimplificationResult> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        if (s.source === SimplificationSource.Basemap) {
-          const reduction = getVertexReduction(s.level);
-          resolve({
-            type: SimplificationTarget.BASEMAP,
-            level: s.level,
-            simplified: true,
-            vertexReduction: reduction,
-            originalVertices: 10000,
-            simplifiedVertices: Math.round(10000 * (1 - reduction / 100))
-          });
-        } else {
-          resolve({
-            type: SimplificationTarget.GEODATA,
-            rate: s.rate,
-            simplified: true,
-            vertexReduction: s.rate,
-            originalVertices: 15000,
-            simplifiedVertices: Math.round(15000 * (1 - s.rate / 100))
-          });
+    if (s.source === SimplificationSource.Basemap) {
+      const currentBasemap = basemapService.currentBasemap;
+      if (!currentBasemap) {
+        logger.error(
+          'No basemap loaded for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('No basemap loaded');
+      }
+
+      const basemapId = currentBasemap.metadata.file;
+      const tolerance = SIMPLIFICATION_TOLERANCE[s.level];
+
+      logger.info('Starting basemap simplification', LogCategory.DUCKDB, {
+        basemapId,
+        level: s.level,
+        tolerance
+      });
+
+      const tableName = await basemapService.loadGeometryIntoDuckDB(basemapId);
+      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
+
+      await basemapService.simplifyBasemap(basemapId, s.level);
+
+      logger.success('Basemap simplification completed', LogCategory.DUCKDB, {
+        basemapId,
+        metrics
+      });
+
+      return {
+        type: SimplificationTarget.BASEMAP,
+        level: s.level,
+        simplified: true,
+        vertexReduction: metrics.reductionPercentage,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices
+      };
+    } else {
+      const dataset = datasetsStore.selectedDataset;
+      if (!dataset) {
+        logger.error(
+          'No dataset selected for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('No dataset selected');
+      }
+
+      if (!dataset.geometry?.bounds) {
+        logger.error(
+          'Dataset has no geometry bounds for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('Dataset has no geometry bounds');
+      }
+
+      const tolerance = calculateToleranceFromRate(
+        s.rate,
+        dataset.geometry.bounds
+      );
+
+      logger.info('Starting dataset simplification', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        rate: s.rate,
+        tolerance
+      });
+
+      const metrics = await simplifyGeometryTable(
+        Duck,
+        dataset.tableName,
+        tolerance
+      );
+
+      await datasetsStore.updateDataset(dataset.id, {
+        simplificationApplied: {
+          rate: s.rate,
+          tolerance,
+          ...metrics
         }
-      }, 800);
-    });
+      });
+
+      logger.success('Dataset simplification completed', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        metrics
+      });
+
+      return {
+        type: SimplificationTarget.GEODATA,
+        rate: s.rate,
+        simplified: true,
+        vertexReduction: metrics.reductionPercentage,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices
+      };
+    }
   };
 
   return {

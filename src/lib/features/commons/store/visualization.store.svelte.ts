@@ -291,6 +291,44 @@ class VisualizationStore {
     this.incrementVersion();
   }
 
+  createBulkVisualizations(configs: VisualizationConfig[]): void {
+    if (configs.length === 0) {
+      return;
+    }
+
+    configs.forEach((config) => {
+      this._state.visualizations.push(config);
+      this._state.activeVisualizationIds.add(config.id);
+    });
+
+    this.incrementVersion();
+  }
+
+  removeBulkVisualizations(ids: string[]): void {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const idsSet = new Set(ids);
+    const filteredVisualizations = this._state.visualizations.filter(
+      (v) => !idsSet.has(v.id)
+    );
+
+    ids.forEach((id) => {
+      this._state.activeVisualizationIds.delete(id);
+    });
+
+    if (
+      this._state.selectedVisualizationId &&
+      idsSet.has(this._state.selectedVisualizationId)
+    ) {
+      this._state.selectedVisualizationId = filteredVisualizations[0]?.id;
+    }
+
+    this._state.visualizations = filteredVisualizations;
+    this.incrementVersion();
+  }
+
   toggleVisualization(id: string): void {
     if (this._state.activeVisualizationIds.has(id)) {
       this._state.activeVisualizationIds.delete(id);

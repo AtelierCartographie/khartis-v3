@@ -24,6 +24,8 @@
   } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
+  import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
 
   let containerRef: HTMLDivElement;
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
@@ -46,6 +48,9 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  const facetsEnabled = $derived(facetsStore.enabled);
+  const facetsLayout = $derived(facetsStore.layout);
+  const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
   async function convertDatasetToGeoJSON(
     dataset: DatasetResult
@@ -429,13 +434,24 @@
       class:visible={isMapReady}
       bind:this={thematicMapRef}
     >
-      <ThematicMap
-        tables={displayTables}
-        geoJSONs={displayGeoJSONs}
-        width={formatState.width}
-        height={formatState.height}
-        onReady={handleMapReady}
-      />
+      {#if facetsEnabled && facetVisualizations.length > 0}
+        <FacetsGrid
+          visualizations={facetVisualizations}
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          layout={facetsLayout}
+          containerWidth={formatState.width}
+          containerHeight={formatState.height}
+        />
+      {:else}
+        <ThematicMap
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          width={formatState.width}
+          height={formatState.height}
+          onReady={handleMapReady}
+        />
+      {/if}
       <div class="resize-overlay" class:active={isResizing}></div>
     </div>
   {/if}
