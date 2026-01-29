@@ -1,15 +1,3 @@
-/**
- * @module VizSuggesterService
- * @description Cartographic visualization suggestion service based on semio analysis of the dataset
- *
- * 3-step algorithm:
- * 1. Determine the semiological type of each column (QTA, QTR, QL, QLO, geoid, geolat, geolon)
- * 2. Sort columns by relevance (score and missing data)
- * 3. Apply viz criteria compatible with the geometry type
- *
- * Based on the original algorithm from khartis-pipeline-old/src/lib/viz_suggestions.ts
- */
-
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   detectSemioType,

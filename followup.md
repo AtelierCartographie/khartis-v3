@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 28 janvier 2026
+> Dernière mise à jour : 29 janvier 2026
 
 ---
 
@@ -23,7 +23,7 @@
 | 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                                  |
 | 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                  |
 | 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto      |
-| 2.B.3-2.B.4 Outils           | **80%**  | ✅ Basemap 85%, pointillés+ombre connectés      |
+| 2.B.3-2.B.4 Outils           | **85%**  | ✅ Basemap 85%, recherche+highlight 90%         |
 | 2.C Habillage                | **45%**  | ✅ Légende auto, daltonisme SVG, annotations 🔌 |
 | 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                |
 | 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                  |
@@ -33,7 +33,7 @@
 | 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                  |
 | 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code          |
 
-### Avancement global : 86%
+### Avancement global : 87%
 
 > ✅ **Note** : Tous les composants de personnalisation de visualisation sont maintenant connectés au store et au rendu Deck.gl/MapLibre :
 >
@@ -225,15 +225,15 @@
 | Relief               | ✅    | ✅  | 🔧    | Stub (DEM data manquant)        |
 | Villes/Capitales     | ✅    | ✅  | ✅    | 4 symboles, 4 catégories        |
 
-### 2.B.4.a Recherche — 50%
+### 2.B.4.a Recherche — 90%
 
-| Fonctionnalité                  | Statut | Note                         |
-| ------------------------------- | ------ | ---------------------------- |
-| Barre de recherche entités      | ✅     | Fonctionne (données fixture) |
-| Navigation résultats            | ✅     | Prev/Next fonctionnels       |
-| Mise en lumière carte           | 🔧     | Aucune intégration carte     |
-| Remplacer                       | ⚠️     | 50%                          |
-| Options avancées (regex, casse) | ⚠️     | 30%                          |
+| Fonctionnalité                  | Statut | Note                                          |
+| ------------------------------- | ------ | --------------------------------------------- |
+| Barre de recherche entités      | ✅     | DuckDB search avec fuzzy matching             |
+| Navigation résultats            | ✅     | Prev/Next fonctionnels                        |
+| Mise en lumière carte           | ✅     | mapHighlightStore → layer-factory dimming 0.3 |
+| Remplacer                       | ✅     | replaceAll() dans search-panel.svelte         |
+| Options avancées (regex, casse) | ⚠️     | 30%                                           |
 
 ### 2.B.4.b Calques — 95%
 
@@ -554,7 +554,7 @@
 
 ---
 
-### Avancement global : 86%
+### Avancement global : 87%
 
 ---
 

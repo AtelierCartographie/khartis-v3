@@ -5,6 +5,12 @@ import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';
 import { projectStore } from '../project.store.svelte';
+import {
+  findById,
+  removeById,
+  updateById,
+  replaceAtIndex
+} from '../../utils/array-helpers';
 
 export function addProcessedDataset(
   state: DatasetsState,
@@ -18,7 +24,7 @@ export function addProcessedDataset(
 }
 
 export function removeDataset(state: DatasetsState, datasetId: string): void {
-  const filteredDatasets = state.datasets.filter((d) => d.id !== datasetId);
+  const filteredDatasets = removeById(state.datasets, datasetId);
 
   if (state.selectedDatasetId === datasetId) {
     const newSelectedId = filteredDatasets[0]?.id;
@@ -34,7 +40,7 @@ export async function deleteDataset(
   datasetId: string,
   vizOps?: VisualizationStoreOperations | null
 ): Promise<boolean> {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
   if (!dataset) {
     return false;
   }
@@ -72,11 +78,7 @@ export function updateDataset(
     ...updates
   };
 
-  state.datasets = [
-    ...state.datasets.slice(0, datasetIndex),
-    updatedDataset,
-    ...state.datasets.slice(datasetIndex + 1)
-  ];
+  state.datasets = replaceAtIndex(state.datasets, datasetIndex, updatedDataset);
 
   logger.debug('Dataset updated', LogCategory.STORE, {
     datasetId,
@@ -89,15 +91,13 @@ export function updateDatasetRowCount(
   datasetId: string,
   rowCount: number
 ): void {
-  state.datasets = state.datasets.map((d) =>
-    d.id === datasetId
-      ? {
-          ...d,
-          rowCount,
-          metadata: { ...d.metadata }
-        }
-      : d
-  );
+  if (!findById(state.datasets, datasetId)) {
+    logger.warn('Dataset not found for row count update', LogCategory.STORE, {
+      datasetId
+    });
+    return;
+  }
+  state.datasets = updateById(state.datasets, datasetId, { rowCount });
 }
 
 export function updateDatasetTableName(
@@ -115,7 +115,7 @@ export async function renameDataset(
   datasetId: string,
   newName: string
 ): Promise<boolean> {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
   if (!dataset) {
     return false;
   }
@@ -125,7 +125,9 @@ export async function renameDataset(
     return false;
   }
 
-  dataset.name = sanitizedName;
+  state.datasets = updateById(state.datasets, datasetId, {
+    name: sanitizedName
+  });
 
   if (dataset.sourceFileId) {
     await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
@@ -139,7 +141,7 @@ export function renameDatasetOnly(
   datasetId: string,
   newName: string
 ): boolean {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
   if (!dataset) {
     return false;
   }
@@ -149,7 +151,9 @@ export function renameDatasetOnly(
     return false;
   }
 
-  dataset.name = sanitizedName;
+  state.datasets = updateById(state.datasets, datasetId, {
+    name: sanitizedName
+  });
   return true;
 }
 
@@ -157,7 +161,7 @@ export function hasModifications(
   state: DatasetsState,
   datasetId: string
 ): boolean {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
   return dataset ? (dataset.metadata.transformations?.length ?? 0) > 0 : false;
 }
 
@@ -166,7 +170,7 @@ export function recordTransformation(
   datasetId: string,
   description: string
 ): void {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
   if (!dataset) {
     return;
   }
@@ -177,17 +181,12 @@ export function recordTransformation(
     entry
   ];
 
-  state.datasets = state.datasets.map((d) =>
-    d.id === datasetId
-      ? {
-          ...d,
-          metadata: {
-            ...d.metadata,
-            transformations: updatedTransformations
-          }
-        }
-      : d
-  );
+  state.datasets = updateById(state.datasets, datasetId, {
+    metadata: {
+      ...dataset.metadata,
+      transformations: updatedTransformations
+    }
+  });
 }
 
 export function waitForDatasetBySourceFile(
