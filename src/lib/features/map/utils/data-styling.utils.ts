@@ -1,5 +1,8 @@
 import type { VisualizationConfig } from '../../commons/store/visualization.store.svelte';
-import { VisualizationType } from '../../commons/store/visualization.store.svelte';
+import {
+  VisualizationType,
+  ScaleType
+} from '../../commons/store/visualization.store.svelte';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
@@ -26,17 +29,17 @@ export function getSizeForValue(
   max: number,
   minSize: number,
   maxSize: number,
-  scale: 'linear' | 'sqrt' | 'log' = 'linear'
+  scale: ScaleType = ScaleType.LINEAR
 ): number {
   if (max === min) return (minSize + maxSize) / 2;
 
   const normalized = (value - min) / (max - min);
 
   switch (scale) {
-    case 'sqrt':
+    case ScaleType.SQRT:
       return minSize + Math.sqrt(normalized) * (maxSize - minSize);
 
-    case 'log':
+    case ScaleType.LOG:
       return (
         minSize + (Math.log1p(normalized) / Math.log1p(1)) * (maxSize - minSize)
       );

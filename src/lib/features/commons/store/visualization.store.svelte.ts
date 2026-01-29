@@ -12,6 +12,13 @@ import {
 import { deepClone } from '../utils/clone.utils';
 import { generateDuplicateName } from '../utils/naming.utils';
 import { datasetsStore } from './datasets.store.svelte';
+import { findById, updateById, removeById } from '../utils/array-helpers';
+import {
+  DEFAULT_STROKE_COLOR,
+  DEFAULT_FILL_COLOR,
+  DEFAULT_STYLE_OPACITY,
+  DEFAULT_STROKE_WIDTH
+} from '../constants/colors.constants';
 
 export enum VisualizationType {
   CHOROPLETH = 'choropleth',
@@ -26,6 +33,18 @@ export enum ClassificationMethod {
   JENKS = 'jenks',
   MANUAL = 'manual',
   STANDARD_DEVIATION = 'standard_deviation'
+}
+
+export enum ScaleType {
+  LINEAR = 'linear',
+  SQRT = 'sqrt',
+  LOG = 'log'
+}
+
+export enum PrimitiveFilterType {
+  POINT = 'point',
+  LINE = 'line',
+  POLYGON = 'polygon'
 }
 
 export interface VisualizationModes {
@@ -52,12 +71,15 @@ export interface MissingDataConfig {
   pattern?: boolean;
 }
 
-export type PrimitiveFilter = 'point' | 'line' | 'polygon';
+export type PrimitiveFilter =
+  | PrimitiveFilterType.POINT
+  | PrimitiveFilterType.LINE
+  | PrimitiveFilterType.POLYGON;
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
-  'point',
-  'line',
-  'polygon'
+  PrimitiveFilterType.POINT,
+  PrimitiveFilterType.LINE,
+  PrimitiveFilterType.POLYGON
 ];
 
 export interface VisualizationConfig {
@@ -89,7 +111,7 @@ export interface VisualizationConfig {
     size?: number;
     minSize: number;
     maxSize: number;
-    sizeScale: 'linear' | 'sqrt' | 'log';
+    sizeScale: ScaleType;
     opacity?: number;
   };
   missingData?: MissingDataConfig;
@@ -122,8 +144,10 @@ class VisualizationStore {
   }
 
   get selectedVisualization() {
-    return this._state.visualizations.find(
-      (v) => v.id === this._state.selectedVisualizationId
+    if (!this._state.selectedVisualizationId) return undefined;
+    return findById(
+      this._state.visualizations,
+      this._state.selectedVisualizationId
     );
   }
 
@@ -138,7 +162,7 @@ class VisualizationStore {
     datasetId: string,
     name?: string
   ): VisualizationConfig {
-    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
+    const dataset = findById(datasetsStore.datasets, datasetId);
     if (!dataset) {
       throw new Error('Dataset not found');
     }
@@ -166,22 +190,23 @@ class VisualizationStore {
   }
 
   updateModes(id: string, modes: Partial<VisualizationModes>): void {
-    this._state.visualizations = this._state.visualizations.map((v) =>
-      v.id === id
-        ? { ...v, modes: { ...v.modes, ...modes } as VisualizationModes }
-        : v
-    );
+    const viz = findById(this._state.visualizations, id);
+    if (!viz) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      modes: { ...viz.modes, ...modes } as VisualizationModes
+    });
     this.incrementVersion();
   }
 
   togglePrimitiveFilter(id: string, primitive: PrimitiveFilter): void {
-    this._state.visualizations = this._state.visualizations.map((v) => {
-      if (v.id !== id) return v;
-      const current = v.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-      const updated = current.includes(primitive)
-        ? current.filter((p) => p !== primitive)
-        : [...current, primitive];
-      return { ...v, primitiveFilters: updated.length > 0 ? updated : current };
+    const viz = findById(this._state.visualizations, id);
+    if (!viz) return;
+    const current = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    const updated = current.includes(primitive)
+      ? current.filter((p) => p !== primitive)
+      : [...current, primitive];
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      primitiveFilters: updated.length > 0 ? updated : current
     });
     this.incrementVersion();
   }
@@ -190,20 +215,20 @@ class VisualizationStore {
     id: string,
     symbols: Partial<VisualizationConfig['symbols']>
   ): void {
-    this._state.visualizations = this._state.visualizations.map((v) =>
-      v.id === id && v.symbols
-        ? { ...v, symbols: { ...v.symbols, ...symbols } }
-        : v
-    );
+    const viz = findById(this._state.visualizations, id);
+    if (!viz?.symbols) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      symbols: { ...viz.symbols, ...symbols }
+    });
     this.incrementVersion();
   }
 
   updateMissingData(id: string, missingData: Partial<MissingDataConfig>): void {
-    this._state.visualizations = this._state.visualizations.map((v) =>
-      v.id === id && v.missingData
-        ? { ...v, missingData: { ...v.missingData, ...missingData } }
-        : v
-    );
+    const viz = findById(this._state.visualizations, id);
+    if (!viz?.missingData) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      missingData: { ...viz.missingData, ...missingData }
+    });
     this.incrementVersion();
   }
 
@@ -211,23 +236,25 @@ class VisualizationStore {
     id: string,
     classification: Partial<ClassificationConfig>
   ): void {
-    this._state.visualizations = this._state.visualizations.map((v) =>
-      v.id === id && v.classification
-        ? { ...v, classification: { ...v.classification, ...classification } }
-        : v
-    );
+    const viz = findById(this._state.visualizations, id);
+    if (!viz?.classification) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      classification: { ...viz.classification, ...classification }
+    });
     this.incrementVersion();
   }
 
   updateVisualization(id: string, updates: Partial<VisualizationConfig>): void {
-    this._state.visualizations = this._state.visualizations.map((v) =>
-      v.id === id ? { ...v, ...updates, id } : v
-    );
+    if (!findById(this._state.visualizations, id)) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      ...updates,
+      id
+    });
     this.incrementVersion();
   }
 
   duplicateVisualization(id: string): VisualizationConfig | null {
-    const original = this._state.visualizations.find((v) => v.id === id);
+    const original = findById(this._state.visualizations, id);
     if (!original) {
       return null;
     }
@@ -274,24 +301,20 @@ class VisualizationStore {
   }
 
   selectVisualization(id: string): void {
-    const viz = this._state.visualizations.find((v) => v.id === id);
+    const viz = findById(this._state.visualizations, id);
     if (viz) {
       this._state.selectedVisualizationId = id;
     }
   }
 
   invertPalette(id: string): void {
-    this._state.visualizations = this._state.visualizations.map((v) => {
-      if (v.id === id && v.classification?.colors) {
-        return {
-          ...v,
-          classification: {
-            ...v.classification,
-            colors: [...v.classification.colors].reverse()
-          }
-        };
+    const viz = findById(this._state.visualizations, id);
+    if (!viz?.classification?.colors) return;
+    this._state.visualizations = updateById(this._state.visualizations, id, {
+      classification: {
+        ...viz.classification,
+        colors: [...viz.classification.colors].reverse()
       }
-      return v;
     });
     this.incrementVersion();
   }
@@ -316,36 +339,36 @@ class VisualizationStore {
     switch (type) {
       case VisualizationType.CHOROPLETH:
         return {
-          fillOpacity: 0.8,
-          strokeColor: '#ffffff',
-          strokeWidth: 1,
-          strokeOpacity: 1
+          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+          strokeColor: DEFAULT_STROKE_COLOR,
+          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
         };
 
       case VisualizationType.PROPORTIONAL:
         return {
-          fillColor: '#3b82f6',
-          fillOpacity: 0.6,
-          strokeColor: '#ffffff',
-          strokeWidth: 2,
-          strokeOpacity: 1
+          fillColor: DEFAULT_FILL_COLOR,
+          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_LOW,
+          strokeColor: DEFAULT_STROKE_COLOR,
+          strokeWidth: DEFAULT_STROKE_WIDTH.MEDIUM,
+          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
         };
 
       case VisualizationType.CATEGORICAL:
         return {
-          fillOpacity: 0.8,
-          strokeColor: '#ffffff',
-          strokeWidth: 1,
-          strokeOpacity: 1
+          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+          strokeColor: DEFAULT_STROKE_COLOR,
+          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
         };
 
       default:
         return {
-          fillColor: '#3b82f6',
-          fillOpacity: 0.7,
-          strokeColor: '#ffffff',
-          strokeWidth: 1,
-          strokeOpacity: 1
+          fillColor: DEFAULT_FILL_COLOR,
+          fillOpacity: DEFAULT_STYLE_OPACITY.FILL,
+          strokeColor: DEFAULT_STROKE_COLOR,
+          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
         };
     }
   }
@@ -454,7 +477,7 @@ class VisualizationStore {
         size: 12,
         minSize: 5,
         maxSize: 50,
-        sizeScale: 'sqrt',
+        sizeScale: ScaleType.SQRT,
         opacity: 0.8
       };
     }
@@ -463,7 +486,7 @@ class VisualizationStore {
       size: 12,
       minSize: 5,
       maxSize: 50,
-      sizeScale: 'linear',
+      sizeScale: ScaleType.LINEAR,
       opacity: 0.8
     };
   }

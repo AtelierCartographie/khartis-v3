@@ -14,6 +14,7 @@ import {
 } from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
+import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
@@ -627,12 +628,12 @@ export function createDeckLayers(
   const resolvedGeometryType = geometryInfo.type;
 
   const primitiveMap: Record<string, PrimitiveFilter> = {
-    [GeometryType.POINT]: 'point',
-    [GeometryType.MULTIPOINT]: 'point',
-    [GeometryType.LINESTRING]: 'line',
-    [GeometryType.MULTILINESTRING]: 'line',
-    [GeometryType.POLYGON]: 'polygon',
-    [GeometryType.MULTIPOLYGON]: 'polygon'
+    [GeometryType.POINT]: PrimitiveFilterType.POINT,
+    [GeometryType.MULTIPOINT]: PrimitiveFilterType.POINT,
+    [GeometryType.LINESTRING]: PrimitiveFilterType.LINE,
+    [GeometryType.MULTILINESTRING]: PrimitiveFilterType.LINE,
+    [GeometryType.POLYGON]: PrimitiveFilterType.POLYGON,
+    [GeometryType.MULTIPOLYGON]: PrimitiveFilterType.POLYGON
   };
 
   const primitive = primitiveMap[resolvedGeometryType];

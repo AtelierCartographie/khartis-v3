@@ -2,6 +2,7 @@ import type { Color } from '@deck.gl/core';
 import type { DeckDataRow, RGBColor } from '../types';
 import { getSizeForValue, getColorForValue } from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
+import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
 
 export const BASE_FILL_COLOR: RGBColor = [220, 220, 220];
 export const BASE_STROKE_COLOR: RGBColor = [80, 80, 80];
@@ -34,7 +35,7 @@ export function createProportionalSizeAccessor(
   maxValue: number,
   minSize: number,
   maxSize: number,
-  sizeScale: 'linear' | 'sqrt' | 'log'
+  sizeScale: ScaleType
 ) {
   return (object: DeckDataRow): number => {
     const rawValue = object[sizeColumn];
@@ -100,7 +101,7 @@ export function createGeoJsonProportionalSizeAccessor(
   maxValue: number,
   minSize: number,
   maxSize: number,
-  sizeScale: 'linear' | 'sqrt' | 'log',
+  sizeScale: ScaleType,
   defaultSize = 5
 ) {
   return (feature: { properties?: Record<string, unknown> }) => {
