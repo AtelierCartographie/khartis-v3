@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { globalActions, globalState } from '../store/global.svelte';
   import { mapInstanceStore } from '../store/map-instance.store.svelte';
+  import { zoomModeStore } from '../store/zoom-mode.store.svelte';
   import { createProjectActions } from '../store/create-project.store.svelte';
   import { projectStore } from '../store/project.store.svelte';
   import { ToolbarState, ToolbarStep } from '../types/global';
@@ -11,8 +12,6 @@
     '2': ToolbarStep.Visualizations,
     '3': ToolbarStep.Styling
   };
-
-  let isMapZoomActive = $state(true);
 
   onMount(() => {
     function isInputField(target: HTMLElement): boolean {
@@ -55,28 +54,25 @@
     function handleZoomKey(key: string): boolean {
       switch (key) {
         case '+':
-
-        // fallthrough
         case '=':
-          if (isMapZoomActive) {
-            mapInstanceStore.map?.zoomIn();
+          if (zoomModeStore.isMapMode) {
+            mapInstanceStore.zoomIn();
           } else {
             globalActions.zoomInPage();
           }
           return true;
 
         case '-':
-          if (isMapZoomActive) {
-            mapInstanceStore.map?.zoomOut();
+          if (zoomModeStore.isMapMode) {
+            mapInstanceStore.zoomOut();
           } else {
             globalActions.zoomOutPage();
           }
           return true;
 
         case '0':
-          if (isMapZoomActive) {
-            const baseZoom = mapInstanceStore.baseZoomLevel;
-            mapInstanceStore.map?.setZoom(baseZoom);
+          if (zoomModeStore.isMapMode) {
+            mapInstanceStore.resetZoom();
           } else {
             globalActions.resetPageZoom();
           }
@@ -88,7 +84,7 @@
     }
 
     function handleZoomModeToggle(): void {
-      isMapZoomActive = !isMapZoomActive;
+      zoomModeStore.toggle();
     }
 
     function handleNewProject(): void {
@@ -190,14 +186,14 @@
       event.preventDefault();
 
       if (event.deltaY < 0) {
-        if (isMapZoomActive) {
-          mapInstanceStore.map?.zoomIn();
+        if (zoomModeStore.isMapMode) {
+          mapInstanceStore.zoomIn();
         } else {
           globalActions.zoomInPage();
         }
       } else {
-        if (isMapZoomActive) {
-          mapInstanceStore.map?.zoomOut();
+        if (zoomModeStore.isMapMode) {
+          mapInstanceStore.zoomOut();
         } else {
           globalActions.zoomOutPage();
         }
