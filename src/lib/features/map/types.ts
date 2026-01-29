@@ -69,18 +69,6 @@ export interface TooltipEntry {
   value: string;
 }
 
-export interface TooltipStyle {
-  backgroundColor: string;
-  color: string;
-  padding: string;
-  borderRadius: string;
-  fontSize: string;
-  fontFamily: string;
-  boxShadow: string;
-  border: string;
-  maxWidth: string;
-}
-
 // =============================================================================
 // Deck.gl Orthographic View State Types
 // =============================================================================

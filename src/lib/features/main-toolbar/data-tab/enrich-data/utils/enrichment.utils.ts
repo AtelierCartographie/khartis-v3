@@ -1,11 +1,9 @@
-import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import {
   GeoColumnDetector,
   type GeoColumnResult,
   type GeoDetectionResult
 } from '$lib/features/commons/utils/geo-detector.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import type { GeoComboBoxItem } from '../../data-tab.shared.types';
 
 export interface EnrichDataFieldItem {
   id: number;
@@ -94,17 +92,6 @@ export function hasOnlyCoordinates(
   return hasCoordinates && !hasEntityColumn;
 }
 
-export function findEnrichDataFieldItemByColumnName(
-  items: EnrichDataFieldItem[],
-  columnName: string
-): GeoComboBoxItem | undefined {
-  const item = items.find((i) => i.columnName === columnName);
-  if (!item) return undefined;
-  return item;
-}
-
-export const ACCEPTED_ENRICHMENT_EXTENSIONS = ['.csv', '.tsv', '.txt'];
-
 export const ACCEPTED_BASEMAP_EXTENSIONS = [
   '.geojson',
   '.json',
@@ -113,34 +100,3 @@ export const ACCEPTED_BASEMAP_EXTENSIONS = [
   '.kml',
   '.parquet'
 ];
-
-export function enrichJoinStatsWithTargetOptions(
-  stats: {
-    entities: Array<{
-      status: string;
-      matches?: string[];
-      selectedMapping?: string;
-    }>;
-  },
-  allTargetOptions: string[]
-): void {
-  stats.entities = stats.entities.map((entity) => {
-    if (entity.status === JoinStatus.TO_VERIFY) {
-      return {
-        ...entity,
-        basemapOptions: entity.matches?.length
-          ? entity.matches
-          : allTargetOptions.slice(0, 20),
-        selectedMapping: entity.matches?.[0] || undefined
-      };
-    }
-    return entity;
-  });
-}
-
-export function getGeoTableNameFromDataset(
-  dataset: { id: string; duckdbTableName?: string; tableName?: string } | null
-): string | null {
-  if (!dataset) return null;
-  return dataset.duckdbTableName || dataset.tableName || dataset.id;
-}

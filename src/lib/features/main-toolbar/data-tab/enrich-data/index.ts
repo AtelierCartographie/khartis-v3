@@ -18,7 +18,6 @@ export {
 
 export {
   ACCEPTED_BASEMAP_EXTENSIONS,
-  ACCEPTED_ENRICHMENT_EXTENSIONS,
   buildEnrichDataFieldItems,
   buildGeoFileColumns,
   findSuggestedColumn,

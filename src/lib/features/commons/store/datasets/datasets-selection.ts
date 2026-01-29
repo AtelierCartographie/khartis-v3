@@ -1,15 +1,17 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DatasetsState } from './datasets-state.svelte';
 import { dataTabActions } from '../data-tab.store.svelte';
+import { findById } from '../../utils/array-helpers';
 
 export function getSelectedDataset(
   state: DatasetsState
 ): DatasetResult | undefined {
-  return state.datasets.find((d) => d.id === state.selectedDatasetId);
+  if (!state.selectedDatasetId) return undefined;
+  return findById(state.datasets, state.selectedDatasetId);
 }
 
 export function selectDataset(state: DatasetsState, datasetId: string): void {
-  const dataset = state.datasets.find((d) => d.id === datasetId);
+  const dataset = findById(state.datasets, datasetId);
 
   if (dataset && state.selectedDatasetId !== datasetId) {
     state.selectedDatasetId = datasetId;

@@ -25,10 +25,6 @@ export type GeoJSONData = GeoJSONFeature | GeoJSONFeatureCollection;
 
 export type ParsedData = TabularData | GeoJSONData;
 
-export function isTabularData(data: ParsedData): data is TabularData {
-  return Array.isArray(data) && (data.length === 0 || !('type' in data[0]));
-}
-
 export function isGeoJSONFeatureCollection(
   data: ParsedData
 ): data is GeoJSONFeatureCollection {
