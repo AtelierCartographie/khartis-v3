@@ -11,6 +11,9 @@
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);
 
   $effect(() => {
+    void dataTabStore.hasCompletedStep;
+    void dataTabStore.activeStepIndex;
+    void isGeographicMode;
     dataTabStore.updateNavigationPermissions();
   });
 </script>

@@ -23,6 +23,8 @@
   let joinTabularEnabled = $state(false);
   let overlayBasemapEnabled = $state(false);
 
+  import { dataTabStore } from './data-tab.store.svelte';
+
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
 
@@ -102,6 +104,12 @@
       dataTabActions.setEnrichDataState({ targetColumn: columnName });
     }
   }
+
+  $effect(() => {
+    if (selectedDataset && selectedDataset.geometry) {
+      dataTabStore.markStepComplete(1);
+    }
+  });
 </script>
 
 <section id="enrich-data-step">

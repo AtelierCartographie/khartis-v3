@@ -1398,5 +1398,9 @@
   "error_geometry_conversion_message": "Unable to convert geometry for display. The map may appear empty.",
   "error_invalid_mapping_value": "Invalid mapping value",
   "no_variable": "No variable",
-  "map_collection": "Map collection"
+  "map_collection": "Map collection",
+  "annotationImageAlt": "Annotation",
+  "data_tab_enrich": "Enrich",
+  "enrich_status_done": "Enrichment completed",
+  "enrich_status_pending": "Enrich your geographic data"
 }

@@ -27,7 +27,9 @@
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
+  import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import type { DeckMapProps } from '../types';
+  import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
 
@@ -58,7 +60,7 @@
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const RESIZE_DEBOUNCE_MS = 150;
-  const LAYER_UPDATE_DEBOUNCE_MS = 100;
+  const LAYER_UPDATE_DEBOUNCE_MS = 16;
 
   let scheduleCount = 0;
   let effectTriggerLog: string[] = [];
@@ -105,12 +107,16 @@
         !mapBasemap.isStyleLoading
       ) {
         logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
+        mapLoadingStore.setUpdatingLayers(true);
         const start = performance.now();
         mapLayers.updateLayers(tables, geoJSONs);
         logger.debug(
           `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
           LogCategory.MAP
         );
+        requestAnimationFrame(() => {
+          mapLoadingStore.setUpdatingLayers(false);
+        });
       }
     }, LAYER_UPDATE_DEBOUNCE_MS);
   }
@@ -509,8 +515,14 @@
       <SkeletonPlaceholder style="width: 100%; height: 100%;" />
     </div>
   {/if}
+  {#if mapLoadingStore.isUpdatingLayers}
+    <div class="layer-update-indicator" transition:fade={{ duration: 150 }}>
+      <div class="spinner"></div>
+    </div>
+  {/if}
   <GeoIndicationsOverlay />
   <LegendOverlay />
+  <AnnotationOverlay />
 </div>
 
 <style>
@@ -542,6 +554,33 @@
   .view-mode-loader :global(.bx--skeleton__placeholder) {
     width: 100%;
     height: 100%;
+  }
+
+  .layer-update-indicator {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 50;
+    background: var(--cds-ui-01);
+    border-radius: 50%;
+    padding: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    pointer-events: none;
+  }
+
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--cds-ui-03);
+    border-top-color: var(--cds-interactive-01);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   :global(.maplibregl-ctrl-attrib) {

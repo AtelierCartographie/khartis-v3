@@ -5,7 +5,6 @@
  * Centralizes all file type identification logic to avoid scattered string literals.
  */
 
-// File extensions by category
 export const FILE_EXTENSIONS = {
   CSV: ['csv'] as const,
   GEOJSON: ['geojson', 'json'] as const,
@@ -20,7 +19,6 @@ export const FILE_EXTENSIONS = {
   ARROW: ['arrow'] as const
 } as const;
 
-// MIME type patterns for detection
 export const MIME_TYPE_PATTERNS = {
   CSV: 'csv',
   PARQUET: 'parquet',
@@ -28,5 +26,4 @@ export const MIME_TYPE_PATTERNS = {
   TAB_SEPARATED: 'tab-separated'
 } as const;
 
-// Delimiters for tabular data detection
 export const TABULAR_DELIMITERS = [',', ';', '\t', '|'] as const;
