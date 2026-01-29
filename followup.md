@@ -1,6 +1,6 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 29 janvier 2026 (Ralph Loop #2)
+> Dernière mise à jour : 29 janvier 2026 (CDC Sync)
 
 ---
 
@@ -17,23 +17,23 @@
 
 ## Résumé global
 
-| Section                      | %        | Reste à faire                               |
-| ---------------------------- | -------- | ------------------------------------------- |
-| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                              |
-| 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                              |
-| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                              |
-| 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto  |
-| 2.B.3-2.B.4 Outils           | **86%**  | ✅ Basemap 85%, calques 100%, recherche 90% |
-| 2.C Habillage                | **75%**  | ✅ Légende, daltonisme, annotations 85%     |
-| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                            |
-| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                              |
-| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                     |
-| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation      |
-| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG  |
-| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                              |
-| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code      |
+| Section                      | %        | Reste à faire                              |
+| ---------------------------- | -------- | ------------------------------------------ |
+| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                             |
+| 2.A.5 Tableau de données     | **100%** | ✅ Fonctionnel                             |
+| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                             |
+| 2.B.1-2.B.2 Visualisations   | **96%**  | ✅ Score, filtres primitives, légende auto |
+| 2.B.3-2.B.4 Outils           | **92%**  | ✅ Simplification 95%, Facettes 75%        |
+| 2.C Habillage                | **85%**  | ✅ Geo-indications 90%, annotations 85%    |
+| 2.D Téléchargement           | **95%**  | ✅ PNG, résolution, annotations, légende   |
+| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                             |
+| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                    |
+| 2.G Aide                     | **50%**  | 🔧 Créer pages annexes + documentation     |
+| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG |
+| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                             |
+| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code     |
 
-### Avancement global : 89% → 90%
+### Avancement global : 92%
 
 **Quick wins Ralph Loop #2** :
 
@@ -269,28 +269,32 @@
 | Réinitialisation paramètres             | ✅     |                               |
 | Aperçu simplifié performance            | ✅     |                               |
 
-### 2.B.4.d Simplification — 5%
+### 2.B.4.d Simplification — 95%
 
-| Fonctionnalité                    | UI  | Algo | Note                           |
-| --------------------------------- | --- | ---- | ------------------------------ |
-| 3 niveaux prédéfinis              | 🔌  | 🔧   | UI prête, algo stub (mock)     |
-| Taux personnalisé                 | 🔌  | 🔧   | UI prête, algo stub (mock)     |
-| Avertissement suppression entités | 🔌  | 🔧   | Données mockées                |
-| Application sur géométries        | 🔧  | 🔧   | Douglas-Peucker non implémenté |
+| Fonctionnalité                    | UI  | Algo | Note                                              |
+| --------------------------------- | --- | ---- | ------------------------------------------------- |
+| 3 niveaux prédéfinis              | ✅  | ✅   | RadioButtonGroup Low/Medium/High → store.setLevel |
+| Taux personnalisé                 | ✅  | ✅   | Slider 0-100% → store.setRate                     |
+| Avertissement suppression entités | ✅  | ✅   | Métriques réelles (vertices, réduction %)         |
+| Application sur géométries        | ✅  | ✅   | DuckDB ST_Simplify + ST_SimplifyPreserveTopology  |
+| Support Basemap + Geo             | ✅  | ✅   | Tabs toggle dans simplification.svelte            |
+| Undo simplification               | ✅  | ✅   | undoLastSimplification() dans store               |
 
-### 2.B.4.e Collection (Facettes) — 3%
+### 2.B.4.e Collection (Facettes) — 75%
 
-| Fonctionnalité                | Statut |
-| ----------------------------- | ------ |
-| Collection small multiples    | 🔧     |
-| Sélection plusieurs variables | 🔧     |
-| Échelle commune/propre        | 🔧     |
-| Disposition colonnes          | 🔧     |
-| Pastille incitation sur icône | 🔧     |
+| Fonctionnalité                | Statut | Note                                       |
+| ----------------------------- | ------ | ------------------------------------------ |
+| Collection small multiples    | ✅     | facets-grid.svelte avec CSS Grid dynamique |
+| Sélection plusieurs variables | ✅     | MultiSelect (min 2, max 9 avec warning)    |
+| Échelle commune/propre        | ✅     | scaleMode: shared/independent dans store   |
+| Disposition colonnes          | ✅     | RadioButtonGroup 2/3/4 colonnes + gap      |
+| Pastille incitation sur icône | 🔧     |                                            |
+| Sync pan/zoom entre facettes  | ✅     | syncPanZoom option dans FacetsState        |
+| Generate/Exit buttons         | ✅     | generateFacetVisualizations() implémenté   |
 
 ---
 
-## 2.C. Habillage — 75%
+## 2.C. Habillage — 85%
 
 ### 2.C.1 Habillage prédéfini — 65%
 
@@ -329,15 +333,16 @@
 | Rendu overlay sur carte  | ✅     | legend-overlay.svelte intégré       |
 | Pastille incitation      | ⚠️     | 20%                                 |
 
-### 2.C.2.c Indications géographiques — 60%
+### 2.C.2.c Indications géographiques — 90%
 
-| Fonctionnalité                    | UI  | Rendu | Note                           |
-| --------------------------------- | --- | ----- | ------------------------------ |
-| Échelle (distance, unité)         | ✅  | ✅    |                                |
-| Orientation flèche/rose des vents | ✅  | ✅    |                                |
-| Taille, couleur orientation       | ✅  | ✅    |                                |
-| Carte en encart (globe)           | 🔌  | 🔧    | UI prête, rendu non implémenté |
-| Taille, couleur, zoom encart      | 🔌  | 🔧    | UI prête, rendu non implémenté |
+| Fonctionnalité                    | UI  | Rendu | Note                                         |
+| --------------------------------- | --- | ----- | -------------------------------------------- |
+| Échelle (distance, unité)         | ✅  | ✅    | SVG scale bar dans geo-indications-overlay   |
+| Orientation flèche/rose des vents | ✅  | ✅    | RadioButtonGroup arrow/compass + rendu       |
+| Taille, couleur orientation       | ✅  | ✅    | Slider size + ColorPicker connectés          |
+| Carte en encart (globe)           | ✅  | ✅    | RadioButtonGroup globe/planisphere + overlay |
+| Taille, couleur, zoom encart      | ✅  | ✅    | Sliders size/zoom/contrast + window color    |
+| Store connecté                    | ✅  | ✅    | geo-indications.store.svelte.ts complet      |
 
 ### 2.C.2.d Annotations — 85%
 
@@ -362,17 +367,21 @@
 
 ---
 
-## 2.D. Téléchargement — 85%
+## 2.D. Téléchargement — 95%
 
-### 2.D.1 Carte — 90%
+### 2.D.1 Carte — 100%
 
-| Fonctionnalité                       | Statut | Note                         |
-| ------------------------------------ | ------ | ---------------------------- |
-| Bouton menu présent toutes étapes    | ✅     |                              |
-| 3 onglets (Projet, Carte, Données)   | ✅     |                              |
-| Export JPG (1920x1080)               | ✅     | Avec watermark Khartis       |
-| Export SVG (avec groupes par calque) | ✅     | Groupes par visualization ID |
-| Calques organisés SVG                | ✅     |                              |
+| Fonctionnalité                       | Statut | Note                                      |
+| ------------------------------------ | ------ | ----------------------------------------- |
+| Bouton menu présent toutes étapes    | ✅     |                                           |
+| 3 onglets (Projet, Carte, Données)   | ✅     |                                           |
+| Export JPG                           | ✅     | Avec watermark Khartis                    |
+| Export PNG                           | ✅     | Nouveau format ajouté                     |
+| Export SVG (avec groupes par calque) | ✅     | Structure CDC conforme                    |
+| Calques organisés SVG                | ✅     | basemap, viz-{id}/polygons/symbols/labels |
+| Sélecteur résolution (PNG/JPG)       | ✅     | 1080p, 2K, 4K                             |
+| Export annotations dans SVG          | ✅     | Texte, formes, dessins, images            |
+| Export légende dans SVG              | ✅     | Position, background, classification      |
 
 ### 2.D.2 Données — 85%
 
@@ -559,7 +568,31 @@
 
 ---
 
-### Avancement global : 89%
+### Avancement global : 92%
+
+---
+
+## Sync CDC - 29 janvier 2026
+
+### Modifications apportées
+
+| Section | Fonctionnalité  | Ancien | Nouveau | Raison                                                   |
+| ------- | --------------- | ------ | ------- | -------------------------------------------------------- |
+| 2.B.4.d | Simplification  | 5%     | 95%     | DuckDB ST_Simplify réel, store complet, UI connectée     |
+| 2.B.4.e | Facettes        | 3%     | 75%     | facets-grid.svelte, MultiSelect, scaleMode implémentés   |
+| 2.C.2.c | Geo-indications | 60%    | 90%     | Inset map rendu complet (geo-indications-overlay.svelte) |
+
+### Fichiers clés analysés
+
+| Fonctionnalité  | Fichiers                                                                       |
+| --------------- | ------------------------------------------------------------------------------ |
+| Simplification  | `simplification.ts`, `simplification.store.svelte.ts`, `simplification.svelte` |
+| Facettes        | `facets.store.svelte.ts`, `facets.svelte`, `facets-grid.svelte`                |
+| Geo-indications | `geo-indications.store.svelte.ts`, `geo-indications-overlay.svelte`            |
+
+### Commit récent confirmant implémentation
+
+- `97422b1 feat(map): implement geometry simplification and facets visualization`
 
 ---
 

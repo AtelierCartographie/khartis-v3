@@ -9,8 +9,11 @@ import {
 } from '$lib/features/commons/utils/file-export.utils';
 import {
   exportMapToSvg,
-  exportMapToJpg
+  exportMapToJpg,
+  exportMapToPng
 } from '$lib/features/commons/utils/map-export.utils';
+import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
@@ -40,9 +43,15 @@ export async function exportMapAsSvg(fileName: string): Promise<void> {
   validateMapExportPrerequisites();
 
   const processedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
   const blob = exportMapToSvg(
     processedDatasets,
-    visualizationStore.activeVisualizations
+    visualizationStore.activeVisualizations,
+    {},
+    annotations,
+    legend
   );
   const filename = generateExportFilename(fileName, 'svg');
 
@@ -50,18 +59,60 @@ export async function exportMapAsSvg(fileName: string): Promise<void> {
   logger.info('SVG export completed', LogCategory.EXPORT, { filename });
 }
 
-export async function exportMapAsJpg(fileName: string): Promise<void> {
+export async function exportMapAsJpg(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
   validateMapExportPrerequisites();
 
   const processedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
   const blob = await exportMapToJpg(
     processedDatasets,
-    visualizationStore.activeVisualizations
+    visualizationStore.activeVisualizations,
+    { width, height },
+    annotations,
+    legend
   );
   const filename = generateExportFilename(fileName, 'jpg');
 
   downloadFile(blob, filename);
-  logger.info('JPG export completed', LogCategory.EXPORT, { filename });
+  logger.info('JPG export completed', LogCategory.EXPORT, {
+    filename,
+    width,
+    height
+  });
+}
+
+export async function exportMapAsPng(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
+  validateMapExportPrerequisites();
+
+  const processedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
+  const blob = await exportMapToPng(
+    processedDatasets,
+    visualizationStore.activeVisualizations,
+    { width, height },
+    annotations,
+    legend
+  );
+  const filename = generateExportFilename(fileName, 'png');
+
+  downloadFile(blob, filename);
+  logger.info('PNG export completed', LogCategory.EXPORT, {
+    filename,
+    width,
+    height
+  });
 }
 
 export async function exportData(
