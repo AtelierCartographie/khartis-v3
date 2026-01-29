@@ -18,6 +18,12 @@ import {
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
+import { SimplificationLevel } from '../../commons/types/enums';
+import {
+  simplifyGeometryTable,
+  getSimplifiedArrowTable,
+  SIMPLIFICATION_TOLERANCE
+} from '../../duckdb/operations/simplification';
 
 interface AdditionalBasemapData {
   lakesData: FeatureCollection<Polygon | MultiPolygon> | null;
@@ -37,6 +43,8 @@ interface LoadedBasemap {
   metadata: BasemapMetadata;
   geometryTable: ArrowTable;
   layerTables: SvelteMap<string, ArrowTable>;
+  simplifiedVariants?: SvelteMap<SimplificationLevel, ArrowTable>;
+  activeSimplificationLevel?: SimplificationLevel | null;
 }
 
 class BasemapService {
@@ -463,6 +471,118 @@ class BasemapService {
       });
     } catch (error) {
       logger.warn('Failed to load cities data', LogCategory.MAP, error);
+    }
+  }
+
+  async simplifyBasemap(
+    basemapId: string,
+    level: SimplificationLevel
+  ): Promise<ArrowTable> {
+    const loadedBasemap = this._basemapCache.get(basemapId);
+
+    if (!loadedBasemap) {
+      throw new Error(`Basemap not loaded: ${basemapId}`);
+    }
+
+    if (!loadedBasemap.simplifiedVariants) {
+      loadedBasemap.simplifiedVariants = new SvelteMap<
+        SimplificationLevel,
+        ArrowTable
+      >();
+    }
+
+    if (loadedBasemap.simplifiedVariants.has(level)) {
+      logger.debug('Using cached simplified basemap', LogCategory.MAP, {
+        basemapId,
+        level
+      });
+      loadedBasemap.activeSimplificationLevel = level;
+      return loadedBasemap.simplifiedVariants.get(level)!;
+    }
+
+    const start = performance.now();
+    logger.info('Simplifying basemap geometry', LogCategory.MAP, {
+      basemapId,
+      level
+    });
+
+    try {
+      const tableName = await this.loadGeometryIntoDuckDB(basemapId);
+      const tolerance = SIMPLIFICATION_TOLERANCE[level];
+
+      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
+
+      const simplifiedTable = await getSimplifiedArrowTable(
+        Duck,
+        tableName,
+        tolerance
+      );
+
+      loadedBasemap.simplifiedVariants.set(level, simplifiedTable);
+      loadedBasemap.activeSimplificationLevel = level;
+
+      logger.success('Basemap geometry simplified', LogCategory.MAP, {
+        basemapId,
+        level,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices,
+        reductionPercentage: `${metrics.reductionPercentage}%`,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return simplifiedTable;
+    } catch (error) {
+      logger.error('Failed to simplify basemap geometry', LogCategory.MAP, {
+        basemapId,
+        level,
+        error
+      });
+      throw error;
+    }
+  }
+
+  getSimplifiedBasemapTable(
+    basemapId: string,
+    level?: SimplificationLevel
+  ): ArrowTable | null {
+    const loadedBasemap = this._basemapCache.get(basemapId);
+
+    if (!loadedBasemap) {
+      return null;
+    }
+
+    const targetLevel = level ?? loadedBasemap.activeSimplificationLevel;
+
+    if (!targetLevel || !loadedBasemap.simplifiedVariants) {
+      return null;
+    }
+
+    return loadedBasemap.simplifiedVariants.get(targetLevel) ?? null;
+  }
+
+  clearSimplificationCache(basemapId?: string): void {
+    if (basemapId) {
+      const loadedBasemap = this._basemapCache.get(basemapId);
+      if (loadedBasemap) {
+        loadedBasemap.simplifiedVariants?.clear();
+        loadedBasemap.activeSimplificationLevel = null;
+        logger.debug(
+          'Simplification cache cleared for basemap',
+          LogCategory.MAP,
+          {
+            basemapId
+          }
+        );
+      }
+    } else {
+      for (const [id, basemap] of this._basemapCache) {
+        basemap.simplifiedVariants?.clear();
+        basemap.activeSimplificationLevel = null;
+      }
+      logger.debug(
+        'Simplification cache cleared for all basemaps',
+        LogCategory.MAP
+      );
     }
   }
 
