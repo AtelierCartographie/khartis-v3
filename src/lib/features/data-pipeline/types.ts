@@ -236,6 +236,14 @@ export interface DatasetResult {
   geoDetection?: GeoDetectionResult;
   joinedBasemap?: string;
   geoColumn?: string;
+  simplificationApplied?: {
+    rate: number;
+    tolerance: number;
+    originalVertices: number;
+    simplifiedVertices: number;
+    reductionPercentage: number;
+    duration: number;
+  };
 }
 
 export interface ProcessedDatasetAnalysisResult {

@@ -62,7 +62,9 @@ export async function deleteDataset(
 export function updateDataset(
   state: DatasetsState,
   datasetId: string,
-  updates: Partial<Pick<DatasetResult, 'tableName' | 'columns'>>
+  updates: Partial<
+    Pick<DatasetResult, 'tableName' | 'columns' | 'simplificationApplied'>
+  >
 ): void {
   const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);
 
