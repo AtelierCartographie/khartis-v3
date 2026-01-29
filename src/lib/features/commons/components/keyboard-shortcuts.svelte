@@ -192,7 +192,7 @@
         } else {
           globalActions.zoomInPage();
         }
-      } else {
+      } else if (event.deltaY > 0) {
         if (zoomModeStore.isMapMode) {
           mapInstanceStore.zoomOut();
         } else {
@@ -206,7 +206,7 @@
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('wheel', handleWheel);
+      document.removeEventListener('wheel', handleWheel, { capture: true });
     };
   });
 </script>
