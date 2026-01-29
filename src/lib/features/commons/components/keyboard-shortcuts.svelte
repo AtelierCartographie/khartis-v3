@@ -184,6 +184,7 @@
       }
 
       event.preventDefault();
+      event.stopPropagation();
 
       if (event.deltaY < 0) {
         if (zoomModeStore.isMapMode) {
@@ -201,7 +202,7 @@
     }
 
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('wheel', handleWheel, { passive: false });
+    document.addEventListener('wheel', handleWheel, { passive: false, capture: true });
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
