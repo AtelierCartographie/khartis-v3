@@ -11,9 +11,9 @@
     reset: void;
   }>();
 
-  let activeTabIndex: number = 0;
-  let isCodeView: boolean = false;
-  let crsCode: string = '';
+  let activeTabIndex = $state(0);
+  let isCodeView = $state(false);
+  let crsCode = $state('');
 
   const items = PROJECTIONS.map((p) => ({ id: p.id, text: p.title }));
   const catalogueLabel = m.projection_catalog_label();
@@ -41,6 +41,7 @@
   ];
 
   function handleViewChange(index: number): void {
+    activeTabIndex = index;
     isCodeView = index === 1;
   }
 
@@ -62,7 +63,7 @@
   <div class="other-proj">
     <ToggleTabs
       items={viewTabs}
-      bind:activeIndex={activeTabIndex}
+      activeIndex={activeTabIndex}
       onChange={handleViewChange}
       className="projection-view-tabs"
       hideInactiveLabel={true}
