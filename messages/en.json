@@ -716,6 +716,7 @@
   "filter_op_top_desc": "Top descending values",
   "filter_op_empty": "Empty",
   "filter_op_not_empty": "Not empty",
+  "delete_filtered_rows": "Delete {count} filtered rows",
   "calc_functions": "Functions",
   "calc_function_average": "Average",
   "calc_function_sum": "Sum",

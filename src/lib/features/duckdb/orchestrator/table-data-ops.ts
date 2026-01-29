@@ -1,12 +1,6 @@
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import type {
-  AnalysisResult,
-  ArrowTableLike,
-  DataTableFilter,
-  FilterStats
-} from '../types';
+import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
 
@@ -138,6 +132,25 @@ export async function getRowStats(
   ]);
 
   return { total, filtered };
+}
+
+export async function getFilteredRowIds(
+  tableName: string,
+  Duck: DuckDBClientForTableData
+): Promise<number[]> {
+  const filters = getFiltersMap();
+  const whereClause = buildFilterWhereClause(filters.get(tableName));
+  if (!whereClause) return [];
+
+  const query = `SELECT __id FROM "${tableName}" WHERE ${whereClause}`;
+  const result = (await Duck.query(query)) as ArrowTableLike;
+
+  const ids: number[] = [];
+  for (let i = 0; i < result.numRows; i++) {
+    const row = result.get(i) as { __id: number };
+    ids.push(row.__id);
+  }
+  return ids;
 }
 
 export async function analyzeTable(

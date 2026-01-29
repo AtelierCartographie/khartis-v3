@@ -445,6 +445,18 @@ export const duckDBOrchestrator = {
     state.bumpDatasetsVersion();
   },
 
+  async deleteFilteredRows(tableName: string): Promise<number> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const rowIds = await tableDataOps.getFilteredRowIds(tableName, Duck);
+    if (rowIds.length === 0) return 0;
+
+    await columnOps.dropRows(tableName, rowIds, Duck);
+    state.bumpDatasetsVersion();
+    return rowIds.length;
+  },
+
   async refineColumn(
     tableName: string,
     columnName: string,
