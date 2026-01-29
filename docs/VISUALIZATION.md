@@ -413,16 +413,16 @@ Apply SVG `feColorMatrix` filters to simulate 8 color-blindness types.
 
 ### Supported Types
 
-| Type              | Description                    | Matrix Transformation |
-| ----------------- | ------------------------------ | --------------------- |
-| Protanopia        | Red-blind (dichromacy)         | Remove red channel    |
-| Deuteranopia      | Green-blind (dichromacy)       | Remove green channel  |
-| Tritanopia        | Blue-blind (dichromacy)        | Remove blue channel   |
-| Protanomaly       | Red-weak (anomalous trichromat | Reduce red            |
-| Deuteranomaly     | Green-weak                     | Reduce green          |
-| Tritanomaly       | Blue-weak                      | Reduce blue           |
-| Achromatopsia     | Complete color-blind           | Grayscale             |
-| Achromatomaly     | Partial color-blind            | Reduced saturation    |
+| Type          | Description                    | Matrix Transformation |
+| ------------- | ------------------------------ | --------------------- |
+| Protanopia    | Red-blind (dichromacy)         | Remove red channel    |
+| Deuteranopia  | Green-blind (dichromacy)       | Remove green channel  |
+| Tritanopia    | Blue-blind (dichromacy)        | Remove blue channel   |
+| Protanomaly   | Red-weak (anomalous trichromat | Reduce red            |
+| Deuteranomaly | Green-weak                     | Reduce green          |
+| Tritanomaly   | Blue-weak                      | Reduce blue           |
+| Achromatopsia | Complete color-blind           | Grayscale             |
+| Achromatomaly | Partial color-blind            | Reduced saturation    |
 
 ### Usage
 

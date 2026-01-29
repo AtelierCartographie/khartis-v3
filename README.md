@@ -69,16 +69,16 @@ pnpm build && pnpm preview
 
 ## Commands
 
-| Command        | Description              |
-| -------------- | ------------------------ |
-| `pnpm dev`     | Development server       |
-| `pnpm build`   | Production build         |
-| `pnpm check`   | Svelte type check        |
-| `pnpm lint`    | ESLint + Prettier check  |
-| `pnpm format`  | Auto-format code         |
-| `pnpm test`    | All tests (unit + E2E)   |
-| `pnpm test:unit` | Vitest unit tests      |
-| `pnpm test:e2e`  | Playwright E2E tests   |
+| Command          | Description             |
+| ---------------- | ----------------------- |
+| `pnpm dev`       | Development server      |
+| `pnpm build`     | Production build        |
+| `pnpm check`     | Svelte type check       |
+| `pnpm lint`      | ESLint + Prettier check |
+| `pnpm format`    | Auto-format code        |
+| `pnpm test`      | All tests (unit + E2E)  |
+| `pnpm test:unit` | Vitest unit tests       |
+| `pnpm test:e2e`  | Playwright E2E tests    |
 
 **DuckDB Extensions**: Auto-downloaded on `pnpm install` (spatial, parquet, httpfs) for offline PWA.
 

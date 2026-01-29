@@ -257,6 +257,7 @@ export const basemapLayersStore = new BasemapLayersStore();
 **UI Integration**: `visualization-tab/components/basemap-layers/` (7 layer-specific components)
 
 **Layer Types**:
+
 - `TerreLayerConfig` - Fill color/shadow, stroke dotted/thickness
 - `MersLayerConfig` - Sea color/opacity
 - `LacsLayerConfig`, `RivieresLayerConfig` - Water bodies
