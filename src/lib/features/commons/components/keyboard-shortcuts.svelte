@@ -202,7 +202,10 @@
     }
 
     document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+    document.addEventListener('wheel', handleWheel, {
+      passive: false,
+      capture: true
+    });
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
