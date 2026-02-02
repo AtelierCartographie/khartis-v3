@@ -114,7 +114,7 @@ export async function waitForModal(
 
 export async function waitForMap(page: Page, timeout?: number): Promise<void> {
   const mapTimeout = timeout ?? TIMEOUTS.map;
-  await page.waitForSelector('.map-container', {
+  await page.waitForSelector('.map-canvas, canvas', {
     state: 'visible',
     timeout: mapTimeout
   });
