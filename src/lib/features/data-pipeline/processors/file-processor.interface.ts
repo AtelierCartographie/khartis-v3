@@ -1,6 +1,5 @@
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { Table } from 'apache-arrow/Arrow';
-import type { FileFormat, FileInfo } from '../types';
 import type {
   FileType,
   UploadedFile

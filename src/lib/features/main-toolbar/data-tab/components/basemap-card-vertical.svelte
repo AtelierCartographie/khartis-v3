@@ -113,15 +113,15 @@
   }
 
   .basemap-card.border-default {
-    border: 1px solid var(--cds-pale-blue);
+    border: 1px solid var(--color-blue-light, var(--cds-pale-blue));
   }
 
   .basemap-card.variant-gray.border-default {
-    border: 1px solid var(--cds-medium-gray);
+    border: 1px solid var(--border-subtle, var(--cds-medium-gray));
   }
 
   .basemap-card.border-2.border-selected {
-    border: 2px solid var(--cds-blue);
+    border: 2px solid var(--interactive-hover, var(--cds-blue));
   }
 
   .basemap-card.variant-gray.border-2.border-selected {
@@ -129,11 +129,11 @@
   }
 
   .basemap-card:not(.variant-gray):hover .top-section {
-    background-color: var(--cds-pale-blue);
+    background-color: var(--color-info-bg, var(--cds-pale-blue));
   }
 
   .basemap-card:not(.variant-gray):hover .content-section {
-    background-color: var(--cds-pale-blue);
+    background-color: var(--color-info-bg, var(--cds-pale-blue));
   }
 
   .basemap-card.variant-gray:hover .top-section {
@@ -160,7 +160,7 @@
   }
 
   .top-section :global(svg) {
-    color: var(--cds-blue);
+    color: var(--interactive-hover, var(--cds-blue));
   }
 
   .variant-gray .top-section :global(svg) {
@@ -172,7 +172,7 @@
     font-weight: 600;
     line-height: 1.2;
     margin: 0.25rem 0 0;
-    color: var(--cds-blue);
+    color: var(--interactive-hover, var(--cds-blue));
   }
 
   .variant-gray .ratio-label {
@@ -181,7 +181,7 @@
 
   .preview-label {
     font-size: 0.75rem;
-    color: var(--cds-blue);
+    color: var(--interactive-hover, var(--cds-blue));
   }
 
   .variant-gray .preview-label {
@@ -191,28 +191,28 @@
   .content-section {
     display: flex;
     flex-direction: column;
-    padding: 1rem;
-    background-color: var(--cds-pale-blue);
-    gap: 0.375rem;
+    padding: var(--spacing-05, 1rem);
+    background-color: var(--color-info-bg, var(--cds-pale-blue));
+    gap: var(--spacing-02, 0.375rem);
     flex: 1;
   }
 
   .variant-gray .content-section {
-    background-color: var(--cds-light-gray);
+    background-color: var(--bg-layer, var(--cds-light-gray));
   }
 
   .title-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: var(--spacing-03, 0.5rem);
   }
 
   .card-title {
     margin: 0;
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--cds-dark-blue);
+    font-size: var(--font-size-body, 0.875rem);
+    font-weight: var(--font-weight-bold, 700);
+    color: var(--interactive-dark, var(--cds-dark-blue));
     line-height: 1.3;
     flex: 1;
   }
@@ -255,9 +255,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.75rem;
-    color: var(--cds-dark-blue);
-    margin-top: 0.5rem;
+    font-size: var(--font-size-label, 0.75rem);
+    color: var(--interactive-dark, var(--cds-dark-blue));
+    margin-top: var(--spacing-03, 0.5rem);
   }
 
   .variant-gray .metadata-row {
@@ -272,27 +272,27 @@
   .date {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--spacing-02, 0.25rem);
   }
 
   .match-section {
     display: flex;
     flex-direction: column;
-    gap: 0.375rem;
-    padding: 0.75rem 1rem;
-    background-color: var(--cds-pale-blue);
-    border-top: 1px solid var(--cds-dark-blue);
+    gap: var(--spacing-02, 0.375rem);
+    padding: var(--spacing-04, 0.75rem) var(--spacing-05, 1rem);
+    background-color: var(--color-info-bg, var(--cds-pale-blue));
+    border-top: 1px solid var(--interactive-dark, var(--cds-dark-blue));
   }
 
   .variant-gray .match-section {
-    background-color: var(--cds-light-gray);
+    background-color: var(--bg-layer, var(--cds-light-gray));
     border-top: 1px solid var(--cds-dark-gray);
   }
 
   .match-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-dark-blue);
+    font-size: var(--font-size-label, 0.75rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--interactive-dark, var(--cds-dark-blue));
   }
 
   .variant-gray .match-label {
@@ -300,9 +300,9 @@
   }
 
   .match-value {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--cds-dark-blue);
+    font-size: var(--font-size-body, 0.875rem);
+    font-weight: var(--font-weight-bold, 700);
+    color: var(--interactive-dark, var(--cds-dark-blue));
   }
 
   .variant-gray .match-value {

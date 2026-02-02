@@ -102,7 +102,7 @@ async function processAdditionalFiles(
   file: File,
   shapefileDataset: DatasetResult,
   otherFiles: Awaited<ReturnType<typeof extractZip>>['files'],
-  start: number
+  _start: number
 ): Promise<DatasetResult | ZipDatasetResult> {
   logger.info(
     'ZIP contains additional files besides shapefile',

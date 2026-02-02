@@ -42,7 +42,9 @@ import {
 
 class ProjectStore implements ProjectStateContainer {
   _state = $state(createProjectState());
+
   autoSave: AutoSaveController;
+
   initPromise?: Promise<void>;
 
   constructor() {

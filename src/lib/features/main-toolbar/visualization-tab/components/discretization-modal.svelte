@@ -41,7 +41,7 @@
     onchange
   }: Props = $props();
 
-  let isCalculating = $state(false);
+  let _isCalculating = $state(false);
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -105,7 +105,7 @@
       return;
     }
 
-    isCalculating = true;
+    _isCalculating = true;
     try {
       const result = await calculateBreaks({
         datasetId: dataset.sourceFileId,
@@ -137,7 +137,7 @@
         });
       }
     } finally {
-      isCalculating = false;
+      _isCalculating = false;
     }
   }
 

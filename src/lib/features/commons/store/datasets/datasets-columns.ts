@@ -1,4 +1,3 @@
-import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DatasetsState } from './datasets-state.svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../utils/logger';

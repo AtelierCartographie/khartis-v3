@@ -21,14 +21,17 @@
     color?: string;
     shape?: MissingDataShape;
     size?: number;
+    opacity?: number;
     showPattern?: boolean;
     pattern?: boolean;
     showShapeSelector?: boolean;
     showSizeSlider?: boolean;
+    showOpacitySlider?: boolean;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
     onsizechange?: (size: number) => void;
+    onopacitychange?: (opacity: number) => void;
     onpatternchange?: (pattern: boolean) => void;
   }
 
@@ -37,14 +40,17 @@
     color = DEFAULT_COLORS.missingData,
     shape = MissingDataShape.CIRCLE,
     size = 2,
+    opacity = 1,
     showPattern = false,
     pattern = false,
     showShapeSelector = true,
     showSizeSlider = true,
+    showOpacitySlider = false,
     onshowchange,
     oncolorchange,
     onshapechange,
     onsizechange,
+    onopacitychange,
     onpatternchange
   }: Props = $props();
 
@@ -63,6 +69,7 @@
   <ToggleWithLabel
     label={m.show_missing_data()}
     toggled={show}
+    showInfo={true}
     ontoggle={handleShowToggle}
   />
 
@@ -113,6 +120,22 @@
                 min={SLIDER_LIMITS.missingDataSize.min}
                 max={SLIDER_LIMITS.missingDataSize.max}
                 onchange={onsizechange}
+              />
+            </div>
+          </Column>
+        </Row>
+      {/if}
+
+      {#if showOpacitySlider}
+        <Row>
+          <Column>
+            <div class="size-slider">
+              <SliderWithInput
+                label={m.opacity()}
+                bind:value={opacity}
+                min={0}
+                max={100}
+                onchange={onopacitychange}
               />
             </div>
           </Column>

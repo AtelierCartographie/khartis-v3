@@ -1,0 +1,265 @@
+/**
+ * Figma Design Tokens - Khartis Data Panel
+ * Extracted from Figma Design Context - 2026-01-31
+ *
+ * These tokens should be used in conjunction with Carbon Design System tokens.
+ */
+
+:root {
+  /* ========================================
+     KHARTIS BRAND COLORS
+     ======================================== */
+
+  --khartis-teal-dark: #005d5d;
+  --khartis-teal-light: #08bdba;
+  --khartis-teal-bg: #9ef0f0;
+
+  /* ========================================
+     TEXT COLORS (Carbon mapping)
+     ======================================== */
+
+  --text-primary: #525252;
+  --text-emphasis: #161616;
+  --text-secondary: #8d8d8d;
+  --text-disabled: #a8a8a8;
+
+  /* ========================================
+     INTERACTIVE COLORS
+     ======================================== */
+
+  --interactive-primary: #00539a;
+  --interactive-hover: #0072c3;
+  --interactive-dark: #003a6d;
+
+  /* ========================================
+     SEMANTIC COLORS
+     ======================================== */
+
+  --color-error: #9f1853; /* Magenta */
+  --color-warning: #ff832b; /* Orange */
+  --color-info-bg: #e5f6ff; /* Light blue background */
+  --color-success: #00a878; /* Green (à ajuster selon Carbon) */
+
+  /* Status-specific colors */
+  --color-purple: #6929c4; /* Categories, tags */
+  --color-blue-light: #82cfff; /* Active states */
+
+  /* ========================================
+     BORDER COLORS
+     ======================================== */
+
+  --border-subtle: #e0e0e0;
+  --border-strong: #c6c6c6;
+
+  /* ========================================
+     BACKGROUND COLORS
+     ======================================== */
+
+  --bg-layer: #f4f4f4;
+  --bg-white: #ffffff;
+  --bg-khartis-teal: var(--khartis-teal-bg);
+
+  /* Semi-transparent overlays */
+  --overlay-black: rgba(0, 0, 0, 0.3);
+  --overlay-yellow: rgba(241, 194, 27, 0.3);
+  --overlay-blue: rgba(0, 67, 206, 0.3);
+
+  /* ========================================
+     SPACING SCALE (Carbon-aligned)
+     ======================================== */
+
+  --spacing-01: 0.125rem; /* 2px */
+  --spacing-02: 0.25rem; /* 4px */
+  --spacing-03: 0.5rem; /* 8px */
+  --spacing-04: 0.75rem; /* 12px */
+  --spacing-05: 1rem; /* 16px */
+  --spacing-06: 1.5rem; /* 24px */
+  --spacing-07: 2rem; /* 32px */
+  --spacing-08: 2.5rem; /* 40px */
+  --spacing-09: 3rem; /* 48px */
+  --spacing-10: 4rem; /* 64px */
+
+  /* ========================================
+     TYPOGRAPHY SCALE
+     ======================================== */
+
+  /* Font Sizes */
+  --font-size-label: 0.75rem; /* 12px */
+  --font-size-body: 0.875rem; /* 14px */
+  --font-size-heading-02: 1rem; /* 16px */
+  --font-size-heading-03: 1.25rem; /* 20px */
+
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Line Heights */
+  --line-height-compact: 1.25;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.75;
+
+  /* ========================================
+     BORDER RADIUS
+     ======================================== */
+
+  --border-radius-sm: 2px;
+  --border-radius-md: 4px;
+  --border-radius-lg: 8px;
+
+  /* ========================================
+     COMPONENT-SPECIFIC
+     ======================================== */
+
+  /* Data Table */
+  --table-row-height: 2.5rem; /* 40px */
+  --table-cell-padding: var(--spacing-04);
+  --table-header-bg: var(--bg-layer);
+
+  /* Cards/Panels */
+  --card-padding: var(--spacing-05);
+  --card-border: 1px solid var(--border-subtle);
+  --card-border-radius: var(--border-radius-md);
+
+  /* Buttons */
+  --button-min-width: 6.25rem; /* 100px */
+  --button-padding-x: var(--spacing-05);
+  --button-padding-y: var(--spacing-03);
+
+  /* Icons */
+  --icon-size-sm: 1rem; /* 16px */
+  --icon-size-md: 1.25rem; /* 20px */
+  --icon-size-lg: 1.5rem; /* 24px */
+
+  /* Grid */
+  --grid-gap: var(--spacing-05);
+  --grid-gap-large: var(--spacing-06);
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Text utilities */
+.text-primary {
+  color: var(--text-primary);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-disabled {
+  color: var(--text-disabled);
+}
+
+.text-emphasis {
+  color: var(--text-emphasis);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Background utilities */
+.bg-layer {
+  background-color: var(--bg-layer);
+}
+
+.bg-white {
+  background-color: var(--bg-white);
+}
+
+.bg-khartis-teal {
+  background-color: var(--bg-khartis-teal);
+}
+
+/* Border utilities */
+.border-subtle {
+  border: 1px solid var(--border-subtle);
+}
+
+.border-strong {
+  border: 1px solid var(--border-strong);
+}
+
+/* Spacing utilities */
+.gap-sm {
+  gap: var(--spacing-03);
+}
+
+.gap-md {
+  gap: var(--spacing-05);
+}
+
+.gap-lg {
+  gap: var(--spacing-06);
+}
+
+.padding-sm {
+  padding: var(--spacing-03);
+}
+
+.padding-md {
+  padding: var(--spacing-05);
+}
+
+.padding-lg {
+  padding: var(--spacing-06);
+}
+
+/* ========================================
+   COMPONENT PRESETS
+   ======================================== */
+
+/* Card/Panel preset */
+.card {
+  background: var(--bg-white);
+  border: var(--card-border);
+  border-radius: var(--card-border-radius);
+  padding: var(--card-padding);
+}
+
+/* Grid 2-column layout (for joins) */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--grid-gap);
+}
+
+/* Status indicators */
+.status-success {
+  color: var(--color-success);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+.status-error {
+  color: var(--color-error);
+}
+
+/* ========================================
+   NOTES
+   ======================================== */
+
+/*
+ * Usage recommendations:
+ *
+ * 1. Always prefer Carbon Design System tokens when available
+ * 2. Use Khartis brand colors for brand-specific elements only
+ * 3. Follow spacing scale consistently (don't use arbitrary values)
+ * 4. Typography should match Carbon type scale
+ *
+ * Carbon Design System integration:
+ * - Install: carbon-components-svelte
+ * - Import global styles in app.html or +layout.svelte
+ * - Override specific tokens if needed using CSS variables
+ *
+ * Color accessibility:
+ * - All text colors meet WCAG AA contrast requirements
+ * - Test with Carbon's contrast checker before deployment
+ *
+ * Migration from Tailwind (Figma export):
+ * - Replace inline styles with CSS variables
+ * - Use utility classes sparingly (prefer component styles)
+ * - Follow Svelte component scoping patterns
+ */

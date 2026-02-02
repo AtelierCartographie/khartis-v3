@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
+  import { Mountain } from 'carbon-icons-svelte';
   import ColorDropdown from './ColorDropdown.svelte';
   import { SliderWithInput } from '../shared';
   import {
@@ -61,7 +62,10 @@
 
 <div class="layer-config-content">
   <div class="control-group">
-    <span class="field-label">{m.basemap_config_representation()}</span>
+    <span class="field-label">
+      <Mountain size={16} />
+      {m.basemap_config_representation()}
+    </span>
     <Dropdown
       size="sm"
       selectedId={representation}
@@ -96,6 +100,9 @@
   }
 
   .field-label {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
     font-size: 0.75rem;
     color: var(--cds-text-02);
   }

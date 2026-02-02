@@ -575,7 +575,7 @@ class BasemapService {
         );
       }
     } else {
-      for (const [id, basemap] of this._basemapCache) {
+      for (const [_id, basemap] of this._basemapCache) {
         basemap.simplifiedVariants?.clear();
         basemap.activeSimplificationLevel = null;
       }

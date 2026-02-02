@@ -50,7 +50,7 @@
     globalActions.setToolbarState(state);
   }
 
-  const derivedToolbarState = $derived(getDerivedToolbarState());
+  const _derivedToolbarState = $derived(getDerivedToolbarState());
 
   $effect(() => {
     const project = projectStore.currentProject;
@@ -130,7 +130,6 @@
   </article>
 
   {#if globalState.selectedStep === ToolbarStep.Data}
-    {@const dataCompleteness = mainToolbarActions.checkDataCompleteness()}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
     {@const canVisualizeNow = dataTabStore.isReadyForVisualization}
@@ -245,7 +244,7 @@
   }
 
   nav.compact {
-    width: 320px;
+    width: 434px;
   }
 
   nav.collapsed {

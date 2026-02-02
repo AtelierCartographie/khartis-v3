@@ -18,10 +18,18 @@
     Button,
     ComboBox,
     Link,
-    RadioButton,
-    Tag
+    RadioButton
   } from 'carbon-components-svelte';
-  import { ColorPalette, Edit, MagicWand } from 'carbon-icons-svelte';
+  import {
+    ColorPalette,
+    Edit,
+    Launch,
+    MagicWandFilled,
+    Pin,
+    CircleFilled,
+    Shapes,
+    EdgeNode
+  } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   interface Props {
@@ -96,6 +104,23 @@
       default:
         return 'ABC';
     }
+  }
+
+  function getGeometryIcon(geometry: string) {
+    switch (geometry) {
+      case 'point':
+        return CircleFilled;
+      case 'polygon':
+        return Shapes;
+      case 'line':
+        return EdgeNode;
+      default:
+        return CircleFilled;
+    }
+  }
+
+  function getSemioTypeLabel(semioType: string): string {
+    return semioType;
   }
 
   function handleShowMore() {
@@ -214,182 +239,298 @@
 </script>
 
 <section id="choose-visualization">
-  <MainToolBarHeader title={m.step1_title()} />
-
-  <div class="field-group">
-    <div class="field-label">{m.data_visualized_label()}</div>
-    <ComboBox
-      items={dataFieldItems}
-      selectedId={selectedFieldId}
-      on:select={(e) => (selectedFieldId = e.detail.selectedId)}
-      placeholder={m.choose_data_field_placeholder()}
-      labelText=""
-      size="xl"
-    />
-  </div>
-
-  <ExpandableSection
-    title={m.section_suggestions()}
-    defaultOpen={suggestionsExpanded}
-    on:toggle={(e) => (suggestionsExpanded = e.detail.expanded)}
-  >
-    {#snippet icon()}
-      <ColorPalette size={20} />
-    {/snippet}
-
-    <p class="kh-help suggestions-help">
-      {m.use_suggestion_description()}
-    </p>
-
-    <div class="suggestions-group" role="list">
-      {#each visibleSuggestions as suggestion (suggestion.id)}
-        {@const isSelected = selectedSuggestion === suggestion.id}
-        <button
-          type="button"
-          class="suggestion-card"
-          class:selected={isSelected}
-          onclick={() => handleSelectSuggestion(suggestion)}
-          aria-pressed={isSelected}
-        >
-          <div class="card-preview">
-            <div class="preview-icon">
-              <ColorPalette size={32} />
-            </div>
-            {#if suggestion.score != null}
-              <span class="preview-score">{suggestion.score}%</span>
-            {/if}
-            <span class="preview-ratio"
-              >{suggestion.nbColumns > 0
-                ? `${suggestion.nbColumns}:1`
-                : '1:1'}</span
-            >
-          </div>
-
-          <div class="card-content">
-            <div class="card-header">
-              <h6 class="card-title">{suggestion.label}</h6>
-              <span class="radio-indicator">
-                <RadioButton checked={isSelected} />
-              </span>
-            </div>
-
-            <div class="card-variables">
-              {#if suggestion.columns && suggestion.columns.length > 0}
-                {#each suggestion.columns.slice(0, 2) as colName, idx (colName)}
-                  {@const colType = getColumnType(colName)}
-                  <div class="variable-row">
-                    <span class="variable-arrow">↳</span>
-                    <Tag size="sm" type="purple">
-                      {colName.length > 12
-                        ? colName.slice(0, 12) + '...'
-                        : colName}
-                    </Tag>
-                    <Tag size="sm" type="purple">{getTypeLabel(colType)}</Tag>
-                    {#if suggestion.columns && suggestion.columns.length > 2 && idx === 0}
-                      <Tag size="sm" type="purple"
-                        >+ {suggestion.columns.length - 1}</Tag
-                      >
-                    {/if}
-                  </div>
-                {/each}
-              {:else}
-                <div class="variable-row empty">
-                  <span class="no-variable">{m.no_variable()}</span>
-                </div>
-              {/if}
-            </div>
-
-            {#if suggestion.nbColumns > 2}
-              <div class="card-collection">
-                <ColorPalette size={16} />
-                <span>{m.map_collection()}</span>
-              </div>
-            {/if}
-          </div>
-        </button>
-      {/each}
+  <div class="section-content">
+    <div class="header-section">
+      <MainToolBarHeader title={m.step1_title()} icon={Pin} />
+      <div class="divider"></div>
     </div>
 
-    {#if hasMoreSuggestions}
-      <div class="suggestions-actions">
-        <Button
-          kind="tertiary"
-          size="small"
-          icon={MagicWand}
-          on:click={handleShowMore}
-        >
-          {m.show_other_suggestions()}
-        </Button>
+    <div class="field-group">
+      <div class="field-label">{m.data_visualized_label()}</div>
+      <ComboBox
+        items={dataFieldItems}
+        selectedId={selectedFieldId}
+        on:select={(e) => (selectedFieldId = e.detail.selectedId)}
+        placeholder={m.choose_data_field_placeholder()}
+        labelText=""
+        size="xl"
+      />
+    </div>
+
+    <div class="suggestions-section">
+      <ExpandableSection
+        title={m.section_suggestions()}
+        defaultOpen={suggestionsExpanded}
+        on:toggle={(e) => (suggestionsExpanded = e.detail.expanded)}
+        titleClass="suggestions-title"
+      >
+        {#snippet icon()}
+          <span class="suggestions-title-icon">
+            <MagicWandFilled size={20} />
+          </span>
+        {/snippet}
+
+        <p class="suggestions-help">
+          {m.use_suggestion_description()}
+        </p>
+
+        <div class="suggestions-group" role="list">
+          {#each visibleSuggestions as suggestion (suggestion.id)}
+            {@const isSelected = selectedSuggestion === suggestion.id}
+            <button
+              type="button"
+              class="suggestion-card"
+              class:selected={isSelected}
+              onclick={() => handleSelectSuggestion(suggestion)}
+              aria-pressed={isSelected}
+            >
+              <div class="card-preview">
+                <div class="preview-icon">
+                  <ColorPalette size={32} />
+                </div>
+                <div class="preview-ratio">1:1</div>
+                <div class="preview-label">Viz preview</div>
+                <div class="preview-primitives">
+                  {#each suggestion.geometries as geometry (geometry)}
+                    {@const GeomIcon = getGeometryIcon(geometry)}
+                    <GeomIcon size={16} />
+                  {/each}
+                </div>
+                {#if suggestion.semioTypes && suggestion.semioTypes.length > 0}
+                  <div class="preview-semio">
+                    {suggestion.semioTypes.map(getSemioTypeLabel).join(' + ')}
+                  </div>
+                {/if}
+              </div>
+
+              <div class="card-content">
+                <div class="card-header">
+                  <h6 class="card-title">{suggestion.label}</h6>
+                  <span class="radio-indicator">
+                    <RadioButton checked={isSelected} />
+                  </span>
+                </div>
+
+                <div class="card-variables">
+                  {#if suggestion.columns && suggestion.columns.length > 0}
+                    {#each suggestion.columns.slice(0, 2) as colName, idx (colName)}
+                      {@const colType = getColumnType(colName)}
+                      <div class="variable-row">
+                        <span class="variable-arrow">
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 16 16"
+                            fill="none"
+                          >
+                            <path
+                              d="M3 8H13M13 8L9 4M13 8L9 12"
+                              stroke="currentColor"
+                              stroke-width="1.5"
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                            />
+                          </svg>
+                        </span>
+                        <div class="variable-chip">
+                          <span class="chip-text"
+                            >{colName.length > 15
+                              ? colName.slice(0, 15) + '...'
+                              : colName}</span
+                          >
+                          <span class="chip-divider"></span>
+                          <span class="chip-icon">{getTypeLabel(colType)}</span>
+                        </div>
+                        {#if suggestion.columns && suggestion.columns.length > 2 && idx === 0}
+                          <div class="variable-chip more">
+                            <span class="chip-text"
+                              >+ {suggestion.columns.length - 1}</span
+                            >
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  {:else}
+                    <div class="variable-row empty">
+                      <span class="no-variable">{m.no_variable()}</span>
+                    </div>
+                  {/if}
+                </div>
+
+                {#if suggestion.nbColumns > 2}
+                  <div class="card-collection">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <rect
+                        x="1"
+                        y="1"
+                        width="6"
+                        height="6"
+                        stroke="currentColor"
+                        stroke-width="1"
+                      />
+                      <rect
+                        x="9"
+                        y="1"
+                        width="6"
+                        height="6"
+                        stroke="currentColor"
+                        stroke-width="1"
+                      />
+                      <rect
+                        x="1"
+                        y="9"
+                        width="6"
+                        height="6"
+                        stroke="currentColor"
+                        stroke-width="1"
+                      />
+                      <rect
+                        x="9"
+                        y="9"
+                        width="6"
+                        height="6"
+                        stroke="currentColor"
+                        stroke-width="1"
+                      />
+                    </svg>
+                    <span>{m.map_collection()}</span>
+                  </div>
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+
+        {#if hasMoreSuggestions}
+          <div class="suggestions-actions">
+            <Button
+              kind="tertiary"
+              size="small"
+              icon={MagicWandFilled}
+              on:click={handleShowMore}
+            >
+              {m.show_other_suggestions()}
+            </Button>
+          </div>
+        {/if}
+      </ExpandableSection>
+    </div>
+
+    <div class="create-section">
+      <Button
+        icon={Edit}
+        kind="secondary"
+        on:click={handleCreateVisualization}
+        style="width: 100%;"
+      >
+        {m.create_visualization_button()}
+      </Button>
+
+      <div class="learn-more">
+        <Link href="#" size="sm">{m.learn_more_visualizations()}</Link>
+        <Launch size={16} />
       </div>
-    {/if}
-  </ExpandableSection>
-
-  <div class="create-section">
-    <Button
-      kind="primary"
-      size="lg"
-      icon={Edit}
-      on:click={handleCreateVisualization}
-    >
-      {m.create_visualization_button()}
-    </Button>
-
-    <div class="learn-more">
-      <Link href="#" size="sm">{m.learn_more_visualizations()}</Link>
     </div>
   </div>
 </section>
 
 <style lang="scss">
   #choose-visualization {
-    background-color: var(--cds-ui-02);
+    display: flex;
+    flex-direction: column;
+    background: var(--cds-layer-01, #f4f4f4);
     padding: var(--cds-spacing-05);
   }
 
-  .kh-help {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
-    font-size: 0.875rem;
-    line-height: 1.4;
+  .section-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+    background: var(--cds-background, #ffffff);
+    padding: var(--cds-spacing-05) 0;
+  }
+
+  .header-section {
+    display: flex;
+    flex-direction: column;
+    margin: 0 calc(-1 * var(--cds-spacing-05));
+    padding: 0 var(--cds-spacing-05);
+  }
+
+  .divider {
+    width: calc(100% + 2 * var(--cds-spacing-05));
+    height: 1px;
+    background: var(--cds-border-subtle-00, #e0e0e0);
+    margin: 0 calc(-1 * var(--cds-spacing-05));
+  }
+
+  .suggestions-section {
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
+    margin: 0 calc(-1 * var(--cds-spacing-05));
+  }
+
+  .suggestions-title-icon {
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    display: flex;
+    align-items: center;
+  }
+
+  :global(.suggestions-title) {
+    color: var(
+      --khartis-additions-text-primary-suggestions,
+      #003a6d
+    ) !important;
   }
 
   .suggestions-help {
-    margin-top: var(--cds-spacing-03);
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
+    margin: 0 0 var(--cds-spacing-05) 0;
+    padding-right: 32px;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   .field-group {
-    margin-bottom: var(--cds-spacing-05);
+    padding: 0 var(--cds-spacing-05);
+    margin: 0;
   }
 
   .field-label {
     margin-bottom: var(--cds-spacing-03);
-    font-size: 0.875rem;
-    color: var(--cds-text-02);
-    font-weight: 600;
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+    font-weight: 400;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   .suggestions-group {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
-    margin-bottom: var(--cds-spacing-05);
+    margin: 0 0 var(--cds-spacing-05) 0;
+    padding-right: 32px;
   }
 
   .suggestion-card {
     display: flex;
-    border: 1px solid var(--cds-border-subtle);
+    border: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     cursor: pointer;
     transition: all 0.15s ease;
     text-align: left;
     padding: 0;
     min-height: 120px;
+    background: transparent;
 
-    &:hover .card-content {
-      background: var(--cds-medium-blue);
+    &:hover {
+      border-color: var(--khartis-additions-interactive-suggestions, #0072c3);
     }
 
     &.selected {
-      border: 2px solid var(--cds-interactive);
+      border: 2px solid var(--khartis-additions-focus-suggestions, #0072c3);
     }
   }
 
@@ -398,40 +539,55 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 100px;
+    min-width: 120px;
     padding: var(--cds-spacing-04);
-    background: var(--cds-ui-02);
-    border-right: 1px solid var(--cds-border-subtle);
-    color: var(--cds-blue);
+    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
+    border-right: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 
   .preview-icon {
     margin-bottom: var(--cds-spacing-02);
-  }
-
-  .preview-score {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-support-success, #198038);
-    background: var(--cds-support-success-inverse, #defbe6);
-    padding: 1px 6px;
-    border-radius: 10px;
-    margin-bottom: var(--cds-spacing-02);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 
   .preview-ratio {
-    font-size: 0.875rem;
+    font-size: 1rem;
     font-weight: 600;
+    line-height: 1.5rem;
+  }
+
+  .preview-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .preview-primitives {
+    display: flex;
+    gap: var(--cds-spacing-02);
+    margin-top: var(--cds-spacing-02);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
+  }
+
+  .preview-semio {
+    font-size: 0.625rem;
+    font-weight: 600;
+    margin-top: var(--cds-spacing-01);
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .card-content {
     flex: 1;
-    padding: var(--cds-spacing-04);
+    padding: var(--cds-spacing-04) var(--cds-spacing-04) var(--cds-spacing-04)
+      var(--cds-spacing-05);
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
-    background: var(--cds-pale-blue);
-    color: var(--cds-blue);
+    background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
     transition: background 0.15s ease;
   }
 
@@ -449,7 +605,7 @@
     font-size: 0.875rem;
     font-weight: 600;
     margin: 0;
-    color: var(--cds-blue);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
   .card-variables {
@@ -465,15 +621,60 @@
     flex-wrap: wrap;
 
     &.empty {
-      color: var(--cds-blue);
+      color: var(--khartis-additions-text-secondary-suggestions, #00539a);
       font-size: 0.75rem;
       opacity: 0.7;
     }
   }
 
   .variable-arrow {
-    color: var(--cds-blue);
-    font-size: 0.75rem;
+    color: var(--khartis-additions-text-secondary-suggestions, #00539a);
+    display: flex;
+    align-items: center;
+  }
+
+  .variable-chip {
+    display: flex;
+    align-items: center;
+    background: var(--tag-purple-tag-background, #e8daff);
+    border: 1px solid var(--tag-purple-tag-border-operational, #be95ff);
+    border-radius: 1000px;
+    height: 18px;
+    overflow: hidden;
+    font-family: 'IBM Plex Mono', monospace;
+
+    &.more {
+      background: var(--tag-background, #bae6ff);
+      border: 1px solid var(--tag-border, #1192e8);
+      padding: 0 8px;
+    }
+
+    .chip-text {
+      font-size: 0.75rem;
+      color: var(--tag-purple-tag-color, #6929c4);
+      padding: 0 6px 0 8px;
+      line-height: 16px;
+      letter-spacing: 0.32px;
+    }
+
+    &.more .chip-text {
+      color: var(--tag-color, #00539a);
+    }
+
+    .chip-divider {
+      width: 1px;
+      height: 12px;
+      background: var(--tag-purple-tag-border-operational, #be95ff);
+    }
+
+    .chip-icon {
+      font-size: 0.75rem;
+      color: var(--tag-purple-tag-color, #6929c4);
+      padding: 0 6px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      line-height: 16px;
+      letter-spacing: 0.32px;
+    }
   }
 
   .no-variable {
@@ -485,13 +686,14 @@
     align-items: center;
     gap: var(--cds-spacing-02);
     font-size: 0.75rem;
-    color: var(--cds-blue);
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
     margin-top: var(--cds-spacing-02);
   }
 
   .suggestions-actions {
     display: flex;
     justify-content: center;
+    margin-top: 0;
   }
 
   .create-section {
@@ -499,10 +701,21 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--cds-spacing-04);
-    margin-top: var(--cds-spacing-05);
+    margin: 0;
+    padding: 0 var(--cds-spacing-05);
   }
 
   .learn-more {
     display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .learn-more :global(a) {
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .learn-more :global(svg) {
+    color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 </style>

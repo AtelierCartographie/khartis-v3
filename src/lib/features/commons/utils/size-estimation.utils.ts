@@ -12,7 +12,12 @@ function stripBinaryFields(project: unknown): unknown {
   clone.data = {
     ...data,
     sourceFiles: data.sourceFiles.map((file: Record<string, unknown>) => {
-      const { content, relatedFilesData, preparedGeoJSON, ...rest } = file;
+      const {
+        content: _content,
+        relatedFilesData: _relatedFilesData,
+        preparedGeoJSON: _preparedGeoJSON,
+        ...rest
+      } = file;
       return rest;
     })
   };

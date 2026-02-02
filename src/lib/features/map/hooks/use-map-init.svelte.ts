@@ -137,14 +137,14 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     });
   }
 
-  let initialStyleKey: string | null = null;
+  let _initialStyleKey: string | null = null;
 
   function initializeMapLibre(
     container: HTMLDivElement,
     config: MapInitConfig = DEFAULT_CONFIG
   ): void {
     const style = basemapStyleStore.selectedStyleUrl;
-    initialStyleKey =
+    _initialStyleKey =
       typeof style === 'string' ? style : style.name || 'inline-style';
 
     logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
