@@ -5,7 +5,8 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     showError,
-    showSuccess
+    showSuccess,
+    showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
   import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
@@ -130,7 +131,7 @@
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
     if (!sourceFile || !currentDuckTable || !selectedDataset) {
-      throw new Error('No source file or table available');
+      throw new Error(m.csv_error_no_source());
     }
 
     let file = sourceFile.originalFile;
@@ -146,7 +147,7 @@
     }
 
     if (!file) {
-      throw new Error('Original file not available for re-import');
+      throw new Error(m.csv_error_file_not_available());
     }
 
     try {
@@ -162,6 +163,10 @@
       })) as DuckAnalyticsColumn[];
       const newColumns = enrichColumns(duckColumns);
       const newRowCount = await Duck.get_row_count(currentDuckTable);
+
+      if (newRowCount === 0) {
+        showWarning(m.csv_warning_empty_after_reimport(), '');
+      }
 
       datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
@@ -386,8 +391,8 @@
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const skeletonProps = { columns: 5, rows: 12 } as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
+  const getSkeletonProps = () => ({ columns: 5, rows: 12 }) as any;
 </script>
 
 <section id="data-control-step">
@@ -485,7 +490,7 @@
   {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
     <!-- Skeleton loader pendant le chargement ou batch processing -->
     <div class="table-skeleton-wrapper">
-      <DataTableSkeleton {...skeletonProps} />
+      <DataTableSkeleton {...getSkeletonProps()} />
     </div>
   {:else}
     <div class="empty-state">

@@ -1,6 +1,5 @@
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { generateFacetVisualizations } from '$lib/features/commons/utils/facet-generator';
 

@@ -56,9 +56,23 @@ export enum MissingDataShape {
 }
 
 export enum ThicknessMode {
+  NONE = 'none',
   UNIQUE = 'unique',
+  PROPORTIONAL = 'proportional',
   GRADUATED = 'graduated',
   CLASSES = 'classes'
+}
+
+export enum ColorMode {
+  NONE = 'none',
+  UNIQUE = 'unique',
+  CLASSES = 'classes',
+  CATEGORIES = 'categories'
+}
+
+export enum SizeMode {
+  FIXED = 'fixed',
+  PROPORTIONAL = 'proportional'
 }
 
 export const VISUALIZATION_DEFAULTS = {
@@ -70,22 +84,36 @@ export const VISUALIZATION_DEFAULTS = {
   fillOpacity: 100,
   textSize: 12,
   textOpacity: 100,
+  labelSize: 12,
+  labelOpacity: 100,
   lineWidth: 1,
-  lineOpacity: 100
+  lineMaxWidth: 10,
+  lineOpacity: 100,
+  haloWidth: 2
 } as const;
 
 export const SLIDER_LIMITS = {
   opacity: { min: 0, max: 100 },
   strokeWidth: { min: 0, max: 20 },
+  lineWidth: { min: 1, max: 20 },
+  lineMaxWidth: { min: 1, max: 50 },
+  lineOpacity: { min: 0, max: 100 },
   symbolSize: { min: 1, max: 100 },
   symbolMaxSize: { min: 1, max: 200 },
   textSize: { min: 8, max: 32 },
+  textOpacity: { min: 0, max: 100 },
+  labelOpacity: { min: 0, max: 100 },
+  haloWidth: { min: 0, max: 10 },
   missingDataSize: { min: 1, max: 20 }
 } as const;
 
 export const DEFAULT_COLORS = {
   fill: '#4589ff',
   stroke: '#1e3a5f',
+  line: '#1e3a5f',
+  text: '#161616',
+  label: '#161616',
+  halo: '#ffffff',
   missingData: '#c6c6c6',
   white: '#ffffff',
   black: '#000000',

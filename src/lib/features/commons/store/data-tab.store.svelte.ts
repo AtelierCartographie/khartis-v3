@@ -119,6 +119,15 @@ export const dataTabActions = {
     dataTabState.basemapJoin.basemapSource = source;
   },
 
+  clearJoinStats(): void {
+    dataTabState.basemapJoin.joinedEntities = 0;
+    dataTabState.basemapJoin.entitiesToVerify = 0;
+    dataTabState.basemapJoin.duplicateEntities = [];
+    dataTabState.basemapJoin.unrecognizedEntities = [];
+    dataTabState.basemapJoin.joinMappings = [];
+    dataTabState.basemapJoin.correctionEnabled = false;
+  },
+
   applyCorrections(): void {
     dataTabState.basemapJoin.correctionEnabled = true;
   },

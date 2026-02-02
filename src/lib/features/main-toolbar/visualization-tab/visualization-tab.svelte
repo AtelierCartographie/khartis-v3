@@ -57,16 +57,12 @@
     flex-direction: column;
     gap: var(--cds-spacing-06);
     padding-bottom: var(--cds-spacing-06);
+    background-color: var(--cds-layer-01);
   }
 
   #khartis-viz-tab > :global(section) {
-    border-bottom: 1px solid var(--cds-border-subtle);
-    padding-bottom: var(--cds-spacing-06);
-  }
-
-  #khartis-viz-tab > :global(section:last-of-type) {
-    border-bottom: none;
-    padding-bottom: 0;
+    background-color: var(--cds-background);
+    padding: var(--cds-spacing-05);
   }
 
   :global(.collapsed-content) {

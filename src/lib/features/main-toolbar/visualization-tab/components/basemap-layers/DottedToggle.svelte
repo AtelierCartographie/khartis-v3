@@ -60,6 +60,7 @@
     labelB={m.option_oui()}
     toggled={enabled}
     on:toggle={handleToggle}
+    size="sm"
   />
 
   {#if showPattern && enabled}

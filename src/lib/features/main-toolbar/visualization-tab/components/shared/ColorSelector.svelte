@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { ChevronDown } from 'carbon-icons-svelte';
   import ColorPickerModal from '../color-picker-modal.svelte';
 
   interface Props {
@@ -43,6 +44,9 @@
       class:small={size === 'small'}
       style="background-color: {value}"
     ></div>
+    <span class="color-chevron">
+      <ChevronDown size={16} />
+    </span>
   </button>
 </div>
 
@@ -61,37 +65,52 @@
   }
 
   .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
     font-weight: 400;
+    margin-bottom: var(--cds-spacing-02);
   }
 
   .color-selector {
     display: flex;
     align-items: center;
-    padding: var(--cds-spacing-03);
+    justify-content: space-between;
+    padding: var(--cds-spacing-03) var(--cds-spacing-04);
     background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
+    border: none;
+    border-bottom: 1px solid var(--cds-border-strong);
     cursor: pointer;
+    width: 100%;
+    gap: var(--cds-spacing-03);
 
     &:hover {
       background: var(--cds-field-hover);
     }
 
+    &:focus {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: -2px;
+    }
+
     &.small {
-      padding: var(--cds-spacing-02);
+      padding: var(--cds-spacing-02) var(--cds-spacing-03);
     }
   }
 
   .color-preview {
-    width: 100%;
-    max-width: 180px;
-    height: 24px;
-    border-radius: 2px;
+    flex: 1;
+    height: 20px;
+    background-color: var(--cds-background);
 
     &.small {
-      max-width: 100%;
-      height: 32px;
+      height: 16px;
     }
+  }
+
+  .color-chevron {
+    display: flex;
+    align-items: center;
+    color: var(--cds-icon-primary);
+    flex-shrink: 0;
   }
 </style>

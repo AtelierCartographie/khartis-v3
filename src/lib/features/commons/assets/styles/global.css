@@ -24,6 +24,31 @@
   --cds-text-gray: #525252;
   --cds-hover-tertiary: #1a1a1a;
   --cds-button-primary: black;
+
+  /* Khartis additions - Suggestions theming */
+  --khartis-additions-text-primary-suggestions: #003a6d;
+  --khartis-additions-text-secondary-suggestions: #00539a;
+  --khartis-additions-text-helper-suggestions: #0072c3;
+  --khartis-additions-interactive-suggestions: #0072c3;
+  --khartis-additions-focus-suggestions: #0072c3;
+  --khartis-additions-border-tile-01-suggestions: #82cfff;
+  --khartis-additions-layer-01-suggestions: #e5f6ff;
+  --khartis-additions-layer-02-suggestions: #ffffff;
+
+  /* Tag colors - Purple */
+  --tag-purple-tag-background: #e8daff;
+  --tag-purple-tag-border-operational: #be95ff;
+  --tag-purple-tag-color: #6929c4;
+
+  /* Tag colors - Teal */
+  --tag-teal-tag-background: #9ef0f0;
+  --tag-teal-tag-border-operational: #08bdba;
+  --tag-teal-tag-color: #005d5d;
+
+  /* Tag colors - Default/Blue */
+  --tag-background: #bae6ff;
+  --tag-border: #1192e8;
+  --tag-color: #00539a;
 }
 
 :root[theme='g100'] {
@@ -52,6 +77,26 @@
   --cds-text-01: #f4f4f4;
   --cds-hover-tertiary: #e5e5e5;
   --cds-button-primary: white;
+
+  /* Khartis additions - Suggestions theming (dark theme) */
+  --khartis-additions-text-primary-suggestions: #82cfff;
+  --khartis-additions-text-secondary-suggestions: #a8e2ff;
+  --khartis-additions-text-helper-suggestions: #33b1ff;
+  --khartis-additions-interactive-suggestions: #33b1ff;
+  --khartis-additions-focus-suggestions: #33b1ff;
+  --khartis-additions-border-tile-01-suggestions: #00539a;
+  --khartis-additions-layer-01-suggestions: #003a6d;
+  --khartis-additions-layer-02-suggestions: #012749;
+
+  /* Tag colors - Purple (dark theme) */
+  --tag-purple-tag-background: #3e1d66;
+  --tag-purple-tag-border-operational: #6929c4;
+  --tag-purple-tag-color: #e8daff;
+
+  /* Tag colors - Teal (dark theme) */
+  --tag-teal-tag-background: #004144;
+  --tag-teal-tag-border-operational: #009d9a;
+  --tag-teal-tag-color: #9ef0f0;
 }
 
 .app-shadow {

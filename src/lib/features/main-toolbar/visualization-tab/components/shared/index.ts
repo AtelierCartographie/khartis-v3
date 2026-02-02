@@ -1,5 +1,6 @@
 export { default as SliderWithInput } from './SliderWithInput.svelte';
 export { default as SectionTitle } from './SectionTitle.svelte';
+export { default as SectionHeading } from './SectionHeading.svelte';
 export { default as ColorSelector } from './ColorSelector.svelte';
 export { default as PalettePreview } from './PalettePreview.svelte';
 export { default as ToggleWithLabel } from './ToggleWithLabel.svelte';

@@ -1,5 +1,4 @@
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
-import { Duck } from '$lib/features/duckdb';
 import { LogCategory, logger } from './logger';
 import type { ScaleMode } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 

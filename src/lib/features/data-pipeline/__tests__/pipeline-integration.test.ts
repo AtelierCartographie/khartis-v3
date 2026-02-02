@@ -27,6 +27,7 @@ function geoReadSql(tableName: string, filePath: string): string {
 }
 
 let tableCounter = 0;
+
 function uniqueTableName(prefix: string): string {
   return `test_${prefix}_${++tableCounter}`;
 }

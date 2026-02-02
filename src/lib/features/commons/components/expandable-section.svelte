@@ -17,6 +17,7 @@
     disabled?: boolean;
     disabledReason?: string;
     onToggleChange?: (checked: boolean) => void;
+    titleClass?: string;
   }
 
   const {
@@ -30,7 +31,8 @@
     toggleDisabled = false,
     disabled = false,
     disabledReason,
-    onToggleChange
+    onToggleChange,
+    titleClass = ''
   }: Props = $props();
 
   const isControlled = $derived(Boolean(onToggleChange));
@@ -110,7 +112,7 @@
       </div>
     {/if}
 
-    <span class="section-title">
+    <span class="section-title {titleClass}">
       {title}{count !== undefined ? ` (${count})` : ''}
 
       {#if icon}
@@ -128,9 +130,9 @@
       aria-hidden="true"
     >
       {#if expanded}
-        <ChevronDown />
+        <ChevronDown size={16} />
       {:else}
-        <ChevronRight />
+        <ChevronRight size={16} />
       {/if}
     </span>
   </div>
@@ -142,33 +144,41 @@
   {/if}
 </div>
 
-<style>
+<style lang="scss">
   .section-container {
-    border: 1px solid var(--cds-border-subtle);
-    margin-bottom: var(--cds-spacing-05);
-    border-radius: 2px;
+    border: 1px solid var(--cds-border-subtle-01);
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
     background: transparent;
+
+    &:last-child {
+      border-bottom: 1px solid var(--cds-border-subtle-01);
+    }
   }
 
   .section-header {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    background-color: var(--cds-ui-01);
+    padding: 14px var(--cds-spacing-04);
+    background-color: var(--cds-layer-01);
     cursor: pointer;
     user-select: none;
-    height: 48px;
+    min-height: 48px;
   }
 
   .section-header.collapsed {
-    background-color: var(--cds-ui-02);
+    background-color: var(--cds-layer-01);
   }
 
   .section-title {
     flex: 1;
-    font-weight: 500;
+    font-weight: 600;
     font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary);
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
@@ -189,7 +199,7 @@
   .section-toggle {
     display: flex;
     align-items: center;
-    margin-right: var(--cds-spacing-03);
+    margin-right: var(--cds-spacing-02);
   }
 
   .section-toggle :global(.bx--toggle) {
@@ -208,7 +218,7 @@
   .section-chevron {
     display: flex;
     align-items: center;
-    color: var(--cds-icon-01);
+    color: var(--cds-icon-primary);
     margin-left: var(--cds-spacing-03);
   }
 
@@ -217,21 +227,18 @@
   }
 
   .section-body {
-    padding: var(--cds-spacing-03);
-    background-color: var(--cds-ui-02);
-    border-top: 1px solid var(--cds-border-subtle);
+    background-color: var(--cds-layer-01);
+    border-top: 1px solid var(--cds-border-subtle-01);
+    padding: var(--cds-spacing-03) var(--cds-spacing-05) var(--cds-spacing-06)
+      var(--cds-spacing-05);
   }
 
   .section-header:hover:not(.disabled) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .section-header.expanded .section-title {
-    color: var(--cds-link-02);
-  }
-
-  .section-header:active:not(.disabled) .section-title {
-    color: var(--cds-link-02);
+    color: var(--cds-text-primary);
   }
 
   .section-container.disabled {

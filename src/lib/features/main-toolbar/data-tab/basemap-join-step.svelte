@@ -93,6 +93,7 @@
     const abortSignal = currentJoinAbortController.signal;
 
     osmBasemapStore.clear();
+    dataTabActions.clearJoinStats();
     dataTabActions.selectBasemap(basemap.file);
 
     projectStore.updateProjectData({
@@ -366,6 +367,18 @@
       !dataTabState.geolocation.linkedVariableName
     )
       return;
+
+    if (duplicates.length > 0 || unknowns.length > 0) {
+      logger.warn(
+        'Cannot finalize join with unresolved issues',
+        LogCategory.MAP,
+        {
+          duplicates: duplicates.length,
+          unknowns: unknowns.length
+        }
+      );
+      return;
+    }
 
     const basemap = allBasemaps.find((b) => b.file === basemapSelected);
     if (!basemap) {

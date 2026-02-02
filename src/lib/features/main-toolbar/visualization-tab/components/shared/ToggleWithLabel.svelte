@@ -1,11 +1,14 @@
 <script lang="ts">
   import { Toggle } from 'carbon-components-svelte';
+  import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
 
   interface Props {
     label: string;
     toggled: boolean;
     showYesNo?: boolean;
+    showInfo?: boolean;
+    infoLabel?: string;
     ontoggle?: (value: boolean) => void;
   }
 
@@ -13,6 +16,8 @@
     label,
     toggled = $bindable(),
     showYesNo = true,
+    showInfo = false,
+    infoLabel = '',
     ontoggle
   }: Props = $props();
 
@@ -36,6 +41,15 @@
     {#if showYesNo}
       <span class="toggle-label">{toggled ? m.yes() : m.no()}</span>
     {/if}
+    {#if showInfo}
+      <button
+        type="button"
+        class="info-btn"
+        aria-label={infoLabel || m.more_info()}
+      >
+        <Information size={16} />
+      </button>
+    {/if}
   </div>
 </div>
 
@@ -46,12 +60,12 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--cds-spacing-02) 0;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-04);
   }
 
   .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
     font-weight: 400;
   }
 
@@ -67,7 +81,36 @@
     min-width: 30px;
   }
 
+  .info-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--cds-text-02);
+
+    &:hover {
+      color: var(--cds-text-primary);
+    }
+  }
+
   :global(.toggle-row .bx--toggle) {
     margin: 0;
+  }
+
+  :global(.toggle-row .bx--toggle__switch) {
+    width: 36px;
+    height: 20px;
+  }
+
+  :global(.toggle-row .bx--toggle__switch::before) {
+    width: 14px;
+    height: 14px;
+  }
+
+  :global(.toggle-row .bx--toggle-input:checked + .bx--toggle__switch::before) {
+    transform: translateX(16px);
   }
 </style>

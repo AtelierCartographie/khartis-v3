@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Column, Grid, Row } from 'carbon-components-svelte';
+  import { PaintBrush } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import LayerConfigTerre from './components/basemap-layers/LayerConfigTerre.svelte';
@@ -47,11 +47,11 @@
     isTiledBasemapEnabled ? m.basemap_layers_disabled_by_maplibre() : undefined
   );
 
-  // Not implemented layers
-  const notImplementedLayers: BasemapLayerId[] = ['relief'];
-  const isLayerNotImplemented = (layerId: BasemapLayerId) =>
-    notImplementedLayers.includes(layerId);
-  const notImplementedReason = m.basemap_layer_not_implemented();
+  // Not implemented layers - kept for future expansion
+  // const notImplementedLayers: BasemapLayerId[] = [];
+  // const isLayerNotImplemented = (layerId: BasemapLayerId) =>
+  //   notImplementedLayers.includes(layerId);
+  // const notImplementedReason = m.basemap_layer_not_implemented();
 
   async function saveImmediately() {
     if (projectStore.currentProject) {
@@ -124,222 +124,224 @@
 </script>
 
 <section id="customize-basemap">
-  <MainToolBarHeader title={m.step3_title()} />
+  <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} />
 
   <p class="kh-help">{m.step3_description()}</p>
 
-  <Grid noGutter fullWidth>
-    <Row>
-      <Column sm={4} md={8} lg={16}>
-        <div class="layers-list">
-          <ExpandableSection
-            title={m.basemap_layer_terre()}
-            showToggle={true}
-            toggleChecked={terreConfig?.visible ?? true}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('terre', checked)}
-          >
-            <LayerConfigTerre
-              fillColor={terreConfig?.fillColor}
-              fillShadow={terreConfig?.fillShadow}
-              fillOpacity={terreConfig?.fillOpacity}
-              strokeColor={terreConfig?.strokeColor}
-              strokeDotted={terreConfig?.strokeDotted}
-              strokeDottedPattern={terreConfig?.strokeDottedPattern}
-              strokeThickness={terreConfig?.strokeThickness}
-              strokeOpacity={terreConfig?.strokeOpacity}
-              onchange={handleTerreChange}
-            />
-          </ExpandableSection>
+  <div class="layers-list">
+    <!-- Terre - Expanded by default -->
+    <ExpandableSection
+      title={m.basemap_layer_terre()}
+      showToggle={true}
+      toggleChecked={terreConfig?.visible ?? true}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('terre', checked)}
+      defaultOpen={true}
+    >
+      <LayerConfigTerre
+        fillColor={terreConfig?.fillColor}
+        fillShadow={terreConfig?.fillShadow}
+        fillOpacity={terreConfig?.fillOpacity}
+        strokeColor={terreConfig?.strokeColor}
+        strokeDotted={terreConfig?.strokeDotted}
+        strokeDottedPattern={terreConfig?.strokeDottedPattern}
+        strokeThickness={terreConfig?.strokeThickness}
+        strokeOpacity={terreConfig?.strokeOpacity}
+        onchange={handleTerreChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_mers()}
-            showToggle={true}
-            toggleChecked={mersConfig?.visible ?? true}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('mers', checked)}
-          >
-            <LayerConfigSimple
-              showColor={true}
-              showDotted={false}
-              showThickness={false}
-              color={mersConfig?.color}
-              opacity={mersConfig?.opacity}
-              onchange={handleMersChange}
-            />
-          </ExpandableSection>
+    <!-- Mers/océans -->
+    <ExpandableSection
+      title={m.basemap_layer_mers()}
+      showToggle={true}
+      toggleChecked={mersConfig?.visible ?? true}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('mers', checked)}
+    >
+      <LayerConfigSimple
+        showColor={true}
+        showDotted={false}
+        showThickness={false}
+        color={mersConfig?.color}
+        opacity={mersConfig?.opacity}
+        onchange={handleMersChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_lacs()}
-            showToggle={true}
-            toggleChecked={lacsConfig?.visible ?? false}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('lacs', checked)}
-          >
-            <LayerConfigSimple
-              showColor={true}
-              showDotted={false}
-              showThickness={false}
-              color={lacsConfig?.color}
-              opacity={lacsConfig?.opacity}
-              onchange={handleLacsChange}
-            />
-          </ExpandableSection>
+    <!-- Lacs et rivières -->
+    <ExpandableSection
+      title={m.basemap_layer_lacs()}
+      showToggle={true}
+      toggleChecked={lacsConfig?.visible ?? false}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('lacs', checked)}
+    >
+      <LayerConfigSimple
+        showColor={true}
+        showDotted={false}
+        showThickness={false}
+        color={lacsConfig?.color}
+        opacity={lacsConfig?.opacity}
+        onchange={handleLacsChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_rivieres()}
-            showToggle={true}
-            toggleChecked={rivieresConfig?.visible ?? false}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('rivieres', checked)}
-          >
-            <LayerConfigSimple
-              showColor={true}
-              showDotted={true}
-              showThickness={true}
-              color={rivieresConfig?.color}
-              dotted={rivieresConfig?.dotted}
-              dottedPattern={rivieresConfig?.dottedPattern}
-              thickness={rivieresConfig?.thickness}
-              opacity={rivieresConfig?.opacity}
-              onchange={handleRivieresChange}
-            />
-          </ExpandableSection>
+    <!-- Rivières (streams) - separate from lacs -->
+    <ExpandableSection
+      title={m.basemap_layer_rivieres()}
+      showToggle={true}
+      toggleChecked={rivieresConfig?.visible ?? false}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('rivieres', checked)}
+    >
+      <LayerConfigSimple
+        showColor={true}
+        showDotted={true}
+        showThickness={true}
+        color={rivieresConfig?.color}
+        dotted={rivieresConfig?.dotted}
+        dottedPattern={rivieresConfig?.dottedPattern}
+        thickness={rivieresConfig?.thickness}
+        opacity={rivieresConfig?.opacity}
+        onchange={handleRivieresChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_relief()}
-            showToggle={true}
-            toggleChecked={reliefConfig?.visible ?? false}
-            disabled={areDeckLayersDisabled || isLayerNotImplemented('relief')}
-            disabledReason={isLayerNotImplemented('relief')
-              ? notImplementedReason
-              : deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('relief', checked)}
-          >
-            <LayerConfigRelief
-              representation={reliefConfig?.representation}
-              color={reliefConfig?.color}
-              opacity={reliefConfig?.opacity}
-              onchange={handleReliefChange}
-            />
-          </ExpandableSection>
+    <!-- Relief -->
+    <ExpandableSection
+      title={m.basemap_layer_relief()}
+      showToggle={true}
+      toggleChecked={reliefConfig?.visible ?? false}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('relief', checked)}
+    >
+      <LayerConfigRelief
+        representation={reliefConfig?.representation}
+        color={reliefConfig?.color}
+        opacity={reliefConfig?.opacity}
+        onchange={handleReliefChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_equateur()}
-            showToggle={true}
-            toggleChecked={equateurConfig?.visible ?? true}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('equateur', checked)}
-          >
-            <LayerConfigSimple
-              showColor={true}
-              showDotted={true}
-              showThickness={true}
-              thicknessMax={20}
-              color={equateurConfig?.color}
-              dotted={equateurConfig?.dotted}
-              dottedPattern={equateurConfig?.dottedPattern}
-              thickness={equateurConfig?.thickness}
-              opacity={equateurConfig?.opacity}
-              onchange={handleEquateurChange}
-            />
-          </ExpandableSection>
+    <!-- Équateur -->
+    <ExpandableSection
+      title={m.basemap_layer_equateur()}
+      showToggle={true}
+      toggleChecked={equateurConfig?.visible ?? true}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('equateur', checked)}
+    >
+      <LayerConfigSimple
+        showColor={true}
+        showDotted={true}
+        showThickness={true}
+        thicknessMax={20}
+        color={equateurConfig?.color}
+        dotted={equateurConfig?.dotted}
+        dottedPattern={equateurConfig?.dottedPattern}
+        thickness={equateurConfig?.thickness}
+        opacity={equateurConfig?.opacity}
+        onchange={handleEquateurChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_meridiens()}
-            showToggle={true}
-            toggleChecked={meridiensConfig?.visible ?? true}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) =>
-              handleLayerToggle('meridiens', checked)}
-          >
-            <LayerConfigMeridiens
-              remarquables={meridiensConfig?.remarquables}
-              color={meridiensConfig?.color}
-              dotted={meridiensConfig?.dotted}
-              dottedPattern={meridiensConfig?.dottedPattern}
-              thickness={meridiensConfig?.thickness}
-              opacity={meridiensConfig?.opacity}
-              onchange={handleMeridiensChange}
-            />
-          </ExpandableSection>
+    <!-- Méridiens/parallèles -->
+    <ExpandableSection
+      title={m.basemap_layer_meridiens()}
+      showToggle={true}
+      toggleChecked={meridiensConfig?.visible ?? true}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('meridiens', checked)}
+    >
+      <LayerConfigMeridiens
+        remarquables={meridiensConfig?.remarquables}
+        color={meridiensConfig?.color}
+        dotted={meridiensConfig?.dotted}
+        dottedPattern={meridiensConfig?.dottedPattern}
+        thickness={meridiensConfig?.thickness}
+        opacity={meridiensConfig?.opacity}
+        onchange={handleMeridiensChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_frontieres()}
-            showToggle={true}
-            toggleChecked={frontieresConfig?.visible ?? true}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) =>
-              handleLayerToggle('frontieres', checked)}
-          >
-            <LayerConfigSimple
-              showColor={true}
-              showDotted={true}
-              showThickness={true}
-              thicknessMax={20}
-              color={frontieresConfig?.color}
-              dotted={frontieresConfig?.dotted}
-              dottedPattern={frontieresConfig?.dottedPattern}
-              thickness={frontieresConfig?.thickness}
-              opacity={frontieresConfig?.opacity}
-              onchange={handleFrontieresChange}
-            />
-          </ExpandableSection>
+    <!-- Frontières/limites -->
+    <ExpandableSection
+      title={m.basemap_layer_frontieres()}
+      showToggle={true}
+      toggleChecked={frontieresConfig?.visible ?? true}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('frontieres', checked)}
+    >
+      <LayerConfigSimple
+        showColor={true}
+        showDotted={true}
+        showThickness={true}
+        thicknessMax={20}
+        color={frontieresConfig?.color}
+        dotted={frontieresConfig?.dotted}
+        dottedPattern={frontieresConfig?.dottedPattern}
+        thickness={frontieresConfig?.thickness}
+        opacity={frontieresConfig?.opacity}
+        onchange={handleFrontieresChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_layer_villes()}
-            showToggle={true}
-            toggleChecked={villesConfig?.visible ?? false}
-            disabled={areDeckLayersDisabled}
-            disabledReason={deckLayersDisabledReason}
-            onToggleChange={(checked) => handleLayerToggle('villes', checked)}
-          >
-            <LayerConfigVilles
-              category={villesConfig?.category}
-              symbol={villesConfig?.symbol}
-              color={villesConfig?.color}
-              size={villesConfig?.size}
-              opacity={villesConfig?.opacity}
-              onchange={handleVillesChange}
-            />
-          </ExpandableSection>
+    <!-- Villes -->
+    <ExpandableSection
+      title={m.basemap_layer_villes()}
+      showToggle={true}
+      toggleChecked={villesConfig?.visible ?? false}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
+      onToggleChange={(checked) => handleLayerToggle('villes', checked)}
+    >
+      <LayerConfigVilles
+        category={villesConfig?.category}
+        symbol={villesConfig?.symbol}
+        color={villesConfig?.color}
+        size={villesConfig?.size}
+        opacity={villesConfig?.opacity}
+        onchange={handleVillesChange}
+      />
+    </ExpandableSection>
 
-          <ExpandableSection
-            title={m.basemap_tiled_label()}
-            showToggle={true}
-            toggleChecked={isTiledBasemapEnabled}
-            onToggleChange={handleTiledBasemapToggle}
-            defaultOpen={isTiledBasemapEnabled}
-          >
-            <div class="tiled-basemap-config">
-              <BasemapStyleSelector />
-              <MapProjectionSelector />
-            </div>
-          </ExpandableSection>
-        </div>
-      </Column>
-    </Row>
-  </Grid>
+    <!-- Fond de carte tuilé -->
+    <ExpandableSection
+      title={m.basemap_tiled_label()}
+      showToggle={true}
+      toggleChecked={isTiledBasemapEnabled}
+      onToggleChange={handleTiledBasemapToggle}
+      defaultOpen={isTiledBasemapEnabled}
+    >
+      <div class="tiled-basemap-config">
+        <BasemapStyleSelector />
+        <MapProjectionSelector />
+      </div>
+    </ExpandableSection>
+  </div>
 </section>
 
 <style lang="scss">
   #customize-basemap {
-    background-color: var(--cds-ui-02);
-    padding: var(--cds-spacing-05);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
   }
 
   .kh-help {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
+    color: var(--cds-text-helper);
     font-size: 0.875rem;
     line-height: 1.4;
+    margin: 0;
   }
 
   .layers-list {
@@ -352,5 +354,6 @@
     flex-direction: column;
     gap: var(--cds-spacing-05);
     padding: var(--cds-spacing-04);
+    background-color: var(--cds-layer-01);
   }
 </style>

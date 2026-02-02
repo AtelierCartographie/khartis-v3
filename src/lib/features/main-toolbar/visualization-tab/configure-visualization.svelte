@@ -14,8 +14,8 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import FillConfig from './components/fill-config.svelte';
   import LabelsConfig from './components/labels-config.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
@@ -152,73 +152,68 @@
 </script>
 
 <section id="configure-visualization">
-  <MainToolBarHeader title={m.step2_title()} />
+  <MainToolBarHeader title={m.step2_title()} icon={SettingsAdjust} />
 
   <p class="kh-help">
     {m.step2_description()}
   </p>
 
-  <SymbolsConfig
-    dataFields={dataFieldItems}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-    onModesChange={handleModesChange}
-    onSymbolsChange={handleSymbolsChange}
-    onMissingDataChange={handleMissingDataChange}
-    onClassificationChange={handleClassificationChange}
-    onInvertPalette={handleInvertPalette}
-    onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POINT)}
-  />
+  <div class="config-accordion">
+    <SymbolsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onSymbolsChange={handleSymbolsChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POINT)}
+    />
 
-  <FillConfig
-    dataFields={dataFieldItems}
-    discretizationMethods={discretizationMethods}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-    onInvertPalette={handleInvertPalette}
-  />
+    <PolygonsConfig
+      dataFields={dataFieldItems}
+      discretizationMethods={discretizationMethods}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POLYGON)}
+    />
 
-  <PolygonsConfig
-    dataFields={dataFieldItems}
-    discretizationMethods={discretizationMethods}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-    onModesChange={handleModesChange}
-    onMissingDataChange={handleMissingDataChange}
-    onClassificationChange={handleClassificationChange}
-    onMappingChange={handleMappingChange}
-    onInvertPalette={handleInvertPalette}
-    onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POLYGON)}
-  />
+    <LinesConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.LINE)}
+    />
 
-  <LinesConfig
-    dataFields={dataFieldItems}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-    onModesChange={handleModesChange}
-    onMissingDataChange={handleMissingDataChange}
-    onClassificationChange={handleClassificationChange}
-    onInvertPalette={handleInvertPalette}
-    onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.LINE)}
-  />
+    <LabelsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+    />
 
-  <LabelsConfig
-    dataFields={dataFieldItems}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-  />
-
-  <TextsConfig
-    dataFields={dataFieldItems}
-    visualization={selectedViz}
-    onStyleChange={handleStyleChange}
-  />
+    <TextsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+    />
+  </div>
 </section>
 
 <style lang="scss">
   #configure-visualization {
-    background-color: var(--cds-ui-02);
-    padding: var(--cds-spacing-05);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
   }
 
   .kh-help {
@@ -226,5 +221,15 @@
     margin-bottom: var(--cds-spacing-05);
     font-size: 0.875rem;
     line-height: 1.4;
+  }
+
+  .config-accordion {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--cds-border-subtle-00);
+  }
+
+  .config-accordion > :global(*) {
+    border-bottom: 1px solid var(--cds-border-subtle-00);
   }
 </style>

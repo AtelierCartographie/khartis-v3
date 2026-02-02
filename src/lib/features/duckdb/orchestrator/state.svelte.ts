@@ -7,16 +7,16 @@ interface OrchestratorState {
   currentTableName: string | null;
 }
 
-let _state = $state<OrchestratorState>({
+const _state = $state<OrchestratorState>({
   datasets: new SvelteMap(),
   currentTableName: null
 });
 
-let _filters = $state<SvelteMap<string, DataTableFilter[]>>(new SvelteMap());
+let _filters = new SvelteMap<string, DataTableFilter[]>();
 
 let _filterIdCounter = 0;
 
-let _metadataPrefetches = new SvelteMap<string, Promise<void>>();
+const _metadataPrefetches = new SvelteMap<string, Promise<void>>();
 
 let _datasetsVersion = $state(0);
 

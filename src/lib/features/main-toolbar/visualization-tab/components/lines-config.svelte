@@ -1,30 +1,38 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import {
+    ColorSelector,
+    DiscretizationRow,
+    MissingDataSection,
+    PalettePreview,
+    SectionHeading,
+    SliderWithInput,
+    ToggleWithLabel
+  } from './shared';
   import type {
-    MissingDataConfig as MissingDataConfigType,
+    MissingDataConfig,
     VisualizationConfig,
     VisualizationModes
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Dropdown } from 'carbon-components-svelte';
-  import { Category, ChartLine, Filter, Tag } from 'carbon-icons-svelte';
   import {
+    Category,
+    Filter,
+    Minimize,
+    MisuseOutline,
+    Subtract,
+    Tag
+  } from 'carbon-icons-svelte';
+  import {
+    ColorMode,
     DEFAULT_COLORS,
-    FillMode,
-    SLIDER_LIMITS,
+    MissingDataShape,
     ThicknessMode,
+    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import MissingDataConfigComponent from './missing-data-config.svelte';
-  import {
-    ColorSelector,
-    DiscretizationRow,
-    PalettePreview,
-    SectionTitle,
-    SliderWithInput,
-    ToggleWithLabel
-  } from './shared';
+  import { Dropdown } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
     ClassificationMethod,
@@ -33,136 +41,197 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    enabled?: boolean;
+    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
-    onMissingDataChange?: (updates: Partial<MissingDataConfigType>) => void;
+    onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onInvertPalette?: () => void;
-    onEnabledChange?: (enabled: boolean) => void;
     onFilterToggle?: () => void;
   }
 
   let {
     dataFields = [],
-    enabled = $bindable(false),
+    discretizationMethods: _discretizationMethods = [],
     visualization,
     onStyleChange,
-    onModesChange: _onModesChange,
+    onModesChange,
     onMissingDataChange,
     onClassificationChange,
-    onInvertPalette: _onInvertPalette,
-    onEnabledChange,
+    onMappingChange,
+    onInvertPalette,
     onFilterToggle
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-
-  let thicknessMode = $state<ThicknessMode>(ThicknessMode.UNIQUE);
-  let colorMode = $state<FillMode>(FillMode.CATEGORIES);
-  let lineWidth = $state<number>(VISUALIZATION_DEFAULTS.lineWidth);
-  let lineOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
-  let selectedColorFieldId = $state<number>(0);
-  let categoryCount = $state<number>(4);
-  let showMissingData = $state<boolean>(true);
-  let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let missingDataDashed = $state<boolean>(false);
-  let missingDataWidth = $state<number>(1);
-  let lineColor = $state<string>(DEFAULT_COLORS.stroke);
-  let lineDashed = $state<boolean>(false);
+  let selectedFieldId = $state<number>(0);
 
   $effect(() => {
-    if (visualization?.style) {
-      lineWidth =
-        visualization.style.strokeWidth ?? VISUALIZATION_DEFAULTS.lineWidth;
-      lineOpacity =
-        visualization.style.strokeOpacity !== undefined
-          ? Math.round(visualization.style.strokeOpacity * 100)
-          : VISUALIZATION_DEFAULTS.lineOpacity;
-      lineColor = visualization.style.strokeColor ?? DEFAULT_COLORS.stroke;
-      lineDashed = visualization.style.strokeDashed ?? false;
-    }
-    if (visualization?.missingData) {
-      showMissingData = visualization.missingData.show ?? true;
-      missingDataColor =
-        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.valueColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedFieldId = fieldIndex;
+      }
     }
   });
 
-  const sequentialPalette = ['#c8ddf0', '#78a9cf', '#2171b5', '#084594'];
+  function handleFieldSelect(fieldId: number) {
+    selectedFieldId = fieldId;
+    const field = dataFields[fieldId];
+    if (field && onMappingChange) {
+      onMappingChange({ valueColumn: field.text });
+    }
+  }
+
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? [
+      '#c8ddf0',
+      '#78a9cf',
+      '#2171b5',
+      '#084594'
+    ]
+  );
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
+  let thicknessMode = $state<ThicknessMode>(ThicknessMode.UNIQUE);
+  let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
+  let thickness = $state<number>(VISUALIZATION_DEFAULTS.lineWidth);
+  let maxThickness = $state<number>(VISUALIZATION_DEFAULTS.lineMaxWidth);
+  let color = $state<string>(DEFAULT_COLORS.line);
+  let opacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
+  let enabled = $state<boolean>(false);
+  let dashed = $state<boolean>(false);
+  let showMissingData = $state<boolean>(false);
+  let _missingDataLabel = $state<string>('');
+
+  $effect(() => {
+    if (visualization?.style) {
+      thickness =
+        visualization.style.lineWidth ?? VISUALIZATION_DEFAULTS.lineWidth;
+      maxThickness =
+        visualization.style.lineMaxWidth ?? VISUALIZATION_DEFAULTS.lineMaxWidth;
+      opacity =
+        visualization.style.lineOpacity ?? VISUALIZATION_DEFAULTS.lineOpacity;
+      color = (visualization.style.lineColor as string) ?? DEFAULT_COLORS.line;
+      dashed = visualization.style.lineDashed ?? false;
+    }
+    if (visualization?.modes) {
+      thicknessMode = visualization.modes.thickness ?? ThicknessMode.UNIQUE;
+      colorMode = visualization.modes.color ?? ColorMode.UNIQUE;
+    }
+    if (visualization?.missingData) {
+      showMissingData = visualization.missingData.enabled ?? false;
+      _missingDataLabel = visualization.missingData.label ?? '';
+    }
+  });
+
   const thicknessModeItems = [
-    { icon: ChartLine, label: m.unique(), iconSize: 16 }
+    { icon: MisuseOutline, label: m.thickness_mode_none(), iconSize: 16 },
+    { icon: Subtract, label: m.thickness_mode_unique(), iconSize: 16 },
+    { icon: Minimize, label: m.thickness_mode_proportional(), iconSize: 16 }
   ];
 
   const colorModeItems = [
-    { icon: ChartLine, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
+    { icon: MisuseOutline, label: m.color_mode_none(), iconSize: 16 },
+    { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
+    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
+    { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
   ];
-
-  const thicknessModeIndex = $derived(
-    [
-      ThicknessMode.UNIQUE,
-      ThicknessMode.GRADUATED,
-      ThicknessMode.CLASSES
-    ].indexOf(thicknessMode)
-  );
-
-  const colorModeIndex = $derived(
-    [FillMode.UNIQUE, FillMode.CLASSES, FillMode.CATEGORIES].indexOf(colorMode)
-  );
 
   function handleThicknessModeChange(index: number) {
     const modes = [
+      ThicknessMode.NONE,
       ThicknessMode.UNIQUE,
-      ThicknessMode.GRADUATED,
-      ThicknessMode.CLASSES
+      ThicknessMode.PROPORTIONAL
     ];
     thicknessMode = modes[index] || ThicknessMode.UNIQUE;
+    onModesChange?.({ thickness: thicknessMode });
   }
 
   function handleColorModeChange(index: number) {
-    const modes = [FillMode.UNIQUE, FillMode.CLASSES, FillMode.CATEGORIES];
-    colorMode = modes[index] || FillMode.CATEGORIES;
+    const modes = [
+      ColorMode.NONE,
+      ColorMode.UNIQUE,
+      ColorMode.CLASSES,
+      ColorMode.CATEGORIES
+    ];
+    colorMode = modes[index] || ColorMode.UNIQUE;
+    onModesChange?.({ color: colorMode });
+  }
+
+  function handleThicknessChange(value: number) {
+    thickness = value;
+    onStyleChange?.({ lineWidth: value });
+  }
+
+  function handleMaxThicknessChange(value: number) {
+    maxThickness = value;
+    onStyleChange?.({ lineMaxWidth: value });
+  }
+
+  function handleColorChange(value: string) {
+    color = value;
+    onStyleChange?.({ lineColor: value });
+  }
+
+  function handleOpacityChange(value: number) {
+    opacity = value;
+    onStyleChange?.({ lineOpacity: value });
+  }
+
+  function handleDashedChange(value: boolean) {
+    dashed = value;
+    onStyleChange?.({ lineDashed: value });
   }
 
   function handleToggleChange(checked: boolean) {
     enabled = checked;
-    onEnabledChange?.(checked);
   }
 
-  function handleLineWidthChange(value: number) {
-    lineWidth = value;
-    onStyleChange?.({ strokeWidth: value });
+  function handleMissingDataToggle(checked: boolean) {
+    showMissingData = checked;
+    onMissingDataChange?.({ enabled: checked });
   }
 
-  function handleLineOpacityChange(value: number) {
-    lineOpacity = value;
-    onStyleChange?.({ strokeOpacity: value / 100 });
-  }
-
-  function handleLineColorChange(value: string) {
-    lineColor = value;
-    onStyleChange?.({ strokeColor: value });
-  }
-
-  function handleLineDashedChange(value: boolean) {
-    lineDashed = value;
-    onStyleChange?.({ strokeDashed: value });
-  }
-
-  function _handleMissingDataShowChange(value: boolean) {
-    showMissingData = value;
-    onMissingDataChange?.({ show: value });
-  }
-
-  function _handleMissingDataColorChange(value: string) {
-    missingDataColor = value;
+  function handleMissingDataColorChange(value: string) {
     onMissingDataChange?.({ color: value });
   }
+
+  function handleMissingDataOpacityChange(value: number) {
+    onMissingDataChange?.({ opacity: value / 100 });
+  }
+
+  function handleMissingDataShapeChange(shape: string) {
+    onMissingDataChange?.({ shape: shape as MissingDataShape });
+  }
+
+  function _handleMissingDataLabelChange(label: string) {
+    _missingDataLabel = label;
+    onMissingDataChange?.({ label });
+  }
+
+  const thicknessModeIndex = $derived(
+    [
+      ThicknessMode.NONE,
+      ThicknessMode.UNIQUE,
+      ThicknessMode.PROPORTIONAL
+    ].indexOf(thicknessMode)
+  );
+
+  const colorModeIndex = $derived(
+    [
+      ColorMode.NONE,
+      ColorMode.UNIQUE,
+      ColorMode.CLASSES,
+      ColorMode.CATEGORIES
+    ].indexOf(colorMode)
+  );
 
   function handleOpenDiscretization() {
     discretizationModalOpen = true;
@@ -214,7 +283,7 @@
   {/snippet}
 
   <div class="lines-config">
-    <SectionTitle title={m.thickness()} />
+    <SectionHeading title={m.thickness()} />
 
     <div class="field-group">
       <ToggleTabs
@@ -225,15 +294,34 @@
       />
     </div>
 
-    <SliderWithInput
-      label={m.thickness()}
-      bind:value={lineWidth}
-      min={1}
-      max={SLIDER_LIMITS.strokeWidth.max}
-      onchange={handleLineWidthChange}
-    />
+    {#if thicknessMode === ThicknessMode.UNIQUE}
+      <SliderWithInput
+        label={m.thickness()}
+        min={SLIDER_LIMITS.lineWidth.min}
+        max={SLIDER_LIMITS.lineWidth.max}
+        value={thickness}
+        onchange={handleThicknessChange}
+      />
+    {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
+      <div class="field-group">
+        <Dropdown
+          titleText={m.thickness_according()}
+          items={dataFields}
+          selectedId={selectedFieldId}
+          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          type="default"
+        />
+      </div>
+      <SliderWithInput
+        label={m.max_thickness()}
+        min={1}
+        max={SLIDER_LIMITS.lineMaxWidth.max}
+        value={maxThickness}
+        onchange={handleMaxThicknessChange}
+      />
+    {/if}
 
-    <SectionTitle title={m.color()} />
+    <SectionHeading title={m.color()} />
 
     <div class="field-group">
       <ToggleTabs
@@ -244,93 +332,78 @@
       />
     </div>
 
-    {#if colorMode === FillMode.CATEGORIES}
+    {#if colorMode === ColorMode.UNIQUE}
+      <ColorSelector
+        label={m.color()}
+        value={color}
+        onchange={handleColorChange}
+      />
+    {:else if colorMode === ColorMode.CLASSES}
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedColorFieldId}
+          selectedId={selectedFieldId}
+          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
-
-      <DiscretizationRow
-        label={m.category_aspect()}
-        value={m.categories_count({ count: categoryCount })}
-        onsettings={handleOpenDiscretization}
-      />
-
-      <PalettePreview label={m.color_palette()} colors={qualitativePalette} />
-
-      <SliderWithInput
-        label={m.opacity()}
-        bind:value={lineOpacity}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        onchange={handleLineOpacityChange}
-      />
-
-      <MissingDataConfigComponent
-        bind:show={showMissingData}
-        bind:color={missingDataColor}
-        bind:dashed={missingDataDashed}
-        bind:width={missingDataWidth}
-        showDashed={true}
-        showWidth={true}
-      />
-    {:else if colorMode === FillMode.CLASSES}
-      <div class="field-group">
-        <Dropdown
-          titleText={m.color_according()}
-          items={dataFields}
-          bind:selectedId={selectedColorFieldId}
-          type="default"
-        />
-      </div>
-
       <DiscretizationRow
         label={m.discretization()}
         value={discretizationLabel}
         onsettings={handleOpenDiscretization}
       />
-
-      <PalettePreview label={m.color_palette()} colors={sequentialPalette} />
-
-      <SliderWithInput
-        label={m.opacity()}
-        bind:value={lineOpacity}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        onchange={handleLineOpacityChange}
+      <PalettePreview
+        label={m.color_palette()}
+        colors={currentPalette}
+        oninvert={onInvertPalette}
       />
-
-      <MissingDataConfigComponent
-        bind:show={showMissingData}
-        bind:color={missingDataColor}
-        bind:dashed={missingDataDashed}
-        bind:width={missingDataWidth}
-        showDashed={true}
-        showWidth={true}
+    {:else if colorMode === ColorMode.CATEGORIES}
+      <div class="field-group">
+        <Dropdown
+          titleText={m.color_according()}
+          items={dataFields}
+          bind:selectedId={selectedFieldId}
+          type="default"
+        />
+      </div>
+      <DiscretizationRow
+        label={m.category_aspect()}
+        value={m.categories_count({ count: 4 })}
+        onsettings={handleOpenDiscretization}
       />
-    {:else}
-      <ColorSelector
-        label={m.color()}
-        value={lineColor}
-        onchange={handleLineColorChange}
+      <PalettePreview
+        label={m.color_palette()}
+        colors={qualitativePalette}
+        oninvert={onInvertPalette}
       />
+    {/if}
 
+    {#if thicknessMode !== ThicknessMode.NONE || colorMode !== ColorMode.NONE}
       <ToggleWithLabel
-        label={m.dashed_line()}
-        toggled={lineDashed}
-        ontoggle={handleLineDashedChange}
+        label={m.dashed()}
+        toggled={dashed}
+        ontoggle={handleDashedChange}
       />
 
       <SliderWithInput
         label={m.opacity()}
-        bind:value={lineOpacity}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        onchange={handleLineOpacityChange}
+        min={SLIDER_LIMITS.lineOpacity.min}
+        max={SLIDER_LIMITS.lineOpacity.max}
+        value={opacity}
+        onchange={handleOpacityChange}
+      />
+
+      <MissingDataSection
+        show={showMissingData}
+        onshowchange={handleMissingDataToggle}
+        color={visualization?.missingData?.color}
+        oncolorchange={handleMissingDataColorChange}
+        opacity={visualization?.missingData?.opacity}
+        onopacitychange={handleMissingDataOpacityChange}
+        shape={visualization?.missingData?.shape}
+        onshapechange={handleMissingDataShapeChange}
+        showShapeSelector={true}
       />
     {/if}
   </div>
@@ -369,9 +442,5 @@
     &:hover {
       background: var(--cds-hover-ui);
     }
-  }
-
-  :global(.lines-config .bx--dropdown) {
-    max-width: 100%;
   }
 </style>

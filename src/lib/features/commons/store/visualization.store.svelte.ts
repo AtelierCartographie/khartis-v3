@@ -51,9 +51,12 @@ export enum PrimitiveFilterType {
 }
 
 export interface VisualizationModes {
-  symbol: SymbolMode;
-  fill: FillMode;
-  stroke: StrokeMode;
+  symbol?: SymbolMode;
+  fill?: FillMode;
+  stroke?: StrokeMode;
+  thickness?: import('$lib/features/main-toolbar/constants').ThicknessMode;
+  color?: import('$lib/features/main-toolbar/constants').ColorMode;
+  size?: import('$lib/features/main-toolbar/constants').SizeMode;
 }
 
 export interface ClassificationConfig {
@@ -68,10 +71,13 @@ export interface ClassificationConfig {
 
 export interface MissingDataConfig {
   show: boolean;
+  enabled?: boolean;
   shape: MissingDataShape;
   size: number;
   color: string;
+  opacity?: number;
   pattern?: boolean;
+  label?: string;
 }
 
 export type PrimitiveFilter =
@@ -100,6 +106,33 @@ export interface VisualizationConfig {
     strokeWidth?: number;
     strokeOpacity?: number;
     strokeDashed?: boolean;
+    // Line properties
+    lineWidth?: number;
+    lineMaxWidth?: number;
+    lineColor?: string | string[];
+    lineOpacity?: number;
+    lineDashed?: boolean;
+    // Text properties
+    textColor?: string | string[];
+    textOpacity?: number;
+    textSize?: number;
+    textBold?: boolean;
+    textItalic?: boolean;
+    textAlign?: 'left' | 'center' | 'right';
+    textHalo?: boolean;
+    textHaloColor?: string;
+    textHaloWidth?: number;
+    textDxpMasking?: boolean;
+    // Label properties
+    labelColor?: string | string[];
+    labelOpacity?: number;
+    labelSize?: number;
+    labelAlign?: 'left' | 'center' | 'right';
+    labelHalo?: boolean;
+    labelHaloColor?: string;
+    labelHaloWidth?: number;
+    labelCollisionDetection?: boolean;
+    labelDxpMasking?: boolean;
   };
   mapping: {
     valueColumn?: string;
@@ -107,6 +140,7 @@ export interface VisualizationConfig {
     sizeColumn?: string;
     colorColumn?: string;
     geometryColumn?: string;
+    labelColumn?: string;
   };
   classification?: ClassificationConfig;
   symbols?: {
