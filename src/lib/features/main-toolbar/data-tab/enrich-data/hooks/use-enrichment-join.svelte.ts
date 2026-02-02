@@ -44,7 +44,7 @@ export function useEnrichmentJoin(
   let joinStats = $state<JoinStats | null>(null);
   let isComputingJoin = $state(false);
   let isFinalizingJoin = $state(false);
-  let joinMappings = $state(new SvelteMap<number, string>());
+  let joinMappings = new SvelteMap<number, string>();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 

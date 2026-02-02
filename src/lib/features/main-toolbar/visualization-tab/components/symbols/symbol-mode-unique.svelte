@@ -16,17 +16,13 @@
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS
   } from '../../../constants';
-  import type {
-    ClassificationConfig,
-    VisualizationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     ColorSelector,
     DiscretizationRow,
     PalettePreview,
-    SectionTitle,
+    SectionHeading,
     SliderWithInput,
-    ToggleWithLabel
+    MissingDataSection
   } from '../shared';
   import type { SymbolModeProps } from './types';
 
@@ -198,13 +194,15 @@
   }
 </script>
 
-<SliderWithInput
-  label={m.size_label()}
-  bind:value={symbolSize}
-  min={SLIDER_LIMITS.symbolSize.min}
-  max={SLIDER_LIMITS.symbolSize.max}
-  onchange={handleSymbolSizeChange}
-/>
+<div class="field-row">
+  <SliderWithInput
+    label={m.size_label()}
+    bind:value={symbolSize}
+    min={SLIDER_LIMITS.symbolSize.min}
+    max={SLIDER_LIMITS.symbolSize.max}
+    onchange={handleSymbolSizeChange}
+  />
+</div>
 
 <div class="field-group">
   <Select
@@ -222,7 +220,7 @@
   </Select>
 </div>
 
-<SectionTitle title={m.background()} />
+<SectionHeading title={m.background()} />
 
 <div class="field-group">
   <ToggleTabs
@@ -272,26 +270,17 @@
     max={SLIDER_LIMITS.opacity.max}
     onchange={handleFillOpacityChange}
   />
-  <div class="missing-data-section">
-    <ToggleWithLabel
-      label={m.show_missing_data()}
-      toggled={showMissingData}
-      ontoggle={handleMissingDataShowChange}
-    />
-    {#if showMissingData}
-      <ColorSelector
-        label={m.color()}
-        value={missingDataColor}
-        size="small"
-        onchange={handleMissingDataColorChange}
-      />
-      <ToggleWithLabel
-        label={m.pattern()}
-        toggled={fillPattern}
-        ontoggle={handleFillPatternChange}
-      />
-    {/if}
-  </div>
+  <MissingDataSection
+    bind:show={showMissingData}
+    color={missingDataColor}
+    showShapeSelector={false}
+    showSizeSlider={false}
+    showPattern={true}
+    pattern={fillPattern}
+    onshowchange={handleMissingDataShowChange}
+    oncolorchange={handleMissingDataColorChange}
+    onpatternchange={handleFillPatternChange}
+  />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
     <Dropdown
@@ -318,29 +307,20 @@
     max={SLIDER_LIMITS.opacity.max}
     onchange={handleFillOpacityChange}
   />
-  <div class="missing-data-section">
-    <ToggleWithLabel
-      label={m.show_missing_data()}
-      toggled={showMissingData}
-      ontoggle={handleMissingDataShowChange}
-    />
-    {#if showMissingData}
-      <ColorSelector
-        label={m.color()}
-        value={missingDataColor}
-        size="small"
-        onchange={handleMissingDataColorChange}
-      />
-      <ToggleWithLabel
-        label={m.pattern()}
-        toggled={fillPattern}
-        ontoggle={handleFillPatternChange}
-      />
-    {/if}
-  </div>
+  <MissingDataSection
+    bind:show={showMissingData}
+    color={missingDataColor}
+    showShapeSelector={false}
+    showSizeSlider={false}
+    showPattern={true}
+    pattern={fillPattern}
+    onshowchange={handleMissingDataShowChange}
+    oncolorchange={handleMissingDataColorChange}
+    onpatternchange={handleFillPatternChange}
+  />
 {/if}
 
-<SectionTitle title={m.stroke()} />
+<SectionHeading title={m.stroke()} />
 
 <div class="field-group">
   <ToggleTabs
@@ -423,9 +403,9 @@
     gap: var(--cds-spacing-02);
   }
 
-  .missing-data-section {
-    margin-top: var(--cds-spacing-04);
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
+  .field-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
   }
 </style>

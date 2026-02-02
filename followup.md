@@ -1,14 +1,14 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 30 janvier 2026
+> Dernière mise à jour : 3 février 2026
 
 ## Avancement global : 85%
 
 | Statut     | Nombre  | Pourcentage |
 | ---------- | ------- | ----------- |
-| ✅ Fait    | 251     | 80%         |
-| ⚠️ Partiel | 23      | 7%          |
-| ❌ À faire | 40      | 13%         |
+| ✅ Fait    | 255     | 81%         |
+| ⚠️ Partiel | 21      | 7%          |
+| ❌ À faire | 38      | 12%         |
 | **Total**  | **314** |             |
 
 ### Par section
@@ -16,7 +16,7 @@
 | Section             | Avancement |
 | ------------------- | ---------- |
 | 2.A Données         | 100%       |
-| 2.B Visualisations  | 87%        |
+| 2.B Visualisations  | 91%        |
 | 2.C Habillage       | 63%        |
 | 2.D Téléchargement  | 100%       |
 | 2.E Sauvegarde      | 100%       |
@@ -249,7 +249,7 @@
 | Fonctionnalité                                               | Statut |
 | ------------------------------------------------------------ | ------ |
 | Basées sur profil données                                    | ✅     |
-| Vignette : aperçu générique, primitives, type, variables     | ⚠️     |
+| Vignette : aperçu générique, primitives, type, variables     | ✅     |
 | Max 3 affichées, "voir plus" par 3                           | ✅     |
 | Meilleur score sélectionné par défaut + représenté sur carte | ✅     |
 | Paramètres préréglés à la sélection                          | ✅     |
@@ -310,16 +310,16 @@
 | Couleur fond polygones           | ✅     |
 | Couleur contours                 | ✅     |
 | Épaisseur contours               | ✅     |
-| Pointillés                       | ❌     |
+| Pointillés                       | ✅     |
 | Opacité                          | ✅     |
-| Ombre portée (option prédéfinie) | ❌     |
+| Ombre portée (option prédéfinie) | ✅     |
 
 #### Fond catalogue
 
 | Fonctionnalité                                                                                                  | Statut |
 | --------------------------------------------------------------------------------------------------------------- | ------ |
 | Couches additionnelles configurables individuellement                                                           | ✅     |
-| Couches : terre, mers/océans, lacs/rivières, relief, équateur, méridiens/parallèles, frontières/limites, villes | ⚠️     |
+| Couches : terre, mers/océans, lacs/rivières, relief, équateur, méridiens/parallèles, frontières/limites, villes | ✅     |
 | Afficher/masquer chaque couche                                                                                  | ✅     |
 | Personnaliser chaque couche                                                                                     | ✅     |
 

@@ -33,6 +33,7 @@
   import '$lib/features/commons/assets/styles/dimension.css';
   import '$lib/features/commons/assets/styles/flex.css';
   import '$lib/features/commons/assets/styles/global.css';
+  import '$lib/features/commons/assets/styles/figma-tokens.css';
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
 

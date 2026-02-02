@@ -75,7 +75,7 @@
 
   function scheduleLayerUpdate(source?: string): void {
     scheduleCount++;
-    const now = performance.now();
+    const _now = performance.now();
     logger.debug(
       `scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`,
       LogCategory.MAP,

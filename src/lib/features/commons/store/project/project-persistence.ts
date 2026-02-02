@@ -1,4 +1,3 @@
-import type { KhartisProject } from '$lib/features/project-management';
 import {
   ProjectStorageKey,
   projectFiles,

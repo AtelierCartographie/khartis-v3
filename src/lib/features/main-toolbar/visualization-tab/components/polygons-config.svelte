@@ -26,7 +26,7 @@
     ColorSelector,
     DiscretizationRow,
     PalettePreview,
-    SectionTitle,
+    SectionHeading,
     SliderWithInput,
     ToggleWithLabel
   } from './shared';
@@ -98,7 +98,7 @@
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
-  let strokeMode = $state<StrokeMode>(StrokeMode.UNIQUE);
+  let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
@@ -128,7 +128,7 @@
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
-      strokeMode = visualization.modes.stroke ?? StrokeMode.UNIQUE;
+      strokeMode = visualization.modes.stroke ?? StrokeMode.NONE;
     }
   });
 
@@ -270,7 +270,7 @@
   {/snippet}
 
   <div class="polygons-config">
-    <SectionTitle title={m.background()} />
+    <SectionHeading title={m.fill()} />
 
     <div class="field-group">
       <ToggleTabs
@@ -338,7 +338,7 @@
       />
     {/if}
 
-    <SectionTitle title={m.stroke()} />
+    <SectionHeading title={m.stroke()} />
 
     <div class="field-group">
       <ToggleTabs
@@ -363,6 +363,44 @@
           label={m.color()}
           value={strokeColor}
           onchange={handleStrokeColorChange}
+        />
+      {:else if strokeMode === StrokeMode.CLASSES}
+        <div class="field-group">
+          <Dropdown
+            titleText={m.color_according()}
+            items={dataFields}
+            bind:selectedId={selectedFieldId}
+            type="default"
+          />
+        </div>
+        <DiscretizationRow
+          label={m.discretization()}
+          value={discretizationLabel}
+          onsettings={handleOpenDiscretization}
+        />
+        <PalettePreview
+          label={m.color_palette()}
+          colors={currentPalette}
+          oninvert={onInvertPalette}
+        />
+      {:else if strokeMode === StrokeMode.CATEGORIES}
+        <div class="field-group">
+          <Dropdown
+            titleText={m.color_according()}
+            items={dataFields}
+            bind:selectedId={selectedFieldId}
+            type="default"
+          />
+        </div>
+        <DiscretizationRow
+          label={m.category_aspect()}
+          value={m.categories_count({ count: 4 })}
+          onsettings={handleOpenDiscretization}
+        />
+        <PalettePreview
+          label={m.color_palette()}
+          colors={qualitativePalette}
+          oninvert={onInvertPalette}
         />
       {/if}
 

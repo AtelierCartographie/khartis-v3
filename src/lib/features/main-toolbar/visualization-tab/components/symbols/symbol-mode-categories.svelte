@@ -11,7 +11,7 @@
     DiscretizationRow,
     MissingDataSection,
     PalettePreview,
-    SectionTitle,
+    SectionHeading,
     SliderWithInput
   } from '../shared';
   import type { SymbolModeProps } from './types';
@@ -72,7 +72,7 @@
   }
 </script>
 
-<SectionTitle title={m.size_and_color()} />
+<SectionHeading title={m.size_and_color()} />
 
 <div class="field-group">
   <Dropdown

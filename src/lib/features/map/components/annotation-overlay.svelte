@@ -4,7 +4,6 @@
     AnnotationKind,
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
-  import { TextAlign } from '$lib/features/commons/types/enums';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';

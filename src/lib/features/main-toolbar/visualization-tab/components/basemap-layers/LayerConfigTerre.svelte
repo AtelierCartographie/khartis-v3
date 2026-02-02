@@ -2,7 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import { Toggle } from 'carbon-components-svelte';
   import ColorDropdown from './ColorDropdown.svelte';
-  import { SliderWithInput } from '../shared';
+  import { SliderWithInput, SectionHeading } from '../shared';
   import DottedToggle from './DottedToggle.svelte';
   import {
     BASEMAP_LAYER_CONFIG,
@@ -68,7 +68,9 @@
 
 <div class="layer-config-content">
   <fieldset class="config-section">
-    <legend class="section-title">{m.basemap_config_fill()}</legend>
+    <legend class="config-legend">
+      <SectionHeading title={m.basemap_config_fill()} />
+    </legend>
     <div class="section-content">
       <ColorDropdown value={fillColor} onchange={handleFillColorChange} />
 
@@ -79,6 +81,7 @@
           labelB={m.option_oui()}
           toggled={fillShadow}
           on:toggle={handleFillShadowToggle}
+          size="sm"
         />
       </div>
 
@@ -93,7 +96,9 @@
   </fieldset>
 
   <fieldset class="config-section">
-    <legend class="section-title">{m.basemap_config_stroke()}</legend>
+    <legend class="config-legend">
+      <SectionHeading title={m.basemap_config_stroke()} />
+    </legend>
     <div class="section-content">
       <ColorDropdown value={strokeColor} onchange={handleStrokeColorChange} />
 
@@ -128,7 +133,7 @@
   .layer-config-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--cds-spacing-06);
     padding: var(--cds-spacing-04);
   }
 
@@ -138,19 +143,21 @@
     margin: 0;
   }
 
-  .section-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--cds-text-primary);
-    margin-bottom: var(--cds-spacing-04);
-    padding-bottom: var(--cds-spacing-02);
-    border-bottom: 1px solid var(--cds-border-subtle);
+  .config-legend {
+    display: block;
+    width: 100%;
+    padding: 0;
+    margin: 0 0 var(--cds-spacing-03) 0;
   }
 
   .section-content {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
+  }
+
+  .toggle-row :global(.bx--toggle) {
+    margin: 0;
   }
 
   .toggle-row :global(.bx--toggle-input__label) {

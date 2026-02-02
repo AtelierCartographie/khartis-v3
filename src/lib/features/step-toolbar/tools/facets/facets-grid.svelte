@@ -11,7 +11,7 @@
     geoJSONs,
     layout,
     containerWidth = 1200,
-    containerHeight = 800
+    containerHeight: _containerHeight = 800
   }: {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;

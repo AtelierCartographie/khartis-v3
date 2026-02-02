@@ -1,84 +1,260 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import {
+    ColorSelector,
+    DiscretizationRow,
+    PalettePreview,
+    SectionHeading,
+    SliderWithInput,
+    ToggleWithLabel
+  } from './shared';
+  import type {
+    VisualizationConfig,
+    VisualizationModes
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    Dropdown,
-    Select,
-    SelectItem,
-    TextInput,
-    Toggle
-  } from 'carbon-components-svelte';
-  import {
+    Category,
     Filter,
-    Information,
     MisuseOutline,
-    SquareOutline,
-    TextFont
+    Subtract,
+    Tag,
+    TextBold,
+    TextItalic,
+    TextAlignLeft,
+    TextAlignCenter,
+    TextAlignRight
   } from 'carbon-icons-svelte';
   import {
-    FillMode,
+    ColorMode,
+    DEFAULT_COLORS,
     SLIDER_LIMITS,
-    StrokeMode,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import StrokeConfig from './stroke-config.svelte';
-  import { SliderWithInput } from './shared';
+  import { Dropdown, Select, SelectItem } from 'carbon-components-svelte';
+  import DiscretizationModal from './discretization-modal.svelte';
+  import {
+    ClassificationMethod,
+    type ClassificationConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    enabled?: boolean;
+    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
-    onEnabledChange?: (enabled: boolean) => void;
+    onModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
+    onInvertPalette?: () => void;
+    onFilterToggle?: () => void;
   }
 
   let {
     dataFields = [],
-    enabled = $bindable(true),
-    visualization: _visualization,
-    onStyleChange: _onStyleChange,
-    onEnabledChange
+    discretizationMethods: __discretizationMethods = [],
+    visualization,
+    onStyleChange,
+    onModesChange,
+    onClassificationChange,
+    onMappingChange,
+    onInvertPalette,
+    onFilterToggle
   }: Props = $props();
 
-  let textFieldId = $state<number>(0);
-  let textSecondaryFieldId = $state<number | null>(null);
-  let showMissingData = $state<boolean>(true);
-  let missingDataText = $state<string>(m.missing_data_text());
-  let missingDataColor = $state<string>('gray');
+  let discretizationModalOpen = $state(false);
+  let selectedFieldId = $state<number>(0);
 
-  let fillMode = $state<FillMode>(FillMode.UNIQUE);
-  let fillColor = $state<string>('#4589ff');
-  let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
+  $effect(() => {
+    if (visualization?.mapping.labelColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.labelColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedFieldId = fieldIndex;
+      }
+    }
+  });
 
-  let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
-  let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
-  let strokeColor = $state<string>('#1e3a5f');
+  function handleFieldSelect(fieldId: number) {
+    selectedFieldId = fieldId;
+    const field = dataFields[fieldId];
+    if (field && onMappingChange) {
+      onMappingChange({ labelColumn: field.text });
+    }
+  }
 
-  const dataFieldsWithNone = $derived([
-    { id: -1, text: m.none() },
-    ...dataFields
-  ]);
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? [
+      '#c8ddf0',
+      '#78a9cf',
+      '#2171b5',
+      '#084594'
+    ]
+  );
+  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareOutline, label: m.fill_mode_unique(), iconSize: 16 }
+  let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
+  let color = $state<string>(DEFAULT_COLORS.text);
+  let opacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
+  let enabled = $state<boolean>(false);
+  let bold = $state<boolean>(false);
+  let italic = $state<boolean>(false);
+  let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
+  let alignment = $state<'left' | 'center' | 'right'>('left');
+  let halo = $state<boolean>(false);
+  let haloColor = $state<string>(DEFAULT_COLORS.halo);
+  let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
+  let dxpMasking = $state<boolean>(false);
+
+  $effect(() => {
+    if (visualization?.style) {
+      opacity =
+        visualization.style.textOpacity ?? VISUALIZATION_DEFAULTS.textOpacity;
+      color = (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
+      bold = visualization.style.textBold ?? false;
+      italic = visualization.style.textItalic ?? false;
+      size = visualization.style.textSize ?? VISUALIZATION_DEFAULTS.textSize;
+      alignment = visualization.style.textAlign ?? 'left';
+      halo = visualization.style.textHalo ?? false;
+      haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
+      haloWidth =
+        visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+      dxpMasking = visualization.style.textDxpMasking ?? false;
+    }
+    if (visualization?.modes) {
+      colorMode = visualization.modes.color ?? ColorMode.UNIQUE;
+    }
+  });
+
+  const colorModeItems = [
+    { icon: MisuseOutline, label: m.color_mode_none(), iconSize: 16 },
+    { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
+    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
+    { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
   ];
 
-  const fillModeIndex = $derived(
-    [FillMode.NONE, FillMode.UNIQUE].indexOf(fillMode)
-  );
+  const alignmentItems = [
+    { icon: TextAlignLeft, label: m.alignment_left(), iconSize: 16 },
+    { icon: TextAlignCenter, label: m.alignment_center(), iconSize: 16 },
+    { icon: TextAlignRight, label: m.alignment_right(), iconSize: 16 }
+  ];
 
-  function handleFillModeChange(index: number) {
-    const modes = [FillMode.NONE, FillMode.UNIQUE];
-    fillMode = modes[index] || FillMode.NONE;
+  function handleColorModeChange(index: number) {
+    const modes = [
+      ColorMode.NONE,
+      ColorMode.UNIQUE,
+      ColorMode.CLASSES,
+      ColorMode.CATEGORIES
+    ];
+    colorMode = modes[index] || ColorMode.UNIQUE;
+    onModesChange?.({ color: colorMode });
+  }
+
+  function handleColorChange(value: string) {
+    color = value;
+    onStyleChange?.({ textColor: value });
+  }
+
+  function handleOpacityChange(value: number) {
+    opacity = value;
+    onStyleChange?.({ textOpacity: value });
+  }
+
+  function handleBoldChange(value: boolean) {
+    bold = value;
+    onStyleChange?.({ textBold: value });
+  }
+
+  function handleItalicChange(value: boolean) {
+    italic = value;
+    onStyleChange?.({ textItalic: value });
+  }
+
+  function handleSizeChange(value: number) {
+    size = value;
+    onStyleChange?.({ textSize: value });
+  }
+
+  function handleAlignmentChange(index: number) {
+    const alignments: Array<'left' | 'center' | 'right'> = [
+      'left',
+      'center',
+      'right'
+    ];
+    alignment = alignments[index] || 'left';
+    onStyleChange?.({ textAlign: alignment });
+  }
+
+  function handleHaloToggle(value: boolean) {
+    halo = value;
+    onStyleChange?.({ textHalo: value });
+  }
+
+  function handleHaloColorChange(value: string) {
+    haloColor = value;
+    onStyleChange?.({ textHaloColor: value });
+  }
+
+  function handleHaloWidthChange(value: number) {
+    haloWidth = value;
+    onStyleChange?.({ textHaloWidth: value });
+  }
+
+  function handleDxpMaskingChange(value: boolean) {
+    dxpMasking = value;
+    onStyleChange?.({ textDxpMasking: value });
   }
 
   function handleToggleChange(checked: boolean) {
     enabled = checked;
-    onEnabledChange?.(checked);
   }
+
+  const colorModeIndex = $derived(
+    [
+      ColorMode.NONE,
+      ColorMode.UNIQUE,
+      ColorMode.CLASSES,
+      ColorMode.CATEGORIES
+    ].indexOf(colorMode)
+  );
+
+  const alignmentIndex = $derived(
+    ['left', 'center', 'right'].indexOf(alignment)
+  );
+
+  function handleOpenDiscretization() {
+    discretizationModalOpen = true;
+  }
+
+  function handleClassificationChange(
+    classification: Partial<ClassificationConfig>
+  ) {
+    onClassificationChange?.(classification);
+  }
+
+  const discretizationLabel = $derived.by(() => {
+    if (!visualization?.classification) return m.discretization_method_jenks();
+    const methodLabels: Record<ClassificationMethod, () => string> = {
+      [ClassificationMethod.JENKS]: m.discretization_method_jenks,
+      [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
+      [ClassificationMethod.EQUAL_INTERVAL]:
+        m.discretization_method_equal_interval,
+      [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
+      [ClassificationMethod.MANUAL]: m.discretization_method_manual
+    };
+    const method =
+      visualization.classification.method ?? ClassificationMethod.QUANTILES;
+    const numClasses =
+      visualization.classification.numClasses ??
+      visualization.classification.classes ??
+      5;
+    const methodLabel = methodLabels[method]?.() ?? String(method);
+    return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
+  });
 </script>
 
 <ExpandableSection
@@ -89,130 +265,175 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button type="button" class="filter-btn" aria-label={m.filter_data()}>
+    <button
+      type="button"
+      class="filter-btn"
+      aria-label={m.filter_data()}
+      onclick={onFilterToggle}
+    >
       <Filter size={16} />
     </button>
   {/snippet}
 
   <div class="texts-config">
-    <h6 class="section-title">{m.text_label()}</h6>
+    <SectionHeading title={m.text_content()} />
 
-    <div class="field-row">
-      <div class="field-group flex-1">
-        <Dropdown
-          titleText={m.text_according()}
-          items={dataFields}
-          bind:selectedId={textFieldId}
-          type="default"
-        />
-      </div>
-      <button type="button" class="icon-btn" aria-label={m.text_style()}>
-        <TextFont size={16} />
-      </button>
+    <div class="field-group">
+      <Dropdown
+        titleText={m.field_to_display()}
+        items={dataFields}
+        selectedId={selectedFieldId}
+        on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+        type="default"
+      />
     </div>
 
-    <div class="field-row">
-      <div class="field-group flex-1">
-        <Dropdown
-          titleText={m.secondary_text()}
-          items={dataFieldsWithNone}
-          bind:selectedId={textSecondaryFieldId}
-          type="default"
-        />
-      </div>
-      <button
-        type="button"
-        class="icon-btn"
-        aria-label={m.text_style()}
-        disabled={textSecondaryFieldId === -1 || textSecondaryFieldId === null}
-      >
-        <TextFont size={16} />
-      </button>
-    </div>
-
-    <div class="missing-data-section">
-      <div class="missing-data-header">
-        <span class="field-label">{m.show_missing_data()}</span>
-        <button type="button" class="info-btn" aria-label={m.more_info()}>
-          <Information size={16} />
-        </button>
-      </div>
-      <div class="toggle-row">
-        <Toggle
-          size="sm"
-          bind:toggled={showMissingData}
-          hideLabel
-          labelA=""
-          labelB=""
-        />
-        <span class="toggle-label">{showMissingData ? m.yes() : m.no()}</span>
-      </div>
-
-      {#if showMissingData}
-        <div class="missing-data-fields">
-          <div class="field-group">
-            <TextInput
-              labelText={m.text_label()}
-              bind:value={missingDataText}
-              size="sm"
-            />
-          </div>
-          <div class="field-group">
-            <Select
-              id="missing-text-color"
-              labelText={m.color()}
-              bind:selected={missingDataColor}
-              size="sm"
-            >
-              <SelectItem value="gray" text={m.color_gray()} />
-              <SelectItem value="black" text={m.color_black()} />
-              <SelectItem value="white" text={m.color_white()} />
-            </Select>
-          </div>
-        </div>
-      {/if}
-    </div>
-
-    <h6 class="section-title">{m.background()}</h6>
+    <SectionHeading title={m.appearance()} />
 
     <div class="field-group">
       <ToggleTabs
-        items={fillModeItems}
-        activeIndex={fillModeIndex}
-        onChange={handleFillModeChange}
+        items={colorModeItems}
+        activeIndex={colorModeIndex}
+        onChange={handleColorModeChange}
         hideInactiveLabel={true}
       />
     </div>
 
-    {#if fillMode === FillMode.UNIQUE}
+    {#if colorMode === ColorMode.UNIQUE}
+      <ColorSelector
+        label={m.color()}
+        value={color}
+        onchange={handleColorChange}
+      />
+    {:else if colorMode === ColorMode.CLASSES}
       <div class="field-group">
-        <span class="field-label">{m.color()}</span>
-        <div class="color-selector">
-          <div
-            class="color-preview"
-            style="background-color: {fillColor}"
-          ></div>
-        </div>
+        <Dropdown
+          titleText={m.color_according()}
+          items={dataFields}
+          selectedId={selectedFieldId}
+          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          type="default"
+        />
       </div>
-
-      <SliderWithInput
-        label={m.opacity()}
-        bind:value={fillOpacity}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        step={1}
+      <DiscretizationRow
+        label={m.discretization()}
+        value={discretizationLabel}
+        onsettings={handleOpenDiscretization}
+      />
+      <PalettePreview
+        label={m.color_palette()}
+        colors={currentPalette}
+        oninvert={onInvertPalette}
+      />
+    {:else if colorMode === ColorMode.CATEGORIES}
+      <div class="field-group">
+        <Dropdown
+          titleText={m.color_according()}
+          items={dataFields}
+          bind:selectedId={selectedFieldId}
+          type="default"
+        />
+      </div>
+      <DiscretizationRow
+        label={m.category_aspect()}
+        value={m.categories_count({ count: 4 })}
+        onsettings={handleOpenDiscretization}
+      />
+      <PalettePreview
+        label={m.color_palette()}
+        colors={qualitativePalette}
+        oninvert={onInvertPalette}
       />
     {/if}
 
-    <StrokeConfig
-      bind:mode={strokeMode}
-      bind:width={strokeWidth}
-      bind:color={strokeColor}
-      showThickness={true}
-      showOpacity={false}
+    <SliderWithInput
+      label={m.opacity()}
+      min={SLIDER_LIMITS.textOpacity.min}
+      max={SLIDER_LIMITS.textOpacity.max}
+      value={opacity}
+      onchange={handleOpacityChange}
+    />
+
+    <SectionHeading title={m.text_style()} />
+
+    <div class="text-style-row">
+      <ToggleTabs
+        items={[{ icon: TextBold, label: '', iconSize: 16 }]}
+        activeIndex={bold ? 0 : -1}
+        onChange={() => handleBoldChange(!bold)}
+        hideInactiveLabel={true}
+      />
+      <ToggleTabs
+        items={[{ icon: TextItalic, label: '', iconSize: 16 }]}
+        activeIndex={italic ? 0 : -1}
+        onChange={() => handleItalicChange(!italic)}
+        hideInactiveLabel={true}
+      />
+    </div>
+
+    <div class="field-group">
+      <Select
+        labelText={m.font_size()}
+        selected={String(size)}
+        on:change={(e) => handleSizeChange(Number((e as CustomEvent).detail))}
+      >
+        <SelectItem value="8" text="8 px" />
+        <SelectItem value="10" text="10 px" />
+        <SelectItem value="12" text="12 px" />
+        <SelectItem value="14" text="14 px" />
+        <SelectItem value="16" text="16 px" />
+        <SelectItem value="18" text="18 px" />
+        <SelectItem value="20" text="20 px" />
+        <SelectItem value="24" text="24 px" />
+      </Select>
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">{m.alignment()}</span>
+      <ToggleTabs
+        items={alignmentItems}
+        activeIndex={alignmentIndex}
+        onChange={handleAlignmentChange}
+        hideInactiveLabel={true}
+      />
+    </div>
+
+    <ToggleWithLabel
+      label={m.halo()}
+      toggled={halo}
+      ontoggle={handleHaloToggle}
+    />
+
+    {#if halo}
+      <ColorSelector
+        label={m.halo_color()}
+        value={haloColor}
+        onchange={handleHaloColorChange}
+      />
+      <SliderWithInput
+        label={m.halo_width()}
+        min={SLIDER_LIMITS.haloWidth.min}
+        max={SLIDER_LIMITS.haloWidth.max}
+        value={haloWidth}
+        onchange={handleHaloWidthChange}
+      />
+    {/if}
+
+    <ToggleWithLabel
+      label={m.dxp_masking()}
+      showInfo={true}
+      infoLabel={m.dxp_masking_info()}
+      toggled={dxpMasking}
+      ontoggle={handleDxpMaskingChange}
     />
   </div>
 </ExpandableSection>
+
+<DiscretizationModal
+  bind:open={discretizationModalOpen}
+  visualization={visualization}
+  onchange={handleClassificationChange}
+/>
 
 <style lang="scss">
   .texts-config {
@@ -222,140 +443,39 @@
     padding: var(--cds-spacing-03);
   }
 
-  .section-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--cds-text-primary);
-    margin: var(--cds-spacing-02) 0;
-    padding-bottom: var(--cds-spacing-02);
-    border-bottom: 1px solid var(--cds-border-subtle);
-  }
-
   .field-group {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
-
-    &.flex-1 {
-      flex: 1;
-    }
-  }
-
-  .field-row {
-    display: flex;
-    align-items: flex-end;
-    gap: var(--cds-spacing-03);
   }
 
   .field-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    font-weight: 400;
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+    font-weight: var(--cds-label-01-font-weight, 400);
+    line-height: var(--cds-label-01-line-height, 1.33333);
+    letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
+    color: var(--cds-text-secondary);
+    margin-bottom: var(--cds-spacing-02);
   }
 
-  .icon-btn,
-  .filter-btn,
-  .info-btn {
+  .text-style-row {
     display: flex;
+    gap: var(--cds-spacing-03);
     align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: var(--cds-spacing-02);
-    background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover:not(:disabled) {
-      background: var(--cds-field-hover);
-    }
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 
   .filter-btn {
-    width: auto;
-    height: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: var(--cds-spacing-02);
     background: transparent;
     border: none;
-  }
-
-  .info-btn {
-    width: auto;
-    height: auto;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: var(--cds-text-02);
-  }
-
-  .missing-data-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    margin-top: var(--cds-spacing-03);
-    padding-top: var(--cds-spacing-03);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .missing-data-header {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .toggle-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary);
-  }
-
-  .missing-data-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--cds-spacing-03);
-  }
-
-  .color-selector {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03);
-    background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
     cursor: pointer;
+    color: var(--cds-icon-01);
 
     &:hover {
-      background: var(--cds-field-hover);
+      background: var(--cds-hover-ui);
     }
-  }
-
-  .color-preview {
-    width: 100%;
-    max-width: 180px;
-    height: 24px;
-    border-radius: 2px;
-  }
-
-  :global(.texts-config .bx--dropdown) {
-    max-width: 100%;
-  }
-
-  :global(.texts-config .bx--select) {
-    max-width: 100%;
-  }
-
-  :global(.texts-config .bx--toggle) {
-    margin: 0;
   }
 </style>

@@ -1,5 +1,6 @@
 class MapHighlightStore {
   private _highlightedRowIds = $state<Set<number>>(new Set());
+
   private _version = $state(0);
 
   get highlightedRowIds(): Set<number> {

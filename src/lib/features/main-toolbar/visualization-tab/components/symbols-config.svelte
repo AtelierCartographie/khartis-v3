@@ -16,7 +16,6 @@
     VisualizationModes,
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import { SectionTitle } from './shared';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
     SymbolModeUnique,
@@ -115,8 +114,6 @@
   {/snippet}
 
   <div class="symbols-config">
-    <SectionTitle title={m.size_and_shape()} />
-
     <div class="field-group">
       <span class="field-label">{m.symbols_title()}</span>
       <ToggleTabs

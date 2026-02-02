@@ -321,7 +321,7 @@
               role="tooltip"
             >
               <div class="warning-tooltip-arrow"></div>
-              {#each columnWarnings as warning}
+              {#each columnWarnings as warning, i (i)}
                 <div class="warning-tooltip-item">
                   <WarningAlt size={16} />
                   <span>{warning.message}</span>
