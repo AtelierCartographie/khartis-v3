@@ -154,10 +154,9 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    if: false # TEMPORARILY DISABLED
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -196,20 +195,8 @@ jobs:
           key: ${{ runner.os }}-build-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
-
       - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install chromium --with-deps
 
       - name: Run Playwright tests
         run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
@@ -227,7 +214,7 @@ jobs:
 
   merge-reports:
     name: Merge E2E Reports
-    if: false # TEMPORARILY DISABLED
+    if: ${{ !cancelled() }}
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
@@ -271,32 +258,16 @@ jobs:
             cat report.md >> $GITHUB_STEP_SUMMARY
           fi
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🗺️ Cartography Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Domain | Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🌍 GeoJSON Import | e2e/imports/geojson.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 Shapefile Import | e2e/imports/shapefile.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗄️ GeoPackage Import | e2e/imports/geopackage.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📍 GPX Import | e2e/imports/gpx.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📌 KML Import | e2e/imports/kml.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 CSV Import | e2e/imports/csv.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗜️ ZIP Archives | e2e/imports/zip.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📁 Project Management | e2e/project-modal.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📥 [Download full HTML report](../artifacts/playwright-report-staging)" >> $GITHUB_STEP_SUMMARY
-
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-staging
           path: playwright-report
-          retention-days: 7
+          retention-days: 14
 
   semantic-versioning:
     name: Version Tag Generation
-    needs: [build] # merge-reports temporarily removed
+    needs: [build, e2e-tests]
     runs-on: ubuntu-latest
     permissions: write-all
     outputs:

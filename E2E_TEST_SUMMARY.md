@@ -39,21 +39,25 @@
 ## 🎯 Axes Critiques Couverts
 
 ### 1. Import de Données ✅
+
 - ✅ CSV (3 tests)
 - ✅ GeoJSON (1 test)
 - ✅ Shapefile (1 test)
 - ✅ GeoPackage (1 test)
 
 ### 2. Navigation dans l'Application ✅
+
 - ✅ Navigation entre les 3 étapes principales (2 tests)
 - ✅ Préservation de l'état de la carte (1 test)
 
 ### 3. Rendu Cartographique ✅
+
 - ✅ Canvas Deck.gl visible (3 tests)
 - ✅ Basemap affiché (1 test)
 - ✅ Layers de visualisation (1 test)
 
 ### 4. Gestion de Projets ✅
+
 - ✅ Création (3 tests)
 - ✅ Sauvegarde (1 test)
 - ✅ Duplication (1 test)
@@ -81,13 +85,13 @@
 
 ## 📊 Métriques
 
-| Métrique | Valeur |
-|----------|--------|
-| Tests créés | 11 nouveaux + 6 existants |
-| Tests passant | 17/17 (100%) |
-| Fichiers modifiés | `helpers.ts`, 5 nouveaux `.spec.ts` |
-| Temps d'exécution | ~8 minutes (CI ~10 min) |
-| Workers parallèles | 2 |
+| Métrique           | Valeur                              |
+| ------------------ | ----------------------------------- |
+| Tests créés        | 11 nouveaux + 6 existants           |
+| Tests passant      | 17/17 (100%)                        |
+| Fichiers modifiés  | `helpers.ts`, 5 nouveaux `.spec.ts` |
+| Temps d'exécution  | ~8 minutes (CI ~10 min)             |
+| Workers parallèles | 2                                   |
 
 ---
 
@@ -121,6 +125,7 @@ pnpm test:e2e --debug
 ### Limites Volontaires
 
 Les tests ne couvrent **pas** (par choix de simplification) :
+
 - Opérations de données complexes (filtres, recherche, calculatrice)
 - Export de fichiers (SVG, PNG, .kh)
 - Jointure assistée de données
@@ -144,6 +149,7 @@ Ces fonctionnalités sont complexes et mieux testées via tests unitaires/intég
 ## 🎉 Conclusion
 
 Suite de tests E2E **complète et fonctionnelle** couvrant les **flux critiques** de l'application Khartis v3 :
+
 - ✅ Import de données (CSV + geo files)
 - ✅ Navigation entre étapes
 - ✅ Rendu cartographique (Deck.gl + basemaps)
