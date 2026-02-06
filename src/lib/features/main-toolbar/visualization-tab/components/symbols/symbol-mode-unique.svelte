@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { Dropdown, Select, SelectItem } from 'carbon-components-svelte';
+  import { Dropdown } from 'carbon-components-svelte';
   import {
     MisuseOutline,
     SquareOutline,
+    CircleFilled,
+    SquareFill,
+    CaretUp,
     Category,
     Tag
   } from 'carbon-icons-svelte';
@@ -11,7 +14,6 @@
   import {
     FillMode,
     ShapeType,
-    StrokeMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS
@@ -19,10 +21,12 @@
   import {
     ColorSelector,
     DiscretizationRow,
+    InfoPopover,
     PalettePreview,
     SectionHeading,
     SliderWithInput,
-    MissingDataSection
+    MissingDataSection,
+    StrokeSection
   } from '../shared';
   import type { SymbolModeProps } from './types';
 
@@ -41,25 +45,19 @@
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
-  let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);
   let shapeType = $state<ShapeType>(ShapeType.POINT);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let strokeColor = $state<string>(DEFAULT_COLORS.stroke);
-  let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let fillPattern = $state<boolean>(false);
   let selectedFieldId = $state<number>(0);
-  let strokeColorFieldId = $state<number>(0);
   let categoryCount = $state<number>(4);
-  let strokeCategoryCount = $state<number>(4);
 
   $effect(() => {
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
-      strokeMode = visualization.modes.stroke ?? StrokeMode.NONE;
     }
     if (visualization?.style) {
       fillColor =
@@ -68,9 +66,6 @@
         visualization.style.fillOpacity !== undefined
           ? Math.round(visualization.style.fillOpacity * 100)
           : VISUALIZATION_DEFAULTS.fillOpacity;
-      strokeColor = visualization.style.strokeColor ?? DEFAULT_COLORS.stroke;
-      strokeWidth =
-        visualization.style.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth;
     }
     if (visualization?.symbols) {
       symbolSize =
@@ -92,13 +87,6 @@
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
 
-  const strokeModeItems = [
-    { icon: MisuseOutline, label: m.stroke_mode_none(), iconSize: 16 },
-    { icon: SquareOutline, label: m.stroke_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.stroke_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.stroke_mode_categories(), iconSize: 16 }
-  ];
-
   const fillModeIndex = $derived(
     [
       FillMode.NONE,
@@ -106,15 +94,6 @@
       FillMode.CLASSES,
       FillMode.CATEGORIES
     ].indexOf(fillMode)
-  );
-
-  const strokeModeIndex = $derived(
-    [
-      StrokeMode.NONE,
-      StrokeMode.UNIQUE,
-      StrokeMode.CLASSES,
-      StrokeMode.CATEGORIES
-    ].indexOf(strokeMode)
   );
 
   const discretizationLabel = $derived.by(() => {
@@ -137,17 +116,6 @@
     onModesChange?.({ fill: fillMode });
   }
 
-  function handleStrokeModeChange(index: number) {
-    const modes = [
-      StrokeMode.NONE,
-      StrokeMode.UNIQUE,
-      StrokeMode.CLASSES,
-      StrokeMode.CATEGORIES
-    ];
-    strokeMode = modes[index] || StrokeMode.NONE;
-    onModesChange?.({ stroke: strokeMode });
-  }
-
   function handleSymbolSizeChange(value: number) {
     symbolSize = value;
     onSymbolsChange?.({ size: value });
@@ -168,16 +136,6 @@
     onStyleChange?.({ fillOpacity: value / 100 });
   }
 
-  function handleStrokeColorChange(value: string) {
-    strokeColor = value;
-    onStyleChange?.({ strokeColor: value });
-  }
-
-  function handleStrokeWidthChange(value: number) {
-    strokeWidth = value;
-    onStyleChange?.({ strokeWidth: value });
-  }
-
   function handleMissingDataShowChange(value: boolean) {
     showMissingData = value;
     onMissingDataChange?.({ show: value });
@@ -192,35 +150,45 @@
     fillPattern = value;
     onMissingDataChange?.({ pattern: value });
   }
+
+  const shapeItems = [
+    { icon: CircleFilled, label: m.point(), iconSize: 16 },
+    { icon: SquareFill, label: m.square(), iconSize: 16 },
+    { icon: CaretUp, label: m.triangle(), iconSize: 16 }
+  ];
+
+  const shapeTypes = [ShapeType.POINT, ShapeType.SQUARE, ShapeType.TRIANGLE];
+
+  const shapeIndex = $derived(shapeTypes.indexOf(shapeType));
+
+  function handleShapeTabChange(index: number) {
+    handleShapeTypeChange(shapeTypes[index] || ShapeType.POINT);
+  }
 </script>
 
-<div class="field-row">
-  <SliderWithInput
-    label={m.size_label()}
-    bind:value={symbolSize}
-    min={SLIDER_LIMITS.symbolSize.min}
-    max={SLIDER_LIMITS.symbolSize.max}
-    onchange={handleSymbolSizeChange}
+<SliderWithInput
+  label={m.size_label()}
+  infoText={m.unique_size_info()}
+  bind:value={symbolSize}
+  min={SLIDER_LIMITS.symbolSize.min}
+  max={SLIDER_LIMITS.symbolSize.max}
+  onchange={handleSymbolSizeChange}
+/>
+
+<div class="field-group">
+  <span class="field-label">
+    {m.viz_symbols_representation()}
+    <InfoPopover text={m.shape_info()} />
+  </span>
+  <ToggleTabs
+    items={shapeItems}
+    activeIndex={shapeIndex}
+    onChange={handleShapeTabChange}
+    hideInactiveLabel={true}
   />
 </div>
 
-<div class="field-group">
-  <Select
-    id="shape-unique"
-    labelText={m.shape()}
-    selected={shapeType}
-    on:change={(e) => {
-      const target = e.target as HTMLSelectElement;
-      handleShapeTypeChange(target.value as ShapeType);
-    }}
-  >
-    <SelectItem value={ShapeType.POINT} text={m.point()} />
-    <SelectItem value={ShapeType.SQUARE} text={m.square()} />
-    <SelectItem value={ShapeType.TRIANGLE} text={m.triangle()} />
-  </Select>
-</div>
-
-<SectionHeading title={m.background()} />
+<SectionHeading title={m.background()} infoText={m.fill_section_info()} />
 
 <div class="field-group">
   <ToggleTabs
@@ -320,81 +288,16 @@
   />
 {/if}
 
-<SectionHeading title={m.stroke()} />
-
-<div class="field-group">
-  <ToggleTabs
-    items={strokeModeItems}
-    activeIndex={strokeModeIndex}
-    onChange={handleStrokeModeChange}
-    hideInactiveLabel={true}
-  />
-</div>
-
-{#if strokeMode === StrokeMode.UNIQUE}
-  <SliderWithInput
-    label={m.thickness()}
-    bind:value={strokeWidth}
-    min={1}
-    max={SLIDER_LIMITS.strokeWidth.max}
-    onchange={handleStrokeWidthChange}
-  />
-  <ColorSelector
-    label={m.color()}
-    value={strokeColor}
-    onchange={handleStrokeColorChange}
-  />
-{:else if strokeMode === StrokeMode.CLASSES}
-  <div class="field-group">
-    <Dropdown
-      titleText={m.color_according()}
-      items={dataFields}
-      bind:selectedId={strokeColorFieldId}
-      type="default"
-    />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={sequentialPalette}
-    oninvert={onInvertPalette}
-  />
-  <SliderWithInput
-    label={m.thickness()}
-    bind:value={strokeWidth}
-    min={1}
-    max={SLIDER_LIMITS.strokeWidth.max}
-  />
-{:else if strokeMode === StrokeMode.CATEGORIES}
-  <div class="field-group">
-    <Dropdown
-      titleText={m.color_according()}
-      items={dataFields}
-      bind:selectedId={strokeColorFieldId}
-      type="default"
-    />
-  </div>
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={m.categories_count({ count: strokeCategoryCount })}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={qualitativePalette}
-    oninvert={onInvertPalette}
-  />
-  <SliderWithInput
-    label={m.thickness()}
-    bind:value={strokeWidth}
-    min={1}
-    max={SLIDER_LIMITS.strokeWidth.max}
-  />
-{/if}
+<StrokeSection
+  visualization={visualization}
+  dataFields={dataFields}
+  infoText={m.stroke_section_info()}
+  discretizationLabel={discretizationLabel}
+  onStyleChange={onStyleChange}
+  onModesChange={onModesChange}
+  onInvertPalette={onInvertPalette}
+  onOpenDiscretization={onOpenDiscretization}
+/>
 
 <style lang="scss">
   .field-group {
@@ -403,9 +306,12 @@
     gap: var(--cds-spacing-02);
   }
 
-  .field-row {
-    display: flex;
-    flex-direction: column;
+  .field-label {
+    display: inline-flex;
+    align-items: center;
     gap: var(--cds-spacing-02);
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 400;
   }
 </style>

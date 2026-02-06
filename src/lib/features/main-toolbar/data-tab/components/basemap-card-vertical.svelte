@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-  import { m } from '$lib/paraglide/messages';
-  import { ProgressBar, Tag } from 'carbon-components-svelte';
-  import { Calendar, Checkmark, Earth } from 'carbon-icons-svelte';
+  import * as m from '$lib/paraglide/messages';
+  import { RadioButton } from 'carbon-components-svelte';
+  import { Calendar, Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
   interface BasemapCardVerticalProps {
@@ -11,6 +11,7 @@
     matchScore?: number;
     showMatchScore?: boolean;
     variant?: 'blue' | 'gray';
+    disabled?: boolean;
     onclick?: () => void;
   }
 
@@ -20,65 +21,115 @@
     matchScore,
     showMatchScore = true,
     variant = 'blue',
+    disabled = false,
     onclick
   }: BasemapCardVerticalProps = $props();
 
   function handleCardClick() {
-    if (onclick) onclick();
+    if (!disabled && onclick) onclick();
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
       handleCardClick();
     }
   }
 
-  const isGray = $derived(variant === 'gray');
+  function handleRadioClick(event: Event) {
+    event.preventDefault();
+  }
+
+  const isBlue = $derived(variant === 'blue');
 
   const cardClasses = $derived(
     clsx('basemap-card', {
-      'variant-gray': isGray,
-      'border-2 border-selected': selected,
-      'border-default': !selected
+      'variant-blue': isBlue,
+      'variant-gray': !isBlue,
+      selected,
+      disabled
     })
   );
 
   const matchPercentage = $derived(
     matchScore !== undefined ? Math.round(matchScore) : undefined
   );
+
+  const TOTAL_SEGMENTS = 4;
+
+  const filledSegments = $derived(
+    matchPercentage !== undefined
+      ? Math.round((matchPercentage / 100) * TOTAL_SEGMENTS)
+      : 0
+  );
+
+  /**
+   * Compute the closest standard aspect ratio from the basemap's bounding box.
+   */
+  const STANDARD_RATIOS: [number, string][] = [
+    [1, '1:1'],
+    [4 / 3, '4:3'],
+    [3 / 2, '3:2'],
+    [16 / 10, '16:10'],
+    [16 / 9, '16:9'],
+    [2, '2:1']
+  ];
+
+  const aspectRatio = $derived(() => {
+    if (!basemap.bbox || basemap.bbox.length < 4) return null;
+    const [minX, minY, maxX, maxY] = basemap.bbox;
+    const width = Math.abs(maxX - minX);
+    const height = Math.abs(maxY - minY);
+    if (height === 0) return '2:1';
+    const ratio = width / height;
+    let closest = STANDARD_RATIOS[0];
+    let minDiff = Math.abs(ratio - closest[0]);
+    for (const entry of STANDARD_RATIOS) {
+      const diff = Math.abs(ratio - entry[0]);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = entry;
+      }
+    }
+    return closest[1];
+  });
 </script>
 
 <div
   class={cardClasses}
   role="button"
-  tabindex={0}
+  tabindex={disabled ? -1 : 0}
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
   aria-label={basemap.title}
   aria-pressed={selected}
+  aria-disabled={disabled}
 >
-  <!-- Top Section - Preview -->
-  <div class="top-section">
+  <div class="preview-section">
+    {#if aspectRatio()}
+      <span class="ratio-badge">{aspectRatio()}</span>
+    {/if}
     <Earth size={32} />
-    <h4 class="ratio-label">16:9</h4>
     <span class="preview-label">{m.basemap_preview()}</span>
   </div>
 
-  <!-- Content Section -->
   <div class="content-section">
     <div class="title-row">
       <span class="card-title">{basemap.title}</span>
-      <div class="radio-indicator" class:selected={selected}>
-        {#if selected}
-          <Checkmark size={16} />
-        {/if}
+      <div class="radio-wrapper">
+        <RadioButton
+          checked={selected}
+          disabled={disabled}
+          onclick={handleRadioClick}
+        />
       </div>
     </div>
 
     {#if basemap.level}
-      <Tag size="sm" type={isGray ? 'gray' : 'blue'}>{basemap.level}</Tag>
+      <span class="card-level">{basemap.level}</span>
     {/if}
+
+    <p class="card-description">{basemap.description}</p>
 
     <div class="metadata-row">
       <span class="source">{basemap.source}</span>
@@ -89,11 +140,20 @@
     </div>
   </div>
 
-  <!-- Match Section -->
   {#if showMatchScore && matchPercentage !== undefined}
     <div class="match-section">
       <span class="match-label">{m.basemap_match_score()}</span>
-      <ProgressBar value={matchPercentage} max={100} size="sm" />
+      <div
+        class="segmented-bar"
+        role="progressbar"
+        aria-valuenow={matchPercentage}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        {#each Array(TOTAL_SEGMENTS) as _, i (i)}
+          <div class="segment" class:filled={i < filledSegments}></div>
+        {/each}
+      </div>
       <span class="match-value">{matchPercentage} %</span>
     </div>
   {/if}
@@ -103,226 +163,306 @@
   .basemap-card {
     display: flex;
     flex-direction: column;
-    min-width: 220px;
-    width: 220px;
+    width: 184px;
+    min-width: 184px;
     flex-shrink: 0;
     overflow: hidden;
     cursor: pointer;
-    transition: all 0.2s ease-out;
     box-sizing: border-box;
+    padding-bottom: 16px;
+    position: relative;
   }
 
-  .basemap-card.border-default {
-    border: 1px solid var(--color-blue-light, var(--cds-pale-blue));
+  .basemap-card.disabled {
+    cursor: default;
+    pointer-events: none;
   }
 
-  .basemap-card.variant-gray.border-default {
-    border: 1px solid var(--border-subtle, var(--cds-medium-gray));
+  .basemap-card.variant-blue {
+    background-color: #e5f6ff;
   }
 
-  .basemap-card.border-2.border-selected {
-    border: 2px solid var(--interactive-hover, var(--cds-blue));
+  .basemap-card.variant-gray {
+    background-color: #f4f4f4;
   }
 
-  .basemap-card.variant-gray.border-2.border-selected {
-    border: 2px solid var(--cds-dark-gray);
+  .basemap-card.variant-blue:not(.selected) {
+    border: 1px solid #82cfff;
   }
 
-  .basemap-card:not(.variant-gray):hover .top-section {
-    background-color: var(--color-info-bg, var(--cds-pale-blue));
+  .basemap-card.variant-blue.selected {
+    border: 3px solid #1192e8;
   }
 
-  .basemap-card:not(.variant-gray):hover .content-section {
-    background-color: var(--color-info-bg, var(--cds-pale-blue));
+  .basemap-card.variant-gray:not(.selected) {
+    border: 1px solid #c6c6c6;
   }
 
-  .basemap-card.variant-gray:hover .top-section {
-    background-color: var(--cds-light-gray);
+  .basemap-card.variant-gray.selected {
+    border: 2px solid #8d8d8d;
   }
 
-  .basemap-card.variant-gray:hover .content-section {
-    background-color: var(--cds-light-gray);
+  .basemap-card.variant-blue:hover:not(.disabled) {
+    background-color: #cceeff;
   }
 
-  .basemap-card:focus {
-    outline: 2px solid var(--cds-focus);
+  .basemap-card.variant-gray:hover:not(.disabled) {
+    background-color: #e8e8e8;
+  }
+
+  .basemap-card.variant-blue:hover:not(.disabled) .preview-section {
+    background-color: #cceeff;
+  }
+
+  .basemap-card.variant-gray:hover:not(.disabled) .preview-section {
+    background-color: #e8e8e8;
+  }
+
+  .basemap-card:focus-visible {
+    outline: 2px solid #0f62fe;
     outline-offset: 2px;
   }
 
-  .top-section {
+  .preview-section {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 1.25rem 1rem;
-    background-color: var(--cds-ui-02);
-    gap: 0.25rem;
+    padding: 1px;
+    min-height: 100px;
+    gap: 8px;
+    background-color: #ffffff;
+    position: relative;
   }
 
-  .top-section :global(svg) {
-    color: var(--interactive-hover, var(--cds-blue));
+  .preview-section :global(svg) {
+    color: #726e6e;
   }
 
-  .variant-gray .top-section :global(svg) {
-    color: var(--cds-text-01);
+  .variant-blue .preview-section :global(svg) {
+    color: #0072c3;
   }
 
-  .ratio-label {
-    font-size: 1rem;
+  .ratio-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 0.625rem;
     font-weight: 600;
-    line-height: 1.2;
-    margin: 0.25rem 0 0;
-    color: var(--interactive-hover, var(--cds-blue));
+    line-height: 14px;
+    letter-spacing: 0.32px;
+    padding: 1px 6px;
+    background-color: #e0e0e0;
+    color: #525252;
+    border-radius: 2px;
   }
 
-  .variant-gray .ratio-label {
-    color: var(--cds-text-01);
+  .variant-blue .ratio-badge {
+    background-color: #d0e2ff;
+    color: #0043ce;
   }
 
   .preview-label {
     font-size: 0.75rem;
-    color: var(--interactive-hover, var(--cds-blue));
+    color: #726e6e;
+    letter-spacing: 0.32px;
+    line-height: 16px;
   }
 
-  .variant-gray .preview-label {
-    color: var(--cds-text-02);
+  .variant-blue .preview-label {
+    color: #0072c3;
   }
 
   .content-section {
     display: flex;
     flex-direction: column;
-    padding: var(--spacing-05, 1rem);
-    background-color: var(--color-info-bg, var(--cds-pale-blue));
-    gap: var(--spacing-02, 0.375rem);
     flex: 1;
-  }
-
-  .variant-gray .content-section {
-    background-color: var(--bg-layer, var(--cds-light-gray));
   }
 
   .title-row {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--spacing-03, 0.5rem);
+    align-items: center;
+    padding: 16px 8px 8px 16px;
   }
 
   .card-title {
-    margin: 0;
-    font-size: var(--font-size-body, 0.875rem);
-    font-weight: var(--font-weight-bold, 700);
-    color: var(--interactive-dark, var(--cds-dark-blue));
-    line-height: 1.3;
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 18px;
+    letter-spacing: 0.16px;
     flex: 1;
+    min-width: 0;
+    max-height: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .variant-blue .card-title {
+    color: #003a6d;
+  }
+
+  .variant-blue.disabled .card-title {
+    color: rgba(0, 58, 109, 0.25);
   }
 
   .variant-gray .card-title {
-    color: var(--cds-text-01);
+    color: #161616;
   }
 
-  .radio-indicator {
+  .variant-gray.disabled .card-title {
+    color: #c6c6c6;
+  }
+
+  .radio-wrapper {
     flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 2px solid var(--cds-icon-02);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s ease-out;
+    padding-right: 8px;
   }
 
-  .radio-indicator.selected {
-    border-color: var(--cds-interactive-01);
-    background-color: var(--cds-interactive-01);
-    color: white;
+  .card-level {
+    display: inline-block;
+    font-size: 0.6875rem;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    padding: 0 16px;
+    color: #697077;
   }
 
-  .variant-gray .radio-indicator.selected {
-    border-color: var(--cds-text-01);
-    background-color: var(--cds-text-01);
+  .variant-blue .card-level {
+    color: #4589ff;
   }
 
   .card-description {
-    margin: 0;
     font-size: 0.75rem;
-    color: var(--cds-dark-blue);
-    line-height: 1.4;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    padding: 0 16px;
+    margin: 0;
+    max-height: 48px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .variant-blue .card-description {
+    color: #003a6d;
+  }
+
+  .variant-blue.disabled .card-description {
+    color: rgba(0, 58, 109, 0.25);
+  }
+
+  .variant-gray .card-description {
+    color: #161616;
+  }
+
+  .variant-gray.disabled .card-description {
+    color: #c6c6c6;
   }
 
   .metadata-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: var(--font-size-label, 0.75rem);
-    color: var(--interactive-dark, var(--cds-dark-blue));
-    margin-top: var(--spacing-03, 0.5rem);
-  }
-
-  .variant-gray .metadata-row {
-    color: var(--cds-text-02);
+    padding: 16px 16px 0;
   }
 
   .source {
+    font-size: 0.75rem;
+    line-height: 16px;
+    letter-spacing: 0.32px;
     text-decoration: underline;
+    text-decoration-style: dashed;
     text-underline-offset: 2px;
+    color: #525252;
   }
 
   .date {
     display: flex;
     align-items: center;
-    gap: var(--spacing-02, 0.25rem);
+    gap: 4px;
+    font-size: 0.75rem;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+  }
+
+  .variant-blue .date {
+    color: #00539a;
+  }
+
+  .variant-blue.disabled .date {
+    color: rgba(0, 58, 109, 0.25);
+  }
+
+  .variant-gray .date {
+    color: #525252;
+  }
+
+  .variant-gray.disabled .date {
+    color: #c6c6c6;
   }
 
   .match-section {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-02, 0.375rem);
-    padding: var(--spacing-04, 0.75rem) var(--spacing-05, 1rem);
-    background-color: var(--color-info-bg, var(--cds-pale-blue));
-    border-top: 1px solid var(--interactive-dark, var(--cds-dark-blue));
+    gap: 8px;
+    padding: 16px 16px 0;
+    margin-top: 16px;
+  }
+
+  .variant-blue .match-section {
+    border-top: 1px solid #82cfff;
   }
 
   .variant-gray .match-section {
-    background-color: var(--bg-layer, var(--cds-light-gray));
-    border-top: 1px solid var(--cds-dark-gray);
+    border-top: 1px solid #c6c6c6;
   }
 
   .match-label {
-    font-size: var(--font-size-label, 0.75rem);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--interactive-dark, var(--cds-dark-blue));
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    color: #161616;
   }
 
-  .variant-gray .match-label {
-    color: var(--cds-text-01);
+  .variant-blue .match-label {
+    color: #003a6d;
+  }
+
+  .segmented-bar {
+    display: flex;
+    width: 100%;
+    height: 4px;
+    background-color: #c6c6c6;
+  }
+
+  .variant-blue .segmented-bar {
+    background-color: #82cfff;
+  }
+
+  .segment {
+    flex: 1;
+    height: 4px;
+  }
+
+  .segment.filled {
+    background-color: #726e6e;
+  }
+
+  .variant-blue .segment.filled {
+    background-color: #0072c3;
   }
 
   .match-value {
-    font-size: var(--font-size-body, 0.875rem);
-    font-weight: var(--font-weight-bold, 700);
-    color: var(--interactive-dark, var(--cds-dark-blue));
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: #525252;
   }
 
-  .variant-gray .match-value {
-    color: var(--cds-text-01);
-  }
-
-  .match-section :global(.bx--progress-bar) {
-    margin: 0;
-  }
-
-  .match-section :global(.bx--progress-bar__label),
-  .match-section :global(.bx--progress-bar__helper-text) {
-    display: none;
-  }
-
-  .match-section :global(.bx--progress-bar__bar) {
-    background-color: var(--cds-blue);
-  }
-
-  .variant-gray .match-section :global(.bx--progress-bar__bar) {
-    background-color: var(--cds-dark-gray);
+  .variant-blue .match-value {
+    color: #00539a;
   }
 </style>

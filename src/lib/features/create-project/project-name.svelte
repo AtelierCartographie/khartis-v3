@@ -25,6 +25,19 @@
     getOnClose: () => onClose
   });
 
+  function getNextProjectName(): string {
+    const existingNames = new Set(
+      projectsStore.projects.map((p) => p.name)
+    );
+    let number = 1;
+    let candidate = m.project_default_name({ number });
+    while (existingNames.has(candidate)) {
+      number++;
+      candidate = m.project_default_name({ number });
+    }
+    return candidate;
+  }
+
   let isCreating = $state(false);
   let hasTriedSubmit = $state(false);
   let creationStep = $state('');
@@ -64,7 +77,7 @@
 
     let effectiveName = projectName.trim();
     if (!effectiveName) {
-      effectiveName = m.project_name_placeholder();
+      effectiveName = getNextProjectName();
       createProjectActions.setProjectName(effectiveName);
       localProjectName = effectiveName;
     }

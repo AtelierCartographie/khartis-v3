@@ -2,13 +2,8 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ComboBox,
-    InlineNotification,
-    Tag
-  } from 'carbon-components-svelte';
-  import { Launch, List, MagicWand, Upload } from 'carbon-icons-svelte';
+  import { ComboBox, InlineNotification, Tag } from 'carbon-components-svelte';
+  import { List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
 
   interface SuggestedBasemap {
@@ -27,17 +22,13 @@
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
-    onSuggestBasemap: () => void;
-    onGoToImport: () => void;
   }
 
   let {
     suggestedBasemaps,
     allBasemaps,
     basemapSelected,
-    onSelectBasemap,
-    onSuggestBasemap,
-    onGoToImport
+    onSelectBasemap
   }: Props = $props();
 
   let searchQuery = $state('');
@@ -117,10 +108,10 @@
       <MagicWand size={16} />
     {/snippet}
     {#if suggestedBasemaps.length > 0}
-      <p class="kh-help section-subtitle">
+      <p class="section-subtitle">
         {m.basemap_suggestions_desc()}
       </p>
-      <div class="suggestions-scroll-container">
+      <div class="suggestions-container">
         <div class="suggestions-scroll">
           {#each suggestedBasemaps as { basemap, score } (basemap.file)}
             <BasemapCardVertical
@@ -143,13 +134,11 @@
     {/if}
   </ExpandableSection>
 
-  <ExpandableSection
-    title={m.basemap_other()}
-    defaultOpen={suggestedBasemaps.length === 0}
-  >
+  <ExpandableSection title={m.basemap_other()} defaultOpen={false}>
     {#snippet icon()}
       <List size={16} />
     {/snippet}
+
     <div class="catalogue-filters">
       <ComboBox
         items={searchComboBoxItems()}
@@ -205,33 +194,6 @@
         {/each}
       </div>
     {/if}
-
-    <div class="footer-section">
-      <div class="footer-row">
-        <span class="footer-label">{m.basemap_missing_question()}</span>
-        <Button
-          kind="ghost"
-          icon={Launch}
-          iconDescription={m.basemap_suggest_addition()}
-          on:click={onSuggestBasemap}
-        >
-          {m.basemap_suggest_button()}
-        </Button>
-        <Button kind="primary" icon={Upload} on:click={onGoToImport}>
-          {m.basemap_import_button()}
-        </Button>
-      </div>
-      <Button
-        kind="ghost"
-        icon={Launch}
-        iconDescription={m.basemap_learn_more()}
-        href="https://www.sciencespo.fr/cartographie/khartis/docs/basemaps"
-        target="_blank"
-        size="small"
-      >
-        {m.basemap_learn_more()}
-      </Button>
-    </div>
   </ExpandableSection>
 </div>
 
@@ -239,105 +201,77 @@
   .tab-content {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-05, var(--cds-spacing-05));
-  }
-
-  .kh-help {
-    color: var(--text-secondary, var(--cds-text-02));
-    margin-bottom: var(--spacing-05, var(--cds-spacing-05));
   }
 
   .section-subtitle {
-    margin-top: 0;
-    font-style: italic;
-    color: var(--text-secondary, var(--cds-text-02));
-    font-size: var(--font-size-body, 0.875rem);
+    margin: 0 0 var(--cds-spacing-03) 0;
+    font-size: 0.8125rem;
+    color: var(--cds-text-02);
+    line-height: 1.25rem;
   }
 
-  .suggestions-scroll-container {
-    margin-top: var(--spacing-04, var(--cds-spacing-04));
-    margin-left: calc(-1 * var(--spacing-05, var(--cds-spacing-05)));
-    margin-right: calc(-1 * var(--spacing-05, var(--cds-spacing-05)));
-    padding-left: var(--spacing-05, var(--cds-spacing-05));
-    padding-right: var(--spacing-05, var(--cds-spacing-05));
+  .suggestions-container {
+    margin-left: calc(-1 * var(--cds-spacing-04));
+    margin-right: calc(-1 * var(--cds-spacing-04));
+    padding-left: var(--cds-spacing-04);
+    padding-right: var(--cds-spacing-04);
     overflow-x: auto;
     scrollbar-width: thin;
-    scrollbar-color: var(--border-subtle, var(--cds-border-subtle)) transparent;
+    scrollbar-color: var(--cds-border-subtle) transparent;
   }
 
-  .suggestions-scroll-container::-webkit-scrollbar {
+  .suggestions-container::-webkit-scrollbar {
     height: 6px;
   }
 
-  .suggestions-scroll-container::-webkit-scrollbar-track {
+  .suggestions-container::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .suggestions-scroll-container::-webkit-scrollbar-thumb {
-    background-color: var(--border-subtle, var(--cds-border-subtle));
+  .suggestions-container::-webkit-scrollbar-thumb {
+    background-color: var(--cds-border-subtle);
     border-radius: 3px;
   }
 
   .suggestions-scroll {
     display: flex;
-    gap: var(--spacing-04, var(--cds-spacing-04));
-    padding-bottom: var(--spacing-03, var(--cds-spacing-03));
+    gap: var(--cds-spacing-04);
+    padding-bottom: var(--cds-spacing-03);
   }
 
-  .basemap-cards-grid {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--spacing-03, var(--cds-spacing-03));
-    margin-top: var(--spacing-04, var(--cds-spacing-04));
-  }
-
+  /* Catalogue grid styles */
   .catalogue-filters {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-04, var(--cds-spacing-04));
-    margin-bottom: var(--spacing-04, var(--cds-spacing-04));
+    gap: var(--cds-spacing-03);
+    margin-bottom: var(--cds-spacing-03);
   }
 
   .year-filters {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--spacing-02, var(--cds-spacing-02));
+    gap: var(--cds-spacing-02);
     align-items: center;
   }
 
   .filter-label {
-    font-size: var(--font-size-body, 0.875rem);
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--text-emphasis, var(--cds-text-01));
-    margin-right: var(--spacing-03, var(--cds-spacing-03));
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cds-text-01);
+    margin-right: var(--cds-spacing-03);
+  }
+
+  .basemap-cards-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cds-spacing-03);
+    margin-top: var(--cds-spacing-03);
   }
 
   .no-results {
     margin: 2rem 0;
     text-align: center;
-    color: var(--text-secondary, var(--cds-text-02));
-    font-size: var(--font-size-body, 0.875rem);
-  }
-
-  .footer-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-04, var(--cds-spacing-04));
-    padding-top: var(--spacing-05, var(--cds-spacing-05));
-    margin-top: var(--spacing-05, var(--cds-spacing-05));
-    border-top: 1px solid var(--border-subtle, var(--cds-ui-03));
-  }
-
-  .footer-row {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-04, var(--cds-spacing-04));
-    flex-wrap: wrap;
-  }
-
-  .footer-label {
-    font-size: var(--font-size-body, 0.875rem);
-    color: var(--text-secondary, var(--cds-text-02));
+    color: var(--cds-text-02);
+    font-size: 0.875rem;
   }
 </style>

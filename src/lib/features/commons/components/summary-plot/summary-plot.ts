@@ -33,6 +33,7 @@ interface SummaryPlotOptions {
   stroke_unique?: string;
   bg_color?: string;
   text_color?: string;
+  rule_color?: string;
 }
 
 interface NumericData {
@@ -120,11 +121,12 @@ function create_plot_numeric(
 ) {
   const {
     width = 150,
-    height = 64,
-    main_color = '#ff7f00',
-    nulls_color = 'gold',
-    text_color = '#f4f4f4',
-    bg_color = '#222'
+    height = 56,
+    main_color = '#8a3ffc',
+    nulls_color = '#ff832b',
+    text_color = '#525252',
+    bg_color = '#f4f4f4',
+    rule_color = '#8d8d8d'
   } = options;
   const { min, max, histogram, type_simple, nulls } = data;
 
@@ -143,8 +145,10 @@ function create_plot_numeric(
   return Plot.plot({
     width,
     height,
-    marginBottom: 8,
-    style: { overflow: 'visible', color: text_color },
+    marginBottom: 14,
+    marginLeft: 2,
+    marginRight: 2,
+    style: { overflow: 'hidden', color: text_color },
     x: { axis: null, type: 'band' },
     y: { axis: null },
     marks: [
@@ -153,7 +157,7 @@ function create_plot_numeric(
         y: 'count',
         fill: (d) => (d.bin !== null ? main_color : nulls_color)
       }),
-      Plot.ruleY([0], { stroke: text_color }),
+      Plot.ruleY([0], { stroke: rule_color }),
       Plot.text(
         [
           is_date
@@ -230,16 +234,16 @@ function create_plot_categorical(
 ) {
   const {
     width = 150,
-    height = 64,
+    height = 56,
     geoid = false,
-    main_color = '#a56eff',
-    nulls_color = 'gold',
-    unique_color = 'grey',
+    main_color = '#d02670',
+    nulls_color = '#ff832b',
+    unique_color = '#007d79',
     stroke_main = 'none',
     stroke_nulls = 'none',
     stroke_unique = 'none',
-    bg_color = '#222',
-    text_color = '#f4f4f4'
+    bg_color = '#f4f4f4',
+    text_color = '#525252'
   } = options;
 
   const { uniques, histogram } = data;
@@ -303,9 +307,9 @@ function create_plot_categorical(
     height,
     marginLeft: 5,
     marginRight: 5,
-    marginBottom: 8,
-    marginTop: 5,
-    style: 'overflow: visible;',
+    marginBottom: 14,
+    marginTop: 4,
+    style: 'overflow: hidden;',
     x: { axis: null },
     marks: [
       // BARS

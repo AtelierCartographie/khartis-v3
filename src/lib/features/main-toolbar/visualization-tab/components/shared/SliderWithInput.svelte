@@ -1,9 +1,11 @@
 <script lang="ts">
   import { Slider } from 'carbon-components-svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
+  import InfoPopover from './InfoPopover.svelte';
 
   interface Props {
     label?: string;
+    infoText?: string;
     value: number;
     min?: number;
     max?: number;
@@ -15,6 +17,7 @@
 
   let {
     label,
+    infoText,
     value = $bindable(),
     min = 0,
     max = 100,
@@ -33,7 +36,12 @@
 
 <div class="slider-with-input-wrapper">
   {#if label}
-    <span class="field-label">{label}</span>
+    <span class="field-label">
+      {label}
+      {#if infoText}
+        <InfoPopover text={infoText} />
+      {/if}
+    </span>
   {/if}
   <div class="slider-with-input">
     {#if showMinMax}
@@ -71,6 +79,9 @@
   }
 
   .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
     font-size: 0.875rem;
     color: var(--cds-text-secondary);
     font-weight: 400;

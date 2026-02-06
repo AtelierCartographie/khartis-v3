@@ -4,6 +4,7 @@
   import {
     ColorSelector,
     DiscretizationRow,
+    InfoPopover,
     MissingDataSection,
     PalettePreview,
     SectionHeading,
@@ -18,9 +19,7 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Category,
-    Filter,
     Minimize,
-    MisuseOutline,
     Subtract,
     Tag
   } from 'carbon-icons-svelte';
@@ -51,7 +50,6 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
-    onFilterToggle?: () => void;
   }
 
   let {
@@ -63,8 +61,7 @@
     onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette,
-    onFilterToggle
+    onInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -105,7 +102,7 @@
   let maxThickness = $state<number>(VISUALIZATION_DEFAULTS.lineMaxWidth);
   let color = $state<string>(DEFAULT_COLORS.line);
   let opacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
-  let enabled = $state<boolean>(false);
+  let enabled = $state<boolean>(true);
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(false);
   let _missingDataLabel = $state<string>('');
@@ -132,13 +129,12 @@
   });
 
   const thicknessModeItems = [
-    { icon: MisuseOutline, label: m.thickness_mode_none(), iconSize: 16 },
     { icon: Subtract, label: m.thickness_mode_unique(), iconSize: 16 },
-    { icon: Minimize, label: m.thickness_mode_proportional(), iconSize: 16 }
+    { icon: Minimize, label: m.thickness_mode_proportional(), iconSize: 16 },
+    { icon: Category, label: m.thickness_mode_classes(), iconSize: 16 }
   ];
 
   const colorModeItems = [
-    { icon: MisuseOutline, label: m.color_mode_none(), iconSize: 16 },
     { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
     { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
@@ -146,9 +142,9 @@
 
   function handleThicknessModeChange(index: number) {
     const modes = [
-      ThicknessMode.NONE,
       ThicknessMode.UNIQUE,
-      ThicknessMode.PROPORTIONAL
+      ThicknessMode.PROPORTIONAL,
+      ThicknessMode.CLASSES
     ];
     thicknessMode = modes[index] || ThicknessMode.UNIQUE;
     onModesChange?.({ thickness: thicknessMode });
@@ -156,7 +152,6 @@
 
   function handleColorModeChange(index: number) {
     const modes = [
-      ColorMode.NONE,
       ColorMode.UNIQUE,
       ColorMode.CLASSES,
       ColorMode.CATEGORIES
@@ -218,15 +213,14 @@
 
   const thicknessModeIndex = $derived(
     [
-      ThicknessMode.NONE,
       ThicknessMode.UNIQUE,
-      ThicknessMode.PROPORTIONAL
+      ThicknessMode.PROPORTIONAL,
+      ThicknessMode.CLASSES
     ].indexOf(thicknessMode)
   );
 
   const colorModeIndex = $derived(
     [
-      ColorMode.NONE,
       ColorMode.UNIQUE,
       ColorMode.CLASSES,
       ColorMode.CATEGORIES
@@ -272,14 +266,7 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button
-      type="button"
-      class="filter-btn"
-      aria-label={m.filter_data()}
-      onclick={onFilterToggle}
-    >
-      <Filter size={16} />
-    </button>
+    <InfoPopover text={m.lines_section_info()} />
   {/snippet}
 
   <div class="lines-config">
@@ -312,6 +299,28 @@
           type="default"
         />
       </div>
+      <SliderWithInput
+        label={m.max_thickness()}
+        min={1}
+        max={SLIDER_LIMITS.lineMaxWidth.max}
+        value={maxThickness}
+        onchange={handleMaxThicknessChange}
+      />
+    {:else if thicknessMode === ThicknessMode.CLASSES}
+      <div class="field-group">
+        <Dropdown
+          titleText={m.thickness_according()}
+          items={dataFields}
+          selectedId={selectedFieldId}
+          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          type="default"
+        />
+      </div>
+      <DiscretizationRow
+        label={m.discretization()}
+        value={discretizationLabel}
+        onsettings={handleOpenDiscretization}
+      />
       <SliderWithInput
         label={m.max_thickness()}
         min={1}
@@ -379,33 +388,31 @@
       />
     {/if}
 
-    {#if thicknessMode !== ThicknessMode.NONE || colorMode !== ColorMode.NONE}
-      <ToggleWithLabel
-        label={m.dashed()}
-        toggled={dashed}
-        ontoggle={handleDashedChange}
-      />
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={dashed}
+      ontoggle={handleDashedChange}
+    />
 
-      <SliderWithInput
-        label={m.opacity()}
-        min={SLIDER_LIMITS.lineOpacity.min}
-        max={SLIDER_LIMITS.lineOpacity.max}
-        value={opacity}
-        onchange={handleOpacityChange}
-      />
+    <SliderWithInput
+      label={m.opacity()}
+      min={SLIDER_LIMITS.lineOpacity.min}
+      max={SLIDER_LIMITS.lineOpacity.max}
+      value={opacity}
+      onchange={handleOpacityChange}
+    />
 
-      <MissingDataSection
-        show={showMissingData}
-        onshowchange={handleMissingDataToggle}
-        color={visualization?.missingData?.color}
-        oncolorchange={handleMissingDataColorChange}
-        opacity={visualization?.missingData?.opacity}
-        onopacitychange={handleMissingDataOpacityChange}
-        shape={visualization?.missingData?.shape}
-        onshapechange={handleMissingDataShapeChange}
-        showShapeSelector={true}
-      />
-    {/if}
+    <MissingDataSection
+      show={showMissingData}
+      onshowchange={handleMissingDataToggle}
+      color={visualization?.missingData?.color}
+      oncolorchange={handleMissingDataColorChange}
+      opacity={visualization?.missingData?.opacity}
+      onopacitychange={handleMissingDataOpacityChange}
+      shape={visualization?.missingData?.shape}
+      onshapechange={handleMissingDataShapeChange}
+      showShapeSelector={true}
+    />
   </div>
 </ExpandableSection>
 
@@ -427,20 +434,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
-  }
-
-  .filter-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
-    }
   }
 </style>

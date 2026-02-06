@@ -2,7 +2,19 @@ import { dataOrchestratorService } from '../../services/data-orchestrator.servic
 import { LogCategory, logger } from '../../utils/logger';
 import type { UploadedFile } from '../create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
-import { saveCurrentProject } from './project-persistence';
+import { markDirtyAndSave } from './project-persistence';
+
+export function getSourceFileIndex(
+  container: ProjectStateContainer,
+  fileId: string
+): number {
+  if (!container._state.currentProject?.data?.sourceFiles) {
+    return -1;
+  }
+  return container._state.currentProject.data.sourceFiles.findIndex(
+    (f) => f.id === fileId
+  );
+}
 
 export function cleanFileForStorage(file: UploadedFile): UploadedFile {
   return {
@@ -86,8 +98,7 @@ export async function addFilesToProject(
     }
   }
 
-  container._state.isDirty = true;
-  await saveCurrentProject(container);
+  await markDirtyAndSave(container);
 }
 
 export function addVirtualSourceFile(
@@ -131,8 +142,7 @@ export async function removeFileFromProject(
 
   await dataOrchestratorService.onFileRemoved(fileId);
 
-  container._state.isDirty = true;
-  await saveCurrentProject(container);
+  await markDirtyAndSave(container);
 }
 
 export async function renameFile(
@@ -140,20 +150,11 @@ export async function renameFile(
   fileId: string,
   newName: string
 ): Promise<void> {
-  if (!container._state.currentProject?.data?.sourceFiles) {
-    return;
-  }
+  const fileIndex = getSourceFileIndex(container, fileId);
+  if (fileIndex === -1) return;
 
-  const fileIndex = container._state.currentProject.data.sourceFiles.findIndex(
-    (f) => f.id === fileId
-  );
-
-  if (fileIndex === -1) {
-    return;
-  }
-
-  const currentFile =
-    container._state.currentProject.data.sourceFiles[fileIndex];
+  const project = container._state.currentProject!;
+  const currentFile = project.data.sourceFiles[fileIndex];
   const oldName = currentFile.name;
 
   const getBaseName = (fileName: string) => {
@@ -164,7 +165,7 @@ export async function renameFile(
   const oldBaseName = getBaseName(oldName);
   const newBaseName = getBaseName(newName);
 
-  const updatedFiles = [...container._state.currentProject.data.sourceFiles];
+  const updatedFiles = [...project.data.sourceFiles];
   const updatedFile = { ...updatedFiles[fileIndex], name: newName };
 
   if (updatedFile.relatedFilesData && oldBaseName !== newBaseName) {
@@ -197,13 +198,9 @@ export async function renameFile(
   updatedFiles[fileIndex] = updatedFile;
 
   container._state.currentProject = {
-    ...container._state.currentProject,
-    data: {
-      ...container._state.currentProject.data,
-      sourceFiles: updatedFiles
-    }
+    ...project,
+    data: { ...project.data, sourceFiles: updatedFiles }
   };
 
-  container._state.isDirty = true;
-  await saveCurrentProject(container);
+  await markDirtyAndSave(container);
 }

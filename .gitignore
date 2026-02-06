@@ -9,6 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 *-old
+.zed
 
 # Diagnostic reports
 report.*.json
@@ -71,7 +72,7 @@ blob-report/
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
-.claude
+.claude/
 CLAUDE_BEST_PRACTICES.md
 CLAUDE.md
 .yarn/*
@@ -79,6 +80,9 @@ CLAUDE.md
 !.yarn/plugins
 !.yarn/releases
 !.yarn/sdks
+
+# Turbo
+.turbo
 
 # Vitest
 .vitest

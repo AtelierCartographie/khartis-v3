@@ -78,11 +78,21 @@ export function buildFilterSQL(
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef} <> ${value}`;
 
-    case 'between':
+    case 'between': {
       if (filter.value === undefined || filter.secondaryValue === undefined) {
         throw new DuckDBError(m.filter_between_requires_two_values());
       }
+      const numMin = Number(filter.value);
+      const numMax = Number(filter.secondaryValue);
+      if (
+        Number.isFinite(numMin) &&
+        Number.isFinite(numMax) &&
+        numMin > numMax
+      ) {
+        return `${columnRef} BETWEEN ${secondValue} AND ${value}`;
+      }
       return `${columnRef} BETWEEN ${value} AND ${secondValue}`;
+    }
 
     case 'top_asc':
       return buildTopFilter('ASC');

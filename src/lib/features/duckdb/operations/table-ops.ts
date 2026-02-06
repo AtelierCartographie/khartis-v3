@@ -1,5 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import {
   getDescribe,
   getRowCountFromCache,
@@ -54,7 +57,7 @@ export async function getRowCount(
   try {
     const result = (await executeQuery(
       ctx.connection,
-      `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM "${table}"`,
+      `SELECT CAST(COUNT(*) AS DOUBLE) as num_rows FROM "${escapeIdentifier(table)}"`,
       { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     )) as Array<{ num_rows: number }>;
 
@@ -77,7 +80,7 @@ export async function dropRows(
 ): Promise<void> {
   await executeQuery(
     ctx.connection,
-    `DELETE FROM "${table}" WHERE __id IN (${rowsId.toString()})`,
+    `DELETE FROM "${escapeIdentifier(table)}" WHERE __id IN (${rowsId.toString()})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
   markTableMutated(ctx, table);

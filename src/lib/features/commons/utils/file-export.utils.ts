@@ -1,7 +1,7 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { escapeSqlString } from './sanitize.utils';
+import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
@@ -78,13 +78,13 @@ export async function exportDatasetToCsv(
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
       .filter((col) => col.type !== 'geometry')
-      .map((col) => `"${col.name}"`)
+      .map((col) => `"${escapeIdentifier(col.name)}"`)
       .join(', ');
 
     try {
       await Duck.query(`
         CREATE TEMPORARY VIEW "${viewName}" AS
-        SELECT ${nonGeomColumns} FROM "${dataset.duckdbTableName}"
+        SELECT ${nonGeomColumns} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"
       `);
 
       const blob = await exportToCsv(viewName);
@@ -281,10 +281,10 @@ export async function exportProcessedDatasets(
         const unionParts = datasets.map((dataset) => {
           const nonGeomColumns = dataset.columns
             .filter((col) => col.type !== 'geometry')
-            .map((col) => `"${col.name}"`)
+            .map((col) => `"${escapeIdentifier(col.name)}"`)
             .join(', ');
           const escapedName = escapeSqlString(dataset.name);
-          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${dataset.duckdbTableName}"`;
+          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
         });
 
         const unionQuery = `

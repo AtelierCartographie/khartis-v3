@@ -253,6 +253,7 @@ export const duckDBOrchestrator = {
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
+    Duck.invalidateTableCache(dataset.tableName);
     const columns = await Duck.analyse(dataset.tableName);
     datasetOps.updateDatasetColumns(dataset.id, columns);
   },
@@ -410,9 +411,10 @@ export const duckDBOrchestrator = {
 
     const filters = state.getFilters(tableName);
     if (filters.length > 0) {
-      const updatedFilters = filters.map((f) =>
-        f.column === oldName ? { ...f, column: newName } : f
-      );
+      const updatedFilters = filters.map((f) => {
+        if (f.column !== oldName) return f;
+        return createFilterRecord(tableName, { ...f, column: newName }, f.id);
+      });
       state.setFilters(tableName, updatedFilters);
     }
 
@@ -449,7 +451,7 @@ export const duckDBOrchestrator = {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    const rowIds = await tableDataOps.getFilteredRowIds(tableName, Duck);
+    const rowIds = await tableDataOps.getExcludedRowIds(tableName, Duck);
     if (rowIds.length === 0) return 0;
 
     await columnOps.dropRows(tableName, rowIds, Duck);
@@ -641,6 +643,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await datasetOps.dropTable(tableName, Duck);
+    state.clearFiltersForTable(tableName);
   },
 
   async clear(): Promise<void> {
@@ -660,8 +663,10 @@ export const duckDBOrchestrator = {
   async convertToProcessedDataset(
     duckDataset: DuckDBDataset
   ): Promise<ProcessedDataset> {
-    return conversionOps.convertToProcessedDataset(duckDataset, (tableName) =>
-      duckDBOrchestrator.getTableData(tableName)
+    return conversionOps.convertToProcessedDataset(
+      duckDataset,
+      (tableName, options) =>
+        duckDBOrchestrator.getTableData(tableName, options)
     );
   },
 

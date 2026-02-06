@@ -63,18 +63,20 @@ export const dataTabActions = {
   },
 
   setJoinStats(stats: JoinQuality): void {
-    dataTabState.basemapJoin.joinedEntities = stats.joinedCount;
-    dataTabState.basemapJoin.entitiesToVerify = stats.toVerifyCount;
+    dataTabState.basemapJoin.joinedEntities = stats.joinedCount ?? 0;
+    dataTabState.basemapJoin.entitiesToVerify = stats.toVerifyCount ?? 0;
 
-    dataTabState.basemapJoin.duplicateEntities = stats.entities
+    const entities = stats.entities ?? [];
+
+    dataTabState.basemapJoin.duplicateEntities = entities
       .filter((e) => e.status === JoinStatus.DUPLICATE)
       .map((e) => e.dataValue);
 
-    dataTabState.basemapJoin.unrecognizedEntities = stats.entities
+    dataTabState.basemapJoin.unrecognizedEntities = entities
       .filter((e) => e.status === JoinStatus.UNRECOGNIZED)
       .map((e) => e.dataValue);
 
-    dataTabState.basemapJoin.joinMappings = stats.entities
+    dataTabState.basemapJoin.joinMappings = entities
       .filter((e) => e.status === JoinStatus.TO_VERIFY)
       .map((e) => ({
         dataValue: e.dataValue,

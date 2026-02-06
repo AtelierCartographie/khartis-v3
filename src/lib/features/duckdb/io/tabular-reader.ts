@@ -25,6 +25,7 @@ export async function readTabular(
   const decimal_separator =
     options.decimal_separator ?? DUCK_CONST.DEFAULT.DECIMAL_SEPARATOR;
   const thousands_separator = options.thousands_separator;
+  const delimiter = options.delimiter;
   const header = options.header ?? true;
   const format = options.format ?? DUCK_CONST.DEFAULT.FORMAT_TABULAR;
   let filename: string;
@@ -81,6 +82,10 @@ export async function readTabular(
 
           if (thousands_separator) {
             csvOptions.push(`thousands="${thousands_separator}"`);
+          }
+
+          if (delimiter) {
+            csvOptions.push(`delim='${delimiter}'`);
           }
 
           const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;

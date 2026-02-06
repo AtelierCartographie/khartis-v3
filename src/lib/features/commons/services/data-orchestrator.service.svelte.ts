@@ -37,11 +37,11 @@ class DataOrchestratorService {
     }
   }
 
-  async onFileAdded(file: UploadedFile): Promise<void> {
+  async onFileAdded(file: UploadedFile, autoEnable = true): Promise<void> {
     const snapshot = importRollbackService.createSnapshot(file);
 
     try {
-      const dataset = await datasetsStore.addFile(file);
+      const dataset = await datasetsStore.addFile(file, autoEnable);
 
       if (!dataset) {
         logger.error('Dataset not found after processing', LogCategory.DATA, {
@@ -445,6 +445,10 @@ class DataOrchestratorService {
     if (currentProject?.data?.sourceFiles) {
       await this.processProjectFiles(currentProject.data.sourceFiles);
     }
+
+    // Lazy import to avoid circular dependency (global → project → data-orchestrator → global)
+    const { globalActions } = await import('../store/global.svelte');
+    globalActions.ensureTabSelected();
   }
 
   private processedFileIds = new Set<string>();
@@ -487,6 +491,22 @@ class DataOrchestratorService {
 
     if (unprocessedFiles.length === 0) {
       return;
+    }
+
+    // Determine which source file should be visible on the map
+    const { globalState } = await import('../store/global.svelte');
+    const selectedSourceFileId =
+      globalState.selectedDataButtonId ?? unprocessedFiles[0]?.id;
+
+    // Process selected file first so the map shows its data immediately
+    if (selectedSourceFileId) {
+      const idx = unprocessedFiles.findIndex(
+        (f) => f.id === selectedSourceFileId
+      );
+      if (idx > 0) {
+        const [selected] = unprocessedFiles.splice(idx, 1);
+        unprocessedFiles.unshift(selected);
+      }
     }
 
     unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
@@ -567,8 +587,11 @@ class DataOrchestratorService {
             LogCategory.DATA
           );
 
+          // Only auto-enable the dataset if it belongs to the selected tab
+          const autoEnable = file.id === selectedSourceFileId;
+
           try {
-            await this.onFileAdded(file);
+            await this.onFileAdded(file, autoEnable);
 
             if (
               file.columnTransformations &&

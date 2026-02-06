@@ -9,26 +9,24 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Category,
-    Filter,
     MisuseOutline,
     SquareFill,
-    SquareOutline,
     Tag
   } from 'carbon-icons-svelte';
   import {
     DEFAULT_COLORS,
     FillMode,
     SLIDER_LIMITS,
-    StrokeMode,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
   import {
     ColorSelector,
     DiscretizationRow,
+    InfoPopover,
     PalettePreview,
     SectionHeading,
     SliderWithInput,
-    ToggleWithLabel
+    StrokeSection
   } from './shared';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
@@ -49,7 +47,6 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
-    onFilterToggle?: () => void;
   }
 
   let {
@@ -61,8 +58,7 @@
     onMissingDataChange: _onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette,
-    onFilterToggle
+    onInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -98,14 +94,9 @@
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
-  let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
-  let strokeColor = $state<string>(DEFAULT_COLORS.stroke);
-  let strokeDashed = $state<boolean>(false);
-  let strokeOpacity = $state<number>(VISUALIZATION_DEFAULTS.strokeOpacity);
-  let enabled = $state<boolean>(false);
+  let enabled = $state<boolean>(true);
 
   $effect(() => {
     if (visualization?.style) {
@@ -114,21 +105,11 @@
         fillOp !== undefined
           ? Math.round(fillOp * 100)
           : VISUALIZATION_DEFAULTS.fillOpacity;
-      strokeWidth =
-        visualization.style.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth;
-      const strokeOp = visualization.style.strokeOpacity;
-      strokeOpacity =
-        strokeOp !== undefined
-          ? Math.round(strokeOp * 100)
-          : VISUALIZATION_DEFAULTS.strokeOpacity;
       fillColor =
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
-      strokeColor = visualization.style.strokeColor ?? DEFAULT_COLORS.stroke;
-      strokeDashed = visualization.style.strokeDashed ?? false;
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
-      strokeMode = visualization.modes.stroke ?? StrokeMode.NONE;
     }
   });
 
@@ -137,13 +118,6 @@
     { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const strokeModeItems = [
-    { icon: MisuseOutline, label: m.stroke_mode_none(), iconSize: 16 },
-    { icon: SquareOutline, label: m.stroke_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.stroke_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.stroke_mode_categories(), iconSize: 16 }
   ];
 
   function handleFillModeChange(index: number) {
@@ -157,30 +131,9 @@
     onModesChange?.({ fill: fillMode });
   }
 
-  function handleStrokeModeChange(index: number) {
-    const modes = [
-      StrokeMode.NONE,
-      StrokeMode.UNIQUE,
-      StrokeMode.CLASSES,
-      StrokeMode.CATEGORIES
-    ];
-    strokeMode = modes[index] || StrokeMode.NONE;
-    onModesChange?.({ stroke: strokeMode });
-  }
-
   function handleFillColorChange(value: string) {
     fillColor = value;
     onStyleChange?.({ fillColor: value });
-  }
-
-  function handleStrokeColorChange(value: string) {
-    strokeColor = value;
-    onStyleChange?.({ strokeColor: value });
-  }
-
-  function handleStrokeDashedChange(value: boolean) {
-    strokeDashed = value;
-    onStyleChange?.({ strokeDashed: value });
   }
 
   const fillModeIndex = $derived(
@@ -192,28 +145,9 @@
     ].indexOf(fillMode)
   );
 
-  const strokeModeIndex = $derived(
-    [
-      StrokeMode.NONE,
-      StrokeMode.UNIQUE,
-      StrokeMode.CLASSES,
-      StrokeMode.CATEGORIES
-    ].indexOf(strokeMode)
-  );
-
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
     onStyleChange?.({ fillOpacity: value / 100 });
-  }
-
-  function handleStrokeWidthChange(value: number) {
-    strokeWidth = value;
-    onStyleChange?.({ strokeWidth: value });
-  }
-
-  function handleStrokeOpacityChange(value: number) {
-    strokeOpacity = value;
-    onStyleChange?.({ strokeOpacity: value / 100 });
   }
 
   function handleToggleChange(checked: boolean) {
@@ -259,14 +193,7 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button
-      type="button"
-      class="filter-btn"
-      aria-label={m.filter_data()}
-      onclick={onFilterToggle}
-    >
-      <Filter size={16} />
-    </button>
+    <InfoPopover text={m.polygons_section_info()} />
   {/snippet}
 
   <div class="polygons-config">
@@ -338,86 +265,16 @@
       />
     {/if}
 
-    <SectionHeading title={m.stroke()} />
-
-    <div class="field-group">
-      <ToggleTabs
-        items={strokeModeItems}
-        activeIndex={strokeModeIndex}
-        onChange={handleStrokeModeChange}
-        hideInactiveLabel={true}
-      />
-    </div>
-
-    {#if strokeMode !== StrokeMode.NONE}
-      <SliderWithInput
-        label={m.thickness()}
-        min={1}
-        max={SLIDER_LIMITS.strokeWidth.max}
-        value={strokeWidth}
-        onchange={handleStrokeWidthChange}
-      />
-
-      {#if strokeMode === StrokeMode.UNIQUE}
-        <ColorSelector
-          label={m.color()}
-          value={strokeColor}
-          onchange={handleStrokeColorChange}
-        />
-      {:else if strokeMode === StrokeMode.CLASSES}
-        <div class="field-group">
-          <Dropdown
-            titleText={m.color_according()}
-            items={dataFields}
-            bind:selectedId={selectedFieldId}
-            type="default"
-          />
-        </div>
-        <DiscretizationRow
-          label={m.discretization()}
-          value={discretizationLabel}
-          onsettings={handleOpenDiscretization}
-        />
-        <PalettePreview
-          label={m.color_palette()}
-          colors={currentPalette}
-          oninvert={onInvertPalette}
-        />
-      {:else if strokeMode === StrokeMode.CATEGORIES}
-        <div class="field-group">
-          <Dropdown
-            titleText={m.color_according()}
-            items={dataFields}
-            bind:selectedId={selectedFieldId}
-            type="default"
-          />
-        </div>
-        <DiscretizationRow
-          label={m.category_aspect()}
-          value={m.categories_count({ count: 4 })}
-          onsettings={handleOpenDiscretization}
-        />
-        <PalettePreview
-          label={m.color_palette()}
-          colors={qualitativePalette}
-          oninvert={onInvertPalette}
-        />
-      {/if}
-
-      <ToggleWithLabel
-        label={m.dashed()}
-        toggled={strokeDashed}
-        ontoggle={handleStrokeDashedChange}
-      />
-
-      <SliderWithInput
-        label={m.opacity()}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        value={strokeOpacity}
-        onchange={handleStrokeOpacityChange}
-      />
-    {/if}
+    <StrokeSection
+      visualization={visualization}
+      dataFields={dataFields}
+      classesPalette={currentPalette}
+      discretizationLabel={discretizationLabel}
+      onStyleChange={onStyleChange}
+      onModesChange={onModesChange}
+      onInvertPalette={onInvertPalette}
+      onOpenDiscretization={handleOpenDiscretization}
+    />
   </div>
 </ExpandableSection>
 
@@ -439,20 +296,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
-  }
-
-  .filter-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
-    }
   }
 </style>

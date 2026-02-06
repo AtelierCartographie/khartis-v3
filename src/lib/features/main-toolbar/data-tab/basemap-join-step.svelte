@@ -16,6 +16,8 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type {
     BasemapMetadata,
@@ -27,12 +29,13 @@
     processBasemapImport
   } from '$lib/features/map/utils/basemap-import.utils';
   import * as m from '$lib/paraglide/messages';
-  import { Grid as GridIcon, List, Upload } from 'carbon-icons-svelte';
+  import { Earth, List, Upload } from 'carbon-icons-svelte';
   import BasemapCatalogTab from './basemap-join-components/basemap-catalog-tab.svelte';
   import BasemapImportTab from './basemap-join-components/basemap-import-tab.svelte';
   import BasemapOsmTab from './basemap-join-components/basemap-osm-tab.svelte';
   import JoinAssistedSection from './basemap-join-components/join-assisted-section.svelte';
   import BasemapSuggestionModal from './components/basemap-suggestion-modal.svelte';
+  import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
 
@@ -41,7 +44,7 @@
   const tabItems = [
     { icon: List, label: m.basemap_catalog(), iconSize: 20 },
     { icon: Upload, label: m.basemap_import(), iconSize: 20 },
-    { icon: GridIcon, label: m.basemap_osm(), iconSize: 20 }
+    { icon: Earth, label: m.basemap_osm(), iconSize: 20 }
   ];
 
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
@@ -64,6 +67,7 @@
   let importError = $state<string | null>(null);
   let importedBasemap = $state<BasemapMetadata | null>(null);
   let showSuggestionModal = $state(false);
+  let joinLoading = $state(false);
 
   let currentJoinAbortController: AbortController | null = null;
 
@@ -95,6 +99,7 @@
     osmBasemapStore.clear();
     dataTabActions.clearJoinStats();
     dataTabActions.selectBasemap(basemap.file);
+    basemapStyleStore.setReferenceBasemap(basemap.file);
 
     projectStore.updateProjectData({
       basemap: {
@@ -109,6 +114,7 @@
       datasetIdForOrchestrator &&
       dataTabState.geolocation.linkedVariableName
     ) {
+      joinLoading = true;
       try {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -126,14 +132,12 @@
 
         dataTabActions.setJoinStats(stats);
 
-        const hasErrors =
+        const hasBlockingErrors =
           stats.toVerifyCount > 0 ||
           stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE)
-            .length > 0 ||
-          stats.entities.filter((e) => e.status === JoinStatus.UNRECOGNIZED)
             .length > 0;
 
-        if (!hasErrors && stats.joinedCount > 0) {
+        if (!hasBlockingErrors && stats.joinedCount > 0) {
           logger.info(
             'Auto-finalizing join - no errors detected',
             LogCategory.MAP,
@@ -166,6 +170,8 @@
         }
         logger.error('Failed to compute join stats', LogCategory.MAP, error);
         showError(m.join_error_title(), m.join_error_message());
+      } finally {
+        joinLoading = false;
       }
     }
   }
@@ -197,11 +203,14 @@
 
     try {
       const file = importFiles[0];
-      const { basemap: customBasemap } = await processBasemapImport(file);
+      const { basemap: customBasemap, geometryTable } =
+        await processBasemapImport(file);
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
+      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedBasemap = customBasemap;
 
       projectStore.updateProjectData({
@@ -217,6 +226,7 @@
         datasetIdForOrchestrator &&
         dataTabState.geolocation.linkedVariableName
       ) {
+        joinLoading = true;
         try {
           const stats = await duckDBOrchestrator.computeJoinStats(
             datasetIdForOrchestrator,
@@ -227,6 +237,8 @@
         } catch (error) {
           logger.error('Failed to compute join stats', LogCategory.MAP, error);
           showError(m.join_error_title(), m.join_error_message());
+        } finally {
+          joinLoading = false;
         }
       }
     } catch (err) {
@@ -272,6 +284,7 @@
     basemapCatalogService.addCustomBasemap(osmBasemap);
     osmBasemapStore.setOSMBasemap(osmBasemap);
     dataTabActions.selectBasemap(osmBasemap.file);
+    basemapStyleStore.setReferenceBasemap(null);
 
     projectStore.updateProjectData({
       basemap: {
@@ -368,14 +381,11 @@
     )
       return;
 
-    if (duplicates.length > 0 || unknowns.length > 0) {
+    if (duplicates.length > 0) {
       logger.warn(
-        'Cannot finalize join with unresolved issues',
+        'Cannot finalize join with duplicate entities',
         LogCategory.MAP,
-        {
-          duplicates: duplicates.length,
-          unknowns: unknowns.length
-        }
+        { duplicates: duplicates.length }
       );
       return;
     }
@@ -462,6 +472,7 @@
           ) {
             const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
             if (basemap) {
+              joinLoading = true;
               try {
                 const stats = await duckDBOrchestrator.computeJoinStats(
                   datasetIdForOrchestrator,
@@ -475,6 +486,8 @@
                   LogCategory.MAP,
                   error
                 );
+              } finally {
+                joinLoading = false;
               }
             }
           }
@@ -514,6 +527,7 @@
         );
         osmBasemapStore.clear();
         dataTabActions.selectBasemap('');
+        basemapStyleStore.setReferenceBasemap(null);
       }
     }
 
@@ -522,10 +536,11 @@
 </script>
 
 <section id="basemap-join-step">
-  <MainToolBarHeader title={m.basemap_step_title()} />
+  <MainToolBarHeader title={m.basemap_step_title()} icon={Earth} />
 
   <p class="kh-help">
     {m.basemap_step_description()}
+    <InfoPopover text={m.basemap_step_info()} />
   </p>
 
   <div class="basemap-tabs-wrapper">
@@ -542,12 +557,8 @@
       allBasemaps={allBasemaps}
       basemapSelected={basemapSelected}
       onSelectBasemap={handleSelectBasemap}
-      onSuggestBasemap={handleSuggestBasemap}
-      onGoToImport={() => (activeTabIndex = 1)}
     />
-  {/if}
-
-  {#if activeTabIndex === 1}
+  {:else if activeTabIndex === 1}
     <BasemapImportTab
       importedBasemap={importedBasemap}
       importError={importError}
@@ -556,9 +567,7 @@
       onFileInputChange={handleFileInputChange}
       onLoadUrl={handleLoadUrl}
     />
-  {/if}
-
-  {#if activeTabIndex === 2}
+  {:else if activeTabIndex === 2}
     <BasemapOsmTab
       hasGPSCoordinates={hasGPSCoordinates()}
       onSelectOSM={handleSelectOSM}
@@ -567,6 +576,7 @@
   {/if}
 
   {#if basemapSelected}
+    <hr class="join-separator" />
     <JoinAssistedSection
       joinRows={joinRows}
       duplicates={duplicates}
@@ -574,6 +584,7 @@
       joinedCount={joinedCount}
       toVerifyCount={toVerifyCount}
       linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      loading={joinLoading}
       onApplyCorrections={handleApplyCorrections}
       onFinalizeJoin={handleFinalizeJoin}
     />
@@ -587,16 +598,24 @@
 
 <style>
   #basemap-join-step {
-    background-color: var(--cds-ui-02);
-    padding: var(--cds-spacing-05);
+    display: flex;
+    flex-direction: column;
   }
 
   .kh-help {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
+    color: #6f6f6f;
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 18px;
   }
 
   .basemap-tabs-wrapper {
-    margin-bottom: var(--cds-spacing-05);
+    margin-bottom: 12px;
+  }
+
+  .join-separator {
+    border: none;
+    border-top: 1px solid #e0e0e0;
+    margin: 0;
   }
 </style>

@@ -5,6 +5,7 @@ import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
+  CsvImportOptions,
   DatasetResult,
   FileInfo,
   PipelineContext,
@@ -46,13 +47,15 @@ export async function processFileInternal(
 
   await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
 
+  let detectedCsvOptions: CsvImportOptions | undefined;
+
   if (isGeoFile) {
     await Duck.read_geofile(file, {
       tablename: tableName,
       shapefile: isShapefile
     });
   } else {
-    await readTabularFile(file, tableName, fileInfo.name);
+    detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
   }
 
   const dataset = await buildDatasetFromDuckTable(ctx, {
@@ -61,6 +64,10 @@ export async function processFileInternal(
     isGeoFile,
     format
   });
+
+  if (detectedCsvOptions) {
+    dataset.metadata.csvOptions = detectedCsvOptions;
+  }
 
   if (options.rawDataset) {
     dataset.originalData = buildOriginalData(
@@ -114,7 +121,7 @@ async function readTabularFile(
   file: File,
   tableName: string,
   fileName: string
-): Promise<void> {
+): Promise<CsvImportOptions | undefined> {
   const isParquet = fileName.toLowerCase().endsWith('.parquet');
   const isArrow = fileName.toLowerCase().endsWith('.arrow');
 
@@ -123,19 +130,26 @@ async function readTabularFile(
       tablename: tableName,
       format: 'parquet'
     });
-  } else {
-    const detection = await detectDecimalSeparator(file);
-    if (detection.separator === ',') {
-      logger.info('European decimal format detected', LogCategory.DATA, {
-        confidence: detection.confidence,
-        sampleSize: detection.sampleSize
-      });
-    }
-    await Duck.read_tabular(file, {
-      tablename: tableName,
-      decimal_separator: detection.separator
+    return undefined;
+  }
+
+  const detection = await detectDecimalSeparator(file);
+  if (detection.separator === ',') {
+    logger.info('European decimal format detected', LogCategory.DATA, {
+      confidence: detection.confidence,
+      sampleSize: detection.sampleSize
     });
   }
+  await Duck.read_tabular(file, {
+    tablename: tableName,
+    decimal_separator: detection.separator
+  });
+
+  return {
+    header: true,
+    decimalSeparator: detection.separator,
+    delimiter: detection.delimiter
+  };
 }
 
 export async function createFileFromUploadContent(

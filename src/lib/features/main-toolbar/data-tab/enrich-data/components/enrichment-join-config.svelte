@@ -246,7 +246,6 @@
     padding: var(--cds-spacing-03);
     background-color: var(--cds-layer-02);
     border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
   }
 
   .file-name {
@@ -279,7 +278,6 @@
 
   .preview-container {
     border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
     overflow: hidden;
   }
 
@@ -343,7 +341,6 @@
     color: var(--cds-support-success);
     font-weight: 500;
     background-color: var(--cds-layer-01);
-    border-radius: var(--cds-spacing-02);
     margin-top: var(--cds-spacing-04);
   }
 
@@ -352,7 +349,6 @@
     color: var(--cds-text-02);
     padding: var(--cds-spacing-04);
     background-color: var(--cds-layer-02);
-    border-radius: var(--cds-spacing-02);
     text-align: center;
   }
 </style>

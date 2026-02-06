@@ -1,18 +1,17 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { ToolbarState } from '$lib/features/commons/types/global';
   import {
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import clsx from 'clsx';
   import ChooseVisualization from './choose-visualization.svelte';
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
+  import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
 
   let configureSection: HTMLElement | undefined = $state();
   let hasAutoCreated = $state(false);
+
 
   function handleCreateVisualization() {
     if (configureSection) {
@@ -36,12 +35,7 @@
   });
 </script>
 
-<div
-  id="khartis-viz-tab"
-  class={clsx(
-    globalState.toolbarState === ToolbarState.Collapsed && 'collapsed-content'
-  )}
->
+<ToolbarTabLayout id="khartis-viz-tab">
   <ChooseVisualization onCreateVisualization={handleCreateVisualization} />
 
   <div bind:this={configureSection}>
@@ -49,24 +43,4 @@
   </div>
 
   <CustomizeBasemap />
-</div>
-
-<style>
-  #khartis-viz-tab {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-06);
-    padding-bottom: var(--cds-spacing-06);
-    background-color: var(--cds-layer-01);
-  }
-
-  #khartis-viz-tab > :global(section) {
-    background-color: var(--cds-background);
-    padding: var(--cds-spacing-05);
-  }
-
-  :global(.collapsed-content) {
-    opacity: 0.7;
-    pointer-events: none;
-  }
-</style>
+</ToolbarTabLayout>

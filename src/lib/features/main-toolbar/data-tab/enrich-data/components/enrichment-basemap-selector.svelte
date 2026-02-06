@@ -145,7 +145,6 @@
 
   .expandable-section {
     border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
     overflow: hidden;
   }
 

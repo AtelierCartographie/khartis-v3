@@ -27,7 +27,27 @@ export async function getTableData(
 ): Promise<ArrowTableLike> {
   try {
     const filters = getFiltersMap();
-    let query = `SELECT * FROM "${tableName}"`;
+
+    // Exclude geometry columns from SELECT to avoid transferring large WKB data
+    // The UI already filters these out (EXCLUDED_COLUMNS in use-table-data)
+    let selectClause = '*';
+    try {
+      const columns = await Duck.describeColumns(tableName);
+      const geomCols = columns
+        .filter(
+          (c) =>
+            String(c.type || '').toUpperCase() === 'GEOMETRY' ||
+            String(c.type_simple || '') === 'geometry'
+        )
+        .map((c) => `"${c.name}"`);
+      if (geomCols.length > 0) {
+        selectClause = `* EXCLUDE (${geomCols.join(', ')})`;
+      }
+    } catch {
+      // Fallback to SELECT * if column detection fails
+    }
+
+    let query = `SELECT ${selectClause} FROM "${tableName}"`;
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     if (whereClause) {
       query += ` WHERE ${whereClause}`;
@@ -95,25 +115,47 @@ export async function getRowPosition(
   try {
     const filters = getFiltersMap();
     const whereClause = buildFilterWhereClause(filters.get(tableName));
-    const filterPart = whereClause ? `WHERE ${whereClause}` : '';
-    const orderPart =
-      options?.orderBy && options?.order
-        ? `ORDER BY "${options.orderBy}" ${options.order}`
-        : 'ORDER BY __id ASC';
+    const filterCondition = whereClause ? `AND ${whereClause}` : '';
 
-    const query = `
-      WITH ordered AS (
-        SELECT __id, ROW_NUMBER() OVER (${orderPart}) - 1 as position
+    // Use COUNT-based approach instead of ROW_NUMBER() over entire table
+    // This avoids materializing window function results for all rows
+    if (options?.orderBy && options?.order) {
+      const sortCol = `"${options.orderBy}"`;
+      const isAsc = options.order === 'ASC';
+
+      // Count rows that sort before the target row
+      const query = `
+        WITH target AS (
+          SELECT ${sortCol} as sort_val FROM "${tableName}" WHERE __id = ${rowId}
+        )
+        SELECT COUNT(*) as position
+        FROM "${tableName}", target
+        WHERE (
+          ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
+          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${rowId})
+        )
+        ${filterCondition}
+      `;
+
+      const result = (await Duck.query(query)) as ArrowTableLike;
+      if (result.numRows > 0) {
+        const row = result.get(0);
+        return Number(row.position);
+      }
+    } else {
+      // Default order by __id ASC — simple count of rows with smaller __id
+      const query = `
+        SELECT COUNT(*) as position
         FROM "${tableName}"
-        ${filterPart}
-      )
-      SELECT position FROM ordered WHERE __id = ${rowId}
-    `;
+        WHERE __id < ${rowId}
+        ${filterCondition}
+      `;
 
-    const result = (await Duck.query(query)) as ArrowTableLike;
-    if (result.numRows > 0) {
-      const row = result.get(0);
-      return Number(row.position);
+      const result = (await Duck.query(query)) as ArrowTableLike;
+      if (result.numRows > 0) {
+        const row = result.get(0);
+        return Number(row.position);
+      }
     }
     return -1;
   } catch (error) {
@@ -126,15 +168,26 @@ export async function getRowStats(
   tableName: string,
   Duck: DuckDBClientForTableData
 ): Promise<FilterStats> {
-  const [total, filtered] = await Promise.all([
-    countRows(tableName, Duck, false),
-    countRows(tableName, Duck, true)
-  ]);
+  const filters = getFiltersMap();
+  const whereClause = buildFilterWhereClause(filters.get(tableName));
 
-  return { total, filtered };
+  // Single query with COUNT(*) FILTER instead of two separate queries
+  if (whereClause) {
+    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${tableName}"`;
+    const result = (await Duck.query(query)) as ArrowTableLike;
+    const row = result.get(0) as Record<string, unknown>;
+    return {
+      total: Number(row?.total) || 0,
+      filtered: Number(row?.filtered) || 0
+    };
+  }
+
+  // No filters — total equals filtered
+  const total = await countRows(tableName, Duck, false);
+  return { total, filtered: total };
 }
 
-export async function getFilteredRowIds(
+export async function getExcludedRowIds(
   tableName: string,
   Duck: DuckDBClientForTableData
 ): Promise<number[]> {
@@ -142,7 +195,7 @@ export async function getFilteredRowIds(
   const whereClause = buildFilterWhereClause(filters.get(tableName));
   if (!whereClause) return [];
 
-  const query = `SELECT __id FROM "${tableName}" WHERE ${whereClause}`;
+  const query = `SELECT __id FROM "${tableName}" WHERE NOT (${whereClause})`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
   const ids: number[] = [];

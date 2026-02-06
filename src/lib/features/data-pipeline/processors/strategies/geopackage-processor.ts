@@ -40,10 +40,12 @@ export const geopackageProcessor: FileProcessor = {
     const actualTableName =
       typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-    const columns = await ctx.Duck.analyse(actualTableName);
-    const rowCount = await ctx.callbacks.getRowCount(actualTableName);
-    const { arrowTableWithMetadata, geoArrowMetadata } =
-      await ctx.callbacks.createArrowTableWithMetadata(actualTableName);
+    const [columns, rowCount, { arrowTableWithMetadata, geoArrowMetadata }] =
+      await Promise.all([
+        ctx.Duck.analyse(actualTableName),
+        ctx.callbacks.getRowCount(actualTableName),
+        ctx.callbacks.createArrowTableWithMetadata(actualTableName)
+      ]);
 
     const dataset: ProcessorDataset = {
       id: crypto.randomUUID(),
