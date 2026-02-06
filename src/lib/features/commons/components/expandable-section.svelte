@@ -3,10 +3,11 @@
   import { Toggle } from 'carbon-components-svelte';
   import { ChevronDown, ChevronRight } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { createEventDispatcher, untrack } from 'svelte';
+  import { untrack } from 'svelte';
 
   interface Props {
     title: string;
+    description?: string;
     defaultOpen?: boolean;
     count?: number;
     children?: Snippet;
@@ -17,11 +18,13 @@
     disabled?: boolean;
     disabledReason?: string;
     onToggleChange?: (checked: boolean) => void;
+    onToggle?: (expanded: boolean) => void;
     titleClass?: string;
   }
 
   const {
     title,
+    description,
     defaultOpen = false,
     count,
     children,
@@ -32,6 +35,7 @@
     disabled = false,
     disabledReason,
     onToggleChange,
+    onToggle,
     titleClass = ''
   }: Props = $props();
 
@@ -57,13 +61,11 @@
     }
   });
 
-  const dispatch = createEventDispatcher<{ toggle: { expanded: boolean } }>();
-
   function toggle(): void {
     if (disabled) return;
     if (showToggle && !effectiveToggleChecked) return;
     expanded = !expanded;
-    dispatch('toggle', { expanded });
+    onToggle?.(expanded);
   }
 
   function handleToggleChange(event: CustomEvent): void {
@@ -112,17 +114,25 @@
       </div>
     {/if}
 
-    <span class="section-title {titleClass}">
-      {title}{count !== undefined ? ` (${count})` : ''}
+    <div class="section-title-group">
+      <span class="section-title {titleClass}">
+        {title}{count !== undefined ? ` (${count})` : ''}
 
-      {#if icon}
-        <span class="section-custom-icon">
-          {@render icon()}
-        </span>
+        {#if icon}
+          <span
+            class="section-custom-icon"
+            onclick={(e: MouseEvent) => e.stopPropagation()}
+            onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
+            role="presentation"
+          >
+            {@render icon()}
+          </span>
+        {/if}
+      </span>
+      {#if description}
+        <span class="section-description">{description}</span>
       {/if}
-    </span>
-
-    <div class="section-actions"></div>
+    </div>
 
     <span
       class="section-chevron"
@@ -146,34 +156,32 @@
 
 <style lang="scss">
   .section-container {
-    border: 1px solid var(--cds-border-subtle-01);
-    border-left: none;
-    border-right: none;
-    border-bottom: none;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     background: transparent;
-
-    &:last-child {
-      border-bottom: 1px solid var(--cds-border-subtle-01);
-    }
   }
 
   .section-header {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: 14px var(--cds-spacing-04);
+    gap: 16px;
+    padding: 14px 16px;
     background-color: var(--cds-layer-01);
     cursor: pointer;
     user-select: none;
-    min-height: 48px;
   }
 
   .section-header.collapsed {
     background-color: var(--cds-layer-01);
   }
 
+  .section-title-group {
+    flex: 1 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
   .section-title {
-    flex: 1;
     font-weight: 600;
     font-size: 0.875rem;
     line-height: 1.125rem;
@@ -184,16 +192,17 @@
     gap: var(--cds-spacing-02);
   }
 
+  .section-description {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary);
+    font-weight: 400;
+  }
+
   .section-custom-icon {
     display: flex;
     align-items: center;
     margin-left: var(--cds-spacing-02);
-  }
-
-  .section-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
   }
 
   .section-toggle {
@@ -219,7 +228,6 @@
     display: flex;
     align-items: center;
     color: var(--cds-icon-primary);
-    margin-left: var(--cds-spacing-03);
   }
 
   .section-chevron.toggle-off {
@@ -229,8 +237,7 @@
   .section-body {
     background-color: var(--cds-layer-01);
     border-top: 1px solid var(--cds-border-subtle-01);
-    padding: var(--cds-spacing-03) var(--cds-spacing-05) var(--cds-spacing-06)
-      var(--cds-spacing-05);
+    padding: 8px 16px 16px 16px;
   }
 
   .section-header:hover:not(.disabled) {

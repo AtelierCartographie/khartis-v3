@@ -6,7 +6,6 @@
     Category,
     ChartBubble,
     CircleFilled,
-    Filter,
     Tag
   } from 'carbon-icons-svelte';
   import { SymbolMode } from '../../constants';
@@ -17,6 +16,7 @@
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
+  import { SectionHeading, InfoPopover } from './shared';
   import {
     SymbolModeUnique,
     SymbolModeProportional,
@@ -31,10 +31,12 @@
     onSymbolsChange?: (
       updates: Partial<VisualizationConfig['symbols']>
     ) => void;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     onInvertPalette?: () => void;
-    onFilterToggle?: () => void;
   }
 
   let {
@@ -43,14 +45,19 @@
     onStyleChange,
     onModesChange,
     onSymbolsChange,
+    onMappingChange,
     onMissingDataChange,
     onClassificationChange,
-    onInvertPalette,
-    onFilterToggle
+    onInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
   let symbolMode = $state<SymbolMode>(SymbolMode.UNIQUE);
+  let enabled = $state<boolean>(true);
+
+  function handleToggleChange(checked: boolean) {
+    enabled = checked;
+  }
 
   $effect(() => {
     if (visualization?.modes) {
@@ -100,22 +107,21 @@
   title={m.symbols_title()}
   defaultOpen
   showToggle
-  toggleChecked={true}
+  toggleChecked={enabled}
+  onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button
-      type="button"
-      class="filter-btn"
-      aria-label={m.filter_data()}
-      onclick={onFilterToggle}
-    >
-      <Filter size={16} />
-    </button>
+    <InfoPopover text={m.symbols_section_info()} />
   {/snippet}
 
   <div class="symbols-config">
+    <SectionHeading title={m.size_and_shape()} />
+
     <div class="field-group">
-      <span class="field-label">{m.symbols_title()}</span>
+      <span class="field-label">
+        {m.symbols_title()}
+        <InfoPopover text={m.symbol_mode_info()} />
+      </span>
       <ToggleTabs
         items={symbolModeItems}
         activeIndex={symbolModeIndex}
@@ -141,13 +147,18 @@
         visualization={visualization}
         symbolMode={symbolMode}
         onSymbolsChange={onSymbolsChange}
+        onMappingChange={onMappingChange}
+        onModesChange={onModesChange}
+        onStyleChange={onStyleChange}
         onMissingDataChange={onMissingDataChange}
+        onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
     {:else if symbolMode === SymbolMode.CATEGORIES}
       <SymbolModeCategories
         dataFields={dataFields}
         visualization={visualization}
+        onMappingChange={onMappingChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -176,24 +187,12 @@
   }
 
   .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
     font-size: 0.75rem;
     color: var(--cds-text-02);
     font-weight: 400;
-  }
-
-  .filter-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
-    }
   }
 
   :global(.symbols-config .bx--dropdown) {

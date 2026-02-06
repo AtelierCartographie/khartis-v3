@@ -253,7 +253,8 @@ export async function addFile(
   state: DatasetsState,
   internals: DatasetsInternals,
   file: UploadedFile,
-  vizOps?: VisualizationStoreOperations | null
+  vizOps?: VisualizationStoreOperations | null,
+  autoEnable = true
 ): Promise<DatasetResult | null> {
   const startTime = performance.now();
 
@@ -324,7 +325,9 @@ export async function addFile(
         );
       } else {
         state.datasets = [...state.datasets, dataset];
-        state.enabledDatasetIds.add(dataset.id);
+        if (autoEnable) {
+          state.enabledDatasetIds.add(dataset.id);
+        }
       }
 
       if (!state.selectedDatasetId) {

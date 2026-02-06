@@ -2,7 +2,9 @@
   import * as m from '$lib/paraglide/messages';
   import { PaintBrush } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { InfoPopover } from './components/shared';
   import LayerConfigTerre from './components/basemap-layers/LayerConfigTerre.svelte';
   import LayerConfigSimple from './components/basemap-layers/LayerConfigSimple.svelte';
   import LayerConfigRelief from './components/basemap-layers/LayerConfigRelief.svelte';
@@ -53,19 +55,13 @@
   //   notImplementedLayers.includes(layerId);
   // const notImplementedReason = m.basemap_layer_not_implemented();
 
-  async function saveImmediately() {
-    if (projectStore.currentProject) {
-      await projectStore.saveCurrentProject();
-    }
-  }
-
   function markProjectDirty() {
     projectStore.markAsDirty();
   }
 
-  async function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
+  function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
     basemapLayersStore.setLayerVisibility(layerId, checked);
-    await saveImmediately();
+    markProjectDirty();
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
@@ -124,9 +120,11 @@
 </script>
 
 <section id="customize-basemap">
-  <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} />
+  <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} showDivider />
 
-  <p class="kh-help">{m.step3_description()}</p>
+  <div class="content-area">
+    <p class="kh-help">{m.step3_description()}</p>
+  </div>
 
   <div class="layers-list">
     <!-- Terre - Expanded by default -->
@@ -175,7 +173,7 @@
     <ExpandableSection
       title={m.basemap_layer_lacs()}
       showToggle={true}
-      toggleChecked={lacsConfig?.visible ?? false}
+      toggleChecked={lacsConfig?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('lacs', checked)}
@@ -194,7 +192,7 @@
     <ExpandableSection
       title={m.basemap_layer_rivieres()}
       showToggle={true}
-      toggleChecked={rivieresConfig?.visible ?? false}
+      toggleChecked={rivieresConfig?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('rivieres', checked)}
@@ -216,7 +214,7 @@
     <ExpandableSection
       title={m.basemap_layer_relief()}
       showToggle={true}
-      toggleChecked={reliefConfig?.visible ?? false}
+      toggleChecked={reliefConfig?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('relief', checked)}
@@ -299,7 +297,7 @@
     <ExpandableSection
       title={m.basemap_layer_villes()}
       showToggle={true}
-      toggleChecked={villesConfig?.visible ?? false}
+      toggleChecked={villesConfig?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('villes', checked)}
@@ -322,6 +320,9 @@
       onToggleChange={handleTiledBasemapToggle}
       defaultOpen={isTiledBasemapEnabled}
     >
+      {#snippet icon()}
+        <InfoPopover text={m.basemap_tiled_info()} />
+      {/snippet}
       <div class="tiled-basemap-config">
         <BasemapStyleSelector />
         <MapProjectionSelector />
@@ -334,19 +335,24 @@
   #customize-basemap {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    padding: 16px 0;
+  }
+
+  .content-area {
+    padding: 16px 16px 8px 16px;
   }
 
   .kh-help {
-    color: var(--cds-text-helper);
-    font-size: 0.875rem;
-    line-height: 1.4;
+    color: var(--cds-text-secondary, #6f6f6f);
+    font-size: 14px;
+    line-height: 18px;
     margin: 0;
   }
 
   .layers-list {
     display: flex;
     flex-direction: column;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .tiled-basemap-config {

@@ -112,12 +112,16 @@ class DatasetsStore {
     );
   }
 
-  async addFile(file: UploadedFile): Promise<DatasetResult | null> {
+  async addFile(
+    file: UploadedFile,
+    autoEnable = true
+  ): Promise<DatasetResult | null> {
     return addFileFn(
       datasetsState,
       datasetsInternals,
       file,
-      this.visualizationStoreOps
+      this.visualizationStoreOps,
+      autoEnable
     );
   }
 

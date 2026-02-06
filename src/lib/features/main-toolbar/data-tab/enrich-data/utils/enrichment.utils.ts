@@ -35,7 +35,7 @@ export function buildEnrichDataFieldItems(
       let displayText = col.name;
       if (geoCol) {
         const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-        displayText = `${col.name} (${description})`;
+        displayText = `${col.name} – ${description}`;
       }
 
       return {

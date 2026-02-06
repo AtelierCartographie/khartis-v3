@@ -16,6 +16,11 @@ export interface LegendItem {
 export interface LegendStyle {
   fontFamily: string;
   fontSize: number;
+  textColor: {
+    hue: number;
+    saturation: number;
+    lightness: number;
+  };
   background: {
     enabled: boolean;
     color: {
@@ -33,4 +38,5 @@ export interface LegendState {
   visible: boolean;
   style: LegendStyle;
   activeTab: LegendTab;
+  hasBeenOpened: boolean;
 }

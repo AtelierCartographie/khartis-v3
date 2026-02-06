@@ -96,6 +96,12 @@ export function createTerreLayers(
   const fillOpacity = config.fillOpacity / 100;
   const strokeOpacity = config.strokeOpacity / 100;
 
+  // Each country border is drawn TWICE (by adjacent polygon strokes).
+  // WebGL anti-aliases sub-pixel lines to ~1px minimum visible width.
+  // Combined effect: ~2px borders. Cap to 0.5px max to keep borders subtle.
+  const effectiveStrokeThickness = Math.min(config.strokeThickness, 0.5);
+  const effectiveStrokeOpacity = Math.min(strokeOpacity, 0.4);
+
   const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);
 
@@ -105,7 +111,7 @@ export function createTerreLayers(
 
   const updateTriggers = {
     getFillColor: [config.fillColor, config.fillOpacity],
-    getLineColor: [config.strokeColor, config.strokeOpacity],
+    getLineColor: [config.strokeColor, effectiveStrokeOpacity],
     getDashArray: [config.strokeDotted, config.strokeDottedPattern]
   };
 
@@ -122,10 +128,12 @@ export function createTerreLayers(
           data: worldBaseTable,
           filled: false,
           stroked: true,
-          getLineColor: withOpacity([80, 80, 80], 0.3),
+          getLineColor: withOpacity([80, 80, 80], 0.15),
           opacity: 1,
           lineWidthUnits: 'pixels',
-          lineWidthScale: (config.strokeThickness + 4) / 4,
+          lineWidthScale: 1,
+          lineWidthMinPixels: 1,
+          lineWidthMaxPixels: 4,
           ...baseProps,
           updateTriggers: {
             lineWidthScale: [config.strokeThickness]
@@ -139,12 +147,14 @@ export function createTerreLayers(
         id: layerId,
         data: worldBaseTable,
         filled: true,
-        stroked: config.strokeThickness > 0,
+        stroked: effectiveStrokeThickness > 0,
         getFillColor: withOpacity(fillColor, fillOpacity),
-        getLineColor: withOpacity(strokeColor, strokeOpacity),
+        getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
         opacity: 1,
         lineWidthUnits: 'pixels',
-        lineWidthScale: config.strokeThickness / 4,
+        lineWidthScale: effectiveStrokeThickness,
+        lineWidthMinPixels: 0,
+        lineWidthMaxPixels: 0.5,
         extensions: config.strokeDotted
           ? [new PathStyleExtension({ dash: true })]
           : [],
@@ -152,7 +162,7 @@ export function createTerreLayers(
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,
-          lineWidthScale: [config.strokeThickness]
+          lineWidthScale: [effectiveStrokeThickness]
         }
       })
     );
@@ -170,12 +180,14 @@ export function createTerreLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: withOpacity([80, 80, 80], 0.3),
+            getLineColor: withOpacity([80, 80, 80], 0.15),
             lineWidthUnits: 'pixels',
-            lineWidthMinPixels: config.strokeThickness + 4,
+            getLineWidth: 1,
+            lineWidthMinPixels: 1,
+            lineWidthMaxPixels: 4,
             ...baseProps,
             updateTriggers: {
-              lineWidthMinPixels: [config.strokeThickness]
+              getLineWidth: [config.strokeThickness]
             }
           })
         );
@@ -186,11 +198,13 @@ export function createTerreLayers(
           id: layerId,
           data: geojson,
           filled: true,
-          stroked: config.strokeThickness > 0,
+          stroked: effectiveStrokeThickness > 0,
           getFillColor: withOpacity(fillColor, fillOpacity),
-          getLineColor: withOpacity(strokeColor, strokeOpacity),
+          getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
           lineWidthUnits: 'pixels',
-          lineWidthMinPixels: config.strokeThickness,
+          getLineWidth: effectiveStrokeThickness,
+          lineWidthMinPixels: 0,
+          lineWidthMaxPixels: 0.5,
           extensions: config.strokeDotted
             ? [new PathStyleExtension({ dash: true })]
             : [],
@@ -198,7 +212,7 @@ export function createTerreLayers(
           ...baseProps,
           updateTriggers: {
             ...updateTriggers,
-            lineWidthMinPixels: [config.strokeThickness]
+            getLineWidth: [effectiveStrokeThickness]
           }
         })
       );
@@ -273,6 +287,10 @@ export function createFrontieresLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
+  // Frontieres also draws polygon outlines, so borders are doubled at shared edges.
+  const effectiveThickness = Math.min(config.thickness, 0.5);
+  const effectiveOpacity = Math.min(opacity, 0.5);
+
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_FRONTIERES,
     ctx.projectionSuffix
@@ -284,7 +302,7 @@ export function createFrontieresLayer(
     : [0, 0];
 
   const updateTriggers = {
-    getLineColor: [config.color, config.opacity],
+    getLineColor: [config.color, effectiveOpacity],
     getDashArray: [config.dotted, config.dottedPattern]
   };
 
@@ -297,15 +315,17 @@ export function createFrontieresLayer(
       data: worldBaseTable,
       filled: false,
       stroked: true,
-      getLineColor: withOpacity(strokeColor, opacity),
+      getLineColor: withOpacity(strokeColor, effectiveOpacity),
       lineWidthUnits: 'pixels',
-      lineWidthScale: config.thickness / 4,
+      lineWidthScale: effectiveThickness,
+      lineWidthMinPixels: 0,
+      lineWidthMaxPixels: 0.5,
       extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
       getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
         ...updateTriggers,
-        lineWidthScale: [config.thickness]
+        lineWidthScale: [effectiveThickness]
       }
     });
   }
@@ -318,9 +338,11 @@ export function createFrontieresLayer(
         data: geojson,
         filled: false,
         stroked: true,
-        getLineColor: withOpacity(strokeColor, opacity),
+        getLineColor: withOpacity(strokeColor, effectiveOpacity),
         lineWidthUnits: 'pixels',
-        lineWidthMinPixels: config.thickness,
+        getLineWidth: effectiveThickness,
+        lineWidthMinPixels: 0,
+        lineWidthMaxPixels: 0.5,
         extensions: config.dotted
           ? [new PathStyleExtension({ dash: true })]
           : [],
@@ -328,7 +350,7 @@ export function createFrontieresLayer(
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,
-          lineWidthMinPixels: [config.thickness]
+          getLineWidth: [effectiveThickness]
         }
       });
     }

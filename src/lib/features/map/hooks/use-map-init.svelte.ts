@@ -115,7 +115,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       },
       width: '100%',
       height: '100%',
-      controller: true,
+      controller: { scrollZoom: false, doubleClickZoom: false },
       layers: [],
       getTooltip: createTooltipHandler(),
       onViewStateChange: handleViewStateChange as DeckProps<

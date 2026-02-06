@@ -21,48 +21,31 @@
     Table
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import type { Snippet } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from './data-tab/data-tab.store.svelte';
   import DataTab from './data-tab/data-tab.svelte';
   import {
-    getDerivedToolbarState,
     mainToolbarActions,
     mainToolbarState
   } from './main-toolbar.state.svelte';
   import VizualisationTab from './visualization-tab/visualization-tab.svelte';
 
-  const listToolsComponents = {
-    [ToolbarStep.Data]: DataTab,
-    [ToolbarStep.Visualizations]: VizualisationTab
-  };
-
-  let selectedList = $derived<Snippet | undefined>(
-    globalState.selectedStep
-      ? listToolsComponents[
-          globalState.selectedStep as ToolbarStep.Visualizations &
-            ToolbarStep.Styling
-        ]
-      : undefined
-  );
-
   function setToolbar(state: ToolbarState) {
     globalActions.setToolbarState(state);
   }
 
-  const _derivedToolbarState = $derived(getDerivedToolbarState());
 
   $effect(() => {
     const project = projectStore.currentProject;
 
-    if (project?.data?.sourceFiles && project.data.sourceFiles.length > 0) {
-      mainToolbarState.canNavigateToVisualization = true;
-    } else {
-      mainToolbarState.canNavigateToVisualization = false;
-    }
+    const hasFiles =
+      (project?.data?.sourceFiles?.length ?? 0) > 0;
 
-    mainToolbarActions.updateToolbarState();
+    mainToolbarState.canNavigateToVisualization = hasFiles;
+    mainToolbarState.hasValidData = hasFiles;
+    mainToolbarState.currentProjectName = project?.manifest.name || '';
   });
+
 </script>
 
 <nav
@@ -122,11 +105,15 @@
 
   <article
     class={clsx(
-      'mt-5 mb-5 pr-5 pl-5',
-      globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
+      'toolbar-content scrollbar-hidden',
+      globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0',
     )}
   >
-    {@render selectedList?.()}
+    {#if globalState.selectedStep === ToolbarStep.Data}
+      <DataTab />
+    {:else if globalState.selectedStep === ToolbarStep.Visualizations}
+      <VizualisationTab />
+    {/if}
   </article>
 
   {#if globalState.selectedStep === ToolbarStep.Data}
@@ -136,7 +123,7 @@
 
     <footer
       class={clsx(
-        'sticky bottom-0 bg-white p-5 border-t z-50',
+        'toolbar-footer bg-white p-5 border-t z-50',
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
@@ -202,11 +189,6 @@
         >
       </ProgressIndicator>
 
-      {#if projectStore.isDirty}
-        <div class="mt-2 text-xs text-gray-600">
-          ⚠️ {m.unsaved_changes_notice()}
-        </div>
-      {/if}
     </footer>
   {/if}
 </nav>
@@ -217,14 +199,15 @@
   }
 
   nav {
+    display: flex;
+    flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     height: calc(100dvh - var(--cds-header-height));
-    overflow-y: scroll;
+    overflow: hidden;
     position: relative;
-    gap: var(--cds-spacing-05);
     flex-shrink: 0;
   }
 
@@ -266,5 +249,16 @@
 
   .main-toolbar-header {
     top: 1px !important;
+  }
+
+  .toolbar-content {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .toolbar-footer {
+    flex-shrink: 0;
   }
 </style>

@@ -194,7 +194,8 @@ export async function serializeProjectData(
       items: legendState.items,
       position: legendState.position,
       visible: legendState.visible,
-      style: legendState.style
+      style: legendState.style,
+      hasBeenOpened: legendState.hasBeenOpened
     },
     geoIndications: geoIndicationsState,
     projection: {

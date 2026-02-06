@@ -439,4 +439,21 @@
     color: var(--cds-text-helper);
     font-style: italic;
   }
+
+  :global(.search-panel .bx--inline-notification) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: unset !important;
+  }
+
+  :global(.search-panel .bx--inline-notification__text-wrapper) {
+    flex-wrap: wrap;
+  }
+
+  :global(.search-panel .bx--inline-notification__subtitle) {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto;
+    white-space: normal !important;
+  }
 </style>

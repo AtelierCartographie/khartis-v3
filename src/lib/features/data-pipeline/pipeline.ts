@@ -202,22 +202,6 @@ const Pipeline = {
     await Duck.apply_join_association(tableName, basemap);
   },
 
-  async applyFilters(tableName: string, filters: string[]): Promise<unknown> {
-    await this.initialize();
-    const metadata =
-      Duck.table_metadata.get(tableName) ??
-      (() => {
-        const fresh = { analysis: null, join: null, filters: new Map() };
-        Duck.table_metadata.set(tableName, fresh as never);
-        return fresh;
-      })();
-    metadata.filters.clear();
-    filters.forEach((filter, index) =>
-      Duck.add_filter(tableName, index, filter)
-    );
-    return Duck.apply_filters(tableName);
-  },
-
   async validateFile(file: File): Promise<ValidationResult> {
     return validateFile(file);
   },

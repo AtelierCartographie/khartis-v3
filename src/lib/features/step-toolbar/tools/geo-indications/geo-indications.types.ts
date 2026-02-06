@@ -2,7 +2,7 @@ import {
   DistanceUnit,
   InsetMapType,
   OrientationIndicatorStyle,
-  StrokeStyle
+  ScaleForm
 } from '$lib/features/commons/constants/ui.constants';
 
 export interface ColorState {
@@ -14,7 +14,7 @@ export interface ColorState {
 export interface GeoIndicationsState {
   scale: {
     enabled: boolean;
-    style: StrokeStyle;
+    form: ScaleForm;
     distance: number;
     units: DistanceUnit;
     color: ColorState;
@@ -31,7 +31,11 @@ export interface GeoIndicationsState {
     type: InsetMapType;
     size: number;
     windowColor: ColorState;
+    continentColor: ColorState;
+    seaColor: ColorState;
+    useBasemapColors: boolean;
     zoom: number;
-    contrast: number;
+    centerLongitude: number;
+    centerLatitude: number;
   };
 }

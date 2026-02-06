@@ -1,8 +1,11 @@
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import {
@@ -47,6 +50,15 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       selectedBasemap: basemapId,
       basemapSource: BasemapSource.CATALOG
     });
+
+    basemapStyleStore.setReferenceBasemap(basemapId);
+
+    projectStore.updateProjectData({
+      basemap: {
+        id: basemapId,
+        type: 'catalog'
+      }
+    });
   }
 
   async function handleBasemapImportFile(file: File): Promise<void> {
@@ -54,13 +66,24 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     basemapImportError = null;
 
     try {
-      const { basemap: customBasemap } = await processBasemapImport(file);
+      const { basemap: customBasemap, geometryTable } =
+        await processBasemapImport(file);
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
+      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;
+
+      projectStore.updateProjectData({
+        basemap: {
+          id: customBasemap.file,
+          type: 'custom',
+          data: { ...customBasemap }
+        }
+      });
 
       logger.success('Custom basemap imported', LogCategory.MAP, {
         title: customBasemap.title
@@ -94,11 +117,21 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
     osmBasemapStore.setOSMBasemap(osmBasemap);
+    basemapStyleStore.setReferenceBasemap(null);
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
       basemapSource: BasemapSource.OSM
     });
     selectedBasemapId = osmBasemap.file;
+
+    projectStore.updateProjectData({
+      basemap: {
+        id: osmBasemap.file,
+        type: 'osm',
+        data: { ...osmBasemap }
+      }
+    });
+
     logger.success('OSM basemap selected', LogCategory.MAP);
   }
 

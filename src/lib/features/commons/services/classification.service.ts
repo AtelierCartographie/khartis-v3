@@ -2,6 +2,7 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
+import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import type { Table } from '@uwdata/flechette';
 
 export interface BreaksResult {
@@ -53,14 +54,16 @@ export async function calculateBreaks(
   }
 
   const tableName = duckDBDataset.tableName;
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCol = escapeIdentifier(columnName);
 
   try {
     const minMaxResult = (await Duck.query(`
       SELECT
-        MIN("${columnName}") as min_val,
-        MAX("${columnName}") as max_val
-      FROM "${tableName}"
-      WHERE "${columnName}" IS NOT NULL
+        MIN("${escapedCol}") as min_val,
+        MAX("${escapedCol}") as max_val
+      FROM "${escapedTable}"
+      WHERE "${escapedCol}" IS NOT NULL
     `)) as Table;
 
     const minMaxRows = minMaxResult.toArray() as Array<{
@@ -97,7 +100,7 @@ export async function calculateBreaks(
     const macroName = mapMethodToMacro(method);
     let breaks: number[] = [];
 
-    const query = `SELECT ${macroName}('${tableName}', '${columnName}', ${numClasses}) as breaks`;
+    const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
     logger.debug('Executing breaks query', LogCategory.DATA, { query });
 
     const result = (await Duck.query(query)) as Table;
@@ -124,18 +127,24 @@ export async function calculateBreaks(
     const allBreaks = [min, ...breaks, max];
     const counts: number[] = [];
 
-    for (let i = 0; i < allBreaks.length - 1; i++) {
-      const countQuery = `
-        SELECT COUNT(*) as cnt
-        FROM "${tableName}"
-        WHERE "${columnName}" >= ${allBreaks[i]}
-          AND "${columnName}" ${i === allBreaks.length - 2 ? '<=' : '<'} ${allBreaks[i + 1]}
-      `;
-      const countResult = (await Duck.query(countQuery)) as Table;
-      const countRows = countResult.toArray() as Array<{
-        cnt: bigint | number;
-      }>;
-      counts.push(Number(countRows[0]?.cnt ?? 0));
+    // Single query with CASE WHEN to count all classes at once (avoids N+1 pattern)
+    const caseParts = allBreaks.slice(0, -1).map((_, i) => {
+      const lower = allBreaks[i];
+      const upper = allBreaks[i + 1];
+      const upperOp = i === allBreaks.length - 2 ? '<=' : '<';
+      return `COUNT(*) FILTER (WHERE "${escapedCol}" >= ${lower} AND "${escapedCol}" ${upperOp} ${upper}) as cnt_${i}`;
+    });
+
+    const countsQuery = `SELECT ${caseParts.join(', ')} FROM "${escapedTable}" WHERE "${escapedCol}" IS NOT NULL`;
+    const countsResult = (await Duck.query(countsQuery)) as Table;
+    const countsRows = countsResult.toArray() as Array<
+      Record<string, bigint | number>
+    >;
+
+    if (countsRows.length > 0) {
+      for (let i = 0; i < allBreaks.length - 1; i++) {
+        counts.push(Number(countsRows[0][`cnt_${i}`] ?? 0));
+      }
     }
 
     logger.success('Breaks calculated successfully', LogCategory.DATA, {

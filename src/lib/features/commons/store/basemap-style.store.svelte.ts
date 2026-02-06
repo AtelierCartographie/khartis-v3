@@ -7,7 +7,8 @@ import {
 
 class BasemapStyleStore {
   private _state = $state({
-    selectedStyle: DEFAULT_BASEMAP_STYLE
+    selectedStyle: DEFAULT_BASEMAP_STYLE,
+    referenceBasemapId: null as string | null
   });
 
   get selectedStyle(): BasemapStyle {
@@ -22,12 +23,21 @@ class BasemapStyleStore {
     return this._state.selectedStyle !== BasemapStyle.BLANK_WHITE;
   }
 
+  get referenceBasemapId(): string | null {
+    return this._state.referenceBasemapId;
+  }
+
+  setReferenceBasemap(id: string | null): void {
+    this._state.referenceBasemapId = id;
+  }
+
   setStyle(style: BasemapStyle): void {
     this._state.selectedStyle = style;
   }
 
   reset(): void {
     this._state.selectedStyle = DEFAULT_BASEMAP_STYLE;
+    this._state.referenceBasemapId = null;
   }
 
   restoreFromSerialized(style: BasemapStyle): void {

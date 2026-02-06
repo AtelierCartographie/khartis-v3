@@ -12,7 +12,7 @@ import { showError } from '../../utils/notification.utils.svelte';
 import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
 import type { ProjectStateContainer } from './project-state.svelte';
-import { addToHistory } from './project-history';
+import { addToHistory, resetHistory } from './project-history';
 
 export async function saveCurrentProject(
   container: ProjectStateContainer
@@ -98,8 +98,7 @@ export async function importProject(
     container._state.currentProject = project;
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
-    container._state.history = [];
-    container._state.historyIndex = -1;
+    resetHistory(container);
 
     addToHistory(container, 'Project imported', project);
 
@@ -116,6 +115,13 @@ export async function importProject(
 export function markDirty(container: ProjectStateContainer): void {
   container._state.isDirty = true;
   scheduleAutoSave(container);
+}
+
+export async function markDirtyAndSave(
+  container: ProjectStateContainer
+): Promise<void> {
+  container._state.isDirty = true;
+  await saveCurrentProject(container);
 }
 
 export function scheduleAutoSave(container: ProjectStateContainer): void {

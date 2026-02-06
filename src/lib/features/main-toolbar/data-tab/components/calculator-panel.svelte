@@ -11,6 +11,7 @@
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import AutocompleteTextarea, {
     type Suggestion
@@ -30,20 +31,40 @@
     ) ?? []
   );
 
-  let variableName = $state('');
-  let formula = $state('');
+  let variableName = $state(dataToolsStore.calculatorName || '');
+  let formula = $state(dataToolsStore.calculatorFormula || '');
   let selectedVariable = $state('');
   let selectedFunction = $state('moyenne');
   let testResult = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
   let isTesting = $state(false);
+  let isCalculating = $state(false);
 
   const hasData = $derived(columns.length > 0);
+
+  const isDuplicate = $derived(
+    variableName.trim() !== '' &&
+      columns.some(
+        (c) => c.name.toLowerCase() === variableName.trim().toLowerCase()
+      )
+  );
+
+  const columnNameError = $derived.by((): string | null => {
+    const name = variableName.trim();
+    if (!name) return null;
+    if (isDuplicate) return m.error_calc_column_exists({ column: name });
+    return null;
+  });
+
+  function handleVariableNameInput() {
+    dataToolsStore.setCalculatorName(variableName);
+    if (errorMessage) errorMessage = null;
+  }
 
   const autocompleteSuggestions = $derived.by((): Suggestion[] => {
     const variableSuggestions: Suggestion[] = columns.map((col) => ({
       label: col.name,
-      value: col.name,
+      value: escapeIdentifier(col.name),
       type: 'variable' as const,
       description: col.type || 'colonne'
     }));
@@ -104,6 +125,8 @@
 
   function handleFormulaChange(newValue: string) {
     formula = newValue;
+    errorMessage = null;
+    testResult = null;
     dataToolsStore.setCalculatorFormula(formula);
   }
 
@@ -159,7 +182,7 @@
 
   function insertVariable() {
     if (!selectedVariable) return;
-    formula += `"${selectedVariable}"`;
+    formula += `"${escapeIdentifier(selectedVariable)}"`;
     dataToolsStore.setCalculatorFormula(formula);
   }
 
@@ -173,7 +196,7 @@
     if (!fn) return;
 
     const col = selectedVariable || m.calc_column_default();
-    const template = fn.template.replace('{col}', `"${col}"`);
+    const template = fn.template.replace('{col}', `"${escapeIdentifier(col)}"`);
     formula += template;
     dataToolsStore.setCalculatorFormula(formula);
   }
@@ -202,11 +225,13 @@
   }
 
   async function handleCalculate() {
+    if (isCalculating) return;
     if (!tableName || !variableName.trim() || !formula.trim()) {
       errorMessage = m.error_calc_name_formula_required();
       return;
     }
 
+    isCalculating = true;
     errorMessage = null;
 
     try {
@@ -225,6 +250,8 @@
       errorMessage =
         err instanceof Error ? err.message : m.error_calc_execution_failed();
       dataToolsStore.setCalculatorError(errorMessage);
+    } finally {
+      isCalculating = false;
     }
   }
 </script>
@@ -245,6 +272,9 @@
         labelText={m.calc_variable_name()}
         placeholder={m.calc_name_placeholder()}
         bind:value={variableName}
+        invalid={!!columnNameError}
+        invalidText={columnNameError || ''}
+        on:input={handleVariableNameInput}
       />
     </div>
 
@@ -324,7 +354,12 @@
       </div>
     </div>
 
-    <Link href="#" icon={Launch} size="sm">
+    <Link
+      href="https://duckdb.org/docs/sql/expressions/overview"
+      target="_blank"
+      icon={Launch}
+      size="sm"
+    >
       {m.calc_help_link()}
     </Link>
 
@@ -346,7 +381,7 @@
       <Button
         kind="ghost"
         size="small"
-        disabled={isTesting || !formula}
+        disabled={isTesting || isCalculating || !formula}
         on:click={handleTest}
       >
         {m.calc_test()}
@@ -354,10 +389,13 @@
       <Button
         kind="primary"
         size="small"
-        disabled={!variableName || !formula}
+        disabled={isCalculating ||
+          !variableName ||
+          !formula ||
+          !!columnNameError}
         on:click={handleCalculate}
       >
-        {m.calc_calculate()}
+        {isCalculating ? m.calc_calculating() : m.calc_calculate()}
       </Button>
     </div>
   {/if}

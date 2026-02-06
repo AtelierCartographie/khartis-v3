@@ -4,6 +4,7 @@
   import {
     ColorSelector,
     DiscretizationRow,
+    InfoPopover,
     PalettePreview,
     SectionHeading,
     SliderWithInput,
@@ -16,7 +17,6 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Category,
-    Filter,
     MisuseOutline,
     Subtract,
     Tag,
@@ -49,7 +49,6 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
-    onFilterToggle?: () => void;
   }
 
   let {
@@ -60,8 +59,7 @@
     onModesChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette,
-    onFilterToggle
+    onInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -100,7 +98,7 @@
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
   let color = $state<string>(DEFAULT_COLORS.label);
   let opacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
-  let enabled = $state<boolean>(false);
+  let enabled = $state<boolean>(true);
   let size = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let alignment = $state<'left' | 'center' | 'right'>('center');
   let halo = $state<boolean>(true);
@@ -275,14 +273,7 @@
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
-    <button
-      type="button"
-      class="filter-btn"
-      aria-label={m.filter_data()}
-      onclick={onFilterToggle}
-    >
-      <Filter size={16} />
-    </button>
+    <InfoPopover text={m.labels_section_info()} />
   {/snippet}
 
   <div class="labels-config">
@@ -437,16 +428,14 @@
 
     <ToggleWithLabel
       label={m.collision_detection()}
-      showInfo={true}
-      infoLabel={m.collision_detection_info()}
+      infoText={m.collision_detection_info()}
       toggled={collisionDetection}
       ontoggle={handleCollisionDetectionChange}
     />
 
     <ToggleWithLabel
       label={m.dxp_masking()}
-      showInfo={true}
-      infoLabel={m.dxp_masking_info()}
+      infoText={m.dxp_masking_info()}
       toggled={dxpMasking}
       ontoggle={handleDxpMaskingChange}
     />
@@ -480,20 +469,5 @@
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
     color: var(--cds-text-secondary);
     margin-bottom: var(--cds-spacing-02);
-  }
-
-  .filter-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
-    }
   }
 </style>
