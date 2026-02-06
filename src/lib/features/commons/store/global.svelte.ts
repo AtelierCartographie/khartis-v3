@@ -14,8 +14,22 @@ import { projectStore } from './project.store.svelte';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
+const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const MOBILE_BREAKPOINT_VALUE = 1024;
 const TAB_QUERY_PARAM = 'tab';
+
+const VALID_TOOLBAR_STATES = new Set<string>([
+  ToolbarState.Full,
+  ToolbarState.Compact,
+  ToolbarState.Collapsed
+]);
+
+function readToolbarStateFromStorage(): ToolbarState {
+  if (typeof window === 'undefined') return ToolbarState.Full;
+  const stored = localStorage.getItem(TOOLBAR_STATE_STORAGE_KEY);
+  if (stored && VALID_TOOLBAR_STATES.has(stored)) return stored as ToolbarState;
+  return ToolbarState.Full;
+}
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -27,7 +41,7 @@ class GlobalStore {
     isDeleteModalOpen: false,
     selectedStep: ToolbarStep.Data,
     selectedTool: undefined,
-    toolbarState: ToolbarState.Full,
+    toolbarState: readToolbarStateFromStorage(),
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
@@ -58,7 +72,12 @@ class GlobalStore {
 
   constructor() {
     if (typeof window !== 'undefined' && this._selectedDataButtonId) {
-      this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+      // Defer to next microtask so all module-level singletons (datasetsStore) are initialized
+      queueMicrotask(() => {
+        if (this._selectedDataButtonId) {
+          this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+        }
+      });
     }
   }
 
@@ -157,6 +176,10 @@ class GlobalStore {
         (sourceFiles.length === 1 && !this._selectedDataButtonId)
     }));
   });
+
+  get selectedDataButtonId(): string | undefined {
+    return this._selectedDataButtonId;
+  }
 
   get settingPanel() {
     return this._state.settingPanel;
@@ -280,10 +303,13 @@ class GlobalStore {
   setNavigationState(selectedStep: ToolbarStep, updateUrl = true): void {
     this.selectedStep = selectedStep;
 
-    if (selectedStep === ToolbarStep.Styling)
+    if (selectedStep === ToolbarStep.Styling) {
       this.toolbarState = ToolbarState.Collapsed;
-    else if (this.toolbarState === ToolbarState.Collapsed)
-      this.toolbarState = ToolbarState.Full;
+    } else if (this.toolbarState === ToolbarState.Collapsed) {
+      const preferred = readToolbarStateFromStorage();
+      this.toolbarState =
+        preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
+    }
 
     if (updateUrl && typeof window !== 'undefined') {
       this.syncTabToUrl(selectedStep);
@@ -317,6 +343,9 @@ class GlobalStore {
 
   setToolbarState(state: ToolbarState): void {
     this.toolbarState = state;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, state);
+    }
   }
 
   selectDataButton(id: string): void {

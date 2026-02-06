@@ -1,13 +1,18 @@
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeSqlString,
+  escapeIdentifier
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
 
-const MAX_ROWS_FOR_SEARCH = 20000;
-const MAX_CELLS_FOR_FUZZY = 200000;
+const MAX_ROWS_FOR_SEARCH = 10000;
+const MAX_CELLS_FOR_FUZZY = 100000;
 const MIN_QUERY_LENGTH_FOR_FUZZY = 4;
 const MIN_RESULTS_FOR_FUZZY = 10;
+const MAX_EXACT_RESULTS = 200;
+const MAX_FUZZY_RESULTS = 50;
 const CACHE_TTL_MS = 60000;
 const MAX_CACHE_SIZE = 50;
 
@@ -44,6 +49,84 @@ function setCache(key: string, results: SearchStats): void {
     if (oldestKey) searchCache.delete(oldestKey);
   }
   searchCache.set(key, { results, timestamp: Date.now() });
+}
+
+/**
+ * Build per-column UNION ALL query instead of UNPIVOT.
+ * This is dramatically faster because DuckDB pushes the WHERE filter
+ * down to the column scan, avoiding materializing all rows x columns.
+ */
+function buildExactSearchSQL(
+  tableName: string,
+  textColumns: string[],
+  escapedTerm: string,
+  maxResults: number,
+  filterColumn: string | null
+): string {
+  const columnsToSearch = filterColumn
+    ? textColumns.filter((c) => c === filterColumn)
+    : textColumns;
+
+  if (columnsToSearch.length === 0) {
+    return `SELECT NULL::INTEGER AS __id, NULL::VARCHAR AS column_name, NULL::VARCHAR AS column_value, NULL::DOUBLE AS score WHERE false`;
+  }
+
+  const unionParts = columnsToSearch.map((col) => {
+    const escapedCol = escapeIdentifier(col);
+    // Subquery pre-computes normalize_text() ONCE per row, then outer query filters on the alias
+    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
+      CASE WHEN norm_value = '${escapedTerm}' THEN 1.0 ELSE 0.99 END AS score
+    FROM (
+      SELECT __id, "${escapedCol}" AS column_value, normalize_text("${escapedCol}") AS norm_value
+      FROM "${escapeIdentifier(tableName)}"
+      WHERE "${escapedCol}" IS NOT NULL AND length(trim("${escapedCol}")) > 0
+    ) sub
+    WHERE norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}')`;
+  });
+
+  return `${unionParts.join('\nUNION ALL\n')}
+  ORDER BY score DESC, __id ASC
+  LIMIT ${maxResults}`;
+}
+
+/**
+ * Build per-column fuzzy search SQL.
+ * Only searches columns where no exact match was found.
+ */
+function buildFuzzySearchSQL(
+  tableName: string,
+  textColumns: string[],
+  escapedTerm: string,
+  threshold: number,
+  maxResults: number,
+  filterColumn: string | null
+): string {
+  const columnsToSearch = filterColumn
+    ? textColumns.filter((c) => c === filterColumn)
+    : textColumns;
+
+  if (columnsToSearch.length === 0) {
+    return `SELECT NULL::INTEGER AS __id, NULL::VARCHAR AS column_name, NULL::VARCHAR AS column_value, NULL::DOUBLE AS score WHERE false`;
+  }
+
+  const unionParts = columnsToSearch.map((col) => {
+    const escapedCol = escapeIdentifier(col);
+    // Subquery pre-computes normalize_text() ONCE, then filters and scores on the alias
+    return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
+      jaro_winkler_similarity(norm_value, '${escapedTerm}') AS score
+    FROM (
+      SELECT __id, "${escapedCol}" AS column_value, normalize_text("${escapedCol}") AS norm_value
+      FROM "${escapeIdentifier(tableName)}"
+      WHERE "${escapedCol}" IS NOT NULL AND length(trim("${escapedCol}")) > 0
+    ) sub
+    WHERE length(norm_value) BETWEEN length('${escapedTerm}') * 0.5 AND length('${escapedTerm}') * 2
+      AND NOT (norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}'))
+      AND jaro_winkler_similarity(norm_value, '${escapedTerm}') > ${threshold}`;
+  });
+
+  return `${unionParts.join('\nUNION ALL\n')}
+  ORDER BY score DESC, __id ASC
+  LIMIT ${maxResults}`;
 }
 
 export async function searchInTable(
@@ -83,26 +166,50 @@ export async function searchInTable(
   let isSampled = false;
 
   try {
-    const rowCountResult = (await executeQuery(
-      ctx.connection,
-      `SELECT count(*) as cnt FROM "${table}"`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{ cnt: bigint | number }>;
-    const rowCount = Number(rowCountResult[0]?.cnt ?? 0);
+    // Step 1: Get metadata + normalize search term + text columns in parallel
+    const [metaResult, textColResult] = await Promise.all([
+      executeQuery(
+        ctx.connection,
+        `SELECT
+          normalize_text('${escapedQuery}') AS normalized_term,
+          (SELECT count(*) FROM "${escapeIdentifier(table)}") AS row_count,
+          (SELECT count(*) FROM duckdb_columns() WHERE table_name = '${escapeSqlString(table)}' AND column_name != '__id') AS col_count`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+      ) as Promise<
+        Array<{
+          normalized_term: string;
+          row_count: bigint | number;
+          col_count: bigint | number;
+        }>
+      >,
+      executeQuery(
+        ctx.connection,
+        `SELECT column_name FROM duckdb_columns()
+         WHERE table_name = '${escapeSqlString(table)}'
+           AND column_name != '__id'
+           AND data_type IN ('VARCHAR', 'TEXT', 'STRING')`,
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+      ) as Promise<Array<{ column_name: string }>>
+    ]);
 
-    const colCountResult = (await executeQuery(
-      ctx.connection,
-      `SELECT count(*) as cnt FROM duckdb_columns() WHERE table_name = '${escapeSqlString(table)}' AND column_name != '__id'`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{ cnt: bigint | number }>;
-    const colCount = Number(colCountResult[0]?.cnt ?? 0);
+    if (searchId !== currentSearchId) return emptyResult;
 
+    const normalizedTerm = escapeSqlString(
+      metaResult[0]?.normalized_term ?? trimmedQuery
+    );
+    const rowCount = Number(metaResult[0]?.row_count ?? 0);
+    const colCount = Number(metaResult[0]?.col_count ?? 0);
     const estimatedCells = rowCount * colCount;
 
-    if (searchId !== currentSearchId) {
+    const textColumns = textColResult.map((r) => r.column_name);
+
+    if (textColumns.length === 0) {
       return emptyResult;
     }
 
+    if (searchId !== currentSearchId) return emptyResult;
+
+    // Step 3: Sampling for large tables
     let searchTable = table;
     if (
       rowCount > MAX_ROWS_FOR_SEARCH ||
@@ -116,52 +223,41 @@ export async function searchInTable(
       logger.warn(
         'Large table detected, using sampling for search',
         LogCategory.DUCKDB,
-        {
-          table,
-          rowCount,
-          colCount,
-          estimatedCells,
-          samplePercent
-        }
+        { table, rowCount, colCount, estimatedCells, samplePercent }
       );
 
       await executeQuery(
         ctx.connection,
         `CREATE OR REPLACE TEMP TABLE __search_sample AS
-         SELECT * FROM "${table}" USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
+         SELECT * FROM "${escapeIdentifier(table)}" USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       );
       searchTable = '__search_sample';
     }
 
-    if (searchId !== currentSearchId) {
-      return emptyResult;
-    }
+    if (searchId !== currentSearchId) return emptyResult;
 
-    let whereClause = '';
-    if (column) {
-      const escapedColumn = escapeSqlString(column);
-      whereClause = ` WHERE column_name = '${escapedColumn}'`;
-    }
-
-    await executeQuery(
-      ctx.connection,
-      `CREATE OR REPLACE TEMP TABLE __search_exact AS
-       FROM searchExact('${searchTable}', '${escapedQuery}', 500)`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    // Step 4: Run exact search with per-column UNION ALL (no UNPIVOT!)
+    const exactSQL = buildExactSearchSQL(
+      searchTable,
+      textColumns,
+      normalizedTerm,
+      MAX_EXACT_RESULTS,
+      column
     );
 
-    if (searchId !== currentSearchId) {
-      return emptyResult;
-    }
+    const exactResults = (await executeQuery(ctx.connection, exactSQL, {
+      format: DUCK_CONST.QUERY_FORMAT.ARRAY
+    })) as Array<{
+      __id: number;
+      column_name: string;
+      column_value: string;
+      score: number;
+    }>;
 
-    const exactCountResult = (await executeQuery(
-      ctx.connection,
-      `SELECT count(*) as cnt FROM __search_exact${whereClause}`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{ cnt: bigint | number }>;
-    const exactResultCount = Number(exactCountResult[0]?.cnt ?? 0);
+    if (searchId !== currentSearchId) return emptyResult;
 
+    // Step 5: Optional fuzzy search
     let fuzzyResults: Array<{
       __id: number;
       column_name: string;
@@ -169,26 +265,34 @@ export async function searchInTable(
       score: number;
     }> = [];
 
-    if (enableFuzzy && exactResultCount < MIN_RESULTS_FOR_FUZZY && !isSampled) {
-      if (searchId !== currentSearchId) {
-        return emptyResult;
-      }
+    if (
+      enableFuzzy &&
+      exactResults.length < MIN_RESULTS_FOR_FUZZY &&
+      !isSampled
+    ) {
+      if (searchId !== currentSearchId) return emptyResult;
 
       logger.debug(
         'Running fuzzy search (few exact results)',
         LogCategory.DUCKDB,
         {
-          exactResultCount,
+          exactResultCount: exactResults.length,
           threshold: MIN_RESULTS_FOR_FUZZY
         }
       );
 
-      const fuzzyLimit = Math.min(500 - exactResultCount, 100);
-      fuzzyResults = (await executeQuery(
-        ctx.connection,
-        `FROM searchFuzzy('${searchTable}', '${escapedQuery}', ${threshold}, ${fuzzyLimit})${whereClause ? whereClause.replace('WHERE', 'WHERE') : ''}`,
-        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-      )) as Array<{
+      const fuzzySQL = buildFuzzySearchSQL(
+        searchTable,
+        textColumns,
+        normalizedTerm,
+        threshold,
+        MAX_FUZZY_RESULTS,
+        column
+      );
+
+      fuzzyResults = (await executeQuery(ctx.connection, fuzzySQL, {
+        format: DUCK_CONST.QUERY_FORMAT.ARRAY
+      })) as Array<{
         __id: number;
         column_name: string;
         column_value: string;
@@ -196,32 +300,13 @@ export async function searchInTable(
       }>;
     }
 
-    if (searchId !== currentSearchId) {
-      return emptyResult;
-    }
+    if (searchId !== currentSearchId) return emptyResult;
 
-    const exactResults = (await executeQuery(
-      ctx.connection,
-      `SELECT __id, column_name, column_value, score
-       FROM __search_exact${whereClause}
-       ORDER BY score DESC, __id ASC`,
-      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-    )) as Array<{
-      __id: number;
-      column_name: string;
-      column_value: string;
-      score: number;
-    }>;
-
+    // Step 6: Combine results
     const allResults = [...exactResults, ...fuzzyResults];
-
     const exactCount = exactResults.filter((r) => r.score === 1.0).length;
     const containsCount = exactResults.filter((r) => r.score === 0.99).length;
     const fuzzyCount = fuzzyResults.length;
-
-    if (searchId !== currentSearchId) {
-      return emptyResult;
-    }
 
     const cellResults: CellSearchResult[] = allResults.map((r) => ({
       rowId: r.__id,
@@ -240,7 +325,6 @@ export async function searchInTable(
     };
 
     setCache(cacheKey, result);
-
     return result;
   } catch (error) {
     logger.error('Search query failed', LogCategory.DUCKDB, {

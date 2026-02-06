@@ -12,13 +12,15 @@ const DEFAULT_STATE: LegendState = {
   style: {
     fontFamily: 'Cabin',
     fontSize: 12,
+    textColor: { hue: 0, saturation: 0, lightness: 0 },
     background: {
       enabled: true,
       color: { hue: 180, saturation: 50, lightness: 50 },
       opacity: 100
     }
   },
-  activeTab: LegendTab.CONTENT
+  activeTab: LegendTab.CONTENT,
+  hasBeenOpened: false
 };
 
 type LegendActions = {
@@ -32,6 +34,7 @@ type LegendActions = {
   updateBackground: (
     updates: Partial<LegendState['style']['background']>
   ) => void;
+  markAsOpened: () => void;
 };
 
 const { actions, getState } = createToolStore<LegendState, LegendActions>(
@@ -69,6 +72,9 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
       updates: Partial<LegendState['style']['background']>
     ) => {
       Object.assign(s.style.background, updates);
+    },
+    markAsOpened: () => {
+      s.hasBeenOpened = true;
     }
   })
 );

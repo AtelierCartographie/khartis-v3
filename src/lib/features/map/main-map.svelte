@@ -36,8 +36,10 @@
   let errorMessage = $state<string | null>(null);
   let isResizing = $state(false);
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let containerResizeObserver: ResizeObserver | null = null;
 
   const TOOLBAR_TRANSITION_MS = 600;
+  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -323,8 +325,6 @@
     }
   });
 
-  let resizeObserver: ResizeObserver | null = null;
-
   $effect(() => {
     void globalState.toolbarState;
 
@@ -344,10 +344,21 @@
     });
   });
 
+  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   function handleContainerResize() {
     if (!containerRef) return;
-    const rect = containerRef.getBoundingClientRect();
-    formatActions.fitToContainer(rect.width, rect.height);
+    formatActions.fitToContainer(containerRef.offsetWidth, containerRef.offsetHeight);
+  }
+
+  function handleContainerResizeDebounced() {
+    if (containerResizeTimeoutId) {
+      clearTimeout(containerResizeTimeoutId);
+    }
+    containerResizeTimeoutId = setTimeout(() => {
+      containerResizeTimeoutId = null;
+      handleContainerResize();
+    }, CONTAINER_RESIZE_DEBOUNCE_MS);
   }
 
   async function initializeMap() {
@@ -372,18 +383,21 @@
   onMount(() => {
     handleContainerResize();
 
-    resizeObserver = new ResizeObserver(() => {
-      handleContainerResize();
+    containerResizeObserver = new ResizeObserver(() => {
+      handleContainerResizeDebounced();
     });
-    resizeObserver.observe(containerRef);
+    containerResizeObserver.observe(containerRef);
 
     initializeMap();
 
     return () => {
-      resizeObserver?.disconnect();
       if (resizeTimeoutId) {
         clearTimeout(resizeTimeoutId);
       }
+      if (containerResizeTimeoutId) {
+        clearTimeout(containerResizeTimeoutId);
+      }
+      containerResizeObserver?.disconnect();
     };
   });
 
@@ -465,6 +479,7 @@
     width: 100%;
     height: 100%;
     position: relative;
+    overflow: hidden;
   }
 
   .thematic-map-wrapper {

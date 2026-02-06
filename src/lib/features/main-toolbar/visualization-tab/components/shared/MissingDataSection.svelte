@@ -69,7 +69,7 @@
   <ToggleWithLabel
     label={m.show_missing_data()}
     toggled={show}
-    showInfo={true}
+    infoText={m.show_missing_data_info()}
     ontoggle={handleShowToggle}
   />
 

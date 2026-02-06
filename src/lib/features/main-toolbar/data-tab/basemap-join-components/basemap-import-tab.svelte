@@ -14,7 +14,7 @@
     importUploading: boolean;
     onFileDrop: (event: DragEvent) => void;
     onFileInputChange: (event: Event) => void;
-    onLoadUrl: (url: string) => void;
+    onLoadUrl: (url: string) => void | Promise<void>;
   }
 
   let {
@@ -39,10 +39,12 @@
     '.parquet'
   ];
 
-  function handleLoadUrlClick() {
+  async function handleLoadUrlClick() {
     if (!importUrl.trim()) return;
-    onLoadUrl(importUrl.trim());
-    importUrl = '';
+    await onLoadUrl(importUrl.trim());
+    if (!importError) {
+      importUrl = '';
+    }
   }
 </script>
 
@@ -90,6 +92,7 @@
       <TextInput bind:value={importUrl} placeholder={m.url_placeholder()} />
       <Button
         kind="tertiary"
+        size="field"
         icon={CloudUpload}
         disabled={!importUrl.trim() || importUploading}
         on:click={handleLoadUrlClick}
@@ -119,7 +122,7 @@
     />
   {/if}
 
-  <div class="footer-link">
+  <div class="learn-more-link">
     <Button
       kind="ghost"
       icon={Launch}
@@ -137,19 +140,21 @@
   .tab-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    gap: var(--cds-spacing-04);
   }
 
   .import-title {
-    margin: 0 0 var(--cds-spacing-03) 0;
-    font-size: 1rem;
+    margin: 0;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--cds-text-01);
   }
 
   .kh-help {
     color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    margin: 0;
   }
 
   .dropzone {
@@ -226,8 +231,21 @@
     color: var(--cds-text-01);
   }
 
-  .footer-link {
+  .learn-more-link {
     padding-top: var(--cds-spacing-04);
+  }
+
+  .learn-more-link :global(.bx--btn--ghost) {
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.75rem;
+  }
+
+  .learn-more-link :global(.bx--btn--ghost:hover) {
+    color: var(--cds-text-02, #525252);
+  }
+
+  .learn-more-link :global(.bx--btn--ghost svg) {
+    fill: var(--cds-text-helper, #6f6f6f);
   }
 
   :global(.icon-success) {

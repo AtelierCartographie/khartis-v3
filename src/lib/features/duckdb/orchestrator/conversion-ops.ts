@@ -4,7 +4,7 @@ import type { ArrowTableLike, DuckDBDataset } from '../types';
 import * as datasetState from './dataset-state';
 
 export interface GetTableDataFn {
-  (tableName: string): Promise<ArrowTableLike>;
+  (tableName: string, options?: { limit?: number }): Promise<ArrowTableLike>;
 }
 
 export async function convertToProcessedDataset(
@@ -23,7 +23,9 @@ export async function convertToProcessedDataset(
 
   let data: Record<string, unknown>[] = [];
   try {
-    const tableData = await getTableData(duckDataset.tableName);
+    const tableData = await getTableData(duckDataset.tableName, {
+      limit: 1000
+    });
 
     if (tableData && tableData.numRows > 0) {
       const limit = Math.min(1000, tableData.numRows);

@@ -26,7 +26,7 @@ import type { UploadedFile } from '../create-project.types';
 import { visualizationStore } from '../visualization.store.svelte';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
-import { addToHistory } from './project-history';
+import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
 
 export function resetAllStores(): void {
@@ -99,8 +99,7 @@ export async function loadProject(
     container._state.currentProject = project;
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
-    container._state.history = [];
-    container._state.historyIndex = -1;
+    resetHistory(container);
 
     addToHistory(container, 'Project loaded', project);
 
@@ -205,8 +204,7 @@ export async function clearProject(
   container._state.currentProject = undefined;
   container._state.isDirty = false;
   container._state.lastSaved = undefined;
-  container._state.history = [];
-  container._state.historyIndex = -1;
+  resetHistory(container);
 
   resetAllStores();
 

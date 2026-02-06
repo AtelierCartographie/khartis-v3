@@ -6,9 +6,7 @@
     type VisualizationConfig,
     type VisualizationModes,
     type MissingDataConfig,
-    type ClassificationConfig,
-    type PrimitiveFilter,
-    PrimitiveFilterType
+    type ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     calculateBreaks,
@@ -80,12 +78,6 @@
     }
   }
 
-  function handleFilterToggle(primitive: PrimitiveFilter) {
-    if (selectedViz?.id) {
-      visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
-    }
-  }
-
   function handleMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
   ) {
@@ -152,11 +144,17 @@
 </script>
 
 <section id="configure-visualization">
-  <MainToolBarHeader title={m.step2_title()} icon={SettingsAdjust} />
+  <MainToolBarHeader
+    title={m.step2_title()}
+    icon={SettingsAdjust}
+    showDivider
+  />
 
-  <p class="kh-help">
-    {m.step2_description()}
-  </p>
+  <div class="content-area">
+    <p class="kh-help">
+      {m.step2_description()}
+    </p>
+  </div>
 
   <div class="config-accordion">
     <SymbolsConfig
@@ -165,10 +163,10 @@
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onSymbolsChange={handleSymbolsChange}
+      onMappingChange={handleMappingChange}
       onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
       onInvertPalette={handleInvertPalette}
-      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POINT)}
     />
 
     <PolygonsConfig
@@ -181,7 +179,6 @@
       onClassificationChange={handleClassificationChange}
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
-      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.POLYGON)}
     />
 
     <LinesConfig
@@ -192,7 +189,6 @@
       onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
       onInvertPalette={handleInvertPalette}
-      onFilterToggle={() => handleFilterToggle(PrimitiveFilterType.LINE)}
     />
 
     <LabelsConfig
@@ -205,6 +201,11 @@
       dataFields={dataFieldItems}
       visualization={selectedViz}
       onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
     />
   </div>
 </section>
@@ -213,23 +214,23 @@
   #configure-visualization {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
+    padding: 16px 0;
+  }
+
+  .content-area {
+    padding: 16px 16px 8px 16px;
   }
 
   .kh-help {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
-    font-size: 0.875rem;
-    line-height: 1.4;
+    color: var(--cds-text-secondary, #6f6f6f);
+    margin: 0;
+    font-size: 14px;
+    line-height: 18px;
   }
 
   .config-accordion {
     display: flex;
     flex-direction: column;
-    border-top: 1px solid var(--cds-border-subtle-00);
-  }
-
-  .config-accordion > :global(*) {
-    border-bottom: 1px solid var(--cds-border-subtle-00);
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 </style>

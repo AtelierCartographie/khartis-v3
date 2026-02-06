@@ -1,9 +1,11 @@
 <script lang="ts">
+  import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { InlineNotification, Toggle } from 'carbon-components-svelte';
-  import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
+  import { InlineNotification } from 'carbon-components-svelte';
+  import { DataEnrichment } from 'carbon-icons-svelte';
+  import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
     EnrichmentBasemapSelector,
@@ -113,41 +115,24 @@
 </script>
 
 <section id="enrich-data-step">
-  <MainToolBarHeader title={m.enrich_step_title()} />
+  <MainToolBarHeader title={m.enrich_step_title()} icon={DataEnrichment} />
 
   <p class="kh-help">
     {m.enrich_step_description()}
+    <InfoPopover text={m.enrich_step_info()} />
   </p>
 
-  <div class="toggle-section">
-    <div class="toggle-header">
-      <Toggle
-        bind:toggled={joinTabularEnabled}
-        labelText=""
-        hideLabel
-        size="sm"
-      />
-      <div class="toggle-info">
-        <span class="toggle-title">{m.enrich_join_tabular_title()}</span>
-        <span class="toggle-description"
-          >{m.enrich_join_tabular_description()}</span
-        >
-      </div>
-      <button
-        class="toggle-chevron"
-        onclick={() => (joinTabularEnabled = !joinTabularEnabled)}
-        aria-label={m.section_toggle()}
-      >
-        {#if joinTabularEnabled}
-          <ChevronUp size={20} />
-        {:else}
-          <ChevronDown size={20} />
-        {/if}
-      </button>
-    </div>
-
-    {#if joinTabularEnabled}
-      <div class="toggle-content">
+  <div class="enrich-sections">
+    <ExpandableSection
+      title={m.enrich_join_tabular_title()}
+      description={m.enrich_join_tabular_description()}
+      showToggle={true}
+      toggleChecked={joinTabularEnabled}
+      onToggleChange={(checked) => {
+        joinTabularEnabled = checked;
+      }}
+    >
+      <div class="section-content">
         {#if !fileHook.enrichmentDataset}
           <EnrichmentFileUpload
             isUploading={fileHook.isUploading}
@@ -192,54 +177,32 @@
           />
         {/if}
       </div>
-    {/if}
-  </div>
+    </ExpandableSection>
 
-  <div class="toggle-section">
-    <div class="toggle-header">
-      <Toggle
-        bind:toggled={overlayBasemapEnabled}
-        labelText=""
-        hideLabel
-        size="sm"
+    <ExpandableSection
+      title={m.enrich_overlay_basemap_title()}
+      description={m.enrich_overlay_basemap_description()}
+      showToggle={true}
+      toggleChecked={overlayBasemapEnabled}
+      onToggleChange={(checked) => {
+        overlayBasemapEnabled = checked;
+      }}
+    >
+      <EnrichmentBasemapSelector
+        basemapTabIndex={basemapHook.basemapTabIndex}
+        selectedBasemapId={basemapHook.selectedBasemapId}
+        basemaps={basemapHook.basemaps}
+        basemapImportUploading={basemapHook.basemapImportUploading}
+        basemapImportError={basemapHook.basemapImportError}
+        importedCustomBasemap={basemapHook.importedCustomBasemap}
+        onTabChange={basemapHook.setBasemapTabIndex}
+        onSelectBasemap={basemapHook.handleSelectBasemap}
+        onBasemapImportFile={basemapHook.handleBasemapImportFile}
+        onBasemapUrlLoad={basemapHook.handleBasemapUrlLoad}
+        onClearError={basemapHook.clearBasemapImportError}
+        onSelectOSM={basemapHook.handleSelectOSM}
       />
-      <div class="toggle-info">
-        <span class="toggle-title">{m.enrich_overlay_basemap_title()}</span>
-        <span class="toggle-description"
-          >{m.enrich_overlay_basemap_description()}</span
-        >
-      </div>
-      <button
-        class="toggle-chevron"
-        onclick={() => (overlayBasemapEnabled = !overlayBasemapEnabled)}
-        aria-label={m.section_toggle()}
-      >
-        {#if overlayBasemapEnabled}
-          <ChevronUp size={20} />
-        {:else}
-          <ChevronDown size={20} />
-        {/if}
-      </button>
-    </div>
-
-    {#if overlayBasemapEnabled}
-      <div class="toggle-content">
-        <EnrichmentBasemapSelector
-          basemapTabIndex={basemapHook.basemapTabIndex}
-          selectedBasemapId={basemapHook.selectedBasemapId}
-          basemaps={basemapHook.basemaps}
-          basemapImportUploading={basemapHook.basemapImportUploading}
-          basemapImportError={basemapHook.basemapImportError}
-          importedCustomBasemap={basemapHook.importedCustomBasemap}
-          onTabChange={basemapHook.setBasemapTabIndex}
-          onSelectBasemap={basemapHook.handleSelectBasemap}
-          onBasemapImportFile={basemapHook.handleBasemapImportFile}
-          onBasemapUrlLoad={basemapHook.handleBasemapUrlLoad}
-          onClearError={basemapHook.clearBasemapImportError}
-          onSelectOSM={basemapHook.handleSelectOSM}
-        />
-      </div>
-    {/if}
+    </ExpandableSection>
   </div>
 </section>
 
@@ -247,62 +210,18 @@
   #enrich-data-step {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
   }
 
   .kh-help {
     color: var(--cds-text-02);
-    font-size: 0.875rem;
-    margin-bottom: var(--cds-spacing-03);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+    margin-bottom: var(--cds-spacing-02);
   }
 
-  .toggle-section {
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
-    background-color: white;
-  }
-
-  .toggle-header {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-05);
-    cursor: pointer;
-    background-color: white;
-  }
-
-  .toggle-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-01);
-  }
-
-  .toggle-title {
-    font-weight: 600;
-    font-size: 0.875rem;
-    color: var(--cds-text-01);
-  }
-
-  .toggle-description {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-  }
-
-  .toggle-chevron {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-    padding: 0;
-  }
-
-  .toggle-content {
-    padding: var(--cds-spacing-04) var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
+  .section-content {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-04);
-    background-color: white;
   }
 </style>

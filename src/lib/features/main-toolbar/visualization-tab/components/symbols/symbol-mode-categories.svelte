@@ -9,6 +9,7 @@
   } from '../../../constants';
   import {
     DiscretizationRow,
+    InfoPopover,
     MissingDataSection,
     PalettePreview,
     SectionHeading,
@@ -19,6 +20,7 @@
   let {
     dataFields = [],
     visualization,
+    onMappingChange,
     onMissingDataChange,
     onInvertPalette,
     onOpenDiscretization
@@ -70,15 +72,27 @@
     missingDataColor = color;
     onMissingDataChange?.({ color });
   }
+
+  function handleFieldSelect(fieldId: number) {
+    selectedFieldId = fieldId;
+    const field = dataFields.find((f) => f.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
+  }
 </script>
 
 <SectionHeading title={m.size_and_color()} />
 
 <div class="field-group">
+  <span class="field-label">
+    {m.viz_symbols_select_criteria()}
+    <InfoPopover text={m.category_variable_info()} />
+  </span>
   <Dropdown
-    titleText={m.size_according()}
     items={dataFields}
-    bind:selectedId={selectedFieldId}
+    selectedId={selectedFieldId}
+    on:select={(e) => handleFieldSelect(e.detail.selectedId)}
     type="default"
   />
 </div>
@@ -116,5 +130,14 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 400;
   }
 </style>

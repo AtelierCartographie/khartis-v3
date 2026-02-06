@@ -15,6 +15,8 @@
     cellHighlights?: CellHighlight[];
     currentCell?: { rowId: number; columnName: string } | null;
     highlightedRowIds?: number[];
+    isSelectable?: boolean;
+    onSelectionChange?: (ids: number[], count: number) => void;
     onClose: () => void;
   }
 
@@ -26,6 +28,8 @@
     cellHighlights = [],
     currentCell = null,
     highlightedRowIds = [],
+    isSelectable = false,
+    onSelectionChange,
     onClose
   }: Props = $props();
 
@@ -155,6 +159,8 @@
         currentCell={currentCell}
         highlightedRowIds={highlightedRowIds}
         isExpanded={true}
+        isSelectable={isSelectable}
+        onSelectionChange={onSelectionChange}
       />
     </div>
   </Modal>

@@ -4,6 +4,7 @@ export interface DecimalDetectionResult {
   separator: '.' | ',';
   confidence: number;
   sampleSize: number;
+  delimiter: string;
 }
 
 interface DetectionOptions {
@@ -25,7 +26,7 @@ export async function detectDecimalSeparator(
     const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
     if (lines.length < 2) {
-      return { separator: '.', confidence: 0, sampleSize: 0 };
+      return { separator: '.', confidence: 0, sampleSize: 0, delimiter: ',' };
     }
 
     const delimiter = detectFieldDelimiter(lines[0]);
@@ -51,7 +52,12 @@ export async function detectDecimalSeparator(
     }
 
     if (totalNumericValues === 0) {
-      return { separator: '.', confidence: 1, sampleSize: lines.length - 1 };
+      return {
+        separator: '.',
+        confidence: 1,
+        sampleSize: lines.length - 1,
+        delimiter
+      };
     }
 
     const europeanRatio = europeanMatches / totalNumericValues;
@@ -66,18 +72,20 @@ export async function detectDecimalSeparator(
       return {
         separator: ',',
         confidence: europeanRatio,
-        sampleSize: lines.length - 1
+        sampleSize: lines.length - 1,
+        delimiter
       };
     }
 
     return {
       separator: '.',
       confidence: standardRatio || 1,
-      sampleSize: lines.length - 1
+      sampleSize: lines.length - 1,
+      delimiter
     };
   } catch (error) {
     logger.warn('Failed to detect decimal separator', LogCategory.DATA, error);
-    return { separator: '.', confidence: 0, sampleSize: 0 };
+    return { separator: '.', confidence: 0, sampleSize: 0, delimiter: ',' };
   }
 }
 

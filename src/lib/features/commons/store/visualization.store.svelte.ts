@@ -141,6 +141,7 @@ export interface VisualizationConfig {
     colorColumn?: string;
     geometryColumn?: string;
     labelColumn?: string;
+    secondaryLabelColumn?: string;
   };
   classification?: ClassificationConfig;
   symbols?: {

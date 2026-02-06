@@ -12,6 +12,7 @@
     header: boolean;
     decimalSeparator: string;
     thousandsSeparator: string | undefined;
+    delimiter: string | undefined;
   }
 
   interface Props {
@@ -26,6 +27,7 @@
   let header = $state(true);
   let decimalSeparator = $state('.');
   let thousandsSeparator = $state('none');
+  let delimiter = $state('auto');
   let isApplying = $state(false);
 
   $effect(() => {
@@ -33,6 +35,14 @@
       header = currentOptions.header;
       decimalSeparator = currentOptions.decimalSeparator;
       thousandsSeparator = currentOptions.thousandsSeparator || 'none';
+      delimiter = currentOptions.delimiter || 'auto';
+    }
+  });
+
+  // BUG FIX: Reset thousandsSeparator when it conflicts with decimalSeparator
+  $effect(() => {
+    if (!filteredThousandsOptions.some((o) => o.value === thousandsSeparator)) {
+      thousandsSeparator = 'none';
     }
   });
 
@@ -43,13 +53,24 @@
         header,
         decimalSeparator,
         thousandsSeparator:
-          thousandsSeparator === 'none' ? undefined : thousandsSeparator
+          thousandsSeparator === 'none' ? undefined : thousandsSeparator,
+        delimiter: delimiter === 'auto' ? undefined : delimiter
       });
       onClose();
+    } catch {
+      // Error already handled by onApply (notification shown)
     } finally {
       isApplying = false;
     }
   }
+
+  const delimiterOptions = [
+    { value: 'auto', label: m.csv_options_delimiter_auto() },
+    { value: ',', label: m.csv_options_delimiter_comma() },
+    { value: ';', label: m.csv_options_delimiter_semicolon() },
+    { value: '\t', label: m.csv_options_delimiter_tab() },
+    { value: '|', label: m.csv_options_delimiter_pipe() }
+  ];
 
   const decimalOptions = [
     { value: '.', label: m.csv_options_decimal_period() },
@@ -90,6 +111,18 @@
         bind:toggled={header}
         disabled={isApplying}
       />
+    </div>
+
+    <div class="option-group">
+      <Select
+        labelText={m.csv_options_delimiter()}
+        bind:selected={delimiter}
+        disabled={isApplying}
+      >
+        {#each delimiterOptions as opt (opt.value)}
+          <SelectItem value={opt.value} text={opt.label} />
+        {/each}
+      </Select>
     </div>
 
     <div class="option-group">

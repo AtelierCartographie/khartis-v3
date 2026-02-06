@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
+  import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
@@ -20,22 +21,26 @@
     }
   ];
 
-  let selectedStyle = $state<BasemapStyle>(
+  const selectedStyle = $derived(
     basemapStyleStore.selectedStyle !== BasemapStyle.BLANK_WHITE
       ? basemapStyleStore.selectedStyle
       : BasemapStyle.CARTE_FACILE_DESATURATED
   );
 
   function handleStyleChange(value: BasemapStyle): void {
-    selectedStyle = value;
     basemapStyleStore.setStyle(value);
     projectStore.markAsDirty();
   }
 </script>
 
 <div class="basemap-style-selector">
+  <span class="field-label">
+    {m.basemap_style_label()}
+    <InfoPopover text={m.basemap_style_info()} />
+  </span>
   <RadioButtonGroup
-    legendText={m.basemap_style_label()}
+    legendText=""
+    hideLabel
     selected={selectedStyle}
     on:change={(e) => handleStyleChange(e.detail as BasemapStyle)}
   >
@@ -46,6 +51,18 @@
 </div>
 
 <style>
+  .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+    font-weight: var(--cds-label-01-font-weight, 400);
+    line-height: var(--cds-label-01-line-height, 1.33333);
+    letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
+    color: var(--cds-text-secondary);
+    margin-bottom: var(--cds-spacing-02);
+  }
+
   .basemap-style-selector :global(.cds--radio-button-group) {
     display: flex;
     flex-direction: column;

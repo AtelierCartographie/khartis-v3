@@ -1,5 +1,7 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
+  import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import {
     vizSuggester,
     type GeometryType,
@@ -30,6 +32,7 @@
     Shapes,
     EdgeNode
   } from 'carbon-icons-svelte';
+  import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
 
   interface Props {
@@ -86,24 +89,13 @@
   const visibleSuggestions = $derived(allSuggestions.slice(0, visibleCount));
   const hasMoreSuggestions = $derived(visibleCount < allSuggestions.length);
 
-  function getColumnType(columnName: string): 'numeric' | 'text' | 'date' {
+  function getColumnBadgeType(columnName: string): VariableBadgeType {
     const col = datasetColumns.find((c) => c.name === columnName);
-    if (!col) return 'text';
+    if (!col) return 'string';
     const type = String(col.type || '').toLowerCase();
     if (isNumericType(type)) return 'numeric';
     if (type === 'date' || type === 'timestamp') return 'date';
-    return 'text';
-  }
-
-  function getTypeLabel(type: 'numeric' | 'text' | 'date'): string {
-    switch (type) {
-      case 'numeric':
-        return '123';
-      case 'date':
-        return 'Date';
-      default:
-        return 'ABC';
-    }
+    return 'string';
   }
 
   function getGeometryIcon(geometry: string) {
@@ -239,14 +231,14 @@
 </script>
 
 <section id="choose-visualization">
-  <div class="section-content">
-    <div class="header-section">
-      <MainToolBarHeader title={m.step1_title()} icon={Pin} />
-      <div class="divider"></div>
-    </div>
+  <MainToolBarHeader title={m.step1_title()} icon={Pin} showDivider />
 
+  <div class="section-content">
     <div class="field-group">
-      <div class="field-label">{m.data_visualized_label()}</div>
+      <div class="field-label">
+        {m.data_visualized_label()}
+        <InfoPopover text={m.data_visualized_info()} />
+      </div>
       <ComboBox
         items={dataFieldItems}
         selectedId={selectedFieldId}
@@ -261,7 +253,7 @@
       <ExpandableSection
         title={m.section_suggestions()}
         defaultOpen={suggestionsExpanded}
-        on:toggle={(e) => (suggestionsExpanded = e.detail.expanded)}
+        onToggle={(expanded) => (suggestionsExpanded = expanded)}
         titleClass="suggestions-title"
       >
         {#snippet icon()}
@@ -314,7 +306,7 @@
                 <div class="card-variables">
                   {#if suggestion.columns && suggestion.columns.length > 0}
                     {#each suggestion.columns.slice(0, 2) as colName, idx (colName)}
-                      {@const colType = getColumnType(colName)}
+                      {@const badgeType = getColumnBadgeType(colName)}
                       <div class="variable-row">
                         <span class="variable-arrow">
                           <svg
@@ -324,7 +316,7 @@
                             fill="none"
                           >
                             <path
-                              d="M3 8H13M13 8L9 4M13 8L9 12"
+                              d="M4 2V10H12"
                               stroke="currentColor"
                               stroke-width="1.5"
                               stroke-linecap="round"
@@ -332,21 +324,16 @@
                             />
                           </svg>
                         </span>
-                        <div class="variable-chip">
-                          <span class="chip-text"
-                            >{colName.length > 15
-                              ? colName.slice(0, 15) + '...'
-                              : colName}</span
-                          >
-                          <span class="chip-divider"></span>
-                          <span class="chip-icon">{getTypeLabel(colType)}</span>
-                        </div>
+                        <VariableBadge
+                          label={colName.length > 10
+                            ? colName.slice(0, 10) + '...'
+                            : colName}
+                          type={badgeType}
+                        />
                         {#if suggestion.columns && suggestion.columns.length > 2 && idx === 0}
-                          <div class="variable-chip more">
-                            <span class="chip-text"
-                              >+ {suggestion.columns.length - 1}</span
-                            >
-                          </div>
+                          <span class="overflow-chip"
+                            >+ {suggestion.columns.length - 1}</span
+                          >
                         {/if}
                       </div>
                     {/each}
@@ -438,36 +425,18 @@
   #choose-visualization {
     display: flex;
     flex-direction: column;
-    background: var(--cds-layer-01, #f4f4f4);
-    padding: var(--cds-spacing-05);
+    padding: 16px 0;
   }
 
   .section-content {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-05);
-    background: var(--cds-background, #ffffff);
-    padding: var(--cds-spacing-05) 0;
-  }
-
-  .header-section {
-    display: flex;
-    flex-direction: column;
-    margin: 0 calc(-1 * var(--cds-spacing-05));
-    padding: 0 var(--cds-spacing-05);
-  }
-
-  .divider {
-    width: calc(100% + 2 * var(--cds-spacing-05));
-    height: 1px;
-    background: var(--cds-border-subtle-00, #e0e0e0);
-    margin: 0 calc(-1 * var(--cds-spacing-05));
+    gap: var(--cds-spacing-05, 16px);
+    padding: 16px 0 0 0;
   }
 
   .suggestions-section {
-    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-    margin: 0 calc(-1 * var(--cds-spacing-05));
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .suggestions-title-icon {
@@ -498,6 +467,9 @@
   }
 
   .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
     margin-bottom: var(--cds-spacing-03);
     font-size: 0.75rem;
     color: var(--cds-text-secondary, #525252);
@@ -633,48 +605,20 @@
     align-items: center;
   }
 
-  .variable-chip {
-    display: flex;
+  .overflow-chip {
+    display: inline-flex;
     align-items: center;
-    background: var(--tag-purple-tag-background, #e8daff);
-    border: 1px solid var(--tag-purple-tag-border-operational, #be95ff);
-    border-radius: 1000px;
     height: 18px;
-    overflow: hidden;
-    font-family: 'IBM Plex Mono', monospace;
-
-    &.more {
-      background: var(--tag-background, #bae6ff);
-      border: 1px solid var(--tag-border, #1192e8);
-      padding: 0 8px;
-    }
-
-    .chip-text {
-      font-size: 0.75rem;
-      color: var(--tag-purple-tag-color, #6929c4);
-      padding: 0 6px 0 8px;
-      line-height: 16px;
-      letter-spacing: 0.32px;
-    }
-
-    &.more .chip-text {
-      color: var(--tag-color, #00539a);
-    }
-
-    .chip-divider {
-      width: 1px;
-      height: 12px;
-      background: var(--tag-purple-tag-border-operational, #be95ff);
-    }
-
-    .chip-icon {
-      font-size: 0.75rem;
-      color: var(--tag-purple-tag-color, #6929c4);
-      padding: 0 6px;
-      font-family: 'IBM Plex Sans', sans-serif;
-      line-height: 16px;
-      letter-spacing: 0.32px;
-    }
+    padding: 0 8px;
+    border-radius: 1000px;
+    background: var(--tag-background, #bae6ff);
+    border: 1px solid var(--tag-border, #1192e8);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.75rem;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--tag-color, #00539a);
+    white-space: nowrap;
   }
 
   .no-variable {

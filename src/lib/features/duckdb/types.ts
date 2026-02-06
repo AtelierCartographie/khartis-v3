@@ -96,6 +96,7 @@ export interface ReadTabularOptions {
   tablename?: string;
   decimal_separator?: string;
   thousands_separator?: string;
+  delimiter?: string;
   header?: boolean;
   format?: string;
 }

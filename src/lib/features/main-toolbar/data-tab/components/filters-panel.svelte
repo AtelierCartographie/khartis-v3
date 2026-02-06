@@ -37,6 +37,8 @@
 
   let filters = $state<DataTableFilter[]>([]);
   let filterStats = $state<FilterStats>({ total: 0, filtered: 0 });
+  let isProcessing = $state(false);
+  let filterError = $state<string | null>(null);
 
   let newFilter = $state({
     column: '',
@@ -48,7 +50,12 @@
 
   const hasData = $derived(columns.length > 0);
   const hasActiveFilters = $derived(
-    filters.length > 0 && filterStats.filtered < filterStats.total
+    filters.length > 0 &&
+      filterStats.filtered > 0 &&
+      filterStats.filtered < filterStats.total
+  );
+  const hasNoResults = $derived(
+    filters.length > 0 && filterStats.filtered === 0 && filterStats.total > 0
   );
   const rowsToDelete = $derived(filterStats.total - filterStats.filtered);
 
@@ -146,8 +153,10 @@
 
   async function addFilter(event?: Event) {
     event?.preventDefault();
-    if (!tableName || !newFilter.column) return;
+    if (!tableName || !newFilter.column || isProcessing) return;
 
+    isProcessing = true;
+    filterError = null;
     try {
       const updated = await duckDBOrchestrator.addFilter(tableName, {
         column: newFilter.column,
@@ -161,13 +170,19 @@
       resetFilterForm();
       onFilterChange?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      filterError = message;
       logger.error('Failed to add filter', LogCategory.UI, err);
+    } finally {
+      isProcessing = false;
     }
   }
 
   async function removeFilter(filterId: string) {
-    if (!tableName) return;
+    if (!tableName || isProcessing) return;
 
+    isProcessing = true;
+    filterError = null;
     try {
       const updated = await duckDBOrchestrator.removeFilter(
         tableName,
@@ -177,7 +192,11 @@
       await refreshFilters();
       onFilterChange?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      filterError = message;
       logger.error('Failed to remove filter', LogCategory.UI, err);
+    } finally {
+      isProcessing = false;
     }
   }
 
@@ -309,12 +328,21 @@
           kind="primary"
           size="small"
           type="submit"
-          disabled={!newFilter.column}
+          disabled={!newFilter.column || isProcessing}
         >
           {m.filter_add()}
         </Button>
       </div>
     </form>
+
+    {#if filterError}
+      <InlineNotification
+        kind="error"
+        lowContrast
+        subtitle={filterError}
+        on:close={() => (filterError = null)}
+      />
+    {/if}
 
     {#if filters.length > 0}
       <div class="active-filters">
@@ -322,8 +350,10 @@
           <span class="filters-title"
             >{m.filter_active()} ({filters.length})</span
           >
-          <Button kind="ghost" size="small" on:click={clearAllFilters}
-            >{m.filter_clear_all()}</Button
+          <Button
+            kind={hasNoResults ? 'danger-ghost' : 'ghost'}
+            size="small"
+            on:click={clearAllFilters}>{m.filter_clear_all()}</Button
           >
         </div>
         <ul class="filters-list">
@@ -340,6 +370,16 @@
             </li>
           {/each}
         </ul>
+        {#if hasNoResults}
+          <div class="no-results-warning">
+            <InlineNotification
+              kind="warning"
+              lowContrast
+              hideCloseButton
+              subtitle={m.filter_no_results()}
+            />
+          </div>
+        {/if}
         {#if hasActiveFilters && onDeleteFilteredRows}
           <div class="delete-filtered-action">
             <Button
@@ -441,6 +481,10 @@
 
   .filter-item {
     display: flex;
+  }
+
+  .no-results-warning {
+    margin-top: var(--cds-spacing-03);
   }
 
   .delete-filtered-action {

@@ -25,8 +25,10 @@
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Theme } from 'carbon-components-svelte';
+  import { Tag, Theme } from 'carbon-components-svelte';
+  import { WarningAltFilled } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
+  import * as m from '$lib/paraglide/messages';
 
   import 'carbon-components-svelte/css/all.css';
 
@@ -62,6 +64,15 @@
 
     handleResize();
     window.addEventListener('resize', handleResize);
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (projectStore.isDirty) {
+        e.preventDefault();
+        // Legacy browsers require returnValue to be set
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     const initApp = async () => {
       try {
@@ -121,6 +132,7 @@
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   });
 
@@ -161,7 +173,13 @@
 
       <MobileOpenPanelButton />
 
-      <div></div>
+      {#if projectStore.isDirty}
+        <div class="unsaved-indicator">
+          <Tag type="warm-gray" size="sm" icon={WarningAltFilled}>
+            {m.unsaved_changes_notice()}
+          </Tag>
+        </div>
+      {/if}
     </article>
 
     <CreateProject
@@ -201,7 +219,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--cds-spacing-06);
+    gap: var(--cds-spacing-03);
     overflow: visible;
   }
 
@@ -218,6 +236,15 @@
     justify-content: center;
     transition: transform 0.2s ease-in-out;
     overflow: visible;
-    padding: var(--cds-spacing-05);
+    padding: var(--cds-spacing-03) var(--cds-spacing-05);
+  }
+
+  .unsaved-indicator {
+    position: absolute;
+    top: var(--cds-spacing-03);
+    right: var(--cds-spacing-03);
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0.85;
   }
 </style>

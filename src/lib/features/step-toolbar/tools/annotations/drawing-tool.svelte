@@ -50,6 +50,11 @@
   let saturation = $state(0);
   let lightness = $state(0);
 
+  let fillColor = $state('#ffffff');
+  let fillHue = $state(0);
+  let fillSaturation = $state(0);
+  let fillLightness = $state(100);
+
   $effect(() => {
     if (defaultStyle.drawingType) drawingType = defaultStyle.drawingType;
     if (defaultStyle.strokeColor) {
@@ -66,6 +71,27 @@
         lightness = c.lightness ?? 0;
         const cv = createColorValue('#000000', hue, saturation, lightness);
         strokeColor = cv.hex;
+      }
+    }
+    if (defaultStyle.fillColor) {
+      if (typeof defaultStyle.fillColor === 'string') {
+        fillColor = defaultStyle.fillColor as string;
+        const hsl = hexToHsl(fillColor);
+        fillHue = hsl.hue;
+        fillSaturation = hsl.saturation;
+        fillLightness = hsl.lightness;
+      } else if (isStrokeColorDescriptor(defaultStyle.fillColor)) {
+        const c = defaultStyle.fillColor;
+        fillHue = c.hue ?? 0;
+        fillSaturation = c.saturation ?? 0;
+        fillLightness = c.lightness ?? 100;
+        const cv = createColorValue(
+          '#ffffff',
+          fillHue,
+          fillSaturation,
+          fillLightness
+        );
+        fillColor = cv.hex;
       }
     }
   });
@@ -210,6 +236,39 @@
       </div>
     </Column>
   </Row>
+
+  {#if drawingType === DrawingType.ZONE}
+    <Row>
+      <Column>
+        <div class="section">
+          <ColorPicker
+            hex={fillColor}
+            hue={fillHue}
+            saturation={fillSaturation}
+            lightness={fillLightness}
+            triggerLabel={m.annotations_fill_color()}
+            onValidate={({
+              hex,
+              hue,
+              saturation,
+              lightness
+            }: {
+              hex: string;
+              hue: number;
+              saturation: number;
+              lightness: number;
+            }) => {
+              fillColor = hex;
+              annotationsActions.updateDefaultStyle({
+                fillColor: { hue, saturation, lightness }
+              });
+            }}
+            onCancel={() => {}}
+          />
+        </div>
+      </Column>
+    </Row>
+  {/if}
 
   <Row>
     <Column>

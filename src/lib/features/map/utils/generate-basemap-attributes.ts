@@ -1,11 +1,10 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
-
-function escapeIdentifier(name: string): string {
-  return name.replace(/"/g, '""');
-}
 
 export async function generateCustomBasemapAttributes(
   tableName: string,

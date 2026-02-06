@@ -61,10 +61,6 @@ function setCalculatorFormula(formula: string) {
   state.calculatorFormula = formula;
 }
 
-function appendToFormula(text: string) {
-  state.calculatorFormula += text;
-}
-
 function setCalculatorTestResult(result: unknown) {
   state.calculatorTestResult = result;
   state.calculatorError = null;
@@ -130,7 +126,6 @@ export const dataToolsStore = {
   setReplaceValue,
   setCalculatorName,
   setCalculatorFormula,
-  appendToFormula,
   setCalculatorTestResult,
   setCalculatorError,
   resetCalculator,

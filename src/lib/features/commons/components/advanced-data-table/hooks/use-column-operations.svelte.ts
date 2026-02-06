@@ -105,16 +105,12 @@ export function useColumnOperations(
       return;
     }
 
-    try {
-      const duckType = mapColumnTypeToDuckDB(newType);
-      await changeColumnType(tableName, columnName, duckType, Duck);
-      await props.onColumnsChange();
-      props.onRecordTransformation?.(
-        `Type changé (${newType}) sur ${columnName}`
-      );
-    } catch (err) {
-      logger.error('Error changing column type', LogCategory.UI, err);
-    }
+    const duckType = mapColumnTypeToDuckDB(newType);
+    await changeColumnType(tableName, columnName, duckType, Duck);
+    await props.onColumnsChange();
+    props.onRecordTransformation?.(
+      `Type changé (${newType}) sur ${columnName}`
+    );
   }
 
   function handleHide(columnName: string): void {

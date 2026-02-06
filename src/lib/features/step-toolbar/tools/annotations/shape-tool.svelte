@@ -43,10 +43,10 @@
 
   const shapes = [
     { value: 'arrow', text: m.annotations_shape_arrow() },
+    { value: 'line', text: m.annotations_shape_line() },
     { value: 'rectangle', text: m.annotations_shape_rectangle() },
     { value: 'circle', text: m.annotations_shape_circle() },
-    { value: 'triangle', text: m.triangle() },
-    { value: 'star', text: m.annotations_shape_star() }
+    { value: 'triangle', text: m.triangle() }
   ];
 
   let selectedShape = $state('arrow');

@@ -127,22 +127,22 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     fillColor: '#ffffff',
     fillShadow: false,
     fillOpacity: 100,
-    strokeColor: '#8d8d8d',
+    strokeColor: '#a8a8a8',
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
-    strokeThickness: 1,
-    strokeOpacity: 100
+    strokeThickness: 0.5,
+    strokeOpacity: 40
   },
   {
     id: 'lacs',
-    visible: false,
+    visible: true,
     color: '#a6c8ff',
     thickness: 0,
     opacity: 80
   },
   {
     id: 'rivieres',
-    visible: false,
+    visible: true,
     color: '#a6c8ff',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -151,14 +151,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   },
   {
     id: 'relief',
-    visible: false,
+    visible: true,
     representation: BasemapRepresentation.SHADING,
     color: '#e0e0e0',
     opacity: 50
   },
   {
     id: 'equateur',
-    visible: false,
+    visible: true,
     color: '#8d8d8d',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   },
   {
     id: 'meridiens',
-    visible: false,
+    visible: true,
     remarquables: BasemapRemarquables.ALL,
     color: '#e0e0e0',
     dotted: true,
@@ -235,9 +235,10 @@ class BasemapLayersStore {
   }
 
   setLayerVisibility(id: BasemapLayerId, visible: boolean): void {
-    this._state.layers = this._state.layers.map((l) =>
-      l.id === id ? { ...l, visible } : l
-    );
+    const layer = this._state.layers.find((l) => l.id === id);
+    if (layer) {
+      layer.visible = visible;
+    }
     this.incrementVersion();
   }
 
@@ -245,9 +246,10 @@ class BasemapLayersStore {
     id: T,
     updates: Partial<Omit<Extract<BasemapLayerConfig, { id: T }>, 'id'>>
   ): void {
-    this._state.layers = this._state.layers.map((l) =>
-      l.id === id ? { ...l, ...updates } : l
-    );
+    const layer = this._state.layers.find((l) => l.id === id);
+    if (layer) {
+      Object.assign(layer, updates);
+    }
     this.incrementVersion();
   }
 

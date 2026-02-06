@@ -1,6 +1,10 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import {
   RefineOperation,
   type AnalysisResult,
@@ -24,8 +28,12 @@ export async function renameColumn(
 ): Promise<void> {
   const start = performance.now();
 
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedOld = escapeIdentifier(oldName);
+  const escapedNew = escapeIdentifier(newName);
+
   await Duck.query(
-    `ALTER TABLE "${tableName}" RENAME COLUMN "${oldName}" TO "${newName}"`
+    `ALTER TABLE "${escapedTable}" RENAME COLUMN "${escapedOld}" TO "${escapedNew}"`
   );
 
   await Duck.analyse(tableName, { force: true });
@@ -46,8 +54,11 @@ export async function changeColumnType(
 ): Promise<void> {
   const start = performance.now();
 
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCol = escapeIdentifier(columnName);
+
   await Duck.query(
-    `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" SET DATA TYPE ${newType}`
+    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${newType}`
   );
 
   await Duck.analyse(tableName, { force: true });
@@ -67,7 +78,10 @@ export async function dropColumn(
 ): Promise<void> {
   const start = performance.now();
 
-  await Duck.query(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCol = escapeIdentifier(columnName);
+
+  await Duck.query(`ALTER TABLE "${escapedTable}" DROP COLUMN "${escapedCol}"`);
 
   await Duck.analyse(tableName, { force: true });
 
@@ -105,12 +119,15 @@ export async function refineColumn(
 ): Promise<void> {
   const start = performance.now();
 
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCol = escapeIdentifier(columnName);
+
   const operations: Record<RefineOperation, string> = {
-    [RefineOperation.UPPERCASE]: `UPDATE "${tableName}" SET "${columnName}" = UPPER("${columnName}")`,
-    [RefineOperation.LOWERCASE]: `UPDATE "${tableName}" SET "${columnName}" = LOWER("${columnName}")`,
-    [RefineOperation.TITLECASE]: `UPDATE "${tableName}" SET "${columnName}" = INITCAP("${columnName}")`,
-    [RefineOperation.TRIM]: `UPDATE "${tableName}" SET "${columnName}" = TRIM("${columnName}")`,
-    [RefineOperation.TRIM_ALL]: `UPDATE "${tableName}" SET "${columnName}" = REGEXP_REPLACE("${columnName}", '\\s+', ' ', 'g')`
+    [RefineOperation.UPPERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = UPPER("${escapedCol}")`,
+    [RefineOperation.LOWERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = LOWER("${escapedCol}")`,
+    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = INITCAP("${escapedCol}")`,
+    [RefineOperation.TRIM]: `UPDATE "${escapedTable}" SET "${escapedCol}" = TRIM("${escapedCol}")`,
+    [RefineOperation.TRIM_ALL]: `UPDATE "${escapedTable}" SET "${escapedCol}" = REGEXP_REPLACE("${escapedCol}", '\\s+', ' ', 'g')`
   };
 
   await Duck.query(operations[operation]);
@@ -134,13 +151,24 @@ export async function replaceInColumn(
 ): Promise<number> {
   const start = performance.now();
 
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCol = escapeIdentifier(columnName);
   const escapedSearchValue = escapeSqlString(searchValue);
   const escapedReplaceValue = escapeSqlString(replaceValue);
 
-  const exactMatchCondition = `jaro_winkler_similarity(normalize_text("${columnName}"::VARCHAR), normalize_text('${escapedSearchValue}')) = 1`;
+  // Pre-compute the normalized search value once (instead of per-row)
+  const normResult = (await Duck.query(
+    `SELECT normalize_text('${escapedSearchValue}') as norm`,
+    { format: 'array' }
+  )) as Array<{ norm: string }>;
+  const normalizedSearch = normResult?.[0]?.norm ?? '';
+
+  // Use simple equality on normalized text instead of expensive jaro_winkler_similarity
+  // jaro_winkler_similarity(...) = 1 is semantically identical to equality after normalization
+  const exactMatchCondition = `normalize_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
 
   const countResult = (await Duck.query(
-    `SELECT COUNT(*) as count FROM "${tableName}" WHERE ${exactMatchCondition}`
+    `SELECT COUNT(*) as count FROM "${escapedTable}" WHERE ${exactMatchCondition}`
   )) as ArrowTableLike;
 
   const countRow = countResult.get(0) as Record<string, unknown>;
@@ -159,7 +187,7 @@ export async function replaceInColumn(
       }
     );
     await Duck.query(
-      `UPDATE "${tableName}" SET "${columnName}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
+      `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
     );
 
     await Duck.analyse(tableName, { force: true });
@@ -178,6 +206,48 @@ export async function replaceInColumn(
   return count;
 }
 
+const BLOCKED_KEYWORDS = [
+  'DROP',
+  'DELETE',
+  'INSERT',
+  'UPDATE',
+  'ALTER',
+  'CREATE',
+  'ATTACH',
+  'COPY',
+  'EXPORT',
+  'INSTALL',
+  'LOAD',
+  'PRAGMA',
+  'CALL',
+  'EXECUTE',
+  'EXEC'
+];
+
+const BLOCKED_PATTERN = new RegExp(
+  `\\b(${BLOCKED_KEYWORDS.join('|')})\\b`,
+  'i'
+);
+
+export function validateExpression(expression: string): void {
+  if (!expression.trim()) {
+    throw new DuckDBError('Expression cannot be empty');
+  }
+
+  if (expression.includes(';')) {
+    throw new DuckDBError(m.error_calc_expression_forbidden_semicolon());
+  }
+
+  const match = expression.match(BLOCKED_PATTERN);
+  if (match) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({
+        keyword: match[1].toUpperCase()
+      })
+    );
+  }
+}
+
 export async function addCalculatedColumn(
   tableName: string,
   columnName: string,
@@ -186,33 +256,34 @@ export async function addCalculatedColumn(
 ): Promise<AnalysisResult[]> {
   const start = performance.now();
 
-  const sanitizedColumnName = columnName.trim();
-  if (!sanitizedColumnName) {
+  const trimmedName = columnName.trim();
+  if (!trimmedName) {
     throw new DuckDBError('Invalid column name for calculator');
   }
 
-  if (!expression.trim()) {
-    throw new DuckDBError('Expression cannot be empty');
-  }
+  validateExpression(expression);
 
   const columns = await Duck.analyse(tableName);
-  if (columns.some((col: AnalysisResult) => col.name === sanitizedColumnName)) {
+  if (columns.some((col: AnalysisResult) => col.name === trimmedName)) {
     throw new DuckDBError(
-      `La colonne "${sanitizedColumnName}" existe déjà`,
+      m.error_calc_column_exists({ column: trimmedName }),
       undefined,
-      { tableName, columnName: sanitizedColumnName }
+      { tableName, columnName: trimmedName }
     );
   }
 
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedColumn = escapeIdentifier(trimmedName);
+
   await Duck.query(
-    `CREATE OR REPLACE TABLE "${tableName}" AS SELECT *, (${expression}) AS "${sanitizedColumnName}" FROM "${tableName}"`
+    `CREATE OR REPLACE TABLE "${escapedTable}" AS SELECT *, (${expression}) AS "${escapedColumn}" FROM "${escapedTable}"`
   );
 
   const updatedColumns = await Duck.analyse(tableName, { force: true });
 
   logger.success('Calculated column added to DuckDB', LogCategory.DUCKDB, {
     tableName,
-    columnName: sanitizedColumnName,
+    columnName: trimmedName,
     durationMs: (performance.now() - start).toFixed(2)
   });
 
@@ -224,8 +295,11 @@ export async function testExpression(
   expression: string,
   Duck: DuckDBClient
 ): Promise<unknown> {
+  validateExpression(expression);
+
+  const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
-    `SELECT (${expression}) as result FROM "${tableName}" LIMIT 1`
+    `SELECT (${expression}) as result FROM "${escapedTable}" LIMIT 1`
   )) as ArrowTableLike;
 
   if (result.numRows === 0) {

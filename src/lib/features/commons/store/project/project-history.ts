@@ -5,6 +5,11 @@ import type {
 import { bigIntReplacer } from '$lib/features/commons/utils/clone.utils';
 import type { ProjectStateContainer } from './project-state.svelte';
 
+export function resetHistory(container: ProjectStateContainer): void {
+  container._state.history = [];
+  container._state.historyIndex = -1;
+}
+
 export function addToHistory(
   container: ProjectStateContainer,
   action: string,

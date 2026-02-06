@@ -296,7 +296,7 @@ class BasemapService {
   private updateProjectionFromTable(geometryTable: ArrowTable): void {
     if (projectionStore.referenceBbox !== null) {
       logger.debug(
-        'Skipping basemap bbox update - user data bbox already set',
+        'Skipping basemap bbox update - referenceBbox already set (thematic-map handles switching)',
         LogCategory.MAP,
         {
           currentBbox: projectionStore.referenceBbox
@@ -366,6 +366,32 @@ class BasemapService {
 
   async loadDefaultBasemap(): Promise<LoadedBasemap | null> {
     return this.loadBasemap(DEFAULT_BASEMAP_ID);
+  }
+
+  registerCustomBasemap(
+    metadata: BasemapMetadata,
+    geometryTable: ArrowTable
+  ): void {
+    const idx = this._availableBasemaps.findIndex(
+      (bm) => bm.file === metadata.file
+    );
+    if (idx === -1) {
+      this._availableBasemaps.push(metadata);
+    } else {
+      this._availableBasemaps[idx] = metadata;
+    }
+
+    const loaded: LoadedBasemap = {
+      metadata,
+      geometryTable,
+      layerTables: new SvelteMap<string, ArrowTable>()
+    };
+    this._basemapCache.set(metadata.file, loaded);
+
+    logger.info('Custom basemap registered', LogCategory.MAP, {
+      basemapId: metadata.file,
+      rows: geometryTable.numRows
+    });
   }
 
   get availableBasemaps(): BasemapMetadata[] {

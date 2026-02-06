@@ -204,6 +204,13 @@ export interface AnalysisResult {
 
 export type FileFormat = `${FileFormatEnum}`;
 
+export interface CsvImportOptions {
+  header: boolean;
+  decimalSeparator: string;
+  thousandsSeparator?: string;
+  delimiter?: string;
+}
+
 export interface DatasetMetadata {
   processedAt: Date;
   fileType: string;
@@ -211,6 +218,7 @@ export interface DatasetMetadata {
   processingDuration?: number;
   transformations?: string[];
   geoDuckTableReady?: boolean;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface DatasetResult {

@@ -218,6 +218,26 @@ class MapInstanceStore {
     }
   }
 
+  /**
+   * Reset the Deck.gl orthographic camera to origin.
+   * The model matrix (from projectionStore) already centers and scales data
+   * to fit the canvas at zoom 0, so target [0,0,0] + zoom 0 = "fit bounds".
+   */
+  fitToOrthographicBounds(): void {
+    if (!this._state.deckInstance) return;
+
+    this._state.deckViewState = {
+      ...this._state.deckViewState,
+      target: [0, 0, 0],
+      zoom: 0
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (this._state.deckInstance as any).setProps({
+      initialViewState: { main: this._state.deckViewState }
+    });
+    this.updateZoomFromMap();
+  }
+
   reset() {
     this._state.map = null;
     this._state.deckOverlay = null;

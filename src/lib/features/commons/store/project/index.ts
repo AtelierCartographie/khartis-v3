@@ -17,6 +17,7 @@ export {
 } from './project-lifecycle';
 
 export {
+  getSourceFileIndex,
   cleanFileForStorage,
   addFilesToProject,
   addVirtualSourceFile,
@@ -24,13 +25,21 @@ export {
   renameFile
 } from './project-files';
 
-export { addToHistory, undo, redo, canUndo, canRedo } from './project-history';
+export {
+  resetHistory,
+  addToHistory,
+  undo,
+  redo,
+  canUndo,
+  canRedo
+} from './project-history';
 
 export {
   saveCurrentProject,
   exportProject,
   importProject,
   markDirty,
+  markDirtyAndSave,
   scheduleAutoSave,
   setAutoSave
 } from './project-persistence';

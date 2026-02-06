@@ -21,6 +21,7 @@ export interface UseMapBoundsProps {
 export interface UseMapBoundsReturn {
   fitToArrowBounds: (jsTable: ArrowTable | null, datasetId?: string) => void;
   fitToGeoJSONBounds: (geojson: FeatureCollection | null) => void;
+  fitToBounds: (bounds: LngLatBoundsLike, animate?: boolean) => void;
   readonly shouldRestorePosition: boolean;
   setShouldRestorePosition: (value: boolean) => void;
   resetFitState: () => void;
@@ -40,7 +41,10 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   let lastFitGeoJSON = $state<FeatureCollection | null>(null);
   let shouldRestorePosition = $state(true);
 
-  function executeFitBounds(bounds: LngLatBoundsLike): void {
+  function executeFitBounds(
+    bounds: LngLatBoundsLike,
+    animate = false
+  ): void {
     const map = getMap();
     if (!map) {
       onFitComplete?.();
@@ -49,7 +53,7 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
 
     map.fitBounds(bounds, {
       padding: MAP_TIMING.FITBOUNDS_PADDING_PX,
-      duration: 0
+      duration: animate ? MAP_TIMING.ZOOM_ANIMATION_MS : 0
     });
 
     const onMoveEnd = () => {
@@ -142,9 +146,17 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     lastFitGeoJSON = null;
   }
 
+  function fitToBounds(bounds: LngLatBoundsLike, animate = false): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded()) return;
+    shouldRestorePosition = false;
+    executeFitBounds(bounds, animate);
+  }
+
   return {
     fitToArrowBounds,
     fitToGeoJSONBounds,
+    fitToBounds,
     get shouldRestorePosition() {
       return shouldRestorePosition;
     },
