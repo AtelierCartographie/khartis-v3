@@ -204,6 +204,12 @@
   }
 
   const mapState = useMapState();
+  const visualizationSignature = $derived.by(() =>
+    JSON.stringify({
+      selected: visualizationStore.selectedVisualization,
+      activeIds: visualizationStore.activeVisualizations.map((viz) => viz.id)
+    })
+  );
 
   const mapInit = useMapInit({
     onMapLoaded: () => {
