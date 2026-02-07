@@ -13,7 +13,8 @@ pnpm-debug.log*
 
 # Diagnostic reports
 report.*.json
-
+*AGENTS.md
+*PROMPT.md
 # Output
 .output
 .vercel
@@ -36,6 +37,7 @@ Thumbs.db
 !.env.example
 !.env.test
 .env.local
+.codex
 .env.development.local
 .env.production.local
 .env.test.local

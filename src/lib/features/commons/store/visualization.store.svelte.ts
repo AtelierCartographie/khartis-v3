@@ -372,6 +372,32 @@ class VisualizationStore {
     this.incrementVersion();
   }
 
+  setVisualizationOrder(orderedIds: string[]): void {
+    if (!orderedIds.length) {
+      return;
+    }
+
+    const idSet = new Set(orderedIds);
+    const orderedVisualizations: VisualizationConfig[] = [];
+
+    for (const id of orderedIds) {
+      const visualization = findById(this._state.visualizations, id);
+      if (visualization) {
+        orderedVisualizations.push(visualization);
+      }
+    }
+
+    if (!orderedVisualizations.length) {
+      return;
+    }
+
+    const remaining = this._state.visualizations.filter(
+      (viz) => !idSet.has(viz.id)
+    );
+    this._state.visualizations = [...orderedVisualizations, ...remaining];
+    this.incrementVersion();
+  }
+
   toggleVisualization(id: string): void {
     if (this._state.activeVisualizationIds.has(id)) {
       this._state.activeVisualizationIds.delete(id);

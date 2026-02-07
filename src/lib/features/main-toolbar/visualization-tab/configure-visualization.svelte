@@ -12,6 +12,7 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LabelsConfig from './components/labels-config.svelte';
@@ -22,6 +23,7 @@
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = $state<string>('');
+  let computeRequestCounter = $state(0);
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -86,26 +88,55 @@
         mapping: { ...selectedViz.mapping, ...updates }
       });
       if (updates.valueColumn) {
-        computeBreaksForVisualization();
+        computeBreaksForVisualization('mapping:valueColumn');
       }
     }
   }
 
-  async function computeBreaksForVisualization() {
+  async function computeBreaksForVisualization(trigger = 'unknown') {
     if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (missing dataset/valueColumn)',
+        LogCategory.UI,
+        {
+          trigger,
+          selectedVisualizationId: selectedViz?.id,
+          datasetId: selectedViz?.datasetId,
+          valueColumn: selectedViz?.mapping.valueColumn
+        }
+      );
       return;
     }
 
     const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${selectedViz.classification?.method}-${selectedViz.classification?.numClasses}`;
     if (computeKey === lastComputedKey) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (same compute key)',
+        LogCategory.UI,
+        {
+          trigger,
+          computeKey
+        }
+      );
       return;
     }
     lastComputedKey = computeKey;
+    computeRequestCounter += 1;
+    const requestId = computeRequestCounter;
 
     const dataset = datasetsStore.datasets.find(
       (d) => d.id === selectedViz.datasetId
     );
     if (!dataset?.sourceFileId) {
+      logger.warn(
+        '[configure-visualization] skipped breaks computation (missing sourceFileId)',
+        LogCategory.UI,
+        {
+          trigger,
+          requestId,
+          datasetId: selectedViz.datasetId
+        }
+      );
       return;
     }
 
@@ -113,22 +144,75 @@
     const numClasses = selectedViz.classification?.numClasses ?? 5;
 
     if (!method) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (missing method)',
+        LogCategory.UI,
+        {
+          trigger,
+          requestId,
+          selectedVisualizationId: selectedViz.id
+        }
+      );
       return;
     }
 
-    const result = await calculateBreaks({
-      datasetId: dataset.sourceFileId,
-      columnName: selectedViz.mapping.valueColumn,
-      method,
-      numClasses
-    });
+    logger.info(
+      '[configure-visualization] computing breaks',
+      LogCategory.UI,
+      {
+        trigger,
+        requestId,
+        selectedVisualizationId: selectedViz.id,
+        sourceFileId: dataset.sourceFileId,
+        valueColumn: selectedViz.mapping.valueColumn,
+        method,
+        numClasses
+      }
+    );
 
-    if (result && selectedViz?.id) {
-      const colors = generateColorsForBreaks(numClasses);
-      visualizationStore.updateClassification(selectedViz.id, {
-        breaks: result.breaks,
-        colors
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: selectedViz.mapping.valueColumn,
+        method,
+        numClasses
       });
+
+      if (result && selectedViz?.id) {
+        const colors = generateColorsForBreaks(numClasses);
+        visualizationStore.updateClassification(selectedViz.id, {
+          breaks: result.breaks,
+          colors
+        });
+        logger.success(
+          '[configure-visualization] breaks computed and applied',
+          LogCategory.UI,
+          {
+            requestId,
+            selectedVisualizationId: selectedViz.id,
+            breaksCount: result.breaks.length
+          }
+        );
+      } else {
+        logger.warn(
+          '[configure-visualization] breaks computation returned empty result',
+          LogCategory.UI,
+          {
+            requestId,
+            selectedVisualizationId: selectedViz?.id
+          }
+        );
+      }
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] breaks computation crashed',
+        LogCategory.UI,
+        {
+          requestId,
+          trigger,
+          error
+        }
+      );
     }
   }
 
@@ -138,7 +222,7 @@
       selectedViz?.classification?.method &&
       !selectedViz?.classification?.breaks?.length
     ) {
-      computeBreaksForVisualization();
+      computeBreaksForVisualization('$effect:missingBreaks');
     }
   });
 </script>

@@ -281,18 +281,29 @@ export function updateDatasetJoinInfo(
   updateDatasets((datasets) => {
     const ds = datasets.get(datasetId);
     if (ds) {
-      if (joinInfo.joinedBasemap !== undefined) {
+      if ('joinedBasemap' in joinInfo) {
         ds.joinedBasemap = joinInfo.joinedBasemap;
       }
-      if (joinInfo.geoColumn !== undefined) {
+      if ('geoColumn' in joinInfo) {
         ds.geoColumn = joinInfo.geoColumn;
       }
-      if (joinInfo.gpsMode !== undefined) {
+      if ('gpsMode' in joinInfo) {
         ds.gpsMode = joinInfo.gpsMode;
       }
-      if (joinInfo.gpsColumns !== undefined) {
+      if ('gpsColumns' in joinInfo) {
         ds.gpsColumns = joinInfo.gpsColumns;
       }
+
+      // When switching away from OSM/GPS mode, clear stale GPS columns.
+      if (joinInfo.gpsMode === false) {
+        ds.gpsColumns = undefined;
+      }
+
+      // GPS mode ignores geocoding joins.
+      if (joinInfo.gpsMode === true) {
+        ds.geoColumn = undefined;
+      }
+
       ds.arrowTableWithMetadata = undefined;
     }
   });

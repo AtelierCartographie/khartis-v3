@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Toggle } from 'carbon-components-svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import ColorDropdown from './ColorDropdown.svelte';
   import { SliderWithInput, SectionHeading } from '../shared';
   import DottedToggle from './DottedToggle.svelte';
@@ -37,8 +37,8 @@
     onchange?.({ fillColor: value });
   }
 
-  function handleFillShadowToggle() {
-    onchange?.({ fillShadow: !fillShadow });
+  function handleFillShadowToggle(value: boolean) {
+    onchange?.({ fillShadow: value });
   }
 
   function handleFillOpacityChange(value: number) {
@@ -75,13 +75,15 @@
       <ColorDropdown value={fillColor} onchange={handleFillColorChange} />
 
       <div class="toggle-row">
-        <Toggle
+        <span class="toggle-row-label">{m.basemap_config_shadow()}</span>
+        <Switch
+          toggled={fillShadow}
           labelText={m.basemap_config_shadow()}
+          hideLabel
           labelA={m.option_non()}
           labelB={m.option_oui()}
-          toggled={fillShadow}
-          on:toggle={handleFillShadowToggle}
-          size="sm"
+          showStateLabel
+          onchange={handleFillShadowToggle}
         />
       </div>
 
@@ -156,11 +158,14 @@
     gap: var(--cds-spacing-05);
   }
 
-  .toggle-row :global(.bx--toggle) {
-    margin: 0;
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
   }
 
-  .toggle-row :global(.bx--toggle-input__label) {
+  .toggle-row-label {
     font-size: 0.75rem;
     color: var(--cds-text-02);
   }

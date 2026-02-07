@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Toggle } from 'carbon-components-svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
@@ -9,8 +9,8 @@
   const isGlobe = $derived(mapProjectionStore.isGlobe);
   const requiresMapLibre = $derived(basemapStyleStore.requiresMapLibre);
 
-  async function handleToggle(): Promise<void> {
-    mapProjectionStore.toggle();
+  async function handleToggle(isGlobe: boolean): Promise<void> {
+    mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator');
     if (projectStore.currentProject) {
       await projectStore.saveCurrentProject();
     }
@@ -23,13 +23,14 @@
       {m.map_projection_label()}
       <InfoPopover text={m.map_projection_info()} />
     </span>
-    <Toggle
-      labelText=""
-      hideLabel
+    <Switch
       labelA={m.map_projection_mercator()}
       labelB={m.map_projection_globe()}
       toggled={isGlobe}
-      on:toggle={handleToggle}
+      labelText={m.map_projection_label()}
+      hideLabel
+      showStateLabel
+      onchange={handleToggle}
     />
   </div>
 {/if}

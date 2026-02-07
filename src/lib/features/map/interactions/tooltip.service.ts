@@ -1,4 +1,5 @@
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { ReservedColumnName } from '../constants';
@@ -69,6 +70,64 @@ function extractEntriesFromArrowTable(
   return entries;
 }
 
+/**
+ * Extract the datasetId embedded in a Deck.gl layer ID.
+ * Layer IDs follow the pattern: `{prefix}-{datasetId}` or `{prefix}-{datasetId}-{suffix}`.
+ */
+function extractDatasetIdFromLayerId(layerId: string): string | null {
+  const parts = layerId.split('-');
+  // prefix is first segment, datasetId is the rest before any projection suffix
+  // DatasetIds are branded strings like "ds_abc123" so they start with "ds_"
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i].startsWith('ds_')) {
+      return parts[i];
+    }
+  }
+  return parts.length >= 2 ? parts[1] : null;
+}
+
+/**
+ * Get the set of mapping columns used in visualizations for a given datasetId.
+ * These columns should appear first in the tooltip.
+ */
+function getVizColumnNames(
+  visualizations: VisualizationConfig[],
+  datasetId: string
+): Set<string> {
+  const columns = new Set<string>();
+  for (const viz of visualizations) {
+    if (viz.datasetId !== datasetId) continue;
+    const m = viz.mapping;
+    if (m.valueColumn) columns.add(m.valueColumn);
+    if (m.categoryColumn) columns.add(m.categoryColumn);
+    if (m.sizeColumn) columns.add(m.sizeColumn);
+    if (m.colorColumn) columns.add(m.colorColumn);
+    if (m.labelColumn) columns.add(m.labelColumn);
+  }
+  return columns;
+}
+
+/**
+ * Sort entries so that visualization mapping columns appear first,
+ * preserving relative order within each group.
+ */
+function sortEntriesByVizPriority(
+  entries: TooltipEntry[],
+  vizColumns: Set<string>
+): TooltipEntry[] {
+  if (vizColumns.size === 0) return entries;
+  const priority: TooltipEntry[] = [];
+  const rest: TooltipEntry[] = [];
+  for (const entry of entries) {
+    if (vizColumns.has(entry.key)) {
+      priority.push(entry);
+    } else {
+      rest.push(entry);
+    }
+  }
+  return [...priority, ...rest];
+}
+
 function buildTooltipHtml(entries: TooltipEntry[]): string {
   const visibleEntries = entries.slice(0, MAX_TOOLTIP_ENTRIES);
   const hiddenEntries = entries.slice(MAX_TOOLTIP_ENTRIES);
@@ -114,7 +173,10 @@ function buildTooltipHtml(entries: TooltipEntry[]): string {
   return html;
 }
 
-export function getTooltip(info: PickingInfo): TooltipContent {
+export function getTooltip(
+  info: PickingInfo,
+  visualizations?: VisualizationConfig[]
+): TooltipContent {
   if (!info.picked || info.index === undefined || info.index === -1) {
     return null;
   }
@@ -139,12 +201,24 @@ export function getTooltip(info: PickingInfo): TooltipContent {
 
   if (entries.length === 0) return null;
 
+  // Prioritize visualization mapping columns at the top of the tooltip
+  if (visualizations && visualizations.length > 0 && info.layer?.id) {
+    const datasetId = extractDatasetIdFromLayerId(info.layer.id);
+    if (datasetId) {
+      const vizColumns = getVizColumnNames(visualizations, datasetId);
+      entries = sortEntriesByVizPriority(entries, vizColumns);
+    }
+  }
+
   return {
     html: buildTooltipHtml(entries),
     style: DEFAULT_TOOLTIP_STYLE
   };
 }
 
-export function createTooltipHandler(): (info: PickingInfo) => TooltipContent {
-  return (info: PickingInfo) => getTooltip(info);
+export function createTooltipHandler(
+  getVisualizations?: () => VisualizationConfig[]
+): (info: PickingInfo) => TooltipContent {
+  return (info: PickingInfo) =>
+    getTooltip(info, getVisualizations?.());
 }

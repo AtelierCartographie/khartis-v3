@@ -40,6 +40,7 @@ export interface UseMapInitProps {
   onMapLoaded: () => void;
   onZoom: () => void;
   onMoveEnd: () => void;
+  getActiveVisualizations?: () => import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig[];
 }
 
 export interface UseMapInitReturn {
@@ -64,7 +65,7 @@ const DEFAULT_CONFIG: MapInitConfig = {
 const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: 'main', flipY: false });
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
-  const { onMapLoaded, onZoom, onMoveEnd } = props;
+  const { onMapLoaded, onZoom, onMoveEnd, getActiveVisualizations } = props;
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
@@ -117,7 +118,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       height: '100%',
       controller: { scrollZoom: false, doubleClickZoom: false },
       layers: [],
-      getTooltip: createTooltipHandler(),
+      getTooltip: createTooltipHandler(getActiveVisualizations),
       onViewStateChange: handleViewStateChange as DeckProps<
         [OrthographicView]
       >['onViewStateChange'],
@@ -175,7 +176,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       deckOverlay = new MapboxOverlay({
         interleaved: true,
         layers: [],
-        getTooltip: createTooltipHandler()
+        getTooltip: createTooltipHandler(getActiveVisualizations)
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);
@@ -249,16 +250,21 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function destroy(): void {
-    if (map) {
-      map.remove();
-      map = null;
-    }
-    if (deckInstance) {
-      deckInstance.finalize();
-      deckInstance = null;
-    }
+    // Clear reactive refs first so concurrent effects cannot read stale
+    // Deck/Map instances during teardown.
+    const mapToRemove = map;
+    const deckToFinalize = deckInstance;
+    map = null;
+    deckInstance = null;
     deckOverlay = null;
     isMapLoaded = false;
+
+    if (mapToRemove) {
+      mapToRemove.remove();
+    }
+    if (deckToFinalize) {
+      deckToFinalize.finalize();
+    }
     projectionStore.reset();
     mapInstanceStore.reset();
     logger.info('Map destroyed', LogCategory.MAP);

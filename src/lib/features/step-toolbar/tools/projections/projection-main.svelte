@@ -11,13 +11,23 @@
   import { Grid, List } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { GROUPS, PROJECTIONS } from './data';
-  import { projectionActions } from './projection.store.svelte';
+  import {
+    getProjectionState,
+    projectionActions
+  } from './projection.store.svelte';
 
   const description = m.projection_description();
 
   const projections = PROJECTIONS;
 
-  let selectedId = $state<string>(projections[0].id);
+  const projectionState = $derived(getProjectionState());
+  const selectedCardId = $derived.by(() => {
+    const selectedProjection = projectionState.selected;
+    const matchingCard = projections.find(
+      (projection) => projection.projectionId === selectedProjection
+    );
+    return matchingCard?.id ?? projections[0].id;
+  });
 
   const filterOptions: ReadonlyArray<{
     id: ProjectionFilterId;
@@ -34,8 +44,8 @@
     PROJECTIONS.filter((p) => activeFilter === 'all' || p.tag === activeFilter)
   );
 
-  function selectProjection(id: string) {
-    selectedId = id;
+  function selectProjection(projectionId: string) {
+    projectionActions.setSelected(projectionId);
   }
 
   function setFilter(id: ProjectionFilterId) {
@@ -106,10 +116,10 @@
           tag={p.tag}
           ratio={p.ratio}
           previewLabel={p.previewLabel}
-          selected={selectedId === p.id}
+          selected={selectedCardId === p.id}
           disabled={p.disabled}
           variant={p.variant}
-          onclick={() => selectProjection(p.id)}
+          onclick={() => selectProjection(p.projectionId)}
         />
       {/each}
     </div>
@@ -128,12 +138,12 @@
                   tag={p.tag}
                   ratio={p.ratio}
                   previewLabel={p.previewLabel}
-                  selected={selectedId === p.id}
+                  selected={selectedCardId === p.id}
                   disabled={p.disabled}
                   variant={p.variant}
                   layout="vertical"
                   fullWidth
-                  onclick={() => selectProjection(p.id)}
+                  onclick={() => selectProjection(p.projectionId)}
                 />
               {/each}
             </div>

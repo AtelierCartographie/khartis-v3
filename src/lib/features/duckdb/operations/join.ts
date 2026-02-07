@@ -108,7 +108,6 @@ export async function joinById(
     }
   } else if (basemap_table) {
     basemap_join_ref_name = `${basemap_table}_join_ref`;
-    const escapedBasemapJoinRefName = escapeSqlString(basemap_join_ref_name);
     if (basemap_others_id) {
       await executeQuery(
         ctx.connection,
@@ -196,14 +195,22 @@ export async function applyJoinAssociation(
   await executeQuery(
     ctx.connection,
     `CREATE OR REPLACE TABLE "${escapedTable}" AS
+      WITH ranked_join AS (
+        SELECT *
+        FROM "${escapedJoinResultsName}"
+        WHERE basemap = '${escapedBasemap}'
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY geoname
+          ORDER BY score DESC, id
+        ) = 1
+      )
       SELECT
         t.* ${excludeClause},
         j.id as basemap_id,
         j.typo_match
       FROM "${escapedTable}" as t
-      LEFT JOIN "${escapedJoinResultsName}" as j
-      ON t."${escapedId}" = j.geoname
-      WHERE j.basemap = '${escapedBasemap}'`
+      LEFT JOIN ranked_join as j
+      ON t."${escapedId}" = j.geoname`
   );
   markTableMutated(ctx, table);
 }

@@ -74,7 +74,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     styleLoadStartTime = performance.now();
 
     if (styleLoadHandler) {
-      map.off('styledata', styleLoadHandler);
+      map.off('style.load', styleLoadHandler);
     }
 
     styleLoadHandler = () => {
@@ -88,7 +88,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       lastAppliedStyleKey = styleKey;
 
       if (styleLoadHandler) {
-        map.off('styledata', styleLoadHandler);
+        map.off('style.load', styleLoadHandler);
         styleLoadHandler = null;
       }
 
@@ -98,7 +98,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     };
 
-    map.once('styledata', styleLoadHandler);
+    // `style.load` fires once when the full style graph is ready.
+    // Using `styledata` can flip the loading flag too early.
+    map.once('style.load', styleLoadHandler);
     logger.debug('Calling map.setStyle()', LogCategory.MAP);
     map.setStyle(style);
   }
@@ -158,7 +160,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   function cleanup(): void {
     const map = getMap();
     if (map && styleLoadHandler) {
-      map.off('styledata', styleLoadHandler);
+      map.off('style.load', styleLoadHandler);
       styleLoadHandler = null;
     }
     isStyleLoading = false;

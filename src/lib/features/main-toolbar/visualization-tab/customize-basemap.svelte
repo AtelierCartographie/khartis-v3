@@ -14,30 +14,26 @@
   import MapProjectionSelector from './map-projection-selector.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
     basemapLayersStore,
-    type TerreLayerConfig,
-    type MersLayerConfig,
-    type LacsLayerConfig,
-    type RivieresLayerConfig,
-    type ReliefLayerConfig,
-    type EquateurLayerConfig,
-    type MeridiensLayerConfig,
-    type FrontieresLayerConfig,
-    type VillesLayerConfig,
+    type BasemapLayerConfig,
     type BasemapLayerId
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
-  const terreConfig = $derived(basemapLayersStore.getLayer('terre'));
-  const mersConfig = $derived(basemapLayersStore.getLayer('mers'));
-  const lacsConfig = $derived(basemapLayersStore.getLayer('lacs'));
-  const rivieresConfig = $derived(basemapLayersStore.getLayer('rivieres'));
-  const reliefConfig = $derived(basemapLayersStore.getLayer('relief'));
-  const equateurConfig = $derived(basemapLayersStore.getLayer('equateur'));
-  const meridiensConfig = $derived(basemapLayersStore.getLayer('meridiens'));
-  const frontieresConfig = $derived(basemapLayersStore.getLayer('frontieres'));
-  const villesConfig = $derived(basemapLayersStore.getLayer('villes'));
+  // Single $derived: one array iteration instead of 9 separate .find() calls
+  const layerConfigs = $derived(
+    new Map(basemapLayersStore.layers.map((l) => [l.id, l] as const))
+  );
+
+  function getConfig<T extends BasemapLayerId>(
+    id: T
+  ): Extract<BasemapLayerConfig, { id: T }> | undefined {
+    return layerConfigs.get(id) as
+      | Extract<BasemapLayerConfig, { id: T }>
+      | undefined;
+  }
 
   const isTiledBasemapEnabled = $derived(
     basemapStyleStore.selectedStyle !== BasemapStyle.BLANK_WHITE
@@ -49,73 +45,40 @@
     isTiledBasemapEnabled ? m.basemap_layers_disabled_by_maplibre() : undefined
   );
 
-  // Not implemented layers - kept for future expansion
-  // const notImplementedLayers: BasemapLayerId[] = [];
-  // const isLayerNotImplemented = (layerId: BasemapLayerId) =>
-  //   notImplementedLayers.includes(layerId);
-  // const notImplementedReason = m.basemap_layer_not_implemented();
+  const notImplementedReason = m.basemap_layer_not_implemented();
 
-  function markProjectDirty() {
+  function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
+    logger.info('[customize-basemap] layer visibility toggled', LogCategory.UI, {
+      layerId,
+      checked
+    });
+    basemapLayersStore.setLayerVisibility(layerId, checked);
     projectStore.markAsDirty();
   }
 
-  function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
-    basemapLayersStore.setLayerVisibility(layerId, checked);
-    markProjectDirty();
-  }
-
   function handleTiledBasemapToggle(checked: boolean) {
+    logger.info('[customize-basemap] tiled basemap toggled', LogCategory.UI, {
+      checked,
+      previousStyle: basemapStyleStore.selectedStyle
+    });
     if (checked) {
       basemapStyleStore.setStyle(BasemapStyle.CARTE_FACILE_DESATURATED);
     } else {
       basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
     }
-    markProjectDirty();
+    projectStore.markAsDirty();
   }
 
-  function handleTerreChange(updates: Partial<TerreLayerConfig>) {
-    basemapLayersStore.updateLayer('terre', updates);
-    markProjectDirty();
-  }
-
-  function handleMersChange(updates: Partial<MersLayerConfig>) {
-    basemapLayersStore.updateLayer('mers', updates);
-    markProjectDirty();
-  }
-
-  function handleLacsChange(updates: Partial<LacsLayerConfig>) {
-    basemapLayersStore.updateLayer('lacs', updates);
-    markProjectDirty();
-  }
-
-  function handleRivieresChange(updates: Partial<RivieresLayerConfig>) {
-    basemapLayersStore.updateLayer('rivieres', updates);
-    markProjectDirty();
-  }
-
-  function handleReliefChange(updates: Partial<ReliefLayerConfig>) {
-    basemapLayersStore.updateLayer('relief', updates);
-    markProjectDirty();
-  }
-
-  function handleEquateurChange(updates: Partial<EquateurLayerConfig>) {
-    basemapLayersStore.updateLayer('equateur', updates);
-    markProjectDirty();
-  }
-
-  function handleMeridiensChange(updates: Partial<MeridiensLayerConfig>) {
-    basemapLayersStore.updateLayer('meridiens', updates);
-    markProjectDirty();
-  }
-
-  function handleFrontieresChange(updates: Partial<FrontieresLayerConfig>) {
-    basemapLayersStore.updateLayer('frontieres', updates);
-    markProjectDirty();
-  }
-
-  function handleVillesChange(updates: Partial<VillesLayerConfig>) {
-    basemapLayersStore.updateLayer('villes', updates);
-    markProjectDirty();
+  function handleLayerChange<T extends BasemapLayerId>(
+    id: T,
+    updates: Partial<Extract<BasemapLayerConfig, { id: T }>>
+  ): void {
+    logger.debug('[customize-basemap] layer style updated', LogCategory.UI, {
+      layerId: id,
+      updates
+    });
+    basemapLayersStore.updateLayer(id, updates);
+    projectStore.markAsDirty();
   }
 </script>
 
@@ -131,22 +94,22 @@
     <ExpandableSection
       title={m.basemap_layer_terre()}
       showToggle={true}
-      toggleChecked={terreConfig?.visible ?? true}
+      toggleChecked={getConfig('terre')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('terre', checked)}
       defaultOpen={true}
     >
       <LayerConfigTerre
-        fillColor={terreConfig?.fillColor}
-        fillShadow={terreConfig?.fillShadow}
-        fillOpacity={terreConfig?.fillOpacity}
-        strokeColor={terreConfig?.strokeColor}
-        strokeDotted={terreConfig?.strokeDotted}
-        strokeDottedPattern={terreConfig?.strokeDottedPattern}
-        strokeThickness={terreConfig?.strokeThickness}
-        strokeOpacity={terreConfig?.strokeOpacity}
-        onchange={handleTerreChange}
+        fillColor={getConfig('terre')?.fillColor}
+        fillShadow={getConfig('terre')?.fillShadow}
+        fillOpacity={getConfig('terre')?.fillOpacity}
+        strokeColor={getConfig('terre')?.strokeColor}
+        strokeDotted={getConfig('terre')?.strokeDotted}
+        strokeDottedPattern={getConfig('terre')?.strokeDottedPattern}
+        strokeThickness={getConfig('terre')?.strokeThickness}
+        strokeOpacity={getConfig('terre')?.strokeOpacity}
+        onchange={(updates) => handleLayerChange('terre', updates)}
       />
     </ExpandableSection>
 
@@ -154,7 +117,7 @@
     <ExpandableSection
       title={m.basemap_layer_mers()}
       showToggle={true}
-      toggleChecked={mersConfig?.visible ?? true}
+      toggleChecked={getConfig('mers')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('mers', checked)}
@@ -163,9 +126,9 @@
         showColor={true}
         showDotted={false}
         showThickness={false}
-        color={mersConfig?.color}
-        opacity={mersConfig?.opacity}
-        onchange={handleMersChange}
+        color={getConfig('mers')?.color}
+        opacity={getConfig('mers')?.opacity}
+        onchange={(updates) => handleLayerChange('mers', updates)}
       />
     </ExpandableSection>
 
@@ -173,7 +136,7 @@
     <ExpandableSection
       title={m.basemap_layer_lacs()}
       showToggle={true}
-      toggleChecked={lacsConfig?.visible ?? true}
+      toggleChecked={getConfig('lacs')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('lacs', checked)}
@@ -182,9 +145,9 @@
         showColor={true}
         showDotted={false}
         showThickness={false}
-        color={lacsConfig?.color}
-        opacity={lacsConfig?.opacity}
-        onchange={handleLacsChange}
+        color={getConfig('lacs')?.color}
+        opacity={getConfig('lacs')?.opacity}
+        onchange={(updates) => handleLayerChange('lacs', updates)}
       />
     </ExpandableSection>
 
@@ -192,7 +155,7 @@
     <ExpandableSection
       title={m.basemap_layer_rivieres()}
       showToggle={true}
-      toggleChecked={rivieresConfig?.visible ?? true}
+      toggleChecked={getConfig('rivieres')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('rivieres', checked)}
@@ -201,12 +164,12 @@
         showColor={true}
         showDotted={true}
         showThickness={true}
-        color={rivieresConfig?.color}
-        dotted={rivieresConfig?.dotted}
-        dottedPattern={rivieresConfig?.dottedPattern}
-        thickness={rivieresConfig?.thickness}
-        opacity={rivieresConfig?.opacity}
-        onchange={handleRivieresChange}
+        color={getConfig('rivieres')?.color}
+        dotted={getConfig('rivieres')?.dotted}
+        dottedPattern={getConfig('rivieres')?.dottedPattern}
+        thickness={getConfig('rivieres')?.thickness}
+        opacity={getConfig('rivieres')?.opacity}
+        onchange={(updates) => handleLayerChange('rivieres', updates)}
       />
     </ExpandableSection>
 
@@ -214,16 +177,18 @@
     <ExpandableSection
       title={m.basemap_layer_relief()}
       showToggle={true}
-      toggleChecked={reliefConfig?.visible ?? true}
-      disabled={areDeckLayersDisabled}
-      disabledReason={deckLayersDisabledReason}
+      toggleChecked={getConfig('relief')?.visible ?? true}
+      disabled={true}
+      disabledReason={areDeckLayersDisabled
+        ? deckLayersDisabledReason
+        : notImplementedReason}
       onToggleChange={(checked) => handleLayerToggle('relief', checked)}
     >
       <LayerConfigRelief
-        representation={reliefConfig?.representation}
-        color={reliefConfig?.color}
-        opacity={reliefConfig?.opacity}
-        onchange={handleReliefChange}
+        representation={getConfig('relief')?.representation}
+        color={getConfig('relief')?.color}
+        opacity={getConfig('relief')?.opacity}
+        onchange={(updates) => handleLayerChange('relief', updates)}
       />
     </ExpandableSection>
 
@@ -231,7 +196,7 @@
     <ExpandableSection
       title={m.basemap_layer_equateur()}
       showToggle={true}
-      toggleChecked={equateurConfig?.visible ?? true}
+      toggleChecked={getConfig('equateur')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('equateur', checked)}
@@ -241,12 +206,12 @@
         showDotted={true}
         showThickness={true}
         thicknessMax={20}
-        color={equateurConfig?.color}
-        dotted={equateurConfig?.dotted}
-        dottedPattern={equateurConfig?.dottedPattern}
-        thickness={equateurConfig?.thickness}
-        opacity={equateurConfig?.opacity}
-        onchange={handleEquateurChange}
+        color={getConfig('equateur')?.color}
+        dotted={getConfig('equateur')?.dotted}
+        dottedPattern={getConfig('equateur')?.dottedPattern}
+        thickness={getConfig('equateur')?.thickness}
+        opacity={getConfig('equateur')?.opacity}
+        onchange={(updates) => handleLayerChange('equateur', updates)}
       />
     </ExpandableSection>
 
@@ -254,19 +219,19 @@
     <ExpandableSection
       title={m.basemap_layer_meridiens()}
       showToggle={true}
-      toggleChecked={meridiensConfig?.visible ?? true}
+      toggleChecked={getConfig('meridiens')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('meridiens', checked)}
     >
       <LayerConfigMeridiens
-        remarquables={meridiensConfig?.remarquables}
-        color={meridiensConfig?.color}
-        dotted={meridiensConfig?.dotted}
-        dottedPattern={meridiensConfig?.dottedPattern}
-        thickness={meridiensConfig?.thickness}
-        opacity={meridiensConfig?.opacity}
-        onchange={handleMeridiensChange}
+        remarquables={getConfig('meridiens')?.remarquables}
+        color={getConfig('meridiens')?.color}
+        dotted={getConfig('meridiens')?.dotted}
+        dottedPattern={getConfig('meridiens')?.dottedPattern}
+        thickness={getConfig('meridiens')?.thickness}
+        opacity={getConfig('meridiens')?.opacity}
+        onchange={(updates) => handleLayerChange('meridiens', updates)}
       />
     </ExpandableSection>
 
@@ -274,7 +239,7 @@
     <ExpandableSection
       title={m.basemap_layer_frontieres()}
       showToggle={true}
-      toggleChecked={frontieresConfig?.visible ?? true}
+      toggleChecked={getConfig('frontieres')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('frontieres', checked)}
@@ -284,12 +249,12 @@
         showDotted={true}
         showThickness={true}
         thicknessMax={20}
-        color={frontieresConfig?.color}
-        dotted={frontieresConfig?.dotted}
-        dottedPattern={frontieresConfig?.dottedPattern}
-        thickness={frontieresConfig?.thickness}
-        opacity={frontieresConfig?.opacity}
-        onchange={handleFrontieresChange}
+        color={getConfig('frontieres')?.color}
+        dotted={getConfig('frontieres')?.dotted}
+        dottedPattern={getConfig('frontieres')?.dottedPattern}
+        thickness={getConfig('frontieres')?.thickness}
+        opacity={getConfig('frontieres')?.opacity}
+        onchange={(updates) => handleLayerChange('frontieres', updates)}
       />
     </ExpandableSection>
 
@@ -297,18 +262,18 @@
     <ExpandableSection
       title={m.basemap_layer_villes()}
       showToggle={true}
-      toggleChecked={villesConfig?.visible ?? true}
+      toggleChecked={getConfig('villes')?.visible ?? true}
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('villes', checked)}
     >
       <LayerConfigVilles
-        category={villesConfig?.category}
-        symbol={villesConfig?.symbol}
-        color={villesConfig?.color}
-        size={villesConfig?.size}
-        opacity={villesConfig?.opacity}
-        onchange={handleVillesChange}
+        category={getConfig('villes')?.category}
+        symbol={getConfig('villes')?.symbol}
+        color={getConfig('villes')?.color}
+        size={getConfig('villes')?.size}
+        opacity={getConfig('villes')?.opacity}
+        onchange={(updates) => handleLayerChange('villes', updates)}
       />
     </ExpandableSection>
 
