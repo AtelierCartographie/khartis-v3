@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Toggle, Dropdown } from 'carbon-components-svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
+  import { Dropdown } from 'carbon-components-svelte';
   import { BasemapDottedPattern } from '../../../constants';
 
   interface PatternOption {
@@ -44,8 +45,8 @@
     onpatternchange
   }: Props = $props();
 
-  function handleToggle() {
-    onenabledchange?.(!enabled);
+  function handleToggle(next: boolean): void {
+    onenabledchange?.(next);
   }
 
   function handlePatternChange(e: CustomEvent<{ selectedId: string }>) {
@@ -54,14 +55,18 @@
 </script>
 
 <div class="dotted-toggle">
-  <Toggle
-    labelText={label}
-    labelA={m.option_non()}
-    labelB={m.option_oui()}
-    toggled={enabled}
-    on:toggle={handleToggle}
-    size="sm"
-  />
+  <div class="dotted-toggle-row">
+    <span class="dotted-label">{label}</span>
+    <Switch
+      toggled={enabled}
+      labelText={label}
+      hideLabel
+      labelA={m.option_non()}
+      labelB={m.option_oui()}
+      showStateLabel
+      onchange={handleToggle}
+    />
+  </div>
 
   {#if showPattern && enabled}
     <div class="pattern-selector">
@@ -82,12 +87,19 @@
     gap: var(--cds-spacing-03);
   }
 
-  .pattern-selector {
-    margin-top: var(--cds-spacing-02);
+  .dotted-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
   }
 
-  .dotted-toggle :global(.bx--toggle-input__label) {
+  .dotted-label {
     font-size: 0.75rem;
     color: var(--cds-text-02);
+  }
+
+  .pattern-selector {
+    margin-top: var(--cds-spacing-02);
   }
 </style>

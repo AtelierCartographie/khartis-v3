@@ -9,6 +9,7 @@ import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
+import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
 import {
   createBasemapLayers,
   createDeckLayers,
@@ -57,18 +58,32 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return undefined;
   }
 
-  function setLayers(layers: Layer<DeckDataRow>[]): void {
+  function setLayers(layers: Layer<DeckDataRow>[]): boolean {
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
 
-    if (deckOverlay) {
-      deckOverlay.setProps({ layers });
-    } else if (deckInstance) {
-      deckInstance.setProps({ layers });
+    try {
+      if (deckOverlay) {
+        deckOverlay.setProps({ layers });
+        return true;
+      }
+      if (deckInstance) {
+        deckInstance.setProps({ layers });
+        return true;
+      }
+      return false;
+    } catch (error) {
+      logger.error(
+        'Failed to apply Deck.gl layers on current rendering context',
+        LogCategory.MAP,
+        error
+      );
+      return false;
     }
   }
 
   let updateCount = 0;
+  let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
@@ -90,132 +105,209 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return;
     }
 
-    const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
-    const worldBaseTable = getWorldBaseTable();
-    const activeVisualizations = getActiveVisualizations();
-
-    // Only apply modelMatrix in orthographic mode (Deck.gl standalone)
-    // In MapLibre mode (deckOverlay), the map handles projection including globe
-    const isOrthographicMode = !deckOverlay && deckInstance;
-    const matrixToApply = isOrthographicMode
-      ? projectionStore.modelMatrix
-      : null;
-
-    // In MapLibre mode, use projection suffix to force layer re-creation when projection changes
-    // This is a workaround for deck.gl issue #9466 where layers don't sync with globe projection
-    const projectionSuffix = deckOverlay
-      ? mapProjectionStore.projection
-      : undefined;
-
-    // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
-    const beforeId =
-      map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
-
-    logger.debug(
-      'Updating Deck.gl layers for multi-dataset view',
-      LogCategory.MAP,
-      {
-        tablesCount: tables.size,
-        geoJSONsCount: geoJSONs.size,
-        activeVisualizationsCount: activeVisualizations.length,
-        hasWorldBase: Boolean(worldBaseTable),
-        isOSMActive,
-        isOrthographicMode,
-        beforeId
-      }
-    );
-
-    const layers: Layer<DeckDataRow>[] = [];
-
-    // Only show basemap layers in orthographic mode (Deck.gl standalone)
-    // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
-    const shouldShowBasemapLayers = !isOSMActive && isOrthographicMode;
-
-    if (shouldShowBasemapLayers) {
-      const basemapStart = performance.now();
-      const basemapCtx = {
-        modelMatrix: matrixToApply ?? undefined,
-        projectionSuffix
-      };
-      const additionalData = {
-        lakesData: basemapService.lakesData ?? undefined,
-        riversData: basemapService.riversData ?? undefined,
-        citiesData: basemapService.citiesData ?? undefined
-      };
-      const basemapLayers = createBasemapLayers(
-        worldBaseTable,
-        basemapCtx,
-        additionalData
-      );
-      layers.push(...basemapLayers);
+    // In MapLibre mode, avoid pushing layers while style is being swapped/reloaded.
+    if (deckOverlay && map && !map.isStyleLoaded()) {
       logger.debug(
-        `Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`,
+        'Skipping layer update while MapLibre style is loading',
         LogCategory.MAP
       );
+      return;
     }
 
-    logger.debug(
-      `Processing ${activeVisualizations.length} visualizations`,
-      LogCategory.MAP
-    );
-    for (const viz of activeVisualizations) {
-      const vizStart = performance.now();
-      const datasetId = viz.datasetId;
-      const table = tables.get(datasetId);
-      const geojson = geoJSONs.get(datasetId);
+    try {
+      const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
+      const worldBaseTable = getWorldBaseTable();
+      const activeVisualizations = getActiveVisualizations();
 
-      const ctx = buildLayerContextForViz(viz);
-      ctx.modelMatrix = matrixToApply;
-      ctx.projectionSuffix = projectionSuffix;
-      ctx.beforeId = beforeId;
+      // Only apply modelMatrix in orthographic mode (Deck.gl standalone)
+      // In MapLibre mode (deckOverlay), the map handles projection including globe
+      const isOrthographicMode = !deckOverlay && deckInstance;
+      const matrixToApply = isOrthographicMode
+        ? projectionStore.modelMatrix
+        : null;
 
-      if (geojson) {
-        const geojsonStart = performance.now();
-        const geojsonLayers = createGeoJsonLayers(geojson, ctx);
-        layers.push(...geojsonLayers);
-        logger.debug(
-          `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
-          LogCategory.MAP
-        );
-      } else if (table) {
-        const geoMetadata = table.schema.metadata?.get('geo');
-        if (!geoMetadata) {
-          logger.warn(
-            'Arrow table missing GeoArrow metadata, skipping',
-            LogCategory.MAP,
-            { datasetId }
-          );
-          continue;
+      // In MapLibre mode, use projection suffix to force layer re-creation when projection changes
+      // This is a workaround for deck.gl issue #9466 where layers don't sync with globe projection
+      const projectionSuffix = deckOverlay
+        ? mapProjectionStore.projection
+        : undefined;
+
+      // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
+      const beforeId =
+        map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
+
+      logger.debug(
+        'Updating Deck.gl layers for multi-dataset view',
+        LogCategory.MAP,
+        {
+          tablesCount: tables.size,
+          geoJSONsCount: geoJSONs.size,
+          activeVisualizationsCount: activeVisualizations.length,
+          hasWorldBase: Boolean(worldBaseTable),
+          isOSMActive,
+          isOrthographicMode,
+          beforeId
         }
-        const arrowStart = performance.now();
-        const arrowLayers = createDeckLayers(table, ctx);
-        layers.push(...arrowLayers);
-        logger.debug(
-          `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
-          LogCategory.MAP
-        );
+      );
+
+      const layers: Layer<DeckDataRow>[] = [];
+
+      // Only show basemap layers in orthographic mode (Deck.gl standalone)
+      // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
+      const shouldShowBasemapLayers = !isOSMActive && isOrthographicMode;
+
+      if (shouldShowBasemapLayers) {
+        try {
+          const basemapStart = performance.now();
+          const basemapCtx = {
+            modelMatrix: matrixToApply ?? undefined,
+            projectionSuffix
+          };
+          const additionalData = {
+            lakesData: basemapService.lakesData ?? undefined,
+            riversData: basemapService.riversData ?? undefined,
+            citiesData: basemapService.citiesData ?? undefined
+          };
+          const basemapLayers = createBasemapLayers(
+            worldBaseTable,
+            basemapCtx,
+            additionalData
+          );
+          layers.push(...basemapLayers);
+          logger.debug(
+            `Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`,
+            LogCategory.MAP
+          );
+        } catch (error) {
+          logger.error(
+            'Basemap layer creation failed; rendering thematic layers only',
+            LogCategory.MAP,
+            error
+          );
+        }
       }
+
       logger.debug(
-        `Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`,
+        `Processing ${activeVisualizations.length} visualizations`,
         LogCategory.MAP
       );
+      for (const viz of activeVisualizations) {
+        const vizStart = performance.now();
+        try {
+          const datasetId = viz.datasetId;
+          const table = tables.get(datasetId);
+          const geojson = geoJSONs.get(datasetId);
+
+          const ctx = buildLayerContextForViz(viz);
+          ctx.modelMatrix = matrixToApply;
+          ctx.projectionSuffix = projectionSuffix;
+          ctx.beforeId = beforeId;
+
+          if (geojson) {
+            const geojsonStart = performance.now();
+            const geojsonLayers = createGeoJsonLayers(geojson, ctx);
+            layers.push(...geojsonLayers);
+            logger.debug(
+              `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
+              LogCategory.MAP
+            );
+          } else if (table) {
+            const geoMetadata = table.schema.metadata?.get('geo');
+            if (!geoMetadata) {
+              logger.warn(
+                'Arrow table missing GeoArrow metadata, skipping',
+                LogCategory.MAP,
+                { datasetId }
+              );
+              continue;
+            }
+            const arrowStart = performance.now();
+            const arrowLayers = createDeckLayers(table, ctx);
+            layers.push(...arrowLayers);
+            logger.debug(
+              `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
+              LogCategory.MAP
+            );
+          }
+          logger.debug(
+            `Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`,
+            LogCategory.MAP
+          );
+        } catch (error) {
+          logger.error(
+            'Visualization layer creation failed; continuing with remaining visualizations',
+            LogCategory.MAP,
+            {
+              visualizationId: viz.id,
+              datasetId: viz.datasetId,
+              error
+            }
+          );
+        }
+      }
+
+      const setStart = performance.now();
+      const hasExpectedActiveViz = activeVisualizations.length > 0;
+      const hasVisibleBasemapConfig =
+        shouldShowBasemapLayers && basemapLayersStore.visibleLayers.length > 0;
+      const hasExpectedVisibleLayers =
+        hasExpectedActiveViz || hasVisibleBasemapConfig;
+      const shouldPreservePreviousLayers =
+        layers.length === 0 &&
+        lastAppliedLayers.length > 0 &&
+        hasExpectedVisibleLayers;
+
+      if (shouldPreservePreviousLayers) {
+        logger.warn(
+          'Computed empty layer stack unexpectedly; preserving last valid layers',
+          LogCategory.MAP,
+          {
+            activeVisualizationsCount: activeVisualizations.length,
+            tablesCount: tables.size,
+            geoJSONsCount: geoJSONs.size,
+            hasVisibleBasemapConfig
+          }
+        );
+        const applied = setLayers(lastAppliedLayers);
+        if (!applied) {
+          return;
+        }
+      } else {
+        const applied = setLayers(layers);
+        if (!applied) {
+          return;
+        }
+        if (layers.length > 0) {
+          lastAppliedLayers = layers;
+        } else if (!hasExpectedVisibleLayers) {
+          // When emptiness is expected, drop fallback layers to avoid stale restores.
+          lastAppliedLayers = [];
+        }
+      }
+      logger.debug(
+        `setLayers took ${(performance.now() - setStart).toFixed(1)}ms`,
+        LogCategory.MAP
+      );
+      logger.debug(
+        `updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`,
+        LogCategory.MAP
+      );
+
+      logger.success('Deck.gl layers applied', LogCategory.MAP, {
+        layerCount: layers.length,
+        isOSMActive
+      });
+    } catch (error) {
+      logger.error(
+        'Unexpected failure while updating map layers',
+        LogCategory.MAP,
+        error
+      );
+
+      if (lastAppliedLayers.length > 0) {
+        setLayers(lastAppliedLayers);
+      }
     }
-
-    const setStart = performance.now();
-    setLayers(layers);
-    logger.debug(
-      `setLayers took ${(performance.now() - setStart).toFixed(1)}ms`,
-      LogCategory.MAP
-    );
-    logger.debug(
-      `updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`,
-      LogCategory.MAP
-    );
-
-    logger.success('Deck.gl layers applied', LogCategory.MAP, {
-      layerCount: layers.length,
-      isOSMActive
-    });
   }
 
   return {

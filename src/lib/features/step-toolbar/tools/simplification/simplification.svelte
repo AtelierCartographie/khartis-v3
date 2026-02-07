@@ -1,5 +1,6 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     SimplificationLevel,
     SimplificationSource
@@ -19,9 +20,11 @@
     simplificationActions,
     getSimplificationState
   } from '../simplification/simplification.store.svelte';
+  import { onDestroy } from 'svelte';
 
   const store = simplificationActions;
   const state = $derived(getSimplificationState());
+  let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const sourceIndex = $derived(
     state.source === SimplificationSource.Basemap ? 0 : 1
@@ -40,7 +43,48 @@
     const newSource =
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
     store.setSource(newSource);
+    scheduleSimplificationApply('source-change');
   }
+
+  function clearApplyTimeout(): void {
+    if (!applyTimeoutId) return;
+    clearTimeout(applyTimeoutId);
+    applyTimeoutId = null;
+  }
+
+  async function applySimplificationNow(trigger: string): Promise<void> {
+    if (state.isProcessing) {
+      return;
+    }
+
+    try {
+      await store.applySimplification();
+    } catch (error) {
+      logger.error(
+        'Failed to apply simplification from step-toolbar',
+        LogCategory.UI,
+        { trigger, error }
+      );
+    }
+  }
+
+  function scheduleSimplificationApply(trigger: string, delay = 0): void {
+    clearApplyTimeout();
+
+    if (delay > 0) {
+      applyTimeoutId = setTimeout(() => {
+        applyTimeoutId = null;
+        void applySimplificationNow(trigger);
+      }, delay);
+      return;
+    }
+
+    void applySimplificationNow(trigger);
+  }
+
+  onDestroy(() => {
+    clearApplyTimeout();
+  });
 </script>
 
 <div id="khartis-simplification-tool">
@@ -72,8 +116,10 @@
           <RadioButtonGroup
             orientation="horizontal"
             selected={state.level}
-            on:change={(e) =>
-              store.setLevel((e as CustomEvent).detail as SimplificationLevel)}
+            on:change={(e) => {
+              store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+              scheduleSimplificationApply('level-change');
+            }}
           >
             <RadioButton
               value={SimplificationLevel.Low}
@@ -113,7 +159,10 @@
               max={100}
               step={1}
               value={state.rate}
-              on:change={(e) => store.setRate((e as CustomEvent).detail || 50)}
+              on:change={(e) => {
+                store.setRate((e as CustomEvent).detail || 50);
+                scheduleSimplificationApply('rate-change', 250);
+              }}
               labelText=""
               minLabel="0"
               maxLabel="100"

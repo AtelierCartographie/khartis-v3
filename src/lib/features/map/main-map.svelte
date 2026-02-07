@@ -17,6 +17,7 @@
   import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
+  import { ColorBlindnessType } from '../commons/constants/ui.constants';
   import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
@@ -348,7 +349,10 @@
 
   function handleContainerResize() {
     if (!containerRef) return;
-    formatActions.fitToContainer(containerRef.offsetWidth, containerRef.offsetHeight);
+    formatActions.fitToContainer(
+      containerRef.offsetWidth,
+      containerRef.offsetHeight
+    );
   }
 
   function handleContainerResizeDebounced() {
@@ -409,7 +413,9 @@
   const colorBlindnessState = $derived(getColorBlindnessState());
 
   $effect(() => {
-    const simulationType = colorBlindnessState.simulationType;
+    const simulationType = colorBlindnessState.enabled
+      ? colorBlindnessState.simulationType
+      : ColorBlindnessType.NONE;
     if (thematicMapRef) {
       applyColorBlindnessFilter(thematicMapRef, simulationType);
     }

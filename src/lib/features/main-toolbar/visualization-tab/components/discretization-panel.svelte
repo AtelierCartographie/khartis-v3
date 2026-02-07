@@ -1,14 +1,14 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     Column,
     Grid,
     Row,
     Select,
     SelectItem,
-    TextInput,
-    Toggle
+    TextInput
   } from 'carbon-components-svelte';
   import { Information, Edit } from 'carbon-icons-svelte';
 
@@ -86,14 +86,10 @@
     onclasseschange?.(numClasses);
   }
 
-  function toggleDivergent() {
-    if (useDivergent) {
-      breakpointValue = null;
-      onbreakpointchange?.(null);
-    } else {
-      breakpointValue = 50;
-      onbreakpointchange?.(50);
-    }
+  function handleDivergentToggle(checked: boolean): void {
+    useDivergent = checked;
+    breakpointValue = checked ? 50 : null;
+    onbreakpointchange?.(breakpointValue);
   }
 
   function startEditingBreak(index: number) {
@@ -197,14 +193,18 @@
   </div>
 
   <div class="section divergent-section">
-    <Toggle
-      id="divergent-toggle"
-      labelText={m.discretization_divergent_palette()}
-      labelA={m.no()}
-      labelB={m.yes()}
-      bind:toggled={useDivergent}
-      on:toggle={toggleDivergent}
-    />
+    <div class="divergent-toggle-row">
+      <span class="input-label">{m.discretization_divergent_palette()}</span>
+      <Switch
+        toggled={useDivergent}
+        labelText={m.discretization_divergent_palette()}
+        hideLabel
+        labelA={m.no()}
+        labelB={m.yes()}
+        showStateLabel
+        onchange={handleDivergentToggle}
+      />
+    </div>
 
     {#if useDivergent}
       <div class="breakpoint-input">
@@ -389,6 +389,13 @@
     padding: var(--cds-spacing-03) 0;
     border-top: 1px solid var(--cds-border-subtle);
     border-bottom: 1px solid var(--cds-border-subtle);
+  }
+
+  .divergent-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
   }
 
   .breakpoint-input {
