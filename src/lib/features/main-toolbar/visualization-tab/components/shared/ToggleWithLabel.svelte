@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Toggle } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import InfoPopover from './InfoPopover.svelte';
 
   interface Props {
@@ -19,9 +19,37 @@
     ontoggle
   }: Props = $props();
 
-  function handleToggle() {
-    toggled = !toggled;
-    ontoggle?.(toggled);
+  function stopBubbleEvents(node: HTMLElement) {
+    const events = [
+      'click',
+      'mousedown',
+      'mouseup',
+      'pointerdown',
+      'pointerup',
+      'keydown',
+      'keyup'
+    ] as const;
+    const handler = (event: Event) => event.stopPropagation();
+
+    events.forEach((eventName) => {
+      node.addEventListener(eventName, handler, { capture: true });
+    });
+
+    return {
+      destroy() {
+        events.forEach((eventName) => {
+          node.removeEventListener(eventName, handler, { capture: true });
+        });
+      }
+    };
+  }
+
+  function handleToggleChange(next: boolean) {
+    if (next === toggled) {
+      return;
+    }
+    toggled = next;
+    ontoggle?.(next);
   }
 </script>
 
@@ -32,14 +60,12 @@
       <InfoPopover text={infoText} />
     {/if}
   </span>
-  <div class="toggle-with-label">
-    <Toggle
-      size="sm"
+  <div class="toggle-with-label" use:stopBubbleEvents>
+    <Switch
       toggled={toggled}
       hideLabel
-      labelA=""
-      labelB=""
-      on:toggle={handleToggle}
+      labelText={label}
+      onchange={handleToggleChange}
     />
     {#if showYesNo}
       <span class="toggle-label">{toggled ? m.yes() : m.no()}</span>
@@ -76,23 +102,5 @@
     font-size: 0.875rem;
     color: var(--cds-text-primary);
     min-width: 30px;
-  }
-
-  :global(.toggle-row .bx--toggle) {
-    margin: 0;
-  }
-
-  :global(.toggle-row .bx--toggle__switch) {
-    width: 36px;
-    height: 20px;
-  }
-
-  :global(.toggle-row .bx--toggle__switch::before) {
-    width: 14px;
-    height: 14px;
-  }
-
-  :global(.toggle-row .bx--toggle-input:checked + .bx--toggle__switch::before) {
-    transform: translateX(16px);
   }
 </style>

@@ -336,9 +336,7 @@ export async function applyJoinCorrections(
   await Duck.query(
     `CREATE TEMP TABLE "${correctionsTable}" (original VARCHAR, corrected VARCHAR)`
   );
-  await Duck.query(
-    `INSERT INTO "${correctionsTable}" VALUES ${valueRows}`
-  );
+  await Duck.query(`INSERT INTO "${correctionsTable}" VALUES ${valueRows}`);
 
   await Duck.query(`
     UPDATE "${dataset.tableName}"
@@ -385,7 +383,20 @@ export async function finalizeJoin(
   // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
   const joinTableExists = await checkJoinResultsExist(dataset.tableName, Duck);
 
-  if (!options?.skipJoinComputation && !joinTableExists) {
+  const shouldComputeJoin = !options?.skipJoinComputation || !joinTableExists;
+
+  if (shouldComputeJoin) {
+    if (options?.skipJoinComputation && !joinTableExists) {
+      logger.warn(
+        'Join table missing while skipJoinComputation=true, forcing recomputation',
+        LogCategory.DATA,
+        {
+          datasetId: dataset.id,
+          tableName: dataset.tableName
+        }
+      );
+    }
+
     await ensureBasemapAttributesLoaded(Duck);
     await Duck.join_by_id(dataset.tableName, geoColumn, {
       basemaps_table: 'basemap_attributes'
@@ -424,7 +435,9 @@ export async function finalizeJoin(
 
   return {
     joinedBasemap: basemap.file,
-    geoColumn
+    geoColumn,
+    gpsMode: false,
+    gpsColumns: undefined
   };
 }
 
@@ -477,9 +490,6 @@ export async function getJoinedArrowTable(
   const joinedView = `joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const escapedDataset = escapeSqlString(datasetTableName);
   const escapedGeometry = escapeSqlString(geometryTable);
-  const escapedBasemapId = escapeSqlString(
-    basemapId.replace(/\.(parquet|geojson)$/i, '')
-  );
 
   // Get the text columns from the geometry table (excluding geom) to find join candidates
   const geomColumns = (await Duck.query(
@@ -491,7 +501,9 @@ export async function getJoinedArrowTable(
   )) as Array<{ column_name: string }>;
 
   // Build UNPIVOT to create a flat (value, geom) mapping from all text columns
-  const colList = geomColumns.map((c) => `"${escapeIdentifier(c.column_name)}"`).join(', ');
+  const colList = geomColumns
+    .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+    .join(', ');
 
   await Duck.query(`
     CREATE OR REPLACE VIEW "${joinedView}" AS

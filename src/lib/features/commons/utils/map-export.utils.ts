@@ -373,9 +373,11 @@ function resolveColor(
 }
 
 function renderTextAnnotation(item: Annotation): string {
+  const content = String(item.content || '');
+  if (!content.trim()) return '';
+
   const { x, y } = item.position;
   const style = item.style ?? {};
-  const content = String(item.content || '');
   const fontSize = style.fontSize ?? 14;
   const fontFamily = style.font ?? 'Arial';
   const color = resolveColor(style.color, SVG_COLORS.BLACK);

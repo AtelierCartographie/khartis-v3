@@ -135,14 +135,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   },
   {
     id: 'lacs',
-    visible: true,
+    visible: false,
     color: '#a6c8ff',
     thickness: 0,
     opacity: 80
   },
   {
     id: 'rivieres',
-    visible: true,
+    visible: false,
     color: '#a6c8ff',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -151,14 +151,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   },
   {
     id: 'relief',
-    visible: true,
+    visible: false,
     representation: BasemapRepresentation.SHADING,
     color: '#e0e0e0',
     opacity: 50
   },
   {
     id: 'equateur',
-    visible: true,
+    visible: false,
     color: '#8d8d8d',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -167,7 +167,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   },
   {
     id: 'meridiens',
-    visible: true,
+    visible: false,
     remarquables: BasemapRemarquables.ALL,
     color: '#e0e0e0',
     dotted: true,
@@ -197,6 +197,40 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
 
 function cloneDefaults(): BasemapLayerConfig[] {
   return deepClone(DEFAULT_LAYERS);
+}
+
+function mergeLayerWithDefaults<T extends BasemapLayerConfig>(
+  defaults: T,
+  candidate: Partial<T> | undefined
+): T {
+  if (!candidate || candidate.id !== defaults.id) {
+    return deepClone(defaults);
+  }
+
+  const sanitizedCandidate = Object.fromEntries(
+    Object.entries(candidate).filter(([, value]) => value !== undefined)
+  ) as Partial<T>;
+
+  return {
+    ...deepClone(defaults),
+    ...sanitizedCandidate
+  } as T;
+}
+
+function normalizeSerializedLayers(
+  layers: BasemapLayerConfig[]
+): BasemapLayerConfig[] {
+  if (!Array.isArray(layers)) {
+    return cloneDefaults();
+  }
+
+  return DEFAULT_LAYERS.map((defaults) => {
+    const candidate = layers.find((layer) => layer?.id === defaults.id) as
+      | Partial<typeof defaults>
+      | undefined;
+
+    return mergeLayerWithDefaults(defaults, candidate);
+  });
 }
 
 interface BasemapLayersState {
@@ -235,10 +269,16 @@ class BasemapLayersStore {
   }
 
   setLayerVisibility(id: BasemapLayerId, visible: boolean): void {
-    const layer = this._state.layers.find((l) => l.id === id);
-    if (layer) {
-      layer.visible = visible;
+    if (typeof visible !== 'boolean') {
+      return;
     }
+
+    const layer = this._state.layers.find((l) => l.id === id);
+    if (!layer) {
+      return;
+    }
+
+    layer.visible = visible;
     this.incrementVersion();
   }
 
@@ -247,9 +287,46 @@ class BasemapLayersStore {
     updates: Partial<Omit<Extract<BasemapLayerConfig, { id: T }>, 'id'>>
   ): void {
     const layer = this._state.layers.find((l) => l.id === id);
-    if (layer) {
-      Object.assign(layer, updates);
+    if (!layer) {
+      return;
     }
+
+    const sanitizedUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, value]) => value !== undefined)
+    );
+
+    if (Object.keys(sanitizedUpdates).length === 0) {
+      return;
+    }
+
+    Object.assign(layer, sanitizedUpdates);
+    this.incrementVersion();
+  }
+
+  setLayerOrder(orderedIds: BasemapLayerId[]): void {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return;
+    }
+
+    const layerMap = new Map(
+      this._state.layers.map((layer) => [layer.id, layer] as const)
+    );
+    const ordered: BasemapLayerConfig[] = [];
+    const seen = new Set<BasemapLayerId>();
+
+    for (const id of orderedIds) {
+      const layer = layerMap.get(id);
+      if (!layer || seen.has(id)) continue;
+      ordered.push(layer);
+      seen.add(id);
+    }
+
+    for (const layer of this._state.layers) {
+      if (seen.has(layer.id)) continue;
+      ordered.push(layer);
+    }
+
+    this._state.layers = ordered;
     this.incrementVersion();
   }
 
@@ -272,7 +349,10 @@ class BasemapLayersStore {
       this.resetToDefaults();
       return;
     }
-    this._state.layers = deepClone(layers);
+
+    // Normalize potentially outdated serialized schemas by filling missing
+    // per-layer fields from current defaults while preserving user values.
+    this._state.layers = normalizeSerializedLayers(layers);
     this.incrementVersion();
   }
 }

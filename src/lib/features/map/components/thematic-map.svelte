@@ -5,6 +5,7 @@
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
+  import { hslToHex } from '../../commons/utils/color-utils';
   import { LogCategory, logger } from '../../commons/utils/logger';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
@@ -30,6 +31,7 @@
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import type { DeckMapProps } from '../types';
+  import { formatState } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
@@ -38,6 +40,24 @@
   let { tables, geoJSONs, width, height, onReady }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
+  const formatColor = $derived(
+    typeof formatState.color === 'object' && formatState.color
+      ? formatState.color
+      : { hue: 0, saturation: 0, lightness: 100 }
+  );
+  const pageBackgroundColor = $derived(
+    hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
+  );
+  const pageMargins = $derived(formatState.margins);
+  const mapCanvasWidth = $derived(
+    Math.max(1, width - pageMargins.left - pageMargins.right)
+  );
+  const mapCanvasHeight = $derived(
+    Math.max(1, height - pageMargins.top - pageMargins.bottom)
+  );
+  const pageStyle = $derived(
+    `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
+  );
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );
@@ -64,9 +84,12 @@
 
   const RESIZE_DEBOUNCE_MS = 150;
   const LAYER_UPDATE_DEBOUNCE_MS = 16;
+  const PROJECT_EMPTY_RESET_DEBOUNCE_MS = 250;
 
   let previousDatasetCount = 0;
   let pendingViewReset = false;
+  let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let lastDatasetCountSnapshot = -1;
 
   let scheduleCount = 0;
   let effectTriggerLog: string[] = [];
@@ -95,6 +118,19 @@
 
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
       logger.debug(`Deferred (pending=true) from: ${source}`, LogCategory.MAP);
+      pendingLayerUpdate = true;
+      return;
+    }
+
+    if (
+      mapInit.viewMode === 'maplibre' &&
+      mapInit.map &&
+      !mapInit.map.isStyleLoaded()
+    ) {
+      logger.debug(
+        `Deferred (style not loaded, pending=true) from: ${source}`,
+        LogCategory.MAP
+      );
       pendingLayerUpdate = true;
       return;
     }
@@ -190,7 +226,8 @@
       }
     },
     onZoom: () => mapInstanceStore.updateZoomFromMap(),
-    onMoveEnd: () => mapPosition.savePosition()
+    onMoveEnd: () => mapPosition.savePosition(),
+    getActiveVisualizations: () => mapState.activeVisualizations
   });
 
   const mapPosition = useMapPosition({
@@ -399,31 +436,94 @@
   // as the source of truth — displayTables can be empty for tabular CSVs not yet joined
   $effect(() => {
     const currentCount = datasetsStore.datasets.length;
+    const sourceFileCount = untrack(
+      () => projectStore.currentProject?.data?.sourceFiles?.length ?? 0
+    );
+
+    if (currentCount !== lastDatasetCountSnapshot) {
+      lastDatasetCountSnapshot = currentCount;
+      logger.debug('[thematic-map] dataset/source snapshot', LogCategory.MAP, {
+        datasetsCount: currentCount,
+        previousDatasetCount,
+        sourceFileCount,
+        isMapLoaded: mapInit.isMapLoaded
+      });
+    }
 
     if (currentCount > 0) {
       previousDatasetCount = currentCount;
+      if (projectEmptyResetTimeoutId) {
+        clearTimeout(projectEmptyResetTimeoutId);
+        projectEmptyResetTimeoutId = null;
+        logger.debug(
+          '[thematic-map] canceled pending projectEmpty reset because datasets became non-empty',
+          LogCategory.MAP,
+          {
+            datasetsCount: currentCount
+          }
+        );
+      }
     }
 
     if (currentCount === 0 && previousDatasetCount > 0 && mapInit.isMapLoaded) {
       // Guard: don't reset if the project still has source files.
       // Datasets can be temporarily empty during reprocessing or lifecycle transitions.
-      const hasSourceFiles = untrack(() => {
-        const sourceFiles = projectStore.currentProject?.data?.sourceFiles;
-        return sourceFiles && sourceFiles.length > 0;
-      });
-
-      if (hasSourceFiles) {
+      if (sourceFileCount > 0) {
         logger.warn(
           '[thematic-map] projectEmpty blocked: datasets=0 but sourceFiles still exist',
-          LogCategory.MAP
+          LogCategory.MAP,
+          {
+            previousDatasetCount,
+            sourceFileCount
+          }
         );
         return;
       }
 
-      previousDatasetCount = 0;
-      logEffect('projectEmpty');
-      logger.info('[thematic-map] projectEmpty: resetting map state', LogCategory.MAP);
-      untrack(() => {
+      if (projectEmptyResetTimeoutId) {
+        return;
+      }
+
+      logger.info(
+        '[thematic-map] projectEmpty candidate detected, scheduling reset',
+        LogCategory.MAP,
+        {
+          previousDatasetCount,
+          sourceFileCount,
+          debounceMs: PROJECT_EMPTY_RESET_DEBOUNCE_MS
+        }
+      );
+
+      projectEmptyResetTimeoutId = setTimeout(() => {
+        projectEmptyResetTimeoutId = null;
+
+        const datasetsCountNow = datasetsStore.datasets.length;
+        const sourceFileCountNow =
+          projectStore.currentProject?.data?.sourceFiles?.length ?? 0;
+        if (
+          datasetsCountNow !== 0 ||
+          sourceFileCountNow > 0 ||
+          !mapInit.isMapLoaded
+        ) {
+          logger.warn(
+            '[thematic-map] projectEmpty reset canceled after debounce',
+            LogCategory.MAP,
+            {
+              datasetsCountNow,
+              sourceFileCountNow,
+              isMapLoaded: mapInit.isMapLoaded
+            }
+          );
+          return;
+        }
+
+        previousDatasetCount = 0;
+        logEffect('projectEmpty');
+        logger.info(
+          '[thematic-map] projectEmpty confirmed: resetting map state',
+          LogCategory.MAP
+        );
+
         pendingViewReset = true;
         projectionStore.clear();
         mapBounds.resetFitState();
@@ -432,7 +532,7 @@
         worldBaseTable = null;
         scheduleLayerUpdate('effect:projectEmpty');
         loadWorldBasemap();
-      });
+      }, PROJECT_EMPTY_RESET_DEBOUNCE_MS);
     }
   });
 
@@ -556,17 +656,13 @@
 
             // Fit map view to new basemap bounds
             if (mapInit.viewMode === 'maplibre' && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(
-                loaded.geometryTable
-              );
+              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
               if (bounds) {
                 mapBounds.resetFitState();
                 mapBounds.fitToBounds(bounds, true);
               }
             } else if (mapInit.viewMode === 'orthographic') {
-              const bounds = calculateBoundsFromGeoArrow(
-                loaded.geometryTable
-              );
+              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
               if (bounds) {
                 const [[minX, minY], [maxX, maxY]] = bounds as [
                   [number, number],
@@ -689,46 +785,69 @@
       if (layerUpdateTimeoutId) {
         clearTimeout(layerUpdateTimeoutId);
       }
+      if (projectEmptyResetTimeoutId) {
+        clearTimeout(projectEmptyResetTimeoutId);
+      }
     };
   });
 </script>
 
-<div class="page-container">
+<div class="page-container" style={pageStyle}>
   <div
-    bind:this={mapContainer}
-    class="map-canvas"
-    style="width: {width}px; height: {height}px;"
-  ></div>
-  {#if isSwitchingViewMode}
-    <div
-      class="view-mode-loader"
-      style="width: {width}px; height: {height}px;"
-      transition:fade={{ duration: 200 }}
-    >
-      <SkeletonPlaceholder style="width: 100%; height: 100%;" />
-    </div>
-  {/if}
-  {#if mapLoadingStore.isUpdatingLayers}
-    <div class="layer-update-indicator" transition:fade={{ duration: 150 }}>
-      <div class="spinner"></div>
-    </div>
-  {/if}
-  <GeoIndicationsOverlay />
-  <LegendOverlay />
-  <AnnotationOverlay />
+    class="map-stage"
+    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
+  >
+    <div bind:this={mapContainer} class="map-canvas"></div>
+
+    {#if formatState.gridEnabled}
+      <div class="page-grid"></div>
+    {/if}
+
+    {#if isSwitchingViewMode}
+      <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
+        <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+      </div>
+    {/if}
+
+    {#if mapLoadingStore.isUpdatingLayers}
+      <div class="layer-update-indicator" transition:fade={{ duration: 150 }}>
+        <div class="spinner"></div>
+      </div>
+    {/if}
+
+    <GeoIndicationsOverlay />
+    <LegendOverlay />
+    <AnnotationOverlay />
+  </div>
 </div>
 
 <style>
   .page-container {
     position: relative;
     flex-shrink: 0;
-    background-color: var(--cds-ui-background);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .map-stage {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .page-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, rgba(22, 22, 22, 0.12) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(22, 22, 22, 0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
   }
 
   .map-canvas {
     position: relative;
-    overflow: hidden;
+    width: 100%;
+    height: 100%;
     background-color: #ffffff;
   }
 
@@ -738,8 +857,7 @@
 
   .view-mode-loader {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     z-index: 100;
     pointer-events: none;
   }

@@ -8,6 +8,7 @@
     ToolbarState,
     ToolbarStep
   } from '$lib/features/commons/types/global';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -34,18 +35,39 @@
     globalActions.setToolbarState(state);
   }
 
+  let lastUiSnapshot = $state<string>('');
 
   $effect(() => {
     const project = projectStore.currentProject;
 
-    const hasFiles =
-      (project?.data?.sourceFiles?.length ?? 0) > 0;
+    const hasFiles = (project?.data?.sourceFiles?.length ?? 0) > 0;
 
     mainToolbarState.canNavigateToVisualization = hasFiles;
     mainToolbarState.hasValidData = hasFiles;
     mainToolbarState.currentProjectName = project?.manifest.name || '';
   });
 
+  $effect(() => {
+    const selectedStep = globalState.selectedStep;
+    const toolbarState = globalState.toolbarState;
+    const hasDataTabContent = selectedStep === ToolbarStep.Data;
+    const hasVisualizationTabContent =
+      selectedStep === ToolbarStep.Visualizations;
+    const snapshot = `${selectedStep}|${toolbarState}|${hasDataTabContent}|${hasVisualizationTabContent}`;
+
+    if (snapshot === lastUiSnapshot) {
+      return;
+    }
+    lastUiSnapshot = snapshot;
+
+    logger.info('[main-toolbar] content selection snapshot', LogCategory.UI, {
+      selectedStep,
+      toolbarState,
+      willRenderDataTab: hasDataTabContent,
+      willRenderVisualizationTab: hasVisualizationTabContent,
+      selectedTool: globalState.selectedTool
+    });
+  });
 </script>
 
 <nav
@@ -106,7 +128,7 @@
   <article
     class={clsx(
       'toolbar-content scrollbar-hidden',
-      globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0',
+      globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
     )}
   >
     {#if globalState.selectedStep === ToolbarStep.Data}
@@ -188,7 +210,6 @@
           size="small">{m.data_tab_visualize()}</Button
         >
       </ProgressIndicator>
-
     </footer>
   {/if}
 </nav>
@@ -202,6 +223,7 @@
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
+    z-index: 1100;
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);

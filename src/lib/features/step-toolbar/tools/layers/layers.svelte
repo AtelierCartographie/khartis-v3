@@ -9,22 +9,32 @@
   import {
     filterLayersByType,
     getVisibleLayersCount,
-    reorderLayersArray,
-    resetDragState,
-    toggleLayerVisibility
+    resetDragState
   } from './layers.utils.js';
   import SectionHeader from './section-header.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
 
   const store = layersActions;
   const currentState = $derived(layersState);
 
+  $effect(() => {
+    void visualizationStore.version;
+    void basemapLayersStore.version;
+    store.syncWithVisualizations();
+  });
+
   let layers = $derived(
     currentState.layers.map((l: Layer) => ({
       ...l,
-      icon: l.id === 'texts' ? Txt : l.id === 'symbols' ? Location : Earth
+      icon:
+        l.id === 'texts'
+          ? Txt
+          : l.id === 'symbols' || l.id === 'villes'
+            ? Location
+            : Earth
     }))
   );
 
@@ -66,7 +76,6 @@
   );
 
   function handleToggleVisibility(layerId: string): void {
-    toggleLayerVisibility(layers, layerId);
     store.toggleLayerVisibility(layerId);
   }
 
@@ -114,8 +123,7 @@
     dragIndex: number,
     hoverIndex: number
   ): void {
-    layers = reorderLayersArray(layers, type, dragIndex, hoverIndex);
-    store.reorderLayers(dragIndex, hoverIndex);
+    store.reorderLayers(type, dragIndex, hoverIndex);
   }
 
   function reorderVisualizationLayers(

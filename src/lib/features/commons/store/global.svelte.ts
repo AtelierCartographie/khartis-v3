@@ -70,6 +70,17 @@ class GlobalStore {
 
   private _pendingDatasetSelections = new Set<string>();
 
+  private getCallerHint(): string | undefined {
+    const stack = new Error().stack;
+    if (!stack) return undefined;
+    const caller = stack
+      .split('\n')
+      .slice(3, 5)
+      .map((line) => line.trim())
+      .join(' | ');
+    return caller || undefined;
+  }
+
   constructor() {
     if (typeof window !== 'undefined' && this._selectedDataButtonId) {
       // Defer to next microtask so all module-level singletons (datasetsStore) are initialized
@@ -154,6 +165,13 @@ class GlobalStore {
         }
       } else {
         if (this._selectedDataButtonId) {
+          logger.info(
+            '[global-store] clearing selected data button because project has no source files',
+            LogCategory.UI,
+            {
+              previousSelectedDataButtonId: this._selectedDataButtonId
+            }
+          );
           this._selectedDataButtonId = undefined;
           if (typeof window !== 'undefined') {
             localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
@@ -301,6 +319,8 @@ class GlobalStore {
   }
 
   setNavigationState(selectedStep: ToolbarStep, updateUrl = true): void {
+    const previousStep = this.selectedStep;
+    const previousToolbarState = this.toolbarState;
     this.selectedStep = selectedStep;
 
     if (selectedStep === ToolbarStep.Styling) {
@@ -309,6 +329,20 @@ class GlobalStore {
       const preferred = readToolbarStateFromStorage();
       this.toolbarState =
         preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
+    }
+
+    if (
+      previousStep !== selectedStep ||
+      previousToolbarState !== this.toolbarState
+    ) {
+      logger.info('[global-store] navigation state changed', LogCategory.UI, {
+        fromStep: previousStep,
+        toStep: selectedStep,
+        updateUrl,
+        fromToolbarState: previousToolbarState,
+        toToolbarState: this.toolbarState,
+        caller: this.getCallerHint()
+      });
     }
 
     if (updateUrl && typeof window !== 'undefined') {
@@ -342,7 +376,16 @@ class GlobalStore {
   }
 
   setToolbarState(state: ToolbarState): void {
+    const previousToolbarState = this.toolbarState;
     this.toolbarState = state;
+    if (previousToolbarState !== state) {
+      logger.info('[global-store] toolbar state changed', LogCategory.UI, {
+        fromToolbarState: previousToolbarState,
+        toToolbarState: state,
+        selectedStep: this.selectedStep,
+        caller: this.getCallerHint()
+      });
+    }
     if (typeof window !== 'undefined') {
       localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, state);
     }
@@ -352,7 +395,13 @@ class GlobalStore {
     if (this._selectedDataButtonId === id) {
       return;
     }
+    const previousSelectedDataButtonId = this._selectedDataButtonId;
     this._selectedDataButtonId = id;
+
+    logger.debug('[global-store] data tab selection changed', LogCategory.UI, {
+      previousSelectedDataButtonId,
+      selectedDataButtonId: id
+    });
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);

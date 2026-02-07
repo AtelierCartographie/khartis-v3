@@ -757,86 +757,100 @@ export function createBasemapLayers(
   for (const config of basemapLayersStore.layers) {
     if (!config.visible) continue;
 
-    switch (config.id) {
-      case 'mers': {
-        const layer = createMersLayer(config as MersLayerConfig, ctx);
-        if (layer) layers.push(layer);
-        break;
+    try {
+      switch (config.id) {
+        case 'mers': {
+          const layer = createMersLayer(config as MersLayerConfig, ctx);
+          if (layer) layers.push(layer);
+          break;
+        }
+
+        case 'terre':
+          if (worldBaseTable) {
+            const terreLayers = createTerreLayers(
+              worldBaseTable,
+              config as TerreLayerConfig,
+              ctx
+            );
+            layers.push(...terreLayers);
+          }
+          break;
+
+        case 'lacs':
+          if (additionalData?.lakesData) {
+            const layer = createLacsLayer(
+              additionalData.lakesData,
+              config as LacsLayerConfig,
+              ctx
+            );
+            if (layer) layers.push(layer);
+          }
+          break;
+
+        case 'rivieres':
+          if (additionalData?.riversData) {
+            const layer = createRivieresLayer(
+              additionalData.riversData,
+              config as RivieresLayerConfig,
+              ctx
+            );
+            if (layer) layers.push(layer);
+          }
+          break;
+
+        case 'frontieres':
+          if (worldBaseTable) {
+            const layer = createFrontieresLayer(
+              worldBaseTable,
+              config as FrontieresLayerConfig,
+              ctx
+            );
+            if (layer) layers.push(layer);
+          }
+          break;
+
+        case 'equateur': {
+          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
+          if (layer) layers.push(layer);
+          break;
+        }
+
+        case 'meridiens': {
+          const layer = createMeridiensLayer(
+            config as MeridiensLayerConfig,
+            ctx
+          );
+          if (layer) layers.push(layer);
+          break;
+        }
+
+        case 'villes':
+          if (additionalData?.citiesData) {
+            const layer = createVillesLayer(
+              additionalData.citiesData,
+              config as VillesLayerConfig,
+              ctx
+            );
+            if (layer) layers.push(layer);
+          }
+          break;
+
+        case 'relief':
+          logger.debug(
+            'Relief layer not yet implemented - requires DEM data',
+            LogCategory.MAP
+          );
+          break;
       }
-
-      case 'terre':
-        if (worldBaseTable) {
-          const terreLayers = createTerreLayers(
-            worldBaseTable,
-            config as TerreLayerConfig,
-            ctx
-          );
-          layers.push(...terreLayers);
+    } catch (error) {
+      logger.error(
+        'Failed to create basemap layer; keeping other layers intact',
+        LogCategory.MAP,
+        {
+          layerId: config.id,
+          error
         }
-        break;
-
-      case 'lacs':
-        if (additionalData?.lakesData) {
-          const layer = createLacsLayer(
-            additionalData.lakesData,
-            config as LacsLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
-        }
-        break;
-
-      case 'rivieres':
-        if (additionalData?.riversData) {
-          const layer = createRivieresLayer(
-            additionalData.riversData,
-            config as RivieresLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
-        }
-        break;
-
-      case 'frontieres':
-        if (worldBaseTable) {
-          const layer = createFrontieresLayer(
-            worldBaseTable,
-            config as FrontieresLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
-        }
-        break;
-
-      case 'equateur': {
-        const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
-        if (layer) layers.push(layer);
-        break;
-      }
-
-      case 'meridiens': {
-        const layer = createMeridiensLayer(config as MeridiensLayerConfig, ctx);
-        if (layer) layers.push(layer);
-        break;
-      }
-
-      case 'villes':
-        if (additionalData?.citiesData) {
-          const layer = createVillesLayer(
-            additionalData.citiesData,
-            config as VillesLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
-        }
-        break;
-
-      case 'relief':
-        logger.debug(
-          'Relief layer not yet implemented - requires DEM data',
-          LogCategory.MAP
-        );
-        break;
+      );
     }
   }
 

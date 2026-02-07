@@ -313,10 +313,6 @@
     }
   }
 
-  function handleSuggestBasemap() {
-    showSuggestionModal = true;
-  }
-
   function handleGoToVisualize() {
     globalActions.setNavigationState(ToolbarStep.Visualizations);
   }
@@ -340,6 +336,7 @@
     });
 
     try {
+      joinLoading = true;
       await duckDBOrchestrator.applyJoinCorrections(
         datasetIdForOrchestrator,
         dataTabState.geolocation.linkedVariableName,
@@ -356,11 +353,26 @@
         );
         dataTabActions.setJoinStats(stats);
 
+        const hasBlockingErrors =
+          stats.toVerifyCount > 0 || stats.duplicateCount > 0;
+
+        if (hasBlockingErrors || stats.joinedCount === 0) {
+          logger.info(
+            'Corrections applied but join still requires manual validation',
+            LogCategory.MAP,
+            {
+              toVerify: stats.toVerifyCount,
+              duplicates: stats.duplicateCount,
+              joinedCount: stats.joinedCount
+            }
+          );
+          return;
+        }
+
         await duckDBOrchestrator.finalizeJoin(
           datasetIdForOrchestrator,
           basemap,
-          dataTabState.geolocation.linkedVariableName,
-          { skipJoinComputation: true }
+          dataTabState.geolocation.linkedVariableName
         );
         dataTabStore.markStepComplete(2);
         logger.success(
@@ -370,6 +382,9 @@
       }
     } catch (error) {
       logger.error('Failed to apply corrections', LogCategory.MAP, error);
+      showError(m.join_error_title(), m.join_error_message());
+    } finally {
+      joinLoading = false;
     }
   }
 
@@ -381,22 +396,35 @@
     )
       return;
 
-    if (duplicates.length > 0) {
-      logger.warn(
-        'Cannot finalize join with duplicate entities',
-        LogCategory.MAP,
-        { duplicates: duplicates.length }
-      );
-      return;
-    }
-
     const basemap = allBasemaps.find((b) => b.file === basemapSelected);
     if (!basemap) {
       logger.warn('No basemap selected for join finalization', LogCategory.MAP);
       return;
     }
 
+    const hasBlockingErrors = toVerifyCount > 0 || duplicates.length > 0;
+    if (hasBlockingErrors) {
+      logger.warn(
+        'Cannot finalize join with unresolved entities',
+        LogCategory.MAP,
+        {
+          toVerify: toVerifyCount,
+          duplicates: duplicates.length
+        }
+      );
+      return;
+    }
+
+    if (joinedCount === 0) {
+      logger.warn(
+        'Cannot finalize join with zero matched entities',
+        LogCategory.MAP
+      );
+      return;
+    }
+
     try {
+      joinLoading = true;
       logger.info('Finalizing join to enable map rendering', LogCategory.MAP, {
         datasetId: selectedDataset.id,
         basemap: basemap.file
@@ -414,6 +442,8 @@
     } catch (error) {
       logger.error('Failed to finalize join', LogCategory.MAP, error);
       showError(m.join_error_title(), m.join_error_message());
+    } finally {
+      joinLoading = false;
     }
   }
 
