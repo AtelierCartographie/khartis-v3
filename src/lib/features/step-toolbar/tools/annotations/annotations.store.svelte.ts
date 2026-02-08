@@ -1,10 +1,13 @@
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
   Annotation,
   AnnotationsState,
-  AnnotationStyle
+  AnnotationStyle,
+  PageElementRole
 } from './annotations.types';
 
 const DEFAULT_STATE: AnnotationsState = {
@@ -40,6 +43,7 @@ type AnnotationsActions = {
   clearAll: () => void;
   toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => void;
   setTextAlign: (align: TextAlign) => void;
+  initPageElements: () => void;
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
@@ -132,6 +136,79 @@ const { actions, getState } = createToolStore<
   },
   setTextAlign: (align: TextAlign) => {
     s.defaultStyle = { ...s.defaultStyle, textAlign: align };
+  },
+  initPageElements: () => {
+    // Guard: don't create if page elements already exist
+    const hasPageElements = s.items.some((item) => item.role != null);
+    if (hasPageElements) return;
+
+    const format = getFormatState();
+    const width = format.width;
+    const height = format.height;
+    const margins = format.margins;
+
+    const basemapSource = basemapService.currentBasemap?.metadata?.source || '';
+
+    const pageElements: {
+      role: PageElementRole;
+      content: string;
+      style: Partial<AnnotationStyle>;
+      position: { x: number; y: number };
+    }[] = [
+      {
+        role: 'title',
+        content: '',
+        style: { ...PREDEFINED_STYLES.title },
+        position: { x: margins.left, y: margins.top + 24 }
+      },
+      {
+        role: 'subtitle',
+        content: '',
+        style: { ...PREDEFINED_STYLES.subtitle },
+        position: { x: margins.left, y: margins.top + 48 }
+      },
+      {
+        role: 'source',
+        content: '',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: { x: margins.left, y: height - margins.bottom - 24 }
+      },
+      {
+        role: 'basemap_source',
+        content: basemapSource,
+        style: { ...PREDEFINED_STYLES.caption },
+        position: { x: margins.left, y: height - margins.bottom - 10 }
+      },
+      {
+        role: 'signature',
+        content: '',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: {
+          x: width - margins.right - 100,
+          y: height - margins.bottom - 24
+        }
+      },
+      {
+        role: 'credit',
+        content: 'Réalisé avec Khartis',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: {
+          x: width - margins.right - 150,
+          y: height - margins.bottom - 10
+        }
+      }
+    ];
+
+    const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
+      id: `page-element-${el.role}-${Date.now()}-${index}`,
+      type: AnnotationKind.TEXT,
+      content: el.content,
+      position: el.position,
+      style: { ...s.defaultStyle, ...el.style },
+      role: el.role
+    }));
+
+    s.items = [...s.items, ...newAnnotations];
   }
 }));
 
