@@ -4,6 +4,14 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 
+export type PageElementRole =
+  | 'title'
+  | 'subtitle'
+  | 'source'
+  | 'basemap_source'
+  | 'signature'
+  | 'credit';
+
 export interface Annotation {
   id: string;
   type: AnnotationKind;
@@ -11,6 +19,7 @@ export interface Annotation {
   position: { x: number; y: number };
   style?: AnnotationStyle;
   visible?: boolean;
+  role?: PageElementRole;
 }
 
 export interface AnnotationStyle {

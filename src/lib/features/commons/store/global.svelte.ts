@@ -9,6 +9,7 @@ import {
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 
@@ -325,6 +326,7 @@ class GlobalStore {
 
     if (selectedStep === ToolbarStep.Styling) {
       this.toolbarState = ToolbarState.Collapsed;
+      annotationsActions.initPageElements();
     } else if (this.toolbarState === ToolbarState.Collapsed) {
       const preferred = readToolbarStateFromStorage();
       this.toolbarState =
