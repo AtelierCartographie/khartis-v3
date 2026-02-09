@@ -11,6 +11,7 @@ import type {
 import { Duck } from '$lib/features/duckdb';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import {
   simplifyGeometryTable,
   calculateToleranceFromRate,
@@ -43,6 +44,21 @@ const { actions, getState } = createToolStore<
     _geometryData?: unknown
   ): Promise<SimplificationResult> => {
     if (s.source === SimplificationSource.Basemap) {
+      if (osmBasemapStore.isActive) {
+        logger.info(
+          'Skipping simplification for active OSM basemap',
+          LogCategory.DUCKDB
+        );
+        return {
+          type: SimplificationTarget.BASEMAP,
+          level: s.level,
+          simplified: false,
+          vertexReduction: 0,
+          originalVertices: 0,
+          simplifiedVertices: 0
+        };
+      }
+
       const currentBasemap = basemapService.currentBasemap;
       if (!currentBasemap) {
         logger.error(
@@ -164,13 +180,15 @@ const { actions, getState } = createToolStore<
       s.isProcessing = true;
       try {
         const result = await performSimplification(geometryData);
-        s.lastApplied = {
-          source: s.source,
-          level:
-            s.source === SimplificationSource.Basemap ? s.level : undefined,
-          rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
-          timestamp: Date.now()
-        };
+        if (result?.simplified) {
+          s.lastApplied = {
+            source: s.source,
+            level:
+              s.source === SimplificationSource.Basemap ? s.level : undefined,
+            rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
+            timestamp: Date.now()
+          };
+        }
         return result;
       } finally {
         s.isProcessing = false;

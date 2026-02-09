@@ -1,6 +1,7 @@
-import { Deck, OrthographicView, View } from '@deck.gl/core';
-import type { DeckProps } from '@deck.gl/core';
+import { Deck, OrthographicView } from '@deck.gl/core';
+import type { DeckProps, View } from '@deck.gl/core';
 import { MapboxOverlay } from '@deck.gl/mapbox';
+import { CanvasContext } from '@luma.gl/core';
 import maplibregl from 'maplibre-gl';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 
@@ -63,13 +64,123 @@ const DEFAULT_CONFIG: MapInitConfig = {
 };
 
 const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: 'main', flipY: false });
+let hasPatchedLumaCanvasContext = false;
+let hasWebGL2Support: boolean | null = null;
+
+function supportsWebGL2(): boolean {
+  if (hasWebGL2Support !== null) {
+    return hasWebGL2Support;
+  }
+
+  if (typeof document === 'undefined') {
+    hasWebGL2Support = false;
+    return hasWebGL2Support;
+  }
+
+  try {
+    const canvas = document.createElement('canvas');
+    hasWebGL2Support = Boolean(canvas.getContext('webgl2'));
+  } catch {
+    hasWebGL2Support = false;
+  }
+
+  return hasWebGL2Support;
+}
+
+function patchLumaCanvasContextResizeGuard(): void {
+  if (hasPatchedLumaCanvasContext) {
+    return;
+  }
+
+  const prototype = CanvasContext?.prototype as
+    | {
+        getMaxDrawingBufferSize?: () => [number, number];
+      }
+    | undefined;
+
+  if (!prototype || typeof prototype.getMaxDrawingBufferSize !== 'function') {
+    return;
+  }
+
+  hasPatchedLumaCanvasContext = true;
+
+  prototype.getMaxDrawingBufferSize = function (this: {
+    device?: { limits?: { maxTextureDimension2D?: number } };
+    canvas?: { width?: number; height?: number };
+  }): [number, number] {
+    const maxTextureDimension = this.device?.limits?.maxTextureDimension2D;
+
+    if (
+      typeof maxTextureDimension === 'number' &&
+      Number.isFinite(maxTextureDimension) &&
+      maxTextureDimension > 0
+    ) {
+      return [maxTextureDimension, maxTextureDimension];
+    }
+
+    const fallbackWidth = Math.max(1, Math.floor(this.canvas?.width ?? 1));
+    const fallbackHeight = Math.max(1, Math.floor(this.canvas?.height ?? 1));
+    const fallback = Math.max(fallbackWidth, fallbackHeight);
+
+    return [fallback, fallback];
+  };
+}
+
+function createDeckWithDeferredResizeObserver(
+  deckFactory: () => DeckInstance
+): DeckInstance {
+  if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') {
+    return deckFactory();
+  }
+
+  const globalWindow = window as unknown as Window &
+    typeof globalThis & {
+      ResizeObserver: typeof ResizeObserver;
+    };
+  const nativeDescriptor = Object.getOwnPropertyDescriptor(
+    globalWindow,
+    'ResizeObserver'
+  );
+  const NativeResizeObserver = globalWindow.ResizeObserver;
+
+  class DeferredResizeObserver extends NativeResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      super((entries, observer) => {
+        queueMicrotask(() => callback(entries, observer));
+      });
+    }
+  }
+
+  try {
+    Object.defineProperty(globalWindow, 'ResizeObserver', {
+      configurable: true,
+      writable: true,
+      value: DeferredResizeObserver
+    });
+    return deckFactory();
+  } catch {
+    return deckFactory();
+  } finally {
+    if (nativeDescriptor) {
+      Object.defineProperty(globalWindow, 'ResizeObserver', nativeDescriptor);
+    } else {
+      Object.defineProperty(globalWindow, 'ResizeObserver', {
+        configurable: true,
+        writable: true,
+        value: NativeResizeObserver
+      });
+    }
+  }
+}
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   const { onMapLoaded, onZoom, onMoveEnd, getActiveVisualizations } = props;
+  patchLumaCanvasContextResizeGuard();
 
   let map = $state<maplibregl.Map | null>(null);
   let deckOverlay = $state<MapboxOverlay | null>(null);
   let deckInstance = $state<DeckInstance | null>(null);
+  let orthographicFallbackCanvas = $state<HTMLCanvasElement | null>(null);
   let isMapLoaded = $state(false);
   const shouldUseMapLibre =
     osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
@@ -79,16 +190,79 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let currentViewMode = $state<ViewMode>(initialViewMode);
   let containerRef = $state<HTMLDivElement | null>(null);
 
+  function ensureOrthographicFallbackCanvas(
+    container: HTMLDivElement
+  ): HTMLCanvasElement {
+    const staleCanvases = container.querySelectorAll(
+      'canvas#deckgl-overlay'
+    ) as NodeListOf<HTMLCanvasElement>;
+    for (const staleCanvas of staleCanvases) {
+      if (staleCanvas !== orthographicFallbackCanvas) {
+        staleCanvas.remove();
+      }
+    }
+
+    if (
+      orthographicFallbackCanvas &&
+      orthographicFallbackCanvas.parentElement === container
+    ) {
+      return orthographicFallbackCanvas;
+    }
+
+    orthographicFallbackCanvas?.remove();
+
+    const fallbackCanvas = document.createElement('canvas');
+    fallbackCanvas.id = 'deckgl-overlay';
+    fallbackCanvas.width = Math.max(1, container.clientWidth || 800);
+    fallbackCanvas.height = Math.max(1, container.clientHeight || 600);
+    Object.assign(fallbackCanvas.style, {
+      position: 'absolute',
+      inset: '0',
+      width: '100%',
+      height: '100%',
+      pointerEvents: 'none'
+    });
+
+    container.appendChild(fallbackCanvas);
+    orthographicFallbackCanvas = fallbackCanvas;
+
+    return fallbackCanvas;
+  }
+
+  function removeOrthographicFallbackCanvas(): void {
+    if (orthographicFallbackCanvas) {
+      orthographicFallbackCanvas.remove();
+      orthographicFallbackCanvas = null;
+    }
+  }
+
   function initializeOrthographic(container: HTMLDivElement): void {
     logger.info('Initializing Deck.gl with OrthographicView', LogCategory.MAP);
 
     containerRef = container;
+    isMapLoaded = false;
+    removeOrthographicFallbackCanvas();
 
     const canvasSize = {
       width: container.clientWidth || 800,
       height: container.clientHeight || 600
     };
     projectionStore.updateCanvasSize(canvasSize);
+
+    if (!supportsWebGL2()) {
+      ensureOrthographicFallbackCanvas(container);
+      deckInstance = null;
+      currentViewMode = 'orthographic';
+      isMapLoaded = true;
+      mapInstanceStore.setDeckInstance(null);
+      mapInstanceStore.setMapLoaded(true);
+      logger.warn(
+        'WebGL2 unavailable: using static orthographic fallback canvas',
+        LogCategory.MAP
+      );
+      onMapLoaded();
+      return;
+    }
 
     const handleViewStateChange = ({
       viewState
@@ -103,39 +277,60 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       return viewState;
     };
 
-    deckInstance = new Deck({
-      parent: container,
-      views: [ORTHOGRAPHIC_VIEW],
-      initialViewState: {
-        main: {
-          target: [0, 0, 0],
-          zoom: 0,
-          minZoom: -10,
-          maxZoom: 10
-        }
-      },
-      width: '100%',
-      height: '100%',
-      controller: { scrollZoom: false, doubleClickZoom: false },
-      layers: [],
-      getTooltip: createTooltipHandler(getActiveVisualizations),
-      onViewStateChange: handleViewStateChange as DeckProps<
-        [OrthographicView]
-      >['onViewStateChange'],
-      onResize: ({ width, height }) => {
-        projectionStore.updateCanvasSize({ width, height });
-      }
-    });
+    const orthographicDeck = createDeckWithDeferredResizeObserver(
+      () =>
+        new Deck({
+          parent: container,
+          deviceProps: {
+            type: 'webgl'
+          },
+          views: [ORTHOGRAPHIC_VIEW],
+          initialViewState: {
+            main: {
+              target: [0, 0, 0],
+              zoom: 0,
+              minZoom: -10,
+              maxZoom: 10
+            }
+          },
+          width: '100%',
+          height: '100%',
+          controller: { scrollZoom: false, doubleClickZoom: false },
+          layers: [],
+          getTooltip: createTooltipHandler(getActiveVisualizations),
+          onViewStateChange: handleViewStateChange as DeckProps<
+            [OrthographicView]
+          >['onViewStateChange'],
+          onLoad: () => {
+            // Ignore late callbacks from a stale deck instance during view switches.
+            if (deckInstance !== orthographicDeck) {
+              return;
+            }
 
+            isMapLoaded = true;
+            mapInstanceStore.setMapLoaded(true);
+            logger.success('Deck.gl OrthographicView ready', LogCategory.MAP);
+            onMapLoaded();
+          },
+          onError: (error, layer) => {
+            logger.error(
+              'Deck.gl orthographic runtime error',
+              LogCategory.MAP,
+              {
+                error,
+                layerId: layer?.id
+              }
+            );
+          },
+          onResize: ({ width, height }) => {
+            projectionStore.updateCanvasSize({ width, height });
+          }
+        })
+    );
+
+    deckInstance = orthographicDeck;
     currentViewMode = 'orthographic';
-
-    requestAnimationFrame(() => {
-      isMapLoaded = true;
-      mapInstanceStore.setDeckInstance(deckInstance);
-      mapInstanceStore.setMapLoaded(true);
-      logger.success('Deck.gl OrthographicView ready', LogCategory.MAP);
-      onMapLoaded();
-    });
+    mapInstanceStore.setDeckInstance(orthographicDeck);
   }
 
   let _initialStyleKey: string | null = null;
@@ -152,6 +347,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
     containerRef = container;
     currentViewMode = 'maplibre';
+    removeOrthographicFallbackCanvas();
 
     map = new maplibregl.Map({
       container,
@@ -263,8 +459,17 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapToRemove.remove();
     }
     if (deckToFinalize) {
-      deckToFinalize.finalize();
+      try {
+        deckToFinalize.finalize();
+      } catch (error) {
+        logger.warn(
+          'Deck finalize raised an error during teardown',
+          LogCategory.MAP,
+          error
+        );
+      }
     }
+    removeOrthographicFallbackCanvas();
     projectionStore.reset();
     mapInstanceStore.reset();
     logger.info('Map destroyed', LogCategory.MAP);

@@ -30,7 +30,11 @@
   }
 </script>
 
-<label class="kh-switch-native" class:disabled class:sm={size === 'sm'}>
+<label
+  class="kh-switch-native"
+  class:disabled={disabled}
+  class:sm={size === 'sm'}
+>
   {#if !hideLabel && labelText}
     <span class="kh-switch-label">{labelText}</span>
   {/if}

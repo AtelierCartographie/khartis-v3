@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 
 export type LayerType = 'visualization' | 'geographic';
 
@@ -11,6 +12,9 @@ export interface Layer {
   type: LayerType;
   opacity?: number;
   order: number;
+  parentId?: string;
+  isSubLayer?: boolean;
+  primitive?: PrimitiveFilter;
 }
 
 export interface Section {
@@ -36,6 +40,9 @@ export interface LayersState {
     color: string;
     opacity?: number;
     order: number;
+    parentId?: string;
+    isSubLayer?: boolean;
+    primitive?: PrimitiveFilter;
   }>;
   expandedSections: Record<string, boolean>;
   dragState: {

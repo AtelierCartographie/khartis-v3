@@ -124,7 +124,8 @@
       };
     }
 
-    if (!analysis.histogram || !isHistogramLike(analysis.histogram)) return null;
+    if (!analysis.histogram || !isHistogramLike(analysis.histogram))
+      return null;
 
     const typeSimple = analysis.type_simple;
 
@@ -552,119 +553,127 @@
     </div>
     {#if showSummaryPlots && analysis}
       <div class="summary-plot-wrapper">
-      <div class="summary-plot">
-        {#if histogramData?.kind === 'geographic'}
-          <!-- Geographic column: uniform pills for uniques/nulls/duplicates (spec 2.5.b) -->
-          <div class="hist-geo-pills">
-            <span class="hist-geo-pill hist-geo-uniques">
-              {m.summary_plot_unique_values({ count: histogramData.uniques.toLocaleString() })}
-            </span>
-            {#if histogramData.nulls > 0}
-              <span class="hist-geo-pill hist-geo-nulls">
-                {m.column_warning_nulls({ count: histogramData.nulls.toLocaleString() })}
-              </span>
-            {/if}
-            {#if histogramData.duplicates > 0}
-              <span class="hist-geo-pill hist-geo-duplicates">
-                {m.column_warning_duplicates({ count: histogramData.duplicates.toLocaleString() })}
-              </span>
-            {/if}
-          </div>
-        {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
-          <!-- Show warnings in histogram area when present -->
-          <div class="hist-warnings">
-            {#each columnWarnings as warning}
-              <div class="hist-warning-line">
-                <span class="hist-warning-icon"><WarningAlt size={16} /></span>
-                <span>{warning.message}</span>
-              </div>
-            {/each}
-          </div>
-        {:else if histogramData?.kind === 'categorical'}
-          {#if histogramData.isAllUnique}
-            <!-- All unique values: single teal bar -->
-            <div class="hist-unique-bar">
-              <span class="hist-unique-text">
+        <div class="summary-plot">
+          {#if histogramData?.kind === 'geographic'}
+            <!-- Geographic column: uniform pills for uniques/nulls/duplicates (spec 2.5.b) -->
+            <div class="hist-geo-pills">
+              <span class="hist-geo-pill hist-geo-uniques">
                 {m.summary_plot_unique_values({
                   count: histogramData.uniques.toLocaleString()
                 })}
               </span>
+              {#if histogramData.nulls > 0}
+                <span class="hist-geo-pill hist-geo-nulls">
+                  {m.column_warning_nulls({
+                    count: histogramData.nulls.toLocaleString()
+                  })}
+                </span>
+              {/if}
+              {#if histogramData.duplicates > 0}
+                <span class="hist-geo-pill hist-geo-duplicates">
+                  {m.column_warning_duplicates({
+                    count: histogramData.duplicates.toLocaleString()
+                  })}
+                </span>
+              {/if}
             </div>
-          {:else}
-            <!-- Multiple categories: equal-width bars -->
-            <div class="hist-cat-bars">
-              {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
-                <div
-                  class="hist-cat-bar"
-                  class:first={i === 0}
-                  class:last={i === histogramData.items.length - 1}
-                  style="background-color: {item.category === null
-                    ? '#ff832b'
-                    : '#d02670'}"
-                  title="{item.count?.toLocaleString()} – {item.category ??
-                    'nulls'}"
-                >
-                  <span class="hist-cat-label">
-                    {item.category ?? '⌀'}
-                  </span>
+          {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
+            <!-- Show warnings in histogram area when present -->
+            <div class="hist-warnings">
+              {#each columnWarnings as warning}
+                <div class="hist-warning-line">
+                  <span class="hist-warning-icon"><WarningAlt size={16} /></span
+                  >
+                  <span>{warning.message}</span>
                 </div>
               {/each}
             </div>
-            <div class="hist-footer">
-              {m.summary_plot_categories({
-                count: histogramData.uniques.toLocaleString()
-              })}
-            </div>
-          {/if}
-        {:else if histogramData?.kind === 'numeric'}
-          <!-- Numeric/date histogram: varying height bars -->
-          <div class="hist-num-area">
-            <div class="hist-num-bars">
-              {#each histogramData.bins as bin (bin.bin)}
-                <div
-                  class="hist-num-bar"
-                  style="height: {(bin.count / histogramData.maxCount) * 100}%"
-                  title={bin.count?.toLocaleString()}
-                ></div>
-              {/each}
-            </div>
-            {#if histogramData.nullCount > 0}
-              <div class="hist-null-section">
-                <div
-                  class="hist-null-bar"
-                  style="height: {Math.min(
-                    (histogramData.nullCount / histogramData.maxCount) * 100,
-                    100
-                  )}%"
-                  title="{histogramData.nullCount.toLocaleString()} nulls"
-                ></div>
+          {:else if histogramData?.kind === 'categorical'}
+            {#if histogramData.isAllUnique}
+              <!-- All unique values: single teal bar -->
+              <div class="hist-unique-bar">
+                <span class="hist-unique-text">
+                  {m.summary_plot_unique_values({
+                    count: histogramData.uniques.toLocaleString()
+                  })}
+                </span>
+              </div>
+            {:else}
+              <!-- Multiple categories: equal-width bars -->
+              <div class="hist-cat-bars">
+                {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
+                  <div
+                    class="hist-cat-bar"
+                    class:first={i === 0}
+                    class:last={i === histogramData.items.length - 1}
+                    style="background-color: {item.category === null
+                      ? '#ff832b'
+                      : '#d02670'}"
+                    title="{item.count?.toLocaleString()} – {item.category ??
+                      'nulls'}"
+                  >
+                    <span class="hist-cat-label">
+                      {item.category ?? '⌀'}
+                    </span>
+                  </div>
+                {/each}
+              </div>
+              <div class="hist-footer">
+                {m.summary_plot_categories({
+                  count: histogramData.uniques.toLocaleString()
+                })}
               </div>
             {/if}
-          </div>
-          <div class="hist-num-footer">
-            <div class="hist-num-labels">
-              <span class="hist-num-label">
-                {histogramData.isDate
-                  ? ((histogramData.min as Date)?.toLocaleDateString() ?? '')
-                  : ((histogramData.min as number)?.toLocaleString() ?? '')}
-              </span>
-              <span class="hist-num-label">
-                {histogramData.isDate
-                  ? ((histogramData.max as Date)?.toLocaleDateString() ?? '')
-                  : ((histogramData.max as number)?.toLocaleString() ?? '')}
-              </span>
+          {:else if histogramData?.kind === 'numeric'}
+            <!-- Numeric/date histogram: varying height bars -->
+            <div class="hist-num-area">
+              <div class="hist-num-bars">
+                {#each histogramData.bins as bin (bin.bin)}
+                  <div
+                    class="hist-num-bar"
+                    style="height: {(bin.count / histogramData.maxCount) *
+                      100}%"
+                    title={bin.count?.toLocaleString()}
+                  ></div>
+                {/each}
+              </div>
+              {#if histogramData.nullCount > 0}
+                <div class="hist-null-section">
+                  <div
+                    class="hist-null-bar"
+                    style="height: {Math.min(
+                      (histogramData.nullCount / histogramData.maxCount) * 100,
+                      100
+                    )}%"
+                    title="{histogramData.nullCount.toLocaleString()} nulls"
+                  ></div>
+                </div>
+              {/if}
             </div>
-            {#if histogramData.nullCount > 0}
-              <span class="hist-null-footer-label">⌀</span>
-            {/if}
-          </div>
-        {:else}
-          <!-- No histogram data available -->
-          <div class="hist-empty">
-            {m.column_unique_count({ count: analysis.uniques ?? 0 })}
-          </div>
-        {/if}
-      </div>
+            <div class="hist-num-footer">
+              <div class="hist-num-labels">
+                <span class="hist-num-label">
+                  {histogramData.isDate
+                    ? ((histogramData.min as Date)?.toLocaleDateString() ?? '')
+                    : ((histogramData.min as number)?.toLocaleString() ?? '')}
+                </span>
+                <span class="hist-num-label">
+                  {histogramData.isDate
+                    ? ((histogramData.max as Date)?.toLocaleDateString() ?? '')
+                    : ((histogramData.max as number)?.toLocaleString() ?? '')}
+                </span>
+              </div>
+              {#if histogramData.nullCount > 0}
+                <span class="hist-null-footer-label">⌀</span>
+              {/if}
+            </div>
+          {:else}
+            <!-- No histogram data available -->
+            <div class="hist-empty">
+              {m.column_unique_count({ count: analysis.uniques ?? 0 })}
+            </div>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>

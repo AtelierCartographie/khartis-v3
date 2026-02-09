@@ -1,4 +1,7 @@
 import {
+  ALL_PRIMITIVE_FILTERS,
+  PrimitiveFilterType,
+  type PrimitiveFilter,
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
@@ -25,6 +28,12 @@ const DEFAULT_STATE: LayersState = {
 
 const VISUALIZATION_FALLBACK_COLOR = '#3b82f6';
 const GEOGRAPHIC_FALLBACK_COLOR = '#8d8d8d';
+const VISUALIZATION_SUBLAYER_SEPARATOR = '::';
+const VISUALIZATION_SUBLAYER_ORDER: PrimitiveFilter[] = [
+  PrimitiveFilterType.POINT,
+  PrimitiveFilterType.LINE,
+  PrimitiveFilterType.POLYGON
+];
 
 type LayersActions = {
   updateLayer: (id: string, updates: Partial<Layer>) => void;
@@ -40,23 +49,97 @@ type LayersActions = {
 };
 
 function getVisualizationColor(viz: VisualizationConfig): string {
-  if (typeof viz.style.fillColor === 'string' && viz.style.fillColor) {
-    return viz.style.fillColor;
-  }
+  const fillColor = getStyleColor(viz.style.fillColor);
+  if (fillColor) return fillColor;
 
   if (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor) {
     return viz.style.strokeColor;
   }
 
-  if (typeof viz.style.lineColor === 'string' && viz.style.lineColor) {
-    return viz.style.lineColor;
-  }
+  const lineColor = getStyleColor(viz.style.lineColor);
+  if (lineColor) return lineColor;
 
-  if (typeof viz.style.textColor === 'string' && viz.style.textColor) {
-    return viz.style.textColor;
-  }
+  const textColor = getStyleColor(viz.style.textColor);
+  if (textColor) return textColor;
 
   return VISUALIZATION_FALLBACK_COLOR;
+}
+
+function getStyleColor(color?: string | string[]): string | null {
+  if (typeof color === 'string' && color) {
+    return color;
+  }
+
+  if (Array.isArray(color) && typeof color[0] === 'string' && color[0]) {
+    return color[0];
+  }
+
+  return null;
+}
+
+function buildVisualizationSubLayerId(
+  visualizationId: string,
+  primitive: PrimitiveFilter
+): string {
+  return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}${primitive}`;
+}
+
+function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
+  switch (primitive) {
+    case PrimitiveFilterType.POINT:
+      return m.symbols_title();
+    case PrimitiveFilterType.LINE:
+      return m.lines_title();
+    case PrimitiveFilterType.POLYGON:
+      return m.polygons_title();
+    default:
+      return primitive;
+  }
+}
+
+function getVisualizationPrimitiveColor(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilter
+): string {
+  switch (primitive) {
+    case PrimitiveFilterType.POINT:
+      return (
+        getStyleColor(viz.style.fillColor) ??
+        viz.style.strokeColor ??
+        VISUALIZATION_FALLBACK_COLOR
+      );
+    case PrimitiveFilterType.LINE:
+      return (
+        getStyleColor(viz.style.lineColor) ??
+        viz.style.strokeColor ??
+        getStyleColor(viz.style.fillColor) ??
+        VISUALIZATION_FALLBACK_COLOR
+      );
+    case PrimitiveFilterType.POLYGON:
+      return (
+        getStyleColor(viz.style.fillColor) ??
+        viz.style.strokeColor ??
+        VISUALIZATION_FALLBACK_COLOR
+      );
+    default:
+      return VISUALIZATION_FALLBACK_COLOR;
+  }
+}
+
+function getVisualizationPrimitiveOpacity(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilter
+): number {
+  switch (primitive) {
+    case PrimitiveFilterType.POINT:
+      return Math.round((viz.style.fillOpacity ?? 1) * 100);
+    case PrimitiveFilterType.LINE:
+      return Math.round((viz.style.lineOpacity ?? 1) * 100);
+    case PrimitiveFilterType.POLYGON:
+      return Math.round((viz.style.fillOpacity ?? 1) * 100);
+    default:
+      return 100;
+  }
 }
 
 function getBasemapLayerColor(layerId: string): string {
@@ -123,6 +206,14 @@ function reorderIds<T>(items: T[], fromIndex: number, toIndex: number): T[] {
   return next;
 }
 
+function isVisualizationLayer(layer: Layer): boolean {
+  return layer.type === 'visualization';
+}
+
+function isVisualizationParentLayer(layer: Layer): boolean {
+  return isVisualizationLayer(layer) && !layer.isSubLayer;
+}
+
 function buildLayers(): Layer[] {
   const activeVisualizationIds = new Set(
     visualizationStore.activeVisualizations.map(
@@ -130,16 +221,36 @@ function buildLayers(): Layer[] {
     )
   );
 
-  const visualizationLayers = visualizationStore.visualizations.map(
-    (viz, order) => ({
-      id: viz.id,
-      name: viz.name,
-      visible: activeVisualizationIds.has(viz.id),
-      type: 'visualization' as const,
-      color: getVisualizationColor(viz),
-      opacity: Math.round((viz.style.fillOpacity ?? 1) * 100),
-      order
-    })
+  const visualizationLayers = visualizationStore.visualizations.flatMap(
+    (viz, order): Layer[] => {
+      const primitiveFilters = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+      const parentLayer: Layer = {
+        id: viz.id,
+        name: viz.name,
+        visible: activeVisualizationIds.has(viz.id),
+        type: 'visualization',
+        color: getVisualizationColor(viz),
+        opacity: Math.round((viz.style.fillOpacity ?? 1) * 100),
+        order
+      };
+
+      const subLayers = VISUALIZATION_SUBLAYER_ORDER.map(
+        (primitive, primitiveIndex): Layer => ({
+          id: buildVisualizationSubLayerId(viz.id, primitive),
+          parentId: viz.id,
+          isSubLayer: true,
+          primitive,
+          name: getVisualizationPrimitiveName(primitive),
+          visible: primitiveFilters.includes(primitive),
+          type: 'visualization',
+          color: getVisualizationPrimitiveColor(viz, primitive),
+          opacity: getVisualizationPrimitiveOpacity(viz, primitive),
+          order: order * 10 + primitiveIndex
+        })
+      );
+
+      return [parentLayer, ...subLayers];
+    }
   );
 
   const geographicLayers = basemapLayersStore.layers.map((layer, order) => ({
@@ -176,6 +287,10 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         if (!layer) return;
 
         if (layer.type === 'visualization') {
+          if (layer.isSubLayer) {
+            return;
+          }
+
           const visualization = visualizationStore.visualizations.find(
             (v) => v.id === id
           );
@@ -202,7 +317,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       },
       removeLayer: (id: string) => {
         const layer = findLayer(id);
-        if (!layer || layer.type !== 'visualization') return;
+        if (!layer || !isVisualizationParentLayer(layer)) return;
 
         visualizationStore.removeVisualization(id);
         syncFromSources();
@@ -212,7 +327,16 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         if (!layer) return;
 
         if (layer.type === 'visualization') {
-          visualizationStore.toggleVisualization(id);
+          if (layer.isSubLayer) {
+            if (layer.parentId && layer.primitive) {
+              visualizationStore.togglePrimitiveFilter(
+                layer.parentId,
+                layer.primitive
+              );
+            }
+          } else {
+            visualizationStore.toggleVisualization(id);
+          }
         } else {
           basemapLayersStore.setLayerVisibility(
             layer.id as BasemapLayerId,
@@ -228,7 +352,11 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         toIndex: number
       ) => {
         const typedLayers = s.layers
-          .filter((layer) => layer.type === type)
+          .filter((layer) =>
+            type === 'visualization'
+              ? isVisualizationParentLayer(layer)
+              : layer.type === type
+          )
           .sort((a, b) => a.order - b.order);
 
         const reordered = reorderIds(typedLayers, fromIndex, toIndex);
@@ -247,7 +375,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
       },
       duplicateLayer: (id: string): Layer | null => {
         const layer = findLayer(id);
-        if (!layer || layer.type !== 'visualization') {
+        if (!layer || !isVisualizationParentLayer(layer)) {
           return null;
         }
 

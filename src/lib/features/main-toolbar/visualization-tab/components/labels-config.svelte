@@ -49,6 +49,7 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onToggleVisibility?: (checked: boolean) => void;
   }
 
   let {
@@ -59,7 +60,8 @@
     onModesChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette
+    onInvertPalette,
+    onToggleVisibility
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -98,7 +100,7 @@
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
   let color = $state<string>(DEFAULT_COLORS.label);
   let opacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
-  let enabled = $state<boolean>(true);
+  const enabled = $derived((visualization?.style.labelOpacity ?? 1) > 0);
   let size = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let alignment = $state<'left' | 'center' | 'right'>('center');
   let halo = $state<boolean>(true);
@@ -214,7 +216,7 @@
   }
 
   function handleToggleChange(checked: boolean) {
-    enabled = checked;
+    onToggleVisibility?.(checked);
   }
 
   const colorModeIndex = $derived(

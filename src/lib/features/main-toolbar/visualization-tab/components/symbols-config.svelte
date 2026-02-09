@@ -9,6 +9,10 @@
     Tag
   } from 'carbon-icons-svelte';
   import { SymbolMode } from '../../constants';
+  import {
+    ALL_PRIMITIVE_FILTERS,
+    PrimitiveFilterType
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -37,6 +41,7 @@
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     onInvertPalette?: () => void;
+    onToggleVisibility?: (checked: boolean) => void;
   }
 
   let {
@@ -48,15 +53,20 @@
     onMappingChange,
     onMissingDataChange,
     onClassificationChange,
-    onInvertPalette
+    onInvertPalette,
+    onToggleVisibility
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
   let symbolMode = $state<SymbolMode>(SymbolMode.UNIQUE);
-  let enabled = $state<boolean>(true);
+  const enabled = $derived.by(() => {
+    const primitiveFilters =
+      visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    return primitiveFilters.includes(PrimitiveFilterType.POINT);
+  });
 
   function handleToggleChange(checked: boolean) {
-    enabled = checked;
+    onToggleVisibility?.(checked);
   }
 
   $effect(() => {

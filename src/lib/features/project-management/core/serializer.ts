@@ -25,7 +25,10 @@ import {
   getLegendState,
   legendActions
 } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-import { projectionActions } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+import {
+  getProjectionState,
+  projectionActions
+} from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import type {
   SerializedBasemapAttribute,
   SerializedLayoutSettings,
@@ -181,6 +184,7 @@ export async function serializeProjectData(
   const annotationsState = getAnnotationsState();
   const formatState = getFormatState();
   const legendState = getLegendState();
+  const projectionState = getProjectionState();
 
   serialized.layoutSettings = {
     format: formatState,
@@ -199,11 +203,16 @@ export async function serializeProjectData(
     },
     geoIndications: geoIndicationsState,
     projection: {
-      selected: projectionActions.getCurrentProjectionInfo()?.id || 'mercator',
-      longitude: 0,
-      latitude: 0,
-      rotation: 0,
-      scale: 1
+      selected:
+        projectionActions.getCurrentProjectionInfo()?.id ||
+        projectionState.selected ||
+        'mercator',
+      longitude: projectionState.longitude ?? 0,
+      latitude: projectionState.latitude ?? 0,
+      rotation: projectionState.rotation ?? 0,
+      scale: projectionState.scale ?? 1,
+      center: projectionState.center,
+      customCode: projectionState.customCode
     }
   } satisfies SerializedLayoutSettings;
 
@@ -335,8 +344,16 @@ export async function deserializeProjectData(
       }
 
       if (projection) {
+        if (projection.customCode !== undefined) {
+          projectionActions.setCustomCode(projection.customCode ?? null);
+        }
         projectionActions.setSelected(projection.selected);
-        if (
+        if (projection.center && projection.center.length === 2) {
+          projectionActions.setCenter(
+            projection.center[0],
+            projection.center[1]
+          );
+        } else if (
           projection.longitude !== undefined &&
           projection.latitude !== undefined
         ) {

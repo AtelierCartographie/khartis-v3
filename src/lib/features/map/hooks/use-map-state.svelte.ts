@@ -16,6 +16,11 @@ export interface UseMapStateReturn {
   buildLayerContextForViz: (viz: VisualizationConfig) => LayerContext;
 }
 
+export interface UseMapStateOptions {
+  forcedVisualizationIds?: string[];
+  getForcedVisualizationIds?: () => string[] | undefined;
+}
+
 function getColorsForViz(viz: VisualizationConfig | null): {
   fill: RGBColor;
   stroke: RGBColor;
@@ -82,10 +87,19 @@ function getCategoryColorMapForViz(
   return getCategoricalColorMap(categories, viz.classification.colors);
 }
 
-export function useMapState(): UseMapStateReturn {
-  const activeVisualizations = $derived(
-    visualizationStore.activeVisualizations
-  );
+export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
+  const activeVisualizations = $derived.by(() => {
+    const forcedIds =
+      options?.getForcedVisualizationIds?.() ?? options?.forcedVisualizationIds;
+    if (!forcedIds || forcedIds.length === 0) {
+      return visualizationStore.activeVisualizations;
+    }
+
+    const forcedSet = new Set(forcedIds);
+    return visualizationStore.activeVisualizations.filter((visualization) =>
+      forcedSet.has(visualization.id)
+    );
+  });
 
   function buildLayerContextForViz(viz: VisualizationConfig): LayerContext {
     const colors = getColorsForViz(viz);

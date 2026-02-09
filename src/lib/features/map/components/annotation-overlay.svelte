@@ -5,13 +5,108 @@
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { onDestroy } from 'svelte';
+  import { formatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import {
+    annotationsActions,
+    getAnnotationsState
+  } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+
+  const GRID_SIZE = 24;
+
+  let overlayElement = $state<HTMLDivElement | null>(null);
+  let dragState = $state<{
+    id: string;
+    offsetX: number;
+    offsetY: number;
+  } | null>(null);
 
   const annotationsState = $derived(getAnnotationsState());
   const visibleItems = $derived(
     annotationsState.items.filter((i) => i.visible !== false)
   );
+  const selectedId = $derived(annotationsState.selectedId);
+  const isGridEnabled = $derived(formatState.gridEnabled);
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function snap(value: number): number {
+    if (!isGridEnabled) {
+      return value;
+    }
+    return Math.round(value / GRID_SIZE) * GRID_SIZE;
+  }
+
+  function stopDragging(): void {
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+    dragState = null;
+  }
+
+  function handlePointerUp(): void {
+    stopDragging();
+  }
+
+  function handlePointerMove(event: PointerEvent): void {
+    if (!dragState || !overlayElement) {
+      return;
+    }
+
+    const rect = overlayElement.getBoundingClientRect();
+    const maxX = Math.max(0, rect.width - 10);
+    const maxY = Math.max(0, rect.height - 10);
+
+    let x = event.clientX - rect.left - dragState.offsetX;
+    let y = event.clientY - rect.top - dragState.offsetY;
+
+    x = clamp(snap(x), 0, maxX);
+    y = clamp(snap(y), 0, maxY);
+
+    annotationsActions.moveAnnotation(dragState.id, { x, y });
+  }
+
+  function handleAnnotationPointerDown(
+    event: PointerEvent,
+    item: Annotation
+  ): void {
+    if (!overlayElement) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    annotationsActions.selectAnnotation(item.id);
+
+    const rect = overlayElement.getBoundingClientRect();
+    dragState = {
+      id: item.id,
+      offsetX: event.clientX - rect.left - item.position.x,
+      offsetY: event.clientY - rect.top - item.position.y
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  }
+
+  function handleAnnotationClick(event: MouseEvent, itemId: string): void {
+    event.stopPropagation();
+    annotationsActions.selectAnnotation(itemId);
+  }
+
+  function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      annotationsActions.selectAnnotation(itemId);
+    }
+  }
+
+  onDestroy(() => {
+    stopDragging();
+  });
 
   function getColorValue(
     color:
@@ -23,6 +118,21 @@
     if (!color) return fallback;
     if (typeof color === 'string') return color;
     return hslToHex(color.hue, color.saturation, color.lightness);
+  }
+
+  function toOpacityUnit(opacity: number | undefined): number {
+    if (opacity === undefined) {
+      return 1;
+    }
+
+    const rawValue = Number(opacity);
+    if (!Number.isFinite(rawValue)) {
+      return 1;
+    }
+
+    const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
+    const clampedPercent = Math.max(0, Math.min(100, percentValue));
+    return clampedPercent / 100;
   }
 
   function getTextStyle(item: Annotation): string {
@@ -47,9 +157,7 @@
     if (style.textAlign) {
       styles.push(`text-align: ${style.textAlign}`);
     }
-    if (style.opacity !== undefined) {
-      styles.push(`opacity: ${style.opacity / 100}`);
-    }
+    styles.push(`opacity: ${toOpacityUnit(style.opacity)}`);
 
     const color = getColorValue(style.color, '#000000');
     styles.push(`color: ${color}`);
@@ -62,6 +170,7 @@
     stroke: string;
     strokeWidth: number;
     strokeDasharray?: string;
+    opacity: number;
   } {
     const style = item.style ?? {};
     return {
@@ -73,7 +182,8 @@
           ? '5,5'
           : style.strokeStyle === 'dotted'
             ? '2,2'
-            : undefined
+            : undefined,
+      opacity: toOpacityUnit(style.opacity)
     };
   }
 
@@ -149,11 +259,21 @@
 </script>
 
 {#if visibleItems.length > 0}
-  <div class="annotation-overlay">
+  <div class="annotation-overlay" bind:this={overlayElement}>
     {#each visibleItems as item (item.id)}
       <div
         class="annotation-item"
+        class:selected={selectedId === item.id}
+        class:dragging={dragState?.id === item.id}
         style="left: {item.position.x}px; top: {item.position.y}px;"
+        role="button"
+        tabindex="0"
+        aria-label={m.annotationImageAlt()}
+        onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
+        onpointerdown={(event: PointerEvent) =>
+          handleAnnotationPointerDown(event, item)}
+        onkeydown={(event: KeyboardEvent) =>
+          handleAnnotationKeyDown(event, item.id)}
       >
         {#if item.type === AnnotationKind.TEXT}
           <div class="annotation-text" style={getTextStyle(item)}>
@@ -165,7 +285,12 @@
             String(item.content ?? 'circle')
           )}
           {@const shapeStyle = getShapeStyle(item)}
-          <svg width="50" height="50" class="annotation-shape">
+          <svg
+            width="50"
+            height="50"
+            class="annotation-shape"
+            style="opacity: {shapeStyle.opacity};"
+          >
             {#if shapeData.type === 'circle'}
               <circle
                 cx={shapeData.cx}
@@ -198,7 +323,10 @@
           {@const drawingStyle = getShapeStyle(item)}
           {@const points = Array.isArray(item.content) ? item.content : []}
           {#if points.length > 0}
-            <svg class="annotation-drawing" style="overflow: visible;">
+            <svg
+              class="annotation-drawing"
+              style="overflow: visible; opacity: {drawingStyle.opacity};"
+            >
               <path
                 d={points
                   .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
@@ -217,13 +345,13 @@
         {:else if item.type === AnnotationKind.IMAGE}
           {@const imgSrc = String(item.content ?? '')}
           {@const size = item.style?.size ?? 100}
-          {@const opacity = item.style?.opacity ?? 100}
+          {@const opacity = toOpacityUnit(item.style?.opacity)}
           {#if imgSrc}
             <img
               src={imgSrc}
               alt={m.annotationImageAlt()}
               class="annotation-image"
-              style="width: {size}px; height: auto; opacity: {opacity / 100};"
+              style="width: {size}px; height: auto; opacity: {opacity};"
             />
           {/if}
         {/if}
@@ -247,6 +375,17 @@
     position: absolute;
     pointer-events: auto;
     cursor: move;
+    touch-action: none;
+    outline: none;
+  }
+
+  .annotation-item.selected {
+    box-shadow: 0 0 0 2px var(--cds-interactive-01);
+    border-radius: 4px;
+  }
+
+  .annotation-item.dragging {
+    cursor: grabbing;
   }
 
   .annotation-text {

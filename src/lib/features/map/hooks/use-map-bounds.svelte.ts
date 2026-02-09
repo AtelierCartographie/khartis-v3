@@ -41,10 +41,7 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   let lastFitGeoJSON = $state<FeatureCollection | null>(null);
   let shouldRestorePosition = $state(true);
 
-  function executeFitBounds(
-    bounds: LngLatBoundsLike,
-    animate = false
-  ): void {
+  function executeFitBounds(bounds: LngLatBoundsLike, animate = false): void {
     const map = getMap();
     if (!map) {
       onFitComplete?.();

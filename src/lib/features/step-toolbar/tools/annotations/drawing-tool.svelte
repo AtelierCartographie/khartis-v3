@@ -115,6 +115,13 @@
   function handleSmoothnessChange(e: CustomEvent<number>) {
     annotationsActions.updateDefaultStyle({ smoothness: e.detail });
   }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
+  }
 </script>
 
 <Grid noGutter fullWidth>
@@ -275,13 +282,13 @@
       <div class="section">
         <Slider
           labelText={m.opacity()}
-          value={(defaultStyle.opacity ?? 1) * 100}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
           stepMultiplier={5}
           on:change={(e) =>
-            annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 })}
+            annotationsActions.updateDefaultStyle({ opacity: e.detail })}
         />
       </div>
     </Column>

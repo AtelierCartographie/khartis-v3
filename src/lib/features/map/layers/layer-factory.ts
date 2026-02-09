@@ -16,8 +16,6 @@ import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
-
-const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,
@@ -33,7 +31,24 @@ import {
   withOpacity
 } from './layer-helpers';
 
+const HIGHLIGHT_DIMMING_FACTOR = 0.3;
+
 export type { LayerContext };
+
+function resolveThematicScopeId(ctx: LayerContext): string {
+  return ctx.viz?.id ?? ctx.datasetId ?? 'default';
+}
+
+function createThematicLayerId(
+  layerType: DeckLayerId,
+  ctx: LayerContext
+): string {
+  return createLayerId(
+    layerType,
+    resolveThematicScopeId(ctx),
+    ctx.projectionSuffix
+  );
+}
 
 export function createPointLayers(
   jsTable: ArrowTable,
@@ -42,7 +57,6 @@ export function createPointLayers(
 ): Layer<DeckDataRow>[] {
   const {
     viz,
-    datasetId,
     fillColor,
     strokeColor,
     fillOpacity: rawFillOpacity,
@@ -52,7 +66,6 @@ export function createPointLayers(
     categoryColorMap,
     highlightedRowIds,
     modelMatrix,
-    projectionSuffix,
     beforeId
   } = ctx;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
@@ -69,15 +82,7 @@ export function createPointLayers(
   const useCategoricalColor = viz && shouldApplyCategorical(viz);
   const { min: minValue, max: maxValue } = statistics;
 
-  const highlightSuffix = hasHighlights ? `-hl${highlightedRowIds.size}` : '';
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}${highlightSuffix}`;
-  const layerId = createLayerId(
-    DeckLayerId.POINT_LAYER,
-    datasetId,
-    projectionSuffix
-      ? `${projectionSuffix}-${styleFingerprint}`
-      : styleFingerprint
-  );
+  const layerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
 
   const isNativeGeoArrowPoint =
     arrowExtension &&
@@ -244,13 +249,11 @@ export function createLineLayers(
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   const {
-    datasetId,
     fillColor,
     fillOpacity: rawLineFillOpacity,
     strokeWidth,
     highlightedRowIds: lineHighlightedRowIds,
     modelMatrix,
-    projectionSuffix,
     beforeId
   } = ctx;
   const hasLineHighlights =
@@ -266,17 +269,7 @@ export function createLineLayers(
     isGeoJsonEncoded
   } = geometryInfo;
 
-  const lineHighlightSuffix = hasLineHighlights
-    ? `-hl${lineHighlightedRowIds.size}`
-    : '';
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}${lineHighlightSuffix}`;
-  const layerId = createLayerId(
-    DeckLayerId.LINE_LAYER,
-    datasetId,
-    projectionSuffix
-      ? `${projectionSuffix}-${styleFingerprint}`
-      : styleFingerprint
-  );
+  const layerId = createThematicLayerId(DeckLayerId.LINE_LAYER, ctx);
 
   const isNativeGeoArrowLine =
     arrowExtension &&
@@ -376,7 +369,6 @@ export function createPolygonLayers(
 ): Layer<DeckDataRow>[] {
   const {
     viz,
-    datasetId,
     fillColor,
     strokeColor,
     fillOpacity: rawPolyFillOpacity,
@@ -384,7 +376,6 @@ export function createPolygonLayers(
     strokeOpacity: rawPolyStrokeOpacity,
     highlightedRowIds: polyHighlightedRowIds,
     modelMatrix,
-    projectionSuffix,
     beforeId
   } = ctx;
   const hasPolyHighlights =
@@ -404,17 +395,7 @@ export function createPolygonLayers(
   } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
-  const polyHighlightSuffix = hasPolyHighlights
-    ? `-hl${polyHighlightedRowIds.size}`
-    : '';
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}${polyHighlightSuffix}`;
-  const layerId = createLayerId(
-    DeckLayerId.POLYGON_LAYER,
-    datasetId,
-    projectionSuffix
-      ? `${projectionSuffix}-${styleFingerprint}`
-      : styleFingerprint
-  );
+  const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     logger.info(
@@ -566,25 +547,16 @@ export function createGeoJsonLayers(
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   const {
-    datasetId,
     fillColor,
     strokeColor,
     fillOpacity,
     strokeWidth,
     strokeOpacity,
     modelMatrix,
-    projectionSuffix,
     beforeId
   } = ctx;
 
-  const styleFingerprint = `${fillColor.join(',')}-${fillOpacity}-${strokeWidth}-${strokeOpacity}`;
-  const layerId = createLayerId(
-    DeckLayerId.GEOJSON_LAYER,
-    datasetId,
-    projectionSuffix
-      ? `${projectionSuffix}-${styleFingerprint}`
-      : styleFingerprint
-  );
+  const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
 
   return [
     new GeoJsonLayer({

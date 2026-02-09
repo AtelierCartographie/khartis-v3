@@ -45,13 +45,15 @@
     isTiledBasemapEnabled ? m.basemap_layers_disabled_by_maplibre() : undefined
   );
 
-  const notImplementedReason = m.basemap_layer_not_implemented();
-
   function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
-    logger.info('[customize-basemap] layer visibility toggled', LogCategory.UI, {
-      layerId,
-      checked
-    });
+    logger.info(
+      '[customize-basemap] layer visibility toggled',
+      LogCategory.UI,
+      {
+        layerId,
+        checked
+      }
+    );
     basemapLayersStore.setLayerVisibility(layerId, checked);
     projectStore.markAsDirty();
   }
@@ -178,10 +180,8 @@
       title={m.basemap_layer_relief()}
       showToggle={true}
       toggleChecked={getConfig('relief')?.visible ?? true}
-      disabled={true}
-      disabledReason={areDeckLayersDisabled
-        ? deckLayersDisabledReason
-        : notImplementedReason}
+      disabled={areDeckLayersDisabled}
+      disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('relief', checked)}
     >
       <LayerConfigRelief

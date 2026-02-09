@@ -1,4 +1,5 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import {
   visualizationStore,
   type VisualizationConfig
@@ -60,7 +61,12 @@ function resolveSearchDataset(): DatasetResult | undefined {
   return datasetsStore.enabledDatasets[0];
 }
 
-function getSearchTableName(): string | null {
+type SearchContext = {
+  dataset: DatasetResult;
+  tableName: string;
+};
+
+function getSearchContext(): SearchContext | null {
   const dataset = resolveSearchDataset();
   if (!dataset?.sourceFileId) {
     return null;
@@ -70,7 +76,51 @@ function getSearchTableName(): string | null {
     dataset.sourceFileId
   );
 
-  return duckDataset?.tableName ?? null;
+  if (!duckDataset?.tableName) {
+    return null;
+  }
+
+  return {
+    dataset,
+    tableName: duckDataset.tableName
+  };
+}
+
+function getSearchTableName(): string | null {
+  return getSearchContext()?.tableName ?? null;
+}
+
+async function persistReplaceTransformations(
+  dataset: DatasetResult,
+  targetColumns: string[],
+  searchValue: string,
+  replaceValue: string,
+  replacedCount: number
+): Promise<void> {
+  if (replacedCount <= 0 || targetColumns.length === 0) {
+    return;
+  }
+
+  datasetsStore.recordTransformation(
+    dataset.id,
+    `Replaced "${searchValue}" with "${replaceValue}" (${replacedCount} occurrences)`
+  );
+
+  if (!dataset.sourceFileId) {
+    return;
+  }
+
+  const timestamp = new Date().toISOString();
+
+  for (const column of targetColumns) {
+    await projectStore.addColumnTransformation(dataset.sourceFileId, {
+      type: 'replace',
+      column,
+      searchValue,
+      newValue: replaceValue,
+      timestamp
+    });
+  }
 }
 
 function clearMapHighlights(): void {
@@ -202,21 +252,47 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
           return false;
         }
 
-        const tableName = getSearchTableName();
+        const searchContext = getSearchContext();
         const current = s.results[s.currentResultIndex];
 
-        if (!tableName || !current) {
+        if (!searchContext || !current) {
           return false;
         }
 
+        const searchValue = s.searchValue.trim();
+        const replaceValue = s.replaceValue.trim();
+
         const replaced = await duckDBOrchestrator.replaceInColumn(
-          tableName,
+          searchContext.tableName,
           current.columnName,
-          s.searchValue.trim(),
-          s.replaceValue.trim()
+          searchValue,
+          replaceValue
         );
 
         if (replaced > 0) {
+          try {
+            await persistReplaceTransformations(
+              searchContext.dataset,
+              [current.columnName],
+              searchValue,
+              replaceValue,
+              replaced
+            );
+          } catch (error) {
+            logger.warn(
+              'Failed to persist search replace transformation',
+              LogCategory.UI,
+              {
+                datasetId: searchContext.dataset.id,
+                column: current.columnName,
+                searchValue,
+                replaceValue,
+                error
+              }
+            );
+          }
+
+          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
           return true;
         }
@@ -231,8 +307,8 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
           return 0;
         }
 
-        const tableName = getSearchTableName();
-        if (!tableName) {
+        const searchContext = getSearchContext();
+        if (!searchContext) {
           return 0;
         }
 
@@ -242,17 +318,46 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
             : [s.selectedSource];
 
         let replacedCount = 0;
+        const replacedColumns = new Set<string>();
 
         for (const columnName of targetColumns) {
-          replacedCount += await duckDBOrchestrator.replaceInColumn(
-            tableName,
+          const replacedInColumn = await duckDBOrchestrator.replaceInColumn(
+            searchContext.tableName,
             columnName,
             searchValue,
             replaceValue
           );
+          replacedCount += replacedInColumn;
+
+          if (replacedInColumn > 0) {
+            replacedColumns.add(columnName);
+          }
         }
 
         if (replacedCount > 0) {
+          try {
+            await persistReplaceTransformations(
+              searchContext.dataset,
+              [...replacedColumns],
+              searchValue,
+              replaceValue,
+              replacedCount
+            );
+          } catch (error) {
+            logger.warn(
+              'Failed to persist search replace transformations',
+              LogCategory.UI,
+              {
+                datasetId: searchContext.dataset.id,
+                columns: [...replacedColumns],
+                searchValue,
+                replaceValue,
+                error
+              }
+            );
+          }
+
+          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
         }
 
