@@ -81,7 +81,9 @@
   }: Props = $props();
 
   let histogramVisible = $state(true);
-  const effectiveShowSummaryPlots = $derived(showSummaryPlots && histogramVisible);
+  const effectiveShowSummaryPlots = $derived(
+    showSummaryPlots && histogramVisible
+  );
 
   function toggleHistograms() {
     histogramVisible = !histogramVisible;
@@ -102,7 +104,9 @@
     Math.floor(viewportHeight * viewportHeightRatio)
   );
   const DEFAULT_MIN_ROWS = 10;
-  const computedMaxRows = $derived(Math.max(DEFAULT_MIN_ROWS, Math.floor(maxViewportHeight / rowHeight)));
+  const computedMaxRows = $derived(
+    Math.max(DEFAULT_MIN_ROWS, Math.floor(maxViewportHeight / rowHeight))
+  );
   const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
   const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
@@ -549,13 +553,18 @@
               {#if isSelectable && isEditMode}
                 <th class="selection-header-spacer"></th>
               {/if}
-              <th class="row-index-header" class:histograms-open={effectiveShowSummaryPlots}>
+              <th
+                class="row-index-header"
+                class:histograms-open={effectiveShowSummaryPlots}
+              >
                 <div class="row-index-header-content">
                   <div class="histogram-toggle-area">
                     <button
                       class="histogram-toggle"
                       onclick={toggleHistograms}
-                      title={histogramVisible ? m.column_hide() : m.column_show()}
+                      title={histogramVisible
+                        ? m.column_hide()
+                        : m.column_show()}
                     >
                       {#if histogramVisible}
                         <ChevronUp size={16} />
@@ -566,7 +575,9 @@
                   </div>
                   {#if effectiveShowSummaryPlots}
                     <div class="row-index-stats">
-                      <span class="row-index-count">{filters.filterStats.total}</span>
+                      <span class="row-index-count"
+                        >{filters.filterStats.total}</span
+                      >
                       <span class="row-index-label">{m.rows()}</span>
                     </div>
                   {/if}
@@ -765,7 +776,11 @@
   }
 
   tr.histograms-open .selection-header-spacer {
-    background: linear-gradient(to bottom, #e0e0e0 calc(100% - 63px), #f4f4f4 calc(100% - 63px));
+    background: linear-gradient(
+      to bottom,
+      #e0e0e0 calc(100% - 63px),
+      #f4f4f4 calc(100% - 63px)
+    );
   }
 
   thead .row-index-header {

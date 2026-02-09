@@ -13,7 +13,7 @@
 </script>
 
 <div
-  {id}
+  id={id}
   class={clsx(
     'toolbar-tab',
     globalState.toolbarState === ToolbarState.Collapsed && 'collapsed-content'

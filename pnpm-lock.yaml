@@ -41,6 +41,9 @@ importers:
       '@inlang/paraglide-js':
         specifier: ^2.10.0
         version: 2.10.0
+      '@luma.gl/core':
+        specifier: 9.2.6
+        version: 9.2.6
       '@math.gl/core':
         specifier: ^4.1.0
         version: 4.1.0

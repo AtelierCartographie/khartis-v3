@@ -3,6 +3,7 @@
   import { m } from '$lib/paraglide/messages';
   import { FileStorage, MagicWandFilled } from 'carbon-icons-svelte';
   import { projectionActions } from './projection.store.svelte';
+  import { parseProjectionCode } from './projection-code.utils';
   import ProjectionMain from './projection-main.svelte';
   import ProjectionOther from './projection-other.svelte';
   import ProjectionSettings from './projection-settings.svelte';
@@ -10,16 +11,17 @@
   const title = m.projection_title();
 
   function handleProjectionCodeApply(event: CustomEvent<{ code: string }>) {
-    const normalizedCode = event.detail.code.toLowerCase();
-    const nextProjection =
-      normalizedCode.includes('globe') || normalizedCode.includes('sphere')
-        ? 'orthographic'
-        : 'mercator';
+    const parsed = parseProjectionCode(event.detail.code);
+    if (!parsed) {
+      return;
+    }
 
-    projectionActions.setSelected(nextProjection);
+    projectionActions.setCustomCode(parsed.normalizedCode);
+    projectionActions.setSelected(parsed.projectionId);
   }
 
   function handleProjectionCodeReset() {
+    projectionActions.setCustomCode(null);
     projectionActions.setSelected('mercator');
   }
 </script>

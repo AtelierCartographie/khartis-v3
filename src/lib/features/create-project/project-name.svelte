@@ -26,9 +26,7 @@
   });
 
   function getNextProjectName(): string {
-    const existingNames = new Set(
-      projectsStore.projects.map((p) => p.name)
-    );
+    const existingNames = new Set(projectsStore.projects.map((p) => p.name));
     let number = 1;
     let candidate = m.project_default_name({ number });
     while (existingNames.has(candidate)) {

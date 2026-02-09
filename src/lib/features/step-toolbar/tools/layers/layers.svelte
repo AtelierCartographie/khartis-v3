@@ -12,7 +12,10 @@
     resetDragState
   } from './layers.utils.js';
   import SectionHeader from './section-header.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    PrimitiveFilterType,
+    visualizationStore
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -32,7 +35,7 @@
       icon:
         l.id === 'texts'
           ? Txt
-          : l.id === 'symbols' || l.id === 'villes'
+          : l.primitive === PrimitiveFilterType.POINT || l.id === 'villes'
             ? Location
             : Earth
     }))
@@ -63,10 +66,33 @@
     filterLayersByType(layers, 'visualization')
   );
 
+  const visualizationParentLayers = $derived(
+    visualizationLayers.filter((layer) => !layer.isSubLayer)
+  );
+
+  const visualizationChildLayersByParent = $derived.by(() => {
+    const childrenByParent: Record<string, Layer[]> = {};
+
+    for (const layer of visualizationLayers) {
+      if (!layer.isSubLayer || !layer.parentId) continue;
+
+      if (!childrenByParent[layer.parentId]) {
+        childrenByParent[layer.parentId] = [];
+      }
+      childrenByParent[layer.parentId].push(layer);
+    }
+
+    for (const parentId of Object.keys(childrenByParent)) {
+      childrenByParent[parentId].sort((a, b) => a.order - b.order);
+    }
+
+    return childrenByParent;
+  });
+
   const geographicLayers = $derived(filterLayersByType(layers, 'geographic'));
 
   const visualizationCount = $derived(
-    getVisibleLayersCount(visualizationLayers)
+    getVisibleLayersCount(visualizationParentLayers)
   );
 
   const geographicCount = $derived(getVisibleLayersCount(geographicLayers));
@@ -83,8 +109,10 @@
     const layer = layers.find((l) => l.id === layerId);
     if (!layer || layer.type !== 'visualization') return;
 
-    // For visualization layers, the layer ID matches the visualization ID
-    visualizationStore.selectVisualization(layerId);
+    const targetVisualizationId = layer.isSubLayer ? layer.parentId : layer.id;
+    if (!targetVisualizationId) return;
+
+    visualizationStore.selectVisualization(targetVisualizationId);
 
     // Navigate to Visualizations tab
     globalActions.setNavigationState(ToolbarStep.Visualizations);
@@ -100,7 +128,7 @@
 
   function handleRenameLayer(layerId: string): void {
     const layer = layers.find((l) => l.id === layerId);
-    if (!layer) return;
+    if (!layer || layer.isSubLayer) return;
 
     const newName = prompt(m.layers_rename_prompt(), layer.name);
     if (newName && newName.trim() !== '') {
@@ -109,10 +137,14 @@
   }
 
   function handleDuplicateLayer(layerId: string): void {
+    const layer = layers.find((l) => l.id === layerId);
+    if (!layer || layer.isSubLayer) return;
     store.duplicateLayer(layerId);
   }
 
   function handleDeleteLayer(layerId: string): void {
+    const layer = layers.find((l) => l.id === layerId);
+    if (!layer || layer.isSubLayer) return;
     if (confirm(m.layers_delete_confirm())) {
       store.removeLayer(layerId);
     }
@@ -175,11 +207,17 @@
   }
 
   function getSectionLayers(type: LayerType): Layer[] {
-    return type === 'visualization' ? visualizationLayers : geographicLayers;
+    return type === 'visualization'
+      ? visualizationParentLayers
+      : geographicLayers;
   }
 
   function getSectionCount(type: LayerType): number {
     return type === 'visualization' ? visualizationCount : geographicCount;
+  }
+
+  function getSectionChildLayers(type: LayerType): Record<string, Layer[]> {
+    return type === 'visualization' ? visualizationChildLayersByParent : {};
   }
 
   function getReorderFunction(
@@ -220,6 +258,7 @@
       {#if expandedById[section.id]}
         <LayersList
           layers={getSectionLayers(section.type)}
+          childLayersByParent={getSectionChildLayers(section.type)}
           isSubSection={true}
           onToggleVisibility={handleToggleVisibility}
           onOpenSettings={handleOpenSettings}

@@ -44,6 +44,16 @@ type AnnotationsActions = {
   toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => void;
   setTextAlign: (align: TextAlign) => void;
   initPageElements: () => void;
+  redistributePageElements: (layout?: {
+    width?: number;
+    height?: number;
+    margins?: {
+      top: number;
+      bottom: number;
+      left: number;
+      right: number;
+    };
+  }) => void;
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
@@ -52,6 +62,79 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   subtitle: { fontSize: 18, bold: false, italic: false },
   caption: { fontSize: 10, bold: false, italic: true }
 };
+
+type PageLayout = {
+  width: number;
+  height: number;
+  margins: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+};
+
+function resolvePageLayout(overrides?: {
+  width?: number;
+  height?: number;
+  margins?: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+}): PageLayout {
+  const format = getFormatState();
+
+  return {
+    width: overrides?.width ?? format.width,
+    height: overrides?.height ?? format.height,
+    margins: overrides?.margins ?? format.margins
+  };
+}
+
+function getPageElementPosition(
+  role: PageElementRole,
+  layout: PageLayout
+): { x: number; y: number } {
+  const { width, height, margins } = layout;
+  const titleX = margins.left + 4;
+  const rightColumnX = Math.max(margins.left, width - margins.right - 220);
+  const bottomY = height - margins.bottom;
+
+  switch (role) {
+    case 'title':
+      return { x: titleX, y: margins.top + 24 };
+    case 'subtitle':
+      return { x: titleX, y: margins.top + 52 };
+    case 'source':
+      return { x: rightColumnX, y: bottomY - 46 };
+    case 'basemap_source':
+      return { x: rightColumnX, y: bottomY - 32 };
+    case 'signature':
+      return { x: rightColumnX, y: bottomY - 18 };
+    case 'credit':
+      return { x: rightColumnX, y: bottomY - 4 };
+    default:
+      return { x: titleX, y: margins.top + 24 };
+  }
+}
+
+function normalizeOpacityPercent(
+  opacity: number | undefined
+): number | undefined {
+  if (opacity === undefined) {
+    return undefined;
+  }
+
+  const rawValue = Number(opacity);
+  if (!Number.isFinite(rawValue)) {
+    return undefined;
+  }
+
+  const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
+  return Math.max(0, Math.min(100, percentValue));
+}
 
 const { actions, getState } = createToolStore<
   AnnotationsState,
@@ -96,7 +179,12 @@ const { actions, getState } = createToolStore<
     s.textContent = content;
   },
   updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-    s.defaultStyle = { ...s.defaultStyle, ...styleUpdates };
+    const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+    if (styleUpdates.opacity !== undefined) {
+      normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
+    }
+
+    s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
   },
   duplicateAnnotation: (id: string) => {
     const original = s.items.find((item) => item.id === id);
@@ -142,10 +230,7 @@ const { actions, getState } = createToolStore<
     const hasPageElements = s.items.some((item) => item.role != null);
     if (hasPageElements) return;
 
-    const format = getFormatState();
-    const width = format.width;
-    const height = format.height;
-    const margins = format.margins;
+    const layout = resolvePageLayout();
 
     const basemapSource = basemapService.currentBasemap?.metadata?.source || '';
 
@@ -159,43 +244,37 @@ const { actions, getState } = createToolStore<
         role: 'title',
         content: '',
         style: { ...PREDEFINED_STYLES.title },
-        position: { x: margins.left, y: margins.top + 24 }
+        position: getPageElementPosition('title', layout)
       },
       {
         role: 'subtitle',
         content: '',
         style: { ...PREDEFINED_STYLES.subtitle },
-        position: { x: margins.left, y: margins.top + 48 }
+        position: getPageElementPosition('subtitle', layout)
       },
       {
         role: 'source',
         content: '',
         style: { ...PREDEFINED_STYLES.caption },
-        position: { x: margins.left, y: height - margins.bottom - 24 }
+        position: getPageElementPosition('source', layout)
       },
       {
         role: 'basemap_source',
         content: basemapSource,
         style: { ...PREDEFINED_STYLES.caption },
-        position: { x: margins.left, y: height - margins.bottom - 10 }
+        position: getPageElementPosition('basemap_source', layout)
       },
       {
         role: 'signature',
         content: '',
         style: { ...PREDEFINED_STYLES.caption },
-        position: {
-          x: width - margins.right - 100,
-          y: height - margins.bottom - 24
-        }
+        position: getPageElementPosition('signature', layout)
       },
       {
         role: 'credit',
         content: 'Réalisé avec Khartis',
         style: { ...PREDEFINED_STYLES.caption },
-        position: {
-          x: width - margins.right - 150,
-          y: height - margins.bottom - 10
-        }
+        position: getPageElementPosition('credit', layout)
       }
     ];
 
@@ -209,6 +288,19 @@ const { actions, getState } = createToolStore<
     }));
 
     s.items = [...s.items, ...newAnnotations];
+  },
+  redistributePageElements: (layoutOverrides) => {
+    const layout = resolvePageLayout(layoutOverrides);
+    s.items = s.items.map((item) => {
+      if (!item.role) {
+        return item;
+      }
+
+      return {
+        ...item,
+        position: getPageElementPosition(item.role, layout)
+      };
+    });
   }
 }));
 

@@ -64,7 +64,14 @@ export class ConsoleErrorTracker {
   getErrorSummary(): string {
     const errors = this.getErrors();
     if (errors.length === 0) return 'No errors';
-    return errors.map((e) => `[${e.type}] ${e.text}`).join('\n');
+    return errors
+      .map((e) => {
+        if (e.location) {
+          return `[${e.type}] ${e.text}\n  at ${e.location}`;
+        }
+        return `[${e.type}] ${e.text}`;
+      })
+      .join('\n');
   }
 
   clear(): void {

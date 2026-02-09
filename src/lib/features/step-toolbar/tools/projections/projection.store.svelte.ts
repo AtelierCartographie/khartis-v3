@@ -34,6 +34,7 @@ function isGeometryCandidate(value: unknown): value is Geometry {
 
 type ProjectionActions = {
   setSelected: (projectionId: string) => void;
+  setCustomCode: (code: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
@@ -67,6 +68,7 @@ const { actions, getState } = createToolStore<
 >(DEFAULT_STATE, (s) => {
   const setSelectedInternal = (projectionId: string, applyToMap: boolean) => {
     s.selected = projectionId;
+    s.customCode = undefined;
     if (applyToMap) {
       mapProjectionStore.setProjection(toMapProjectionType(projectionId));
     }
@@ -78,6 +80,9 @@ const { actions, getState } = createToolStore<
 
   return {
     setSelected,
+    setCustomCode: (code: string | null) => {
+      s.customCode = code?.trim() || undefined;
+    },
     setViewMode: (mode: ViewMode) => {
       s.viewMode = mode;
       globalActions.setProjectionViewMode(mode);
@@ -116,7 +121,7 @@ const { actions, getState } = createToolStore<
       ];
 
       const suggested = suggestProjection(bounds);
-      setSelectedInternal(suggested, false);
+      setSelectedInternal(suggested, true);
     },
     applyProjectionToDataset: (
       datasetId: string,

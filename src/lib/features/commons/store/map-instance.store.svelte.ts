@@ -224,7 +224,7 @@ class MapInstanceStore {
    * to fit the canvas at zoom 0, so target [0,0,0] + zoom 0 = "fit bounds".
    */
   fitToOrthographicBounds(): void {
-    if (!this._state.deckInstance) return;
+    if (!this._state.deckInstance || !this._state.isMapLoaded) return;
 
     this._state.deckViewState = {
       ...this._state.deckViewState,

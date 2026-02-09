@@ -219,6 +219,5 @@ export function getTooltip(
 export function createTooltipHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => TooltipContent {
-  return (info: PickingInfo) =>
-    getTooltip(info, getVisualizations?.());
+  return (info: PickingInfo) => getTooltip(info, getVisualizations?.());
 }

@@ -3,8 +3,11 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     visualizationStore,
+    ALL_PRIMITIVE_FILTERS,
+    PrimitiveFilterType,
     type VisualizationConfig,
     type VisualizationModes,
+    type PrimitiveFilter,
     type MissingDataConfig,
     type ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
@@ -93,6 +96,51 @@
     }
   }
 
+  function handlePrimitiveVisibilityChange(
+    primitive: PrimitiveFilter,
+    visible: boolean
+  ) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const activeFilters = selectedViz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    const isVisible = activeFilters.includes(primitive);
+    if (isVisible === visible) {
+      return;
+    }
+
+    visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
+  }
+
+  function handleLabelVisibilityChange(visible: boolean) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const nextOpacity = visible ? (selectedViz.style.labelOpacity ?? 1) : 0;
+    visualizationStore.updateVisualization(selectedViz.id, {
+      style: {
+        ...selectedViz.style,
+        labelOpacity: nextOpacity
+      }
+    });
+  }
+
+  function handleTextVisibilityChange(visible: boolean) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const nextOpacity = visible ? (selectedViz.style.textOpacity ?? 1) : 0;
+    visualizationStore.updateVisualization(selectedViz.id, {
+      style: {
+        ...selectedViz.style,
+        textOpacity: nextOpacity
+      }
+    });
+  }
+
   async function computeBreaksForVisualization(trigger = 'unknown') {
     if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
       logger.debug(
@@ -156,19 +204,15 @@
       return;
     }
 
-    logger.info(
-      '[configure-visualization] computing breaks',
-      LogCategory.UI,
-      {
-        trigger,
-        requestId,
-        selectedVisualizationId: selectedViz.id,
-        sourceFileId: dataset.sourceFileId,
-        valueColumn: selectedViz.mapping.valueColumn,
-        method,
-        numClasses
-      }
-    );
+    logger.info('[configure-visualization] computing breaks', LogCategory.UI, {
+      trigger,
+      requestId,
+      selectedVisualizationId: selectedViz.id,
+      sourceFileId: dataset.sourceFileId,
+      valueColumn: selectedViz.mapping.valueColumn,
+      method,
+      numClasses
+    });
 
     try {
       const result = await calculateBreaks({
@@ -251,6 +295,8 @@
       onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
       onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
     />
 
     <PolygonsConfig
@@ -263,6 +309,8 @@
       onClassificationChange={handleClassificationChange}
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
     />
 
     <LinesConfig
@@ -273,12 +321,15 @@
       onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
       onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
     />
 
     <LabelsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
       onStyleChange={handleStyleChange}
+      onToggleVisibility={handleLabelVisibilityChange}
     />
 
     <TextsConfig
@@ -290,6 +341,7 @@
       onClassificationChange={handleClassificationChange}
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
+      onToggleVisibility={handleTextVisibilityChange}
     />
   </div>
 </section>

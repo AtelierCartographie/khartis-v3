@@ -46,6 +46,7 @@
         geoJSONs={geoJSONs}
         width={facetWidth}
         height={facetHeight}
+        forcedVisualizationIds={[viz.id]}
       />
     </div>
   {/each}

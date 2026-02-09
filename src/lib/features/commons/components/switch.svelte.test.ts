@@ -16,7 +16,12 @@ describe('Switch', () => {
     const onchange = vi.fn();
 
     render(Switch, {
-      props: { toggled: false, labelText: 'My switch', hideLabel: true, onchange }
+      props: {
+        toggled: false,
+        labelText: 'My switch',
+        hideLabel: true,
+        onchange
+      }
     });
 
     const input = screen.getByRole('switch', { name: 'My switch' });

@@ -75,10 +75,14 @@
       return;
     }
     expanded = !expanded;
-    logger.debug('[expandable-section] expanded state changed', LogCategory.UI, {
-      title,
-      expanded
-    });
+    logger.debug(
+      '[expandable-section] expanded state changed',
+      LogCategory.UI,
+      {
+        title,
+        expanded
+      }
+    );
     onToggle?.(expanded);
   }
 

@@ -151,10 +151,9 @@ async function processParquetBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
 
   // Read geometry as native GeoArrow (no WKB conversion needed)
-  const arrowResult = await duck.query(
-    `SELECT * FROM "${tableName}"`,
-    { format: 'arrow-ipc' }
-  );
+  const arrowResult = await duck.query(`SELECT * FROM "${tableName}"`, {
+    format: 'arrow-ipc'
+  });
   const geometryTable = addGeoArrowMetadata(
     tableFromIPC(arrowResult as Uint8Array),
     colMeta?.encoding

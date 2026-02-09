@@ -12,7 +12,7 @@
   import { onMount } from 'svelte';
 
   let configureSection: HTMLElement | undefined = $state();
-  let hasAutoCreated = $state(false);
+  let initializedDatasetIds = $state<string[]>([]);
   let lastSnapshot = $state<string>('');
 
   function handleCreateVisualization() {
@@ -33,8 +33,14 @@
 
   $effect(() => {
     const dataset = datasetsStore.selectedDataset;
-    const hasNoViz = visualizationStore.visualizations.length === 0;
-    const snapshot = `${dataset?.id ?? 'none'}|${visualizationStore.visualizations.length}|${hasAutoCreated}`;
+    const datasetVisualizations = dataset
+      ? visualizationStore.getVisualizationsByDataset(dataset.id)
+      : [];
+    const hasNoDatasetViz = datasetVisualizations.length === 0;
+    const hasInitializedDataset = dataset
+      ? initializedDatasetIds.includes(dataset.id)
+      : false;
+    const snapshot = `${dataset?.id ?? 'none'}|${datasetVisualizations.length}|${initializedDatasetIds.join(',')}`;
 
     if (snapshot !== lastSnapshot) {
       lastSnapshot = snapshot;
@@ -43,29 +49,32 @@
         LogCategory.UI,
         {
           selectedDatasetId: dataset?.id,
-          hasNoViz,
-          hasAutoCreated,
+          hasNoDatasetViz,
+          hasInitializedDataset,
           selectedVisualizationId: visualizationStore.selectedVisualization?.id
         }
       );
     }
 
-    if (dataset && hasNoViz && !hasAutoCreated) {
-      hasAutoCreated = true;
-      const defaultType = dataset.geometry?.type
-        ?.toLowerCase()
-        .includes('point')
-        ? VisualizationType.PROPORTIONAL
-        : VisualizationType.CHOROPLETH;
-      visualizationStore.createVisualization(defaultType, dataset.id);
-      logger.info(
-        '[visualization-tab] auto-created default visualization',
-        LogCategory.UI,
-        {
-          datasetId: dataset.id,
-          defaultType
-        }
-      );
+    if (dataset && !hasInitializedDataset) {
+      initializedDatasetIds = [...initializedDatasetIds, dataset.id];
+
+      if (hasNoDatasetViz) {
+        const defaultType = dataset.geometry?.type
+          ?.toLowerCase()
+          .includes('point')
+          ? VisualizationType.PROPORTIONAL
+          : VisualizationType.CHOROPLETH;
+        visualizationStore.createVisualization(defaultType, dataset.id);
+        logger.info(
+          '[visualization-tab] auto-created default visualization',
+          LogCategory.UI,
+          {
+            datasetId: dataset.id,
+            defaultType
+          }
+        );
+      }
     }
   });
 </script>

@@ -16,13 +16,12 @@
     VisualizationConfig,
     VisualizationModes
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import * as m from '$lib/paraglide/messages';
   import {
-    Category,
-    Minimize,
-    Subtract,
-    Tag
-  } from 'carbon-icons-svelte';
+    ALL_PRIMITIVE_FILTERS,
+    PrimitiveFilterType
+  } from '$lib/features/commons/store/visualization.store.svelte';
+  import * as m from '$lib/paraglide/messages';
+  import { Category, Minimize, Subtract, Tag } from 'carbon-icons-svelte';
   import {
     ColorMode,
     DEFAULT_COLORS,
@@ -50,6 +49,7 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onToggleVisibility?: (checked: boolean) => void;
   }
 
   let {
@@ -61,7 +61,8 @@
     onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette
+    onInvertPalette,
+    onToggleVisibility
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -102,7 +103,11 @@
   let maxThickness = $state<number>(VISUALIZATION_DEFAULTS.lineMaxWidth);
   let color = $state<string>(DEFAULT_COLORS.line);
   let opacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
-  let enabled = $state<boolean>(true);
+  const enabled = $derived.by(() => {
+    const primitiveFilters =
+      visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    return primitiveFilters.includes(PrimitiveFilterType.LINE);
+  });
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(false);
   let _missingDataLabel = $state<string>('');
@@ -151,11 +156,7 @@
   }
 
   function handleColorModeChange(index: number) {
-    const modes = [
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ];
+    const modes = [ColorMode.UNIQUE, ColorMode.CLASSES, ColorMode.CATEGORIES];
     colorMode = modes[index] || ColorMode.UNIQUE;
     onModesChange?.({ color: colorMode });
   }
@@ -186,7 +187,7 @@
   }
 
   function handleToggleChange(checked: boolean) {
-    enabled = checked;
+    onToggleVisibility?.(checked);
   }
 
   function handleMissingDataToggle(checked: boolean) {
@@ -220,11 +221,9 @@
   );
 
   const colorModeIndex = $derived(
-    [
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ].indexOf(colorMode)
+    [ColorMode.UNIQUE, ColorMode.CLASSES, ColorMode.CATEGORIES].indexOf(
+      colorMode
+    )
   );
 
   function handleOpenDiscretization() {

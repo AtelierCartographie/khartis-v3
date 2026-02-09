@@ -73,7 +73,14 @@
   }
 
   function handleOpacityChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 });
+    annotationsActions.updateDefaultStyle({ opacity: e.detail });
+  }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
   }
 </script>
 
@@ -149,7 +156,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_opacity()}
-          value={(defaultStyle.opacity ?? 1) * 100}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
