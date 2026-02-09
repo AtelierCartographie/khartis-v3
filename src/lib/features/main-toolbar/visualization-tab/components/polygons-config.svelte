@@ -6,6 +6,10 @@
     VisualizationConfig,
     VisualizationModes
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    ALL_PRIMITIVE_FILTERS,
+    PrimitiveFilterType
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Category,
@@ -47,6 +51,7 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onToggleVisibility?: (checked: boolean) => void;
   }
 
   let {
@@ -58,7 +63,8 @@
     onMissingDataChange: _onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette
+    onInvertPalette,
+    onToggleVisibility
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -96,7 +102,11 @@
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let enabled = $state<boolean>(true);
+  const enabled = $derived.by(() => {
+    const primitiveFilters =
+      visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    return primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+  });
 
   $effect(() => {
     if (visualization?.style) {
@@ -151,7 +161,7 @@
   }
 
   function handleToggleChange(checked: boolean) {
-    enabled = checked;
+    onToggleVisibility?.(checked);
   }
 
   function handleOpenDiscretization() {

@@ -22,6 +22,7 @@ import {
   basemapLayersStore,
   type TerreLayerConfig,
   type MersLayerConfig,
+  type ReliefLayerConfig,
   type FrontieresLayerConfig,
   type EquateurLayerConfig,
   type MeridiensLayerConfig,
@@ -30,6 +31,7 @@ import {
   type VillesLayerConfig
 } from '../stores/basemap-layers.store.svelte';
 import {
+  BasemapRepresentation,
   BasemapCityCategory,
   BasemapCitySymbol
 } from '$lib/features/main-toolbar/constants';
@@ -553,6 +555,104 @@ export function createRivieresLayer(
   });
 }
 
+export function createReliefLayer(
+  worldBaseTable: ArrowTable,
+  config: ReliefLayerConfig,
+  ctx: BasemapLayerContext
+): Layer<DeckDataRow> | null {
+  if (!config.visible) return null;
+
+  const geometryInfo = extractGeometryInfo(worldBaseTable);
+  if (!geometryInfo) {
+    logger.warn(
+      'World base table missing geo metadata for relief layer',
+      LogCategory.MAP
+    );
+    return null;
+  }
+
+  const baseColor = toRgbColor(config.color);
+  const baseOpacity = config.opacity / 100;
+  const isContours = config.representation === BasemapRepresentation.CONTOURS;
+  const isElevation = config.representation === BasemapRepresentation.ELEVATION;
+
+  const fillOpacity = isContours
+    ? 0
+    : isElevation
+      ? Math.min(baseOpacity * 0.8, 1)
+      : Math.min(baseOpacity * 0.5, 1);
+  const lineOpacity = isContours
+    ? baseOpacity
+    : isElevation
+      ? Math.min(baseOpacity * 0.7, 1)
+      : Math.min(baseOpacity * 0.45, 1);
+  const lineWidth = isContours ? 0.8 : isElevation ? 0.5 : 0.35;
+  const lineColor = isElevation ? ([96, 96, 96] as RGBColor) : baseColor;
+
+  const layerId = buildLayerId(
+    DeckLayerId.BASEMAP_RELIEF,
+    ctx.projectionSuffix
+  );
+  const baseProps = getBaseLayerProps(ctx);
+
+  const updateTriggers = {
+    getFillColor: [config.color, config.opacity, config.representation],
+    getLineColor: [config.color, config.opacity, config.representation]
+  };
+
+  if (
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
+  ) {
+    return new geodecklayers.GeoArrowPolygonLayer({
+      id: layerId,
+      data: worldBaseTable,
+      filled: !isContours,
+      stroked: true,
+      getFillColor: withOpacity(baseColor, fillOpacity),
+      getLineColor: withOpacity(lineColor, lineOpacity),
+      lineWidthUnits: 'pixels',
+      lineWidthScale: lineWidth,
+      lineWidthMinPixels: 0,
+      lineWidthMaxPixels: 1,
+      ...baseProps,
+      updateTriggers: {
+        ...updateTriggers,
+        lineWidthScale: [lineWidth]
+      }
+    });
+  }
+
+  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    if (geojson) {
+      return new GeoJsonLayer({
+        id: layerId,
+        data: geojson,
+        filled: !isContours,
+        stroked: true,
+        getFillColor: withOpacity(baseColor, fillOpacity),
+        getLineColor: withOpacity(lineColor, lineOpacity),
+        lineWidthUnits: 'pixels',
+        getLineWidth: lineWidth,
+        lineWidthMinPixels: 0,
+        lineWidthMaxPixels: 1,
+        ...baseProps,
+        updateTriggers: {
+          ...updateTriggers,
+          getLineWidth: [lineWidth]
+        }
+      });
+    }
+    logger.warn(
+      'Failed to convert world base table to GeoJSON for relief layer',
+      LogCategory.MAP
+    );
+  }
+
+  return null;
+}
+
 function getSymbolPolygonSides(symbol: BasemapCitySymbol): number {
   switch (symbol) {
     case BasemapCitySymbol.POINT:
@@ -836,10 +936,14 @@ export function createBasemapLayers(
           break;
 
         case 'relief':
-          logger.debug(
-            'Relief layer not yet implemented - requires DEM data',
-            LogCategory.MAP
-          );
+          if (worldBaseTable) {
+            const layer = createReliefLayer(
+              worldBaseTable,
+              config as ReliefLayerConfig,
+              ctx
+            );
+            if (layer) layers.push(layer);
+          }
           break;
       }
     } catch (error) {

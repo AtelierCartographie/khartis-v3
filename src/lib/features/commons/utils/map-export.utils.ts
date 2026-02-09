@@ -372,6 +372,21 @@ function resolveColor(
   return hslToHex(color.hue, color.saturation, color.lightness);
 }
 
+function toOpacityUnit(opacity: number | undefined): number {
+  if (opacity === undefined) {
+    return 1;
+  }
+
+  const rawValue = Number(opacity);
+  if (!Number.isFinite(rawValue)) {
+    return 1;
+  }
+
+  const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
+  const clampedPercent = Math.max(0, Math.min(100, percentValue));
+  return clampedPercent / 100;
+}
+
 function renderTextAnnotation(item: Annotation): string {
   const content = String(item.content || '');
   if (!content.trim()) return '';
@@ -381,7 +396,7 @@ function renderTextAnnotation(item: Annotation): string {
   const fontSize = style.fontSize ?? 14;
   const fontFamily = style.font ?? 'Arial';
   const color = resolveColor(style.color, SVG_COLORS.BLACK);
-  const opacity = (style.opacity ?? 100) / 100;
+  const opacity = toOpacityUnit(style.opacity);
   const fontWeight = style.bold ? 'bold' : 'normal';
   const fontStyle = style.italic ? 'italic' : 'normal';
   const textDecoration = style.underlined ? 'underline' : 'none';
@@ -396,7 +411,7 @@ function renderShapeAnnotation(item: Annotation): string {
   const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
   const stroke = resolveColor(style.strokeColor, SVG_COLORS.DEFAULT_STROKE);
   const strokeWidth = style.strokeWidth ?? 2;
-  const opacity = (style.opacity ?? 100) / 100;
+  const opacity = toOpacityUnit(style.opacity);
   const size = style.size ?? 50;
 
   switch (shapeType) {
@@ -440,7 +455,7 @@ function renderDrawingAnnotation(item: Annotation): string {
       ? resolveColor(style.fillColor, 'none')
       : 'none';
   const strokeWidth = style.strokeWidth ?? 2;
-  const opacity = (style.opacity ?? 100) / 100;
+  const opacity = toOpacityUnit(style.opacity);
 
   const pathData = points
     .map(
@@ -460,7 +475,7 @@ function renderImageAnnotation(item: Annotation): string {
 
   const { x, y } = item.position;
   const size = item.style?.size ?? 100;
-  const opacity = (item.style?.opacity ?? 100) / 100;
+  const opacity = toOpacityUnit(item.style?.opacity);
 
   return `    <image x="${x}" y="${y}" width="${size}" height="${size}" href="${imgSrc}" opacity="${opacity}"/>`;
 }

@@ -43,51 +43,14 @@ export async function exportProject(fileName: string): Promise<void> {
 
 export async function exportMapAsSvg(fileName: string): Promise<void> {
   validateMapExportPrerequisites();
-
-  logger.info('[EXPORT DEBUG] Starting SVG export', LogCategory.EXPORT, {
-    rawDatasetCount: datasetsStore.datasets.length,
-    rawDatasets: datasetsStore.datasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      tableName: d.tableName,
-      geometryType: d.geometry?.type,
-      columnCount: d.columns.length
-    }))
+  logger.info('Starting SVG export', LogCategory.EXPORT, {
+    datasetCount: datasetsStore.datasets.length,
+    visualizationCount: visualizationStore.activeVisualizations.length
   });
 
   const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
 
-  logger.info('[EXPORT DEBUG] Normalized datasets', LogCategory.EXPORT, {
-    normalizedCount: normalizedDatasets.length,
-    datasets: normalizedDatasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      duckdbTableName: d.duckdbTableName,
-      geometry: d.geometry,
-      dataLength: d.data?.length ?? 0
-    }))
-  });
-
   const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-
-  logger.info('[EXPORT DEBUG] After geometry fetch', LogCategory.EXPORT, {
-    processedCount: processedDatasets.length,
-    datasets: processedDatasets.map((d) => ({
-      id: d.id,
-      dataLength: d.data.length
-    }))
-  });
-
-  logger.info('[EXPORT DEBUG] Active visualizations', LogCategory.EXPORT, {
-    count: visualizationStore.activeVisualizations.length,
-    visualizations: visualizationStore.activeVisualizations.map((v) => ({
-      id: v.id,
-      name: v.name,
-      datasetId: v.datasetId,
-      type: v.type,
-      enabled: v.enabled
-    }))
-  });
 
   const annotations = getAnnotationsState();
   const legend = getLegendState();
@@ -215,30 +178,10 @@ async function fetchDatasetsWithGeometry(
 ): Promise<ProcessedDataset[]> {
   const results: ProcessedDataset[] = [];
 
-  logger.info(
-    '[EXPORT DEBUG] fetchDatasetsWithGeometry called',
-    LogCategory.EXPORT,
-    {
-      datasetCount: datasets.length,
-      datasetIds: datasets.map((d) => d.id),
-      datasetNames: datasets.map((d) => d.name)
-    }
-  );
-
   for (const dataset of datasets) {
-    logger.info('[EXPORT DEBUG] Processing dataset', LogCategory.EXPORT, {
-      id: dataset.id,
-      name: dataset.name,
-      duckdbTableName: dataset.duckdbTableName,
-      geometry: dataset.geometry,
-      columnCount: dataset.columns.length,
-      columnTypes: dataset.columns.map((c) => ({ name: c.name, type: c.type })),
-      existingDataLength: dataset.data?.length ?? 0
-    });
-
     if (!dataset.duckdbTableName || !dataset.geometry) {
       logger.warn(
-        '[EXPORT DEBUG] Skipping dataset - no tableName or geometry',
+        'Skipping geometry hydration for dataset without table/geometry',
         LogCategory.EXPORT,
         {
           id: dataset.id,
@@ -253,43 +196,24 @@ async function fetchDatasetsWithGeometry(
     const geomColumn = dataset.columns.find((col) => col.type === 'geometry');
     if (!geomColumn) {
       logger.warn(
-        '[EXPORT DEBUG] Skipping dataset - no geometry column found',
+        'Skipping geometry hydration for dataset without geometry column',
         LogCategory.EXPORT,
         {
-          id: dataset.id,
-          columnTypes: dataset.columns.map((c) => c.type)
+          id: dataset.id
         }
       );
       results.push(dataset);
       continue;
     }
 
-    logger.info('[EXPORT DEBUG] Found geometry column', LogCategory.EXPORT, {
-      id: dataset.id,
-      geomColumnName: geomColumn.name,
-      geomColumnType: geomColumn.type
-    });
-
     try {
       const query = `SELECT * REPLACE (ST_AsGeoJSON("${geomColumn.name}") AS "${geomColumn.name}")
          FROM "${dataset.duckdbTableName}"`;
-      logger.info('[EXPORT DEBUG] Executing DuckDB query', LogCategory.EXPORT, {
-        query
-      });
 
       const rows = (await Duck.query(query, { format: 'array' })) as Record<
         string,
         unknown
       >[];
-
-      logger.info('[EXPORT DEBUG] DuckDB query returned', LogCategory.EXPORT, {
-        rowCount: rows.length,
-        sampleRow: rows[0] ? Object.keys(rows[0]) : [],
-        firstGeomValue:
-          rows[0] && geomColumn.name in rows[0]
-            ? String(rows[0][geomColumn.name]).substring(0, 100)
-            : 'N/A'
-      });
 
       const columnNames = dataset.columns.map((c) => c.name);
       const dataWithParsedGeometry = rows.map((row) => {
@@ -308,39 +232,28 @@ async function fetchDatasetsWithGeometry(
         return newRow;
       });
 
-      logger.info('[EXPORT DEBUG] Parsed geometry data', LogCategory.EXPORT, {
-        parsedRowCount: dataWithParsedGeometry.length,
-        firstParsedGeom: dataWithParsedGeometry[0]
-          ? typeof dataWithParsedGeometry[0][geomColumn.name]
-          : 'N/A'
-      });
-
       results.push({
         ...dataset,
         data: dataWithParsedGeometry
       });
     } catch (error) {
       logger.error(
-        '[EXPORT DEBUG] Failed to fetch geometry data from DuckDB',
+        'Failed to fetch geometry data from DuckDB',
         LogCategory.EXPORT,
         {
+          datasetId: dataset.id,
           tableName: dataset.duckdbTableName,
-          error: error instanceof Error ? error.message : String(error),
-          errorStack: error instanceof Error ? error.stack : undefined
+          error: error instanceof Error ? error.message : String(error)
         }
       );
       results.push(dataset);
     }
   }
 
-  logger.info(
-    '[EXPORT DEBUG] fetchDatasetsWithGeometry completed',
-    LogCategory.EXPORT,
-    {
-      resultCount: results.length,
-      resultsWithData: results.filter((d) => d.data.length > 0).length
-    }
-  );
+  logger.info('Datasets prepared for export', LogCategory.EXPORT, {
+    requested: datasets.length,
+    prepared: results.length
+  });
 
   return results;
 }

@@ -68,6 +68,7 @@ export interface DeckMapProps {
   width: number;
   height: number;
   onReady?: () => void;
+  forcedVisualizationIds?: string[];
 }
 
 export interface LayerContext {

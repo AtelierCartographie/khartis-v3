@@ -33,11 +33,21 @@
   import type { DeckMapProps } from '../types';
   import { formatState } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
+  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
 
-  let { tables, geoJSONs, width, height, onReady }: DeckMapProps = $props();
+  let {
+    tables,
+    geoJSONs,
+    width,
+    height,
+    onReady,
+    forcedVisualizationIds
+  }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
   const formatColor = $derived(
@@ -88,8 +98,10 @@
 
   let previousDatasetCount = 0;
   let pendingViewReset = false;
+  let pendingOrthographicFit = $state(false);
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
+  let lastLayoutSnapshot = $state<string | null>(null);
 
   let scheduleCount = 0;
   let effectTriggerLog: string[] = [];
@@ -203,13 +215,9 @@
     }, MAX_WAIT_FOR_DATA_MS);
   }
 
-  const mapState = useMapState();
-  const visualizationSignature = $derived.by(() =>
-    JSON.stringify({
-      selected: visualizationStore.selectedVisualization,
-      activeIds: visualizationStore.activeVisualizations.map((viz) => viz.id)
-    })
-  );
+  const mapState = useMapState({
+    getForcedVisualizationIds: () => forcedVisualizationIds
+  });
 
   const mapInit = useMapInit({
     onMapLoaded: () => {
@@ -296,6 +304,31 @@
   });
 
   $effect(() => {
+    const margins = pageMargins;
+    const layoutSnapshot = `${formatState.width}x${formatState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
+
+    if (lastLayoutSnapshot === null) {
+      lastLayoutSnapshot = layoutSnapshot;
+      return;
+    }
+
+    if (layoutSnapshot === lastLayoutSnapshot) {
+      return;
+    }
+
+    lastLayoutSnapshot = layoutSnapshot;
+
+    untrack(() => {
+      annotationsActions.redistributePageElements({
+        width: formatState.width,
+        height: formatState.height,
+        margins
+      });
+      legendActions.setPosition(LegendPosition.BOTTOM_LEFT);
+    });
+  });
+
+  $effect(() => {
     void osmBasemapStore.tileConfig;
     logEffect('osmBasemapStore.tileConfig');
 
@@ -342,6 +375,17 @@
         pendingLayerUpdate = false;
         scheduleLayerUpdate('effect:viewModeSwitchComplete');
       }
+    }
+  });
+
+  $effect(() => {
+    if (
+      pendingOrthographicFit &&
+      mapInit.isMapLoaded &&
+      mapInit.viewMode === 'orthographic'
+    ) {
+      pendingOrthographicFit = false;
+      untrack(() => mapInstanceStore.fitToOrthographicBounds());
     }
   });
 
@@ -681,7 +725,11 @@
                 // return null. Use the catalog bbox (WGS84) instead.
                 projectionStore.setReferenceBbox(loaded.metadata.bbox);
               }
-              mapInstanceStore.fitToOrthographicBounds();
+              if (mapInit.isMapLoaded) {
+                mapInstanceStore.fitToOrthographicBounds();
+              } else {
+                pendingOrthographicFit = true;
+              }
             }
           }
         } else {
@@ -739,7 +787,11 @@
           } else if (loaded.metadata.bbox) {
             projectionStore.setReferenceBbox(loaded.metadata.bbox);
           }
-          mapInstanceStore.fitToOrthographicBounds();
+          if (mapInit.isMapLoaded) {
+            mapInstanceStore.fitToOrthographicBounds();
+          } else {
+            pendingOrthographicFit = true;
+          }
         }
       }
     } catch (error) {

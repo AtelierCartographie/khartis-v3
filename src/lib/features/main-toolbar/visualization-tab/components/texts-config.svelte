@@ -59,6 +59,7 @@
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onToggleVisibility?: (checked: boolean) => void;
   }
 
   let {
@@ -70,7 +71,8 @@
     onMissingDataChange,
     onClassificationChange,
     onMappingChange,
-    onInvertPalette
+    onInvertPalette,
+    onToggleVisibility
   }: Props = $props();
 
   const NONE_FIELD_ID = -1;
@@ -138,7 +140,7 @@
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let color = $state<string>(DEFAULT_COLORS.text);
   let opacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
-  let enabled = $state<boolean>(true);
+  const enabled = $derived((visualization?.style.textOpacity ?? 1) > 0);
   let bold = $state<boolean>(false);
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
@@ -255,7 +257,7 @@
   }
 
   function handleToggleChange(checked: boolean) {
-    enabled = checked;
+    onToggleVisibility?.(checked);
   }
 
   function handleMissingDataShowChange(value: boolean) {

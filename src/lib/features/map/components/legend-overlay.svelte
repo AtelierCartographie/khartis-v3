@@ -1,10 +1,19 @@
 <script lang="ts">
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import {
+    getLegendState,
+    legendActions
+  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 
   const legendState = $derived(getLegendState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
+
+  $effect(() => {
+    void visualizationStore.version;
+    legendActions.syncWithVisualizations();
+  });
 
   const bgColor = $derived(legendState.style.background.color);
   const bgHex = $derived(

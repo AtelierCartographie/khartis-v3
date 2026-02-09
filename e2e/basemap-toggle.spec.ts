@@ -13,7 +13,9 @@ async function clickBasemapToggle(
   label: string
 ): Promise<void> {
   const switchEl = page
-    .locator(`.section-header:has-text("${label}") .bx--toggle__switch`)
+    .getByRole('switch', {
+      name: new RegExp(`^${label}$`, 'i')
+    })
     .first();
 
   await expect(switchEl).toBeVisible({ timeout: 10000 });

@@ -13,7 +13,6 @@
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
-  import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -57,12 +56,16 @@
       .map((col, id) => ({ id, text: col.name }));
   });
 
+  const selectedFieldName = $derived.by(
+    () => dataFieldItems.find((item) => item.id === selectedFieldId)?.text
+  );
+
   const datasetColumns = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
     return dataset?.columns || [];
   });
 
-  const allSuggestions = $derived.by((): VizSuggestion[] => {
+  const suggestions = $derived.by((): VizSuggestion[] => {
     const dataset = datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
 
@@ -86,8 +89,25 @@
     });
   });
 
-  const visibleSuggestions = $derived(allSuggestions.slice(0, visibleCount));
-  const hasMoreSuggestions = $derived(visibleCount < allSuggestions.length);
+  const filteredSuggestions = $derived.by(() => {
+    const suggestionsList = suggestions;
+    if (!selectedFieldName) {
+      return suggestionsList;
+    }
+
+    const withSelectedField = suggestionsList.filter((suggestion) =>
+      suggestion.columns?.includes(selectedFieldName)
+    );
+
+    return withSelectedField.length > 0 ? withSelectedField : suggestionsList;
+  });
+
+  const visibleSuggestions = $derived(
+    filteredSuggestions.slice(0, visibleCount)
+  );
+  const hasMoreSuggestions = $derived(
+    visibleCount < filteredSuggestions.length
+  );
 
   function getColumnBadgeType(columnName: string): VariableBadgeType {
     const col = datasetColumns.find((c) => c.name === columnName);
@@ -118,7 +138,7 @@
   function handleShowMore() {
     visibleCount = Math.min(
       visibleCount + SUGGESTIONS_PER_PAGE,
-      allSuggestions.length
+      filteredSuggestions.length
     );
   }
 
@@ -169,7 +189,9 @@
     const dataset = datasetsStore.selectedDataset;
     if (!dataset) return;
 
-    const suggestion = allSuggestions.find((s) => s.id === selectedSuggestion);
+    const suggestion = filteredSuggestions.find(
+      (s) => s.id === selectedSuggestion
+    );
     if (!suggestion) return;
 
     const vizType = mapSuggestionToType(suggestion.id);
@@ -206,15 +228,6 @@
       });
     }
 
-    legendActions.addLegendItem({
-      name: viz.name,
-      visible: true,
-      title: viz.name,
-      subtitle: suggestion.columns?.[0] ?? '',
-      note: '',
-      variableId: viz.id
-    });
-
     suggestionsExpanded = false;
     onCreateVisualization?.();
   }
@@ -224,8 +237,39 @@
   }
 
   $effect(() => {
-    if (allSuggestions.length > 0 && !selectedSuggestion) {
-      selectedSuggestion = allSuggestions[0].id;
+    const fields = dataFieldItems;
+    if (!fields.length) {
+      return;
+    }
+
+    const hasSelectedField = fields.some(
+      (field) => field.id === selectedFieldId
+    );
+    if (!hasSelectedField) {
+      selectedFieldId = fields[0].id;
+    }
+  });
+
+  $effect(() => {
+    void selectedFieldName;
+    visibleCount = SUGGESTIONS_PER_PAGE;
+  });
+
+  $effect(() => {
+    const suggestionsList = filteredSuggestions;
+    if (!suggestionsList.length) {
+      selectedSuggestion = undefined;
+      return;
+    }
+
+    const hasSelectedSuggestion = selectedSuggestion
+      ? suggestionsList.some(
+          (suggestion) => suggestion.id === selectedSuggestion
+        )
+      : false;
+
+    if (!hasSelectedSuggestion) {
+      selectedSuggestion = suggestionsList[0].id;
     }
   });
 </script>

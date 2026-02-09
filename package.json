@@ -102,6 +102,7 @@
     "@geoarrow/deck.gl-layers": "^0.3.1",
     "@geoarrow/geoparquet-wasm": "0.2.0-beta.5",
     "@inlang/paraglide-js": "^2.10.0",
+    "@luma.gl/core": "9.2.6",
     "@math.gl/core": "^4.1.0",
     "@observablehq/plot": "^0.6.17",
     "@uwdata/flechette": "^2.3.0",
