@@ -5,10 +5,6 @@ import { projectStore } from '../store/project.store.svelte';
 import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 
-/**
- * Snapshot of the state before import attempt
- * Used to rollback on fatal errors
- */
 interface ImportSnapshot {
   fileId: string;
   fileName: string;
@@ -22,18 +18,7 @@ interface ImportSnapshot {
   visualizationIds: string[];
 }
 
-/**
- * Import Rollback Service
- *
- * Handles automatic rollback of file imports on fatal errors.
- * - Takes snapshot before import
- * - Restores state if fatal error occurs
- * - Does NOT rollback for non-fatal errors (duplicates, warnings)
- */
 class ImportRollbackService {
-  /**
-   * Create snapshot of current state before import
-   */
   createSnapshot(file: UploadedFile): ImportSnapshot {
     const currentProject = projectStore.currentProject;
     const existingDataset = datasetsStore.getDatasetBySourceFile(file.id);
@@ -63,10 +48,6 @@ class ImportRollbackService {
     return snapshot;
   }
 
-  /**
-   * Rollback to snapshot state
-   * Only called on FATAL errors
-   */
   async rollback(snapshot: ImportSnapshot): Promise<void> {
     const cleanupResults = {
       projectFile: false,
@@ -129,10 +110,6 @@ class ImportRollbackService {
     }
   }
 
-  /**
-   * Cleanup DuckDB resources (cache, file handles, metadata)
-   * Same as in DataOrchestrator but extracted for reuse
-   */
   private async cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
       const { Duck } = await import('$lib/features/duckdb');

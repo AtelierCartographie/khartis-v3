@@ -70,14 +70,8 @@ function extractEntriesFromArrowTable(
   return entries;
 }
 
-/**
- * Extract the datasetId embedded in a Deck.gl layer ID.
- * Layer IDs follow the pattern: `{prefix}-{datasetId}` or `{prefix}-{datasetId}-{suffix}`.
- */
 function extractDatasetIdFromLayerId(layerId: string): string | null {
   const parts = layerId.split('-');
-  // prefix is first segment, datasetId is the rest before any projection suffix
-  // DatasetIds are branded strings like "ds_abc123" so they start with "ds_"
   for (let i = 1; i < parts.length; i++) {
     if (parts[i].startsWith('ds_')) {
       return parts[i];
@@ -86,10 +80,6 @@ function extractDatasetIdFromLayerId(layerId: string): string | null {
   return parts.length >= 2 ? parts[1] : null;
 }
 
-/**
- * Get the set of mapping columns used in visualizations for a given datasetId.
- * These columns should appear first in the tooltip.
- */
 function getVizColumnNames(
   visualizations: VisualizationConfig[],
   datasetId: string
@@ -107,10 +97,6 @@ function getVizColumnNames(
   return columns;
 }
 
-/**
- * Sort entries so that visualization mapping columns appear first,
- * preserving relative order within each group.
- */
 function sortEntriesByVizPriority(
   entries: TooltipEntry[],
   vizColumns: Set<string>
@@ -135,12 +121,10 @@ function buildTooltipHtml(entries: TooltipEntry[]): string {
 
   let html = '<div style="display:flex;flex-direction:column;gap:4px;">';
 
-  // Visible entries
   for (const entry of visibleEntries) {
     html += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${entry.key}</span><span style="font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${entry.value}</span></div>`;
   }
 
-  // Accordion for hidden entries
   if (hiddenCount > 0) {
     const accordionId = `tooltip-accordion-${Date.now()}`;
     html += `
@@ -154,7 +138,6 @@ function buildTooltipHtml(entries: TooltipEntry[]): string {
         </button>
         <div class="accordion-content" style="display:none;margin-top:4px;padding-left:8px;border-left:2px solid #e0e0e0;">`;
 
-    // Hidden entries
     for (const entry of hiddenEntries) {
       html += `<div style="display:flex;justify-content:space-between;gap:16px;"><span style="color:#525252;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">${entry.key}</span><span style="font-weight:500;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">${entry.value}</span></div>`;
     }
@@ -201,7 +184,6 @@ export function getTooltip(
 
   if (entries.length === 0) return null;
 
-  // Prioritize visualization mapping columns at the top of the tooltip
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
     const datasetId = extractDatasetIdFromLayerId(info.layer.id);
     if (datasetId) {

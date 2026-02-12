@@ -1,13 +1,4 @@
 <script lang="ts">
-  /**
-   * StatusIcon - Composant d'icône de statut
-   * Basé sur l'analyse Figma du panneau de données
-   *
-   * Usage:
-   *   <StatusIcon status="success" />
-   *   <StatusIcon status="warning" size="md" withLabel />
-   */
-
   import type { StatusIconProps } from '../types';
   import {
     CheckmarkFilled,
@@ -20,7 +11,6 @@
 
   let { status, size = 'md', withLabel = false }: Props = $props();
 
-  // Mapping des statuts vers les icônes Carbon
   const iconMap = {
     success: CheckmarkFilled,
     warning: WarningAltFilled,
@@ -28,7 +18,6 @@
     info: InformationFilled
   };
 
-  // Mapping des statuts vers les couleurs
   const colorMap = {
     success: 'var(--color-success)',
     warning: 'var(--color-warning)',
@@ -36,14 +25,12 @@
     info: 'var(--interactive-primary)'
   };
 
-  // Mapping des tailles (en pixels pour les icônes Carbon)
   const sizeMap = {
     sm: 16,
     md: 20,
     lg: 24
   } as const;
 
-  // Mapping des labels
   const labelMap = {
     success: 'Success',
     warning: 'Warning',
@@ -79,7 +66,6 @@
     font-weight: var(--font-weight-semibold);
   }
 
-  /* States for better accessibility */
   .status-icon:focus-within {
     outline: 2px solid var(--interactive-primary);
     outline-offset: 2px;

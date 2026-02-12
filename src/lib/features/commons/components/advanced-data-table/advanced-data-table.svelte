@@ -38,6 +38,9 @@
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
   import TableRow from './components/TableRow.svelte';
 
+  const LOCAL_UPDATE_DELAY_MS = 100;
+  const SCROLL_TO_CELL_DEBOUNCE_MS = 150;
+
   export type HighlightType =
     | 'exact'
     | 'contains'
@@ -227,7 +230,7 @@
     } finally {
       setTimeout(() => {
         isLocalUpdate = false;
-      }, 100);
+      }, LOCAL_UPDATE_DELAY_MS);
     }
   }
 
@@ -257,7 +260,7 @@
     } finally {
       setTimeout(() => {
         isLocalUpdate = false;
-      }, 100);
+      }, LOCAL_UPDATE_DELAY_MS);
     }
   }
 
@@ -298,7 +301,7 @@
       newColumnName = '';
       setTimeout(() => {
         isLocalUpdate = false;
-      }, 100);
+      }, LOCAL_UPDATE_DELAY_MS);
     }
   }
 
@@ -326,11 +329,10 @@
       columnToDelete = null;
       setTimeout(() => {
         isLocalUpdate = false;
-      }, 100);
+      }, LOCAL_UPDATE_DELAY_MS);
     }
   }
 
-  // Pre-index cellHighlights into a Map for O(1) lookup instead of O(n) .find()
   const cellHighlightMap = $derived.by(() => {
     const map = new SvelteMap<string, 'exact' | 'contains' | 'partial'>();
     for (const h of cellHighlights) {
@@ -352,10 +354,8 @@
     return cellHighlightMap.get(`${rowId}:${columnName}`) ?? null;
   }
 
-  // Pre-index highlightedRowIds into a Set for O(1) lookup instead of O(n) .includes()
   const highlightedRowIdSet = $derived(new Set(highlightedRowIds));
 
-  // Pre-compute geoid column names for O(1) lookup in TableRow
   const geoidColumns = $derived.by(() => {
     const set = new SvelteSet<string>();
     for (const [name, a] of tableData.columnAnalysis) {
@@ -393,7 +393,6 @@
     return () => window.removeEventListener('resize', handleResize);
   });
 
-  // Debounce scroll-to-cell to avoid stacking getRowPosition queries during search navigation
   let scrollToCellTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     if (currentCell && filters.numRows > 0 && tableName) {
@@ -426,7 +425,7 @@
             });
           }, DOM_UPDATE_DELAY_MS);
         });
-      }, 150);
+      }, SCROLL_TO_CELL_DEBOUNCE_MS);
     }
     return () => clearTimeout(scrollToCellTimer);
   });
@@ -519,7 +518,6 @@
       size: 'compact',
       showHeader: false,
       showToolbar: false
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
     }) as any;
 </script>
 
@@ -644,7 +642,6 @@
   {/if}
 </div>
 
-<!-- Rename Column Modal -->
 <Modal
   bind:open={renameModalOpen}
   modalHeading={m.column_rename_title()}
@@ -675,7 +672,6 @@
   </div>
 </Modal>
 
-<!-- Delete Column Confirmation Modal -->
 <Modal
   bind:open={deleteConfirmOpen}
   modalHeading={m.delete_column_title()}
@@ -803,7 +799,6 @@
     inset: 0;
   }
 
-  /* --- Chevron toggle: top area, centered in dark gray header zone --- */
   .histogram-toggle-area {
     display: flex;
     align-items: center;
@@ -812,7 +807,6 @@
     min-height: 24px;
   }
 
-  /* --- Row count: bottom area, centered in light gray histogram zone --- */
   .row-index-stats {
     display: flex;
     flex-direction: column;

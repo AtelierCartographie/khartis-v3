@@ -15,10 +15,6 @@ export interface FileValidationConfig {
   strictMode: boolean;
 }
 
-/**
- * Detailed validation result, inherits from ValidationResult
- * and adds file-specific information
- */
 export interface DetailedValidationResult extends ValidationResult {
   fileType: FileType;
   requiresAsyncValidation: boolean;
@@ -506,10 +502,7 @@ export const FileValidator = {
     _files: File[],
     _results: Map<string, DetailedValidationResult>,
     _globalErrors: string[]
-  ): void {
-    // Shapefile validation is handled in processShapefileGroup
-    // to support progressive import (adding .shx, .dbf after .shp)
-  },
+  ): void {},
 
   requiresAsyncValidation(fileType: FileType): boolean {
     return [

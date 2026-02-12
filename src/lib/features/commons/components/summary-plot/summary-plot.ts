@@ -182,7 +182,6 @@ function create_plot_numeric(
           textAnchor: 'end'
         }
       ),
-      // Interactive null count (only on hover)
       nullCount > 0
         ? [
             Plot.rectY(
@@ -193,7 +192,6 @@ function create_plot_numeric(
                 stroke: 'currentColor'
               })
             ),
-            // Null count text background (mask)
             Plot.text(
               histogram.toArray().filter((d) => d.bin === null),
               Plot.pointerX({
@@ -206,7 +204,6 @@ function create_plot_numeric(
                 strokeWidth: 5
               })
             ),
-            // Null count text (appears on hover)
             Plot.text(
               histogram.toArray().filter((d) => d.bin === null),
               Plot.pointerX({
@@ -249,12 +246,10 @@ function create_plot_categorical(
   const { uniques, histogram } = data;
   let histogramArray = histogram.toArray();
 
-  // .toArray() to keep null at the end
   if (geoid) {
     const has_unique = histogramArray.find(
       (d: CategoryHistogramItem) => d.category === 'unique'
     );
-    // If for geoid, category unique has to appear first
     if (has_unique)
       histogramArray = [
         has_unique,
@@ -264,11 +259,9 @@ function create_plot_categorical(
       ];
   }
 
-  // Handle null category => show "nulls"
   const get_label: LabelFunction = (label) =>
     label === null ? 'nulls' : label;
 
-  // filter : [low_limit, high limit]
   const label_layer = (filter: PercentRange, lineWidth: number) =>
     Plot.textX(
       histogramArray as CategoryHistogramItem[],
@@ -285,16 +278,11 @@ function create_plot_categorical(
     );
 
   const numRows = data.histogram.numRows;
-  // Adapt inset on number of categories. More categories = less inset.
-  // Why? Whitout, rectangles are invisible with too much categories
   const inset: number | undefined =
     numRows > 30 ? undefined : numRows > 20 ? 0.2 : 0.5;
 
-  // Intercept case when only one category.
   const has_one_category = numRows === 1 ? true : false;
 
-  // Handle fix text with pointer and stack mark
-  // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
   function renameXYPxPy(
     options: Record<string, unknown>
   ): Record<string, unknown> {
@@ -312,7 +300,6 @@ function create_plot_categorical(
     style: 'overflow: hidden;',
     x: { axis: null },
     marks: [
-      // BARS
       Plot.barX(
         histogramArray as CategoryHistogramItem[],
         Plot.stackX({
@@ -333,8 +320,6 @@ function create_plot_categorical(
         } as ObservablePlotStackOptions)
       ),
 
-      // LABELS
-      // special case all uniques values
       has_one_category
         ? Plot.textX(
             histogramArray as CategoryHistogramItem[],
@@ -352,7 +337,6 @@ function create_plot_categorical(
             } as ObservablePlotStackOptions)
           )
         : null,
-      // adapt label length on percent values
       !has_one_category ? label_layer([0.8, 1], 9) : null,
       label_layer([0.6, 0.8], 6),
       label_layer([0.4, 0.6], 5),
@@ -374,8 +358,6 @@ function create_plot_categorical(
             }
           ),
 
-      // INTERACTIVITY
-      // Highlight bar with fixed pointer-events
       Plot.barX(
         histogramArray as CategoryHistogramItem[],
         Plot.pointerX(
@@ -386,9 +368,6 @@ function create_plot_categorical(
           } as ObservablePlotStackOptions)
         )
       ),
-      // Mask the count of all categories
-      // Fix: use px: 'count' to align with Plot.stackX
-      // https://talk.observablehq.com/t/pointer-transforms-with-px-py-on-stacked-bar-charts/8302/8
       Plot.text(
         histogramArray as CategoryHistogramItem[],
         Plot.pointerX(
@@ -405,7 +384,6 @@ function create_plot_categorical(
           )
         )
       ),
-      // Show count and category in a fixed place
       Plot.text(
         histogramArray as CategoryHistogramItem[],
         Plot.pointerX(

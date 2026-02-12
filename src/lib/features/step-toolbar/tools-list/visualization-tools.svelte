@@ -15,14 +15,16 @@
 
   const PROJECTION_BADGE_STORAGE_KEY = 'khartis_projection_tool_opened';
   const FACETS_BADGE_STORAGE_KEY = 'khartis_facets_tool_opened';
+  const STORAGE_VALUE_OPENED = '1';
 
   let hasOpenedProjectionTool = $state(
     typeof window !== 'undefined' &&
-      localStorage.getItem(PROJECTION_BADGE_STORAGE_KEY) === '1'
+      localStorage.getItem(PROJECTION_BADGE_STORAGE_KEY) ===
+        STORAGE_VALUE_OPENED
   );
   let hasOpenedFacetsTool = $state(
     typeof window !== 'undefined' &&
-      localStorage.getItem(FACETS_BADGE_STORAGE_KEY) === '1'
+      localStorage.getItem(FACETS_BADGE_STORAGE_KEY) === STORAGE_VALUE_OPENED
   );
 
   const showProjectionBadge = $derived(!hasOpenedProjectionTool);
@@ -31,7 +33,7 @@
   function handleProjectionClick() {
     hasOpenedProjectionTool = true;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(PROJECTION_BADGE_STORAGE_KEY, '1');
+      localStorage.setItem(PROJECTION_BADGE_STORAGE_KEY, STORAGE_VALUE_OPENED);
     }
     selectTool(VisualizationTools.Projection);
   }
@@ -39,7 +41,7 @@
   function handleFacetsClick() {
     hasOpenedFacetsTool = true;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(FACETS_BADGE_STORAGE_KEY, '1');
+      localStorage.setItem(FACETS_BADGE_STORAGE_KEY, STORAGE_VALUE_OPENED);
     }
     selectTool(VisualizationTools.Facets);
   }

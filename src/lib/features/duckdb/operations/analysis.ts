@@ -111,8 +111,6 @@ export async function analyse(
 
           const escapedColName = escapeIdentifier(d.name as string);
 
-          // Run summary_general in parallel with type-specific queries
-          // Use analysisTable (sampled when > 50K rows) instead of full table
           const generalPromise = executeQuery(
             ctx.connection,
             `FROM summary_general(${analysisTable}, "${escapedColName}")`,
@@ -227,8 +225,8 @@ export async function analyse(
           ctx.connection,
           `DROP VIEW IF EXISTS "${sampleViewName}"`
         );
-      } catch (_e) {
-        // ignore
+      } catch {
+        /* ignore cleanup errors */
       }
     }
   }

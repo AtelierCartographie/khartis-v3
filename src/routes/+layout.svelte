@@ -47,7 +47,6 @@
   };
 
   onMount(() => {
-    // Auto-detect browser language on first load (if no cookie is set)
     const hasCookie = document.cookie.includes(cookieName);
     if (!hasCookie && typeof navigator !== 'undefined') {
       const browserLang = navigator.language?.split('-')[0];
@@ -59,7 +58,6 @@
       }
     }
 
-    // Initialize tab state from URL query params
     globalActions.initializeFromUrl();
 
     handleResize();
@@ -76,13 +74,8 @@
 
     const initApp = async () => {
       try {
-        // Initialize DuckDB WASM runtime (critical for app functionality)
         await duckDBOrchestrator.initialize();
-
-        // Initialize basemap service (loads metadata catalog for world background)
         await basemapService.initialize();
-
-        // Hide loader as soon as DuckDB and basemaps are ready
         isLoading = false;
 
         logger.info(
@@ -100,15 +93,10 @@
         return;
       }
 
-      // Continue initialization in background (non-blocking)
       try {
-        // Wait for project store to initialize from IndexedDB
         await projectStore.waitForInit();
-
-        // Initialize data orchestrator to process any existing files
         await dataOrchestratorService.initialize();
 
-        // Show modal only if no project exists
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
         }
@@ -123,7 +111,6 @@
           LogCategory.SYSTEM,
           error
         );
-        // Show modal to allow user to create a new project
         globalState.isCreateProjectModalOpen = true;
       }
     };
@@ -140,8 +127,6 @@
     globalState.isCreateProjectModalOpen = false;
   }
 
-  // Reactive transform style for page zoom
-  // Note: The map component must apply a counter-transform to preserve pointer event coordinates
   const pageZoomScale = $derived(globalState.zoom.pageZoomLevel / 100);
   const pageTransformStyle = $derived(
     `transform: scale(${pageZoomScale}); transform-origin: center center;`

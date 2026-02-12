@@ -108,13 +108,11 @@ async function processParquetBasemapImport(
   const fileId = fileWithId.id ?? `${file.lastModified}-${file.name}`;
   const escapedFileId = escapeSqlString(fileId);
 
-  // Create table from parquet (native GeoArrow geometry stays as-is)
   await duck.query(
     `CREATE OR REPLACE TABLE "${tableName}" AS FROM read_parquet('${escapedFileId}')`,
     { format: 'arrow-ipc' }
   );
 
-  // Extract bounds and geometry type from GeoParquet metadata
   const geoMeta = await readGeoParquetMetadata(duck, escapedFileId);
   const geomColName = geoMeta?.primary_column ?? 'geom';
   const colMeta = geoMeta?.columns?.[geomColName];
@@ -150,7 +148,6 @@ async function processParquetBasemapImport(
 
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
 
-  // Read geometry as native GeoArrow (no WKB conversion needed)
   const arrowResult = await duck.query(`SELECT * FROM "${tableName}"`, {
     format: 'arrow-ipc'
   });

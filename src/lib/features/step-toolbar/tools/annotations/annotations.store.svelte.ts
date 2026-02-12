@@ -10,6 +10,8 @@ import type {
   PageElementRole
 } from './annotations.types';
 
+const ANNOTATION_ID_PREFIX = 'annotation-';
+
 const DEFAULT_STATE: AnnotationsState = {
   items: [],
   selectedId: null,
@@ -142,7 +144,7 @@ const { actions, getState } = createToolStore<
 >(DEFAULT_STATE, (s) => ({
   addAnnotation: (type: AnnotationKind, content: string) => {
     const newAnnotation: Annotation = {
-      id: `annotation-${Date.now()}`,
+      id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
       type,
       content,
       position: { x: Math.random() * 300 + 50, y: Math.random() * 200 + 50 },
@@ -191,7 +193,7 @@ const { actions, getState } = createToolStore<
     if (original) {
       const duplicate = {
         ...original,
-        id: `annotation-${Date.now()}`,
+        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
         content: original.content + ' (copie)',
         position: {
           x: original.position.x + 20,

@@ -171,7 +171,6 @@ export async function computeJoinStats(
   geoColumn: string,
   Duck: DuckDBClientForJoin
 ): Promise<JoinQuality> {
-  // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
   await ensureBasemapAttributesLoaded(Duck);
 
   const basemapId = getBasemapAttributesId(basemap);
@@ -226,11 +225,6 @@ export async function computeJoinStats(
   const escapedGeoCol = escapeIdentifier(geoColumn);
   const escapedTable = escapeIdentifier(dataset.tableName);
 
-  // Inline the analyze_join_quality logic instead of using the macro,
-  // because DuckDB macro parameter substitution treats string literals
-  // as expressions, not column references. Passing 'code' as a macro
-  // parameter makes "geoname_column" evaluate to the string 'code'
-  // instead of referencing the column named "code".
   const result = (await Duck.query(
     `
     WITH source_with_counts AS (
@@ -380,7 +374,6 @@ export async function finalizeJoin(
     }
   }
 
-  // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
   const joinTableExists = await checkJoinResultsExist(dataset.tableName, Duck);
 
   const shouldComputeJoin = !options?.skipJoinComputation || !joinTableExists;
@@ -491,7 +484,6 @@ export async function getJoinedArrowTable(
   const escapedDataset = escapeSqlString(datasetTableName);
   const escapedGeometry = escapeSqlString(geometryTable);
 
-  // Get the text columns from the geometry table (excluding geom) to find join candidates
   const geomColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
      WHERE table_name = '${escapeSqlString(geometryTable)}'
@@ -500,7 +492,6 @@ export async function getJoinedArrowTable(
     { format: 'array' }
   )) as Array<{ column_name: string }>;
 
-  // Build UNPIVOT to create a flat (value, geom) mapping from all text columns
   const colList = geomColumns
     .map((c) => `"${escapeIdentifier(c.column_name)}"`)
     .join(', ');

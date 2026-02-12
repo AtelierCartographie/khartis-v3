@@ -22,6 +22,8 @@ import {
   ExportError
 } from '../services/export.service';
 
+const DEFAULT_FILE_NAME = 'untitled';
+
 export interface UseExportModalReturn {
   readonly isOpen: boolean;
   readonly isExporting: boolean;
@@ -45,13 +47,13 @@ export function useExportModal(): UseExportModalReturn {
   let isOpen = $state(false);
   let isExporting = $state(false);
   let selectedTab = $state<ExportTabType>(ExportTab.PROJECT);
-  let fileName = $state(projectStore.projectName || 'untitled');
+  let fileName = $state(projectStore.projectName || DEFAULT_FILE_NAME);
   let mapFormat = $state<MapExportFormat>(MAP_FORMAT.SVG);
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
   let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
 
   function open(): void {
-    fileName = projectStore.projectName || 'untitled';
+    fileName = projectStore.projectName || DEFAULT_FILE_NAME;
     logger.info('Export modal opened', LogCategory.EXPORT);
     isOpen = true;
   }

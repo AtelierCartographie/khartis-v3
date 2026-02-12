@@ -1,7 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { isGeospatialFile } from '../constants';
+import { PIPELINE_CONST, isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
@@ -10,6 +10,8 @@ import type {
   ZipDatasetResult
 } from '../types';
 import { processZipFile } from './zip-processor';
+
+const { BINARY, ZIP } = PIPELINE_CONST.MIME_TYPES;
 
 export async function processRemoteFile(
   ctx: PipelineContext,
@@ -30,7 +32,7 @@ export async function processRemoteFile(
   });
 
   const dataset = await buildDatasetFromDuckTable(ctx, {
-    file: { name: filename, size: 0, type: 'application/octet-stream' },
+    file: { name: filename, size: 0, type: BINARY },
     tableName,
     isGeoFile: isGeospatialFile(filename),
     format: detectFileFormat(filename)
@@ -65,7 +67,7 @@ export async function processRemoteZipFile(
 
     const arrayBuffer = await response.arrayBuffer();
     const filename = url.split('/').pop() || 'remote.zip';
-    const file = new File([arrayBuffer], filename, { type: 'application/zip' });
+    const file = new File([arrayBuffer], filename, { type: ZIP });
     const result = await processZipFile(ctx, file);
 
     if ('datasets' in result) {

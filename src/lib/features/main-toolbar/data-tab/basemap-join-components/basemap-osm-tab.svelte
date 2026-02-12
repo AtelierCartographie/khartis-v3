@@ -14,12 +14,10 @@
 </script>
 
 <div class="tab-content">
-  <!-- Description -->
   <p class="osm-description">
     {m.osm_description()}
   </p>
 
-  <!-- Conditional: GPS warning / Success / Add button -->
   {#if !hasGPSCoordinates}
     <InlineNotification
       kind="warning"
@@ -42,7 +40,6 @@
     </Button>
   {/if}
 
-  <!-- Customization note (always visible) -->
   <p class="osm-note">
     {m.osm_customization_note()}
     <button type="button" class="link-text" onclick={onGoToVisualize}
@@ -50,7 +47,6 @@
     >.
   </p>
 
-  <!-- Learn more -->
   <div class="learn-more-link">
     <Button
       kind="ghost"

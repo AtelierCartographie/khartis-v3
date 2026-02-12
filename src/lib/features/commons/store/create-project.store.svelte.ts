@@ -38,6 +38,8 @@ import { visualizationStore } from './visualization.store.svelte';
 
 const FILE_FETCH_TIMEOUT_MS = 30_000;
 
+const REQUIRED_SHAPEFILE_EXTENSIONS = ['.shp', '.shx', '.dbf'];
+
 const DEFAULT_STATE: CreateProjectState = {
   selectedTab: 1,
 
@@ -111,8 +113,7 @@ export const createProjectActions = {
       return ext ? `.${ext}` : '';
     });
 
-    const requiredExtensions = ['.shp', '.shx', '.dbf'];
-    const stillMissing = requiredExtensions.filter(
+    const stillMissing = REQUIRED_SHAPEFILE_EXTENSIONS.filter(
       (ext) => !presentExtensions.includes(ext)
     );
 
@@ -339,11 +340,10 @@ export const createProjectActions = {
       return;
     }
 
-    const requiredExtensions = ['.shp', '.shx', '.dbf'];
     const fileExtensions = files.map(
       (f) => '.' + f.name.split('.').pop()?.toLowerCase()
     );
-    const missingExtensions = requiredExtensions.filter(
+    const missingExtensions = REQUIRED_SHAPEFILE_EXTENSIONS.filter(
       (ext) => !fileExtensions.includes(ext)
     );
 

@@ -2,6 +2,7 @@ import {
   IGNORED_FILE_PREFIXES,
   SHAPEFILE_EXTENSIONS
 } from '$lib/features/commons/constants/ui.constants';
+import { PIPELINE_CONST } from '../constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
@@ -178,23 +179,16 @@ export function getSupportedFilesFromArchive(
   files: ExtractedFile[]
 ): ExtractedFile[] {
   const supportedExtensions = [
-    '.csv',
-    '.tsv',
-    '.txt',
-    '.json',
-    '.geojson',
-    '.parquet',
-    '.geoparquet',
-    '.arrow',
-    '.gpkg',
-    '.kml',
-    '.kmz',
-    '.gpx'
+    ...PIPELINE_CONST.EXTENSIONS.TABULAR,
+    ...PIPELINE_CONST.EXTENSIONS.GEO,
+    ...PIPELINE_CONST.EXTENSIONS.PARQUET
   ];
 
   return files.filter((f) => {
     const ext = getFileExtensionWithDot(f.name);
-    return supportedExtensions.includes(ext);
+    return supportedExtensions.includes(
+      ext as (typeof supportedExtensions)[number]
+    );
   });
 }
 

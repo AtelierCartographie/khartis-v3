@@ -194,7 +194,6 @@
     font-style: italic;
   }
 
-  /* Cell-level highlights (takes priority over row highlight) */
   td.cell-highlight-current {
     background-color: #a56eff !important;
     color: white !important;

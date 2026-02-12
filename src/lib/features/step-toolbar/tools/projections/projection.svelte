@@ -20,9 +20,11 @@
     projectionActions.setSelected(parsed.projectionId);
   }
 
+  const DEFAULT_PROJECTION = 'mercator';
+
   function handleProjectionCodeReset() {
     projectionActions.setCustomCode(null);
-    projectionActions.setSelected('mercator');
+    projectionActions.setSelected(DEFAULT_PROJECTION);
   }
 </script>
 

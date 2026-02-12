@@ -28,8 +28,6 @@ export async function getTableData(
   try {
     const filters = getFiltersMap();
 
-    // Exclude geometry columns from SELECT to avoid transferring large WKB data
-    // The UI already filters these out (EXCLUDED_COLUMNS in use-table-data)
     let selectClause = '*';
     try {
       const columns = await Duck.describeColumns(tableName);
@@ -44,7 +42,7 @@ export async function getTableData(
         selectClause = `* EXCLUDE (${geomCols.join(', ')})`;
       }
     } catch {
-      // Fallback to SELECT * if column detection fails
+      /* fallback to SELECT * */
     }
 
     let query = `SELECT ${selectClause} FROM "${tableName}"`;
@@ -117,8 +115,6 @@ export async function getRowPosition(
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     const filterCondition = whereClause ? `AND ${whereClause}` : '';
 
-    // Use COUNT-based approach instead of ROW_NUMBER() over entire table
-    // This avoids materializing window function results for all rows
     if (options?.orderBy && options?.order) {
       const sortCol = `"${options.orderBy}"`;
       const isAsc = options.order === 'ASC';
@@ -143,7 +139,6 @@ export async function getRowPosition(
         return Number(row.position);
       }
     } else {
-      // Default order by __id ASC — simple count of rows with smaller __id
       const query = `
         SELECT COUNT(*) as position
         FROM "${tableName}"
@@ -171,7 +166,6 @@ export async function getRowStats(
   const filters = getFiltersMap();
   const whereClause = buildFilterWhereClause(filters.get(tableName));
 
-  // Single query with COUNT(*) FILTER instead of two separate queries
   if (whereClause) {
     const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${tableName}"`;
     const result = (await Duck.query(query)) as ArrowTableLike;
@@ -182,7 +176,6 @@ export async function getRowStats(
     };
   }
 
-  // No filters — total equals filtered
   const total = await countRows(tableName, Duck, false);
   return { total, filtered: total };
 }

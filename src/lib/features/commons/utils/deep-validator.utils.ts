@@ -40,56 +40,23 @@ export interface DataAnalysisResult {
   estimatedProcessingTime?: number;
 }
 
-/**
- * Performance thresholds for data validation.
- *
- * These values balance usability with browser performance limits:
- * - maxRows: 10k rows is the practical limit for smooth DOM/Canvas rendering
- * - warningRows: 5k rows triggers performance advisories
- * - maxColumns: 100 columns prevents layout and memory issues
- * - warningColumns: 50 columns suggests considering column reduction
- * - maxCellLength: 2000 chars prevents rendering issues with long text
- * - maxFileSize: 50MB is the practical limit for client-side processing
- */
 const PERFORMANCE_THRESHOLDS = {
-  /** Maximum rows before data is truncated (10,000 rows) */
   maxRows: 10_000,
-  /** Row count that triggers a performance warning (5,000 rows) */
   warningRows: 5_000,
-  /** Maximum columns supported (100 columns) */
   maxColumns: 100,
-  /** Column count that triggers a warning (50 columns) */
   warningColumns: 50,
-  /** Maximum characters per cell before warning (2,000 chars) */
   maxCellLength: 2_000,
-  /** Maximum estimated file size in bytes (50 MB) */
   maxFileSize: 50 * 1024 * 1024
 } as const;
 
-/**
- * Number of rows to sample for type detection.
- * 100 samples provides 95% confidence for type inference
- * while keeping detection fast for large datasets.
- */
 const TYPE_DETECTION_SAMPLES = 100;
 
-/**
- * Chunk sizes for async processing to avoid blocking the main thread.
- * These values are tuned to yield to the event loop every ~16ms (one frame).
- */
 const PROCESSING_CHUNK_SIZES = {
-  /** Columns to process per chunk in analyzeColumns() */
   COLUMN_CHUNK: 10,
-  /** Values to process per chunk in analyzeColumn() */
   VALUE_CHUNK: 1_000,
-  /** Rows to check per chunk in detectQualityIssues() */
   ROW_CHUNK: 20
 } as const;
 
-/**
- * Deep Data Validator
- * Provides comprehensive data analysis including statistics, type detection, and quality checks
- */
 export const DeepDataValidator = {
   async analyzeDataContent(
     headers: string[],
@@ -182,23 +149,17 @@ export const DeepDataValidator = {
     name: string,
     values: unknown[]
   ): Promise<ColumnStatistics> {
-    // Single-pass algorithm for statistics computation with chunking
-    // Uses Welford's algorithm for mean and variance
-
     let nullCount = 0;
     const uniqueValues = new Set<unknown>();
     const valueOccurrences = new Map<unknown, number>();
     const sampleValues: unknown[] = [];
 
-    // Process values in chunks to avoid blocking
     const CHUNK_SIZE = PROCESSING_CHUNK_SIZES.VALUE_CHUNK;
     for (let i = 0; i < values.length; i += CHUNK_SIZE) {
-      // Yield to event loop between chunks
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
       const chunk = values.slice(i, i + CHUNK_SIZE);
       for (const value of chunk) {
-        // Check for null
         if (
           value == null ||
           value === '' ||
@@ -209,11 +170,9 @@ export const DeepDataValidator = {
           continue;
         }
 
-        // Track unique values and occurrences
         uniqueValues.add(value);
         valueOccurrences.set(value, (valueOccurrences.get(value) || 0) + 1);
 
-        // Collect sample values
         if (sampleValues.length < 5) {
           sampleValues.push(value);
         }
@@ -242,16 +201,14 @@ export const DeepDataValidator = {
       sampleValues
     };
 
-    // Type-specific statistics with Welford's algorithm for numeric data
     if (type === 'numeric' && nonNullValues.length > 0) {
       let numericCount = 0;
       let numericMin = Infinity;
       let numericMax = -Infinity;
       let numericMean = 0;
-      let numericM2 = 0; // Sum of squared differences from mean
-      const numericValues: number[] = []; // For median calculation
+      let numericM2 = 0;
+      const numericValues: number[] = [];
 
-      // Process numeric values in chunks
       for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -262,11 +219,9 @@ export const DeepDataValidator = {
             numericValues.push(numValue);
             numericCount++;
 
-            // Update min/max
             if (numValue < numericMin) numericMin = numValue;
             if (numValue > numericMax) numericMax = numValue;
 
-            // Welford's algorithm for online mean and variance
             const delta = numValue - numericMean;
             numericMean += delta / numericCount;
             const delta2 = numValue - numericMean;
@@ -280,7 +235,6 @@ export const DeepDataValidator = {
         stats.max = numericMax;
         stats.mean = numericMean;
         stats.median = this.calculateMedian(numericValues);
-        // Standard deviation from Welford's algorithm
         stats.standardDeviation =
           numericCount > 1 ? Math.sqrt(numericM2 / numericCount) : 0;
       }
@@ -288,7 +242,6 @@ export const DeepDataValidator = {
       let stringMin: string | undefined;
       let stringMax: string | undefined;
 
-      // Process string values in chunks
       for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -308,7 +261,6 @@ export const DeepDataValidator = {
       let dateMin: number = Infinity;
       let dateMax: number = -Infinity;
 
-      // Process date values in chunks
       for (let i = 0; i < nonNullValues.length; i += CHUNK_SIZE) {
         if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -408,7 +360,6 @@ export const DeepDataValidator = {
   ): Promise<DataQualityIssue[]> {
     const issues: DataQualityIssue[] = [];
 
-    // Yield before processing
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     columns.forEach((column) => {

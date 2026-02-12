@@ -51,11 +51,6 @@ function setCache(key: string, results: SearchStats): void {
   searchCache.set(key, { results, timestamp: Date.now() });
 }
 
-/**
- * Build per-column UNION ALL query instead of UNPIVOT.
- * This is dramatically faster because DuckDB pushes the WHERE filter
- * down to the column scan, avoiding materializing all rows x columns.
- */
 function buildExactSearchSQL(
   tableName: string,
   textColumns: string[],
@@ -73,7 +68,6 @@ function buildExactSearchSQL(
 
   const unionParts = columnsToSearch.map((col) => {
     const escapedCol = escapeIdentifier(col);
-    // Subquery pre-computes normalize_text() ONCE per row, then outer query filters on the alias
     return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
       CASE WHEN norm_value = '${escapedTerm}' THEN 1.0 ELSE 0.99 END AS score
     FROM (
@@ -89,10 +83,6 @@ function buildExactSearchSQL(
   LIMIT ${maxResults}`;
 }
 
-/**
- * Build per-column fuzzy search SQL.
- * Only searches columns where no exact match was found.
- */
 function buildFuzzySearchSQL(
   tableName: string,
   textColumns: string[],
@@ -111,7 +101,6 @@ function buildFuzzySearchSQL(
 
   const unionParts = columnsToSearch.map((col) => {
     const escapedCol = escapeIdentifier(col);
-    // Subquery pre-computes normalize_text() ONCE, then filters and scores on the alias
     return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
       jaro_winkler_similarity(norm_value, '${escapedTerm}') AS score
     FROM (
@@ -166,7 +155,6 @@ export async function searchInTable(
   let isSampled = false;
 
   try {
-    // Step 1: Get metadata + normalize search term + text columns in parallel
     const [metaResult, textColResult] = await Promise.all([
       executeQuery(
         ctx.connection,
@@ -209,7 +197,6 @@ export async function searchInTable(
 
     if (searchId !== currentSearchId) return emptyResult;
 
-    // Step 3: Sampling for large tables
     let searchTable = table;
     if (
       rowCount > MAX_ROWS_FOR_SEARCH ||
@@ -237,7 +224,6 @@ export async function searchInTable(
 
     if (searchId !== currentSearchId) return emptyResult;
 
-    // Step 4: Run exact search with per-column UNION ALL (no UNPIVOT!)
     const exactSQL = buildExactSearchSQL(
       searchTable,
       textColumns,
@@ -257,7 +243,6 @@ export async function searchInTable(
 
     if (searchId !== currentSearchId) return emptyResult;
 
-    // Step 5: Optional fuzzy search
     let fuzzyResults: Array<{
       __id: number;
       column_name: string;
@@ -302,7 +287,6 @@ export async function searchInTable(
 
     if (searchId !== currentSearchId) return emptyResult;
 
-    // Step 6: Combine results
     const allResults = [...exactResults, ...fuzzyResults];
     const exactCount = exactResults.filter((r) => r.score === 1.0).length;
     const containsCount = exactResults.filter((r) => r.score === 0.99).length;

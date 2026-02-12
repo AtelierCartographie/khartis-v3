@@ -35,15 +35,11 @@ function getPlotOptions(typeSimple?: string) {
   return {
     width: 150,
     height: 36,
-    // Bar colors matching Carbon Design tokens (Magenta-60 / Purple-60 / Teal-60)
     main_color: isString ? '#d02670' : '#8a3ffc',
     nulls_color: '#ff832b',
     unique_color: '#007d79',
-    // Light background for hover-mask text
     bg_color: '#f4f4f4',
-    // Label text color
     text_color: '#525252',
-    // Baseline rule color (numeric histograms)
     rule_color: '#8d8d8d'
   };
 }
