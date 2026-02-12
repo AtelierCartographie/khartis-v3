@@ -14,8 +14,10 @@ import { mapProjectionStore } from '$lib/features/map/stores/map-projection.stor
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionState } from './projections.types';
 
+const DEFAULT_PROJECTION = 'mercator';
+
 const DEFAULT_STATE: ProjectionState = {
-  selected: 'mercator',
+  selected: DEFAULT_PROJECTION,
   viewMode: ViewMode.LIST,
   longitude: 0,
   latitude: 0,
@@ -48,9 +50,11 @@ type ProjectionActions = {
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
+const MERCATOR_PROJECTION_TYPE = 'mercator';
+
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
   const mercatorLike = new Set([
-    'mercator',
+    MERCATOR_PROJECTION_TYPE,
     'equirectangular',
     'albers',
     'lambert-conformal',
@@ -59,7 +63,7 @@ function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
     'rect-3'
   ]);
 
-  return mercatorLike.has(projectionId) ? 'mercator' : 'globe';
+  return mercatorLike.has(projectionId) ? MERCATOR_PROJECTION_TYPE : 'globe';
 }
 
 const { actions, getState } = createToolStore<

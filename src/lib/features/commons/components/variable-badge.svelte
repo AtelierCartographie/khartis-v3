@@ -8,19 +8,14 @@
   } from './variable-badge.types';
 
   interface Props {
-    /** Display label (column/variable name) */
     label: string;
-    /** Badge type determining colors and right-side indicator */
     type?: VariableBadgeType;
-    /** Bindable reference to the underlying button element */
     element?: HTMLButtonElement;
-    /** Click handler */
     onclick?: (e: MouseEvent) => void;
     onmouseenter?: (e: MouseEvent) => void;
     onmouseleave?: (e: MouseEvent) => void;
     onfocus?: (e: FocusEvent) => void;
     onblur?: (e: FocusEvent) => void;
-    /** Accessible label for the badge */
     ariaLabel?: string;
   }
 

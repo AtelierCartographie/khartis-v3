@@ -2,6 +2,7 @@ import { DataValidationError } from '$lib/features/commons/errors/pipeline.error
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
+import { PIPELINE_CONST } from './constants';
 import { validateFile } from './core/validators';
 import {
   createCompanionFilesFromUpload,
@@ -20,6 +21,8 @@ import type {
   ZipDatasetResult
 } from './types';
 import { isZipFile } from './utils/zip-handler';
+
+const { CSV } = PIPELINE_CONST.MIME_TYPES;
 
 export { createFileFromUpload };
 
@@ -170,7 +173,7 @@ const Pipeline = {
     const file = await createFileFromUploadContent(
       content,
       name,
-      options.type ?? 'text/csv'
+      options.type ?? CSV
     );
     return this.processFile(file) as Promise<DatasetResult>;
   },

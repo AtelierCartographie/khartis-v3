@@ -4,12 +4,15 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
 import { convertToCSV, isTabularData } from './processor-utils';
+
+const { CSV } = PIPELINE_CONST.MIME_TYPES;
 
 async function processWithArrow(
   ctx: ProcessContext,
@@ -63,7 +66,7 @@ async function processWithLegacy(
   start: number
 ): Promise<ProcessorDataset> {
   const csvData = convertToCSV(file.parsedData as Record<string, unknown>[]);
-  const duckFile = new File([csvData], file.name, { type: 'text/csv' });
+  const duckFile = new File([csvData], file.name, { type: CSV });
 
   await ctx.Duck.register_files([duckFile]);
   const actualTableName =

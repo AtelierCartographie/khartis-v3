@@ -37,11 +37,13 @@
     return datasetsStore.selectedDataset ?? datasetsStore.enabledDatasets[0];
   });
 
+  const ALL_SOURCES_ID = 'all';
+
   const sourceOptions = $derived.by(() => {
     const datasetColumns = searchDataset?.columns ?? [];
 
     return [
-      { id: 'all', text: m.search_all_variables() },
+      { id: ALL_SOURCES_ID, text: m.search_all_variables() },
       ...datasetColumns
         .filter((column) => column.type !== 'geometry')
         .map((column) => ({
@@ -92,7 +94,7 @@
       (option) => option.id === selectedSource
     );
     if (!isKnownSource) {
-      searchActions.setSelectedSource('all');
+      searchActions.setSelectedSource(ALL_SOURCES_ID);
     }
   });
 

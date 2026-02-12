@@ -47,13 +47,11 @@
     cursorPosition = position;
     const text = value;
 
-    // Look for unclosed quote for variable suggestions
     const beforeCursor = text.slice(0, position);
     const lastQuoteIndex = beforeCursor.lastIndexOf('"');
     const quoteCount = (beforeCursor.match(/"/g) || []).length;
 
     if (quoteCount % 2 === 1 && lastQuoteIndex !== -1) {
-      // We're inside quotes - suggest variables
       const partial = beforeCursor.slice(lastQuoteIndex + 1).toLowerCase();
       filteredSuggestions = suggestions
         .filter((s) => s.type === 'variable')
@@ -64,7 +62,6 @@
       return;
     }
 
-    // Check for function/operator suggestions (after space, operator, or at start)
     const { word } = getWordAtCursor(text, position);
     if (word.length >= 1) {
       const lowerWord = word.toLowerCase();
@@ -94,7 +91,6 @@
     let newCursorPosition: number;
 
     if (suggestion.type === 'variable') {
-      // Replace from last quote to cursor
       const beforeCursor = text.slice(0, position);
       const lastQuoteIndex = beforeCursor.lastIndexOf('"');
       const before = text.slice(0, lastQuoteIndex + 1);
@@ -102,7 +98,6 @@
       newValue = before + suggestion.value + '"' + after;
       newCursorPosition = before.length + suggestion.value.length + 1;
     } else if (suggestion.type === 'function') {
-      // Replace the partial word with the function template
       const { start } = getWordAtCursor(text, position);
       const before = text.slice(0, start);
       const after = text.slice(position);
@@ -117,7 +112,6 @@
     showDropdown = false;
     onchange?.(value);
 
-    // Restore focus and cursor position
     requestAnimationFrame(() => {
       if (textareaRef) {
         textareaRef.focus();
@@ -160,7 +154,6 @@
   }
 
   function handleBlur() {
-    // Delay hiding to allow click on suggestion
     setTimeout(() => {
       showDropdown = false;
     }, 200);

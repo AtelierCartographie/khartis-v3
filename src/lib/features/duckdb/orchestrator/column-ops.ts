@@ -156,15 +156,12 @@ export async function replaceInColumn(
   const escapedSearchValue = escapeSqlString(searchValue);
   const escapedReplaceValue = escapeSqlString(replaceValue);
 
-  // Pre-compute the normalized search value once (instead of per-row)
   const normResult = (await Duck.query(
     `SELECT normalize_text('${escapedSearchValue}') as norm`,
     { format: 'array' }
   )) as Array<{ norm: string }>;
   const normalizedSearch = normResult?.[0]?.norm ?? '';
 
-  // Use simple equality on normalized text instead of expensive jaro_winkler_similarity
-  // jaro_winkler_similarity(...) = 1 is semantically identical to equality after normalization
   const exactMatchCondition = `normalize_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
 
   const countResult = (await Duck.query(

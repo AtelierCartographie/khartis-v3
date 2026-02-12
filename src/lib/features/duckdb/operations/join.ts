@@ -49,8 +49,6 @@ export async function joinById(
   let basemap_join_ref_name: string | null = null;
   let join_across_query: string;
 
-  // Inline SQL replaces apply_join_across_basemaps macro to fix column reference
-  // (TABLE macro parameter substitution treats string literals as values, not column refs)
   const buildJoinAcrossSQL = (joinTableName: string): string => {
     const escapedJoinTable = escapeSqlString(joinTableName);
     return `CREATE OR REPLACE TABLE "${escapeIdentifier(table_name)}" AS
@@ -176,7 +174,6 @@ export async function applyJoinAssociation(
   const escapedJoinResultsName = escapeIdentifier(join_results_name);
   const escapedBasemap = escapeSqlString(basemap);
 
-  // Check which join columns already exist in the table (re-join case)
   const columnsToExclude = ['basemap_id', 'typo_match'];
   const existingColumns = (await executeQuery(
     ctx.connection,

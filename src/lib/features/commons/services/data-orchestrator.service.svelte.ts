@@ -13,7 +13,10 @@ import {
   ParseError
 } from '../errors/pipeline.errors';
 import type { UploadedFile } from '../store/create-project.types';
-import { FileType } from '../store/create-project.types';
+import {
+  FileType,
+  COLUMN_TRANSFORMATION_TYPES
+} from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import {
@@ -608,7 +611,7 @@ class DataOrchestratorService {
               await this.applyRowDeletions(file);
             }
           } catch {
-            /* Silently ignore errors during file processing */
+            // Continue processing other files even if one fails
           }
         }
       );
@@ -636,7 +639,7 @@ class DataOrchestratorService {
     for (const transformation of file.columnTransformations) {
       try {
         switch (transformation.type) {
-          case 'rename':
+          case COLUMN_TRANSFORMATION_TYPES.RENAME:
             if (transformation.newValue) {
               await duckDBOrchestrator.renameColumn(
                 dataset.tableName,
@@ -651,14 +654,14 @@ class DataOrchestratorService {
             }
             break;
 
-          case 'drop':
+          case COLUMN_TRANSFORMATION_TYPES.DROP:
             await duckDBOrchestrator.dropColumn(
               dataset.tableName,
               transformation.column
             );
             break;
 
-          case 'type_change':
+          case COLUMN_TRANSFORMATION_TYPES.TYPE_CHANGE:
             if (transformation.newValue) {
               await duckDBOrchestrator.changeColumnType(
                 dataset.tableName,
@@ -668,7 +671,7 @@ class DataOrchestratorService {
             }
             break;
 
-          case 'refine':
+          case COLUMN_TRANSFORMATION_TYPES.REFINE:
             if (transformation.newValue) {
               const operationMap: Record<string, RefineOperation> = {
                 uppercase: RefineOperation.UPPERCASE,
@@ -688,7 +691,7 @@ class DataOrchestratorService {
             }
             break;
 
-          case 'replace':
+          case COLUMN_TRANSFORMATION_TYPES.REPLACE:
             if (transformation.searchValue && transformation.newValue) {
               await duckDBOrchestrator.replaceInColumn(
                 dataset.tableName,

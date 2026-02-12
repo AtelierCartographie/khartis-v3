@@ -1,14 +1,7 @@
-// Core
 export { Duck, initDuckDB } from './duck';
-
-// Orchestrator
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
-
-// GPS Operations
 export { validateGPSColumns } from './orchestrator/gps-ops';
 export type { GPSValidationResult } from './orchestrator/gps-ops';
-
-// Types
 export { RefineOperation } from './types';
 export type {
   AnalyseOptions,

@@ -85,7 +85,6 @@
   let confirmReimportOpen = $state(false);
   let pendingCsvOptions = $state<CsvOptions | null>(null);
 
-  // Sync currentCsvOptions from dataset metadata when dataset changes
   $effect(() => {
     const csvOpts = selectedDataset?.metadata?.csvOptions;
     if (csvOpts) {
@@ -138,7 +137,6 @@
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
-    // Check if dataset has transformations - if so, ask for confirmation
     const hasTransformations =
       selectedDataset?.metadata?.transformations?.length ?? 0;
     if (hasTransformations > 0) {
@@ -434,7 +432,6 @@
 <section id="data-control-step">
   <MainToolBarHeader title={m.data_control_step_title()} icon={DataCheck} />
 
-  <!-- Panneaux flottants -->
   {#if isToolOpen}
     {#if activeTool === DataToolType.Search}
       <DataToolPanel title={m.data_tool_search()}>
@@ -512,7 +509,6 @@
       </Modal>
     {/if}
 
-    <!-- Barre d'outils -->
     <DataToolsBar
       onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
@@ -544,7 +540,6 @@
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
-      <!-- Skeleton loader pendant le chargement ou batch processing -->
       <div class="table-skeleton-wrapper">
         <DataTableSkeleton {...getSkeletonProps()} />
       </div>

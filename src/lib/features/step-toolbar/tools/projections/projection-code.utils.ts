@@ -6,6 +6,7 @@ const WKT_HINT =
   /\b(?:PROJCS|GEOGCS|GEODCRS|PROJCRS|BOUNDCRS|COMPOUNDCRS|VERTCRS)\b/i;
 
 const CUSTOM_PROJECTION_ALIAS = 'CUSTOM:INPUT';
+const DEFAULT_FALLBACK_PROJECTION = 'mercator';
 
 export interface ParsedProjectionCode {
   normalizedCode: string;
@@ -91,7 +92,7 @@ function inferProjectionId(code: string): string {
     return 'mercator';
   }
 
-  return 'mercator';
+  return DEFAULT_FALLBACK_PROJECTION;
 }
 
 function isKnownProjectionId(projectionId: string): boolean {
@@ -137,7 +138,7 @@ export function parseProjectionCode(code: string): ParsedProjectionCode | null {
   const inferredProjectionId = inferProjectionId(normalizedCode);
   const projectionId = isKnownProjectionId(inferredProjectionId)
     ? inferredProjectionId
-    : 'mercator';
+    : DEFAULT_FALLBACK_PROJECTION;
 
   return {
     normalizedCode,

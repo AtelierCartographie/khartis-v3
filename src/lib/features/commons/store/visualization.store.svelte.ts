@@ -106,13 +106,11 @@ export interface VisualizationConfig {
     strokeWidth?: number;
     strokeOpacity?: number;
     strokeDashed?: boolean;
-    // Line properties
     lineWidth?: number;
     lineMaxWidth?: number;
     lineColor?: string | string[];
     lineOpacity?: number;
     lineDashed?: boolean;
-    // Text properties
     textColor?: string | string[];
     textOpacity?: number;
     textSize?: number;
@@ -123,7 +121,6 @@ export interface VisualizationConfig {
     textHaloColor?: string;
     textHaloWidth?: number;
     textDxpMasking?: boolean;
-    // Label properties
     labelColor?: string | string[];
     labelOpacity?: number;
     labelSize?: number;

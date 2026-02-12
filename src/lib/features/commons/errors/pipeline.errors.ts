@@ -1,11 +1,3 @@
-/**
- * Custom Error Classes for Data Pipeline
- * Provides typed errors for better error handling and debugging
- */
-
-/**
- * Base class for all pipeline errors
- */
 export class PipelineError extends Error {
   constructor(
     message: string,
@@ -18,10 +10,6 @@ export class PipelineError extends Error {
   }
 }
 
-/**
- * Data validation errors
- * Thrown when data fails validation checks
- */
 export class DataValidationError extends PipelineError {
   constructor(
     message: string,
@@ -32,9 +20,6 @@ export class DataValidationError extends PipelineError {
   }
 }
 
-/**
- * File parsing errors
- */
 export class ParseError extends PipelineError {
   constructor(
     message: string,
@@ -45,9 +30,6 @@ export class ParseError extends PipelineError {
   }
 }
 
-/**
- * DuckDB operation errors
- */
 export class DuckDBError extends PipelineError {
   constructor(
     message: string,
@@ -58,9 +40,6 @@ export class DuckDBError extends PipelineError {
   }
 }
 
-/**
- * Helper function to check if an error is a pipeline error
- */
 export function isPipelineError(error: unknown): error is PipelineError {
   return error instanceof PipelineError;
 }
@@ -79,9 +58,6 @@ export class NonFatalError extends PipelineError {
   }
 }
 
-/**
- * Duplicate file error (non-fatal)
- */
 export class DuplicateFileError extends NonFatalError {
   constructor(
     message: string,
@@ -92,27 +68,18 @@ export class DuplicateFileError extends NonFatalError {
   }
 }
 
-/**
- * Check if error is fatal (requires rollback)
- */
 export function isFatalError(error: unknown): boolean {
   if (!isPipelineError(error)) {
-    // Unknown errors are considered fatal
     return true;
   }
 
-  // NonFatalError and its subclasses are not fatal
   if (error instanceof NonFatalError) {
     return false;
   }
 
-  // All other PipelineErrors are fatal
   return true;
 }
 
-/**
- * Helper function to format error for logging
- */
 export function formatError(error: unknown): Record<string, unknown> {
   if (isPipelineError(error)) {
     return {

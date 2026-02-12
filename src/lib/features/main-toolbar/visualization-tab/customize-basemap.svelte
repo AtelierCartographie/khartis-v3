@@ -92,7 +92,6 @@
   </div>
 
   <div class="layers-list">
-    <!-- Terre - Expanded by default -->
     <ExpandableSection
       title={m.basemap_layer_terre()}
       showToggle={true}
@@ -115,7 +114,6 @@
       />
     </ExpandableSection>
 
-    <!-- Mers/océans -->
     <ExpandableSection
       title={m.basemap_layer_mers()}
       showToggle={true}
@@ -134,7 +132,6 @@
       />
     </ExpandableSection>
 
-    <!-- Lacs et rivières -->
     <ExpandableSection
       title={m.basemap_layer_lacs()}
       showToggle={true}
@@ -153,7 +150,6 @@
       />
     </ExpandableSection>
 
-    <!-- Rivières (streams) - separate from lacs -->
     <ExpandableSection
       title={m.basemap_layer_rivieres()}
       showToggle={true}
@@ -175,7 +171,6 @@
       />
     </ExpandableSection>
 
-    <!-- Relief -->
     <ExpandableSection
       title={m.basemap_layer_relief()}
       showToggle={true}
@@ -192,7 +187,6 @@
       />
     </ExpandableSection>
 
-    <!-- Équateur -->
     <ExpandableSection
       title={m.basemap_layer_equateur()}
       showToggle={true}
@@ -215,7 +209,6 @@
       />
     </ExpandableSection>
 
-    <!-- Méridiens/parallèles -->
     <ExpandableSection
       title={m.basemap_layer_meridiens()}
       showToggle={true}
@@ -235,7 +228,6 @@
       />
     </ExpandableSection>
 
-    <!-- Frontières/limites -->
     <ExpandableSection
       title={m.basemap_layer_frontieres()}
       showToggle={true}
@@ -258,7 +250,6 @@
       />
     </ExpandableSection>
 
-    <!-- Villes -->
     <ExpandableSection
       title={m.basemap_layer_villes()}
       showToggle={true}
@@ -277,7 +268,6 @@
       />
     </ExpandableSection>
 
-    <!-- Fond de carte tuilé -->
     <ExpandableSection
       title={m.basemap_tiled_label()}
       showToggle={true}

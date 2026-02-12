@@ -34,7 +34,6 @@ export interface EnrichedColumn extends ColumnAnalysis {
   score: number;
 }
 
-// Re-export SEMIO_TYPES for backwards compatibility
 export { SEMIO_TYPES };
 
 /**
@@ -192,9 +191,6 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
 ] as const;
 
 export class VizSuggesterService {
-  /**
-   * Suggests visualizations adapted to the dataset
-   */
   suggestVisualizations(
     columns: ColumnAnalysis[],
     geometryType: GeometryType | null,
@@ -202,27 +198,24 @@ export class VizSuggesterService {
   ): VizSuggestion[] {
     const { maxSuggestions = 3, debug = false } = options;
 
-    // No geometry = no cartographic viz
     if (!geometryType) {
       return [];
     }
 
     const simplifiedGeomType = this.simplifyGeometryType(geometryType);
 
-    // Enrich columns with semiological typing
     const enrichedColumns = columns
       .map((col) => this.getColumnSemioType(col))
       .sort((a, b) => {
-        // Sort by descending score, then by ascending nulls
         if (b.score !== a.score) return b.score - a.score;
         const aNulls = this.getNullCount(a);
         const bNulls = this.getNullCount(b);
         return aNulls - bNulls;
       })
-      .filter((col) => col.semioType !== 'geoid') // Exclude ID columns
-      .filter((col) => col.semioType !== 'geolat') // Exclude lat coordinate columns
-      .filter((col) => col.semioType !== 'geolon') // Exclude lon coordinate columns
-      .filter((col) => this.getUniqueCount(col) > 1); // Exclude columns with only 1 value
+      .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
+      .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
+      .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
+      .filter((col) => this.getUniqueCount(col) > 1);
 
     if (debug) {
       logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
@@ -235,13 +228,11 @@ export class VizSuggesterService {
       });
     }
 
-    // Generate suggestions
     const suggestions = this.generateSuggestions(
       enrichedColumns,
       simplifiedGeomType
     );
 
-    // Limit to requested number
     return suggestions.slice(0, maxSuggestions);
   }
 
@@ -249,12 +240,9 @@ export class VizSuggesterService {
     if (geomType.includes('Point')) return 'point';
     if (geomType.includes('Line')) return 'line';
     if (geomType.includes('Polygon')) return 'polygon';
-    return 'polygon'; // Default
+    return 'polygon';
   }
 
-  /**
-   * Determines the semiological type of a column using the shared detectSemioType function
-   */
   private getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     const columnName = column.name ?? '';
     const columnType = (column.type ?? 'string').toString();
@@ -303,7 +291,6 @@ export class VizSuggesterService {
     const results: VizSuggestion[] = [];
 
     if (columns.length === 0) {
-      // No relevant column = basic viz
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) && viz.semioTypes.length === 0
@@ -311,10 +298,8 @@ export class VizSuggesterService {
     }
 
     if (columns.length === 1) {
-      // 1 column
       results.push(...this.searchVizByType(columns[0], geometryType, 1));
     } else {
-      // 2+ columns: test 1-var and 2-var
       const first = columns[0];
       const second = columns[1];
 
@@ -322,7 +307,6 @@ export class VizSuggesterService {
       results.push(...this.searchVizByType(second, geometryType, 1));
       results.push(...this.searchVizByType([first, second], geometryType, 2));
 
-      // If < 3 suggestions, try with 3rd column
       let third: EnrichedColumn | undefined;
       if (results.length < 3 && columns.length >= 3) {
         third = columns[2];
@@ -331,7 +315,6 @@ export class VizSuggesterService {
         results.push(...this.searchVizByType([second, third], geometryType, 2));
       }
 
-      // If < 3 suggestions, try with 4th column
       if (results.length < 3 && columns.length >= 4) {
         const fourth = columns[3];
         const fallbackThird = third ?? columns[2];
@@ -346,7 +329,6 @@ export class VizSuggesterService {
       }
     }
 
-    // Deduplicate by ID
     const unique = results.filter(
       (viz, index, self) => index === self.findIndex((v) => v.id === viz.id)
     );
@@ -424,5 +406,4 @@ export class VizSuggesterService {
   }
 }
 
-// Export singleton
 export const vizSuggester = new VizSuggesterService();

@@ -1,3 +1,7 @@
+const LOCALHOST = 'localhost';
+const LOOPBACK = '127.0.0.1';
+const PREPROD_PATH = '/cartographie/khartisnewpprd';
+
 export enum Environment {
   DEVELOPMENT = 'development',
   PREPRODUCTION = 'preproduction',
@@ -12,11 +16,11 @@ export const EnvironmentUtils = {
 
     const { hostname, pathname } = window.location;
 
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    if (hostname === LOCALHOST || hostname === LOOPBACK) {
       return Environment.DEVELOPMENT;
     }
 
-    if (pathname.startsWith('/cartographie/khartisnewpprd')) {
+    if (pathname.startsWith(PREPROD_PATH)) {
       return Environment.PREPRODUCTION;
     }
 

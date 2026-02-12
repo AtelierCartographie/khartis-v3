@@ -294,12 +294,10 @@ export function updateDatasetJoinInfo(
         ds.gpsColumns = joinInfo.gpsColumns;
       }
 
-      // When switching away from OSM/GPS mode, clear stale GPS columns.
       if (joinInfo.gpsMode === false) {
         ds.gpsColumns = undefined;
       }
 
-      // GPS mode ignores geocoding joins.
       if (joinInfo.gpsMode === true) {
         ds.geoColumn = undefined;
       }

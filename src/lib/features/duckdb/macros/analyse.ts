@@ -2,20 +2,13 @@ const get_js_type_macro = `CREATE OR REPLACE MACRO get_js_type(t) AS (
 	SELECT
 		CASE
 			WHEN t IN ('BIGINT', 'HUGEINT', 'UBIGINT')  THEN 'bigint'
-			--
 			WHEN t IN ('DOUBLE', 'REAL', 'FLOAT') THEN 'number'
 			WHEN t ILIKE 'decimal%' THEN 'number'
-			--
 			WHEN t IN ('INTEGER', 'SMALLINT', 'TINYINT', 'USMALLINT', 'UINTEGER', 'UTINYINT') THEN 'integer'
-			--
 			WHEN t = 'BOOLEAN' THEN 'boolean'
-			--
 			WHEN t IN ('DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE') THEN 'date'
-			--
 			WHEN t IN ('VARCHAR', 'UUID', 'BLOB', 'BITSTRING', 'TIME', 'INTERVAL') THEN 'string'
-			--
 			WHEN t = 'GEOMETRY' THEN 'geometry'
-			--
 			ELSE 'other'
 		END
 	);`;
@@ -24,20 +17,13 @@ const get_simplified_type_macro = `CREATE OR REPLACE MACRO get_simplified_type(t
 	SELECT 
 		CASE
 			WHEN t IN ('BIGINT', 'HUGEINT', 'UBIGINT')  THEN 'numeric'
-			--
 			WHEN t IN ('DOUBLE', 'REAL', 'FLOAT') THEN 'numeric'
 			WHEN t ILIKE 'decimal%' THEN 'numeric'
-			--
 			WHEN t IN ('INTEGER', 'SMALLINT', 'TINYINT', 'USMALLINT', 'UINTEGER', 'UTINYINT') THEN 'numeric'
-			--
 			WHEN t = 'BOOLEAN' THEN 'string'
-			--
 			WHEN t IN ('DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE') THEN 'date'
-			--
 			WHEN t IN ('VARCHAR', 'UUID', 'BLOB', 'BITSTRING', 'TIME', 'INTERVAL') THEN 'string'
-			--
 			WHEN t = 'GEOMETRY' THEN 'geometry'
-			--
 			ELSE 'other'
 		END
 );`;
@@ -57,19 +43,6 @@ const describe_full_macro = `CREATE OR replace MACRO describe_full(tabname) AS T
 	WHERE table_name = tabname
 );`;
 
-/**
- * SQL macro to create or replace a function named `share_rank_interval`.
- * This function calculates the share of consecutive values in a specified column of a given table.
- *
- * The function performs the following steps:
- * 1. Creates a CTE `ordered_values` to select the column values and their previous values ordered by the column.
- * 2. Creates a CTE `differences` to calculate the difference between each value and its previous value.
- * 3. Calculates the share of consecutive values (where the difference is 1) over the total count of non-null values in the column.
- *
- * @param {string} tabname - The name of the table to query.
- * @param {string} colname - The name of the column to analyze.
- * @returns {number} - The share of consecutive values in the specified column.
- */
 const share_rank_interval_macro = `CREATE OR REPLACE FUNCTION share_rank_interval(tabname, colname) AS (
     WITH ordered_values AS (
         SELECT 
@@ -138,10 +111,6 @@ const summary_date_macro = `CREATE OR REPLACE MACRO summary_date(tabname, colnam
 	        max("colname") AS max
 );`;
 
-// HISTOGRAM NUMERIC
-// /!\ the built-in histogram_values() macro in DuckDB generates an error in this usage.
-// As a replacement, a new macro that only uses the parts needed for Khartis
-// see https://github.com/duckdb/duckdb/pull/12590
 const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabname, colname) AS TABLE(
 	WITH bins AS (
 		FROM query_table(tabname::VARCHAR)
@@ -162,8 +131,6 @@ const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabna
 	FROM nulls_count
 );`;
 
-// HISTOGRAM DATE
-// equi_width_bins does not support TIMESTAMP WITH TIME ZONE, so we cast to epoch first
 const histogram_date_macro = `CREATE OR REPLACE MACRO histogram_date(tabname, colname) AS TABLE(
 	WITH epoch_data AS (
 		FROM query_table(tabname::VARCHAR)
@@ -187,7 +154,6 @@ const histogram_date_macro = `CREATE OR REPLACE MACRO histogram_date(tabname, co
 	FROM nulls_count
 );`;
 
-// HISTOGRAM CATEGORICAL
 const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categorical(tabname, colname) AS TABLE (
 	WITH nrow AS (
 		SELECT count(*) AS total FROM query_table(tabname)
