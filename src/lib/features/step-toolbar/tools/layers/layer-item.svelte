@@ -1,6 +1,10 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
+  import {
+    Button,
+    OverflowMenu,
+    OverflowMenuItem
+  } from 'carbon-components-svelte';
   import {
     Draggable,
     Settings,
@@ -16,6 +20,9 @@
     isDragOver: boolean;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
+    onRenameLayer?: (layerId: string) => void;
+    onDuplicateLayer?: (layerId: string) => void;
+    onDeleteLayer?: (layerId: string) => void;
     onDragStart: (index: number) => void;
     onDragOver: (index: number) => void;
     onDragEnd: () => void;
@@ -29,13 +36,20 @@
     isDragOver,
     onToggleVisibility,
     onOpenSettings,
+    onRenameLayer,
+    onDuplicateLayer,
+    onDeleteLayer,
     onDragStart,
     onDragOver,
     onDragEnd,
     onDragLeave
   }: Props = $props();
 
+  const isSubLayer = $derived(Boolean(layer.isSubLayer));
+  const isDraggable = $derived(!isSubLayer);
+
   function handleDragStart(event: DragEvent): void {
+    if (!isDraggable) return;
     if (!event.dataTransfer) return;
 
     event.dataTransfer.effectAllowed = 'move';
@@ -44,6 +58,7 @@
   }
 
   function handleDragOver(event: DragEvent): void {
+    if (!isDraggable) return;
     event.preventDefault();
     if (!event.dataTransfer) return;
 
@@ -56,6 +71,7 @@
   }
 
   function handleDrop(event: DragEvent): void {
+    if (!isDraggable) return;
     event.preventDefault();
     onDragEnd();
   }
@@ -72,20 +88,23 @@
 <div id="khartis-layer-item-tool">
   <div
     class="layer-item"
+    class:sub-layer={isSubLayer}
     class:dragging={isDragging}
     class:drag-over={isDragOver}
     role="listitem"
-    draggable="true"
-    ondragstart={handleDragStart}
-    ondragover={handleDragOver}
-    ondragenter={handleDragEnter}
-    ondrop={handleDrop}
-    ondragleave={onDragLeave}
-    ondragend={onDragEnd}
+    draggable={isDraggable}
+    ondragstart={isDraggable ? handleDragStart : undefined}
+    ondragover={isDraggable ? handleDragOver : undefined}
+    ondragenter={isDraggable ? handleDragEnter : undefined}
+    ondrop={isDraggable ? handleDrop : undefined}
+    ondragleave={isDraggable ? onDragLeave : undefined}
+    ondragend={isDraggable ? onDragEnd : undefined}
   >
     <div class="layer-indicator" style="background-color: {layer.color}"></div>
 
-    <Draggable class="layer-drag-handle" />
+    {#if isDraggable}
+      <Draggable class="layer-drag-handle" />
+    {/if}
 
     <layer.icon size={16} class="layer-icon" style="fill: {layer.color}" />
 
@@ -107,6 +126,28 @@
         iconDescription={m.layers_settings()}
         onclick={handleOpenSettings}
       />
+
+      {#if !isSubLayer}
+        <OverflowMenu
+          size="sm"
+          flipped
+          iconDescription={m.layers_more_options()}
+        >
+          <OverflowMenuItem
+            text={m.layers_rename()}
+            on:click={() => onRenameLayer?.(layer.id)}
+          />
+          <OverflowMenuItem
+            text={m.layers_duplicate()}
+            on:click={() => onDuplicateLayer?.(layer.id)}
+          />
+          <OverflowMenuItem
+            danger
+            text={m.layers_delete()}
+            on:click={() => onDeleteLayer?.(layer.id)}
+          />
+        </OverflowMenu>
+      {/if}
     </div>
   </div>
 </div>
@@ -124,6 +165,12 @@
     border-left: 4px solid transparent;
     cursor: grab;
     transition: all 0.2s ease;
+  }
+
+  .layer-item.sub-layer {
+    background-color: var(--cds-layer-01);
+    border-color: var(--cds-border-subtle-01);
+    cursor: default;
   }
 
   .layer-item:hover {

@@ -6,20 +6,45 @@ import { LogCategory, logger } from '../../commons/utils/logger';
 import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
+import type {
+  FeatureCollection,
+  Point,
+  Polygon,
+  MultiPolygon,
+  LineString,
+  MultiLineString
+} from 'geojson';
 import {
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
+import { SimplificationLevel } from '../../commons/types/enums';
+import {
+  simplifyGeometryTable,
+  getSimplifiedArrowTable,
+  SIMPLIFICATION_TOLERANCE
+} from '../../duckdb/operations/simplification';
+
+interface AdditionalBasemapData {
+  lakesData: FeatureCollection<Polygon | MultiPolygon> | null;
+  riversData: FeatureCollection<LineString | MultiLineString> | null;
+  citiesData: FeatureCollection<Point> | null;
+}
 
 const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
 const GEOMETRY_BASE_PATH = `${base}/basemaps/geometry/`;
 const DEFAULT_BASEMAP_ID = 'world-countries-50m';
+const LAKES_FILE = 'ne_110m_lakes';
+const RIVERS_FILE = 'ne_110m_rivers_lake_centerlines';
+const CITIES_FILE = 'ne_110m_populated_places_simple';
 
 interface LoadedBasemap {
   metadata: BasemapMetadata;
   geometryTable: ArrowTable;
   layerTables: SvelteMap<string, ArrowTable>;
+  simplifiedVariants?: SvelteMap<SimplificationLevel, ArrowTable>;
+  activeSimplificationLevel?: SimplificationLevel | null;
 }
 
 class BasemapService {
@@ -30,6 +55,12 @@ class BasemapService {
   private _attributesLoaded = false;
 
   private _basemapCache = new SvelteMap<string, LoadedBasemap>();
+
+  private _additionalData: AdditionalBasemapData = {
+    lakesData: null,
+    riversData: null,
+    citiesData: null
+  };
 
   async initialize(): Promise<void> {
     try {
@@ -44,6 +75,14 @@ class BasemapService {
           LogCategory.MAP
         );
       }
+
+      this.loadAdditionalLayers().catch((err) => {
+        logger.warn(
+          'Failed to load additional basemap layers',
+          LogCategory.MAP,
+          err
+        );
+      });
 
       logger.success('Basemap service initialized', LogCategory.MAP, {
         basemapCount: this._availableBasemaps.length
@@ -257,7 +296,7 @@ class BasemapService {
   private updateProjectionFromTable(geometryTable: ArrowTable): void {
     if (projectionStore.referenceBbox !== null) {
       logger.debug(
-        'Skipping basemap bbox update - user data bbox already set',
+        'Skipping basemap bbox update - referenceBbox already set (thematic-map handles switching)',
         LogCategory.MAP,
         {
           currentBbox: projectionStore.referenceBbox
@@ -329,6 +368,32 @@ class BasemapService {
     return this.loadBasemap(DEFAULT_BASEMAP_ID);
   }
 
+  registerCustomBasemap(
+    metadata: BasemapMetadata,
+    geometryTable: ArrowTable
+  ): void {
+    const idx = this._availableBasemaps.findIndex(
+      (bm) => bm.file === metadata.file
+    );
+    if (idx === -1) {
+      this._availableBasemaps.push(metadata);
+    } else {
+      this._availableBasemaps[idx] = metadata;
+    }
+
+    const loaded: LoadedBasemap = {
+      metadata,
+      geometryTable,
+      layerTables: new SvelteMap<string, ArrowTable>()
+    };
+    this._basemapCache.set(metadata.file, loaded);
+
+    logger.info('Custom basemap registered', LogCategory.MAP, {
+      basemapId: metadata.file,
+      rows: geometryTable.numRows
+    });
+  }
+
   get availableBasemaps(): BasemapMetadata[] {
     return this._availableBasemaps;
   }
@@ -343,6 +408,208 @@ class BasemapService {
 
   get currentLayers(): Map<string, ArrowTable> {
     return this._currentBasemap?.layerTables ?? new Map();
+  }
+
+  get lakesData(): FeatureCollection<Polygon | MultiPolygon> | null {
+    return this._additionalData.lakesData;
+  }
+
+  get riversData(): FeatureCollection<LineString | MultiLineString> | null {
+    return this._additionalData.riversData;
+  }
+
+  get citiesData(): FeatureCollection<Point> | null {
+    return this._additionalData.citiesData;
+  }
+
+  async loadAdditionalLayers(): Promise<void> {
+    await Promise.all([
+      this.loadLakesData(),
+      this.loadRiversData(),
+      this.loadCitiesData()
+    ]);
+  }
+
+  private async loadLakesData(): Promise<void> {
+    if (this._additionalData.lakesData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${LAKES_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Lakes data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.lakesData = geojson as FeatureCollection<
+        Polygon | MultiPolygon
+      >;
+      logger.debug('Lakes data loaded', LogCategory.MAP, {
+        features: this._additionalData.lakesData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load lakes data', LogCategory.MAP, error);
+    }
+  }
+
+  private async loadRiversData(): Promise<void> {
+    if (this._additionalData.riversData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${RIVERS_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Rivers data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.riversData = geojson as FeatureCollection<
+        LineString | MultiLineString
+      >;
+      logger.debug('Rivers data loaded', LogCategory.MAP, {
+        features: this._additionalData.riversData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load rivers data', LogCategory.MAP, error);
+    }
+  }
+
+  private async loadCitiesData(): Promise<void> {
+    if (this._additionalData.citiesData) return;
+
+    try {
+      const url = `${GEOMETRY_BASE_PATH}${CITIES_FILE}.geojson`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        logger.debug('Cities data not available', LogCategory.MAP);
+        return;
+      }
+
+      const geojson = await response.json();
+      this._additionalData.citiesData = geojson as FeatureCollection<Point>;
+      logger.debug('Cities data loaded', LogCategory.MAP, {
+        features: this._additionalData.citiesData.features.length
+      });
+    } catch (error) {
+      logger.warn('Failed to load cities data', LogCategory.MAP, error);
+    }
+  }
+
+  async simplifyBasemap(
+    basemapId: string,
+    level: SimplificationLevel
+  ): Promise<ArrowTable> {
+    const loadedBasemap = this._basemapCache.get(basemapId);
+
+    if (!loadedBasemap) {
+      throw new Error(`Basemap not loaded: ${basemapId}`);
+    }
+
+    if (!loadedBasemap.simplifiedVariants) {
+      loadedBasemap.simplifiedVariants = new SvelteMap<
+        SimplificationLevel,
+        ArrowTable
+      >();
+    }
+
+    if (loadedBasemap.simplifiedVariants.has(level)) {
+      logger.debug('Using cached simplified basemap', LogCategory.MAP, {
+        basemapId,
+        level
+      });
+      loadedBasemap.activeSimplificationLevel = level;
+      return loadedBasemap.simplifiedVariants.get(level)!;
+    }
+
+    const start = performance.now();
+    logger.info('Simplifying basemap geometry', LogCategory.MAP, {
+      basemapId,
+      level
+    });
+
+    try {
+      const tableName = await this.loadGeometryIntoDuckDB(basemapId);
+      const tolerance = SIMPLIFICATION_TOLERANCE[level];
+
+      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
+
+      const simplifiedTable = await getSimplifiedArrowTable(
+        Duck,
+        tableName,
+        tolerance
+      );
+
+      loadedBasemap.simplifiedVariants.set(level, simplifiedTable);
+      loadedBasemap.activeSimplificationLevel = level;
+
+      logger.success('Basemap geometry simplified', LogCategory.MAP, {
+        basemapId,
+        level,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices,
+        reductionPercentage: `${metrics.reductionPercentage}%`,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return simplifiedTable;
+    } catch (error) {
+      logger.error('Failed to simplify basemap geometry', LogCategory.MAP, {
+        basemapId,
+        level,
+        error
+      });
+      throw error;
+    }
+  }
+
+  getSimplifiedBasemapTable(
+    basemapId: string,
+    level?: SimplificationLevel
+  ): ArrowTable | null {
+    const loadedBasemap = this._basemapCache.get(basemapId);
+
+    if (!loadedBasemap) {
+      return null;
+    }
+
+    const targetLevel = level ?? loadedBasemap.activeSimplificationLevel;
+
+    if (!targetLevel || !loadedBasemap.simplifiedVariants) {
+      return null;
+    }
+
+    return loadedBasemap.simplifiedVariants.get(targetLevel) ?? null;
+  }
+
+  clearSimplificationCache(basemapId?: string): void {
+    if (basemapId) {
+      const loadedBasemap = this._basemapCache.get(basemapId);
+      if (loadedBasemap) {
+        loadedBasemap.simplifiedVariants?.clear();
+        loadedBasemap.activeSimplificationLevel = null;
+        logger.debug(
+          'Simplification cache cleared for basemap',
+          LogCategory.MAP,
+          {
+            basemapId
+          }
+        );
+      }
+    } else {
+      for (const [_id, basemap] of this._basemapCache) {
+        basemap.simplifiedVariants?.clear();
+        basemap.activeSimplificationLevel = null;
+      }
+      logger.debug(
+        'Simplification cache cleared for all basemaps',
+        LogCategory.MAP
+      );
+    }
   }
 
   reset(): void {

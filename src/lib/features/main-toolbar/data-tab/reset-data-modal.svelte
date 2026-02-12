@@ -57,7 +57,7 @@
   primaryButtonText={isResetting
     ? m.reset_data_modal_resetting()
     : m.reset_data_modal_button()}
-  primaryButtonDisabled={isResetting}
+  primaryButtonDisabled={isResetting || !hasModifications || !dataset}
   secondaryButtonText={m.cancel()}
   danger
   on:click:button--secondary={() => (open = false)}
@@ -69,16 +69,17 @@
   </p>
 
   {#if hasModifications}
-    <p style="margin-top: 1rem; color: var(--cds-text-error);">
+    <p
+      style="margin-top: 1rem; color: var(--cds-text-error); font-weight: 600;"
+    >
       {m.reset_data_modal_warning()}
+    </p>
+    <p style="margin-top: 0.5rem; color: var(--cds-text-02);">
+      {m.reset_data_modal_irreversible()}
     </p>
   {:else}
     <p style="margin-top: 1rem; color: var(--cds-text-02);">
       {m.reset_data_modal_no_modifications()}
     </p>
   {/if}
-
-  <p style="margin-top: 1rem; color: var(--cds-text-02);">
-    {m.reset_data_modal_irreversible()}
-  </p>
 </Modal>

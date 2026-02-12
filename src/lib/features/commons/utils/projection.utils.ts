@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import type { GeoProjection } from 'd3-geo';
 import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
@@ -22,90 +23,90 @@ type ProjectableGeoJSON = FeatureWithPath | FeatureCollectionWithPath;
 export const PROJECTIONS: ProjectionInfo[] = [
   {
     id: 'mercator',
-    name: 'Mercator',
+    name: m.projection_name_mercator(),
     category: 'cylindrical',
-    description: 'Conforme, préserve les angles',
+    description: m.projection_desc_mercator(),
     projection: () => d3geo.geoMercator(),
     recommended: true
   },
   {
     id: 'natural-earth',
-    name: 'Natural Earth',
+    name: m.projection_name_natural_earth(),
     category: 'other',
-    description: 'Bon compromis pour les cartes mondiales',
+    description: m.projection_desc_natural_earth(),
     projection: () => d3geo.geoNaturalEarth1(),
     recommended: true
   },
   {
     id: 'equirectangular',
-    name: 'Équirectangulaire',
+    name: m.projection_name_equirectangular(),
     category: 'cylindrical',
-    description: 'Simple, distances équidistantes sur les méridiens',
+    description: m.projection_desc_equirectangular(),
     projection: () => d3geo.geoEquirectangular()
   },
   {
     id: 'orthographic',
-    name: 'Orthographique',
+    name: m.projection_name_orthographic(),
     category: 'azimuthal',
-    description: "Vue globe depuis l'espace",
+    description: m.projection_desc_orthographic(),
     projection: () => d3geo.geoOrthographic()
   },
   {
     id: 'albers',
-    name: 'Albers',
+    name: m.projection_name_albers(),
     category: 'conic',
-    description: 'Équivalente, préserve les surfaces',
+    description: m.projection_desc_albers(),
     projection: () => d3geo.geoAlbers()
   },
   {
     id: 'lambert-conformal',
-    name: 'Lambert conforme conique',
+    name: m.projection_name_lambert_conformal(),
     category: 'conic',
-    description: 'Conforme, bon pour les latitudes moyennes',
+    description: m.projection_desc_lambert_conformal(),
     projection: () => d3geo.geoConicConformal()
   },
   {
     id: 'robinson',
-    name: 'Robinson',
+    name: m.projection_name_robinson(),
     category: 'other',
-    description: 'Pseudo-cylindrique, esthétique',
+    description: m.projection_desc_robinson(),
     projection: () => d3geoProjection.geoRobinson(),
     recommended: true
   },
   {
     id: 'winkel-tripel',
-    name: 'Winkel Tripel',
+    name: m.projection_name_winkel_tripel(),
     category: 'other',
-    description: 'Minimise les distorsions',
+    description: m.projection_desc_winkel_tripel(),
     projection: () => d3geoProjection.geoWinkel3(),
     recommended: true
   },
   {
     id: 'aitoff',
-    name: 'Aitoff',
+    name: m.projection_name_aitoff(),
     category: 'other',
-    description: 'Azimutale modifiée',
+    description: m.projection_desc_aitoff(),
     projection: () => d3geoProjection.geoAitoff()
   },
   {
     id: 'mollweide',
-    name: 'Mollweide',
+    name: m.projection_name_mollweide(),
     category: 'other',
-    description: 'Équivalente, elliptique',
+    description: m.projection_desc_mollweide(),
     projection: () => d3geoProjection.geoMollweide()
   },
   {
     id: 'stereographic',
-    name: 'Stéréographique',
+    name: m.projection_name_stereographic(),
     category: 'azimuthal',
-    description: 'Conforme, régions polaires',
+    description: m.projection_desc_stereographic(),
     projection: () => d3geo.geoStereographic()
   },
   {
     id: 'azimuthal-equal-area',
-    name: 'Azimutale équivalente',
+    name: m.projection_name_azimuthal_equal_area(),
     category: 'azimuthal',
-    description: 'Préserve les surfaces',
+    description: m.projection_desc_azimuthal_equal_area(),
     projection: () => d3geo.geoAzimuthalEqualArea()
   }
 ];

@@ -5,6 +5,7 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
+import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
 import type { LayerContext, RGBColor } from '../types';
 
@@ -13,6 +14,11 @@ const BASE_STROKE_COLOR: RGBColor = [255, 255, 255];
 export interface UseMapStateReturn {
   readonly activeVisualizations: VisualizationConfig[];
   buildLayerContextForViz: (viz: VisualizationConfig) => LayerContext;
+}
+
+export interface UseMapStateOptions {
+  forcedVisualizationIds?: string[];
+  getForcedVisualizationIds?: () => string[] | undefined;
 }
 
 function getColorsForViz(viz: VisualizationConfig | null): {
@@ -81,10 +87,19 @@ function getCategoryColorMapForViz(
   return getCategoricalColorMap(categories, viz.classification.colors);
 }
 
-export function useMapState(): UseMapStateReturn {
-  const activeVisualizations = $derived(
-    visualizationStore.activeVisualizations
-  );
+export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
+  const activeVisualizations = $derived.by(() => {
+    const forcedIds =
+      options?.getForcedVisualizationIds?.() ?? options?.forcedVisualizationIds;
+    if (!forcedIds || forcedIds.length === 0) {
+      return visualizationStore.activeVisualizations;
+    }
+
+    const forcedSet = new Set(forcedIds);
+    return visualizationStore.activeVisualizations.filter((visualization) =>
+      forcedSet.has(visualization.id)
+    );
+  });
 
   function buildLayerContextForViz(viz: VisualizationConfig): LayerContext {
     const colors = getColorsForViz(viz);
@@ -96,11 +111,14 @@ export function useMapState(): UseMapStateReturn {
       datasetId: viz.datasetId,
       fillColor: colors.fill,
       strokeColor: colors.stroke,
-      fillOpacity: viz.style.fillOpacity ?? 0.6,
+      fillOpacity: viz.style.fillOpacity ?? 1,
       strokeWidth: viz.style.strokeWidth ?? 1,
       strokeOpacity: viz.style.strokeOpacity ?? 1,
       statistics,
-      categoryColorMap
+      categoryColorMap,
+      highlightedRowIds: mapHighlightStore.hasHighlights
+        ? mapHighlightStore.highlightedRowIds
+        : undefined
     };
   }
 

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {
     InlineNotification,
@@ -8,25 +9,38 @@
   } from 'carbon-components-svelte';
   import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
-  import { onMount } from 'svelte';
-  import { SvelteMap } from 'svelte/reactivity';
+  import { onMount, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
+  import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
+  import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
+  import { ColorBlindnessType } from '../commons/constants/ui.constants';
+  import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
+  import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
 
   let containerRef: HTMLDivElement;
+  let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
+  let isResizing = $state(false);
+  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let containerResizeObserver: ResizeObserver | null = null;
+
+  const TOOLBAR_TRANSITION_MS = 600;
+  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -37,6 +51,9 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  const facetsEnabled = $derived(facetsStore.enabled);
+  const facetsLayout = $derived(facetsStore.layout);
+  const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
   async function convertDatasetToGeoJSON(
     dataset: DatasetResult
@@ -248,6 +265,8 @@
 
   $effect(() => {
     void duckDBDatasetsVersion;
+    const currentEnabledDatasets = enabledDatasets;
+
     if (isInitializing) {
       return;
     }
@@ -255,34 +274,25 @@
     hasError = false;
     errorMessage = null;
 
-    const currentEnabledIds = new Set(enabledDatasets.map((d) => d.id));
+    const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-    logger.debug('Map reacting to enabled datasets change', LogCategory.MAP, {
-      enabledCount: currentEnabledIds.size
-    });
+    const tableIdsToRemove = [...displayTables.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
 
-    for (const tableId of displayTables.keys()) {
-      if (!currentEnabledIds.has(tableId)) {
-        displayTables.delete(tableId);
-        logger.debug('Removed disabled dataset from tables', LogCategory.MAP, {
-          datasetId: tableId
-        });
-      }
-    }
-    for (const geojsonId of displayGeoJSONs.keys()) {
-      if (!currentEnabledIds.has(geojsonId)) {
-        displayGeoJSONs.delete(geojsonId);
-        logger.debug(
-          'Removed disabled dataset from GeoJSONs',
-          LogCategory.MAP,
-          {
-            datasetId: geojsonId
-          }
-        );
-      }
+    for (const tableId of tableIdsToRemove) {
+      displayTables.delete(tableId);
     }
 
-    for (const dataset of enabledDatasets) {
+    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
+
+    for (const geojsonId of geojsonIdsToRemove) {
+      displayGeoJSONs.delete(geojsonId);
+    }
+
+    for (const dataset of currentEnabledDatasets) {
       const alreadyLoaded =
         displayTables.has(dataset.id) || displayGeoJSONs.has(dataset.id);
       if (!alreadyLoaded) {
@@ -316,12 +326,43 @@
     }
   });
 
-  let resizeObserver: ResizeObserver | null = null;
+  $effect(() => {
+    void globalState.toolbarState;
+
+    untrack(() => {
+      if (!isMapReady) return;
+
+      isResizing = true;
+
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+
+      resizeTimeoutId = setTimeout(() => {
+        isResizing = false;
+        resizeTimeoutId = null;
+      }, TOOLBAR_TRANSITION_MS);
+    });
+  });
+
+  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   function handleContainerResize() {
     if (!containerRef) return;
-    const rect = containerRef.getBoundingClientRect();
-    formatActions.fitToContainer(rect.width, rect.height);
+    formatActions.fitToContainer(
+      containerRef.offsetWidth,
+      containerRef.offsetHeight
+    );
+  }
+
+  function handleContainerResizeDebounced() {
+    if (containerResizeTimeoutId) {
+      clearTimeout(containerResizeTimeoutId);
+    }
+    containerResizeTimeoutId = setTimeout(() => {
+      containerResizeTimeoutId = null;
+      handleContainerResize();
+    }, CONTAINER_RESIZE_DEBOUNCE_MS);
   }
 
   async function initializeMap() {
@@ -346,15 +387,21 @@
   onMount(() => {
     handleContainerResize();
 
-    resizeObserver = new ResizeObserver(() => {
-      handleContainerResize();
+    containerResizeObserver = new ResizeObserver(() => {
+      handleContainerResizeDebounced();
     });
-    resizeObserver.observe(containerRef);
+    containerResizeObserver.observe(containerRef);
 
     initializeMap();
 
     return () => {
-      resizeObserver?.disconnect();
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+      if (containerResizeTimeoutId) {
+        clearTimeout(containerResizeTimeoutId);
+      }
+      containerResizeObserver?.disconnect();
     };
   });
 
@@ -362,6 +409,17 @@
     logger.success('Map fully rendered', LogCategory.MAP);
     isMapReady = true;
   }
+
+  const colorBlindnessState = $derived(getColorBlindnessState());
+
+  $effect(() => {
+    const simulationType = colorBlindnessState.enabled
+      ? colorBlindnessState.simulationType
+      : ColorBlindnessType.NONE;
+    if (thematicMapRef) {
+      applyColorBlindnessFilter(thematicMapRef, simulationType);
+    }
+  });
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -384,22 +442,37 @@
       </div>
       <InlineNotification
         kind="error"
-        title="Erreur de chargement"
-        subtitle={errorMessage ??
-          'Une erreur est survenue lors du chargement de la carte'}
+        title={m.error_loading_title()}
+        subtitle={errorMessage ?? m.error_loading_subtitle()}
         hideCloseButton
         lowContrast
       />
     </div>
   {:else if !isInitializing}
-    <div class="thematic-map-wrapper" class:visible={isMapReady}>
-      <ThematicMap
-        tables={displayTables}
-        geoJSONs={displayGeoJSONs}
-        width={formatState.width}
-        height={formatState.height}
-        onReady={handleMapReady}
-      />
+    <div
+      class="thematic-map-wrapper"
+      class:visible={isMapReady}
+      bind:this={thematicMapRef}
+    >
+      {#if facetsEnabled && facetVisualizations.length > 0}
+        <FacetsGrid
+          visualizations={facetVisualizations}
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          layout={facetsLayout}
+          containerWidth={formatState.width}
+          containerHeight={formatState.height}
+        />
+      {:else}
+        <ThematicMap
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          width={formatState.width}
+          height={formatState.height}
+          onReady={handleMapReady}
+        />
+      {/if}
+      <div class="resize-overlay" class:active={isResizing}></div>
     </div>
   {/if}
 </div>
@@ -412,15 +485,31 @@
     width: 100%;
     height: 100%;
     position: relative;
+    overflow: hidden;
   }
 
   .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
+    position: relative;
   }
 
   .thematic-map-wrapper.visible {
     opacity: 1;
+  }
+
+  .resize-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--cds-ui-background, #f4f4f4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .resize-overlay.active {
+    opacity: 1;
+    transition: none;
   }
 
   .skeleton-loader {

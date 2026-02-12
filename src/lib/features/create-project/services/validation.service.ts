@@ -1,14 +1,10 @@
 import { extractUrlsFromInput } from '$lib/features/commons/utils/file-import.utils';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { ValidationResult } from '$lib/features/data-pipeline/types';
 import * as m from '$lib/paraglide/messages';
 
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  warnings: string[];
-  requiresAsyncValidation?: boolean;
-}
+export type { ValidationResult } from '$lib/features/data-pipeline/types';
 
 export interface MultiFileValidationResult {
   isValid: boolean;

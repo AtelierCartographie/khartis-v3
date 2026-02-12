@@ -2,7 +2,10 @@ import {
   DataValidationError,
   DuckDBError
 } from '$lib/features/commons/errors/pipeline.errors';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -32,11 +35,6 @@ export async function joinById(
     );
   }
 
-  const escapedTable = escapeSqlString(table);
-  const escapedTableId = escapeSqlString(table_id);
-  const escapedBasemapsTable = basemaps_table
-    ? escapeSqlString(basemaps_table)
-    : undefined;
   const escapedBasemapTable = basemap_table
     ? escapeSqlString(basemap_table)
     : undefined;
@@ -47,49 +45,73 @@ export async function joinById(
 
   const table_name = `${table}_join_results`;
   const escapedTableName = escapeSqlString(table_name);
+  const escapedGeoCol = escapeIdentifier(table_id);
   let basemap_join_ref_name: string | null = null;
   let join_across_query: string;
+
+  // Inline SQL replaces apply_join_across_basemaps macro to fix column reference
+  // (TABLE macro parameter substitution treats string literals as values, not column refs)
+  const buildJoinAcrossSQL = (joinTableName: string): string => {
+    const escapedJoinTable = escapeSqlString(joinTableName);
+    return `CREATE OR REPLACE TABLE "${escapeIdentifier(table_name)}" AS
+      WITH t1 AS (
+        SELECT
+          "${escapedGeoCol}" as geoname,
+          count() over() as candidate_count
+        FROM "${escapeIdentifier(table)}"
+        WHERE "${escapedGeoCol}" IS NOT NULL
+      ), t2 AS (
+        FROM t1, LATERAL (SELECT * FROM get_similarity(geoname, '${escapedJoinTable}'))
+        SELECT *
+        ORDER BY basemap, geoname, score DESC
+      )
+      FROM t2
+      SELECT unnest(max_by(t2, score, 1), recursive := true)
+      GROUP BY basemap, id`;
+  };
 
   if (basemaps_table) {
     const unified_table = 'unified_basemap_attributes';
 
+    const customTableCheck = (await executeQuery(
+      ctx.connection,
+      `SELECT COUNT(*) as cnt FROM information_schema.tables
+       WHERE table_name = 'custom_basemap_attributes'`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    )) as Array<{ cnt: number }>;
+    const hasCustomTable = Number(customTableCheck?.[0]?.cnt ?? 0) > 0;
+
     let hasCustomAttributes = false;
-    try {
+    if (hasCustomTable) {
       const customCheck = (await executeQuery(
         ctx.connection,
         `SELECT COUNT(*) as count FROM custom_basemap_attributes`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ count: number }>;
-      const count = customCheck?.[0]?.count ?? 0;
-      hasCustomAttributes = count > 0;
-    } catch {
-      hasCustomAttributes = false;
+      hasCustomAttributes = Number(customCheck?.[0]?.count ?? 0) > 0;
     }
 
     if (hasCustomAttributes) {
       await executeQuery(
         ctx.connection,
-        `CREATE OR REPLACE TABLE "${unified_table}" AS
-        SELECT * FROM "${basemaps_table}"
+        `CREATE OR REPLACE TABLE "${escapeIdentifier(unified_table)}" AS
+        SELECT * FROM "${escapeIdentifier(basemaps_table!)}"
         UNION ALL
         SELECT * FROM custom_basemap_attributes`,
         { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
       );
       markTableMutated(ctx, unified_table);
 
-      join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
-      FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${unified_table}')`;
+      join_across_query = buildJoinAcrossSQL(unified_table);
     } else {
-      join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
-      FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${escapedBasemapsTable}')`;
+      join_across_query = buildJoinAcrossSQL(basemaps_table);
     }
   } else if (basemap_table) {
     basemap_join_ref_name = `${basemap_table}_join_ref`;
-    const escapedBasemapJoinRefName = escapeSqlString(basemap_join_ref_name);
     if (basemap_others_id) {
       await executeQuery(
         ctx.connection,
-        `CREATE OR REPLACE TABLE "${basemap_join_ref_name}" AS
+        `CREATE OR REPLACE TABLE "${escapeIdentifier(basemap_join_ref_name)}" AS
           FROM get_join_table_from_basemap('${escapedBasemapTable}', '${escapedBasemapId}', '${escapedBasemapOthersId}');`,
         { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
       );
@@ -97,15 +119,14 @@ export async function joinById(
     } else {
       await executeQuery(
         ctx.connection,
-        `CREATE OR REPLACE TABLE "${basemap_join_ref_name}" AS
+        `CREATE OR REPLACE TABLE "${escapeIdentifier(basemap_join_ref_name)}" AS
           FROM get_join_table_from_basemap('${escapedBasemapTable}', '${escapedBasemapId}')`,
         { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
       );
       markTableMutated(ctx, basemap_join_ref_name);
     }
 
-    join_across_query = `CREATE OR REPLACE TABLE "${table_name}" AS
-      FROM apply_join_across_basemaps('${escapedTable}', '${escapedTableId}', '${escapedBasemapJoinRefName}')`;
+    join_across_query = buildJoinAcrossSQL(basemap_join_ref_name);
   } else {
     throw new DataValidationError('Invalid options configuration', undefined, {
       options
@@ -150,18 +171,46 @@ export async function applyJoinAssociation(
     );
   }
   const { id, join_results_name } = join;
+  const escapedTable = escapeIdentifier(table);
+  const escapedId = escapeIdentifier(id);
+  const escapedJoinResultsName = escapeIdentifier(join_results_name);
   const escapedBasemap = escapeSqlString(basemap);
+
+  // Check which join columns already exist in the table (re-join case)
+  const columnsToExclude = ['basemap_id', 'typo_match'];
+  const existingColumns = (await executeQuery(
+    ctx.connection,
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(table)}'
+     AND column_name IN (${columnsToExclude.map((c) => `'${c}'`).join(', ')})`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{ column_name: string }>;
+
+  const excludeList = existingColumns.map((r) => r.column_name);
+  const excludeClause =
+    excludeList.length > 0
+      ? `EXCLUDE (${excludeList.map((c) => `"${escapeIdentifier(c)}"`).join(', ')})`
+      : '';
+
   await executeQuery(
     ctx.connection,
-    `CREATE OR REPLACE TABLE "${table}" AS
+    `CREATE OR REPLACE TABLE "${escapedTable}" AS
+      WITH ranked_join AS (
+        SELECT *
+        FROM "${escapedJoinResultsName}"
+        WHERE basemap = '${escapedBasemap}'
+        QUALIFY ROW_NUMBER() OVER (
+          PARTITION BY geoname
+          ORDER BY score DESC, id
+        ) = 1
+      )
       SELECT
-        t.* EXCLUDE (basemap_id, typo_match),
+        t.* ${excludeClause},
         j.id as basemap_id,
         j.typo_match
-      FROM "${table}" as t
-      LEFT JOIN "${join_results_name}" as j
-      ON t."${id}" = j.geoname
-      WHERE j.basemap = '${escapedBasemap}'`
+      FROM "${escapedTable}" as t
+      LEFT JOIN ranked_join as j
+      ON t."${escapedId}" = j.geoname`
   );
   markTableMutated(ctx, table);
 }

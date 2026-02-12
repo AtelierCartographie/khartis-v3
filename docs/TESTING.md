@@ -19,38 +19,36 @@ The application uses **DuckDB WASM** (`@duckdb/duckdb-wasm`) which runs in the b
 **Testing approach:**
 
 - **Unit tests**: Test validation, format detection, and utility functions (mock DuckDB)
-- **E2E tests**: Test the **real DuckDB WASM pipeline** in a browser with Playwright
+- **Integration tests**: Test **real DuckDB ingestion** of all `tests-datasets/` files via `@duckdb/node-api`, aligned with CDC sections
+- **E2E tests**: Test project creation and UI flows in a browser with Playwright
 - **Component tests**: Mock DuckDB entirely (see `vitest-setup-client.ts`)
 
-The E2E tests are the authoritative tests for the data pipeline - they test the actual DuckDB WASM processing with real files.
+The integration tests (`pipeline-integration.test.ts`) are the authoritative tests for file ingestion — they verify every supported format is correctly loaded by DuckDB with the same options as production (nullstr, normalize_names, decimal_separator).
+
+> **Note:** DuckDB analysis macros using `query_table()` + `"colname"` (summary_general, summary_numeric, histogram\_\*) cannot be tested via Node API. The Node API v1.4 resolves `"colname"` as a string literal, while DuckDB WASM (production) resolves it as a column reference. Only `describe_full` (which uses `duckdb_columns()`) works in both. The integration tests use equivalent direct SQL for statistics.
 
 ## Test Structure
 
 ```
 src/lib/features/
-├── data-pipeline/__tests__/     # Data pipeline unit tests
-│   ├── validators.test.ts       # File validation logic
-│   ├── format-detection.test.ts # Format detection
-│   ├── quality.test.ts          # Quality warnings
-│   ├── types.test.ts            # Type utilities
-│   ├── geojson-guards.test.ts   # GeoJSON validation
-│   ├── shapefile-validator.test.ts # Shapefile validation
-│   ├── zip-handler.test.ts      # ZIP extraction
-│   └── test-file-loader.ts      # Test file loader utilities
+├── data-pipeline/__tests__/          # Data pipeline tests
+│   ├── pipeline-integration.test.ts  # Integration: DuckDB ingestion of all tests-datasets/
+│   ├── serialization-safety.test.ts  # Serialization round-trip + binary safety
+│   ├── duckdb-node-helper.ts         # Helper: DuckDB Node API test instance
+│   ├── validators.test.ts            # Unit: file validation logic
+│   ├── format-detection.test.ts      # Unit: format detection
+│   ├── quality.test.ts               # Unit: quality warnings
+│   ├── types.test.ts                 # Unit: type utilities
+│   ├── geojson-guards.test.ts        # Unit: GeoJSON validation
+│   ├── shapefile-validator.test.ts   # Unit: shapefile validation
+│   ├── zip-handler.test.ts           # Unit: ZIP extraction
+│   └── test-file-loader.ts           # Test file loader utilities
 ├── commons/
-│   ├── services/*.test.ts       # Service unit tests
-│   └── utils/*.test.ts          # Utility unit tests
-└── duckdb/__tests__/            # DuckDB unit tests
+│   ├── services/*.test.ts            # Service unit tests
+│   └── utils/*.test.ts               # Utility unit tests
+└── duckdb/__tests__/                 # DuckDB unit tests
 
 e2e/
-├── imports/                     # File import E2E tests (by format)
-│   ├── csv.spec.ts              # CSV import tests
-│   ├── geojson.spec.ts          # GeoJSON import tests
-│   ├── geopackage.spec.ts       # GeoPackage import tests
-│   ├── gpx.spec.ts              # GPX import tests
-│   ├── kml.spec.ts              # KML import tests
-│   ├── shapefile.spec.ts        # Shapefile import tests
-│   └── zip.spec.ts              # ZIP archive tests
 ├── project-modal.spec.ts        # Project creation modal tests
 ├── side-nav.spec.ts             # Side navigation tests
 ├── helpers.ts                   # E2E utilities (paths, selectors, helpers)
@@ -66,20 +64,31 @@ tests-datasets/                  # Test fixtures
 └── zip/                         # ZIP archives
 ```
 
-### E2E Pipeline Tests
+### Pipeline Integration Tests
 
-The E2E tests in `e2e/imports/` test the **real DuckDB WASM pipeline** with all supported file formats:
+`pipeline-integration.test.ts` tests **real DuckDB ingestion** of every file in `tests-datasets/` via `@duckdb/node-api`, structured by CDC sections:
 
-| File Format | Test                                    |
-| ----------- | --------------------------------------- |
-| CSV         | `should create project from CSV`        |
-| GeoJSON     | `should create project from GeoJSON`    |
-| GeoPackage  | `should create project from GeoPackage` |
-| GPX         | `should create project from GPX`        |
-| KML         | `should create project from KML`        |
-| ZIP         | `should upload ZIP archive`             |
+| CDC Section                | What is tested                                                                                                                          | Files covered                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **2.A.1 — CSV import**     | Row/column counts + `describe_full` type classification                                                                                 | 7 valid CSVs                           |
+| **CSV edge cases**         | Graceful handling (no crash), 0-byte, header-only, broken structure                                                                     | 12 malformed CSVs                      |
+| **2.A.4 — Type detection** | text/numeric classification, semantic geo hints (`id_words`), null variations → SQL NULL, empty columns, duplicated name disambiguation | Targeted CSVs                          |
+| **2.A.5.b — Statistics**   | count/uniques/nulls, numeric min/max/extent, equi-width histogram bins (direct SQL)                                                     | fossil-fuel CSV                        |
+| **2.A.2 — Geo import**     | Geometry + data columns, bounds extraction (`xmin ≤ xmax`, `ymin ≤ ymax`)                                                               | 2 GeoJSON, 3 GPKG, 1 GPX, 1 KML, 4 SHP |
+| **ZIP extraction**         | Extract + ingest single-csv, multiple-csv, shapefile-complete                                                                           | 3 ZIPs                                 |
 
-These tests verify that files are uploaded, parsed by DuckDB WASM, and the project is created successfully.
+**Total: 41 tests** covering all 30+ data files.
+
+### Serialization Safety Tests
+
+`serialization-safety.test.ts` tests binary round-trip safety:
+
+- Large binary file serialize/deserialize without crash
+- `preserveBinary` mode (Uint8Array) vs legacy `number[]` format
+- `relatedFilesData` serialization + clone + restore
+- Backward compatibility with legacy `number[]` format
+- BigInt → Number conversion during `deepCloneForStorage`
+- Project storage size estimation for binary + related files
 
 ## Running Tests
 
@@ -597,9 +606,12 @@ The `tests-datasets/` folder contains real and malformed files for testing:
 **Valid files:**
 
 - `fossil-fuel-subsidies-gdp-2021.csv` - World data with numeric values
-- `naissances-par-commune-departement-et-region-2018.csv` - French communes
+- `naissances-par-commune-departement-et-region-2018.csv` - French communes (34k+ rows)
 - `sites-seveso-idf.csv` - GPS coordinates
 - `world-bank-rural-pop.csv` - World Bank data
+- `test-csv-options-header.csv` - CSV options test fixture
+- `test-csv-options-second-file.csv` - CSV options test fixture
+- `test-csv-options-thousands.csv` - CSV options test fixture
 
 **Malformed files (for edge case testing):**
 
@@ -627,6 +639,7 @@ The `tests-datasets/` folder contains real and malformed files for testing:
 
 - `compagnies-herault-l93.gpkg` - French data in Lambert-93 projection
 - `ADMIN-EXPRESS_4-0__GPKG.../ADE_4-0_GPKG...gpkg` - IGN Admin Express Guadeloupe
+- `ADE 4.0 GPKG GLP ED Dec 5 2025.gpkg` - Same data, filename with spaces (edge case)
 
 **GPX (`tests-datasets/gpx/`):**
 
@@ -844,5 +857,5 @@ it('should reject file exceeding MAX_FILE_SIZE', async () => {
 
 ---
 
-**Last Updated**: 2025-12-17
-**Version**: 3.3.0
+**Last Updated**: 2026-01-27
+**Version**: 3.4.0

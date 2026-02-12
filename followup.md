@@ -1,552 +1,747 @@
 # Khartis v3 - Suivi d'avancement
 
-> Dernière mise à jour : 14 janvier 2026
+> Dernière mise à jour : 3 février 2026
+
+## Avancement global : 85%
+
+| Statut     | Nombre  | Pourcentage |
+| ---------- | ------- | ----------- |
+| ✅ Fait    | 255     | 81%         |
+| ⚠️ Partiel | 21      | 7%          |
+| ❌ À faire | 38      | 12%         |
+| **Total**  | **314** |             |
+
+### Par section
+
+| Section             | Avancement |
+| ------------------- | ---------- |
+| 2.A Données         | 100%       |
+| 2.B Visualisations  | 91%        |
+| 2.C Habillage       | 63%        |
+| 2.D Téléchargement  | 100%       |
+| 2.E Sauvegarde      | 100%       |
+| 2.F Exemples        | 62%        |
+| 2.G Aide            | 50%        |
+| 3. Specs techniques | 72%        |
+| 4. Structure UI     | 93%        |
+| 5. Déploiement      | 25%        |
 
 ---
 
-## Légende des statuts
+## Légende
 
-| Statut | Signification                                    |
-| ------ | ------------------------------------------------ |
-| ✅     | Fonctionnel et connecté                          |
-| ⚠️     | Partiellement implémenté                         |
-| 🔌     | **UI prête, à connecter** (store/rendu manquant) |
-| 🔧     | À implémenter                                    |
-
----
-
-## Résumé global
-
-| Section                      | %        | Reste à faire                                         |
-| ---------------------------- | -------- | ----------------------------------------------------- |
-| 2.A.1-2.A.4 Données (Import) | **100%** | ✅ Fonctionnel                                        |
-| 2.A.5 Tableau de données     | **95%**  | 🔌 Recherche sur carte (UI prête)                     |
-| 2.A.6-2.A.9 Jointure/Carte   | **100%** | ✅ Fonctionnel                                        |
-| 2.B.1-2.B.2 Visualisations   | **30%**  | 🔌 configure-visualization.svelte orphelin            |
-| 2.B.3-2.B.4 Outils           | **35%**  | 🔧 Couches non rendues, simplification stub           |
-| 2.C Habillage                | **35%**  | 🔌 Légende/annotations: UI prêtes, overlays manquants |
-| 2.D Téléchargement           | **85%**  | ✅ Quasi-complet                                      |
-| 2.E Sauvegarde               | **100%** | ✅ Fonctionnel                                        |
-| 2.F Exemples introductifs    | **90%**  | ⚠️ Vignettes manquantes                               |
-| 2.G Aide                     | **40%**  | 🔧 Créer pages annexes + documentation                |
-| 3. Spécifications techniques | **85%**  | 🔧 Responsive mobile/tablette + audit WCAG            |
-| 4. Intégration UI/UX         | **95%**  | ✅ Fonctionnel                                        |
-| 5. Déploiement               | **80%**  | 🔧 Config preprod + documentation code                |
-
-### Avancement global : 73%
-
-> ⚠️ **Note importante** : Le blocage principal est dans **configure-visualization.svelte** (940 lignes) qui utilise des `$state` locaux jamais persistés au `visualizationStore`. Le store et Deck.gl sont prêts, mais l'UI ne synchronise pas.
+| Statut | Signification      |
+| ------ | ------------------ |
+| ✅     | Fait               |
+| ⚠️     | Partiellement fait |
+| ❌     | À faire            |
 
 ---
 
 ## 2.A. Données
 
-### 2.A.1-2.A.4 Import et typage — 100%
+### 2.A.1 Import tabulaire
 
-| Fonctionnalité                                                         | Statut |
-| ---------------------------------------------------------------------- | ------ |
-| Chargement fichier CSV depuis appareil                                 | ✅     |
-| Import via lien URL                                                    | ✅     |
-| Import par copier-coller (nommé "Tableau collé")                       | ✅     |
-| Reconnaissance codes géographiques (ISO2, ISO3, country, region, city) | ✅     |
-| Reconnaissance coordonnées lat/lon                                     | ✅     |
-| Import Shapefile                                                       | ✅     |
-| Import GeoJSON                                                         | ✅     |
-| Import GeoPackage                                                      | ✅     |
-| Import via lien URL (geo)                                              | ✅     |
-| Fichiers ZIP contenant shapefiles                                      | ✅     |
-| Identification comme jeu de données                                    | ✅     |
-| Nommage par défaut (nom fichier)                                       | ✅     |
-| Duplication/Suppression de jeu de données                              | ✅     |
-| Détection automatique type texte/numérique                             | ✅     |
-| Sous-type géographique détecté                                         | ✅     |
-| Changement de type par l'utilisateur                                   | ✅     |
-| Codes NUTS (régions européennes)                                       | ✅     |
+| Fonctionnalité                                                           | Statut |
+| ------------------------------------------------------------------------ | ------ |
+| CSV depuis fichier local                                                 | ✅     |
+| CSV via URL                                                              | ✅     |
+| Copier-coller (nommé "Tableau collé")                                    | ✅     |
+| Variables géo requises : noms de lieux / codes ISO / coordonnées lat+lon | ✅     |
 
-### 2.A.5 Tableau de données — 95%
+### 2.A.2 Import géographique
 
-| Fonctionnalité                                                                  | Statut | Note                    |
-| ------------------------------------------------------------------------------- | ------ | ----------------------- |
-| Panneau latéral taille variable                                                 | ⚠️     |                         |
-| Défilement lignes (scroll virtuel avec buffer)                                  | ✅     |                         |
-| Agrandissement taille prédéfinie                                                | ✅     |                         |
-| Code graphique par type de colonne                                              | ✅     |                         |
-| Menu déroulante au clic (3 points)                                              | ✅     |                         |
-| Changer le type / Affiner / Renommer / Masquer / Supprimer                      | ✅     |                         |
-| Résumé statistique (uniques, nulls, doublons, histogramme, min/max)             | ✅     |                         |
-| Tri croissant/décroissant                                                       | ✅     |                         |
-| Barre de recherche + navigation résultats                                       | ✅     |                         |
-| Recherche sur carte (mise en lumière)                                           | 🔌     | UI prête, highlight map |
-| Rechercher/remplacer (Jaro-Winkler fuzzy matching)                              | ✅     |                         |
-| Filtres multiples avec opérateurs complets                                      | ✅     |                         |
-| Calculatrice (8 fonctions: AVG, SUM, MIN, MAX, POWER, ROUND, CONCAT, SUBSTRING) | ✅     |                         |
-| Suppression variables/lignes avec avertissement                                 | ✅     |                         |
-| Réinitialisation données (recharge depuis fichier original)                     | ✅     |                         |
+| Fonctionnalité                                        | Statut |
+| ----------------------------------------------------- | ------ |
+| Shapefile (.shp + .dbf + .shx en ZIP)                 | ✅     |
+| GeoJSON                                               | ✅     |
+| GeoPackage                                            | ✅     |
+| Via fichier local ou URL                              | ✅     |
+| Utilisable comme visualisation OU comme fond de carte | ✅     |
 
-### 2.A.6-2.A.9 Géolocalisation et Jointure — 100%
+### 2.A.3 Jeux de données
 
-| Fonctionnalité                                                               | Statut |
-| ---------------------------------------------------------------------------- | ------ |
-| Reconnaissance auto variables geo                                            | ✅     |
-| Définition référence géographique                                            | ✅     |
-| Validation GPS (détection inversion lat/lon)                                 | ✅     |
-| Liaison données tabulaires à fond de carte                                   | ✅     |
-| Suggestions basées sur analyse (scoring algorithmique)                       | ✅     |
-| Vignettes avec taux correspondance (ProgressBar)                             | ✅     |
-| Catalogue de fonds de carte (6 basemaps)                                     | ✅     |
-| Moteur de recherche + auto-complétion                                        | ✅     |
-| Filtres par années (tri descendant, compteur)                                | ✅     |
-| Jointure assistée (4 catégories: JOINED, TO_VERIFY, DUPLICATE, UNRECOGNIZED) | ✅     |
-| Import fichier géographique comme fond                                       | ✅     |
-| Superposition OpenStreetMap (couche raster séparée)                          | ✅     |
-| Enrichir un fichier géographique                                             | ✅     |
-| Carte visible au centre                                                      | ✅     |
-| Fond par défaut suggéré (auto-select meilleur score)                         | ✅     |
-| Infobulles au survol (connecté à Deck.gl, max 10 entrées)                    | ✅     |
-| Boutons de zoom (MapLibre + Deck.gl sync)                                    | ✅     |
-| Détection codes NUTS                                                         | ✅     |
-| Formulaire suggestion nouveau fond de carte                                  | ✅     |
+| Fonctionnalité                                        | Statut |
+| ----------------------------------------------------- | ------ |
+| Nommage par défaut = nom fichier (ou "Tableau collé") | ✅     |
+| Renommer par utilisateur                              | ✅     |
+| Dupliquer                                             | ✅     |
+| Supprimer                                             | ✅     |
+
+### 2.A.4 Typage variables
+
+| Fonctionnalité                                        | Statut |
+| ----------------------------------------------------- | ------ |
+| Détection auto : texte, numérique                     | ✅     |
+| Sous-type géo : entités admin, codes ISO, coordonnées | ✅     |
+| Changement de type manuel                             | ✅     |
+| Code graphique distinct par type                      | ✅     |
+
+### 2.A.5 Tableau de données
+
+| Fonctionnalité                              | Statut |
+| ------------------------------------------- | ------ |
+| Taille variable (redimensionnable)          | ✅     |
+| Scroll virtuel (nombre restreint de lignes) | ✅     |
+| Agrandissement à taille prédéfinie          | ✅     |
+| Nombre de lignes affiché                    | ✅     |
+
+#### Actions sur colonnes
+
+| Fonctionnalité                                  | Statut |
+| ----------------------------------------------- | ------ |
+| Menu déroulant au survol                        | ✅     |
+| Changer le type                                 | ✅     |
+| Affiner : majuscules/minuscules, trim espaces   | ✅     |
+| Renommer                                        | ✅     |
+| Masquer (invisible dans les listes déroulantes) | ✅     |
+| Supprimer                                       | ✅     |
+
+#### Résumé statistique
+
+| Fonctionnalité                           | Statut |
+| ---------------------------------------- | ------ |
+| Geo : nb uniques, nulls, doublons        | ✅     |
+| Texte : nb catégories                    | ✅     |
+| Numérique : histogramme, min, max, nulls | ✅     |
+| Affichable/masquable par utilisateur     | ✅     |
+
+#### Tri
+
+| Fonctionnalité                    | Statut |
+| --------------------------------- | ------ |
+| Croissant/décroissant (numérique) | ✅     |
+| Alphabétique (texte)              | ✅     |
+
+#### Recherche
+
+| Fonctionnalité                            | Statut |
+| ----------------------------------------- | ------ |
+| Barre de recherche globale ou par colonne | ✅     |
+| Nb résultats + navigation prev/next       | ✅     |
+| Mise en avant tableau + carte             | ✅     |
+| Rechercher/remplacer                      | ✅     |
+
+#### Filtres
+
+| Fonctionnalité                                                            | Statut |
+| ------------------------------------------------------------------------- | ------ |
+| Filtres multiples                                                         | ✅     |
+| Opérateurs : >=, <=, contient, =, !=, entre, top asc/desc, vide, non vide | ✅     |
+| Résumé graphique : nb filtrés + %                                         | ✅     |
+| Suppression par filtre                                                    | ✅     |
+
+#### Calculatrice
+
+| Fonctionnalité                                               | Statut |
+| ------------------------------------------------------------ | ------ |
+| Nouvelle variable calculée                                   | ✅     |
+| Opérateurs : +, -, \*, /                                     | ✅     |
+| Fonctions : moyenne, puissance, arrondis, concat, extraction | ✅     |
+| Auto-complétion                                              | ✅     |
+| Test avant validation                                        | ✅     |
+
+#### Corbeille
+
+| Fonctionnalité                         | Statut |
+| -------------------------------------- | ------ |
+| Supprimer variables                    | ✅     |
+| Supprimer lignes                       | ✅     |
+| Avertissement si impact visualisations | ✅     |
+
+#### Réinitialisation
+
+| Fonctionnalité                            | Statut |
+| ----------------------------------------- | ------ |
+| Rétablir données initiales                | ✅     |
+| Perte des modifications et visualisations | ✅     |
+
+### 2.A.6 Géolocalisation
+
+| Fonctionnalité                             | Statut |
+| ------------------------------------------ | ------ |
+| Reconnaissance auto variables géo          | ✅     |
+| Définition référence géographique manuelle | ✅     |
+| Sélection variable(s) liée(s)              | ✅     |
+
+### 2.A.7 Jointure fond de carte
+
+#### Suggestions
+
+| Fonctionnalité                                         | Statut |
+| ------------------------------------------------------ | ------ |
+| Vignettes triées par taux de correspondance            | ✅     |
+| Affiche : titre, niveau découpage, année, source, taux | ✅     |
+
+#### Catalogue
+
+| Fonctionnalité                                      | Statut |
+| --------------------------------------------------- | ------ |
+| Vignettes avec titre, niveau, année, source         | ✅     |
+| Recherche + auto-complétion                         | ✅     |
+| Filtre par années                                   | ✅     |
+| Bouton "suggérer nouveau fond" (formulaire externe) | ✅     |
+
+#### Jointure assistée
+
+| Fonctionnalité                                                 | Statut |
+| -------------------------------------------------------------- | ------ |
+| 4 catégories : jointes, à vérifier, non uniques, non reconnues | ✅     |
+| Compteur par catégorie (classé par criticité)                  | ✅     |
+| Remplacement identifiants dans tableau                         | ✅     |
+
+#### Import fond custom
+
+| Fonctionnalité                       | Statut |
+| ------------------------------------ | ------ |
+| Même formats que import géographique | ✅     |
+| Jointure assistée disponible         | ✅     |
+
+#### Superposition OSM
+
+| Fonctionnalité                        | Statut |
+| ------------------------------------- | ------ |
+| Pour données avec coordonnées lat/lon | ✅     |
+| Personnalisable                       | ✅     |
+
+### 2.A.8 Enrichir fichier géo
+
+| Fonctionnalité                                                            | Statut |
+| ------------------------------------------------------------------------- | ------ |
+| Joindre données tabulaires à fichier géo                                  | ✅     |
+| Import tabulaires (entités géo uniquement, pas coordonnées)               | ✅     |
+| Aperçu tableau (sans outils : recherche, filtre, calculatrice, corbeille) | ✅     |
+| Sélection variables communes                                              | ✅     |
+| Jointure assistée                                                         | ✅     |
+| Données jointes visibles dans tableau principal                           | ✅     |
+
+### 2.A.9 Aperçu carte
+
+| Fonctionnalité                                       | Statut |
+| ---------------------------------------------------- | ------ |
+| Infobulles au survol/toucher                         | ✅     |
+| Position fixe                                        | ✅     |
+| Variables viz en premier, autres en accordéon replié | ✅     |
+| Présent tout au long du parcours                     | ✅     |
+| Auto-sélection meilleur fond (si tabulaire)          | ✅     |
+| Fallback : planisphère pays                          | ✅     |
+| Géométrie affichée si fichier géo                    | ✅     |
+| Boutons zoom                                         | ✅     |
+| Choix : zoom page ou zoom carte                      | ✅     |
 
 ---
 
 ## 2.B. Visualisations
 
-### 2.B.1 Création de visualisations — 40%
+### 2.B.1 Création
 
-| Fonctionnalité                         | Statut | Note                       |
-| -------------------------------------- | ------ | -------------------------- |
-| Visualisations multiples               | ✅     |                            |
-| Nommage par défaut avec incrémentation | ✅     |                            |
-| Renommer/dupliquer/supprimer           | ✅     |                            |
-| Choix jeu de données                   | ✅     |                            |
-| Création auto visualisation            | ⚠️     | 80% - manque déclenchement |
-| Connexion au visualizationStore        | 🔧     |                            |
+| Fonctionnalité                             | Statut |
+| ------------------------------------------ | ------ |
+| Création auto à l'entrée dans l'étape      | ✅     |
+| Nommage "Visualisation (N)" avec incrément | ✅     |
+| Renommer / dupliquer / supprimer           | ✅     |
+| Choix jeu de données                       | ✅     |
 
-### 2.B.2.a Suggestions de visualisations — 50%
+### 2.B.2 Choisir visualisation
 
-| Fonctionnalité                      | Statut | Note                                   |
-| ----------------------------------- | ------ | -------------------------------------- |
-| Service viz-suggester.ts (20 types) | ✅     | Service complet, 11+ tests             |
-| UI connectée au service             | ✅     | Suggestions affichées dans UI          |
-| Créer viz depuis suggestion         | 🔌     | Manque onClick → createVisualization() |
-| Vignette aperçu générique           | ⚠️     | 50%                                    |
-| Limite propositions + afficher plus | ✅     |                                        |
-| Score correspondance affiché        | 🔧     |                                        |
+#### Suggestions
 
-### 2.B.2.b Paramétrer la visualisation — 25%
+| Fonctionnalité                                               | Statut |
+| ------------------------------------------------------------ | ------ |
+| Basées sur profil données                                    | ✅     |
+| Vignette : aperçu générique, primitives, type, variables     | ✅     |
+| Max 3 affichées, "voir plus" par 3                           | ✅     |
+| Meilleur score sélectionné par défaut + représenté sur carte | ✅     |
+| Paramètres préréglés à la sélection                          | ✅     |
 
-| Fonctionnalité                  | Statut | Note                                       |
-| ------------------------------- | ------ | ------------------------------------------ |
-| Réglages par primitives         | 🔌     | UI $state local, jamais persisté au store  |
-| Afficher/masquer primitives     | 🔌     | Accordéon toggle, pas de logique réelle    |
-| Taille, épaisseur, forme        | 🔌     | Sliders présents, non connectés            |
-| Filtrer primitives              | ⚠️     | 50%                                        |
-| configure-visualization → store | 🔧     | **Critique** - 940 lignes UI orphelines    |
-| Connexion au rendu Deck.gl      | ⚠️     | Lit store OK, mais UI n'écrit pas au store |
+#### Paramétrage
 
-### 2.B.2.c Personnalisation des couleurs — 40%
+| Fonctionnalité                                               | Statut |
+| ------------------------------------------------------------ | ------ |
+| Réglages par primitive : symboles, polygones, lignes, textes | ✅     |
+| Afficher/masquer chaque primitive                            | ✅     |
+| Filtrer par primitive                                        | ✅     |
+| Taille, épaisseur, forme                                     | ✅     |
+| Couleur fond et contour                                      | ✅     |
+| Variation selon variable quanti/quali                        | ✅     |
 
-| Fonctionnalité                    | Statut | Note                          |
-| --------------------------------- | ------ | ----------------------------- |
-| Panneau dédié couleurs            | ✅     |                               |
-| Filtre daltonisme (9 types UI)    | 🔌     | UI prête, CSS filter manquant |
-| Intensité (nuances)               | ✅     |                               |
-| Couleur personnalisée HSL         | ✅     |                               |
-| Code hexadécimal                  | ✅     |                               |
-| Suggestions palettes qualitatives | 🔧     |                               |
-| Palettes séquentielles            | ✅     | Connecté à Deck.gl            |
-| Palettes divergentes              | 🔧     |                               |
-| Motifs personnalisables           | 🔧     |                               |
-| Inversion palette                 | ✅     |                               |
+#### Couleurs
 
-### 2.B.2.d Discrétisation — 20%
+| Fonctionnalité                                   | Statut |
+| ------------------------------------------------ | ------ |
+| Panneau dédié                                    | ✅     |
+| Palettes qualitatives (familles de couleurs)     | ✅     |
+| Palettes séquentielles                           | ✅     |
+| Filtre daltonisme (couleurs accessibles)         | ✅     |
+| Nuances plus sombres/lumineuses (couleur unique) | ✅     |
+| HSL picker (teinte, saturation, luminosité)      | ✅     |
+| Code hexadécimal (affichage + saisie)            | ✅     |
+| Motifs : forme, angle, taille, échelle           | ❌     |
+| Aplat en motif personnalisable                   | ❌     |
+| Palettes séquentielles personnalisables          | ✅     |
+| Palettes divergentes                             | ✅     |
+| Inversion palette                                | ✅     |
 
-| Fonctionnalité                 | Statut | Note                              |
-| ------------------------------ | ------ | --------------------------------- |
-| Sélection méthode              | 🔌     | UI prête, non connecté            |
-| Nombre de classes              | 🔌     | UI prête, non connecté            |
-| Equal-interval                 | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Quantile                       | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Std Deviation                  | 🔌     | Algo DuckDB prêt, jamais appelé   |
-| Manuel                         | 🔌     | Store prêt, non connecté au rendu |
-| Jenks (fallback sur Quantiles) | ⚠️     | 20%                               |
-| Saisie manuelle bornes         | ⚠️     | 30%                               |
-| Valeur de rupture (divergent)  | 🔧     |                                   |
-| Diagramme fréquences           | 🔧     |                                   |
-| Définition méthode (aide)      | 🔧     |                                   |
-| calculateBreaks() appelé       | 🔧     | **Critique** - jamais appelé      |
+#### Discrétisation
 
-### 2.B.2.e Légende — 15%
+| Fonctionnalité                                             | Statut |
+| ---------------------------------------------------------- | ------ |
+| Sélection méthode                                          | ✅     |
+| Nombre de classes                                          | ✅     |
+| Méthodes : equal-interval, quantile, jenks, stddev, manuel | ✅     |
+| Valeur de rupture → palette divergente                     | ✅     |
+| Position valeur de rupture personnalisable                 | ✅     |
+| Diagramme de fréquences                                    | ✅     |
+| Saisie manuelle des bornes                                 | ✅     |
+| Courte définition de la méthode (aide au choix)            | ✅     |
 
-| Fonctionnalité                            | Statut | Note                             |
-| ----------------------------------------- | ------ | -------------------------------- |
-| Légende configurable dans panneau latéral | 🔌     | UI+Store prêts, pas sur la carte |
-| Légende superposée sur la carte           | 🔧     | Overlay manquant                 |
-| Légende auto-créée lors de visualisation  | 🔧     |                                  |
+#### Légende
 
-### 2.B.3 Personnaliser le fond de carte — 15%
+| Fonctionnalité                               | Statut |
+| -------------------------------------------- | ------ |
+| Affichée automatiquement avec visualisation  | ✅     |
+| Changements visibles simultanément sur carte | ✅     |
+| Personnalisable à l'étape Habillage          | ✅     |
 
-| Fonctionnalité                            | Statut | Note                                    |
-| ----------------------------------------- | ------ | --------------------------------------- |
-| Styles OSM prédéfinis (5 styles MapLibre) | ✅     | Blank, Positron, Dark, Voyager, Liberty |
-| Épaisseur contours (basemap)              | 🔧     | Non implémenté                          |
-| Opacité (basemap)                         | 🔧     | Non implémenté                          |
-| Couches multiples                         | 🔌     | Fixture data seulement                  |
-| Afficher/masquer couches                  | 🔌     | UI toggle, pas de rendu réel            |
-| Couleur contours                          | 🔧     |                                         |
-| Personnalisation par couche               | 🔧     |                                         |
-| Couleur fond polygones                    | 🔧     |                                         |
-| Pointillés                                | 🔧     |                                         |
-| Ombre portée                              | 🔧     |                                         |
+### 2.B.3 Personnaliser fond de carte
 
-#### 2.B.3.a Couches additionnelles — 5%
+| Fonctionnalité                   | Statut |
+| -------------------------------- | ------ |
+| Couleur fond polygones           | ✅     |
+| Couleur contours                 | ✅     |
+| Épaisseur contours               | ✅     |
+| Pointillés                       | ✅     |
+| Opacité                          | ✅     |
+| Ombre portée (option prédéfinie) | ✅     |
 
-| Couche               | Définie | Rendu | Note                 |
-| -------------------- | ------- | ----- | -------------------- |
-| Terre (earth)        | 🔧      | 🔧    | Non trouvé           |
-| Mers/Océans          | 🔧      | 🔧    | Non trouvé           |
-| Équateur             | 🔌      | 🔧    | UI toggle, non rendu |
-| Méridiens/Parallèles | 🔧      | 🔧    | Non trouvé           |
-| Frontières/Limites   | 🔌      | 🔧    | UI toggle, non rendu |
-| Lacs et rivières     | 🔧      | 🔧    |                      |
-| Relief               | 🔧      | 🔧    |                      |
-| Villes/Capitales     | 🔧      | 🔧    |                      |
+#### Fond catalogue
 
-### 2.B.4.a Recherche — 50%
+| Fonctionnalité                                                                                                  | Statut |
+| --------------------------------------------------------------------------------------------------------------- | ------ |
+| Couches additionnelles configurables individuellement                                                           | ✅     |
+| Couches : terre, mers/océans, lacs/rivières, relief, équateur, méridiens/parallèles, frontières/limites, villes | ✅     |
+| Afficher/masquer chaque couche                                                                                  | ✅     |
+| Personnaliser chaque couche                                                                                     | ✅     |
 
-| Fonctionnalité                  | Statut | Note                         |
-| ------------------------------- | ------ | ---------------------------- |
-| Barre de recherche entités      | ✅     | Fonctionne (données fixture) |
-| Navigation résultats            | ✅     | Prev/Next fonctionnels       |
-| Mise en lumière carte           | 🔧     | Aucune intégration carte     |
-| Remplacer                       | ⚠️     | 50%                          |
-| Options avancées (regex, casse) | ⚠️     | 30%                          |
+#### Fond importé
 
-### 2.B.4.b Calques — 70%
+| Fonctionnalité                                                | Statut |
+| ------------------------------------------------------------- | ------ |
+| Personnalisation réduite                                      | ✅     |
+| Couleur fond, contours, épaisseur, pointillés, opacité, ombre | ⚠️     |
 
-| Fonctionnalité                    | Statut | Note |
-| --------------------------------- | ------ | ---- |
-| Calque par visualisation          | ✅     |      |
-| Sous-calques par primitive        | ✅     |      |
-| Code couleur + icône              | ✅     |      |
-| Afficher/masquer                  | ✅     |      |
-| Déplacement calques (Drag & Drop) | ✅     |      |
-| Renommer/dupliquer/supprimer      | 🔧     |      |
-| Raccourci paramétrage             | ⚠️     | 50%  |
+#### Fond OSM
 
-### 2.B.4.c Projections — 80%
+| Fonctionnalité             | Statut |
+| -------------------------- | ------ |
+| Styles prédéfinis          | ✅     |
+| Calques à afficher/masquer | ❌     |
+| Étiquettes                 | ❌     |
 
-| Fonctionnalité                          | Statut | Note                          |
-| --------------------------------------- | ------ | ----------------------------- |
-| Projection par défaut (Mercator)        | ✅     |                               |
-| Pastille incitation                     | ✅     |                               |
-| Suggestions projections (basées bounds) | ✅     |                               |
-| Filtres catégories                      | ✅     | 3 catégories                  |
-| Vue liste et grille                     | ✅     |                               |
-| Catalogue (9 projections)               | ✅     | Rectang/Arrondie/Discontinue  |
-| Code CRS (WKT/PROJ.4)                   | 🔌     | UI existe, pas de parsing CRS |
-| Paramètres (lon, lat, rotation)         | ✅     | Sliders fonctionnels          |
-| Réinitialisation paramètres             | ✅     |                               |
-| Aperçu simplifié performance            | ✅     |                               |
+### 2.B.4 Outils visualisation
 
-### 2.B.4.d Simplification — 5%
+#### Recherche
 
-| Fonctionnalité                    | UI  | Algo | Note                           |
-| --------------------------------- | --- | ---- | ------------------------------ |
-| 3 niveaux prédéfinis              | 🔌  | 🔧   | UI prête, algo stub (mock)     |
-| Taux personnalisé                 | 🔌  | 🔧   | UI prête, algo stub (mock)     |
-| Avertissement suppression entités | 🔌  | 🔧   | Données mockées                |
-| Application sur géométries        | 🔧  | 🔧   | Douglas-Peucker non implémenté |
+| Fonctionnalité                      | Statut |
+| ----------------------------------- | ------ |
+| Barre de recherche entités/valeurs  | ✅     |
+| Mise en lumière sur carte           | ✅     |
+| Nb résultats + navigation prev/next | ✅     |
+| Infobulle sur objet pointé          | ✅     |
 
-### 2.B.4.e Collection (Facettes) — 3%
+#### Calques
 
-| Fonctionnalité                | Statut |
-| ----------------------------- | ------ |
-| Collection small multiples    | 🔧     |
-| Sélection plusieurs variables | 🔧     |
-| Échelle commune/propre        | 🔧     |
-| Disposition colonnes          | 🔧     |
-| Pastille incitation sur icône | 🔧     |
+| Fonctionnalité                                              | Statut |
+| ----------------------------------------------------------- | ------ |
+| 1 calque par visualisation                                  | ✅     |
+| Sous-calques par primitive + fond de carte                  | ✅     |
+| Code couleur + icône par type                               | ✅     |
+| Afficher/masquer calques et sous-calques                    | ✅     |
+| Raccourci vers paramétrage                                  | ✅     |
+| Renommer/dupliquer/supprimer                                | ✅     |
+| Réordonner (drag & drop)                                    | ✅     |
+| Sous-calques fond de carte liés si plusieurs visualisations | ✅     |
 
----
+#### Projections
 
-## 2.C. Habillage — 35%
+| Fonctionnalité                                    | Statut |
+| ------------------------------------------------- | ------ |
+| Projection par défaut                             | ✅     |
+| Pastille incitation (jusqu'à utilisation)         | ❌     |
+| Suggestions basées sur emprise géographique       | ✅     |
+| Filtres : rectangulaires, arrondies, discontinues | ✅     |
+| Vue liste et vue grille                           | ✅     |
+| Vignette : aperçu, titre, catégorie, description  | ✅     |
+| Étiquette "respecte les surfaces" sur vignettes   | ❌     |
+| Catalogue complet                                 | ✅     |
+| Code CRS (WKT ou PROJ.4)                          | ❌     |
+| Paramètres : longitude, latitude, rotation        | ✅     |
+| Réinitialisation paramètres                       | ✅     |
+| Changements visibles simultanément                | ✅     |
+| Aperçu simplifié auto/manuel                      | ⚠️     |
 
-### 2.C.1 Habillage prédéfini — 40%
+#### Simplification (généralisation)
 
-| Fonctionnalité                                  | Statut | Note                           |
-| ----------------------------------------------- | ------ | ------------------------------ |
-| Légende configurable (panneau séparé)           | 🔌     | UI prête, pas rendue sur carte |
-| Éléments supprimables                           | ✅     |                                |
-| Textes prédéfinis (4 styles)                    | ✅     |                                |
-| Éléments déplaçables                            | ⚠️     | 70%                            |
-| Placeholders textes (titre, sous-titre, source) | ✅     |                                |
-| Légende auto-créée avec visualisation           | 🔧     |                                |
-| Mention "Réalisé avec Khartis"                  | ✅     |                                |
+| Fonctionnalité                             | Statut |
+| ------------------------------------------ | ------ |
+| Fonds catalogue : 3 niveaux                | ✅     |
+| Fonds importés : taux personnalisé         | ✅     |
+| Avertissement suppression entités          | ❌     |
+| OSM : non simplifiable                     | ✅     |
+| Sélection par fichier si multiples chargés | ✅     |
 
-### 2.C.2.a Format — 80%
+#### Collection (facettes / small multiples)
 
-| Fonctionnalité               | Statut | Note |
-| ---------------------------- | ------ | ---- |
-| Formats prédéfinis           | ✅     |      |
-| Format personnalisé (pixels) | ✅     |      |
-| Couleur page                 | ✅     |      |
-| Marges                       | ✅     |      |
-| Grille alignement            | ⚠️     | 30%  |
-| Redistribution auto éléments | ✅     |      |
-| Magnétisme (snapToGrid)      | 🔧     |      |
-
-### 2.C.2.b Légende — 20%
-
-| Fonctionnalité           | Statut | Note                           |
-| ------------------------ | ------ | ------------------------------ |
-| Édition contenu légendes | 🔌     | UI prête, pas rendue sur carte |
-| Afficher/masquer         | 🔌     | Store prêt, overlay manquant   |
-| Titre, sous-titre, note  | 🔌     | UI prête, overlay manquant     |
-| Style (police, taille)   | 🔌     | UI prête, overlay manquant     |
-| Arrière-plan             | 🔌     | UI prête, overlay manquant     |
-| Opacité                  | 🔌     | UI prête, overlay manquant     |
-| Rendu overlay sur carte  | 🔧     | **Bloquant**                   |
-| Pastille incitation      | ⚠️     | 20%                            |
-
-### 2.C.2.c Indications géographiques — 60%
-
-| Fonctionnalité                    | UI  | Rendu | Note                           |
-| --------------------------------- | --- | ----- | ------------------------------ |
-| Échelle (distance, unité)         | ✅  | ✅    |                                |
-| Orientation flèche/rose des vents | ✅  | ✅    |                                |
-| Taille, couleur orientation       | ✅  | ✅    |                                |
-| Carte en encart (globe)           | 🔌  | 🔧    | UI prête, rendu non implémenté |
-| Taille, couleur, zoom encart      | 🔌  | 🔧    | UI prête, rendu non implémenté |
-
-### 2.C.2.d Annotations — 15%
-
-| Fonctionnalité                           | UI  | Store | Rendu | Note                             |
-| ---------------------------------------- | --- | ----- | ----- | -------------------------------- |
-| Texte + placement zone texte             | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Style prédéfini/personnalisé (4 styles)  | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Formes (flèche, rectangle, cercle, etc.) | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Réglages forme                           | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Dessin (ligne, zone)                     | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Image (jpg, png, gif, svg, webp)         | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Placement, taille, opacité image         | 🔌  | 🔌    | 🔧    | UI+Store prêts, overlay manquant |
-| Lissage, pointillé                       | 🔌  | 🔌    | ⚠️    |                                  |
-
-### 2.C.2.e Déficiences visuelles — 5%
-
-| Fonctionnalité                  | UI  | Rendu | Note                          |
-| ------------------------------- | --- | ----- | ----------------------------- |
-| Simulation daltonisme (9 types) | 🔌  | 🔧    | UI prête, CSS filter manquant |
-| Filtre CSS/SVG                  | 🔧  | 🔧    | Non implémenté                |
-| Export sans filtre              | 🔧  | 🔧    |                               |
+| Fonctionnalité                                 | Statut |
+| ---------------------------------------------- | ------ |
+| Sélection plusieurs variables (même primitive) | ✅     |
+| 1 variable = 1 carte de la collection          | ✅     |
+| Pastille incitation sur icône outil            | ❌     |
+| Échelle commune ou propre                      | ✅     |
+| Disposition : nombre de colonnes               | ✅     |
+| Distribution variables sur cartes              | ✅     |
+| Calques regroupés par carte                    | ✅     |
+| Même projection et simplification pour toutes  | ✅     |
 
 ---
 
-## 2.D. Téléchargement — 85%
+## 2.C. Habillage
 
-### 2.D.1 Carte — 90%
+### 2.C.1 Habillage prédéfini
 
-| Fonctionnalité                       | Statut | Note                         |
-| ------------------------------------ | ------ | ---------------------------- |
-| Bouton menu présent toutes étapes    | ✅     |                              |
-| 3 onglets (Projet, Carte, Données)   | ✅     |                              |
-| Export JPG (1920x1080)               | ✅     | Avec watermark Khartis       |
-| Export SVG (avec groupes par calque) | ✅     | Groupes par visualization ID |
-| Calques organisés SVG                | ✅     |                              |
+| Fonctionnalité                                                       | Statut |
+| -------------------------------------------------------------------- | ------ |
+| Légende auto (seul élément visible avant étape Habillage)            | ✅     |
+| À l'entrée étape : titre, sous-titre, source, source fond, signature | ✅     |
+| "Réalisé avec Khartis"                                               | ✅     |
+| Textes = placeholders (invisibles à l'export si vides)               | ✅     |
+| Chaque élément : déplaçable, supprimable                             | ⚠️     |
+| Style par défaut personnalisable                                     | ⚠️     |
 
-### 2.D.2 Données — 85%
+### 2.C.2 Outils habillage
 
-| Fonctionnalité               | Statut | Note                       |
-| ---------------------------- | ------ | -------------------------- |
-| Export CSV                   | ✅     | DuckDB intégré, BOM Excel  |
-| Export GeoJSON               | ✅     | Feature collection         |
-| Export CSV avec géo (WKT)    | ✅     | Conversion WKT complète    |
-| Export fond de carte utilisé | 🔧     | Par design (seulement .kh) |
-| Export résultats jointure    | ✅     | Via export data standard   |
+#### Format
 
-### 2.D.3 Projet — 100%
+| Fonctionnalité                                 | Statut |
+| ---------------------------------------------- | ------ |
+| Formats prédéfinis                             | ✅     |
+| Format personnalisé (pixels)                   | ✅     |
+| Redistribution auto des éléments au changement | ❌     |
+| Couleur page                                   | ✅     |
+| Marges                                         | ✅     |
+| Grille alignement                              | ❌     |
+| Magnétisme (option)                            | ❌     |
 
-| Fonctionnalité     | Statut |
-| ------------------ | ------ |
-| Fichier projet .kh | ✅     |
-| Réimport projet    | ✅     |
+#### Légende
+
+| Fonctionnalité                                 | Statut |
+| ---------------------------------------------- | ------ |
+| Afficher/masquer chaque légende                | ✅     |
+| Titre, sous-titre, note                        | ✅     |
+| Pastille incitation                            | ❌     |
+| Style : police, taille, couleur                | ✅     |
+| Arrière-plan : option, couleur, opacité        | ✅     |
+| Modifications appliquées à toutes les légendes | ✅     |
+
+#### Indications géographiques - Échelle
+
+| Fonctionnalité                      | Statut |
+| ----------------------------------- | ------ |
+| Formes prédéfinies : ligne ou boîte | ⚠️     |
+| Distance figurée                    | ✅     |
+| Unité                               | ✅     |
+| Couleur                             | ❌     |
+
+#### Indications géographiques - Orientation
+
+| Fonctionnalité           | Statut |
+| ------------------------ | ------ |
+| Flèche ou rose des vents | ⚠️     |
+| Taille, couleur          | ⚠️     |
+
+#### Indications géographiques - Carte en encart
+
+| Fonctionnalité                               | Statut |
+| -------------------------------------------- | ------ |
+| Globe ou planisphère                         | ❌     |
+| Taille                                       | ❌     |
+| Couleur fenêtre cadrage                      | ❌     |
+| Couleurs encart ou réutiliser fond principal | ❌     |
+| Zoom, centrage                               | ❌     |
+
+#### Annotations - Texte
+
+| Fonctionnalité                                | Statut |
+| --------------------------------------------- | ------ |
+| Placement zone texte sur page                 | ✅     |
+| Style prédéfini ou personnalisé               | ✅     |
+| Édition contenu dans panneau                  | ✅     |
+| Sélection sur page → modification/suppression | ✅     |
+
+#### Annotations - Forme
+
+| Fonctionnalité                                    | Statut |
+| ------------------------------------------------- | ------ |
+| Formes : flèche, ligne, rond, rectangle, triangle | ⚠️     |
+| Réglages : épaisseur, courbe, pointillé, couleur  | ⚠️     |
+| Sélection → modification/suppression              | ✅     |
+
+#### Annotations - Dessin
+
+| Fonctionnalité                                      | Statut |
+| --------------------------------------------------- | ------ |
+| Ligne ou zone (tracé fermé)                         | ❌     |
+| Épaisseur, lissage, couleur contour/fond, pointillé | ❌     |
+| Sélection → modification/suppression                | ❌     |
+
+#### Annotations - Image
+
+| Fonctionnalité                       | Statut |
+| ------------------------------------ | ------ |
+| Import jpg, png                      | ✅     |
+| Placement libre sur page             | ✅     |
+| Taille, opacité                      | ⚠️     |
+| Sélection → modification/suppression | ✅     |
+
+#### Déficiences visuelles
+
+| Fonctionnalité                                         | Statut |
+| ------------------------------------------------------ | ------ |
+| Simulation daltonisme (protanopie, deutéranopie, etc.) | ✅     |
+| Liste filtres fournie                                  | ✅     |
+| Prévisualisation uniquement (pas d'effet sur export)   | ✅     |
 
 ---
 
-## 2.E. Sauvegarde — 95%
+## 2.D. Téléchargement
 
-| Fonctionnalité                     | Statut |
-| ---------------------------------- | ------ |
-| Enregistrement auto (30s debounce) | ✅     |
-| Nommage + date modification        | ✅     |
-| Accès écran accueil                | ✅     |
-| Duplication sauvegarde             | ✅     |
-| Téléchargement .kh                 | ✅     |
-| Réimport projet                    | ✅     |
-| Historique undo/redo (store + UI)  | ✅     |
-| Sauvegarde IndexedDB               | ✅     |
+### 2.D.1 Carte
 
----
+| Fonctionnalité                                       | Statut |
+| ---------------------------------------------------- | ------ |
+| JPG haute résolution (bitmap)                        | ✅     |
+| SVG avec calques organisés (vectoriel)               | ✅     |
+| Calques organisés par éléments page + visualisations | ✅     |
 
-## 2.F. Exemples introductifs — 90%
+### 2.D.2 Données
 
-| Fonctionnalité       | Statut | Note                                  |
-| -------------------- | ------ | ------------------------------------- |
-| 5 projets exemples   | ✅     | Population, Cities, World, GDP, Flows |
-| Vignettes            | ⚠️     | Référencées mais fichiers manquants   |
-| Filtres par critères | ✅     | 6 catégories                          |
-| Chargement data      | ✅     | Fetch async avec gestion erreurs      |
+| Fonctionnalité                                                 | Statut |
+| -------------------------------------------------------------- | ------ |
+| CSV (données tabulaires avec modifications)                    | ✅     |
+| GeoJSON (fichier géo avec modifications)                       | ✅     |
+| Fond de carte utilisé                                          | ✅     |
+| Résultat jointure données + fond (sans couches additionnelles) | ✅     |
 
----
+### 2.D.3 Projet
 
-## 2.G. Aide et pages annexes — 40%
-
-| Fonctionnalité                     | Statut |
-| ---------------------------------- | ------ |
-| Textes d'accompagnement (944 clés) | ✅     |
-| Facilité modification (Paraglide)  | ✅     |
-| Tooltips                           | ⚠️ 80% |
-| Liens vers aide externe            | ⚠️ 50% |
-| Pages annexes (mentions légales)   | ⚠️ 20% |
-| Documentation utilisateur complète | 🔧     |
+| Fonctionnalité | Statut |
+| -------------- | ------ |
+| Fichier .kh    | ✅     |
+| Réimportable   | ✅     |
 
 ---
 
-## 3. Spécifications techniques — 85%
+## 2.E. Sauvegarde
 
-### Technologies — 95%
+### 2.E.1 Auto (navigateur)
 
-| Technologie                  | Statut |
-| ---------------------------- | ------ |
-| DuckDB WASM + SPATIAL        | ✅     |
-| Deck.gl (GeoArrow layers)    | ✅     |
-| d3.js (projections)          | ✅     |
-| Carbon Design System         | ✅     |
-| SvelteKit 5 + Runes          | ✅     |
-| Paraglide JS (i18n)          | ✅     |
-| MapLibre                     | ✅     |
-| @observablehq/plot           | ✅     |
-| chroma.js                    | 🔧     |
-| Analytics (Google Analytics) | 🔧     |
+| Fonctionnalité                             | Statut |
+| ------------------------------------------ | ------ |
+| Enregistrement à chaque action             | ✅     |
+| Nommage utilisateur ou auto avec incrément | ✅     |
+| Date dernière modification                 | ✅     |
+| Liste à l'accueil + menu principal         | ✅     |
+| Duplication possible                       | ✅     |
 
-### Performances — 75%
+### 2.E.2 Manuelle (fichier)
 
-| Fonctionnalité          | Statut |
-| ----------------------- | ------ |
-| Chargement rapide       | ✅     |
-| Écrans loaders          | ✅     |
-| Caching PWA (workbox)   | ✅     |
-| Code splitting          | ⚠️ 80% |
-| Virtualisation tableaux | ⚠️ 50% |
+| Fonctionnalité                   | Statut |
+| -------------------------------- | ------ |
+| Téléchargement .kh               | ✅     |
+| Réimport pour reprendre/modifier | ✅     |
 
-### Compatibilité — 90%
+---
 
-| Fonctionnalité                | Statut |
-| ----------------------------- | ------ |
-| Chrome, Firefox, Edge, Safari | ✅     |
-| WebAssembly requis            | ✅     |
-| IndexedDB requis              | ✅     |
+## 2.F. Exemples
 
-### Responsive design — 30%
+| Fonctionnalité                                         | Statut |
+| ------------------------------------------------------ | ------ |
+| Projets exemples sur page d'accueil                    | ✅     |
+| Vignettes                                              | ⚠️     |
+| Filtres par critères                                   | ❌     |
+| Données variées, fonds variés, visualisations diverses | ✅     |
+
+---
+
+## 2.G. Aide
+
+| Fonctionnalité                         | Statut |
+| -------------------------------------- | ------ |
+| Textes d'accompagnement dans l'outil   | ⚠️     |
+| Tooltips                               | ⚠️     |
+| Liens vers aide externe (site Atelier) | ❌     |
+| Facilement modifiables (Paraglide)     | ✅     |
+
+---
+
+## 3. Spécifications techniques
+
+### 3.A Stack
+
+| Techno                                        | Statut |
+| --------------------------------------------- | ------ |
+| DuckDB WASM + SPATIAL                         | ✅     |
+| Deck.gl                                       | ✅     |
+| MapLibre GL JS                                | ✅     |
+| d3-geo                                        | ✅     |
+| chroma.js (implémentation native équivalente) | ✅     |
+| @observablehq/plot                            | ✅     |
+| Carbon Design System                          | ✅     |
+| SvelteKit 5 + Runes                           | ✅     |
+| Paraglide JS                                  | ✅     |
+
+### 3.B Performances
+
+| Fonctionnalité                             | Statut |
+| ------------------------------------------ | ------ |
+| Chargement rapide (code splitting)         | ✅     |
+| Loaders/squelettes pour opérations longues | ✅     |
+
+### 3.C Compatibilité
+
+| Fonctionnalité                                   | Statut |
+| ------------------------------------------------ | ------ |
+| Chrome, Firefox, Edge, Safari (desktop + mobile) | ⚠️     |
+
+### 3.D Responsive
+
+| Fonctionnalité                                        | Statut |
+| ----------------------------------------------------- | ------ |
+| Desktop : panneau latéral gauche, barre outils gauche | ✅     |
+| Tablette : adaptation                                 | ❌     |
+| Mobile : barre outils en bas, en-tête simplifié       | ❌     |
+
+### 3.E Accessibilité
+
+| Fonctionnalité                      | Statut |
+| ----------------------------------- | ------ |
+| RGAA conformité                     | ❌     |
+| Navigation clavier                  | ⚠️     |
+| Contrastes WCAG (Carbon compatible) | ✅     |
+
+### 3.F Raccourcis clavier
 
 | Fonctionnalité                 | Statut |
 | ------------------------------ | ------ |
-| Adaptation desktop             | ✅     |
-| Mobile toolbar (3 breakpoints) | ⚠️ 50% |
-| Adaptation tablettes           | 🔧     |
-| Adaptation mobile              | 🔧     |
-| Breakpoints CSS harmonisés     | 🔧     |
+| 1/2/3 : navigation étapes      | ✅     |
+| Chaque outil : raccourci dédié | ⚠️     |
+| Échap : fermer panneau/annuler | ✅     |
 
-### Accessibilité — 50%
-
-| Fonctionnalité               | Statut |
-| ---------------------------- | ------ |
-| ARIA labels (46 occurrences) | ✅     |
-| Navigation clavier (Carbon)  | ✅     |
-| Focus ring (Carbon)          | ✅     |
-| Audit WCAG AA                | 🔧     |
-| Color contrast audit         | 🔧     |
-
-### Raccourcis clavier — 100%
-
-| Fonctionnalité                     | Statut |
-| ---------------------------------- | ------ |
-| 1-2-3 (navigation onglets toolbar) | ✅     |
-| ⌘+/-/0 (zoom carte/page)           | ✅     |
-| ⌥Z (toggle zoom mode)              | ✅     |
-| Escape (fermer modales)            | ✅     |
-| ⇧⌘N (nouveau projet)               | ✅     |
-| ⇧⌘O (ouvrir projet)                | ✅     |
-| ⌘S (sauvegarde)                    | ✅     |
-
-### Multilinguisme — 100%
+### 3.G Multilinguisme
 
 | Fonctionnalité                           | Statut |
 | ---------------------------------------- | ------ |
 | Français + Anglais                       | ✅     |
-| Changement via menu                      | ✅     |
-| Détection auto langue premier load       | ✅     |
-| Compatibilité traduction auto navigateur | ✅     |
+| Détection auto langue navigateur/système | ✅     |
+| Changement via menu principal            | ✅     |
+| Compatible traduction auto navigateur    | ✅     |
 
-### Sécurité — 95%
+### 3.H Analytics
+
+| Fonctionnalité                   | Statut |
+| -------------------------------- | ------ |
+| Google Analytics (ou équivalent) | ❌     |
+| Suivi audience et interactions   | ❌     |
+
+### 3.I Sécurité
+
+| Fonctionnalité                      | Statut |
+| ----------------------------------- | ------ |
+| Données 100% client-side            | ✅     |
+| Aucune transmission serveur         | ✅     |
+| RGPD conforme (cookies, navigation) | ⚠️     |
+
+### 3.J Hébergement
+
+| Fonctionnalité                                       | Statut |
+| ---------------------------------------------------- | ------ |
+| Serveurs Sciences Po                                 | ❌     |
+| Option hébergement externe                           | ❌     |
+| GitHub (dépôt privé pendant dev, public à la sortie) | ✅     |
+
+### 3.K Licence
+
+| Fonctionnalité                                | Statut |
+| --------------------------------------------- | ------ |
+| MIT                                           | ✅     |
+| © Atelier de cartographie / Sciences Po, 2025 | ✅     |
+
+---
+
+## 4. Structure UI
+
+### 4.A Parcours utilisateur
+
+| Fonctionnalité                                       | Statut |
+| ---------------------------------------------------- | ------ |
+| Accueil : Nouveau projet                             | ✅     |
+| Accueil : Ouvrir projet/sauvegarde                   | ✅     |
+| Accueil : Essayer avec exemple                       | ✅     |
+| Étape Données tabulaire : Contrôler les données      | ✅     |
+| Étape Données tabulaire : Géolocaliser les données   | ✅     |
+| Étape Données tabulaire : Joindre à un fond de carte | ✅     |
+| Étape Données fichier géo : Contrôler les données    | ✅     |
+| Étape Données fichier géo : Enrichir les données     | ✅     |
+| Étape Visualisations : Choisir/créer visualisation   | ✅     |
+| Étape Visualisations : Paramétrer visualisation      | ✅     |
+| Étape Visualisations : Personnaliser fond de carte   | ✅     |
+| Étape Visualisations : 5 outils                      | ✅     |
+| Étape Habillage : 5 outils                           | ✅     |
+| Fin : Télécharger carte/données/projet               | ✅     |
+
+### 4.B Design System
+
+| Fonctionnalité                        | Statut |
+| ------------------------------------- | ------ |
+| Carbon Design System (IBM)            | ✅     |
+| Personnalisation charte Sciences Po   | ⚠️     |
+| Composants créés si besoin spécifique | ✅     |
+
+### 4.C Interface
+
+| Fonctionnalité                                                     | Statut |
+| ------------------------------------------------------------------ | ------ |
+| En-tête : Menu principal, nom projet, aide, téléchargement         | ✅     |
+| Barre outils : 3 boutons étapes + outils contextuels               | ✅     |
+| Panneau latéral : Contenus, onglets, fil d'ariane, taille variable | ✅     |
+| Visionneuse : Carte + page, zoom, infobulles                       | ✅     |
+| Modales : Import, réinitialisation, actions particulières          | ✅     |
+
+### 4.D Responsive
+
+| Fonctionnalité                                                  | Statut |
+| --------------------------------------------------------------- | ------ |
+| Desktop : Barre outils gauche, panneau latéral affiché          | ✅     |
+| Mobile : Barre outils bas, panneau masquable, en-tête simplifié | ❌     |
+
+---
+
+## 5. Déploiement
+
+### 5.A Environnements
+
+| Fonctionnalité                        | Statut |
+| ------------------------------------- | ------ |
+| Préproduction (tests/validation)      | ❌     |
+| Production (après validation preprod) | ❌     |
+| Déploiement versionné et documenté    | ❌     |
+
+### 5.B Documentation
 
 | Fonctionnalité              | Statut |
 | --------------------------- | ------ |
-| Données client-only         | ✅     |
-| Pas de transmission externe | ✅     |
-| Sanitization                | ✅     |
-
-### Hébergement — 90%
-
-| Fonctionnalité        | Statut |
-| --------------------- | ------ |
-| Build statique        | ✅     |
-| PWA (manifest, icons) | ✅     |
-| FTP ready             | ✅     |
-
-### Licence — 100%
-
-| Fonctionnalité | Statut |
-| -------------- | ------ |
-| MIT            | ✅     |
-
----
-
-## 4. Intégration UI/UX — 95%
-
-| Point CDC                           | Statut |
-| ----------------------------------- | ------ |
-| 4.A Parcours utilisateur (3 étapes) | ✅     |
-| 4.B Design System (Carbon)          | ✅     |
-| 4.C.1 En-tête (menu, nom projet)    | ✅     |
-| 4.C.2 Barre d'outils                | ✅     |
-| 4.C.3 Panneau latéral               | ✅     |
-| 4.C.4 Visionneuse (carte + zoom)    | ✅     |
-| 4.C.5 Fenêtres modales              | ✅     |
-| 4.D Maquettes Figma intégrées       | ✅     |
-
----
-
-## 5. Déploiement — 80%
-
-| Point CDC                      | Statut |
-| ------------------------------ | ------ |
-| 5.A Environnement preprod/prod | ⚠️     |
-| 5.B Documentation code         | ⚠️     |
-| 5.C Maintenance                | 🔧     |
-| GitHub repository              | ✅     |
-| Build statique                 | ✅     |
-
----
-
-### Avancement global : 73%
-
----
-
-## Résumé des 🔌 (UI prête, à connecter)
-
-### Blocage critique #1 : configure-visualization.svelte
-
-Le composant de 940 lignes utilise des `$state` locaux qui ne sont **jamais synchronisés** avec `visualizationStore`. Les changements sont perdus à l'unmount.
-
-**Solution** : Remplacer chaque `let variable = $state(value)` par des appels à `visualizationStore.updateVisualization()`.
+| Commentaires de code        | ⚠️     |
+| Guides d'utilisation        | ❌     |
+| Instructions d'installation | ⚠️     |
+| Exemples cas d'utilisation  | ❌     |
+| Dépôt GitHub maintenu       | ✅     |

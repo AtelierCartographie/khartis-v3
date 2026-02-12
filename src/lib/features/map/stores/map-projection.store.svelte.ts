@@ -27,6 +27,14 @@ class MapProjectionStore {
   reset(): void {
     this._state.projection = DEFAULT_MAP_PROJECTION;
   }
+
+  restoreFromSerialized(projection: MapProjectionType): void {
+    if (!projection || (projection !== 'mercator' && projection !== 'globe')) {
+      this.reset();
+      return;
+    }
+    this._state.projection = projection;
+  }
 }
 
 export const mapProjectionStore = new MapProjectionStore();

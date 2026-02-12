@@ -10,7 +10,7 @@
     ToolbarStep,
     VisualizationTools
   } from '$lib/features/commons/types/global';
-  import { m } from '$lib/paraglide/messages.js';
+  import * as m from '$lib/paraglide/messages';
   import { Button } from 'carbon-components-svelte';
   import {
     Add,
@@ -29,16 +29,16 @@
     View
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { selectTool } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
+  import { selectTool } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
+  import { VizSubTab } from './constants';
   import DataTab from './data-tab/data-tab.svelte';
   import ChooseVisualization from './visualization-tab/choose-visualization.svelte';
   import ConfigureVisualization from './visualization-tab/configure-visualization.svelte';
   import CustomizeBasemap from './visualization-tab/customize-basemap.svelte';
 
-  type VizSubTab = 'choose' | 'configure';
-  let activeVizSubTab = $state<VizSubTab>('choose');
+  let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
   const stepLabels = {
     [ToolbarStep.Data]: m.step_data(),
@@ -112,14 +112,14 @@
             kind="ghost"
             size="small"
             icon={Add}
-            iconDescription={m.new_visualization_button?.() ?? 'Ajouter'}
+            iconDescription={m.new_visualization_button()}
           />
         {/if}
         <Button
           kind="ghost"
           size="small"
           icon={ChevronDown}
-          iconDescription={m.close?.() ?? 'Fermer'}
+          iconDescription={m.close()}
           on:click={handleClose}
         />
       </div>
@@ -130,7 +130,7 @@
         <DataTab />
       {:else if globalState.selectedStep === ToolbarStep.Visualizations}
         <div class="viz-content">
-          {#if activeVizSubTab === 'choose'}
+          {#if activeVizSubTab === VizSubTab.CHOOSE}
             <ChooseVisualization />
           {:else}
             <ConfigureVisualization />
@@ -139,23 +139,21 @@
         </div>
       {:else if globalState.selectedStep === ToolbarStep.Styling}
         <div class="styling-tools-grid">
-          <p class="styling-intro">
-            Sélectionnez un outil pour personnaliser votre carte
-          </p>
+          <p class="styling-intro">{m.styling_tools_intro()}</p>
           <div class="tools-grid">
             <button
               class="tool-btn"
               onclick={() => handleStylingToolSelect(StylingTools.Format)}
             >
               <Document size={32} />
-              <span>{m.tool_format?.() ?? 'Format'}</span>
+              <span>{m.tool_format()}</span>
             </button>
             <button
               class="tool-btn"
               onclick={() => handleStylingToolSelect(StylingTools.Legend)}
             >
               <ListBoxes size={32} />
-              <span>{m.tool_legend?.() ?? 'Légende'}</span>
+              <span>{m.tool_legend()}</span>
             </button>
             <button
               class="tool-btn"
@@ -163,14 +161,14 @@
                 handleStylingToolSelect(StylingTools.GeoIndications)}
             >
               <Earth size={32} />
-              <span>{m.tool_geo_indications?.() ?? 'Indications géo.'}</span>
+              <span>{m.tool_geo_indications()}</span>
             </button>
             <button
               class="tool-btn"
               onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
             >
               <Pen size={32} />
-              <span>{m.tool_annotations?.() ?? 'Annotations'}</span>
+              <span>{m.tool_annotations()}</span>
             </button>
             <button
               class="tool-btn"
@@ -178,7 +176,7 @@
                 handleStylingToolSelect(StylingTools.ColorBlindness)}
             >
               <View size={32} />
-              <span>{m.tool_color_blindness?.() ?? 'Daltonisme'}</span>
+              <span>{m.tool_color_blindness()}</span>
             </button>
           </div>
         </div>
@@ -188,14 +186,18 @@
     {#if globalState.selectedStep === ToolbarStep.Visualizations}
       <div class="viz-sub-tabs">
         <button
-          class={clsx('sub-tab', { selected: activeVizSubTab === 'choose' })}
-          onclick={() => (activeVizSubTab = 'choose')}
+          class={clsx('sub-tab', {
+            selected: activeVizSubTab === VizSubTab.CHOOSE
+          })}
+          onclick={() => (activeVizSubTab = VizSubTab.CHOOSE)}
         >
           {m.mobile_viz_tab_choose()}
         </button>
         <button
-          class={clsx('sub-tab', { selected: activeVizSubTab === 'configure' })}
-          onclick={() => (activeVizSubTab = 'configure')}
+          class={clsx('sub-tab', {
+            selected: activeVizSubTab === VizSubTab.CONFIGURE
+          })}
+          onclick={() => (activeVizSubTab = VizSubTab.CONFIGURE)}
         >
           {m.mobile_viz_tab_customize()}
         </button>
@@ -262,7 +264,10 @@
     </nav>
   {/if}
 
-  <nav class="mobile-bottom-nav app-shadow" aria-label="Navigation principale">
+  <nav
+    class="mobile-bottom-nav app-shadow"
+    aria-label={m.navigation_primary_aria()}
+  >
     <button
       class={clsx('nav-tab', { selected: isStepSelected(ToolbarStep.Data) })}
       onclick={() => selectStep(ToolbarStep.Data)}

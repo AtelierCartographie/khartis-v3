@@ -1,13 +1,14 @@
 <script lang="ts">
+  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     AnnotationKind,
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
-  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import {
     createColorValue,
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     Column,
@@ -49,6 +50,11 @@
   let saturation = $state(0);
   let lightness = $state(0);
 
+  let fillColor = $state('#ffffff');
+  let fillHue = $state(0);
+  let fillSaturation = $state(0);
+  let fillLightness = $state(100);
+
   $effect(() => {
     if (defaultStyle.drawingType) drawingType = defaultStyle.drawingType;
     if (defaultStyle.strokeColor) {
@@ -65,6 +71,27 @@
         lightness = c.lightness ?? 0;
         const cv = createColorValue('#000000', hue, saturation, lightness);
         strokeColor = cv.hex;
+      }
+    }
+    if (defaultStyle.fillColor) {
+      if (typeof defaultStyle.fillColor === 'string') {
+        fillColor = defaultStyle.fillColor as string;
+        const hsl = hexToHsl(fillColor);
+        fillHue = hsl.hue;
+        fillSaturation = hsl.saturation;
+        fillLightness = hsl.lightness;
+      } else if (isStrokeColorDescriptor(defaultStyle.fillColor)) {
+        const c = defaultStyle.fillColor;
+        fillHue = c.hue ?? 0;
+        fillSaturation = c.saturation ?? 0;
+        fillLightness = c.lightness ?? 100;
+        const cv = createColorValue(
+          '#ffffff',
+          fillHue,
+          fillSaturation,
+          fillLightness
+        );
+        fillColor = cv.hex;
       }
     }
   });
@@ -88,18 +115,31 @@
   function handleSmoothnessChange(e: CustomEvent<number>) {
     annotationsActions.updateDefaultStyle({ smoothness: e.detail });
   }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
+  }
 </script>
 
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <p class="field-label">Type</p>
+      <p class="field-label">{m.annotations_type()}</p>
       <RadioButtonGroup
         selected={drawingType}
         on:change={handleDrawingTypeChange}
       >
-        <RadioButton labelText="Ligne" value={DrawingType.LINE} />
-        <RadioButton labelText="Zone" value={DrawingType.ZONE} />
+        <RadioButton
+          labelText={m.annotations_drawing_line()}
+          value={DrawingType.LINE}
+        />
+        <RadioButton
+          labelText={m.annotations_drawing_area()}
+          value={DrawingType.ZONE}
+        />
       </RadioButtonGroup>
     </Column>
   </Row>
@@ -107,12 +147,9 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">
-          Ajouter un dessin ou sélectionner un élément existant pour le modifier
-          ci-dessous.
-        </p>
+        <p class="helper">{m.annotations_drawing_helper()}</p>
         <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
-          Ajouter un dessin
+          {m.annotations_add_drawing()}
         </Button>
       </div>
     </Column>
@@ -122,7 +159,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Épaisseur"
+          labelText={m.thickness()}
           value={defaultStyle.strokeWidth || 2}
           min={1}
           max={10}
@@ -138,7 +175,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Lissage (%)"
+          labelText={m.annotations_smoothness()}
           value={defaultStyle.smoothness ?? 50}
           min={0}
           max={100}
@@ -154,7 +191,7 @@
     <Column>
       <div class="section">
         <div class="toggle-row">
-          <span class="toggle-label">Pointillés</span>
+          <span class="toggle-label">{m.dashed()}</span>
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
@@ -167,8 +204,8 @@
               });
             }}
           >
-            <span slot="labelA">Oui</span>
-            <span slot="labelB">Non</span>
+            <span slot="labelA">{m.yes()}</span>
+            <span slot="labelB">{m.no()}</span>
           </Toggle>
         </div>
       </div>
@@ -183,7 +220,7 @@
           hue={hue}
           saturation={saturation}
           lightness={lightness}
-          triggerLabel="Couleur"
+          triggerLabel={m.color()}
           onValidate={({
             hex,
             hue,
@@ -207,18 +244,51 @@
     </Column>
   </Row>
 
+  {#if drawingType === DrawingType.ZONE}
+    <Row>
+      <Column>
+        <div class="section">
+          <ColorPicker
+            hex={fillColor}
+            hue={fillHue}
+            saturation={fillSaturation}
+            lightness={fillLightness}
+            triggerLabel={m.annotations_fill_color()}
+            onValidate={({
+              hex,
+              hue,
+              saturation,
+              lightness
+            }: {
+              hex: string;
+              hue: number;
+              saturation: number;
+              lightness: number;
+            }) => {
+              fillColor = hex;
+              annotationsActions.updateDefaultStyle({
+                fillColor: { hue, saturation, lightness }
+              });
+            }}
+            onCancel={() => {}}
+          />
+        </div>
+      </Column>
+    </Row>
+  {/if}
+
   <Row>
     <Column>
       <div class="section">
         <Slider
-          labelText="Opacité"
-          value={(defaultStyle.opacity ?? 1) * 100}
+          labelText={m.opacity()}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
           stepMultiplier={5}
           on:change={(e) =>
-            annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 })}
+            annotationsActions.updateDefaultStyle({ opacity: e.detail })}
         />
       </div>
     </Column>
@@ -240,11 +310,11 @@
               selected.type === AnnotationKind.DRAWING &&
               annotationsActions.removeAnnotation(selected.id)}
           >
-            Supprimer le dessin
+            {m.annotations_delete_drawing()}
           </Button>
         {:else}
           <Button kind="danger-tertiary" icon={TrashCan} disabled
-            >Supprimer le dessin</Button
+            >{m.annotations_delete_drawing()}</Button
           >
         {/if}
       </div>

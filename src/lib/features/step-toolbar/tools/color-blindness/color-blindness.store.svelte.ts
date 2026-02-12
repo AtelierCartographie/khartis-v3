@@ -15,10 +15,18 @@ const { actions, getState } = createToolStore<
   }
 >(DEFAULT_STATE, (s) => ({
   toggleEnabled: () => {
-    s.enabled = !s.enabled;
+    const nextEnabled = !s.enabled;
+    s.enabled = nextEnabled;
+
+    if (!nextEnabled) {
+      s.simulationType = ColorBlindnessType.NONE;
+    } else if (s.simulationType === ColorBlindnessType.NONE) {
+      s.simulationType = ColorBlindnessType.DEUTERANOPIA;
+    }
   },
   setSimulationType: (type: ColorBlindnessType) => {
     s.simulationType = type;
+    s.enabled = type !== ColorBlindnessType.NONE;
   }
 }));
 

@@ -159,7 +159,6 @@ function calculateBoundsFromGeometryData(
   const maxSamples = Math.min(jsTable.numRows, 10000);
   const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
 
-  // Log first value for debugging
   if (jsTable.numRows > 0) {
     const firstGeom = geomVector.get(0);
     logger.debug('First geometry value in column', LogCategory.MAP, {

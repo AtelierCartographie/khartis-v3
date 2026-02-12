@@ -3,6 +3,7 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
@@ -46,11 +47,20 @@
   const bgHex = $derived(
     hslToHex(bgColor.hue, bgColor.saturation, bgColor.lightness)
   );
+  const textColor = $derived(legendState.style.textColor);
+  const textColorHex = $derived(
+    hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
+  );
 
   const tabItems = $derived([
     { icon: Document, label: m.legend_content(), iconSize: 20 },
     { icon: TextFont, label: m.legend_style(), iconSize: 20 }
   ]);
+
+  $effect(() => {
+    void visualizationStore.version;
+    legendActions.syncWithVisualizations();
+  });
 
   const activeTabIndex = $derived(
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
@@ -88,6 +98,14 @@
     if (localFontSize !== legendState.style.fontSize) {
       legendActions.updateStyle({ fontSize: localFontSize });
     }
+  }
+
+  function handleTextColorChange(color: {
+    hue: number;
+    saturation: number;
+    lightness: number;
+  }): void {
+    legendActions.updateStyle({ textColor: color });
   }
 
   function handleBackgroundEnabledChange(enabled: boolean): void {
@@ -229,6 +247,25 @@
               <SelectItem value={s} text={String(s)} />
             {/each}
           </Select>
+        </Column>
+      </Row>
+
+      <Row>
+        <Column>
+          <ColorPicker
+            triggerLabel={m.legend_text_color()}
+            hex={textColorHex}
+            hue={textColor.hue}
+            saturation={textColor.saturation}
+            lightness={textColor.lightness}
+            onValidate={({
+              hue,
+              saturation,
+              lightness
+            }: ColorPickerValidateEvent) => {
+              handleTextColorChange({ hue, saturation, lightness });
+            }}
+          />
         </Column>
       </Row>
 

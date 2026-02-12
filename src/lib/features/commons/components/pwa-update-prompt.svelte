@@ -1,5 +1,6 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     InlineNotification,
     NotificationActionButton
@@ -20,7 +21,7 @@
       }
     },
     onRegisterError(error) {
-      console.error('SW registration error:', error);
+      logger.error('SW registration error', LogCategory.SYSTEM, error);
     }
   });
 

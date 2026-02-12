@@ -5,17 +5,22 @@
   import { Code, List } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
   import { PROJECTIONS } from './data';
+  import { projectionActions } from './projection.store.svelte';
 
   const dispatch = createEventDispatcher<{
     apply: { code: string };
     reset: void;
   }>();
 
-  let activeTabIndex: number = 0;
-  let isCodeView: boolean = false;
-  let crsCode: string = '';
+  let activeTabIndex = $state(0);
+  let isCodeView = $state(false);
+  let crsCode = $state('');
 
-  const items = PROJECTIONS.map((p) => ({ id: p.id, text: p.title }));
+  const items = PROJECTIONS.map((p) => ({
+    id: p.id,
+    projectionId: p.projectionId,
+    text: p.title
+  }));
   const catalogueLabel = m.projection_catalog_label();
   const viewCodeLabel = m.projection_view_code();
   const otherSearchPlaceholder = m.projection_other_search_placeholder();
@@ -41,6 +46,7 @@
   ];
 
   function handleViewChange(index: number): void {
+    activeTabIndex = index;
     isCodeView = index === 1;
   }
 
@@ -56,13 +62,23 @@
     if (isEmpty()) return;
     dispatch('apply', { code: crsCode.trim() });
   }
+
+  function handleCatalogueSelect(
+    event: CustomEvent<{ selectedItem?: { projectionId?: string; id: string } }>
+  ): void {
+    const selectedProjectionId =
+      event.detail.selectedItem?.projectionId ?? event.detail.selectedItem?.id;
+    if (!selectedProjectionId) return;
+
+    projectionActions.setSelected(selectedProjectionId);
+  }
 </script>
 
 <div id="khartis-projection-other-tool">
   <div class="other-proj">
     <ToggleTabs
       items={viewTabs}
-      bind:activeIndex={activeTabIndex}
+      activeIndex={activeTabIndex}
       onChange={handleViewChange}
       className="projection-view-tabs"
       hideInactiveLabel={true}
@@ -74,6 +90,7 @@
           items={items}
           size="sm"
           placeholder={otherSearchPlaceholder}
+          on:select={handleCatalogueSelect}
         />
       </div>
     {:else}

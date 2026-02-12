@@ -19,6 +19,7 @@ export interface BasemapMetadata {
   file: string;
   title: string;
   description: string;
+  level?: string;
   source: string;
   date: string;
   bbox: [number, number, number, number];

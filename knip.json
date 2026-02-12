@@ -16,9 +16,13 @@
   "project": ["src/**/*.{ts,js,svelte}"],
   "ignore": [
     "**/*.d.ts",
-    "src/lib/features/data-pipeline/__tests__/test-file-loader.ts"
+    "src/lib/features/data-pipeline/__tests__/test-file-loader.ts",
+    "src/paraglide/**/*.js",
+    "src/paraglide/runtime.js",
+    "src/paraglide/server.js",
+    "src/paraglide/registry.js"
   ],
-  "ignoreDependencies": ["@commitlint/cli"],
+  "ignoreDependencies": ["@commitlint/cli", "@inlang/paraglide-js"],
   "ignoreBinaries": ["semantic-release", "run"],
   "ignoreExportsUsedInFile": true,
   "rules": {

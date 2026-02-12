@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FilterStats } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     filterStats: FilterStats;
@@ -13,10 +14,11 @@
 {#if hasActiveFilters}
   <div class="table-header">
     <div class="table-info">
-      <span class="filter-count">
-        {filterStats.filtered.toLocaleString('fr-FR')} / {filterStats.total.toLocaleString(
-          'fr-FR'
-        )} lignes
+      <span class="filter-count" title={m.filter_count_tooltip()}>
+        {m.filter_count_display({
+          filtered: filterStats.filtered.toLocaleString('fr-FR'),
+          total: filterStats.total.toLocaleString('fr-FR')
+        })}
       </span>
     </div>
   </div>
@@ -26,23 +28,25 @@
   .table-header {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03) 0;
-    margin-bottom: var(--cds-spacing-03);
+    gap: 4px;
+    padding: 4px 0;
+    margin-bottom: 4px;
   }
 
   .table-info {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    font-size: 0.875rem;
-    color: var(--cds-text-02);
+    gap: 8px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    color: var(--cds-text-02, #525252);
   }
 
   .filter-count {
-    font-size: 0.85rem;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--cds-text-02);
+    letter-spacing: 0.32px;
+    color: var(--cds-text-02, #525252);
   }
 </style>

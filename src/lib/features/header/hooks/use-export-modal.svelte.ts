@@ -6,14 +6,18 @@ import {
   type MapExportFormat,
   type DataExportFormat,
   type ExportTabType,
+  type ExportResolution,
   ExportTab,
   MAP_FORMAT,
-  DATA_FORMAT
+  DATA_FORMAT,
+  EXPORT_RESOLUTION,
+  RESOLUTION_DIMENSIONS
 } from '../types';
 import {
   exportProject,
   exportMapAsSvg,
   exportMapAsJpg,
+  exportMapAsPng,
   exportData,
   ExportError
 } from '../services/export.service';
@@ -25,6 +29,7 @@ export interface UseExportModalReturn {
   readonly fileName: string;
   readonly mapFormat: MapExportFormat;
   readonly dataFormat: DataExportFormat;
+  readonly resolution: ExportResolution;
 
   open: () => void;
   close: () => void;
@@ -32,6 +37,7 @@ export interface UseExportModalReturn {
   setFileName: (name: string) => void;
   setMapFormat: (format: MapExportFormat) => void;
   setDataFormat: (format: DataExportFormat) => void;
+  setResolution: (resolution: ExportResolution) => void;
   executeExport: () => Promise<void>;
 }
 
@@ -42,6 +48,7 @@ export function useExportModal(): UseExportModalReturn {
   let fileName = $state(projectStore.projectName || 'untitled');
   let mapFormat = $state<MapExportFormat>(MAP_FORMAT.SVG);
   let dataFormat = $state<DataExportFormat>(DATA_FORMAT.CSV);
+  let resolution = $state<ExportResolution>(EXPORT_RESOLUTION.HD_1080P);
 
   function open(): void {
     fileName = projectStore.projectName || 'untitled';
@@ -69,6 +76,10 @@ export function useExportModal(): UseExportModalReturn {
     dataFormat = format;
   }
 
+  function setResolution(res: ExportResolution): void {
+    resolution = res;
+  }
+
   async function executeExport(): Promise<void> {
     if (fileName !== projectStore.projectName) {
       projectStore.updateProjectName(fileName);
@@ -82,13 +93,17 @@ export function useExportModal(): UseExportModalReturn {
           await exportProject(fileName);
           break;
 
-        case ExportTab.MAP:
+        case ExportTab.MAP: {
+          const dims = RESOLUTION_DIMENSIONS[resolution];
           if (mapFormat === MAP_FORMAT.SVG) {
             await exportMapAsSvg(fileName);
+          } else if (mapFormat === MAP_FORMAT.PNG) {
+            await exportMapAsPng(fileName, dims.width, dims.height);
           } else {
-            await exportMapAsJpg(fileName);
+            await exportMapAsJpg(fileName, dims.width, dims.height);
           }
           break;
+        }
 
         case ExportTab.DATA:
           await exportData(fileName, dataFormat);
@@ -133,6 +148,9 @@ export function useExportModal(): UseExportModalReturn {
     get dataFormat() {
       return dataFormat;
     },
+    get resolution() {
+      return resolution;
+    },
 
     open,
     close,
@@ -140,6 +158,7 @@ export function useExportModal(): UseExportModalReturn {
     setFileName,
     setMapFormat,
     setDataFormat,
+    setResolution,
     executeExport
   };
 }
