@@ -17,7 +17,9 @@ export async function saveToStorage<T>(key: string, data: T): Promise<void> {
         error
       }
     );
-    throw new Error('Storage quota exceeded or storage unavailable');
+    throw new Error('Storage quota exceeded or storage unavailable', {
+      cause: error
+    });
   }
 }
 

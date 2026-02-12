@@ -85,7 +85,8 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
     throw new Error(
       m.pipeline_error_zip_extract_failed({
         error: error instanceof Error ? error.message : String(error)
-      })
+      }),
+      { cause: error }
     );
   }
 }
