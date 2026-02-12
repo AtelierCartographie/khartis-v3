@@ -18,6 +18,7 @@
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
   import { onMount, untrack } from 'svelte';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
@@ -331,7 +332,7 @@
 
   // Pre-index cellHighlights into a Map for O(1) lookup instead of O(n) .find()
   const cellHighlightMap = $derived.by(() => {
-    const map = new Map<string, 'exact' | 'contains' | 'partial'>();
+    const map = new SvelteMap<string, 'exact' | 'contains' | 'partial'>();
     for (const h of cellHighlights) {
       map.set(`${h.rowId}:${h.columnName}`, h.type);
     }
@@ -356,7 +357,7 @@
 
   // Pre-compute geoid column names for O(1) lookup in TableRow
   const geoidColumns = $derived.by(() => {
-    const set = new Set<string>();
+    const set = new SvelteSet<string>();
     for (const [name, a] of tableData.columnAnalysis) {
       if (
         a?.semioType === 'geoid' &&
