@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import {
     createColorValue,
     hexToHsl
   } from '$lib/features/commons/utils/color-utils';
+  import * as m from '$lib/paraglide/messages';
   import {
     Button,
     Column,
@@ -41,11 +42,11 @@
   }
 
   const shapes = [
-    { value: 'arrow', text: 'Flèche' },
-    { value: 'rectangle', text: 'Rectangle' },
-    { value: 'circle', text: 'Cercle' },
-    { value: 'triangle', text: 'Triangle' },
-    { value: 'star', text: 'Étoile' }
+    { value: 'arrow', text: m.annotations_shape_arrow() },
+    { value: 'line', text: m.annotations_shape_line() },
+    { value: 'rectangle', text: m.annotations_shape_rectangle() },
+    { value: 'circle', text: m.annotations_shape_circle() },
+    { value: 'triangle', text: m.triangle() }
   ];
 
   let selectedShape = $state('arrow');
@@ -90,13 +91,20 @@
       strokeStyle: on ? 'dotted' : 'solid'
     });
   }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
+  }
 </script>
 
 <Grid noGutter fullWidth>
   <Row>
     <Column>
       <Select
-        labelText="Forme"
+        labelText={m.shape()}
         selected={selectedShape}
         on:change={(e) =>
           (selectedShape = (e.currentTarget as HTMLSelectElement).value)}
@@ -111,12 +119,9 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">
-          Ajouter une forme ou sélectionner un élément existant pour le modifier
-          ci-dessous.
-        </p>
+        <p class="helper">{m.annotations_shape_helper()}</p>
         <Button kind="primary" icon={Add} on:click={handleAddShape}>
-          Ajouter une forme
+          {m.annotations_add_shape()}
         </Button>
       </div>
     </Column>
@@ -126,7 +131,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Épaisseur"
+          labelText={m.thickness()}
           value={defaultStyle.strokeWidth || 2}
           min={1}
           max={10}
@@ -142,7 +147,7 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Courbe (%)"
+          labelText={m.annotations_curvature()}
           value={defaultStyle.curvature ?? 40}
           min={0}
           max={100}
@@ -158,14 +163,14 @@
     <Column>
       <div class="section">
         <div class="toggle-row">
-          <span class="toggle-label">Pointillés</span>
+          <span class="toggle-label">{m.dashed()}</span>
           <Toggle
             size="sm"
             toggled={defaultStyle.strokeStyle === 'dotted'}
             ontoggle={(e: CustomEvent) => toggleDotted(e.detail ?? true)}
           >
-            <span slot="labelA">Oui</span>
-            <span slot="labelB">Non</span>
+            <span slot="labelA">{m.yes()}</span>
+            <span slot="labelB">{m.no()}</span>
           </Toggle>
         </div>
       </div>
@@ -180,7 +185,7 @@
           hue={hue}
           saturation={saturation}
           lightness={lightness}
-          triggerLabel="Couleur"
+          triggerLabel={m.color()}
           onValidate={({
             hex,
             hue,
@@ -208,14 +213,14 @@
     <Column>
       <div class="section">
         <Slider
-          labelText="Opacité"
-          value={(defaultStyle.opacity ?? 1) * 100}
+          labelText={m.opacity()}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
           stepMultiplier={5}
           on:change={(e) =>
-            annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 })}
+            annotationsActions.updateDefaultStyle({ opacity: e.detail })}
         />
       </div>
     </Column>
@@ -237,11 +242,11 @@
               selected.type === AnnotationKind.SHAPE &&
               annotationsActions.removeAnnotation(selected.id)}
           >
-            Supprimer la forme
+            {m.annotations_delete_shape()}
           </Button>
         {:else}
           <Button kind="danger-tertiary" icon={TrashCan} disabled
-            >Supprimer la forme</Button
+            >{m.annotations_delete_shape()}</Button
           >
         {/if}
       </div>

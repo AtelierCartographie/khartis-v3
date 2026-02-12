@@ -15,6 +15,7 @@
     WarningAltFilled,
     WarningFilled
   } from 'carbon-icons-svelte';
+  import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
   import type { JoinStats } from './join-accordion.types';
 
   interface Props {
@@ -41,16 +42,16 @@
   let unrecognizedExpanded = $state(false);
 
   const joinedEntities = $derived(
-    stats.entities.filter((e) => e.status === 'joined')
+    stats.entities.filter((e) => e.status === JoinStatus.JOINED)
   );
   const toVerifyEntities = $derived(
-    stats.entities.filter((e) => e.status === 'to_verify')
+    stats.entities.filter((e) => e.status === JoinStatus.TO_VERIFY)
   );
   const duplicateEntities = $derived(
-    stats.entities.filter((e) => e.status === 'duplicate')
+    stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE)
   );
   const unrecognizedEntities = $derived(
-    stats.entities.filter((e) => e.status === 'unrecognized')
+    stats.entities.filter((e) => e.status === JoinStatus.UNRECOGNIZED)
   );
 
   const hasErrors = $derived(

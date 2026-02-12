@@ -1,8 +1,8 @@
+import { bigIntReplacer } from '$lib/features/commons/utils/clone.utils';
 import { compressData } from '$lib/features/commons/utils/compression.utils';
 import { PROJECT_CONST } from '../constants';
 import { serialize } from '../core/serializer';
 import type { KhartisProject } from '../types';
-import { bigIntReplacer } from '../utils/json-helpers';
 
 export async function exportProject(project: KhartisProject): Promise<Blob> {
   const serialized = await serialize(project);

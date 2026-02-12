@@ -4,8 +4,20 @@
   import { m } from '$lib/paraglide/messages.js';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
   import { Edit, Legend, Location, TextFont, View } from 'carbon-icons-svelte';
+  import {
+    getLegendState,
+    legendActions
+  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
+
+  const legendState = $derived(getLegendState());
+  const showLegendBadge = $derived(!legendState.hasBeenOpened);
+
+  function handleLegendClick() {
+    legendActions.markAsOpened();
+    selectTool(StylingTools.Legend);
+  }
 </script>
 
 <ToolsListContainer>
@@ -26,15 +38,20 @@
 
     <Row>
       <Column>
-        <Button
-          tooltipPosition="right"
-          kind="ghost"
-          iconDescription={m.tool_legend()}
-          icon={Legend}
-          size="small"
-          isSelected={globalState.selectedTool === StylingTools.Legend}
-          onclick={() => selectTool(StylingTools.Legend)}
-        />
+        <div class="tool-button-wrapper">
+          <Button
+            tooltipPosition="right"
+            kind="ghost"
+            iconDescription={m.tool_legend()}
+            icon={Legend}
+            size="small"
+            isSelected={globalState.selectedTool === StylingTools.Legend}
+            onclick={handleLegendClick}
+          />
+          {#if showLegendBadge}
+            <span class="notification-badge"></span>
+          {/if}
+        </div>
       </Column>
     </Row>
 
@@ -81,3 +98,21 @@
     </Row>
   </Grid>
 </ToolsListContainer>
+
+<style>
+  .tool-button-wrapper {
+    position: relative;
+    display: inline-block;
+  }
+
+  .notification-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--cds-support-error, #da1e28);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+</style>

@@ -46,6 +46,65 @@ The `Pipeline` facade provides a clean API that delegates to DuckDB for all pars
 | **GeoParquet** | `.geoparquet`, `.parquet` | `parseGeoFile` | GeoArrow encoding preserved                 |
 | **KML/KMZ**    | `.kml`, `.kmz`            | `parseGeoFile` | Converted via DuckDB `ST_Read()`            |
 
+## Processor Registry Pattern
+
+**Location**: `src/lib/features/data-pipeline/processors/`
+
+Uses **Registry + Strategy** patterns (SOLID Open/Closed principle).
+
+### Architecture
+
+```typescript
+interface FileProcessor {
+  supportedFileTypes: readonly FileType[];
+  canHandle(file: UploadedFile): boolean;
+  process(file: UploadedFile, context: ProcessContext): Promise<DatasetResult>;
+}
+
+// Registry
+function registerProcessor(processor: FileProcessor, priority = 0): void;
+function getProcessor(file: UploadedFile): FileProcessor | null;
+```
+
+### Registered Processors
+
+| Processor              | Types         | Priority | Notes                         |
+| ---------------------- | ------------- | -------- | ----------------------------- |
+| csvProcessor           | CSV, TSV, TXT | 100      | DuckDB `read_csv()` with opts |
+| geojsonProcessor       | GeoJSON       | 100      | DuckDB `ST_Read()`            |
+| gpkgProcessor          | GPKG          | 100      | Native DuckDB spatial         |
+| gpxProcessor           | GPX           | 100      | Convert → `ST_Read()`         |
+| kmlProcessor           | KML, KMZ      | 100      | Convert → `ST_Read()`         |
+| shapefileProcessor     | SHP bundle    | 90       | Requires .shp + .dbf + .shx   |
+| zipProcessor           | ZIP           | 50       | Extract → delegate            |
+| fallbackTextProcessor  | text/\*       | 0        | CSV fallback                  |
+| binaryFallbackStrategy | Binary        | -100     | Validation-only               |
+
+Higher priority = checked first. ZIP (50) extracts before CSV (100) processes contents.
+
+### Adding New Processor
+
+```typescript
+// 1. Create strategy
+export const myProcessor: FileProcessor = {
+  supportedFileTypes: [FileType.MY_FORMAT],
+  canHandle: (file) => file.fileType === FileType.MY_FORMAT,
+  process: async (file, context) => {
+    /* implementation */
+  }
+};
+
+// 2. Register (processor-auto-register.ts)
+registerProcessor(myProcessor, 100);
+
+// 3. Add FileType enum (commons/constants/file-types.constants.ts)
+export enum FileType {
+  MY_FORMAT = 'my-format'
+}
+```
+
+**Benefits**: Add processors without modifying core pipeline. Testable, SOLID-compliant.
+
 ## Processing flow
 
 ```
@@ -53,9 +112,9 @@ The `Pipeline` facade provides a clean API that delegates to DuckDB for all pars
         ↓
 2. validateFile() → check size, extension, MIME type
         ↓
-3. detectFileFormat() → determine tabular vs geospatial
+3. getProcessor() → find matching processor by priority
         ↓
-4. parseTabular() or parseGeoFile() → creates DuckDB table
+4. processor.process() → creates DuckDB table
         ↓
 5. buildDatasetFromDuckTable() → analysis + stats via Duck.analyse()
         ↓

@@ -34,9 +34,9 @@
 
   const predefinedStyles = [
     { value: 'note', text: m.annotations_note() },
-    { value: 'title', text: 'Titre' },
-    { value: 'subtitle', text: 'Sous-titre' },
-    { value: 'caption', text: 'Légende' }
+    { value: 'title', text: m.annotations_style_title() },
+    { value: 'subtitle', text: m.annotations_style_subtitle() },
+    { value: 'caption', text: m.annotations_style_caption() }
   ];
 
   function handleAddText() {
@@ -73,7 +73,14 @@
   }
 
   function handleOpacityChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 });
+    annotationsActions.updateDefaultStyle({ opacity: e.detail });
+  }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
   }
 </script>
 
@@ -98,18 +105,15 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">
-          Ajouter un texte ou sélectionner un élément existant pour le modifier
-          ci-dessous.
-        </p>
+        <p class="helper">{m.annotations_add_text_description()}</p>
         <TextArea
           id="text-content"
-          labelText="Contenu"
+          labelText={m.annotations_content()}
           value={selectedText
             ? (selectedText.content as string)
             : annotationsState.textContent}
           on:input={handleContentInput}
-          placeholder={selectedText ? '' : 'Aucune'}
+          placeholder={selectedText ? '' : m.annotations_no_content()}
           disabled={!selectedText}
           rows={4}
         />
@@ -151,8 +155,8 @@
     <Column>
       <div class="section">
         <Slider
-          labelText={m.annotations_opacity?.() || 'Opacité'}
-          value={(defaultStyle.opacity ?? 1) * 100}
+          labelText={m.annotations_opacity()}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
@@ -169,7 +173,7 @@
         <div class="style-toggles">
           <Toggle
             size="sm"
-            labelText="Gras"
+            labelText={m.annotations_bold()}
             toggled={defaultStyle.bold || false}
             ontoggle={() => annotationsActions.toggleStyleProperty('bold')}
           >
@@ -179,7 +183,7 @@
 
           <Toggle
             size="sm"
-            labelText="Italique"
+            labelText={m.annotations_italic()}
             toggled={defaultStyle.italic || false}
             ontoggle={() => annotationsActions.toggleStyleProperty('italic')}
           >
@@ -189,7 +193,7 @@
 
           <Toggle
             size="sm"
-            labelText="Souligné"
+            labelText={m.annotations_underline()}
             toggled={defaultStyle.underlined || false}
             ontoggle={() =>
               annotationsActions.toggleStyleProperty('underlined')}
@@ -200,14 +204,14 @@
         </div>
 
         <div class="alignment-controls">
-          <p class="alignment-label">Alignement</p>
+          <p class="alignment-label">{m.annotations_alignment_label()}</p>
           <div class="alignment-buttons">
             <button
               class="alignment-btn {defaultStyle.textAlign === TextAlign.Left
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Left)}
-              aria-label="Aligner à gauche"
+              aria-label={m.annotations_align_left()}
             >
               <TextAlignLeft />
             </button>
@@ -216,7 +220,7 @@
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Center)}
-              aria-label="Centrer"
+              aria-label={m.annotations_align_center()}
             >
               <TextAlignCenter />
             </button>
@@ -225,7 +229,7 @@
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Right)}
-              aria-label="Aligner à droite"
+              aria-label={m.annotations_align_right()}
             >
               <TextAlignRight />
             </button>
@@ -246,7 +250,7 @@
             selectedText &&
             annotationsActions.removeAnnotation(selectedText.id)}
         >
-          Supprimer le texte
+          {m.annotations_delete_text()}
         </Button>
       </div>
     </Column>

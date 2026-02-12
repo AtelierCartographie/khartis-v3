@@ -46,7 +46,14 @@
     annotationsActions.updateDefaultStyle({ size: e.detail });
   }
   function handleOpacityChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ opacity: e.detail / 100 });
+    annotationsActions.updateDefaultStyle({ opacity: e.detail });
+  }
+
+  function toOpacityPercent(value: number | undefined): number {
+    if (value === undefined) {
+      return 100;
+    }
+    return value <= 1 ? value * 100 : value;
   }
 </script>
 
@@ -54,7 +61,7 @@
   <Row>
     <Column>
       <Button kind="primary" icon={Add} on:click={triggerFileDialog}>
-        Importer une image
+        {m.annotations_import_image()}
       </Button>
       <div class="visually-hidden" bind:this={hiddenUploader}>
         <FileUploader
@@ -89,8 +96,8 @@
     <Column>
       <div class="section">
         <Slider
-          labelText={m.annotations_opacity?.() || 'Opacité'}
-          value={(defaultStyle.opacity ?? 1) * 100}
+          labelText={m.annotations_opacity()}
+          value={toOpacityPercent(defaultStyle.opacity)}
           min={0}
           max={100}
           step={5}
@@ -117,11 +124,11 @@
               selected.type === AnnotationKind.IMAGE &&
               annotationsActions.removeAnnotation(selected.id)}
           >
-            Supprimer l’image
+            {m.annotations_delete_image()}
           </Button>
         {:else}
           <Button kind="danger-tertiary" icon={TrashCan} disabled>
-            Supprimer l’image
+            {m.annotations_delete_image()}
           </Button>
         {/if}
       </div>

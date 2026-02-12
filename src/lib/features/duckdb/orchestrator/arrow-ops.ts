@@ -1,5 +1,9 @@
+import {
+  GEOMETRY_COLUMN_TYPE,
+  hasGeometryType
+} from '$lib/features/commons/constants/geometry.constants';
+import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 
@@ -22,7 +26,7 @@ export async function fetchArrowTableWithGeometry(
   }));
 
   const geomColumn = columns.find(
-    (c: { column_type: string }) => c.column_type === 'GEOMETRY'
+    (c: { column_type: string }) => c.column_type === GEOMETRY_COLUMN_TYPE
   );
 
   let query: string;
@@ -147,22 +151,12 @@ export async function addGeoArrowMetadataFromDuckDB(
       } else if (types.length === 1) {
         geometryType = types[0];
       } else {
-        const hasPoint = types.some((t) => t === 'ST_Point' || t === 'POINT');
-        const hasMultiPoint = types.some(
-          (t) => t === 'ST_MultiPoint' || t === 'MULTIPOINT'
-        );
-        const hasLineString = types.some(
-          (t) => t === 'ST_LineString' || t === 'LINESTRING'
-        );
-        const hasMultiLineString = types.some(
-          (t) => t === 'ST_MultiLineString' || t === 'MULTILINESTRING'
-        );
-        const hasPolygon = types.some(
-          (t) => t === 'ST_Polygon' || t === 'POLYGON'
-        );
-        const hasMultiPolygon = types.some(
-          (t) => t === 'ST_MultiPolygon' || t === 'MULTIPOLYGON'
-        );
+        const hasPoint = hasGeometryType(types, 'POINT');
+        const hasMultiPoint = hasGeometryType(types, 'MULTI_POINT');
+        const hasLineString = hasGeometryType(types, 'LINE_STRING');
+        const hasMultiLineString = hasGeometryType(types, 'MULTI_LINE_STRING');
+        const hasPolygon = hasGeometryType(types, 'POLYGON');
+        const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
 
         if (hasPolygon || hasMultiPolygon) {
           geometryType = 'MULTIPOLYGON';
@@ -330,4 +324,53 @@ export async function exportTableToGeoParquet(
   Duck: DuckDBClientForArrow
 ): Promise<Uint8Array> {
   return Duck.copy_to_geoparquet_as_buffer(tableName);
+}
+
+export async function getArrowTableWithCache(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  extractMetadata: (table: Table) => GeoArrowMetadata | null,
+  getCachedTable: () => Table | undefined,
+  setCache: (table: Table, metadata: GeoArrowMetadata | null) => void
+): Promise<Table> {
+  const cached = getCachedTable();
+  if (cached) {
+    return cached;
+  }
+
+  const { arrowTableWithMetadata, geoArrowMetadata } =
+    await createArrowTableWithMetadata(tableName, Duck, extractMetadata);
+
+  setCache(arrowTableWithMetadata, geoArrowMetadata);
+
+  return arrowTableWithMetadata;
+}
+
+export async function getArrowTableDirect(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  getCachedTable: () => Table | undefined,
+  setCache: (table: Table) => void
+): Promise<Table> {
+  const cached = getCachedTable();
+  if (cached) {
+    logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
+      tableName
+    });
+    return cached;
+  }
+
+  const baseTable = await fetchArrowTableWithGeometry(tableName, Duck);
+  const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
+    baseTable,
+    tableName,
+    Duck
+  );
+
+  setCache(tableWithMetadata);
+  logger.info('Cached Arrow table with metadata', LogCategory.DUCKDB, {
+    tableName
+  });
+
+  return tableWithMetadata;
 }

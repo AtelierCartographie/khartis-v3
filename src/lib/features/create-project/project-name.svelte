@@ -3,6 +3,7 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
+  import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -23,6 +24,17 @@
   const { navigateAfterAction } = useProjectNavigation({
     getOnClose: () => onClose
   });
+
+  function getNextProjectName(): string {
+    const existingNames = new Set(projectsStore.projects.map((p) => p.name));
+    let number = 1;
+    let candidate = m.project_default_name({ number });
+    while (existingNames.has(candidate)) {
+      number++;
+      candidate = m.project_default_name({ number });
+    }
+    return candidate;
+  }
 
   let isCreating = $state(false);
   let hasTriedSubmit = $state(false);
@@ -46,7 +58,7 @@
   );
   const hasValidName = $derived(nameValidation.isValid);
   const validFiles = $derived(
-    uploadedFiles.filter((f) => f.status === 'complete')
+    uploadedFiles.filter((f) => f.status === FileStatus.COMPLETE)
   );
   const hasValidFiles = $derived(validFiles.length > 0);
   const canCreateProject = $derived(
@@ -63,7 +75,7 @@
 
     let effectiveName = projectName.trim();
     if (!effectiveName) {
-      effectiveName = m.project_name_placeholder();
+      effectiveName = getNextProjectName();
       createProjectActions.setProjectName(effectiveName);
       localProjectName = effectiveName;
     }

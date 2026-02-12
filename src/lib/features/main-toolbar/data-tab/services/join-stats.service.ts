@@ -1,8 +1,10 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
-import { join_macros } from '$lib/features/duckdb/macros/join';
 import type { JoinEntity, JoinStats } from '../components';
 
 export interface ComputeJoinStatsOptions {
@@ -38,7 +40,7 @@ export async function computeDatasetJoinStats(
     targetColumn
   });
 
-  await Duck.query(join_macros);
+  // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
 
   const escapedSourceCol = escapeIdentifier(sourceColumn);
   const escapedTargetCol = escapeIdentifier(targetColumn);
@@ -101,12 +103,20 @@ export async function computeDatasetJoinStats(
   }
 
   if (unmatchedValues.length > 0) {
-    const safeValues = unmatchedValues.map((v) => v.replace(/'/g, "''"));
-    const valuesLiteral = safeValues.map((v) => `'${v}'`).join(', ');
+    const valuesLiteral = unmatchedValues
+      .map((v) => `'${escapeSqlString(v)}'`)
+      .join(', ');
 
     const fuzzyMatchQuery = `
       WITH unmatched AS (
-        SELECT unnest([${valuesLiteral}]) as source_val
+        SELECT
+          unnest([${valuesLiteral}]) as source_val
+      ),
+      unmatched_normalized AS (
+        SELECT
+          source_val,
+          normalize_text_join(source_val) as norm_source
+        FROM unmatched
       ),
       target_normalized AS (
         SELECT DISTINCT
@@ -114,18 +124,31 @@ export async function computeDatasetJoinStats(
           normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) as normalized_target
         FROM "${escapedTargetTable}"
         WHERE "${escapedTargetCol}" IS NOT NULL
+      ),
+      candidates AS (
+        SELECT
+          u.source_val,
+          u.norm_source,
+          t.target_val,
+          t.normalized_target
+        FROM unmatched_normalized u
+        CROSS JOIN target_normalized t
+        WHERE
+          -- Length pre-filter: levenshtein <= 2 is impossible if lengths differ by > 2
+          ABS(length(u.norm_source) - length(t.normalized_target)) <= 2
+          OR t.normalized_target LIKE '%' || u.norm_source || '%'
+          OR u.norm_source LIKE '%' || t.normalized_target || '%'
       )
       SELECT
-        u.source_val,
-        t.target_val,
-        levenshtein(normalize_text_join(u.source_val), t.normalized_target) as distance
-      FROM unmatched u
-      CROSS JOIN target_normalized t
+        source_val,
+        target_val,
+        levenshtein(norm_source, normalized_target) as distance
+      FROM candidates
       WHERE
-        levenshtein(normalize_text_join(u.source_val), t.normalized_target) <= 2
-        OR t.normalized_target LIKE '%' || normalize_text_join(u.source_val) || '%'
-        OR normalize_text_join(u.source_val) LIKE '%' || t.normalized_target || '%'
-      ORDER BY u.source_val, distance
+        levenshtein(norm_source, normalized_target) <= 2
+        OR normalized_target LIKE '%' || norm_source || '%'
+        OR norm_source LIKE '%' || normalized_target || '%'
+      ORDER BY source_val, distance
     `;
 
     const fuzzyResults = (await Duck.query(fuzzyMatchQuery, {

@@ -1,23 +1,60 @@
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { basemapCatalogService } from '$lib/features/map/services';
+import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import {
+  annotationsActions,
+  getAnnotationsState
+} from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import {
+  formatActions,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  geoIndicationsActions,
+  geoIndicationsState
+} from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+import {
+  getLegendState,
+  legendActions
+} from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import {
+  getProjectionState,
+  projectionActions
+} from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import type {
   SerializedBasemapAttribute,
+  SerializedLayoutSettings,
   SerializedProject,
   SerializedProjectData,
-  SerializedUploadedFile
+  SerializedUploadedFile,
+  SerializedVisualizationSettings
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
-import { bigIntReplacer } from '../utils/json-helpers';
+import {
+  serializeUploadedFile,
+  deserializeUploadedFile
+} from './file-serializer';
+export type { FileSerializationOptions } from './file-serializer';
+export { serializeUploadedFile, deserializeUploadedFile };
+
+interface SerializeOptions {
+  preserveBinary?: boolean;
+}
 
 export async function serialize(
-  project: KhartisProject
+  project: KhartisProject,
+  options?: SerializeOptions
 ): Promise<SerializedProject> {
   const serializedData = project.data
-    ? await serializeProjectData(project.data)
+    ? await serializeProjectData(project.data, options)
     : undefined;
 
   return {
@@ -61,7 +98,8 @@ export async function deserialize(
 }
 
 export async function serializeProjectData(
-  data: unknown
+  data: unknown,
+  options?: SerializeOptions
 ): Promise<SerializedProjectData | undefined> {
   if (!data) return undefined;
   if (typeof data !== 'object' || data === null) return undefined;
@@ -70,9 +108,29 @@ export async function serializeProjectData(
   const dataObj = data as Record<string, unknown>;
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
-    serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) =>
-      serializeUploadedFile(file)
-    );
+    serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
+      const serializedFile = serializeUploadedFile(file, {
+        preserveBinary: options?.preserveBinary
+      });
+
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
+      if (duckDBDataset) {
+        if (duckDBDataset.joinedBasemap) {
+          serializedFile.joinedBasemap = duckDBDataset.joinedBasemap;
+        }
+        if (duckDBDataset.geoColumn) {
+          serializedFile.geoColumn = duckDBDataset.geoColumn;
+        }
+        if (duckDBDataset.gpsMode) {
+          serializedFile.gpsMode = duckDBDataset.gpsMode;
+        }
+        if (duckDBDataset.gpsColumns) {
+          serializedFile.gpsColumns = duckDBDataset.gpsColumns;
+        }
+      }
+
+      return serializedFile;
+    });
   }
 
   const customBasemaps = basemapCatalogService.basemaps.filter(
@@ -105,6 +163,58 @@ export async function serializeProjectData(
       );
     }
   }
+
+  serialized.basemapSettings = {
+    layers: basemapLayersStore.layers,
+    style: basemapStyleStore.selectedStyle,
+    mapProjection: mapProjectionStore.projection
+  };
+
+  const visualizations = visualizationStore.visualizations;
+  if (visualizations.length > 0) {
+    serialized.visualizationSettings = {
+      visualizations,
+      selectedVisualizationId: visualizationStore.selectedVisualization?.id,
+      activeVisualizationIds: visualizationStore.activeVisualizations.map(
+        (v) => v.id
+      )
+    } satisfies SerializedVisualizationSettings;
+  }
+
+  const annotationsState = getAnnotationsState();
+  const formatState = getFormatState();
+  const legendState = getLegendState();
+  const projectionState = getProjectionState();
+
+  serialized.layoutSettings = {
+    format: formatState,
+    annotations: {
+      items: annotationsState.items,
+      activeType: annotationsState.activeType,
+      predefinedStyle: annotationsState.predefinedStyle,
+      defaultStyle: annotationsState.defaultStyle
+    },
+    legend: {
+      items: legendState.items,
+      position: legendState.position,
+      visible: legendState.visible,
+      style: legendState.style,
+      hasBeenOpened: legendState.hasBeenOpened
+    },
+    geoIndications: geoIndicationsState,
+    projection: {
+      selected:
+        projectionActions.getCurrentProjectionInfo()?.id ||
+        projectionState.selected ||
+        'mercator',
+      longitude: projectionState.longitude ?? 0,
+      latitude: projectionState.latitude ?? 0,
+      rotation: projectionState.rotation ?? 0,
+      scale: projectionState.scale ?? 1,
+      center: projectionState.center,
+      customCode: projectionState.customCode
+    }
+  } satisfies SerializedLayoutSettings;
 
   return serialized;
 }
@@ -165,196 +275,117 @@ export async function deserializeProjectData(
     }
   }
 
+  if (data.basemapSettings) {
+    try {
+      const { layers, style, mapProjection } = data.basemapSettings;
+      if (layers) {
+        basemapLayersStore.restoreFromSerialized(layers);
+      }
+      if (style) {
+        basemapStyleStore.restoreFromSerialized(style);
+      }
+      if (mapProjection) {
+        mapProjectionStore.restoreFromSerialized(mapProjection);
+      }
+      logger.debug('Basemap settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore basemap settings',
+        LogCategory.PROJECT,
+        error
+      );
+    }
+  }
+
+  if (data.visualizationSettings) {
+    try {
+      visualizationStore.restoreFromSerialized(data.visualizationSettings);
+      logger.debug('Visualization settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore visualization settings',
+        LogCategory.PROJECT,
+        error
+      );
+    }
+  }
+
+  if (data.layoutSettings) {
+    try {
+      const { format, annotations, legend, geoIndications, projection } =
+        data.layoutSettings;
+
+      if (format) {
+        formatActions.setState(format);
+      }
+
+      if (annotations) {
+        annotationsActions.setState({
+          items: annotations.items,
+          activeType: annotations.activeType,
+          predefinedStyle: annotations.predefinedStyle,
+          defaultStyle: annotations.defaultStyle,
+          selectedId: null,
+          textContent: ''
+        });
+      }
+
+      if (legend) {
+        legendActions.setState({
+          items: legend.items,
+          position: legend.position,
+          visible: legend.visible,
+          style: legend.style
+        });
+      }
+
+      if (geoIndications) {
+        geoIndicationsActions.setState(geoIndications);
+      }
+
+      if (projection) {
+        if (projection.customCode !== undefined) {
+          projectionActions.setCustomCode(projection.customCode ?? null);
+        }
+        projectionActions.setSelected(projection.selected);
+        if (projection.center && projection.center.length === 2) {
+          projectionActions.setCenter(
+            projection.center[0],
+            projection.center[1]
+          );
+        } else if (
+          projection.longitude !== undefined &&
+          projection.latitude !== undefined
+        ) {
+          projectionActions.setCenter(
+            projection.longitude,
+            projection.latitude
+          );
+        }
+        if (projection.rotation !== undefined) {
+          projectionActions.setRotation(projection.rotation);
+        }
+        if (projection.scale !== undefined) {
+          projectionActions.setScale(projection.scale);
+        }
+      }
+
+      logger.debug('Layout settings restored', LogCategory.PROJECT);
+    } catch (error) {
+      logger.warn(
+        'Failed to restore layout settings',
+        LogCategory.PROJECT,
+        error
+      );
+    }
+  }
+
   return deserialized;
-}
-
-export function serializeUploadedFile(
-  file: UploadedFile
-): SerializedUploadedFile {
-  const serialized = {
-    id: file.id,
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    fileType: file.fileType,
-    status: file.status,
-    errorMessage: file.errorMessage,
-    validation: file.validation,
-    sourceType: file.sourceType,
-    relatedFiles: file.relatedFiles,
-    uploadProgress: file.uploadProgress
-  } as SerializedUploadedFile;
-
-  if (file.parsedData) {
-    serialized.parsedData = file.parsedData;
-  }
-
-  if (file.statistics) {
-    serialized.statistics = file.statistics;
-  }
-
-  if (file.preparedGeoJSON) {
-    serialized.preparedGeoJSON = file.preparedGeoJSON;
-  }
-
-  if (file.duplicates) {
-    serialized.duplicates = file.duplicates;
-  }
-
-  if (file.deepAnalysis) {
-    serialized.deepAnalysis = file.deepAnalysis;
-  }
-
-  if (file.geoMatchResult) {
-    serialized.geoMatchResult = file.geoMatchResult;
-  }
-
-  if (file.content) {
-    if (typeof file.content === 'string') {
-      serialized.content = file.content;
-      serialized.contentType = 'string';
-    } else if (file.content instanceof ArrayBuffer) {
-      serialized.content = Array.from(new Uint8Array(file.content));
-      serialized.contentType = 'arraybuffer';
-    }
-  }
-
-  if (file.relatedFilesData) {
-    const serializedData: Record<string, number[]> = {};
-    for (const [name, buffer] of Object.entries(file.relatedFilesData)) {
-      serializedData[name] = Array.from(new Uint8Array(buffer));
-    }
-    serialized.relatedFilesData = serializedData;
-  }
-
-  if (file.columnTransformations && file.columnTransformations.length > 0) {
-    serialized.columnTransformations = file.columnTransformations;
-  }
-
-  if (file.deletedRowIds && file.deletedRowIds.length > 0) {
-    serialized.deletedRowIds = file.deletedRowIds;
-  }
-
-  const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
-  if (duckDBDataset) {
-    if (duckDBDataset.joinedBasemap) {
-      serialized.joinedBasemap = duckDBDataset.joinedBasemap;
-    }
-    if (duckDBDataset.geoColumn) {
-      serialized.geoColumn = duckDBDataset.geoColumn;
-    }
-    if (duckDBDataset.gpsMode) {
-      serialized.gpsMode = duckDBDataset.gpsMode;
-    }
-    if (duckDBDataset.gpsColumns) {
-      serialized.gpsColumns = duckDBDataset.gpsColumns;
-    }
-  }
-
-  if (file.sourceArchive) {
-    serialized.sourceArchive = file.sourceArchive;
-  }
-
-  if (file.duckdbTableName) {
-    serialized.duckdbTableName = file.duckdbTableName;
-  }
-
-  return serialized;
-}
-
-export function deserializeUploadedFile(
-  data: SerializedUploadedFile
-): UploadedFile {
-  const file = {
-    id: data.id,
-    name: data.name,
-    size: data.size,
-    type: data.type,
-    fileType: data.fileType as UploadedFile['fileType'],
-    status: data.status as UploadedFile['status'],
-    errorMessage: data.errorMessage,
-    validation: data.validation as UploadedFile['validation'],
-    sourceType: data.sourceType as UploadedFile['sourceType'],
-    relatedFiles: data.relatedFiles,
-    uploadProgress: data.uploadProgress
-  } as UploadedFile;
-
-  if (data.parsedData) {
-    file.parsedData = data.parsedData as UploadedFile['parsedData'];
-  }
-
-  if (data.statistics) {
-    file.statistics = data.statistics as UploadedFile['statistics'];
-  }
-
-  if (data.preparedGeoJSON) {
-    file.preparedGeoJSON = data.preparedGeoJSON;
-  }
-
-  if (data.duplicates) {
-    file.duplicates = data.duplicates;
-  }
-
-  if (data.deepAnalysis) {
-    file.deepAnalysis = data.deepAnalysis;
-  }
-
-  if (data.geoMatchResult) {
-    file.geoMatchResult = data.geoMatchResult;
-  }
-
-  if (data.content) {
-    if (data.contentType === 'string' && typeof data.content === 'string') {
-      file.content = data.content;
-    } else if (
-      data.contentType === 'arraybuffer' &&
-      Array.isArray(data.content)
-    ) {
-      file.content = new Uint8Array(data.content).buffer;
-    }
-  }
-
-  if (data.relatedFilesData) {
-    const relatedData: Record<string, ArrayBuffer> = {};
-    for (const [name, bytes] of Object.entries(data.relatedFilesData)) {
-      relatedData[name] = new Uint8Array(bytes).buffer;
-    }
-    file.relatedFilesData = relatedData;
-  }
-
-  if (data.columnTransformations) {
-    file.columnTransformations = data.columnTransformations;
-  }
-
-  if (data.deletedRowIds) {
-    file.deletedRowIds = data.deletedRowIds;
-  }
-
-  if (data.joinedBasemap) {
-    file.joinedBasemap = data.joinedBasemap;
-  }
-  if (data.geoColumn) {
-    file.geoColumn = data.geoColumn;
-  }
-  if (data.gpsMode) {
-    file.gpsMode = data.gpsMode;
-  }
-  if (data.gpsColumns) {
-    file.gpsColumns = data.gpsColumns;
-  }
-  if (data.sourceArchive) {
-    file.sourceArchive = data.sourceArchive;
-  }
-  if (data.duckdbTableName) {
-    file.duckdbTableName = data.duckdbTableName;
-  }
-
-  return file as UploadedFile;
 }
 
 export async function prepareForIndexedDB(
   project: KhartisProject
 ): Promise<SerializedProject> {
-  const serialized = await serialize(project);
-  return JSON.parse(JSON.stringify(serialized, bigIntReplacer));
+  const serialized = await serialize(project, { preserveBinary: true });
+  return deepCloneForStorage(serialized) as SerializedProject;
 }

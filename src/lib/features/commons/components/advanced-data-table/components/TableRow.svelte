@@ -1,5 +1,10 @@
 <script lang="ts">
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
+  import {
+    formatValueByType,
+    isNumericType
+  } from '$lib/features/commons/utils/format.utils';
+  import * as m from '$lib/paraglide/messages';
   import type { HighlightType } from '../advanced-data-table.svelte';
   import type { ColumnInfo, TableRow } from '../types';
 
@@ -11,50 +16,31 @@
     getCellHighlight?: (columnName: string) => HighlightType;
     isSelectable?: boolean;
     isSelected?: boolean;
+    showRowNumbers?: boolean;
+    geoidColumns?: Set<string>;
     onToggleSelection?: (rowId: number) => void;
   }
 
   const {
     row,
+    rowIndex,
     visibleColumns,
     highlightType = null,
     getCellHighlight,
     isSelectable = false,
     isSelected = false,
+    showRowNumbers = true,
+    geoidColumns = new Set<string>(),
     onToggleSelection
   }: Props = $props();
 
   const rowId = $derived((row.__id as number | undefined) ?? -1);
+  const displayIndex = $derived(rowIndex + 1);
 
   function handleCheckboxChange() {
     if (rowId !== -1) {
       onToggleSelection?.(rowId);
     }
-  }
-
-  function isNumericType(type: string): boolean {
-    return (
-      type === 'number' ||
-      type === 'integer' ||
-      type === 'bigint' ||
-      type === 'numeric'
-    );
-  }
-
-  function formatValue(value: unknown, columnType: string): string {
-    if (value === null || value === undefined) {
-      return '';
-    }
-
-    if (columnType === 'date' && value instanceof Date) {
-      return value.toLocaleDateString('fr-FR');
-    }
-
-    if (isNumericType(columnType)) {
-      return Number(value).toLocaleString('fr-FR');
-    }
-
-    return String(value);
   }
 </script>
 
@@ -69,13 +55,18 @@
       <SimpleCheckbox checked={isSelected} onchange={handleCheckboxChange} />
     </td>
   {/if}
+  {#if showRowNumbers}
+    <td class="row-index-cell">{displayIndex}</td>
+  {/if}
   {#each visibleColumns as col (col.name)}
     {@const value = row[col.name]}
     {@const isNumeric = isNumericType(col.type)}
     {@const isNull = value === null || value === undefined}
     {@const cellHighlight = getCellHighlight?.(col.name)}
+    {@const isGeoid = geoidColumns.has(col.name)}
     <td
       class:numeric={isNumeric}
+      class:geoid={isGeoid}
       class:cell-highlight-current={cellHighlight === 'current'}
       class:cell-highlight-exact={cellHighlight === 'exact'}
       class:cell-highlight-contains={cellHighlight === 'contains'}
@@ -83,9 +74,9 @@
       data-column={col.name}
     >
       {#if isNull}
-        <span class="null-value">—</span>
+        <span class="null-value" title={m.cell_null_value_tooltip()}>—</span>
       {:else}
-        {formatValue(value, col.type)}
+        {formatValueByType(value, col.type)}
       {/if}
     </td>
   {/each}
@@ -93,9 +84,10 @@
 
 <style>
   tr {
-    height: 26px;
-    border-bottom: 1px solid var(--cds-ui-03);
+    height: 32px;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     transition: background-color 0.15s;
+    background-color: #ffffff;
   }
 
   tr:hover {
@@ -119,7 +111,7 @@
   }
 
   tr.highlight-exact td {
-    color: var(--cds-text-01);
+    color: var(--cds-text-01, #161616);
   }
 
   tr.highlight-partial {
@@ -127,7 +119,7 @@
   }
 
   tr.highlight-partial td {
-    color: var(--cds-text-01);
+    color: var(--cds-text-01, #161616);
   }
 
   tr.selected {
@@ -138,40 +130,67 @@
     background-color: var(--cds-selected-ui-hover, var(--cds-selected-ui));
   }
 
-  .checkbox-cell {
-    width: 40px;
-    min-width: 40px;
-    max-width: 40px;
-    height: 26px;
+  tr .checkbox-cell {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+    height: 32px;
     padding: 0;
     position: sticky;
     left: 0;
-    background-color: var(--cds-ui-01);
+    background-color: #ffffff;
     z-index: 1;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
+  tr .row-index-cell {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 6px 0;
+    text-align: center;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: #c6c6c6;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
   td {
-    padding: var(--cds-spacing-01) var(--cds-spacing-03);
-    color: var(--cds-text-01);
+    padding: 7px 8px;
+    color: #161616;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 200px;
     vertical-align: middle;
-    height: 26px;
-    font-size: 0.75rem;
+    height: 32px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.32px;
   }
 
   td.numeric {
-    text-align: right;
+    text-align: left;
     font-variant-numeric: tabular-nums;
   }
 
+  td.geoid {
+    color: #005d5d;
+    border-bottom: 2px solid #08bdba;
+  }
+
   .null-value {
-    color: var(--cds-text-03);
+    color: var(--cds-text-03, #a8a8a8);
     font-style: italic;
   }
 
@@ -188,16 +207,16 @@
 
   td.cell-highlight-exact {
     background-color: #c8a8ff !important;
-    color: var(--cds-text-01);
+    color: var(--cds-text-01, #161616);
   }
 
   td.cell-highlight-contains {
     background-color: #d4b9ff !important;
-    color: var(--cds-text-01);
+    color: var(--cds-text-01, #161616);
   }
 
   td.cell-highlight-partial {
     background-color: #e8d9ff !important;
-    color: var(--cds-text-01);
+    color: var(--cds-text-01, #161616);
   }
 </style>

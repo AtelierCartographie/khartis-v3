@@ -1,10 +1,13 @@
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
   Annotation,
   AnnotationsState,
-  AnnotationStyle
+  AnnotationStyle,
+  PageElementRole
 } from './annotations.types';
 
 const DEFAULT_STATE: AnnotationsState = {
@@ -40,6 +43,17 @@ type AnnotationsActions = {
   clearAll: () => void;
   toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => void;
   setTextAlign: (align: TextAlign) => void;
+  initPageElements: () => void;
+  redistributePageElements: (layout?: {
+    width?: number;
+    height?: number;
+    margins?: {
+      top: number;
+      bottom: number;
+      left: number;
+      right: number;
+    };
+  }) => void;
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
@@ -48,6 +62,79 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   subtitle: { fontSize: 18, bold: false, italic: false },
   caption: { fontSize: 10, bold: false, italic: true }
 };
+
+type PageLayout = {
+  width: number;
+  height: number;
+  margins: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+};
+
+function resolvePageLayout(overrides?: {
+  width?: number;
+  height?: number;
+  margins?: {
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  };
+}): PageLayout {
+  const format = getFormatState();
+
+  return {
+    width: overrides?.width ?? format.width,
+    height: overrides?.height ?? format.height,
+    margins: overrides?.margins ?? format.margins
+  };
+}
+
+function getPageElementPosition(
+  role: PageElementRole,
+  layout: PageLayout
+): { x: number; y: number } {
+  const { width, height, margins } = layout;
+  const titleX = margins.left + 4;
+  const rightColumnX = Math.max(margins.left, width - margins.right - 220);
+  const bottomY = height - margins.bottom;
+
+  switch (role) {
+    case 'title':
+      return { x: titleX, y: margins.top + 24 };
+    case 'subtitle':
+      return { x: titleX, y: margins.top + 52 };
+    case 'source':
+      return { x: rightColumnX, y: bottomY - 46 };
+    case 'basemap_source':
+      return { x: rightColumnX, y: bottomY - 32 };
+    case 'signature':
+      return { x: rightColumnX, y: bottomY - 18 };
+    case 'credit':
+      return { x: rightColumnX, y: bottomY - 4 };
+    default:
+      return { x: titleX, y: margins.top + 24 };
+  }
+}
+
+function normalizeOpacityPercent(
+  opacity: number | undefined
+): number | undefined {
+  if (opacity === undefined) {
+    return undefined;
+  }
+
+  const rawValue = Number(opacity);
+  if (!Number.isFinite(rawValue)) {
+    return undefined;
+  }
+
+  const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
+  return Math.max(0, Math.min(100, percentValue));
+}
 
 const { actions, getState } = createToolStore<
   AnnotationsState,
@@ -92,7 +179,12 @@ const { actions, getState } = createToolStore<
     s.textContent = content;
   },
   updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-    s.defaultStyle = { ...s.defaultStyle, ...styleUpdates };
+    const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+    if (styleUpdates.opacity !== undefined) {
+      normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
+    }
+
+    s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
   },
   duplicateAnnotation: (id: string) => {
     const original = s.items.find((item) => item.id === id);
@@ -132,6 +224,83 @@ const { actions, getState } = createToolStore<
   },
   setTextAlign: (align: TextAlign) => {
     s.defaultStyle = { ...s.defaultStyle, textAlign: align };
+  },
+  initPageElements: () => {
+    // Guard: don't create if page elements already exist
+    const hasPageElements = s.items.some((item) => item.role != null);
+    if (hasPageElements) return;
+
+    const layout = resolvePageLayout();
+
+    const basemapSource = basemapService.currentBasemap?.metadata?.source || '';
+
+    const pageElements: {
+      role: PageElementRole;
+      content: string;
+      style: Partial<AnnotationStyle>;
+      position: { x: number; y: number };
+    }[] = [
+      {
+        role: 'title',
+        content: '',
+        style: { ...PREDEFINED_STYLES.title },
+        position: getPageElementPosition('title', layout)
+      },
+      {
+        role: 'subtitle',
+        content: '',
+        style: { ...PREDEFINED_STYLES.subtitle },
+        position: getPageElementPosition('subtitle', layout)
+      },
+      {
+        role: 'source',
+        content: '',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: getPageElementPosition('source', layout)
+      },
+      {
+        role: 'basemap_source',
+        content: basemapSource,
+        style: { ...PREDEFINED_STYLES.caption },
+        position: getPageElementPosition('basemap_source', layout)
+      },
+      {
+        role: 'signature',
+        content: '',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: getPageElementPosition('signature', layout)
+      },
+      {
+        role: 'credit',
+        content: 'Réalisé avec Khartis',
+        style: { ...PREDEFINED_STYLES.caption },
+        position: getPageElementPosition('credit', layout)
+      }
+    ];
+
+    const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
+      id: `page-element-${el.role}-${Date.now()}-${index}`,
+      type: AnnotationKind.TEXT,
+      content: el.content,
+      position: el.position,
+      style: { ...s.defaultStyle, ...el.style },
+      role: el.role
+    }));
+
+    s.items = [...s.items, ...newAnnotations];
+  },
+  redistributePageElements: (layoutOverrides) => {
+    const layout = resolvePageLayout(layoutOverrides);
+    s.items = s.items.map((item) => {
+      if (!item.role) {
+        return item;
+      }
+
+      return {
+        ...item,
+        position: getPageElementPosition(item.role, layout)
+      };
+    });
   }
 }));
 

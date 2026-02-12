@@ -1,10 +1,17 @@
 import * as m from '$lib/paraglide/messages';
 import localforage from 'localforage';
-import {
-  STORAGE_LIMITS,
-  type ValidationResult
-} from '../configs/validation.config';
+import { STORAGE_LIMITS } from '../configs/validation.config';
 import { LogCategory, logger } from './logger';
+import { estimateProjectStorageSize } from './size-estimation.utils';
+
+export type { ValidationResult } from '$lib/features/data-pipeline/types';
+export {
+  validationSuccess,
+  validationFailure,
+  mergeValidationResults
+} from '$lib/features/data-pipeline/types';
+
+import type { ValidationResult } from '$lib/features/data-pipeline/types';
 
 function bigIntReplacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value;
@@ -44,8 +51,7 @@ export const ProjectValidator = {
       warnings: []
     };
 
-    const projectSize = new Blob([JSON.stringify(projectData, bigIntReplacer)])
-      .size;
+    const projectSize = estimateProjectStorageSize(projectData);
 
     if (projectSize > STORAGE_LIMITS.maxProjectSize) {
       result.isValid = false;

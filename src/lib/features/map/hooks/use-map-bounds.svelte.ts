@@ -7,6 +7,7 @@ import {
   calculateBoundsFromGeoArrow,
   calculateBoundsFromGeoJSON
 } from '../core';
+import { MAP_TIMING } from '../constants/timing.constants';
 
 export interface UseMapBoundsProps {
   getMap: () => MapLibreMap | null;
@@ -20,12 +21,11 @@ export interface UseMapBoundsProps {
 export interface UseMapBoundsReturn {
   fitToArrowBounds: (jsTable: ArrowTable | null, datasetId?: string) => void;
   fitToGeoJSONBounds: (geojson: FeatureCollection | null) => void;
+  fitToBounds: (bounds: LngLatBoundsLike, animate?: boolean) => void;
   readonly shouldRestorePosition: boolean;
   setShouldRestorePosition: (value: boolean) => void;
   resetFitState: () => void;
 }
-
-const DEBOUNCE_DELAY_MS = 300;
 
 export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   const {
@@ -41,14 +41,17 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   let lastFitGeoJSON = $state<FeatureCollection | null>(null);
   let shouldRestorePosition = $state(true);
 
-  function executeFitBounds(bounds: LngLatBoundsLike): void {
+  function executeFitBounds(bounds: LngLatBoundsLike, animate = false): void {
     const map = getMap();
     if (!map) {
       onFitComplete?.();
       return;
     }
 
-    map.fitBounds(bounds, { padding: 50, duration: 0 });
+    map.fitBounds(bounds, {
+      padding: MAP_TIMING.FITBOUNDS_PADDING_PX,
+      duration: animate ? MAP_TIMING.ZOOM_ANIMATION_MS : 0
+    });
 
     const onMoveEnd = () => {
       if (map) {
@@ -62,7 +65,10 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     map.once('moveend', onMoveEnd);
   }
 
-  const debouncedFitBounds = debounce(executeFitBounds, DEBOUNCE_DELAY_MS);
+  const debouncedFitBounds = debounce(
+    executeFitBounds,
+    MAP_TIMING.FITBOUNDS_DEBOUNCE_MS
+  );
 
   function handleBoundsUpdate(bounds: LngLatBoundsLike): void {
     debouncedFitBounds(bounds);
@@ -137,9 +143,17 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     lastFitGeoJSON = null;
   }
 
+  function fitToBounds(bounds: LngLatBoundsLike, animate = false): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded()) return;
+    shouldRestorePosition = false;
+    executeFitBounds(bounds, animate);
+  }
+
   return {
     fitToArrowBounds,
     fitToGeoJSONBounds,
+    fitToBounds,
     get shouldRestorePosition() {
       return shouldRestorePosition;
     },

@@ -59,10 +59,9 @@ export const SHAPEFILE_EXTENSIONS = [
 
 export const IGNORED_FILE_PREFIXES = ['__MACOSX', '.DS_Store', '._'] as const;
 
-export enum StrokeStyle {
+export enum ScaleForm {
   LINE = 'line',
-  DASHED = 'dashed',
-  DOTTED = 'dotted'
+  BOX = 'box'
 }
 
 export enum AnnotationKind {

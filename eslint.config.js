@@ -79,6 +79,10 @@ export default ts.config(
       parserOptions: {
         parser: ts.parser
       }
+    },
+    rules: {
+      'svelte/no-navigation-without-resolve': 'off',
+      'svelte/prefer-svelte-reactivity': 'off'
     }
   }
 );

@@ -9,12 +9,12 @@
     InlineLoading
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
-  import { onMount, onDestroy } from 'svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
+  import { SearchSource } from '../../constants';
 
   const SEARCH_DEBOUNCE_MS = 500;
   const MIN_SEARCH_LENGTH = 3;
@@ -49,7 +49,7 @@
   const columns = $derived(selectedDataset?.columns ?? []);
 
   let searchQuery = $state('');
-  let searchSource = $state('all');
+  let searchSource = $state<SearchSource | string>(SearchSource.ALL);
   let replaceValue = $state('');
   let searchStats = $state<SearchStats>({
     exactCount: 0,
@@ -63,10 +63,6 @@
   let isSearchInProgress = $state(false);
   let pendingSearchQuery = $state<string | null>(null);
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  onDestroy(() => {
-    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-  });
 
   const cellHighlights = $derived(
     searchStats.results.map((r) => ({
@@ -255,8 +251,11 @@
     clearSearchResults();
   }
 
-  onMount(() => {
+  $effect(() => {
     handleClear();
+    return () => {
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+    };
   });
 
   const hasResults = $derived(searchStats.totalCount > 0);
@@ -439,5 +438,22 @@
     font-size: 0.75rem;
     color: var(--cds-text-helper);
     font-style: italic;
+  }
+
+  :global(.search-panel .bx--inline-notification) {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: unset !important;
+  }
+
+  :global(.search-panel .bx--inline-notification__text-wrapper) {
+    flex-wrap: wrap;
+  }
+
+  :global(.search-panel .bx--inline-notification__subtitle) {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    hyphens: auto;
+    white-space: normal !important;
   }
 </style>

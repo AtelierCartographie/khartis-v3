@@ -9,12 +9,17 @@ import {
 } from '$lib/features/commons/utils/file-export.utils';
 import {
   exportMapToSvg,
-  exportMapToJpg
+  exportMapToJpg,
+  exportMapToPng
 } from '$lib/features/commons/utils/map-export.utils';
+import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
 import type { DataExportFormat } from '../types';
+import { Duck } from '$lib/features/duckdb';
+import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 
 export class ExportError extends Error {
   constructor(
@@ -38,11 +43,24 @@ export async function exportProject(fileName: string): Promise<void> {
 
 export async function exportMapAsSvg(fileName: string): Promise<void> {
   validateMapExportPrerequisites();
+  logger.info('Starting SVG export', LogCategory.EXPORT, {
+    datasetCount: datasetsStore.datasets.length,
+    visualizationCount: visualizationStore.activeVisualizations.length
+  });
 
-  const processedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
+
+  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
+
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
   const blob = exportMapToSvg(
     processedDatasets,
-    visualizationStore.activeVisualizations
+    visualizationStore.activeVisualizations,
+    {},
+    annotations,
+    legend
   );
   const filename = generateExportFilename(fileName, 'svg');
 
@@ -50,18 +68,62 @@ export async function exportMapAsSvg(fileName: string): Promise<void> {
   logger.info('SVG export completed', LogCategory.EXPORT, { filename });
 }
 
-export async function exportMapAsJpg(fileName: string): Promise<void> {
+export async function exportMapAsJpg(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
   validateMapExportPrerequisites();
 
-  const processedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
   const blob = await exportMapToJpg(
     processedDatasets,
-    visualizationStore.activeVisualizations
+    visualizationStore.activeVisualizations,
+    { width, height },
+    annotations,
+    legend
   );
   const filename = generateExportFilename(fileName, 'jpg');
 
   downloadFile(blob, filename);
-  logger.info('JPG export completed', LogCategory.EXPORT, { filename });
+  logger.info('JPG export completed', LogCategory.EXPORT, {
+    filename,
+    width,
+    height
+  });
+}
+
+export async function exportMapAsPng(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
+  validateMapExportPrerequisites();
+
+  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
+  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
+  const annotations = getAnnotationsState();
+  const legend = getLegendState();
+
+  const blob = await exportMapToPng(
+    processedDatasets,
+    visualizationStore.activeVisualizations,
+    { width, height },
+    annotations,
+    legend
+  );
+  const filename = generateExportFilename(fileName, 'png');
+
+  downloadFile(blob, filename);
+  logger.info('PNG export completed', LogCategory.EXPORT, {
+    filename,
+    width,
+    height
+  });
 }
 
 export async function exportData(
@@ -109,4 +171,89 @@ function getDataFormatConfig(format: DataExportFormat): {
     case 'csv-geo':
       return { format: 'csv-geo', extension: 'csv' };
   }
+}
+
+async function fetchDatasetsWithGeometry(
+  datasets: ProcessedDataset[]
+): Promise<ProcessedDataset[]> {
+  const results: ProcessedDataset[] = [];
+
+  for (const dataset of datasets) {
+    if (!dataset.duckdbTableName || !dataset.geometry) {
+      logger.warn(
+        'Skipping geometry hydration for dataset without table/geometry',
+        LogCategory.EXPORT,
+        {
+          id: dataset.id,
+          hasDuckdbTableName: !!dataset.duckdbTableName,
+          hasGeometry: !!dataset.geometry
+        }
+      );
+      results.push(dataset);
+      continue;
+    }
+
+    const geomColumn = dataset.columns.find((col) => col.type === 'geometry');
+    if (!geomColumn) {
+      logger.warn(
+        'Skipping geometry hydration for dataset without geometry column',
+        LogCategory.EXPORT,
+        {
+          id: dataset.id
+        }
+      );
+      results.push(dataset);
+      continue;
+    }
+
+    try {
+      const query = `SELECT * REPLACE (ST_AsGeoJSON("${geomColumn.name}") AS "${geomColumn.name}")
+         FROM "${dataset.duckdbTableName}"`;
+
+      const rows = (await Duck.query(query, { format: 'array' })) as Record<
+        string,
+        unknown
+      >[];
+
+      const columnNames = dataset.columns.map((c) => c.name);
+      const dataWithParsedGeometry = rows.map((row) => {
+        const newRow: Record<string, unknown> = {};
+        for (const colName of columnNames) {
+          newRow[colName] = row[colName];
+        }
+        const geomValue = newRow[geomColumn.name];
+        if (typeof geomValue === 'string') {
+          try {
+            newRow[geomColumn.name] = JSON.parse(geomValue);
+          } catch {
+            newRow[geomColumn.name] = null;
+          }
+        }
+        return newRow;
+      });
+
+      results.push({
+        ...dataset,
+        data: dataWithParsedGeometry
+      });
+    } catch (error) {
+      logger.error(
+        'Failed to fetch geometry data from DuckDB',
+        LogCategory.EXPORT,
+        {
+          datasetId: dataset.id,
+          tableName: dataset.duckdbTableName,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      results.push(dataset);
+    }
+  }
+
+  logger.info('Datasets prepared for export', LogCategory.EXPORT, {
+    requested: datasets.length,
+    prepared: results.length
+  });
+
+  return results;
 }

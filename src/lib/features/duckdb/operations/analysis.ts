@@ -109,24 +109,29 @@ export async function analyse(
           let summary_date: ArrowTableLike | null = null;
           let histogram = null;
 
-          try {
-            summary_general = (await executeQuery(
-              ctx.connection,
-              `FROM summary_general(${table}, "${escapeIdentifier(d.name as string)}")`,
-              { useProxy: false }
-            )) as ArrowTableLike;
-          } catch (e) {
-            logger.warn(
-              `Failed summary_general for ${d.name}`,
-              LogCategory.DUCKDB,
-              e
-            );
-          }
-
           const escapedColName = escapeIdentifier(d.name as string);
+
+          // Run summary_general in parallel with type-specific queries
+          // Use analysisTable (sampled when > 50K rows) instead of full table
+          const generalPromise = executeQuery(
+            ctx.connection,
+            `FROM summary_general(${analysisTable}, "${escapedColName}")`,
+            { useProxy: false }
+          )
+            .then((r) => r as ArrowTableLike)
+            .catch((e) => {
+              logger.warn(
+                `Failed summary_general for ${d.name}`,
+                LogCategory.DUCKDB,
+                e
+              );
+              return null;
+            });
+
           switch (type) {
             case 'numeric': {
-              const [numeric, hist] = await Promise.all([
+              const [general, numeric, hist] = await Promise.all([
+                generalPromise,
                 executeQuery(
                   ctx.connection,
                   `FROM summary_numeric(${analysisTable}, "${escapedColName}")`,
@@ -137,13 +142,15 @@ export async function analyse(
                   `FROM histogram_numeric(${analysisTable}, "${escapedColName}")`
                 )
               ]);
+              summary_general = general;
               summary_numeric = numeric;
               histogram = hist;
               break;
             }
 
             case 'date': {
-              const [dateSum, histDate] = await Promise.all([
+              const [general, dateSum, histDate] = await Promise.all([
+                generalPromise,
                 executeQuery(
                   ctx.connection,
                   `FROM summary_date(${analysisTable}, "${escapedColName}")`,
@@ -154,18 +161,21 @@ export async function analyse(
                   `FROM histogram_date(${analysisTable}, "${escapedColName}")`
                 )
               ]);
+              summary_general = general;
               summary_date = dateSum;
               histogram = histDate;
               break;
             }
 
             case 'string': {
-              const [histStr] = await Promise.all([
+              const [general, histStr] = await Promise.all([
+                generalPromise,
                 executeQuery(
                   ctx.connection,
                   `FROM histogram_categorical(${analysisTable}, "${escapedColName}")`
                 )
               ]);
+              summary_general = general;
               histogram = histStr;
               break;
             }

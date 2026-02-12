@@ -49,137 +49,42 @@ Khartis is a web application to create professional thematic maps without prior 
 
 TODO: add screenshots
 
-## Getting started
+## Quick Start
 
-Prerequisites
-
-- Node.js >= 18
-- pnpm 10 (via Corepack)
-
-Install
-
-- Enable Corepack (first time only):
+**Prerequisites**: Node.js >= 18, pnpm 10 (via Corepack)
 
 ```bash
+# Enable Corepack (once)
 corepack enable pnpm
-```
 
-- Install dependencies:
-
-```bash
+# Install
 pnpm install
-```
 
-Development
-
-```bash
+# Dev server
 pnpm dev
-```
 
-Build
-
-```bash
+# Build
 pnpm build && pnpm preview
 ```
 
-## Scripts
+## Commands
 
-- dev: start the development server
-- build: build for production
-- preview: preview the production build
-- check / check:watch: Svelte type checks
-- lint: Prettier check + ESLint
-- format: Prettier write
-- test:unit: unit tests with Vitest
-- test:e2e: end‑to‑end tests with Playwright
-- test: run unit tests and then E2E tests
+| Command          | Description             |
+| ---------------- | ----------------------- |
+| `pnpm dev`       | Development server      |
+| `pnpm build`     | Production build        |
+| `pnpm check`     | Svelte type check       |
+| `pnpm lint`      | ESLint + Prettier check |
+| `pnpm format`    | Auto-format code        |
+| `pnpm test`      | All tests (unit + E2E)  |
+| `pnpm test:unit` | Vitest unit tests       |
+| `pnpm test:e2e`  | Playwright E2E tests    |
 
-Additional
+**DuckDB Extensions**: Auto-downloaded on `pnpm install` (spatial, parquet, httpfs) for offline PWA.
 
-- generate-pwa-assets: generate PWA icons
-- machine-translate: run Inlang machine translation
-- init:project: initialize Husky and install
-- download:extensions: download DuckDB extensions for offline use
+**Testing**: See `docs/TESTING.md` for detailed guide.
 
-## DuckDB Extensions (Offline PWA)
-
-DuckDB extensions (spatial, parquet, httpfs) are bundled locally for offline-first PWA support.
-
-**Auto-sync with dependencies**
-
-Extensions are automatically downloaded after `pnpm install` via the `postinstall` hook. The script detects the installed `@duckdb/duckdb-wasm` version and downloads matching extensions.
-
-```
-static/duckdb-extensions/v1.4.0/wasm_eh/
-├── spatial.duckdb_extension.wasm  (22 MB)
-├── parquet.duckdb_extension.wasm  (2.9 MB)
-└── httpfs.duckdb_extension.wasm   (374 KB)
-```
-
-**Manual update**
-
-```bash
-pnpm download:extensions
-```
-
-**Version mapping**
-
-| @duckdb/duckdb-wasm | Extensions |
-| ------------------- | ---------- |
-| 1.31.0              | v1.4.0     |
-| 1.30.0              | v1.3.0     |
-
-Old extension versions are automatically cleaned up when upgrading.
-
-## Testing
-
-### Unit tests (Vitest)
-
-```bash
-pnpm test:unit              # Run all unit tests
-pnpm test:unit:ui           # Run with Vitest UI
-pnpm test:unit path/to/file # Run specific test file
-```
-
-### E2E tests (Playwright)
-
-```bash
-pnpm test:e2e               # Run all E2E tests
-pnpm test:e2e:ui            # Run with Playwright UI
-pnpm test:e2e --headed      # Run with visible browser
-```
-
-**Structure:**
-
-```
-e2e/
-├── global-setup.ts              # Playwright global setup
-├── helpers.ts                   # Shared test helpers
-├── imports/                     # File import tests by format
-│   ├── csv.spec.ts
-│   ├── geojson.spec.ts
-│   ├── geopackage.spec.ts
-│   ├── gpx.spec.ts
-│   ├── kml.spec.ts
-│   ├── kmz.spec.ts
-│   ├── parquet.spec.ts
-│   ├── shapefile.spec.ts
-│   ├── tsv.spec.ts
-│   └── zip.spec.ts
-├── project-modal.spec.ts        # Project creation modal
-└── side-nav.spec.ts             # Side navigation
-```
-
-**Test data selectors:** Tests use `data-testid` attributes for stability.
-
-## Linting and formatting
-
-- ESLint (JS/Svelte) and Prettier; run them locally or via CI
-
-## Internationalization
-
-- Inlang Paraglide for type‑safe i18n
-- Languages: English and French
+**i18n**: Inlang Paraglide (English, French)
 
 ## Documentation
 

@@ -15,7 +15,10 @@
     Modal,
     TextInput
   } from 'carbon-components-svelte';
+  import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
+  import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
   import { onMount, untrack } from 'svelte';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
   import { useColumnOperations } from './hooks/use-column-operations.svelte';
@@ -24,7 +27,12 @@
   import { useTableFilters } from './hooks/use-table-filters.svelte';
   import { useTableSort } from './hooks/use-table-sort.svelte';
   import { useVirtualScroll } from './hooks/use-virtual-scroll.svelte';
-  import { DOM_UPDATE_DELAY_MS, TABLE_ROW_HEIGHT } from './types';
+  import { GEOID_SCORE_THRESHOLD } from './column-type-styles';
+  import {
+    DOM_UPDATE_DELAY_MS,
+    TABLE_ROW_HEIGHT,
+    type ColumnType
+  } from './types';
 
   import TableColumnHeader from './components/TableColumnHeader.svelte';
   import TableHeaderInfo from './components/TableHeaderInfo.svelte';
@@ -73,6 +81,15 @@
     onSelectionChange
   }: Props = $props();
 
+  let histogramVisible = $state(true);
+  const effectiveShowSummaryPlots = $derived(
+    showSummaryPlots && histogramVisible
+  );
+
+  function toggleHistograms() {
+    histogramVisible = !histogramVisible;
+  }
+
   let tableContainer = $state<HTMLDivElement | undefined>(undefined);
   let viewportHeight = $state(
     typeof window !== 'undefined' ? window.innerHeight : 800
@@ -87,7 +104,10 @@
   const maxViewportHeight = $derived(
     Math.floor(viewportHeight * viewportHeightRatio)
   );
-  const computedMaxRows = $derived(Math.floor(maxViewportHeight / rowHeight));
+  const DEFAULT_MIN_ROWS = 10;
+  const computedMaxRows = $derived(
+    Math.max(DEFAULT_MIN_ROWS, Math.floor(maxViewportHeight / rowHeight))
+  );
   const effectiveMaxRows = $derived(maxRows ?? computedMaxRows);
   const maxHeight = $derived((effectiveMaxRows + 1) * rowHeight);
   const hasDataSource = $derived(!!dataset || !!tableName);
@@ -99,7 +119,7 @@
   }
 
   async function recordProjectTransformation(
-    type: 'refine',
+    type: 'refine' | 'drop' | 'type_change',
     column: string,
     newValue?: string
   ) {
@@ -149,6 +169,7 @@
   let newColumnName = $state('');
   let deleteConfirmOpen = $state(false);
   let columnToDelete = $state<string | null>(null);
+  let typeChangeError = $state<string | null>(null);
 
   const columnOps = useColumnOperations({
     tableName: () => tableName,
@@ -210,20 +231,65 @@
     }
   }
 
+  const columnTypeToDuckDB: Record<ColumnType, string> = {
+    text: 'VARCHAR',
+    number: 'DOUBLE',
+    date: 'DATE',
+    boolean: 'BOOLEAN'
+  };
+
+  async function handleChangeType(columnName: string, newType: ColumnType) {
+    typeChangeError = null;
+    isLocalUpdate = true;
+    try {
+      await columnOps.handleChangeType(columnName, newType);
+      await recordProjectTransformation(
+        'type_change',
+        columnName,
+        columnTypeToDuckDB[newType]
+      );
+    } catch (err) {
+      logger.error('Error changing column type', LogCategory.UI, err);
+      typeChangeError = m.column_type_change_error({
+        column: columnName,
+        type: newType
+      });
+    } finally {
+      setTimeout(() => {
+        isLocalUpdate = false;
+      }, 100);
+    }
+  }
+
   async function handleRenameConfirm() {
     if (!columnToRename || !newColumnName.trim() || !tableName) {
       renameModalOpen = false;
       return;
     }
 
+    const oldName = columnToRename;
+    const trimmedNewName = newColumnName.trim();
+
     isLocalUpdate = true;
     try {
-      await renameColumn(tableName, columnToRename, newColumnName.trim(), Duck);
+      await renameColumn(tableName, oldName, trimmedNewName, Duck);
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
-      recordTransformation(
-        `Colonne renommée: ${columnToRename} → ${newColumnName.trim()}`
-      );
+
+      if (dataset?.id) {
+        datasetsStore.renameDatasetColumn(dataset.id, oldName, trimmedNewName);
+      }
+
+      recordTransformation(`Colonne renommée: ${oldName} → ${trimmedNewName}`);
+
+      if (dataset?.sourceFileId) {
+        await projectStore.addColumnTransformation(dataset.sourceFileId, {
+          type: 'rename',
+          column: oldName,
+          newValue: trimmedNewName,
+          timestamp: new Date().toISOString()
+        });
+      }
     } catch (err) {
       logger.error('Error renaming column', LogCategory.UI, err);
     } finally {
@@ -247,9 +313,12 @@
       return;
     }
 
+    const deletedColumn = columnToDelete;
+
     isLocalUpdate = true;
     try {
-      await columnOps.handleDelete(columnToDelete);
+      await columnOps.handleDelete(deletedColumn);
+      await recordProjectTransformation('drop', deletedColumn);
     } catch (err) {
       logger.error('Error deleting column', LogCategory.UI, err);
     } finally {
@@ -261,6 +330,15 @@
     }
   }
 
+  // Pre-index cellHighlights into a Map for O(1) lookup instead of O(n) .find()
+  const cellHighlightMap = $derived.by(() => {
+    const map = new SvelteMap<string, 'exact' | 'contains' | 'partial'>();
+    for (const h of cellHighlights) {
+      map.set(`${h.rowId}:${h.columnName}`, h.type);
+    }
+    return map;
+  });
+
   function getCellHighlightType(
     rowId: number,
     columnName: string
@@ -271,11 +349,25 @@
     ) {
       return 'current';
     }
-    const highlight = cellHighlights.find(
-      (h) => h.rowId === rowId && h.columnName === columnName
-    );
-    return highlight?.type ?? null;
+    return cellHighlightMap.get(`${rowId}:${columnName}`) ?? null;
   }
+
+  // Pre-index highlightedRowIds into a Set for O(1) lookup instead of O(n) .includes()
+  const highlightedRowIdSet = $derived(new Set(highlightedRowIds));
+
+  // Pre-compute geoid column names for O(1) lookup in TableRow
+  const geoidColumns = $derived.by(() => {
+    const set = new SvelteSet<string>();
+    for (const [name, a] of tableData.columnAnalysis) {
+      if (
+        a?.semioType === 'geoid' &&
+        (a?.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD
+      ) {
+        set.add(name);
+      }
+    }
+    return set;
+  });
 
   function getRowHighlightType(
     rowIndex: number,
@@ -283,7 +375,7 @@
   ): HighlightType {
     const rowId = (row.__id as number | undefined) ?? rowIndex + 1;
     if (currentCell?.rowId === rowId) return 'current';
-    if (highlightedRowIds.includes(rowId)) return 'partial';
+    if (highlightedRowIdSet.has(rowId)) return 'partial';
     return null;
   }
 
@@ -301,6 +393,8 @@
     return () => window.removeEventListener('resize', handleResize);
   });
 
+  // Debounce scroll-to-cell to avoid stacking getRowPosition queries during search navigation
+  let scrollToCellTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     if (currentCell && filters.numRows > 0 && tableName) {
       const rowId = currentCell.rowId;
@@ -309,28 +403,32 @@
       const currentSortOrder = sort.sortOrder;
       const currentTableName = tableName;
 
-      untrack(async () => {
-        const position = await duckDBOrchestrator.getRowPosition(
-          currentTableName,
-          rowId,
-          { orderBy: currentSortColumn, order: currentSortOrder }
-        );
+      clearTimeout(scrollToCellTimer);
+      scrollToCellTimer = setTimeout(() => {
+        untrack(async () => {
+          const position = await duckDBOrchestrator.getRowPosition(
+            currentTableName,
+            rowId,
+            { orderBy: currentSortColumn, order: currentSortOrder }
+          );
 
-        if (position >= 0) {
-          await virtualScroll.goToPosition(position);
-        }
+          if (position >= 0) {
+            await virtualScroll.goToPosition(position);
+          }
 
-        setTimeout(() => {
-          const cellSelector = `td[data-column="${columnName}"]`;
-          const cell = tableContainer?.querySelector(cellSelector);
-          cell?.scrollIntoView({
-            behavior: 'smooth',
-            inline: 'center',
-            block: 'nearest'
-          });
-        }, DOM_UPDATE_DELAY_MS);
-      });
+          setTimeout(() => {
+            const cellSelector = `td[data-column="${columnName}"]`;
+            const cell = tableContainer?.querySelector(cellSelector);
+            cell?.scrollIntoView({
+              behavior: 'smooth',
+              inline: 'center',
+              block: 'nearest'
+            });
+          }, DOM_UPDATE_DELAY_MS);
+        });
+      }, 150);
     }
+    return () => clearTimeout(scrollToCellTimer);
   });
 
   let lastDatasetId: string | undefined = undefined;
@@ -432,11 +530,11 @@
 
   {#if tableData.error}
     <div class="error-message">
-      <p>Erreur: {tableData.error}</p>
+      <p>{m.error_prefix()}{tableData.error}</p>
     </div>
   {:else if showEmptyState}
     <div class="empty-state">
-      <p>Aucune donnée disponible</p>
+      <p>{m.no_data_available()}</p>
     </div>
   {:else if showFilteredEmptyState}
     <div class="empty-state">
@@ -452,10 +550,40 @@
       >
         <table>
           <thead>
-            <tr>
+            <tr class:histograms-open={effectiveShowSummaryPlots}>
               {#if isSelectable && isEditMode}
                 <th class="selection-header-spacer"></th>
               {/if}
+              <th
+                class="row-index-header"
+                class:histograms-open={effectiveShowSummaryPlots}
+              >
+                <div class="row-index-header-content">
+                  <div class="histogram-toggle-area">
+                    <button
+                      class="histogram-toggle"
+                      onclick={toggleHistograms}
+                      title={histogramVisible
+                        ? m.column_hide()
+                        : m.column_show()}
+                    >
+                      {#if histogramVisible}
+                        <ChevronUp size={16} />
+                      {:else}
+                        <ChevronDown size={16} />
+                      {/if}
+                    </button>
+                  </div>
+                  {#if effectiveShowSummaryPlots}
+                    <div class="row-index-stats">
+                      <span class="row-index-count"
+                        >{filters.filterStats.total}</span
+                      >
+                      <span class="row-index-label">{m.rows()}</span>
+                    </div>
+                  {/if}
+                </div>
+              </th>
               {#each columnOps.visibleColumns as column (column.name)}
                 <TableColumnHeader
                   column={column}
@@ -463,13 +591,13 @@
                   columnAnalysis={tableData.columnAnalysis}
                   sortColumn={sort.sortColumn}
                   sortOrder={sort.sortOrder}
-                  showSummaryPlots={showSummaryPlots}
+                  showSummaryPlots={effectiveShowSummaryPlots}
                   isEditMode={isEditMode}
                   isHidden={columnOps.isColumnHidden(column.name)}
                   onSort={handleSort}
                   onRefine={handleRefine}
                   onRename={columnOps.handleRename}
-                  onChangeType={columnOps.handleChangeType}
+                  onChangeType={handleChangeType}
                   onHide={columnOps.handleHide}
                   onDelete={handleDeleteRequest}
                 />
@@ -489,6 +617,8 @@
                   getCellHighlightType(rowId, colName)}
                 isSelectable={isSelectable && isEditMode}
                 isSelected={rowSelection.isRowSelected(rowId)}
+                showRowNumbers={true}
+                geoidColumns={geoidColumns}
                 onToggleSelection={rowSelection.toggleRowSelection}
               />
             {/each}
@@ -503,14 +633,23 @@
       {/if}
     </div>
   {/if}
+
+  {#if typeChangeError}
+    <InlineNotification
+      kind="error"
+      lowContrast
+      title={typeChangeError}
+      on:close={() => (typeChangeError = null)}
+    />
+  {/if}
 </div>
 
 <!-- Rename Column Modal -->
 <Modal
   bind:open={renameModalOpen}
-  modalHeading="Renommer la colonne"
-  primaryButtonText="Confirmer"
-  secondaryButtonText="Annuler"
+  modalHeading={m.column_rename_title()}
+  primaryButtonText={m.column_rename_confirm()}
+  secondaryButtonText={m.cancel()}
   on:click:button--primary={handleRenameConfirm}
   on:click:button--secondary={() => {
     renameModalOpen = false;
@@ -526,13 +665,12 @@
 >
   <div class="rename-modal-content">
     <p class="rename-modal-description">
-      Entrez le nouveau nom pour la colonne
-      <strong>{columnToRename}</strong>
+      {m.column_rename_description({ column: columnToRename ?? '' })}
     </p>
     <TextInput
       bind:value={newColumnName}
-      labelText="Nouveau nom"
-      placeholder="Nom de la colonne"
+      labelText={m.column_rename_label()}
+      placeholder={m.column_rename_placeholder()}
     />
   </div>
 </Modal>
@@ -575,29 +713,36 @@
 <style>
   .advanced-data-table {
     background-color: var(--cds-ui-background);
-    padding: var(--cds-spacing-05);
+    padding: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+    border: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .table-wrapper {
     position: relative;
+    overflow: hidden;
   }
 
   .table-container {
     overflow-y: auto;
     overflow-x: auto;
-    background-color: var(--cds-ui-01);
-    border: 1px solid var(--cds-ui-03);
-    border-radius: 4px;
+    background-color: #ffffff;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .table-container::-webkit-scrollbar {
+    display: none;
   }
 
   table {
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
-    font-size: 0.875rem;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
 
@@ -605,8 +750,8 @@
     td,
     th {
       text-overflow: ellipsis;
-      min-width: 150px;
-      max-width: 150px;
+      min-width: 128px;
+      max-width: 200px;
       overflow: hidden;
     }
   }
@@ -615,20 +760,102 @@
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: var(--cds-ui-02);
+    background-color: #e0e0e0;
   }
 
-  .selection-header-spacer {
-    width: 40px;
-    min-width: 40px;
-    max-width: 40px;
-    height: 30px;
+  thead .selection-header-spacer {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
     padding: 0;
-    border-bottom: 2px solid var(--cds-ui-03);
-    background-color: var(--cds-ui-02);
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    background-color: #e0e0e0;
     position: sticky;
     left: 0;
     z-index: 1;
+    overflow: visible;
+  }
+
+  tr.histograms-open .selection-header-spacer {
+    background: linear-gradient(
+      to bottom,
+      #e0e0e0 calc(100% - 63px),
+      #f4f4f4 calc(100% - 63px)
+    );
+  }
+
+  thead .row-index-header {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    padding: 0;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    background-color: #e0e0e0;
+    vertical-align: top;
+    overflow: visible;
+    position: relative;
+  }
+
+  .row-index-header-content {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    inset: 0;
+  }
+
+  /* --- Chevron toggle: top area, centered in dark gray header zone --- */
+  .histogram-toggle-area {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    min-height: 24px;
+  }
+
+  /* --- Row count: bottom area, centered in light gray histogram zone --- */
+  .row-index-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 63px;
+    flex-shrink: 0;
+    background-color: #f4f4f4;
+    line-height: 1.2;
+  }
+
+  .row-index-count {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #161616;
+    line-height: 1;
+  }
+
+  .row-index-label {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    color: #525252;
+    line-height: 1;
+  }
+
+  .histogram-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: #525252;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .histogram-toggle:hover {
+    color: #161616;
   }
 
   .skeleton-overlay {
@@ -643,8 +870,8 @@
   .error-message {
     padding: var(--cds-spacing-07);
     text-align: center;
-    color: var(--cds-text-02);
-    background-color: var(--cds-ui-01);
+    color: var(--cds-text-02, #525252);
+    background-color: var(--cds-layer-01, #f4f4f4);
     border-radius: 4px;
   }
 
@@ -660,7 +887,7 @@
   }
 
   :global(.rename-modal-description) {
-    color: var(--cds-text-02);
+    color: var(--cds-text-02, #525252);
     margin-bottom: var(--cds-spacing-03);
   }
 </style>

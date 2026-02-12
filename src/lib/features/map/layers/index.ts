@@ -17,6 +17,13 @@ export {
   createLineLayers,
   createPointLayers,
   createPolygonLayers,
-  createWorldBaseLayer,
   type LayerContext
 } from './layer-factory';
+
+export {
+  createBasemapLayers,
+  createEquateurLayer,
+  createFrontieresLayer,
+  createMeridiensLayer,
+  createMersLayer
+} from './basemap-layers';

@@ -10,9 +10,13 @@
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+
+  initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
@@ -21,14 +25,17 @@
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Theme } from 'carbon-components-svelte';
+  import { Tag, Theme } from 'carbon-components-svelte';
+  import { WarningAltFilled } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
+  import * as m from '$lib/paraglide/messages';
 
   import 'carbon-components-svelte/css/all.css';
 
   import '$lib/features/commons/assets/styles/dimension.css';
   import '$lib/features/commons/assets/styles/flex.css';
   import '$lib/features/commons/assets/styles/global.css';
+  import '$lib/features/commons/assets/styles/figma-tokens.css';
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
 
@@ -52,15 +59,30 @@
       }
     }
 
+    // Initialize tab state from URL query params
+    globalActions.initializeFromUrl();
+
     handleResize();
     window.addEventListener('resize', handleResize);
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (projectStore.isDirty) {
+        e.preventDefault();
+        // Legacy browsers require returnValue to be set
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     const initApp = async () => {
       try {
         // Initialize DuckDB WASM runtime (critical for app functionality)
         await duckDBOrchestrator.initialize();
 
-        // Hide loader as soon as DuckDB is ready
+        // Initialize basemap service (loads metadata catalog for world background)
+        await basemapService.initialize();
+
+        // Hide loader as soon as DuckDB and basemaps are ready
         isLoading = false;
 
         logger.info(
@@ -110,6 +132,7 @@
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   });
 
@@ -150,7 +173,13 @@
 
       <MobileOpenPanelButton />
 
-      <div></div>
+      {#if projectStore.isDirty}
+        <div class="unsaved-indicator">
+          <Tag type="warm-gray" size="sm" icon={WarningAltFilled}>
+            {m.unsaved_changes_notice()}
+          </Tag>
+        </div>
+      {/if}
     </article>
 
     <CreateProject
@@ -190,7 +219,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--cds-spacing-06);
+    gap: var(--cds-spacing-03);
     overflow: visible;
   }
 
@@ -207,6 +236,15 @@
     justify-content: center;
     transition: transform 0.2s ease-in-out;
     overflow: visible;
-    padding: var(--cds-spacing-05);
+    padding: var(--cds-spacing-03) var(--cds-spacing-05);
+  }
+
+  .unsaved-indicator {
+    position: absolute;
+    top: var(--cds-spacing-03);
+    right: var(--cds-spacing-03);
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0.85;
   }
 </style>

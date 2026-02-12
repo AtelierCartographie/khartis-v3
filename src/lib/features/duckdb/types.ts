@@ -1,12 +1,10 @@
 import { FileType } from '$lib/features/commons/store/create-project.types';
+import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import type { GeoArrowMetadata } from '$lib/features/data-pipeline';
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import type { Table } from 'apache-arrow/Arrow';
 
 export { FileType };
-
-// --- Enums ---
 
 export enum DuckDBSimplifiedType {
   NUMERIC = 'numeric',
@@ -35,8 +33,6 @@ export enum FilterOperatorEnum {
   NOT_EMPTY = 'not_empty'
 }
 
-// --- DuckDB Metadata Types ---
-
 export interface DuckDBMetadata {
   name: string;
   format: string;
@@ -44,8 +40,6 @@ export interface DuckDBMetadata {
   geometry: string;
   crs: string;
 }
-
-// --- Analysis Types ---
 
 export interface AnalysisResult {
   name: string;
@@ -64,8 +58,6 @@ export interface AnalysisResult {
 
 export type AnalysisResults = AnalysisResult[];
 
-// --- Query Types ---
-
 // Use QueryFormatEnum values instead of string literals
 export type QueryFormat = `${QueryFormatEnum}`;
 
@@ -77,8 +69,6 @@ export interface QueryOptions {
 export type DuckDBUnsafeBindings = {
   runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
 };
-
-// --- Table Types ---
 
 export interface TableMetadata {
   analysis?: AnalysisResults | null;
@@ -98,8 +88,6 @@ export type DescribeResult = {
   type: string[];
 };
 
-// --- File Types ---
-
 export interface FileWithId extends File {
   id: string;
 }
@@ -108,6 +96,7 @@ export interface ReadTabularOptions {
   tablename?: string;
   decimal_separator?: string;
   thousands_separator?: string;
+  delimiter?: string;
   header?: boolean;
   format?: string;
 }
@@ -127,13 +116,9 @@ export interface RegisterFilesOptions {
   shapefile?: boolean;
 }
 
-// --- Analysis Options ---
-
 export interface AnalyseOptions {
   force?: boolean;
 }
-
-// --- Join Types ---
 
 export interface JoinByIdOptions {
   basemaps_table?: string;
@@ -148,8 +133,6 @@ export interface FinalizeJoinResult {
   gpsMode?: boolean;
   gpsColumns?: GPSColumns;
 }
-
-// --- Search Types ---
 
 export interface CellSearchResult {
   rowId: number;
@@ -167,8 +150,6 @@ export interface SearchStats {
   isSampled?: boolean; // true if search was performed on a sample (large table)
 }
 
-// --- Cache Types ---
-
 export interface CacheState {
   size: number;
   accessOrder: string[];
@@ -180,8 +161,6 @@ export interface QueryCacheEntry {
   tableVersions: Map<string, number>;
 }
 
-// --- Extension State ---
-
 export interface ExtensionsLoaded {
   spatial: boolean;
   httpfs: boolean;
@@ -191,8 +170,6 @@ export interface ExtensionLoadPromises {
   spatial: Promise<void> | null;
   httpfs: Promise<void> | null;
 }
-
-// --- Filter Types ---
 
 export enum RefineOperation {
   UPPERCASE = 'uppercase',
@@ -224,8 +201,6 @@ export interface FilterStats {
   filtered: number;
 }
 
-// --- GPS Types ---
-
 export interface GPSColumns {
   lat: string;
   lon: string;
@@ -237,8 +212,6 @@ export interface GPSBounds {
   maxLon: number;
   maxLat: number;
 }
-
-// --- Dataset Types ---
 
 export interface DuckDBDataset {
   id: string;
@@ -260,8 +233,6 @@ export interface DuckDBDataset {
   gpsColumns?: GPSColumns;
 }
 
-// --- DuckDB Context (shared state for modules) ---
-
 export interface DuckDBContext {
   db: duckdb.AsyncDuckDB;
   connection: duckdb.AsyncDuckDBConnection;
@@ -279,8 +250,6 @@ export interface DuckDBContext {
   threadsSupported: boolean;
   bundleVariant: 'eh' | 'mvp';
 }
-
-// --- Arrow Types ---
 
 export interface ArrowTableLike {
   get(index: number): Record<string, unknown>;
