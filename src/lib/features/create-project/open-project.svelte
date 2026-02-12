@@ -82,11 +82,13 @@
   async function handleFileImport(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
 
-    const khFile = files.find(
-      (f) =>
-        f.name.endsWith(KHARTIS_FILE_EXTENSIONS[0]) ||
-        f.name.endsWith(KHARTIS_FILE_EXTENSIONS[1])
-    );
+    const khFile = files.find((f) => {
+      const normalizedName = f.name.toLowerCase();
+      return (
+        normalizedName.endsWith(KHARTIS_FILE_EXTENSIONS[0]) ||
+        normalizedName.endsWith(KHARTIS_FILE_EXTENSIONS[1])
+      );
+    });
 
     if (!khFile) {
       logger.error('No valid Khartis file found', LogCategory.PROJECT, {
