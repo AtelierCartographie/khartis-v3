@@ -6,7 +6,6 @@ import {
 } from '$lib/features/commons/components/summary-plot/summary-plot';
 import type { AnalysisResult } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../utils/logger';
-import { getColumnTypeStyle } from './column-type-styles';
 
 type HistogramLike = NumericHistogram | CategoricalHistogram;
 
@@ -30,26 +29,22 @@ function isCategoricalHistogram(value: unknown): value is CategoricalHistogram {
   return sample === undefined || 'category' in sample;
 }
 
-function getCSSVariable(name: string, fallback: string): string {
-  if (typeof document === 'undefined') return fallback;
-  const value = getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
-  return value || fallback;
-}
-
 function getPlotOptions(typeSimple?: string) {
-  const typeStyle = getColumnTypeStyle(typeSimple);
-  const textColor = getCSSVariable('--cds-text-01', '');
+  const isString = typeSimple === 'string';
+
   return {
     width: 150,
-    height: 48,
-    main_color: typeStyle.color,
-    nulls_color: '#ffd666',
-    unique_color: getCSSVariable('--cds-ui-03', '#525252'),
-    bg_color: getCSSVariable('--cds-ui-02', '#393939'),
-    text_color: textColor || 'currentColor',
-    text_secondary_color: getCSSVariable('--cds-text-02', '#c6c6c6')
+    height: 36,
+    // Bar colors matching Carbon Design tokens (Magenta-60 / Purple-60 / Teal-60)
+    main_color: isString ? '#d02670' : '#8a3ffc',
+    nulls_color: '#ff832b',
+    unique_color: '#007d79',
+    // Light background for hover-mask text
+    bg_color: '#f4f4f4',
+    // Label text color
+    text_color: '#525252',
+    // Baseline rule color (numeric histograms)
+    rule_color: '#8d8d8d'
   };
 }
 

@@ -68,7 +68,16 @@ export enum DeckLayerId {
   LINE_LAYER = 'line-layer',
   POLYGON_LAYER = 'polygon-layer',
   GEOJSON_LAYER = 'geojson-layer',
-  WORLD_BASE_LAYER = 'world-base-layer'
+  WORLD_BASE_LAYER = 'world-base-layer',
+  BASEMAP_TERRE = 'basemap-terre',
+  BASEMAP_MERS = 'basemap-mers',
+  BASEMAP_LACS = 'basemap-lacs',
+  BASEMAP_RIVIERES = 'basemap-rivieres',
+  BASEMAP_RELIEF = 'basemap-relief',
+  BASEMAP_EQUATEUR = 'basemap-equateur',
+  BASEMAP_MERIDIENS = 'basemap-meridiens',
+  BASEMAP_FRONTIERES = 'basemap-frontieres',
+  BASEMAP_VILLES = 'basemap-villes'
 }
 
 export enum MapStorageKey {
@@ -130,6 +139,11 @@ export const GEOJSON_GEOMETRY_TYPES = [
   GeoJsonGeometryType.MultiPolygon
 ] as const;
 
-export function createLayerId(prefix: DeckLayerId, datasetId?: string): string {
-  return `${prefix}-${datasetId ?? 'default'}`;
+export function createLayerId(
+  prefix: DeckLayerId,
+  datasetId?: string,
+  projectionSuffix?: string
+): string {
+  const base = `${prefix}-${datasetId ?? 'default'}`;
+  return projectionSuffix ? `${base}-${projectionSuffix}` : base;
 }

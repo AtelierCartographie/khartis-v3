@@ -1,7 +1,7 @@
 <script lang="ts">
+  import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
   import { Launch } from 'carbon-icons-svelte';
-  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     isActive?: boolean;
@@ -69,7 +69,7 @@
   <Button
     kind="ghost"
     icon={Launch}
-    iconDescription="En savoir plus"
+    iconDescription={m.learn_more()}
     href="https://www.sciencespo.fr/cartographie/khartis/docs/data"
     target="_blank"
     size="small"

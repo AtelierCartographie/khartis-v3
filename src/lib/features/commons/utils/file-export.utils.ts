@@ -1,6 +1,7 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
-import { escapeSqlString } from './sanitize.utils';
+import * as m from '$lib/paraglide/messages';
+import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 
 export const generateExportFilename = generateFilename;
@@ -14,7 +15,7 @@ export async function exportToCsv(
 
     await initDuckDB();
     if (!Duck) {
-      throw new Error('DuckDB not initialized');
+      throw new Error(m.error_duckdb_not_initialized());
     }
 
     const csvString = await Duck.copy_to_csv_as_string(tableName, {
@@ -71,19 +72,19 @@ export async function exportDatasetToCsv(
   if (dataset.duckdbTableName) {
     await initDuckDB();
     if (!Duck) {
-      throw new Error('DuckDB not initialized');
+      throw new Error(m.error_duckdb_not_initialized());
     }
 
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
       .filter((col) => col.type !== 'geometry')
-      .map((col) => `"${col.name}"`)
+      .map((col) => `"${escapeIdentifier(col.name)}"`)
       .join(', ');
 
     try {
       await Duck.query(`
         CREATE TEMPORARY VIEW "${viewName}" AS
-        SELECT ${nonGeomColumns} FROM "${dataset.duckdbTableName}"
+        SELECT ${nonGeomColumns} FROM "${escapeIdentifier(dataset.duckdbTableName!)}"
       `);
 
       const blob = await exportToCsv(viewName);
@@ -140,7 +141,7 @@ export function exportToGeoJson(data: unknown): Blob {
         })
     };
   } else {
-    throw new Error('Invalid data format for GeoJSON export');
+    throw new Error(m.error_invalid_data_format_geojson());
   }
 
   const jsonString = JSON.stringify(geojson, null, 2);
@@ -250,7 +251,7 @@ export async function exportProcessedDatasets(
   format: 'csv' | 'geojson' | 'json' | 'csv-geo' = 'json'
 ): Promise<Blob> {
   if (datasets.length === 0) {
-    throw new Error('No datasets to export');
+    throw new Error(m.error_no_datasets_to_export());
   }
 
   if (format === 'csv-geo') {
@@ -269,7 +270,7 @@ export async function exportProcessedDatasets(
       // Ensure DuckDB is initialized
       await initDuckDB();
       if (!Duck) {
-        throw new Error('DuckDB not initialized');
+        throw new Error(m.error_duckdb_not_initialized());
       }
 
       // Use DuckDB UNION ALL to combine tables
@@ -280,10 +281,10 @@ export async function exportProcessedDatasets(
         const unionParts = datasets.map((dataset) => {
           const nonGeomColumns = dataset.columns
             .filter((col) => col.type !== 'geometry')
-            .map((col) => `"${col.name}"`)
+            .map((col) => `"${escapeIdentifier(col.name)}"`)
             .join(', ');
           const escapedName = escapeSqlString(dataset.name);
-          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${dataset.duckdbTableName}"`;
+          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
         });
 
         const unionQuery = `
@@ -359,7 +360,7 @@ export async function exportProcessedDatasets(
     }
 
     if (allFeatures.length === 0) {
-      throw new Error('No geometric data to export');
+      throw new Error(m.error_no_geometric_data_export());
     }
 
     return exportToGeoJson({

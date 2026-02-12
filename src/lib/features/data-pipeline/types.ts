@@ -1,6 +1,12 @@
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import type { Duck } from '$lib/features/duckdb';
+
+export type {
+  GeoArrowCRS,
+  GeoArrowColumnMetadata,
+  GeoArrowMetadata
+} from '$lib/features/commons/types/geoarrow.types';
+export { isGeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 
 export enum ColumnType {
   BOOLEAN = 'boolean',
@@ -144,39 +150,6 @@ export function mergeValidationResults(
   };
 }
 
-export interface GeoArrowMetadata {
-  version: string;
-  primary_column: string;
-  columns: Record<string, GeoArrowColumnMetadata>;
-}
-
-export interface GeoArrowColumnMetadata {
-  encoding: string;
-  geometry_types: string[];
-  bbox: [number, number, number, number];
-  crs?: GeoArrowCRS;
-  edges?: 'planar' | 'spherical';
-}
-
-export interface GeoArrowCRS {
-  name?: string;
-  id?: { authority: string; code: number };
-  wkt?: string;
-}
-
-export function isGeoArrowMetadata(obj: unknown): obj is GeoArrowMetadata {
-  if (
-    typeof obj !== 'object' ||
-    obj === null ||
-    typeof (obj as Record<string, unknown>).version !== 'string' ||
-    typeof (obj as Record<string, unknown>).primary_column !== 'string'
-  ) {
-    return false;
-  }
-  const columns = (obj as Record<string, unknown>).columns;
-  return typeof columns === 'object' && columns !== null;
-}
-
 export interface ColumnAnalysis {
   name?: string;
   type?: ColumnType | string;
@@ -231,6 +204,13 @@ export interface AnalysisResult {
 
 export type FileFormat = `${FileFormatEnum}`;
 
+export interface CsvImportOptions {
+  header: boolean;
+  decimalSeparator: string;
+  thousandsSeparator?: string;
+  delimiter?: string;
+}
+
 export interface DatasetMetadata {
   processedAt: Date;
   fileType: string;
@@ -238,6 +218,7 @@ export interface DatasetMetadata {
   processingDuration?: number;
   transformations?: string[];
   geoDuckTableReady?: boolean;
+  csvOptions?: CsvImportOptions;
 }
 
 export interface DatasetResult {
@@ -263,6 +244,14 @@ export interface DatasetResult {
   geoDetection?: GeoDetectionResult;
   joinedBasemap?: string;
   geoColumn?: string;
+  simplificationApplied?: {
+    rate: number;
+    tolerance: number;
+    originalVertices: number;
+    simplifiedVertices: number;
+    reductionPercentage: number;
+    duration: number;
+  };
 }
 
 export interface ProcessedDatasetAnalysisResult {
@@ -298,7 +287,7 @@ export interface ProcessedDataset {
 }
 
 export interface PipelineContext {
-  duck: typeof Duck;
+  initialized: boolean;
 }
 
 export interface UploadedFilePayload {

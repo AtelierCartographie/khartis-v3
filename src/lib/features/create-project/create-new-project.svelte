@@ -237,7 +237,7 @@
       <TextInput
         bind:value={onlineUrlValue}
         labelText={m.create_project_online_file_link()}
-        placeholder="https://example.com/data.csv"
+        placeholder={m.url_placeholder_example()}
         disabled={createProjectState.newProject.isLoading}
         invalid={!!(urlValidation && !urlValidation.isValid)}
         invalidText={urlValidation?.errors[0] || ''}
@@ -360,7 +360,7 @@
               <Button
                 size="field"
                 kind="ghost"
-                iconDescription="Cancel"
+                iconDescription={m.cancel()}
                 icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                 disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
@@ -383,7 +383,7 @@
               <Button
                 size="field"
                 kind="ghost"
-                iconDescription="Remove file"
+                iconDescription={m.remove_file_action()}
                 icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                 disabled={deletingFileIds.has(file.id)}
                 on:click={() => handleRemoveFile(file.id)}
@@ -419,7 +419,7 @@
                   <Button
                     size="small"
                     kind="ghost"
-                    iconDescription="Remove file"
+                    iconDescription={m.remove_file_action()}
                     icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                     disabled={deletingFileIds.has(file.id)}
                     on:click={() => handleRemoveFile(file.id)}
@@ -489,7 +489,7 @@
                   <Button
                     size="small"
                     kind="ghost"
-                    iconDescription="Remove file"
+                    iconDescription={m.remove_file_action()}
                     icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                     disabled={deletingFileIds.has(file.id)}
                     on:click={() => handleRemoveFile(file.id)}

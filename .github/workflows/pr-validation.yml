@@ -239,12 +239,11 @@ jobs:
 
   e2e-tests:
     name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    if: false # TEMPORARILY DISABLED
     needs: build-check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         shardIndex: [1, 2, 3, 4]
         shardTotal: [4]
@@ -281,20 +280,8 @@ jobs:
           key: ${{ runner.os }}-build-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/pnpm-lock.yaml') }}
-
       - name: Install Playwright Browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
-
-      - name: Install Playwright system dependencies
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+        run: npx playwright install chromium --with-deps
 
       - name: Run Playwright tests
         run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
@@ -312,7 +299,7 @@ jobs:
 
   merge-reports:
     name: Merge E2E Reports
-    if: false # TEMPORARILY DISABLED
+    if: ${{ !cancelled() }}
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
@@ -337,24 +324,14 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Download blob reports
-        id: download-reports
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           path: all-blob-reports
           pattern: blob-report-*
           merge-multiple: true
 
       - name: Merge into HTML Report
-        run: |
-          if [ -d "all-blob-reports" ] && [ "$(ls -A all-blob-reports 2>/dev/null)" ]; then
-            echo "Found blob reports, merging..."
-            npx playwright merge-reports --reporter html,markdown ./all-blob-reports
-          else
-            echo "⚠️ No E2E test reports found - tests may have failed before producing reports" >> $GITHUB_STEP_SUMMARY
-            mkdir -p playwright-report
-            echo "<html><body><h1>No E2E reports available</h1><p>Tests failed before producing reports.</p></body></html>" > playwright-report/index.html
-          fi
+        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
 
       - name: Generate E2E test summary
         if: always()
@@ -366,32 +343,17 @@ jobs:
             cat report.md >> $GITHUB_STEP_SUMMARY
           fi
 
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🗺️ Cartography Test Coverage" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Domain | Tests |" >> $GITHUB_STEP_SUMMARY
-          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🌍 GeoJSON Import | e2e/imports/geojson.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📦 Shapefile Import | e2e/imports/shapefile.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗄️ GeoPackage Import | e2e/imports/geopackage.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📍 GPX Import | e2e/imports/gpx.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📌 KML Import | e2e/imports/kml.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📊 CSV Import | e2e/imports/csv.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🗜️ ZIP Archives | e2e/imports/zip.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "| 📁 Project Management | e2e/project-modal.spec.ts |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📥 [Download full HTML report](../artifacts/playwright-report)" >> $GITHUB_STEP_SUMMARY
-
       - name: Upload HTML report
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report
-          retention-days: 7
+          retention-days: 14
 
   pr-validation-complete:
     name: PR Validation Complete
-    needs: [lint, svelte-check, unit-tests, build-check] # e2e-tests, merge-reports temporarily removed
+    needs:
+      [lint, svelte-check, unit-tests, build-check, e2e-tests, merge-reports]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -407,7 +369,7 @@ jobs:
           TYPECHECK="${{ needs.svelte-check.result }}"
           UNIT="${{ needs.unit-tests.result }}"
           BUILD="${{ needs.build-check.result }}"
-          # E2E tests temporarily disabled
+          E2E="${{ needs.e2e-tests.result }}"
 
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -436,17 +398,21 @@ jobs:
             echo "| 📦 Build | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
           fi
 
-          # E2E TEMPORARILY DISABLED
-          echo "| 🎭 E2E Tests (Playwright) | ⏸️ Disabled |" >> $GITHUB_STEP_SUMMARY
+          if [ "$E2E" == "success" ]; then
+            echo "| 🎭 E2E Tests (Playwright) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| 🎭 E2E Tests (Playwright) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
+          fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # Calculate health score (E2E excluded - 25 points each for 4 checks)
+          # Calculate health score (20 points each for 5 checks)
           SCORE=0
-          [ "$LINT" == "success" ] && SCORE=$((SCORE + 25))
-          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 25))
-          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 25))
-          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 25))
+          [ "$LINT" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 20))
+          [ "$E2E" == "success" ] && SCORE=$((SCORE + 20))
 
           echo "## Health Score: $SCORE/100" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -464,5 +430,6 @@ jobs:
           needs.lint.result != 'success' ||
           needs.svelte-check.result != 'success' ||
           needs.unit-tests.result != 'success' ||
-          needs.build-check.result != 'success'
+          needs.build-check.result != 'success' ||
+          needs.e2e-tests.result != 'success'
         run: exit 1

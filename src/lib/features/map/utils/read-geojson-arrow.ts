@@ -1,4 +1,5 @@
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import {
   Field,
@@ -15,7 +16,153 @@ import {
   GeometryEncoding
 } from '../constants';
 
-function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
+/**
+ * Maps GeoParquet encoding names to Arrow extension names.
+ * GeoParquet spec uses short names (e.g., "multipolygon"),
+ * while Arrow extension metadata uses prefixed names (e.g., "geoarrow.multipolygon").
+ */
+const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
+  wkb: ArrowExtension.OGC_WKB,
+  point: ArrowExtension.GEOARROW_POINT,
+  multipoint: ArrowExtension.GEOARROW_MULTIPOINT,
+  linestring: ArrowExtension.GEOARROW_LINESTRING,
+  multilinestring: ArrowExtension.GEOARROW_MULTILINESTRING,
+  polygon: ArrowExtension.GEOARROW_POLYGON,
+  multipolygon: ArrowExtension.GEOARROW_MULTIPOLYGON
+};
+
+const ARROW_EXTENSION_TO_GEOJSON_TYPES: Record<string, string[]> = {
+  [ArrowExtension.GEOARROW_POINT]: [GeoJsonGeometryType.Point],
+  [ArrowExtension.GEOARROW_MULTIPOINT]: [
+    GeoJsonGeometryType.Point,
+    GeoJsonGeometryType.MultiPoint
+  ],
+  [ArrowExtension.GEOARROW_LINESTRING]: [GeoJsonGeometryType.LineString],
+  [ArrowExtension.GEOARROW_MULTILINESTRING]: [
+    GeoJsonGeometryType.LineString,
+    GeoJsonGeometryType.MultiLineString
+  ],
+  [ArrowExtension.GEOARROW_POLYGON]: [
+    GeoJsonGeometryType.Polygon,
+    GeoJsonGeometryType.MultiPolygon
+  ],
+  [ArrowExtension.GEOARROW_MULTIPOLYGON]: [
+    GeoJsonGeometryType.Polygon,
+    GeoJsonGeometryType.MultiPolygon
+  ]
+};
+
+/**
+ * Detect native GeoArrow encoding from Arrow column type structure.
+ * Native GeoArrow uses nested List<Struct{x,y}> patterns:
+ * - Point: Struct{x,y} (depth 0)
+ * - MultiPoint/LineString: List<Struct{x,y}> (depth 1)
+ * - Polygon/MultiLineString: List<List<Struct{x,y}>> (depth 2)
+ * - MultiPolygon: List<List<List<Struct{x,y}>>> (depth 3)
+ */
+function detectNativeGeoArrowFromType(geomField: Field): string | null {
+  let type = geomField.type;
+  let listDepth = 0;
+
+  // Unwrap List nesting layers
+  while (type.children && type.children.length === 1) {
+    type = type.children[0].type;
+    listDepth++;
+  }
+
+  // Innermost type must be a Struct with 2+ fields (x, y coordinates)
+  if (!type.children || type.children.length < 2) {
+    return null;
+  }
+
+  switch (listDepth) {
+    case 0:
+      return ArrowExtension.GEOARROW_POINT;
+    case 1:
+      return ArrowExtension.GEOARROW_MULTIPOINT;
+    case 2:
+      return ArrowExtension.GEOARROW_POLYGON;
+    case 3:
+      return ArrowExtension.GEOARROW_MULTIPOLYGON;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Resolve the Arrow extension name for a geometry column.
+ * Priority: geoParquetEncoding > field metadata > column type detection > WKB fallback
+ */
+function resolveGeometryEncoding(
+  geomField: Field,
+  geoParquetEncoding?: string
+): { arrowExtension: string; geometryTypes: string[] } {
+  // 1. Caller-provided GeoParquet encoding (most reliable)
+  if (geoParquetEncoding) {
+    const mapped =
+      GEOPARQUET_ENCODING_TO_ARROW[geoParquetEncoding.toLowerCase()];
+    if (mapped) {
+      return {
+        arrowExtension: mapped,
+        geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[mapped] ?? [
+          GeoJsonGeometryType.Polygon,
+          GeoJsonGeometryType.MultiPolygon
+        ]
+      };
+    }
+  }
+
+  // 2. Existing field-level extension metadata
+  const extensionName = geomField.metadata?.get(
+    GeoArrowMetadataKey.EXTENSION_NAME
+  );
+  if (extensionName) {
+    if (extensionName.includes('geoarrow')) {
+      return {
+        arrowExtension: extensionName,
+        geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[extensionName] ?? [
+          GeoJsonGeometryType.Polygon,
+          GeoJsonGeometryType.MultiPolygon
+        ]
+      };
+    }
+    if (extensionName === ArrowExtension.OGC_WKB) {
+      return {
+        arrowExtension: ArrowExtension.OGC_WKB,
+        geometryTypes: [
+          GeoJsonGeometryType.Polygon,
+          GeoJsonGeometryType.MultiPolygon
+        ]
+      };
+    }
+  }
+
+  // 3. Detect from column type structure (fallback for parquet without field metadata)
+  const detected = detectNativeGeoArrowFromType(geomField);
+  if (detected) {
+    return {
+      arrowExtension: detected,
+      geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[detected] ?? [
+        GeoJsonGeometryType.Polygon,
+        GeoJsonGeometryType.MultiPolygon
+      ]
+    };
+  }
+
+  // 4. Default to WKB
+  return {
+    arrowExtension: ArrowExtension.OGC_WKB,
+    geometryTypes: [
+      GeoJsonGeometryType.Polygon,
+      GeoJsonGeometryType.MultiPolygon
+    ]
+  };
+}
+
+export function addGeoArrowMetadata(
+  table: ArrowTable,
+  geoParquetEncoding?: string
+): ArrowTable {
   const geomColumn = table.schema.fields.find(
     (f) => f.name === GeoColumnName.GEOM || f.name === GeoColumnName.GEOMETRY
   );
@@ -25,39 +172,10 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
   }
 
   const geoColumnName = geomColumn.name;
-
-  const extensionName = geomColumn.metadata?.get(
-    GeoArrowMetadataKey.EXTENSION_NAME
+  const { arrowExtension, geometryTypes } = resolveGeometryEncoding(
+    geomColumn,
+    geoParquetEncoding
   );
-  let encoding: string = GeometryEncoding.WKB;
-  let geometryTypes = [
-    GeoJsonGeometryType.Polygon,
-    GeoJsonGeometryType.MultiPolygon
-  ];
-
-  if (extensionName) {
-    if (extensionName.includes('geoarrow')) {
-      encoding = extensionName;
-      if (extensionName.includes('point')) {
-        geometryTypes = [
-          GeoJsonGeometryType.Point,
-          GeoJsonGeometryType.MultiPoint
-        ];
-      } else if (extensionName.includes('line')) {
-        geometryTypes = [
-          GeoJsonGeometryType.LineString,
-          GeoJsonGeometryType.MultiLineString
-        ];
-      } else if (extensionName.includes('polygon')) {
-        geometryTypes = [
-          GeoJsonGeometryType.Polygon,
-          GeoJsonGeometryType.MultiPolygon
-        ];
-      }
-    } else if (extensionName === ArrowExtension.OGC_WKB) {
-      encoding = GeometryEncoding.WKB;
-    }
-  }
 
   const columnBounds: [number, number, number, number] = [-180, -90, 180, 90];
 
@@ -66,7 +184,7 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
     primary_column: geoColumnName,
     columns: {
       [geoColumnName]: {
-        encoding,
+        encoding: arrowExtension,
         geometry_types: geometryTypes,
         crs: {
           type: 'name',
@@ -86,10 +204,7 @@ function addGeoArrowMetadata(table: ArrowTable): ArrowTable {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
       if (!fieldMetadata.has(GeoArrowMetadataKey.EXTENSION_NAME)) {
-        fieldMetadata.set(
-          GeoArrowMetadataKey.EXTENSION_NAME,
-          ArrowExtension.OGC_WKB
-        );
+        fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, arrowExtension);
       }
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
@@ -194,6 +309,33 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   return newTable;
 }
 
+/**
+ * Read GeoParquet encoding from parquet file metadata.
+ */
+async function readParquetGeoEncoding(
+  escapedFileId: string
+): Promise<string | undefined> {
+  try {
+    const result = (await Duck.query(
+      `SELECT value FROM parquet_kv_metadata('${escapedFileId}') WHERE key = 'geo'`,
+      { format: 'array', useProxy: false }
+    )) as Array<{ value: string }>;
+
+    if (result.length > 0 && result[0].value) {
+      const geo = JSON.parse(result[0].value);
+      const primaryCol = geo.primary_column ?? 'geom';
+      return geo.columns?.[primaryCol]?.encoding;
+    }
+  } catch (error) {
+    logger.warn(
+      'Failed to read GeoParquet metadata for encoding',
+      LogCategory.MAP,
+      error
+    );
+  }
+  return undefined;
+}
+
 export async function readGeoParquetViaDuckDB(
   arrayBuffer: ArrayBuffer,
   tableName: string
@@ -218,15 +360,18 @@ export async function readGeoParquetViaDuckDB(
     fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
   const escapedFileId = escapeSqlString(fileId);
 
+  // Read GeoParquet encoding metadata before reading data
+  const geoEncoding = await readParquetGeoEncoding(escapedFileId);
+
   const result = await Duck.query(
-    `SELECT * EXCLUDE (geom), ST_AsWKB(geom) as geom FROM read_parquet('${escapedFileId}')`,
+    `SELECT * FROM read_parquet('${escapedFileId}')`,
     { format: 'arrow-ipc' }
   );
 
   let table = tableFromIPC(result as Uint8Array);
 
   if (!table.schema.metadata.has(GeoArrowMetadataKey.GEO)) {
-    table = addGeoArrowMetadata(table);
+    table = addGeoArrowMetadata(table, geoEncoding);
   }
 
   return table;

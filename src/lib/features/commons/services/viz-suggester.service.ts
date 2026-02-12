@@ -1,15 +1,3 @@
-/**
- * @module VizSuggesterService
- * @description Cartographic visualization suggestion service based on semio analysis of the dataset
- *
- * 3-step algorithm:
- * 1. Determine the semiological type of each column (QTA, QTR, QL, QLO, geoid, geolat, geolon)
- * 2. Sort columns by relevance (score and missing data)
- * 3. Apply viz criteria compatible with the geometry type
- *
- * Based on the original algorithm from khartis-pipeline-old/src/lib/viz_suggestions.ts
- */
-
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   detectSemioType,
@@ -17,10 +5,7 @@ import {
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
-
-// ===========================
-// TYPES
-// ===========================
+import * as m from '$lib/paraglide/messages';
 
 export type GeometryType =
   | 'Point'
@@ -59,156 +44,152 @@ export { SEMIO_TYPES };
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'symbols_uniques',
-    label: 'Symboles uniques',
+    label: m.viz_suggestion_symbols_uniques(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_colorful_QL',
-    label: 'Aplats de couleur (qualitatif)',
+    label: m.viz_suggestion_polygons_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['polygon']
   },
   {
     id: 'choropleth',
-    label: 'Choroplèthe',
+    label: m.viz_suggestion_choropleth(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_uniques_colorful_QTR',
-    label: 'Symboles colorés (quantitatif relatif)',
+    label: m.viz_suggestion_symbols_unique_colorful_qtr(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_differents',
-    label: 'Symboles différents (qualitatif)',
+    label: m.viz_suggestion_symbols_different_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QL',
-    label: 'Symboles colorés (qualitatif)',
+    label: m.viz_suggestion_symbols_unique_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional',
-    label: 'Symboles proportionnels',
+    label: m.viz_suggestion_symbols_proportional(),
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QL',
-    label: 'Symboles proportionnels colorés (qualitatif)',
+    label: m.viz_suggestion_symbols_proportional_colorful_ql(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_colorful_QTR',
-    label: 'Symboles proportionnels colorés (quantitatif)',
+    label: m.viz_suggestion_symbols_proportional_colorful_qtr(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_proportional_double',
-    label: 'Double symboles proportionnels',
+    label: m.viz_suggestion_symbols_proportional_double(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTA'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'polygons_uniques',
-    label: 'Polygones uniques',
+    label: m.viz_suggestion_polygons_unique(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['polygon']
   },
   {
     id: 'lines_uniques',
-    label: 'Lignes uniques',
+    label: m.viz_suggestion_lines_unique(),
     nbColumns: 0,
     semioTypes: [],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QL',
-    label: 'Lignes colorées (qualitatif)',
+    label: m.viz_suggestion_lines_colorful_ql(),
     nbColumns: 1,
     semioTypes: ['QL'],
     geometries: ['line']
   },
   {
     id: 'lines_colorful_QTR',
-    label: 'Lignes colorées (quantitatif)',
+    label: m.viz_suggestion_lines_colorful_qtr(),
     nbColumns: 1,
     semioTypes: ['QTR'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional',
-    label: 'Lignes proportionnelles',
+    label: m.viz_suggestion_lines_proportional(),
     nbColumns: 1,
     semioTypes: ['QTA'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QL',
-    label: 'Lignes proportionnelles colorées (qualitatif)',
+    label: m.viz_suggestion_lines_proportional_colorful_ql(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QL'],
     geometries: ['line']
   },
   {
     id: 'lines_proportional_colorful_QTR',
-    label: 'Lignes proportionnelles colorées (quantitatif)',
+    label: m.viz_suggestion_lines_proportional_colorful_qtr(),
     nbColumns: 2,
     semioTypes: ['QTA', 'QTR'],
     geometries: ['line']
   },
   {
     id: 'polygons_colorful_QLO',
-    label: 'Aplats de couleur (qualitatif ordonné)',
+    label: m.viz_suggestion_polygons_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['polygon']
   },
   {
     id: 'symbols_differents_QLO',
-    label: 'Symboles différents (qualitatif ordonné)',
+    label: m.viz_suggestion_symbols_different_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'symbols_uniques_colorful_QLO',
-    label: 'Symboles colorés (qualitatif ordonné)',
+    label: m.viz_suggestion_symbols_unique_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['point', 'polygon']
   },
   {
     id: 'lines_colorful_QLO',
-    label: 'Lignes colorées (qualitatif ordonné)',
+    label: m.viz_suggestion_lines_colorful_qlo(),
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['line']
   }
 ] as const;
-
-// ===========================
-// SERVICE CLASS
-// ===========================
 
 export class VizSuggesterService {
   /**
@@ -264,9 +245,6 @@ export class VizSuggesterService {
     return suggestions.slice(0, maxSuggestions);
   }
 
-  /**
-   * Simplifie le type de géométrie
-   */
   private simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
     if (geomType.includes('Point')) return 'point';
     if (geomType.includes('Line')) return 'line';
@@ -318,13 +296,6 @@ export class VizSuggesterService {
     }
   }
 
-  // ===========================
-  // SUGGESTIONS GENERATION
-  // ===========================
-
-  /**
-   * Generates viz suggestions based on enriched columns
-   */
   private generateSuggestions(
     columns: EnrichedColumn[],
     geometryType: SimplifiedGeometryType
@@ -383,26 +354,25 @@ export class VizSuggesterService {
     return unique;
   }
 
-  /**
-   * Search viz compatible with the semio type of columns
-   */
   private searchVizByType(
     dataset: EnrichedColumn | EnrichedColumn[],
     geometryType: SimplifiedGeometryType,
     nbColumns: 1 | 2
   ): VizSuggestion[] {
     if (nbColumns === 1 && !Array.isArray(dataset)) {
-      // 1 column
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&
           viz.nbColumns === nbColumns &&
           viz.semioTypes.includes(dataset.semioType)
-      ).map((viz) => ({ ...viz, columns: [dataset.name] })) as VizSuggestion[];
+      ).map((viz) => ({
+        ...viz,
+        columns: [dataset.name],
+        score: this.computeSuggestionScore([dataset])
+      })) as VizSuggestion[];
     }
 
     if (nbColumns === 2 && Array.isArray(dataset) && dataset.length === 2) {
-      // 2 columns
       return VIZ_CRITERIA.filter(
         (viz) =>
           viz.geometries.includes(geometryType) &&
@@ -413,11 +383,20 @@ export class VizSuggesterService {
               viz.semioTypes[0] === dataset[1].semioType))
       ).map((viz) => ({
         ...viz,
-        columns: [dataset[0].name, dataset[1].name]
+        columns: [dataset[0].name, dataset[1].name],
+        score: this.computeSuggestionScore(dataset)
       })) as VizSuggestion[];
     }
 
     return [];
+  }
+
+  private computeSuggestionScore(columns: EnrichedColumn[]): number {
+    if (columns.length === 0) return 0;
+    const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
+    const avgScore = totalScore / columns.length;
+    const MAX_SEMIO_SCORE = 6.5;
+    return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
   }
 
   private getTotalCount(column: ColumnAnalysis): number {

@@ -3,6 +3,7 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { DeepDataValidator } from '$lib/features/commons/utils/deep-validator.utils';
+import { getFileExtension } from '$lib/features/commons/utils/file.utils';
 import {
   readFileContent,
   validateGeospatialFile
@@ -14,7 +15,7 @@ import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
 function detectFileTypeFromName(filename: string): FileType {
-  const ext = filename.toLowerCase().split('.').pop();
+  const ext = getFileExtension(filename);
   switch (ext) {
     case 'csv':
       return FileType.CSV;
@@ -70,12 +71,32 @@ function getMimeTypeFromFileType(fileType: FileType): string {
   }
 }
 
-const ERROR_FILE_PROCESSING = () => m.error_file_processing();
 const ERROR_INVALID_JSON_FORMAT = () => m.error_invalid_json_format();
 const WARNING_NO_GEO_COLUMN_TITLE = () => m.warning_no_geo_column_title();
 const WARNING_NO_GEO_COLUMN_MESSAGE = () => m.warning_no_geo_column_message();
 const WARNING_DUPLICATE_ROWS_TITLE = () => m.warning_duplicate_rows_title();
 const WARNING_PERFORMANCE_TITLE = () => m.warning_performance_title();
+
+function getReadableErrorMessage(error: unknown): string {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+
+  if (
+    errorMessage.includes('Multiple layers') ||
+    errorMessage.includes('more than one layer')
+  ) {
+    return m.pipeline_error_geopackage_multiple_layers();
+  }
+
+  if (
+    errorMessage.includes('Could not open file') ||
+    errorMessage.includes('Invalid file') ||
+    errorMessage.includes('not a valid')
+  ) {
+    return m.pipeline_error_file_unreadable();
+  }
+
+  return m.pipeline_error_generic();
+}
 
 import {
   buildColumnStatistics,
@@ -117,8 +138,7 @@ export class FileProcessorService {
           error
         }
       );
-      const message =
-        error instanceof Error ? error.message : ERROR_FILE_PROCESSING();
+      const message = getReadableErrorMessage(error);
       this.callbacks.onStatusChange(uploadedFile.id, FileStatus.ERROR, message);
     }
   }
@@ -535,7 +555,7 @@ class ZipProcessor extends FileProcessor {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
-        // empty
+        // Ignore errors - fallback to empty data
       }
 
       const tabularData = convertRowsToTabular(fullData);

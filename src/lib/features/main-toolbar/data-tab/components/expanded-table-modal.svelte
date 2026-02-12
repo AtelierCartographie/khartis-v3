@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Modal } from 'carbon-components-svelte';
   import AdvancedDataTable, {
     type CellHighlight
   } from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import type { ProcessedDataset } from '$lib/features/data-pipeline';
+  import * as m from '$lib/paraglide/messages';
+  import { Modal } from 'carbon-components-svelte';
 
   interface Props {
     open: boolean;
@@ -14,6 +15,8 @@
     cellHighlights?: CellHighlight[];
     currentCell?: { rowId: number; columnName: string } | null;
     highlightedRowIds?: number[];
+    isSelectable?: boolean;
+    onSelectionChange?: (ids: number[], count: number) => void;
     onClose: () => void;
   }
 
@@ -25,6 +28,8 @@
     cellHighlights = [],
     currentCell = null,
     highlightedRowIds = [],
+    isSelectable = false,
+    onSelectionChange,
     onClose
   }: Props = $props();
 
@@ -44,11 +49,12 @@
   };
 
   const displayName = $derived.by(() => {
-    if (!dataset?.sourceFileId) return dataset?.name || 'Données';
+    if (!dataset?.sourceFileId)
+      return dataset?.name || m.dataset_default_name();
     const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
       (f) => f.id === dataset.sourceFileId
     );
-    return sourceFile?.name || dataset?.name || 'Données';
+    return sourceFile?.name || dataset?.name || m.dataset_default_name();
   });
   const fileInfo = $derived(getFileInfo(displayName));
 
@@ -136,7 +142,7 @@
           class="title-button"
           bind:this={titleButtonRef}
           onclick={startEditing}
-          title="Cliquer pour renommer"
+          title={m.dataset_click_rename()}
         >
           {displayName}
         </button>
@@ -153,6 +159,8 @@
         currentCell={currentCell}
         highlightedRowIds={highlightedRowIds}
         isExpanded={true}
+        isSelectable={isSelectable}
+        onSelectionChange={onSelectionChange}
       />
     </div>
   </Modal>

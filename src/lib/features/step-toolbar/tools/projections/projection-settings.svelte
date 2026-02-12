@@ -7,21 +7,38 @@
     Toggle
   } from 'carbon-components-svelte';
   import { Renew } from 'carbon-icons-svelte';
+  import {
+    getProjectionState,
+    projectionActions
+  } from './projection.store.svelte';
 
-  let longitude = $state<number>(0);
-  let latitude = $state<number>(0);
-  let rotation = $state<number>(0);
+  const projectionState = $derived(getProjectionState());
 
   let simplifiedPreview = $state<boolean>(true);
   let showInfo = $state<boolean>(true);
 
-  const isDirty = $derived(longitude !== 0 || latitude !== 0 || rotation !== 0);
+  const isDirty = $derived(
+    projectionState.longitude !== 0 ||
+      projectionState.latitude !== 0 ||
+      projectionState.rotation !== 0
+  );
   const deg = (n: number) => `${n}°`;
 
+  function handleLongitudeChange(event: CustomEvent<number>): void {
+    projectionActions.setCenter(event.detail, projectionState.latitude);
+  }
+
+  function handleLatitudeChange(event: CustomEvent<number>): void {
+    projectionActions.setCenter(projectionState.longitude, event.detail);
+  }
+
+  function handleRotationChange(event: CustomEvent<number>): void {
+    projectionActions.setRotation(event.detail);
+  }
+
   function resetAll() {
-    longitude = 0;
-    latitude = 0;
-    rotation = 0;
+    projectionActions.setCenter(0, 0);
+    projectionActions.setRotation(0);
   }
 </script>
 
@@ -30,7 +47,7 @@
     <div class="controls">
       <Slider
         labelText={m.projection_settings_longitude()}
-        bind:value={longitude}
+        value={projectionState.longitude}
         min={-180}
         max={180}
         step={1}
@@ -38,11 +55,12 @@
         maxLabel={deg(180)}
         hideTextInput={false}
         fullWidth
+        on:change={handleLongitudeChange}
       />
 
       <Slider
         labelText={m.projection_settings_latitude()}
-        bind:value={latitude}
+        value={projectionState.latitude}
         min={-90}
         max={90}
         step={1}
@@ -50,11 +68,12 @@
         maxLabel={deg(90)}
         hideTextInput={false}
         fullWidth
+        on:change={handleLatitudeChange}
       />
 
       <Slider
         labelText={m.projection_settings_rotation()}
-        bind:value={rotation}
+        value={projectionState.rotation}
         min={-180}
         max={180}
         step={1}
@@ -62,6 +81,7 @@
         maxLabel={deg(180)}
         hideTextInput={false}
         fullWidth
+        on:change={handleRotationChange}
       />
 
       <div class="toggle-row">

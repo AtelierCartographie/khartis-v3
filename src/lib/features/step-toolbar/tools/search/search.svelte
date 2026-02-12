@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -14,14 +16,40 @@
     ChevronRight,
     WatsonHealthRotate_360
   } from 'carbon-icons-svelte';
+  import { onDestroy } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
-  const sourceOptions = [
-    { id: 'all', text: m.search_all_variables() },
-    { id: 'numeric', text: m.search_numeric_variables() },
-    { id: 'categorical', text: m.search_categorical_variables() },
-    { id: 'text', text: m.search_text_variables() }
-  ];
+  const selectedVisualization = $derived(
+    visualizationStore.selectedVisualization
+  );
+
+  const searchDataset = $derived.by(() => {
+    if (selectedVisualization) {
+      const datasetFromVisualization = datasetsStore.datasets.find(
+        (dataset) => dataset.id === selectedVisualization.datasetId
+      );
+
+      if (datasetFromVisualization) {
+        return datasetFromVisualization;
+      }
+    }
+
+    return datasetsStore.selectedDataset ?? datasetsStore.enabledDatasets[0];
+  });
+
+  const sourceOptions = $derived.by(() => {
+    const datasetColumns = searchDataset?.columns ?? [];
+
+    return [
+      { id: 'all', text: m.search_all_variables() },
+      ...datasetColumns
+        .filter((column) => column.type !== 'geometry')
+        .map((column) => ({
+          id: column.name,
+          text: column.name
+        }))
+    ];
+  });
 
   function handleSearchInput(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -55,8 +83,22 @@
   const results = $derived(searchState.results);
   const currentResultIndex = $derived(searchState.currentResultIndex);
   const hasResults = $derived(results.length > 0);
-  const showResults = $derived(searchState.searchValue.trim().length > 0);
+  const showResults = $derived(searchState.searchValue.trim().length >= 2);
   const noResults = $derived(showResults && !hasResults);
+
+  $effect(() => {
+    const selectedSource = searchState.selectedSource;
+    const isKnownSource = sourceOptions.some(
+      (option) => option.id === selectedSource
+    );
+    if (!isKnownSource) {
+      searchActions.setSelectedSource('all');
+    }
+  });
+
+  onDestroy(() => {
+    searchActions.clearSearch();
+  });
 </script>
 
 <div id="khartis-search-tool">

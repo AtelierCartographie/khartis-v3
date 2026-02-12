@@ -1,13 +1,14 @@
 <script lang="ts">
   import {
     Button,
-    NumberInput,
     Select,
     SelectItem,
     TextInput,
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
+  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { ColumnType } from '$lib/features/data-pipeline';
@@ -22,9 +23,10 @@
   interface Props {
     tableName?: string;
     onFilterChange?: () => void;
+    onDeleteFilteredRows?: (count: number) => void;
   }
 
-  let { tableName, onFilterChange }: Props = $props();
+  let { tableName, onFilterChange, onDeleteFilteredRows }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
@@ -35,6 +37,8 @@
 
   let filters = $state<DataTableFilter[]>([]);
   let filterStats = $state<FilterStats>({ total: 0, filtered: 0 });
+  let isProcessing = $state(false);
+  let filterError = $state<string | null>(null);
 
   let newFilter = $state({
     column: '',
@@ -45,6 +49,15 @@
   });
 
   const hasData = $derived(columns.length > 0);
+  const hasActiveFilters = $derived(
+    filters.length > 0 &&
+      filterStats.filtered > 0 &&
+      filterStats.filtered < filterStats.total
+  );
+  const hasNoResults = $derived(
+    filters.length > 0 && filterStats.filtered === 0 && filterStats.total > 0
+  );
+  const rowsToDelete = $derived(filterStats.total - filterStats.filtered);
 
   interface FilterOperatorDef {
     value: FilterOperator;
@@ -140,8 +153,10 @@
 
   async function addFilter(event?: Event) {
     event?.preventDefault();
-    if (!tableName || !newFilter.column) return;
+    if (!tableName || !newFilter.column || isProcessing) return;
 
+    isProcessing = true;
+    filterError = null;
     try {
       const updated = await duckDBOrchestrator.addFilter(tableName, {
         column: newFilter.column,
@@ -155,13 +170,19 @@
       resetFilterForm();
       onFilterChange?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      filterError = message;
       logger.error('Failed to add filter', LogCategory.UI, err);
+    } finally {
+      isProcessing = false;
     }
   }
 
   async function removeFilter(filterId: string) {
-    if (!tableName) return;
+    if (!tableName || isProcessing) return;
 
+    isProcessing = true;
+    filterError = null;
     try {
       const updated = await duckDBOrchestrator.removeFilter(
         tableName,
@@ -171,7 +192,11 @@
       await refreshFilters();
       onFilterChange?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      filterError = message;
       logger.error('Failed to remove filter', LogCategory.UI, err);
+    } finally {
+      isProcessing = false;
     }
   }
 
@@ -283,13 +308,18 @@
         </div>
       {:else if currentOperator.requiresLimit}
         <div class="field-group">
-          <NumberInput
-            size="sm"
-            labelText={m.filter_count()}
-            min={1}
-            max={1000}
-            bind:value={newFilter.limit}
-          />
+          <div class="labeled-input">
+            <label class="input-label" for="filter-count-input"
+              >{m.filter_count()}</label
+            >
+            <CompactNumberInput
+              id="filter-count-input"
+              bind:value={newFilter.limit}
+              min={1}
+              max={1000}
+              width="100%"
+            />
+          </div>
         </div>
       {/if}
 
@@ -298,12 +328,21 @@
           kind="primary"
           size="small"
           type="submit"
-          disabled={!newFilter.column}
+          disabled={!newFilter.column || isProcessing}
         >
           {m.filter_add()}
         </Button>
       </div>
     </form>
+
+    {#if filterError}
+      <InlineNotification
+        kind="error"
+        lowContrast
+        subtitle={filterError}
+        on:close={() => (filterError = null)}
+      />
+    {/if}
 
     {#if filters.length > 0}
       <div class="active-filters">
@@ -311,8 +350,10 @@
           <span class="filters-title"
             >{m.filter_active()} ({filters.length})</span
           >
-          <Button kind="ghost" size="small" on:click={clearAllFilters}
-            >{m.filter_clear_all()}</Button
+          <Button
+            kind={hasNoResults ? 'danger-ghost' : 'ghost'}
+            size="small"
+            on:click={clearAllFilters}>{m.filter_clear_all()}</Button
           >
         </div>
         <ul class="filters-list">
@@ -329,6 +370,28 @@
             </li>
           {/each}
         </ul>
+        {#if hasNoResults}
+          <div class="no-results-warning">
+            <InlineNotification
+              kind="warning"
+              lowContrast
+              hideCloseButton
+              subtitle={m.filter_no_results()}
+            />
+          </div>
+        {/if}
+        {#if hasActiveFilters && onDeleteFilteredRows}
+          <div class="delete-filtered-action">
+            <Button
+              kind="danger-tertiary"
+              size="small"
+              icon={TrashCan}
+              on:click={() => onDeleteFilteredRows(rowsToDelete)}
+            >
+              {m.delete_filtered_rows({ count: rowsToDelete })}
+            </Button>
+          </div>
+        {/if}
       </div>
     {/if}
   {/if}
@@ -373,6 +436,18 @@
     gap: var(--cds-spacing-02);
   }
 
+  .labeled-input {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+  }
+
+  .input-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    font-weight: 400;
+  }
+
   .form-actions {
     padding-top: var(--cds-spacing-02);
   }
@@ -406,5 +481,15 @@
 
   .filter-item {
     display: flex;
+  }
+
+  .no-results-warning {
+    margin-top: var(--cds-spacing-03);
+  }
+
+  .delete-filtered-action {
+    margin-top: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-03);
+    border-top: 1px solid var(--cds-border-subtle);
   }
 </style>

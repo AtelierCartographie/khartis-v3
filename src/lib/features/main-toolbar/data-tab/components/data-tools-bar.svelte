@@ -21,6 +21,7 @@
     onCsvOptions?: () => void;
     onToggleSummaryPlots?: () => void;
     deleteDisabled?: boolean;
+    resetDisabled?: boolean;
     selectionCount?: number;
     showCsvOptions?: boolean;
     showSummaryPlots?: boolean;
@@ -33,6 +34,7 @@
     onCsvOptions,
     onToggleSummaryPlots,
     deleteDisabled = true,
+    resetDisabled = false,
     selectionCount = 0,
     showCsvOptions = false,
     showSummaryPlots = true
@@ -101,6 +103,7 @@
       icon={Reset}
       iconDescription={m.data_tool_reset_icon()}
       tooltipPosition="bottom"
+      disabled={resetDisabled}
       on:click={() => onReset?.()}
     />
     {#if showCsvOptions}
@@ -142,8 +145,7 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--cds-spacing-02) 0;
-    margin-bottom: var(--cds-spacing-03);
-    border-bottom: 1px solid var(--cds-border-subtle);
+    margin-bottom: 0;
   }
 
   .tools-left {

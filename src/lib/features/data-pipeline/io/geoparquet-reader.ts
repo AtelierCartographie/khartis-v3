@@ -35,7 +35,9 @@ export async function initializeGeoParquetWasm(): Promise<void> {
         LogCategory.DATA,
         error
       );
-      throw new Error(m.pipeline_error_geoparquet_init_failed());
+      throw new Error(m.pipeline_error_geoparquet_init_failed(), {
+        cause: error
+      });
     } finally {
       initializationPromise = null;
     }
@@ -78,7 +80,8 @@ export async function readGeoParquet(
     throw new Error(
       m.pipeline_error_geoparquet_read_failed({
         error: error instanceof Error ? error.message : 'Unknown error'
-      })
+      }),
+      { cause: error }
     );
   }
 }

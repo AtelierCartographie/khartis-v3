@@ -1,3 +1,5 @@
+import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
+
 // ToDo:
 // - verify handling of missing values in each method = should not be taken into account
 // - verify handling of time series
@@ -20,13 +22,13 @@
  * @returns {string} The SQL macro definition for calculating quantiles.
  */
 const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb := 5) AS (
-  FROM query(tabname)
+  FROM query_table(tabname::VARCHAR)
   SELECT quantile_disc("colname", list_transform(range(1, nb), c -> c / nb))
 );`;
 
 // nb is not used, just to harmonize with other macros
 const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
-    FROM query(tabname)
+    FROM query_table(tabname::VARCHAR)
     SELECT quantile_disc("colname", [0.05,0.275,0.5,0.725,0.95])
 );`;
 
@@ -45,7 +47,7 @@ const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
  * @param {boolean} [nice=false] - Whether to use "nice" bin boundaries. Default is false.
  */
 const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, nb := 5, nice := false) AS (
-  FROM query(tabname)
+  FROM query_table(tabname::VARCHAR)
   SELECT equi_width_bins(MIN("colname"), MAX("colname"), nb - 1, nice)
 );`;
 
@@ -68,7 +70,7 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 
     WITH RECURSIVE means(iter, breaks) AS (
 
-      FROM query(tabname)
+      FROM query_table(tabname::VARCHAR)
       SELECT 1, [min("colname"), avg("colname"), max("colname")]     -- first row: [min, average, max]
 
       UNION ALL (
@@ -82,7 +84,7 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
         ), t3 AS (
           FROM t2
           SELECT b, (
-            FROM query(tabname) SELECT avg("colname")
+            FROM query_table(tabname::VARCHAR) SELECT avg("colname")
             WHERE "colname" BETWEEN b AND next_b
           ) new_break
         ), t4 AS (
@@ -101,17 +103,17 @@ const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colnam
 );`;
 
 // By Éric Mauvière, https://observablehq.com/@ericmauviere/head-tail-breaks
-const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb := 10, threshold := 0.4) AS (
+const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE headtail(break, values_count) AS (
                     -- Initialization with break = average, values_count = number of observations
-                    FROM query(tabname)
+                    FROM query_table(tabname::VARCHAR)
                     SELECT avg("colname"),   -- break
                     count(*)              -- values_count
 
                     UNION ALL
 
                     -- next headtail refers to the last row of the growing table
-                    FROM query(tabname), headtail
+                    FROM query_table(tabname::VARCHAR), headtail
                     SELECT avg("colname"),    -- next break
                     count(*) head_count    -- next values_count
                     WHERE "colname" > headtail.break
@@ -122,16 +124,16 @@ const headtail_macro = `CREATE OR REPLACE FUNCTION headtail(tabname, colname, nb
             SELECT list(break)[1:nb - 1] AS breaks
         );`;
 
-const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, nb := 10, threshold := 0.4) AS (
+const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, nb := 10, threshold := ${FUZZY_SEARCH.HEAD_TAIL_THRESHOLD}) AS (
               WITH RECURSIVE headtail(break, values_count, l_pct_head) AS (
-                  FROM query(tabname)
+                  FROM query_table(tabname::VARCHAR)
                   SELECT avg("colname"),
                   count(*),
                   []::double[]
 
                   UNION ALL (
                     WITH t1 AS (
-                      FROM query(tabname), headtail
+                      FROM query_table(tabname::VARCHAR), headtail
                       SELECT avg("colname") next_break,
                       count(*) h_count,
                       headtail.values_count v_count,
@@ -154,7 +156,7 @@ const headtail2_macro = `CREATE OR REPLACE FUNCTION headtail2(tabname, colname, 
 const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, maxiter := 30) AS (
   WITH RECURSIVE clusters(iter, cid, x) AS (
     WITH t1 AS (
-      FROM query(tabname)
+      FROM query_table(tabname::VARCHAR)
       SELECT ROW_NUMBER() OVER() id, "colname" AS x
     )
     (SELECT 0, id, x FROM t1 LIMIT nb-1) --USING SAMPLE 10% (bernoulli) --USING SAMPLE nb-1

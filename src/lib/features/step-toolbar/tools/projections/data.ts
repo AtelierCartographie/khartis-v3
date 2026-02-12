@@ -1,5 +1,6 @@
 export type ProjectionItem = {
   id: string;
+  projectionId: string;
   title: string;
   subtitle: string;
   tag: string;
@@ -12,6 +13,7 @@ export type ProjectionItem = {
 export const PROJECTIONS: ProjectionItem[] = [
   {
     id: 'rect-1',
+    projectionId: 'equirectangular',
     title: 'Gall Peters',
     subtitle: 'Surfaces',
     tag: 'Rectangulaire',
@@ -21,6 +23,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'rect-2',
+    projectionId: 'mercator',
     title: 'Mercator',
     subtitle: 'Surfaces',
     tag: 'Rectangulaire',
@@ -30,6 +33,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'rect-3',
+    projectionId: 'albers',
     title: 'Bonne',
     subtitle: 'Surfaces',
     tag: 'Rectangulaire',
@@ -39,6 +43,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'arr-1',
+    projectionId: 'natural-earth',
     title: 'Equal Earth',
     subtitle: 'Surfaces',
     tag: 'Arrondie',
@@ -48,6 +53,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'arr-2',
+    projectionId: 'orthographic',
     title: 'Armadillo',
     subtitle: 'Surfaces',
     tag: 'Arrondie',
@@ -57,6 +63,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'arr-3',
+    projectionId: 'robinson',
     title: 'Atlantis',
     subtitle: 'Surfaces',
     tag: 'Arrondie',
@@ -66,6 +73,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'disc-1',
+    projectionId: 'winkel-tripel',
     title: 'Air Ocean',
     subtitle: 'Surfaces',
     tag: 'Discontinue',
@@ -75,6 +83,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'disc-2',
+    projectionId: 'mollweide',
     title: 'Butterfly',
     subtitle: 'Surfaces',
     tag: 'Discontinue',
@@ -84,6 +93,7 @@ export const PROJECTIONS: ProjectionItem[] = [
   },
   {
     id: 'disc-3',
+    projectionId: 'mollweide',
     title: 'Mollweide interrompue',
     subtitle: 'Surfaces',
     tag: 'Discontinue',

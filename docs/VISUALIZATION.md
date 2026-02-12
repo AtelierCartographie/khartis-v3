@@ -292,6 +292,160 @@ const simplified = simplifyGeometry(geometry, tolerance);
 | **Projection failure**  | Fallback to Equirectangular (default)  |
 | **Invalid breaks**      | Revert to Equal Interval with warning  |
 
+## Map Highlighting System
+
+**Store**: `src/lib/features/map/stores/map-highlight.store.svelte.ts`
+
+Highlight search results or filtered rows on the map with opacity dimming.
+
+### API
+
+```typescript
+import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+
+// Highlight specific rows
+mapHighlightStore.setHighlightedRows([1, 5, 12, 23]);
+
+// Check if row is highlighted
+const isHighlighted = mapHighlightStore.isRowHighlighted(5); // true
+
+// Clear all highlights
+mapHighlightStore.clearHighlights();
+
+// Reactive state
+mapHighlightStore.hasHighlights; // boolean derived
+mapHighlightStore.version; // number, incremented on changes
+```
+
+### Rendering Integration
+
+Highlighted rows: **100% opacity**
+Non-highlighted rows: **30% opacity** (dimmed)
+
+Integration point: `src/lib/features/map/layers/layer-factory.ts`
+
+## Basemap Layers System
+
+**Store**: `src/lib/features/map/stores/basemap-layers.store.svelte.ts` (278 lines)
+
+Manage 9 configurable basemap layers with per-layer styling.
+
+### Layer Types
+
+| Layer ID     | Type            | Default Visible | Properties                                   |
+| ------------ | --------------- | --------------- | -------------------------------------------- |
+| `terre`      | Land polygons   | ✅              | fill color/shadow/opacity, stroke (dotted)   |
+| `mers`       | Sea background  | ✅              | color, opacity                               |
+| `lacs`       | Lake polygons   | ❌              | color, thickness, opacity                    |
+| `rivieres`   | River lines     | ❌              | color, dotted pattern, thickness, opacity    |
+| `relief`     | Terrain shading | ❌              | representation (shading/hachure), color      |
+| `equateur`   | Equator line    | ❌              | color, dotted pattern, thickness, opacity    |
+| `meridiens`  | Meridians       | ❌              | remarquables (ALL/GREENWICH), dotted pattern |
+| `frontieres` | Borders         | ✅              | color, dotted pattern, thickness, opacity    |
+| `villes`     | Cities          | ❌              | category (capitals/large), symbol, size      |
+
+### API
+
+```typescript
+import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+
+// Get all layers
+basemapLayersStore.layers; // BasemapLayerConfig[]
+
+// Get visible layers only
+basemapLayersStore.visibleLayers; // filtered array
+
+// Get specific layer (type-safe)
+const terre = basemapLayersStore.getLayer('terre'); // TerreLayerConfig
+
+// Toggle visibility
+basemapLayersStore.setLayerVisibility('lacs', true);
+
+// Update layer properties
+basemapLayersStore.updateLayer('terre', {
+  fillColor: '#f0f0f0',
+  strokeDotted: true
+});
+
+// Reset single layer to defaults
+basemapLayersStore.resetLayer('relief');
+
+// Reset all layers to defaults
+basemapLayersStore.resetToDefaults();
+
+// Restore from project
+basemapLayersStore.restoreFromSerialized(projectData.basemapLayers);
+```
+
+### UI Components
+
+Located in `src/lib/features/main-toolbar/visualization-tab/components/basemap-layers/`:
+
+- `basemap-layers-panel.svelte` - Main panel
+- `terre-layer-config.svelte` - Land configuration
+- `mers-layer-config.svelte` - Sea configuration
+- `lacs-rivieres-layer-config.svelte` - Water bodies
+- `relief-layer-config.svelte` - Terrain
+- `equateur-meridiens-layer-config.svelte` - Grid lines
+- `frontieres-layer-config.svelte` - Borders
+- `villes-layer-config.svelte` - Cities
+
+### Dotted Patterns
+
+```typescript
+enum BasemapDottedPattern {
+  DOTS = 'dots',
+  DASHES = 'dashes',
+  MIXED = 'mixed'
+}
+```
+
+### Rendering
+
+Layers render in MapLibre via `src/lib/features/map/layers/basemap-layers.ts`.
+Version counter triggers re-render when layer configs change.
+
+## Color-Blindness Filters
+
+**Utility**: `src/lib/features/commons/utils/color-blindness-filters.ts`
+
+Apply SVG `feColorMatrix` filters to simulate 8 color-blindness types.
+
+### Supported Types
+
+| Type          | Description                    | Matrix Transformation |
+| ------------- | ------------------------------ | --------------------- |
+| Protanopia    | Red-blind (dichromacy)         | Remove red channel    |
+| Deuteranopia  | Green-blind (dichromacy)       | Remove green channel  |
+| Tritanopia    | Blue-blind (dichromacy)        | Remove blue channel   |
+| Protanomaly   | Red-weak (anomalous trichromat | Reduce red            |
+| Deuteranomaly | Green-weak                     | Reduce green          |
+| Tritanomaly   | Blue-weak                      | Reduce blue           |
+| Achromatopsia | Complete color-blind           | Grayscale             |
+| Achromatomaly | Partial color-blind            | Reduced saturation    |
+
+### Usage
+
+```typescript
+import { applyColorBlindnessFilter } from '$lib/features/commons/utils/color-blindness-filters';
+import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+
+const mapElement = document.getElementById('map-container');
+
+// Apply filter
+applyColorBlindnessFilter(mapElement, ColorBlindnessType.DEUTERANOPIA);
+
+// Remove filter
+applyColorBlindnessFilter(mapElement, ColorBlindnessType.NONE);
+```
+
+### Implementation
+
+Creates hidden SVG element in DOM with `<filter>` + `<feColorMatrix>`.
+Applies via CSS `filter: url(#khartis-color-blindness-filter)`.
+
+Auto-cleans old filters when switching types.
+
 ## Extension Points
 
 ### Add New Visualization Type

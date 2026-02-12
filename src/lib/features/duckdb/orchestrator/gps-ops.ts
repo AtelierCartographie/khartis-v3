@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';
 import type {
   AnalysisResult,
@@ -65,7 +66,7 @@ export async function validateGPSColumns(
         lonColumn: lonCol,
         latStats: null,
         lonStats: null,
-        warning: 'Aucune coordonnée valide trouvée'
+        warning: m.gps_warning_no_valid_coordinates()
       };
     }
 
@@ -95,11 +96,24 @@ export async function validateGPSColumns(
     let warning: string | undefined;
 
     if (possibleInversion) {
-      warning = `Les colonnes latitude et longitude semblent être inversées. La colonne "${latCol}" contient des valeurs hors de la plage [-90, 90] (min: ${stats.lat_min.toFixed(2)}, max: ${stats.lat_max.toFixed(2)}) tandis que "${lonCol}" est dans la plage de latitude.`;
+      warning = m.gps_warning_inversion({
+        latColumn: latCol,
+        lonColumn: lonCol,
+        latMin: stats.lat_min.toFixed(2),
+        latMax: stats.lat_max.toFixed(2)
+      });
     } else if (!latInRange) {
-      warning = `La colonne latitude "${latCol}" contient des valeurs hors de la plage valide [-90, 90] (min: ${stats.lat_min.toFixed(2)}, max: ${stats.lat_max.toFixed(2)}).`;
+      warning = m.gps_warning_lat_out_of_range({
+        latColumn: latCol,
+        latMin: stats.lat_min.toFixed(2),
+        latMax: stats.lat_max.toFixed(2)
+      });
     } else if (!lonInRange) {
-      warning = `La colonne longitude "${lonCol}" contient des valeurs hors de la plage valide [-180, 180] (min: ${stats.lon_min.toFixed(2)}, max: ${stats.lon_max.toFixed(2)}).`;
+      warning = m.gps_warning_lon_out_of_range({
+        lonColumn: lonCol,
+        lonMin: stats.lon_min.toFixed(2),
+        lonMax: stats.lon_max.toFixed(2)
+      });
     }
 
     const isValid = latInRange && lonInRange;
@@ -138,7 +152,7 @@ export async function validateGPSColumns(
       lonColumn: lonCol,
       latStats: null,
       lonStats: null,
-      warning: 'Erreur lors de la validation des coordonnées GPS'
+      warning: m.gps_warning_validation_error()
     };
   }
 }
@@ -172,7 +186,7 @@ export async function getGPSArrowTable(
   const start = performance.now();
 
   if (!dataset.gpsMode || !dataset.gpsColumns) {
-    throw new Error(`Dataset ${dataset.id} is not in GPS mode`);
+    throw new Error(m.gps_error_not_in_gps_mode({ id: dataset.id }));
   }
 
   const { lat, lon } = dataset.gpsColumns;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {
     InlineNotification,
@@ -8,31 +9,51 @@
   } from 'carbon-components-svelte';
   import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { cubicOut } from 'svelte/easing';
+  import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
+  import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
+  import { ColorBlindnessType } from '../commons/constants/ui.constants';
+  import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
+  import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
 
   let containerRef: HTMLDivElement;
+  let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let displayTable = $state<ArrowTable | null>(null);
-  let displayGeoJSON = $state<FeatureCollection | null>(null);
-  let displayDatasetId = $state<string | undefined>(undefined);
+  let isResizing = $state(false);
+  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let containerResizeObserver: ResizeObserver | null = null;
 
-  const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const TOOLBAR_TRANSITION_MS = 600;
+  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
+  let displayTables = $state<SvelteMap<string, ArrowTable>>(
+    new SvelteMap<string, ArrowTable>()
+  );
+  let displayGeoJSONs = $state<SvelteMap<string, FeatureCollection>>(
+    new SvelteMap<string, FeatureCollection>()
+  );
+
+  const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  const facetsEnabled = $derived(facetsStore.enabled);
+  const facetsLayout = $derived(facetsStore.layout);
+  const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
   async function convertDatasetToGeoJSON(
     dataset: DatasetResult
@@ -91,18 +112,9 @@
     }
   }
 
-  function clearDisplay(): void {
-    displayTable = null;
-    displayGeoJSON = null;
-    displayDatasetId = undefined;
-    logger.info('Cleared map display - showing empty map', LogCategory.MAP);
-  }
-
-  function setWaitingForData(datasetId: string): void {
-    displayTable = null;
-    displayGeoJSON = null;
-    displayDatasetId = datasetId;
-    logger.info('Waiting for data to load', LogCategory.MAP, { datasetId });
+  function removeDatasetFromDisplay(datasetId: string): void {
+    displayTables.delete(datasetId);
+    displayGeoJSONs.delete(datasetId);
   }
 
   async function loadJoinedBasemap(
@@ -111,10 +123,10 @@
     tableName: string
   ): Promise<void> {
     const start = performance.now();
-    const datasetIdAtStart = dataset.id;
+    const datasetId = dataset.id;
 
     logger.info('Loading joined basemap for tabular dataset', LogCategory.MAP, {
-      datasetId: datasetIdAtStart,
+      datasetId,
       joinedBasemap,
       tableName
     });
@@ -125,83 +137,136 @@
         joinedBasemap
       );
 
-      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
-          'Dataset changed during joined basemap load, ignoring',
+          'Dataset no longer enabled, ignoring joined basemap',
           LogCategory.MAP,
-          {
-            loadedDatasetId: datasetIdAtStart,
-            currentSelectedId: datasetsStore.selectedDataset?.id
-          }
+          { datasetId }
         );
         return;
       }
 
       if (joinedTable) {
-        displayTable = joinedTable;
-        displayGeoJSON = null;
-        displayDatasetId = datasetIdAtStart;
+        displayTables.set(datasetId, joinedTable);
+        displayGeoJSONs.delete(datasetId);
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
+          datasetId,
           rows: joinedTable.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
-        logger.warn(
-          'No joined data returned, clearing display',
-          LogCategory.MAP
-        );
-        clearDisplay();
+        logger.warn('No joined data returned for dataset', LogCategory.MAP, {
+          datasetId
+        });
+        removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
-      clearDisplay();
+      removeDatasetFromDisplay(dataset.id);
     }
   }
 
-  async function loadGPSData(datasetId: string): Promise<void> {
+  async function loadGPSData(
+    datasetId: string,
+    duckDBDatasetId: string
+  ): Promise<void> {
     const start = performance.now();
-    const datasetIdAtStart = datasetId;
 
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
-      datasetId: datasetIdAtStart
+      datasetId,
+      duckDBDatasetId
     });
 
     try {
       const { table } =
-        await duckDBOrchestrator.getGPSArrowTable(datasetIdAtStart);
+        await duckDBOrchestrator.getGPSArrowTable(duckDBDatasetId);
 
-      if (datasetsStore.selectedDataset?.id !== datasetIdAtStart) {
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
-          'Dataset changed during GPS data load, ignoring',
+          'Dataset no longer enabled, ignoring GPS data',
           LogCategory.MAP,
-          {
-            loadedDatasetId: datasetIdAtStart,
-            currentSelectedId: datasetsStore.selectedDataset?.id
-          }
+          { datasetId }
         );
         return;
       }
 
       if (table) {
-        displayTable = table;
-        displayGeoJSON = null;
-        displayDatasetId = datasetIdAtStart;
+        displayTables.set(datasetId, table);
+        displayGeoJSONs.delete(datasetId);
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
+          datasetId,
           rows: table.numRows,
           durationMs: (performance.now() - start).toFixed(2)
         });
       } else {
-        logger.warn('No GPS data returned, clearing display', LogCategory.MAP);
-        clearDisplay();
+        logger.warn('No GPS data returned for dataset', LogCategory.MAP, {
+          datasetId
+        });
+        removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
       logger.error('Failed to load GPS data', LogCategory.MAP, error);
-      clearDisplay();
+      removeDatasetFromDisplay(datasetId);
+    }
+  }
+
+  async function loadDatasetForDisplay(dataset: DatasetResult): Promise<void> {
+    const datasetId = dataset.id;
+
+    if (dataset.geometry) {
+      const result = await convertDatasetToGeoJSON(dataset);
+
+      if (!datasetsStore.isDatasetEnabled(datasetId)) {
+        logger.debug(
+          'Dataset no longer enabled, ignoring result',
+          LogCategory.MAP,
+          { datasetId }
+        );
+        return;
+      }
+
+      if (result) {
+        if ('numRows' in result) {
+          displayTables.set(datasetId, result);
+          displayGeoJSONs.delete(datasetId);
+          logger.info(
+            'Dataset added to display as Arrow table',
+            LogCategory.MAP,
+            {
+              datasetId,
+              rows: result.numRows
+            }
+          );
+        } else if ('features' in result) {
+          displayGeoJSONs.set(datasetId, result);
+          displayTables.delete(datasetId);
+          logger.info('Dataset added to display as GeoJSON', LogCategory.MAP, {
+            datasetId,
+            features: result.features.length
+          });
+        }
+      }
+    } else {
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+        dataset.sourceFileId
+      );
+
+      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+        await loadGPSData(datasetId, duckDBDataset.id);
+      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+        await loadJoinedBasemap(
+          dataset,
+          duckDBDataset.joinedBasemap,
+          duckDBDataset.tableName
+        );
+      }
     }
   }
 
   $effect(() => {
     void duckDBDatasetsVersion;
+    const currentEnabledDatasets = enabledDatasets;
+
     if (isInitializing) {
       return;
     }
@@ -209,141 +274,112 @@
     hasError = false;
     errorMessage = null;
 
-    if (selectedDataset) {
-      const currentDatasetId = selectedDataset.id;
+    const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-      logger.debug('Map reacting to dataset change', LogCategory.MAP, {
-        datasetId: currentDatasetId
-      });
+    const tableIdsToRemove = [...displayTables.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
 
-      if (selectedDataset.geometry) {
-        convertDatasetToGeoJSON(selectedDataset).then((result) => {
-          if (datasetsStore.selectedDataset?.id !== currentDatasetId) {
-            logger.debug(
-              'Dataset changed during async load, ignoring result',
-              LogCategory.MAP,
-              {
-                loadedDatasetId: currentDatasetId,
-                currentSelectedId: datasetsStore.selectedDataset?.id
-              }
-            );
-            return;
-          }
+    for (const tableId of tableIdsToRemove) {
+      displayTables.delete(tableId);
+    }
 
-          if (result) {
-            if ('numRows' in result) {
-              displayTable = result;
-              displayGeoJSON = null;
-              displayDatasetId = currentDatasetId;
-              logger.info(
-                'Map display updated with Arrow table',
-                LogCategory.MAP,
-                {
-                  rows: result.numRows
-                }
-              );
-            } else if ('features' in result) {
-              displayTable = null;
-              displayGeoJSON = result;
-              displayDatasetId = currentDatasetId;
-              logger.info('Map display updated with GeoJSON', LogCategory.MAP, {
-                features: result.features.length
-              });
-            }
-          } else {
-            setWaitingForData(currentDatasetId);
-          }
-        });
-      } else {
-        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-          selectedDataset.sourceFileId
-        );
+    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
+      (id) => !currentEnabledIds.has(id)
+    );
 
-        if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-          loadGPSData(duckDBDataset.id);
-        } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
-          loadJoinedBasemap(
-            selectedDataset,
-            duckDBDataset.joinedBasemap,
-            duckDBDataset.tableName
-          );
-        } else {
-          setWaitingForData(currentDatasetId);
-        }
+    for (const geojsonId of geojsonIdsToRemove) {
+      displayGeoJSONs.delete(geojsonId);
+    }
+
+    for (const dataset of currentEnabledDatasets) {
+      const alreadyLoaded =
+        displayTables.has(dataset.id) || displayGeoJSONs.has(dataset.id);
+      if (!alreadyLoaded) {
+        loadDatasetForDisplay(dataset);
       }
-    } else {
-      clearDisplay();
     }
   });
 
   $effect(() => {
     const osmBasemap = activeOSMBasemap;
-    if (isInitializing || !osmBasemap || !selectedDataset) {
+    if (isInitializing || !osmBasemap) {
       return;
     }
 
-    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-      selectedDataset.sourceFileId
-    );
+    for (const dataset of enabledDatasets) {
+      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+        dataset.sourceFileId
+      );
 
-    if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-      logger.info('OSM basemap activated, loading GPS data', LogCategory.MAP, {
-        datasetId: duckDBDataset.id,
-        osmBasemap: osmBasemap.file
-      });
-      loadGPSData(duckDBDataset.id);
+      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
+        logger.info(
+          'OSM basemap activated, loading GPS data',
+          LogCategory.MAP,
+          {
+            datasetId: dataset.id,
+            osmBasemap: osmBasemap.file
+          }
+        );
+        loadGPSData(dataset.id, duckDBDataset.id);
+      }
     }
   });
 
-  let resizeObserver: ResizeObserver | null = null;
+  $effect(() => {
+    void globalState.toolbarState;
+
+    untrack(() => {
+      if (!isMapReady) return;
+
+      isResizing = true;
+
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+
+      resizeTimeoutId = setTimeout(() => {
+        isResizing = false;
+        resizeTimeoutId = null;
+      }, TOOLBAR_TRANSITION_MS);
+    });
+  });
+
+  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   function handleContainerResize() {
     if (!containerRef) return;
-    const rect = containerRef.getBoundingClientRect();
-    formatActions.fitToContainer(rect.width, rect.height);
+    formatActions.fitToContainer(
+      containerRef.offsetWidth,
+      containerRef.offsetHeight
+    );
+  }
+
+  function handleContainerResizeDebounced() {
+    if (containerResizeTimeoutId) {
+      clearTimeout(containerResizeTimeoutId);
+    }
+    containerResizeTimeoutId = setTimeout(() => {
+      containerResizeTimeoutId = null;
+      handleContainerResize();
+    }, CONTAINER_RESIZE_DEBOUNCE_MS);
   }
 
   async function initializeMap() {
     const start = performance.now();
-    logger.info('Initializing main map view', LogCategory.MAP);
+    logger.info('Initializing main map view', LogCategory.MAP, {
+      enabledCount: enabledDatasets.length
+    });
 
-    if (selectedDataset?.geometry) {
-      const result = await convertDatasetToGeoJSON(selectedDataset);
-      if (result) {
-        if ('numRows' in result) {
-          displayTable = result;
-          displayGeoJSON = null;
-          displayDatasetId = selectedDataset.id;
-        } else if ('features' in result) {
-          displayTable = null;
-          displayGeoJSON = result;
-          displayDatasetId = selectedDataset.id;
-        }
-      } else {
-        setWaitingForData(selectedDataset.id);
-      }
-    } else if (selectedDataset) {
-      const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
-        selectedDataset.sourceFileId
-      );
-
-      if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-        await loadGPSData(duckDBDataset.id);
-      } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
-        await loadJoinedBasemap(
-          selectedDataset,
-          duckDBDataset.joinedBasemap,
-          duckDBDataset.tableName
-        );
-      } else {
-        setWaitingForData(selectedDataset.id);
-      }
-    } else {
-      clearDisplay();
-    }
+    const loadPromises = enabledDatasets.map((dataset) =>
+      loadDatasetForDisplay(dataset)
+    );
+    await Promise.all(loadPromises);
 
     logger.success('Main map data ready', LogCategory.MAP, {
-      durationMs: (performance.now() - start).toFixed(2)
+      durationMs: (performance.now() - start).toFixed(2),
+      tablesLoaded: displayTables.size,
+      geoJSONsLoaded: displayGeoJSONs.size
     });
     isInitializing = false;
   }
@@ -351,15 +387,21 @@
   onMount(() => {
     handleContainerResize();
 
-    resizeObserver = new ResizeObserver(() => {
-      handleContainerResize();
+    containerResizeObserver = new ResizeObserver(() => {
+      handleContainerResizeDebounced();
     });
-    resizeObserver.observe(containerRef);
+    containerResizeObserver.observe(containerRef);
 
     initializeMap();
 
     return () => {
-      resizeObserver?.disconnect();
+      if (resizeTimeoutId) {
+        clearTimeout(resizeTimeoutId);
+      }
+      if (containerResizeTimeoutId) {
+        clearTimeout(containerResizeTimeoutId);
+      }
+      containerResizeObserver?.disconnect();
     };
   });
 
@@ -367,6 +409,17 @@
     logger.success('Map fully rendered', LogCategory.MAP);
     isMapReady = true;
   }
+
+  const colorBlindnessState = $derived(getColorBlindnessState());
+
+  $effect(() => {
+    const simulationType = colorBlindnessState.enabled
+      ? colorBlindnessState.simulationType
+      : ColorBlindnessType.NONE;
+    if (thematicMapRef) {
+      applyColorBlindnessFilter(thematicMapRef, simulationType);
+    }
+  });
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -389,23 +442,37 @@
       </div>
       <InlineNotification
         kind="error"
-        title="Erreur de chargement"
-        subtitle={errorMessage ??
-          'Une erreur est survenue lors du chargement de la carte'}
+        title={m.error_loading_title()}
+        subtitle={errorMessage ?? m.error_loading_subtitle()}
         hideCloseButton
         lowContrast
       />
     </div>
   {:else if !isInitializing}
-    <div class="thematic-map-wrapper" class:visible={isMapReady}>
-      <ThematicMap
-        jsTable={displayTable}
-        userGeoJSON={displayGeoJSON}
-        datasetId={displayDatasetId}
-        width={formatState.width}
-        height={formatState.height}
-        onReady={handleMapReady}
-      />
+    <div
+      class="thematic-map-wrapper"
+      class:visible={isMapReady}
+      bind:this={thematicMapRef}
+    >
+      {#if facetsEnabled && facetVisualizations.length > 0}
+        <FacetsGrid
+          visualizations={facetVisualizations}
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          layout={facetsLayout}
+          containerWidth={formatState.width}
+          containerHeight={formatState.height}
+        />
+      {:else}
+        <ThematicMap
+          tables={displayTables}
+          geoJSONs={displayGeoJSONs}
+          width={formatState.width}
+          height={formatState.height}
+          onReady={handleMapReady}
+        />
+      {/if}
+      <div class="resize-overlay" class:active={isResizing}></div>
     </div>
   {/if}
 </div>
@@ -418,15 +485,31 @@
     width: 100%;
     height: 100%;
     position: relative;
+    overflow: hidden;
   }
 
   .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
+    position: relative;
   }
 
   .thematic-map-wrapper.visible {
     opacity: 1;
+  }
+
+  .resize-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--cds-ui-background, #f4f4f4);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+  }
+
+  .resize-overlay.active {
+    opacity: 1;
+    transition: none;
   }
 
   .skeleton-loader {

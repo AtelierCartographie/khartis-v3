@@ -23,12 +23,11 @@
     <Column>
       <ToggleTabs
         items={modeItems}
-        bind:activeIndex={modeIndex}
+        activeIndex={modeIndex}
         className="format-mode-tabs"
         activeClass="active"
         fullWidthClass="full-width"
         onChange={(index) => {
-          modeIndex = index;
           formatActions.setMode(
             index === 0 ? FormatMode.PRESET : FormatMode.CUSTOM
           );
