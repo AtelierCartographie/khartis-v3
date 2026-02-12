@@ -140,18 +140,18 @@ export async function exportToGeoparquet(
   );
 
   const filename = `${table}.parquet`;
-  let stableBuffer: Uint8Array | null = null;
+  let stableBuffer: Uint8Array | undefined;
 
   try {
     stableBuffer = await readStableParquetBuffer(ctx, filename);
   } finally {
     try {
       await ctx.db.dropFile(filename);
-    } catch (error) {
+    } catch (dropError) {
       logger.warn(
         'Failed to remove temporary GeoParquet file',
         LogCategory.DUCKDB,
-        error
+        dropError
       );
     }
   }

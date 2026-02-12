@@ -634,7 +634,7 @@ export const createProjectActions = {
     } catch (error) {
       clearTimeout(timeoutId);
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(m.error_download_timeout());
+        throw new Error(m.error_download_timeout(), { cause: error });
       }
       throw error;
     }

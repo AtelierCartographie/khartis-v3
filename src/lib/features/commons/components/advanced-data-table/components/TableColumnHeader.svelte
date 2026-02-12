@@ -580,7 +580,7 @@
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
             <!-- Show warnings in histogram area when present -->
             <div class="hist-warnings">
-              {#each columnWarnings as warning}
+              {#each columnWarnings as warning, index (warning.message + index)}
                 <div class="hist-warning-line">
                   <span class="hist-warning-icon"><WarningAlt size={16} /></span
                   >

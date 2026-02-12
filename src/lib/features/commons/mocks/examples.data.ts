@@ -175,6 +175,8 @@ export async function loadExampleData(
       return await response.text();
     }
   } catch (error) {
-    throw new Error(`${m.error_example_load_failed()}: ${String(error)}`);
+    throw new Error(`${m.error_example_load_failed()}: ${String(error)}`, {
+      cause: error
+    });
   }
 }
