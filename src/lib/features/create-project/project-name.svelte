@@ -3,12 +3,18 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
-  import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+  import {
+    canSubmitImport,
+    getValidImportFiles,
+    hasBlockingImportFiles,
+    hasImportValidationErrors,
+    hasPendingImportFiles
+  } from '$lib/features/create-project/services/import-readiness.service';
   import { m } from '$lib/paraglide/messages';
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
@@ -57,12 +63,27 @@
     CreateProjectValidationService.validateProjectName(projectName)
   );
   const hasValidName = $derived(nameValidation.isValid);
-  const validFiles = $derived(
-    uploadedFiles.filter((f) => f.status === FileStatus.COMPLETE)
-  );
+  const validFiles = $derived(getValidImportFiles(uploadedFiles));
   const hasValidFiles = $derived(validFiles.length > 0);
+  const hasValidationErrors = $derived(
+    hasImportValidationErrors(uploadedFiles)
+  );
+  const hasBlockingFileStatuses = $derived(
+    hasBlockingImportFiles(uploadedFiles)
+  );
+  const hasPendingFiles = $derived(
+    hasPendingImportFiles(
+      uploadedFiles,
+      createProjectState.newProject.isProcessingFiles
+    )
+  );
   const canCreateProject = $derived(
-    hasValidName && hasValidFiles && !isCreating
+    hasValidName &&
+      canSubmitImport(
+        uploadedFiles,
+        createProjectState.newProject.isProcessingFiles
+      ) &&
+      !isCreating
   );
   const nameErrors = $derived(
     hasTriedSubmit && !hasValidName ? nameValidation.errors : []
@@ -88,6 +109,10 @@
 
     if (!hasValidFiles) {
       showError(m.validation_no_files_title(), m.validation_no_files_message());
+      return;
+    }
+
+    if (hasPendingFiles || hasValidationErrors || hasBlockingFileStatuses) {
       return;
     }
 
