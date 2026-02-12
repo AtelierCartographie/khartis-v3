@@ -16,6 +16,7 @@
     WarningFilled
   } from 'carbon-icons-svelte';
   import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+  import { canFinalizeJoin } from '../services/join-validation';
   import type { JoinStats } from './join-accordion.types';
 
   interface Props {
@@ -60,9 +61,7 @@
       stats.unrecognizedCount > 0
   );
 
-  const canFinalize = $derived(
-    stats.joinedCount > 0 && stats.toVerifyCount === 0
-  );
+  const canFinalize = $derived(canFinalizeJoin(stats));
 </script>
 
 <div class="join-stats-accordion">

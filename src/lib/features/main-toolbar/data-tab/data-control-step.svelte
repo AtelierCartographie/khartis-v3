@@ -36,6 +36,7 @@
   import { dataToolsStore, DataToolType } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
+  import { resolveSelectedDuckTableName } from './services/dataset-resolution';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -51,13 +52,10 @@
 
   const currentDuckTable = $derived.by(() => {
     void duckDBDatasetsVersion;
-    const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
-    const tableName = selectedDataset?.sourceFileId
-      ? allDuckDatasets.find(
-          (d) => d.sourceFileId === selectedDataset.sourceFileId
-        )?.tableName || null
-      : null;
-    return tableName;
+    return resolveSelectedDuckTableName(
+      selectedDataset,
+      duckDBOrchestrator.getAllDatasets()
+    );
   });
 
   const hasDataModifications = $derived(
@@ -393,6 +391,8 @@
 
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
+  const MAP_HIGHLIGHT_DEBOUNCE_MS = 800;
+  const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
 
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
@@ -415,7 +415,7 @@
       } else {
         mapHighlightStore.clearHighlights();
       }
-    }, 800);
+    }, MAP_HIGHLIGHT_DEBOUNCE_MS);
     return () => clearTimeout(mapHighlightTimer);
   });
 
@@ -425,8 +425,8 @@
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
-  const getSkeletonProps = () => ({ columns: 5, rows: 5 }) as any;
+  const DATA_TABLE_SKELETON_COLUMNS = 5;
+  const DATA_TABLE_SKELETON_ROWS = 5;
 </script>
 
 <section id="data-control-step">
@@ -541,7 +541,12 @@
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
       <div class="table-skeleton-wrapper">
-        <DataTableSkeleton {...getSkeletonProps()} />
+        <DataTableSkeleton
+          key={DATA_TABLE_SKELETON_HEADER_KEY}
+          empty
+          columns={DATA_TABLE_SKELETON_COLUMNS}
+          rows={DATA_TABLE_SKELETON_ROWS}
+        />
       </div>
     {:else}
       <div class="empty-state">

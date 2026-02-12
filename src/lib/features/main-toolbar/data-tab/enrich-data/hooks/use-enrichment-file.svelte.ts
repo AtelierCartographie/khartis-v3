@@ -1,7 +1,10 @@
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
+import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
 export interface UseEnrichmentFileReturn {
@@ -27,6 +30,59 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
 
+  async function cleanupEnrichmentTable(
+    dataset: DatasetResult | null
+  ): Promise<void> {
+    if (!dataset?.tableName || !Duck) return;
+
+    const isTrackedByDatasetsStore = datasetsStore.datasets.some(
+      (trackedDataset) => trackedDataset.tableName === dataset.tableName
+    );
+
+    if (isTrackedByDatasetsStore) {
+      logger.debug(
+        'Skipping enrichment table cleanup because table is tracked in datasets store',
+        LogCategory.DATA,
+        { tableName: dataset.tableName }
+      );
+      return;
+    }
+
+    try {
+      await Duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(dataset.tableName)}"`
+      );
+      logger.debug('Cleaned enrichment temporary table', LogCategory.DATA, {
+        tableName: dataset.tableName
+      });
+    } catch (error) {
+      logger.warn(
+        'Failed to cleanup enrichment temporary table',
+        LogCategory.DATA,
+        { tableName: dataset.tableName, error }
+      );
+    }
+  }
+
+  async function replaceEnrichmentDataset(
+    dataset: DatasetResult,
+    file: File | null
+  ): Promise<void> {
+    const previousDataset = enrichmentDataset;
+
+    enrichmentDataset = dataset;
+    enrichmentFile = file;
+
+    dataTabActions.setEnrichDataState({
+      enrichmentDatasetId: dataset.id,
+      enrichmentColumn: undefined,
+      targetColumn: undefined,
+      isEnrichmentActive: true
+    });
+
+    await cleanupEnrichmentTable(previousDataset);
+  }
+
   async function handleFileUpload(files: readonly File[]): Promise<void> {
     if (!files || files.length === 0) return;
 
@@ -46,13 +102,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       const dataset: DatasetResult = isZipDatasetResult(result)
         ? result.datasets[0]
         : result;
-      enrichmentDataset = dataset;
-      enrichmentFile = file;
-
-      dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: dataset.id,
-        isEnrichmentActive: true
-      });
+      await replaceEnrichmentDataset(dataset, file);
 
       logger.success('Enrichment file loaded', LogCategory.DATA, {
         fileName: file.name,
@@ -78,14 +128,8 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       const dataset: DatasetResult = isZipDatasetResult(result)
         ? result.datasets[0]
         : result;
-      enrichmentDataset = dataset;
-      enrichmentFile = null;
+      await replaceEnrichmentDataset(dataset, null);
       onlineUrlValue = '';
-
-      dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: dataset.id,
-        isEnrichmentActive: true
-      });
     } catch (error) {
       uploadError =
         error instanceof Error ? error.message : m.error_loading_default();
@@ -105,14 +149,8 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       const dataset: DatasetResult = isZipDatasetResult(result)
         ? result.datasets[0]
         : result;
-      enrichmentDataset = dataset;
-      enrichmentFile = null;
+      await replaceEnrichmentDataset(dataset, null);
       pastedDataValue = '';
-
-      dataTabActions.setEnrichDataState({
-        enrichmentDatasetId: dataset.id,
-        isEnrichmentActive: true
-      });
 
       logger.success('Pasted data loaded', LogCategory.DATA, {
         rowCount: dataset.rowCount
@@ -129,9 +167,12 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   }
 
   function handleRemoveFile(): void {
+    const previousDataset = enrichmentDataset;
     enrichmentDataset = null;
     enrichmentFile = null;
     uploadError = null;
+    pastedDataValue = '';
+    onlineUrlValue = '';
 
     dataTabActions.setEnrichDataState({
       enrichmentDatasetId: undefined,
@@ -139,6 +180,8 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       targetColumn: undefined,
       isEnrichmentActive: false
     });
+
+    void cleanupEnrichmentTable(previousDataset);
   }
 
   function setPastedDataValue(value: string): void {

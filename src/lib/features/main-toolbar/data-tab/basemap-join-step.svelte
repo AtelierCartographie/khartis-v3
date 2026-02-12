@@ -38,6 +38,7 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
 
   let activeTabIndex = $state(0);
 
@@ -49,8 +50,8 @@
 
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
-  const datasetIdForOrchestrator = $derived(
-    selectedDataset?.sourceFileId ?? selectedDataset?.id
+  const datasetIdForOrchestrator = $derived.by(() =>
+    resolveDatasetIdForOrchestrator(selectedDataset)
   );
   let basemapSuggestions = $state<BasemapSuggestion[]>([]);
 
