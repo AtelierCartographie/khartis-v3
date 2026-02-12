@@ -114,10 +114,8 @@
 
     visualizationStore.selectVisualization(targetVisualizationId);
 
-    // Navigate to Visualizations tab
     globalActions.setNavigationState(ToolbarStep.Visualizations);
 
-    // Scroll to configure section after navigation
     setTimeout(() => {
       const configureSection = document.querySelector(
         '#khartis-viz-tab > div:nth-child(2)'

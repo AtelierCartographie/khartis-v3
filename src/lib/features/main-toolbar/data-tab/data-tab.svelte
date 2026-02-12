@@ -17,14 +17,11 @@
 </script>
 
 <ToolbarTabLayout id="khartis-data-tab">
-  <!-- Step 1: Control data - Always visible -->
   <DataControlStep />
 
   {#if isGeographicMode}
-    <!-- Geographic workflow: Step 2 is Enrich (optional) -->
     <EnrichDataStep />
   {:else}
-    <!-- Tabular workflow: Steps 2 and 3 -->
     <GeolocationStep />
     <BasemapJoinStep />
   {/if}

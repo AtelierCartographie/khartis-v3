@@ -71,7 +71,6 @@
 </script>
 
 <div class="join-assisted-section">
-  <!-- Header -->
   <div class="section-header">
     <span class="section-title">{m.section_join_assisted()}</span>
     <span class="section-header-icon">
@@ -85,9 +84,7 @@
       <SkeletonText paragraph lines={3} />
     </div>
   {:else}
-    <!-- Category rows -->
     <div class="category-rows">
-      <!-- Joined entities -->
       {#if joinedCount > 0}
         <div class="category-row">
           <button
@@ -120,7 +117,6 @@
         </div>
       {/if}
 
-      <!-- Entities to verify -->
       {#if toVerifyCount > 0}
         <div class="category-row">
           <button
@@ -194,7 +190,6 @@
         </div>
       {/if}
 
-      <!-- Duplicate entities -->
       {#if duplicateCount > 0}
         <div class="category-row">
           <button
@@ -229,7 +224,6 @@
         </div>
       {/if}
 
-      <!-- Unrecognized entities -->
       {#if unrecognizedCount > 0}
         <div class="category-row">
           <button
@@ -267,7 +261,6 @@
       {/if}
     </div>
 
-    <!-- Notifications -->
     {#if hasBlockingErrors}
       <div class="notifications-row">
         <InlineNotification

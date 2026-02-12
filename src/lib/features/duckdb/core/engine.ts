@@ -19,7 +19,6 @@ import type {
 } from '../types';
 import { executeQuery } from './query';
 
-// --- Module-level state (singleton pattern without class) ---
 let db: duckdb.AsyncDuckDB | null = null;
 let connection: duckdb.AsyncDuckDBConnection | null = null;
 const loaded_files: Map<string, string> = new Map();
@@ -300,7 +299,6 @@ export async function initEngine(): Promise<void> {
         durationMs: (performance.now() - connectStart).toFixed(2)
       });
 
-      // Load macros will be done in duck.ts facade
       await configureRuntimeSettings();
       await configureLocalExtensionRepository();
       await preloadExtensions();

@@ -3,12 +3,15 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
   ProcessorDataset
 } from '../file-processor.interface';
 import { getFileForDuckDB } from './processor-utils';
+
+const { GEOPACKAGE } = PIPELINE_CONST.MIME_TYPES;
 
 export const geopackageProcessor: FileProcessor = {
   supportedFileTypes: [FileType.GEOPACKAGE],
@@ -30,7 +33,7 @@ export const geopackageProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const gpkgFile = getFileForDuckDB(file, 'application/geopackage+sqlite3');
+    const gpkgFile = getFileForDuckDB(file, GEOPACKAGE);
 
     await ctx.Duck.register_files([gpkgFile]);
 

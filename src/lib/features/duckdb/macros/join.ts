@@ -1,22 +1,7 @@
-/**
- * @constant {string} normalize_text_join_macro
- * @description SQL macro that normalizes a text string for join operations by applying NFC normalization,
- * stripping accents, converting to lowercase, and trimming whitespace.
- * Note: Named differently from search's normalize_text to avoid conflict.
- * @example
- * // Example usage within a SQL query:
- * SELECT normalize_text_join('Héllo Wørld!');
- */
 const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(string) AS (
     nfc_normalize(string).strip_accents().lower().trim()
 );`;
 
-/**
- * @constant {string} get_similarity_macro
- * @description SQL macro that calculates the Jaro-Winkler similarity score between a candidate string
- * and a table of strings, categorizes the similarity into 'exact', 'partial', or 'toofar'.
- * Returns ALL matches above a threshold, not just the best one, to allow for ambiguity detection.
- */
 const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, join_table) AS TABLE (
   WITH t0 AS (
     SELECT normalize_text_join(candidate) as search_term
@@ -37,16 +22,6 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
     ORDER BY score DESC
 );`;
 
-/**
- * @const {string} analyze_join_quality_macro
- * @description Analyzes the quality of the join for a given dataset against a basemap.
- * Categorizes each entity from the dataset into:
- * - 'matched': Exact match found and unique.
- * - 'check': Partial match found or ambiguous exact matches.
- * - 'not_found': No match found above threshold.
- * - 'ambiguous': Multiple candidates with high scores (handled within 'check' for UI simplicity, but logic detects it).
- * - 'duplicate': Source data contains duplicate values for this entity.
- */
 const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality(candidates_table, geoname_column, join_table) AS TABLE (
     WITH source_with_counts AS (
         SELECT
@@ -86,13 +61,7 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
     LEFT JOIN best_matches bm ON c.original_name = bm.original_name
 );`;
 
-/**
- * @const {string} get_join_table_from_basemap_macro
- * @description SQL macro for creating a join table from a basemap.
- */
 const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_table_from_basemap
--- WARNING: basemap_table must be provided as a string. e.g.: 'table_name'
--- TWO ARGUMENTS VERSION = a single identifier column
 (basemap_table, main_id) AS TABLE (
   WITH t1 AS (
       FROM query_table(basemap_table)
@@ -106,7 +75,6 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         basemap_table as basemap,
         t1.count as basemap_count
     ),
--- THREE ARGUMENTS VERSION = one main id and one or more secondary ids
 (basemap_table, main_id, others_id) AS TABLE (
   WITH t1 AS (
     FROM query_table(basemap_table)
@@ -134,11 +102,6 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
       ORDER BY variant, raw
   );`;
 
-/**
- * @const {string} join_synthesis_macro
- * @description SQL macro for generating a synthesis of join results (Global Score).
- * Used for the initial basemap suggestion ranking.
- */
 const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS TABLE (
   FROM query_table(tabname)
   SELECT
@@ -149,10 +112,6 @@ const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS
   ORDER BY share_basemap DESC
 );`;
 
-/**
- * @const {string} apply_join_across_basemaps_macro
- * Kept for backward compatibility or global search if needed.
- */
 const apply_join_across_basemaps_macro = `CREATE OR REPLACE MACRO apply_join_across_basemaps(candidates_table, geoname_column, join_table) AS TABLE (
     WITH t1 AS (
         FROM query_table(candidates_table)

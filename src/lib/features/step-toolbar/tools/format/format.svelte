@@ -8,7 +8,9 @@
   import MarginsEditor from './margins-editor.svelte';
   import ModelSelect from './model-select.svelte';
 
-  const isPreset = $derived(formatState.mode === 'preset');
+  const PRESET_MODE = 'preset';
+
+  const isPreset = $derived(formatState.mode === PRESET_MODE);
 </script>
 
 <div id="khartis-format-tool">

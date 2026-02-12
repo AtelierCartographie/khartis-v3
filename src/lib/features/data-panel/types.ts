@@ -1,17 +1,9 @@
-/**
- * Types for Data Panel components
- * Based on Figma Design Analysis - 2026-01-31
- */
-
 export type StatusType = 'success' | 'warning' | 'error' | 'info';
 
 export type NotificationKind = 'error' | 'warning' | 'info' | 'success';
 
 export type GeocodeType = 'entities' | 'longlat';
 
-/**
- * Mapping row for basemap merger
- */
 export type MappingRow = {
   id: string;
   dataValue: string;
@@ -20,9 +12,6 @@ export type MappingRow = {
   suggestion?: string;
 };
 
-/**
- * Entity mapping statistics
- */
 export type MappingStats = {
   joinedCount: number;
   toVerifyCount: number;
@@ -30,9 +19,6 @@ export type MappingStats = {
   unrecognizedCount: number;
 };
 
-/**
- * Column metadata for data table
- */
 export type ColumnMetadata = {
   name: string;
   type: 'text' | 'numeric' | 'date' | 'geometry';
@@ -44,40 +30,25 @@ export type ColumnMetadata = {
   categories?: string[];
 };
 
-/**
- * Data table row
- */
 export type DataTableRow = {
   id: string;
   values: Record<string, unknown>;
 };
 
-/**
- * Geocode settings for entities
- */
 export type GeocodeSettingsEntities = {
   type: 'entities';
   linkedVariable: string;
   entityColumn: string;
 };
 
-/**
- * Geocode settings for longitude/latitude
- */
 export type GeocodeSettingsLonLat = {
   type: 'longlat';
   longitudeColumn: string;
   latitudeColumn: string;
 };
 
-/**
- * Geocode settings union type
- */
 export type GeocodeSettings = GeocodeSettingsEntities | GeocodeSettingsLonLat;
 
-/**
- * Basemap merger error
- */
 export type MappingError = {
   type: 'duplicate' | 'unrecognized' | 'ambiguous';
   dataValue: string;
@@ -85,9 +56,6 @@ export type MappingError = {
   message: string;
 };
 
-/**
- * Props for BasemapMerger component
- */
 export type BasemapMergerProps = {
   mappings: MappingRow[];
   stats: MappingStats;
@@ -98,9 +66,6 @@ export type BasemapMergerProps = {
   onCorrect?: (id: string, newValue: string) => void;
 };
 
-/**
- * Props for GeocodeSettings component
- */
 export type GeocodeSettingsProps = {
   type: GeocodeType;
   variables: string[];
@@ -108,18 +73,12 @@ export type GeocodeSettingsProps = {
   onUpdate?: (settings: GeocodeSettings) => void;
 };
 
-/**
- * Props for StatusIcon component
- */
 export type StatusIconProps = {
   status: StatusType;
   size?: 'sm' | 'md' | 'lg';
   withLabel?: boolean;
 };
 
-/**
- * Props for DataTableRowItem component
- */
 export type DataTableRowItemProps = {
   row: DataTableRow;
   columns: ColumnMetadata[];
@@ -127,9 +86,6 @@ export type DataTableRowItemProps = {
   onSelect?: (id: string) => void;
 };
 
-/**
- * Props for DataPanelContent component
- */
 export type DataPanelContentProps = {
   columns: ColumnMetadata[];
   rows: DataTableRow[];
@@ -139,9 +95,6 @@ export type DataPanelContentProps = {
   onExpand?: () => void;
 };
 
-/**
- * Notification message
- */
 export type NotificationMessage = {
   id: string;
   kind: NotificationKind;
@@ -150,9 +103,6 @@ export type NotificationMessage = {
   dismissible?: boolean;
 };
 
-/**
- * Helper type guards
- */
 export const isEntitiesGeocode = (
   settings: GeocodeSettings
 ): settings is GeocodeSettingsEntities => {
@@ -165,9 +115,6 @@ export const isLonLatGeocode = (
   return settings.type === 'longlat';
 };
 
-/**
- * Constants for status types
- */
 export const STATUS_TYPES = {
   SUCCESS: 'success' as const,
   WARNING: 'warning' as const,
@@ -175,9 +122,6 @@ export const STATUS_TYPES = {
   INFO: 'info' as const
 };
 
-/**
- * Constants for notification kinds
- */
 export const NOTIFICATION_KINDS = {
   ERROR: 'error' as const,
   WARNING: 'warning' as const,
@@ -185,9 +129,6 @@ export const NOTIFICATION_KINDS = {
   SUCCESS: 'success' as const
 };
 
-/**
- * Constants for geocode types
- */
 export const GEOCODE_TYPES = {
   ENTITIES: 'entities' as const,
   LONGLAT: 'longlat' as const

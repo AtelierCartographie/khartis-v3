@@ -44,7 +44,6 @@
     untrack(() => (showToggle ? defaultOpen && toggleChecked : defaultOpen))
   );
 
-  // Auto-expand/collapse when toggle value changes (skip initial run)
   let isInitialized = false;
 
   $effect(() => {
@@ -224,7 +223,6 @@
     box-sizing: border-box;
   }
 
-  // When toggle is present, remove left padding from button (toggle provides it)
   .section-header.has-toggle .section-expand-btn {
     padding-left: 0;
   }
@@ -289,7 +287,6 @@
     background-color: var(--cds-layer-hover-01);
   }
 
-  // Hover effect on entire header when no toggle (button fills the header)
   .section-header:not(.has-toggle):hover:not(.disabled) {
     background-color: var(--cds-layer-hover-01);
   }

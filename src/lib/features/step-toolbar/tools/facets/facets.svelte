@@ -47,11 +47,11 @@
 
   const showWarning = $derived(selectedVarIds.length > 9);
 
+  const FACETS_HELP_URL =
+    'https://cartographie.sciencespo.fr/khartis/help/facets';
+
   function handleLearnMore() {
-    window.open(
-      'https://cartographie.sciencespo.fr/khartis/help/facets',
-      '_blank'
-    );
+    window.open(FACETS_HELP_URL, '_blank');
   }
 
   async function handleGenerate() {

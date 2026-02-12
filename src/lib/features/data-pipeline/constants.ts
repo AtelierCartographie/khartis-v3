@@ -30,15 +30,19 @@ export const PIPELINE_CONST = {
     ] as const
   },
   MIME_TYPES: {
-    CSV: ['text/csv', 'text/plain', 'application/csv'] as const,
-    JSON: ['application/json', 'application/geo+json'] as const,
-    PARQUET: ['application/octet-stream', 'application/x-parquet'] as const,
-    ARROW: [
-      'application/vnd.apache.arrow.file',
-      'application/octet-stream'
-    ] as const,
-    SHAPEFILE: ['application/x-shapefile', 'application/octet-stream'] as const
-  },
+    CSV: 'text/csv',
+    JSON: 'application/json',
+    GEOJSON: 'application/geo+json',
+    PARQUET: 'application/octet-stream',
+    ARROW: 'application/vnd.apache.arrow.file',
+    SHAPEFILE: 'application/x-shapefile',
+    GEOPACKAGE: 'application/geopackage+sqlite3',
+    KML: 'application/vnd.google-earth.kml+xml',
+    KMZ: 'application/vnd.google-earth.kmz',
+    GPX: 'application/gpx+xml',
+    ZIP: 'application/zip',
+    BINARY: 'application/octet-stream'
+  } as const,
   LIMITS: {
     MAX_FILE_SIZE: 100 * 1024 * 1024,
     WARNING_FILE_SIZE: 50 * 1024 * 1024,

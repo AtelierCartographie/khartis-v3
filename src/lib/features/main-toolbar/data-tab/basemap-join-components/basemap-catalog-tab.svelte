@@ -239,7 +239,6 @@
     padding-bottom: var(--cds-spacing-03);
   }
 
-  /* Catalogue grid styles */
   .catalogue-filters {
     display: flex;
     flex-direction: column;

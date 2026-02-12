@@ -32,6 +32,8 @@
     getOnClose: () => onClose
   });
 
+  const KHARTIS_FILE_EXTENSIONS = ['.kh', '.khartis'];
+
   let savedProjects = $state<SavedProjectMetadata[]>([]);
   let selectedProjectId = $state<string | null>(null);
   let isLoading = $state(true);
@@ -81,7 +83,9 @@
     const files = Array.from(event.detail);
 
     const khFile = files.find(
-      (f) => f.name.endsWith('.kh') || f.name.endsWith('.khartis')
+      (f) =>
+        f.name.endsWith(KHARTIS_FILE_EXTENSIONS[0]) ||
+        f.name.endsWith(KHARTIS_FILE_EXTENSIONS[1])
     );
 
     if (!khFile) {
@@ -267,7 +271,7 @@
     <div class="flex items-end gap-3 mt-5 mb-3">
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
-        accept={['.kh', '.khartis']}
+        accept={KHARTIS_FILE_EXTENSIONS}
         validateFiles={validateKhartisFiles}
         disabled={isImporting}
         on:change={handleFileImport}

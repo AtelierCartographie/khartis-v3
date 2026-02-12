@@ -1,19 +1,3 @@
-/**
- * @module SemioDetector
- * @description Semiological type detection for dataset columns
- *
- * Determines the semiological type of each column:
- * - geoid: Geographic identifier (for joins with basemaps)
- * - geolat: Latitude coordinate
- * - geolon: Longitude coordinate
- * - QTA: Absolute Quantitative (counts, sizes)
- * - QTR: Relative Quantitative (ratios, percentages)
- * - QL: Qualitative (categories)
- * - QLO: Ordered Qualitative (ranks)
- *
- * Extracted from VizSuggesterService for reuse across the application.
- */
-
 import type { AnalysisResult } from '$lib/features/duckdb';
 
 export type SemioType =
@@ -159,12 +143,6 @@ function detectKeywordsFromName(columnName: string): {
   };
 }
 
-/**
- * Detects the semiological type of a column based on its analysis results.
- *
- * @param analysis - The analysis result from DuckDB containing column statistics
- * @returns The detected semiological type and confidence score
- */
 export function detectSemioType(
   analysis: AnalysisResult
 ): SemioDetectionResult {

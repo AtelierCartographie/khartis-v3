@@ -45,9 +45,9 @@ class Logger {
 
   private recentLogs: RecentLog[] = [];
 
-  private readonly LOOP_DETECTION_WINDOW = 100; // ms
+  private readonly LOOP_DETECTION_WINDOW = 100;
 
-  private readonly LOOP_DETECTION_THRESHOLD = 10; // occurrences
+  private readonly LOOP_DETECTION_THRESHOLD = 10;
 
   constructor() {
     const isTest =
@@ -122,7 +122,6 @@ class Logger {
         window: `${this.LOOP_DETECTION_WINDOW}ms`,
         recentLogs: this.recentLogs.slice(-5)
       });
-      // Clear to avoid spamming
       this.recentLogs = [];
       return true;
     }
@@ -180,9 +179,8 @@ class Logger {
 
     if (!this.shouldLog(options.category, level)) return;
 
-    // Detect infinite loops
     if (this.detectInfiniteLoop(message, options.category)) {
-      return; // Stop logging to prevent console spam
+      return;
     }
 
     const icon = this.getIcon(level);
@@ -191,7 +189,6 @@ class Logger {
 
     const style = this.getColor(level);
 
-    // Add stack trace for errors if configured
     let data = options.data;
     if (
       this.config.includeStack &&
@@ -271,7 +268,6 @@ class Logger {
     this.log(message, { category, level: LogLevel.SUCCESS, data });
   }
 
-  // Special method for grouping related logs
   group(title: string, category: LogCategory): void {
     if (!this.config.enabled) return;
     console.group(`[${category}] ${title}`);
@@ -282,7 +278,6 @@ class Logger {
     console.groupEnd();
   }
 
-  // Method to check if logging is enabled
   isEnabled(): boolean {
     return this.config.enabled;
   }

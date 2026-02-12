@@ -654,7 +654,6 @@
     untrack(() => mapBasemap.syncProjection());
   });
 
-  // Consolidated layer update trigger - combines visualization, basemap layers, and data changes
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
@@ -673,7 +672,6 @@
     }
   });
 
-  // Watch for reference basemap changes (e.g., basemap join or enrichment overlay selection)
   $effect(() => {
     const refId = basemapStyleStore.referenceBasemapId;
     logEffect('referenceBasemapId');

@@ -67,7 +67,6 @@
 
 <div class="join-stats-accordion">
   <Accordion>
-    <!-- Joined Entities -->
     <AccordionItem
       open={joinedExpanded}
       on:click={() => (joinedExpanded = !joinedExpanded)}
@@ -89,7 +88,6 @@
       {/if}
     </AccordionItem>
 
-    <!-- To Verify Entities -->
     <AccordionItem
       open={toVerifyExpanded}
       on:click={() => (toVerifyExpanded = !toVerifyExpanded)}
@@ -159,7 +157,6 @@
       {/if}
     </AccordionItem>
 
-    <!-- Duplicate Entities -->
     <AccordionItem
       open={duplicatesExpanded}
       on:click={() => (duplicatesExpanded = !duplicatesExpanded)}
@@ -181,7 +178,6 @@
       {/if}
     </AccordionItem>
 
-    <!-- Unrecognized Entities -->
     <AccordionItem
       open={unrecognizedExpanded}
       on:click={() => (unrecognizedExpanded = !unrecognizedExpanded)}

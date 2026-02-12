@@ -44,10 +44,12 @@ const COLOR_MATRIX: Record<string, string> = {
 };
 
 const SVG_FILTER_ID = 'khartis-color-blindness-filter';
+const SVG_CONTAINER_ID = 'khartis-svg-filters';
+const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function createSVGFilterElement(): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('id', 'khartis-svg-filters');
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('id', SVG_CONTAINER_ID);
   svg.setAttribute('width', '0');
   svg.setAttribute('height', '0');
   svg.style.position = 'absolute';
@@ -61,7 +63,7 @@ function createSVGFilterElement(): SVGSVGElement {
 
 function ensureSVGFiltersExist(): SVGDefsElement {
   let svg = document.getElementById(
-    'khartis-svg-filters'
+    SVG_CONTAINER_ID
   ) as unknown as SVGSVGElement | null;
   if (!svg) {
     svg = createSVGFilterElement();
@@ -93,16 +95,10 @@ export function applyColorBlindnessFilter(
     existing.remove();
   }
 
-  const filter = document.createElementNS(
-    'http://www.w3.org/2000/svg',
-    'filter'
-  );
+  const filter = document.createElementNS(SVG_NS, 'filter');
   filter.setAttribute('id', SVG_FILTER_ID);
 
-  const feColorMatrix = document.createElementNS(
-    'http://www.w3.org/2000/svg',
-    'feColorMatrix'
-  );
+  const feColorMatrix = document.createElementNS(SVG_NS, 'feColorMatrix');
   feColorMatrix.setAttribute('type', 'matrix');
   feColorMatrix.setAttribute('values', matrix);
 

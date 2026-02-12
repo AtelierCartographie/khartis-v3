@@ -105,7 +105,6 @@ function findGeoColumn(jsTable: ArrowTable): string | null {
 function extractCoordFromValue(value: unknown): [number, number] | null {
   if (!value) return null;
 
-  // Handle { lon, lat } or { lng, lat } format (common in open data)
   if (typeof value === 'object' && value !== null) {
     const obj = value as Record<string, unknown>;
     const lon = obj.lon ?? obj.lng ?? obj.longitude ?? obj.x;
@@ -115,7 +114,6 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
     }
   }
 
-  // Handle string JSON format
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
@@ -125,7 +123,6 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
     }
   }
 
-  // Handle [lng, lat] array format
   if (Array.isArray(value) && value.length >= 2) {
     const [lng, lat] = value;
     if (typeof lng === 'number' && typeof lat === 'number') {
@@ -177,7 +174,6 @@ function calculateBoundsFromGeometryData(
   for (let i = 0; i < jsTable.numRows; i += step) {
     const geom = geomVector.get(i);
 
-    // First try to parse as standard geometry (WKB, GeoJSON, GeoArrow)
     const parsed = parseGeoJsonGeometry(geom);
     if (parsed) {
       parsedCount++;
@@ -194,7 +190,6 @@ function calculateBoundsFromGeometryData(
       continue;
     }
 
-    // Fallback: try to extract simple coordinate from { lon, lat } format
     const coord = extractCoordFromValue(geom);
     if (coord) {
       coordCount++;
@@ -254,7 +249,6 @@ export function calculateBoundsFromGeoArrow(
     const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
     let primaryColumn: string | null = null;
 
-    // Step 1: Try to get bbox from GeoArrow metadata
     if (geoMetadata) {
       const jsonMeta = JSON.parse(geoMetadata);
       primaryColumn = jsonMeta.primary_column ?? null;
@@ -295,7 +289,6 @@ export function calculateBoundsFromGeoArrow(
       }
     }
 
-    // Step 2: Try to calculate from primary geometry column
     if (primaryColumn) {
       logger.info(
         'No bbox in metadata, calculating from primary column',
@@ -306,7 +299,6 @@ export function calculateBoundsFromGeoArrow(
       if (bounds) return bounds;
     }
 
-    // Step 3: Try to find and use any known geometry column
     const geoColumn = findGeoColumn(jsTable);
     if (geoColumn && geoColumn !== primaryColumn) {
       logger.info(
@@ -318,7 +310,6 @@ export function calculateBoundsFromGeoArrow(
       if (bounds) return bounds;
     }
 
-    // Step 4: Last resort - try all columns that might contain coordinates
     logger.info('Trying all columns to find coordinates', LogCategory.MAP, {
       fields: jsTable.schema.fields.map((f) => f.name)
     });
