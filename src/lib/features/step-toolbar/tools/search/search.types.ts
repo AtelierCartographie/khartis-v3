@@ -3,10 +3,10 @@ export interface SearchState {
   selectedSource: string;
   replaceValue: string;
   results: Array<{
-    id: string;
-    text: string;
-    location: string;
-    layerId?: string;
+    rowId: number;
+    columnName: string;
+    value: string;
+    score: number;
   }>;
   currentResultIndex: number;
   isSearching: boolean;

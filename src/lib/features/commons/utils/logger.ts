@@ -213,15 +213,6 @@ class Logger {
     }
   }
 
-  /**
-   * Start timing an operation
-   * Returns a function that when called, logs the duration
-   *
-   * @example
-   * const endTiming = logger.startTiming('Parse CSV', LogCategory.FILE);
-   * // ... do work ...
-   * endTiming(); // Logs: "Parse CSV completed" with duration
-   */
   startTiming(label: string, category: LogCategory): () => void {
     const start = performance.now();
     return () => {
@@ -233,14 +224,6 @@ class Logger {
     };
   }
 
-  /**
-   * Log with automatic performance timing
-   *
-   * @example
-   * await logger.time('Parse CSV', LogCategory.FILE, async () => {
-   *   return await parseFile(file);
-   * });
-   */
   async time<T>(
     label: string,
     category: LogCategory,

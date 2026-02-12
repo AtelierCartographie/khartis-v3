@@ -1,4 +1,4 @@
-import { createProjectState } from '$lib/features/commons/store/create-project.store.svelte';
+import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -23,9 +23,8 @@ export const mainToolbarState = $state<MainToolbarState>({ ...DEFAULT_STATE });
 
 export function getDerivedToolbarState() {
   const hasProject = !!projectStore.currentProject;
-  const hasFiles = createProjectState.newProject.uploadedFiles.some(
-    (f) => f.status === 'complete'
-  );
+  const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+  const hasFiles = sourceFiles.length > 0;
   const projectName = projectStore.currentProject?.manifest.name || '';
 
   return {
@@ -49,9 +48,9 @@ export const mainToolbarActions = {
     mainToolbarState.canNavigateToVisualization = hasProject && hasValidFiles;
   },
 
-  navigateToVisualization(): void {
+  async navigateToVisualization(): Promise<void> {
     if (projectStore.isDirty) {
-      void projectStore.saveCurrentProject();
+      await projectStore.saveCurrentProject();
     }
 
     const derived = getDerivedToolbarState();
@@ -87,7 +86,7 @@ export const mainToolbarActions = {
     }
 
     const files = projectStore.currentProject?.data?.sourceFiles || [];
-    const hasErrors = files.some((f) => f.status === 'error');
+    const hasErrors = files.some((f) => f.status === FileStatus.ERROR);
     if (hasErrors) {
       missingSteps.push('Fix file errors');
     }

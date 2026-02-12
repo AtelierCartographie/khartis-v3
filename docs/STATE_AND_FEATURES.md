@@ -207,6 +207,121 @@ interface SavedProjectMetadata {
 
 Sorted by `updatedAt` descending on load.
 
+## Map-Specific Stores
+
+### Map Highlight Store
+
+**Location**: `src/lib/features/map/stores/map-highlight.store.svelte.ts`
+
+Manages highlighted rows on map (search results, filters).
+
+```typescript
+class MapHighlightStore {
+  get highlightedRowIds(): Set<number>; // Current highlights
+  get version(): number; // Change tracker
+  get hasHighlights(): boolean; // Derived
+
+  setHighlightedRows(rowIds: number[]): void;
+  clearHighlights(): void;
+  isRowHighlighted(rowId: number): boolean;
+}
+
+export const mapHighlightStore = new MapHighlightStore();
+```
+
+**Use case**: Search panel sets highlights → layer-factory applies 30% opacity to non-highlighted.
+
+### Basemap Layers Store
+
+**Location**: `src/lib/features/map/stores/basemap-layers.store.svelte.ts`
+
+Manages 9 configurable basemap layers (terre, mers, lacs, rivieres, relief, equateur, meridiens, frontieres, villes).
+
+```typescript
+class BasemapLayersStore {
+  get version(): number; // Triggers re-render
+  get layers(): BasemapLayerConfig[]; // All 9 layers
+  get visibleLayers(): BasemapLayerConfig[]; // Filtered
+
+  getLayer<T>(id: T): Extract<BasemapLayerConfig, { id: T }>;
+  setLayerVisibility(id: BasemapLayerId, visible: boolean): void;
+  updateLayer<T>(id: T, updates: Partial<...>): void;
+  resetToDefaults(): void;
+  resetLayer(id: BasemapLayerId): void;
+  restoreFromSerialized(layers: BasemapLayerConfig[]): void;
+}
+
+export const basemapLayersStore = new BasemapLayersStore();
+```
+
+**UI Integration**: `visualization-tab/components/basemap-layers/` (7 layer-specific components)
+
+**Layer Types**:
+
+- `TerreLayerConfig` - Fill color/shadow, stroke dotted/thickness
+- `MersLayerConfig` - Sea color/opacity
+- `LacsLayerConfig`, `RivieresLayerConfig` - Water bodies
+- `ReliefLayerConfig` - Shading/hachure representation
+- `EquateurLayerConfig`, `MeridiensLayerConfig` - Grid lines
+- `FrontieresLayerConfig` - Borders (dotted patterns)
+- `VillesLayerConfig` - Cities (category/symbol/size)
+
+**Dotted Patterns**: `DOTS`, `DASHES`, `MIXED` (from `BasemapDottedPattern` enum)
+
+**Persistence**: Serialized in project JSON, restored via `restoreFromSerialized()`.
+
+### Map Loading Store
+
+**Location**: `src/lib/features/map/stores/map-loading.store.svelte.ts`
+
+Tracks DuckDB WASM initialization and data loading states for map component.
+
+## Visualization Store Enums
+
+**Location**: `src/lib/features/commons/store/visualization.store.svelte.ts`
+
+### Primitive Filter Type (NEW)
+
+```typescript
+enum PrimitiveFilterType {
+  POINT = 'POINT',
+  LINE = 'LINE',
+  POLYGON = 'POLYGON'
+}
+
+const ALL_PRIMITIVE_FILTERS = [
+  PrimitiveFilterType.POINT,
+  PrimitiveFilterType.LINE,
+  PrimitiveFilterType.POLYGON
+];
+```
+
+**Use case**: Toggle visibility of geometry types in visualization (e.g., show only polygons, hide points/lines).
+
+### Visualization Type
+
+```typescript
+enum VisualizationType {
+  CHOROPLETH = 'choropleth',
+  PROPORTIONAL = 'proportional',
+  CATEGORICAL = 'categorical',
+  BIVARIATE = 'bivariate',
+  COMBINED = 'combined'
+}
+```
+
+### Classification Method
+
+```typescript
+enum ClassificationMethod {
+  EQUAL_INTERVAL = 'equal-interval',
+  QUANTILE = 'quantile',
+  JENKS = 'jenks',
+  STDDEV = 'stddev',
+  MANUAL = 'manual'
+}
+```
+
 ## Project Management Services
 
 The project management feature uses **modular functional design** with the following structure:

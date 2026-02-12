@@ -1,6 +1,9 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { CACHE_CONSTANTS, DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
@@ -85,7 +88,7 @@ export async function exportToCsv(
   try {
     await executeQuery(
       ctx.connection,
-      `COPY "${table}" TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
+      `COPY "${escapeIdentifier(table)}" TO '${filename}' (FORMAT CSV, DELIMITER '${delimiter}', HEADER ${header})`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
 
@@ -132,23 +135,23 @@ export async function exportToGeoparquet(
   const escapedTableForFile = escapeSqlString(table);
   await executeQuery(
     ctx.connection,
-    `COPY "${table}" TO '${escapedTableForFile}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
+    `COPY "${escapeIdentifier(table)}" TO '${escapedTableForFile}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 
   const filename = `${table}.parquet`;
-  let stableBuffer: Uint8Array | null = null;
+  let stableBuffer: Uint8Array | undefined;
 
   try {
     stableBuffer = await readStableParquetBuffer(ctx, filename);
   } finally {
     try {
       await ctx.db.dropFile(filename);
-    } catch (error) {
+    } catch (dropError) {
       logger.warn(
         'Failed to remove temporary GeoParquet file',
         LogCategory.DUCKDB,
-        error
+        dropError
       );
     }
   }

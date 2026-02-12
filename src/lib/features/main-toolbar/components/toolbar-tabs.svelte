@@ -1,31 +1,31 @@
 <script lang="ts">
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
-  import {
-    Add,
-    OverflowMenuVertical,
-    Copy,
-    Edit,
-    TrashCan,
-    View,
-    ViewOff
-  } from 'carbon-icons-svelte';
-  import clsx from 'clsx';
-  import { SvelteMap } from 'svelte/reactivity';
-  import AddDataModal from './add-data-modal.svelte';
   import {
     showError,
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Checkmark } from 'carbon-icons-svelte';
+  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
+  import {
+    Add,
+    Checkmark,
+    Copy,
+    Edit,
+    OverflowMenuVertical,
+    TrashCan
+  } from 'carbon-icons-svelte';
+  import clsx from 'clsx';
+  import { SvelteMap } from 'svelte/reactivity';
+  import AddDataModal from './add-data-modal.svelte';
+  import { dataTabStore } from '../data-tab/data-tab.store.svelte';
+  import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
 
@@ -65,10 +65,26 @@
     return datasets.find((d) => d.isSelected) ?? datasets[0];
   }
 
+  function resetDataTabStores() {
+    dataTabStore.reset();
+    dataToolsStore.reset();
+  }
+
   function handleSelectDataset(datasetId: string, event: Event) {
     event.stopPropagation();
+    const previousDatasetId = datasetsStore.selectedDatasetId;
     datasetsStore.selectDataset(datasetId);
+    if (previousDatasetId !== datasetId) {
+      resetDataTabStores();
+    }
     closeTabMenu();
+  }
+
+  function handleTabClick(sourceFileId: string, isCurrentlySelected: boolean) {
+    if (!isCurrentlySelected) {
+      resetDataTabStores();
+      globalActions.selectDataButton(sourceFileId);
+    }
   }
 
   let datasetToDelete = $state<{ id: string; name: string } | null>(null);
@@ -379,27 +395,6 @@
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength - 3) + '...';
   };
-
-  function isTabVisible(sourceFileId: string): boolean {
-    const datasets = getDatasetsForTab(sourceFileId);
-    return datasets.some((d) => datasetsStore.isDatasetEnabled(d.id));
-  }
-
-  function toggleTabVisibility(sourceFileId: string, event: Event): void {
-    event.stopPropagation();
-    const datasets = getDatasetsForTab(sourceFileId);
-    const anyEnabled = datasets.some((d) =>
-      datasetsStore.isDatasetEnabled(d.id)
-    );
-
-    for (const dataset of datasets) {
-      if (anyEnabled) {
-        datasetsStore.disableDataset(dataset.id);
-      } else {
-        datasetsStore.enableDataset(dataset.id);
-      }
-    }
-  }
 </script>
 
 <div
@@ -421,20 +416,11 @@
         datasetCount > 1 && selectedDataset
           ? selectedDataset.name
           : fileInfo.name}
-      {@const tabVisible = isTabVisible(dataButton.id)}
-      <div
-        class="tab-button-wrapper"
-        class:hidden-layer={!tabVisible}
-        use:registerTab={dataButton.id}
-      >
+      <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
         <Button
           isSelected={dataButton.isSelected}
           kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-          on:click={() => {
-            if (!dataButton.isSelected) {
-              globalActions.selectDataButton(dataButton.id);
-            }
-          }}
+          on:click={() => handleTabClick(dataButton.id, dataButton.isSelected)}
           class="tab-button"
           title={displayName}
         >
@@ -461,22 +447,10 @@
             {/if}
           </div>
           <button
-            class="visibility-toggle"
-            onclick={(e: MouseEvent) => toggleTabVisibility(dataButton.id, e)}
-            aria-label={tabVisible ? 'Masquer la couche' : 'Afficher la couche'}
-            title={tabVisible ? 'Masquer la couche' : 'Afficher la couche'}
-          >
-            {#if tabVisible}
-              <View size={16} />
-            {:else}
-              <ViewOff size={16} />
-            {/if}
-          </button>
-          <button
             class="tab-menu-button"
             onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
-            aria-label="Options du fichier"
-            title="Options du fichier"
+            aria-label={m.file_options()}
+            title={m.file_options()}
             aria-haspopup="true"
             aria-expanded={menuOpenTabId === dataButton.id}
           >
@@ -491,14 +465,16 @@
             role="menu"
           >
             {#if menuDatasets.length > 1}
-              <div class="tab-menu-section-label">Jeux de données</div>
+              <div class="tab-menu-section-label">
+                {m.datasets_label()}
+              </div>
               {#each menuDatasets as dataset (dataset.id)}
                 <div class="tab-menu-item-dataset-row">
                   {#if editingDatasetId === dataset.id}
                     <TextInput
                       size="sm"
                       hideLabel
-                      labelText="Nom du jeu de données"
+                      labelText={m.dataset_name_label()}
                       bind:value={editedDatasetName}
                       on:keydown={handleDatasetEditKeyPress}
                       on:blur={saveDatasetRename}
@@ -523,7 +499,7 @@
                   <Button
                     kind="ghost"
                     size="small"
-                    iconDescription="Renommer le jeu de données"
+                    iconDescription={m.dataset_rename_action()}
                     icon={Edit}
                     on:click={(e) =>
                       startEditingDataset(dataset.id, dataset.name, e)}
@@ -531,7 +507,7 @@
                   <Button
                     kind="danger-ghost"
                     size="small"
-                    iconDescription="Supprimer le jeu de données"
+                    iconDescription={m.dataset_delete_action()}
                     icon={TrashCan}
                     on:click={(e) =>
                       handleDeleteDataset(dataset.id, dataset.name, e)}
@@ -547,7 +523,7 @@
               role="menuitem"
             >
               <Edit size={16} />
-              Renommer...
+              {m.tab_rename_action()}
             </button>
             <button
               class="tab-menu-item"
@@ -555,7 +531,7 @@
               role="menuitem"
             >
               <Copy size={16} />
-              Dupliquer
+              {m.tab_duplicate_action()}
             </button>
             <div class="tab-menu-divider"></div>
             <button
@@ -565,7 +541,7 @@
               role="menuitem"
             >
               <TrashCan size={16} />
-              Supprimer
+              {m.tab_delete_action()}
             </button>
           </div>
         {/if}
@@ -573,17 +549,17 @@
     {/each}
 
     {#if globalState.dataButtons.length === 0}
-      <span class="no-files-text">Aucun fichier importé</span>
+      <span class="no-files-text">{m.no_files_imported()}</span>
     {/if}
   </div>
 
   <div class="add-btn-wrapper">
     <Button
       kind="ghost"
-      iconDescription="Ajouter des fichiers"
+      iconDescription={m.add_files_action()}
       icon={Add}
       on:click={openAddDataModal}
-      aria-label="Ajouter des fichiers"
+      aria-label={m.add_files_action()}
     />
   </div>
 </div>
@@ -593,36 +569,32 @@
 <Modal
   danger
   open={isDeleteConfirmOpen}
-  modalHeading="Supprimer le fichier"
-  primaryButtonText="Supprimer"
-  secondaryButtonText="Annuler"
+  modalHeading={m.file_delete_title()}
+  primaryButtonText={m.delete_confirm_button()}
+  secondaryButtonText={m.cancel()}
   size="sm"
   on:click:button--secondary={cancelDelete}
   on:click:button--primary={handleDeleteFile}
   on:close={cancelDelete}
 >
   <p>
-    Êtes-vous sûr de vouloir supprimer le fichier <strong
-      >{fileToDelete?.name}</strong
-    > du projet ? Cette action est irréversible.
+    {m.file_delete_message({ name: fileToDelete?.name ?? '' })}
   </p>
 </Modal>
 
 <Modal
   danger
   open={isDeleteDatasetConfirmOpen}
-  modalHeading="Supprimer le jeu de données"
-  primaryButtonText="Supprimer"
-  secondaryButtonText="Annuler"
+  modalHeading={m.dataset_delete_title()}
+  primaryButtonText={m.delete_confirm_button()}
+  secondaryButtonText={m.cancel()}
   size="sm"
   on:click:button--secondary={cancelDeleteDataset}
   on:click:button--primary={confirmDeleteDataset}
   on:close={cancelDeleteDataset}
 >
   <p>
-    Êtes-vous sûr de vouloir supprimer le jeu de données <strong
-      >{datasetToDelete?.name}</strong
-    > ? Les visualisations associées seront également supprimées.
+    {m.dataset_delete_message({ name: datasetToDelete?.name ?? '' })}
   </p>
 </Modal>
 
@@ -749,43 +721,6 @@
 
   .tab-menu-button:hover :global(svg) {
     fill: var(--cds-text-01);
-  }
-
-  .visibility-toggle {
-    position: absolute;
-    right: calc(var(--cds-spacing-03) + 24px);
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    padding: var(--cds-spacing-02);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    border-radius: var(--cds-border-radius);
-    transition: background-color 0.15s ease;
-    z-index: 10;
-  }
-
-  .visibility-toggle:hover {
-    background-color: var(--cds-hover-ui);
-  }
-
-  .visibility-toggle :global(svg) {
-    fill: var(--cds-text-02);
-  }
-
-  .visibility-toggle:hover :global(svg) {
-    fill: var(--cds-text-01);
-  }
-
-  .hidden-layer {
-    opacity: 0.5;
-  }
-
-  .hidden-layer .tab-label {
-    text-decoration: line-through;
   }
 
   .tab-context-menu {

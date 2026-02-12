@@ -1,3 +1,4 @@
+import { combineUint8Arrays } from './array.utils';
 import { LogCategory, logger } from './logger';
 
 export async function compressData(data: string): Promise<ArrayBuffer> {
@@ -29,16 +30,8 @@ export async function compressData(data: string): Promise<ArrayBuffer> {
       chunks.push(value);
     }
 
-    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-    const result = new Uint8Array(totalLength);
-    let offset = 0;
-
-    for (const chunk of chunks) {
-      result.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    return result.buffer;
+    const result = combineUint8Arrays(chunks);
+    return result.buffer as ArrayBuffer;
   }
 
   return uint8Array.buffer;
@@ -71,15 +64,7 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
         chunks.push(value);
       }
 
-      const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
-      const result = new Uint8Array(totalLength);
-      let offset = 0;
-
-      for (const chunk of chunks) {
-        result.set(chunk, offset);
-        offset += chunk.length;
-      }
-
+      const result = combineUint8Arrays(chunks);
       const decoder = new TextDecoder();
       return decoder.decode(result);
     } catch (error) {

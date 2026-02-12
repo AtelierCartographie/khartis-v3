@@ -9,4 +9,5 @@ export interface ProjectionState {
   scale?: number;
   center?: [number, number];
   autoFit?: boolean;
+  customCode?: string;
 }

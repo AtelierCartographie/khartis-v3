@@ -1,6 +1,8 @@
-import type { Deck } from '@deck.gl/core';
+import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+
+type DeckInstance = Deck<View | View[] | null>;
 
 interface DeckViewState {
   target: [number, number, number];
@@ -23,7 +25,7 @@ class MapInstanceStore {
   private _state = $state<{
     map: MapLibreMap | null;
     deckOverlay: MapboxOverlay | null;
-    deckInstance: Deck | null;
+    deckInstance: DeckInstance | null;
     isMapLoaded: boolean;
     zoomLevel: number;
     baseZoomLevel: number;
@@ -62,7 +64,7 @@ class MapInstanceStore {
     this._state.deckOverlay = overlay;
   }
 
-  setDeckInstance(instance: Deck | null) {
+  setDeckInstance(instance: DeckInstance | null) {
     this._state.deckInstance = instance;
   }
 
@@ -214,6 +216,26 @@ class MapInstanceStore {
       });
       this.updateZoomFromMap();
     }
+  }
+
+  /**
+   * Reset the Deck.gl orthographic camera to origin.
+   * The model matrix (from projectionStore) already centers and scales data
+   * to fit the canvas at zoom 0, so target [0,0,0] + zoom 0 = "fit bounds".
+   */
+  fitToOrthographicBounds(): void {
+    if (!this._state.deckInstance || !this._state.isMapLoaded) return;
+
+    this._state.deckViewState = {
+      ...this._state.deckViewState,
+      target: [0, 0, 0],
+      zoom: 0
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (this._state.deckInstance as any).setProps({
+      initialViewState: { main: this._state.deckViewState }
+    });
+    this.updateZoomFromMap();
   }
 
   reset() {

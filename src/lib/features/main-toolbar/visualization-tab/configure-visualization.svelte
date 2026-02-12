@@ -1,26 +1,47 @@
 <script lang="ts">
-  import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
-    Button,
-    Checkbox,
-    Column,
-    ComboBox,
-    Grid,
-    NumberInput,
-    RadioButton,
-    RadioButtonGroup,
-    Row,
-    Select,
-    SelectItem,
-    Slider,
-    TextInput
-  } from 'carbon-components-svelte';
-  import { Add, ArrowsHorizontal } from 'carbon-icons-svelte';
+    visualizationStore,
+    ALL_PRIMITIVE_FILTERS,
+    PrimitiveFilterType,
+    type VisualizationConfig,
+    type VisualizationModes,
+    type PrimitiveFilter,
+    type MissingDataConfig,
+    type ClassificationConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    calculateBreaks,
+    generateColorsForBreaks
+  } from '$lib/features/commons/services/classification.service';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import LabelsConfig from './components/labels-config.svelte';
+  import LinesConfig from './components/lines-config.svelte';
+  import PolygonsConfig from './components/polygons-config.svelte';
+  import SymbolsConfig from './components/symbols-config.svelte';
+  import TextsConfig from './components/texts-config.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
+  let lastComputedKey = $state<string>('');
+  let computeRequestCounter = $state(0);
+
+  const dataFieldItems = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset?.columns) return [];
+    return dataset.columns
+      .filter((col) => col.type !== 'geometry')
+      .map((col, id) => ({ id, text: col.name }));
+  });
+
+  const discretizationMethods = [
+    { id: 0, text: m.discretization_method_jenks() },
+    { id: 1, text: m.discretization_method_quantile() },
+    { id: 2, text: m.discretization_method_equal_interval() },
+    { id: 3, text: m.discretization_method_manual() }
+  ];
 
   function handleInvertPalette() {
     if (selectedViz?.id) {
@@ -28,913 +49,324 @@
     }
   }
 
-  const dataFields = ['sous-alimentation', 'Part sous-alim.', 'Population'];
-  const dataFieldItems = dataFields.map((text, id) => ({ id, text }));
-  const discretizationMethods = [
-    { id: 0, text: 'Jenks, 4 classes' },
-    { id: 1, text: 'Quantiles, 5 classes' },
-    { id: 2, text: 'Equal intervals, 5 classes' },
-    { id: 3, text: 'Manual' }
-  ];
+  function handleStyleChange(updates: Partial<VisualizationConfig['style']>) {
+    if (selectedViz?.id) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        style: { ...selectedViz.style, ...updates }
+      });
+    }
+  }
 
-  let selectedFieldId = $state<number>(0);
-  let selectedColorFieldId = $state<number>(0);
-  let symbolsType = $state<string>('proportionnels');
-  let proportionalType = $state<string>('uniques');
-  let fillType = $state<string>('classes');
-  let labelStrokeType = $state<string>('aucun');
+  function handleModesChange(updates: Partial<VisualizationModes>) {
+    if (selectedViz?.id) {
+      visualizationStore.updateModes(selectedViz.id, updates);
+    }
+  }
 
-  let symbolMaxSize = $state<number>(24);
-  let symbolSize = $state<number>(12);
-  let symbolOpacity = $state<number>(80);
-  let strokeWidth = $state<number>(1);
-  let strokeOpacity = $state<number>(100);
+  function handleSymbolsChange(
+    updates: Partial<VisualizationConfig['symbols']>
+  ) {
+    if (selectedViz?.id) {
+      visualizationStore.updateSymbols(selectedViz.id, updates);
+    }
+  }
 
-  let feedFillType = $state<string>('unique');
-  let feedDiscretizationId = $state<number>(0);
-  let feedColorFieldId = $state<number>(0);
-  let feedOpacity = $state<number>(100);
-  let feedStrokeWidth = $state<number>(1);
-  let feedStrokeOpacity = $state<number>(100);
+  function handleMissingDataChange(updates: Partial<MissingDataConfig>) {
+    if (selectedViz?.id) {
+      visualizationStore.updateMissingData(selectedViz.id, updates);
+    }
+  }
 
-  let polyFillType = $state<string>('unique');
-  let polyDiscretizationId = $state<number>(0);
-  let polyColorFieldId = $state<number>(0);
-  let polyOpacity = $state<number>(100);
-  let polyStrokeWidth = $state<number>(2);
-  let polyStrokeOpacity = $state<number>(100);
+  function handleClassificationChange(updates: Partial<ClassificationConfig>) {
+    if (selectedViz?.id) {
+      visualizationStore.updateClassification(selectedViz.id, updates);
+    }
+  }
 
-  let lineWidth = $state<number>(1);
-  let lineOpacity = $state<number>(100);
+  function handleMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    if (selectedViz?.id) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        mapping: { ...selectedViz.mapping, ...updates }
+      });
+      if (updates.valueColumn) {
+        computeBreaksForVisualization('mapping:valueColumn');
+      }
+    }
+  }
 
-  let textFieldId = $state<number>(0);
-  let textSecondaryFieldId = $state<number>(0);
-  let textSize = $state<number>(12);
-  let textOpacity = $state<number>(100);
-  let labelBgOpacity = $state<number>(0);
-  let showMissingData = $state<boolean>(true);
-  let missingText = $state<string>('Absence de données');
+  function handlePrimitiveVisibilityChange(
+    primitive: PrimitiveFilter,
+    visible: boolean
+  ) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const activeFilters = selectedViz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    const isVisible = activeFilters.includes(primitive);
+    if (isVisible === visible) {
+      return;
+    }
+
+    visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
+  }
+
+  function handleLabelVisibilityChange(visible: boolean) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const nextOpacity = visible ? (selectedViz.style.labelOpacity ?? 1) : 0;
+    visualizationStore.updateVisualization(selectedViz.id, {
+      style: {
+        ...selectedViz.style,
+        labelOpacity: nextOpacity
+      }
+    });
+  }
+
+  function handleTextVisibilityChange(visible: boolean) {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const nextOpacity = visible ? (selectedViz.style.textOpacity ?? 1) : 0;
+    visualizationStore.updateVisualization(selectedViz.id, {
+      style: {
+        ...selectedViz.style,
+        textOpacity: nextOpacity
+      }
+    });
+  }
+
+  async function computeBreaksForVisualization(trigger = 'unknown') {
+    if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (missing dataset/valueColumn)',
+        LogCategory.UI,
+        {
+          trigger,
+          selectedVisualizationId: selectedViz?.id,
+          datasetId: selectedViz?.datasetId,
+          valueColumn: selectedViz?.mapping.valueColumn
+        }
+      );
+      return;
+    }
+
+    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${selectedViz.classification?.method}-${selectedViz.classification?.numClasses}`;
+    if (computeKey === lastComputedKey) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (same compute key)',
+        LogCategory.UI,
+        {
+          trigger,
+          computeKey
+        }
+      );
+      return;
+    }
+    lastComputedKey = computeKey;
+    computeRequestCounter += 1;
+    const requestId = computeRequestCounter;
+
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.id === selectedViz.datasetId
+    );
+    if (!dataset?.sourceFileId) {
+      logger.warn(
+        '[configure-visualization] skipped breaks computation (missing sourceFileId)',
+        LogCategory.UI,
+        {
+          trigger,
+          requestId,
+          datasetId: selectedViz.datasetId
+        }
+      );
+      return;
+    }
+
+    const method = selectedViz.classification?.method;
+    const numClasses = selectedViz.classification?.numClasses ?? 5;
+
+    if (!method) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (missing method)',
+        LogCategory.UI,
+        {
+          trigger,
+          requestId,
+          selectedVisualizationId: selectedViz.id
+        }
+      );
+      return;
+    }
+
+    logger.info('[configure-visualization] computing breaks', LogCategory.UI, {
+      trigger,
+      requestId,
+      selectedVisualizationId: selectedViz.id,
+      sourceFileId: dataset.sourceFileId,
+      valueColumn: selectedViz.mapping.valueColumn,
+      method,
+      numClasses
+    });
+
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: selectedViz.mapping.valueColumn,
+        method,
+        numClasses
+      });
+
+      if (result && selectedViz?.id) {
+        const colors = generateColorsForBreaks(numClasses);
+        visualizationStore.updateClassification(selectedViz.id, {
+          breaks: result.breaks,
+          colors
+        });
+        logger.success(
+          '[configure-visualization] breaks computed and applied',
+          LogCategory.UI,
+          {
+            requestId,
+            selectedVisualizationId: selectedViz.id,
+            breaksCount: result.breaks.length
+          }
+        );
+      } else {
+        logger.warn(
+          '[configure-visualization] breaks computation returned empty result',
+          LogCategory.UI,
+          {
+            requestId,
+            selectedVisualizationId: selectedViz?.id
+          }
+        );
+      }
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] breaks computation crashed',
+        LogCategory.UI,
+        {
+          requestId,
+          trigger,
+          error
+        }
+      );
+    }
+  }
+
+  $effect(() => {
+    if (
+      selectedViz?.mapping.valueColumn &&
+      selectedViz?.classification?.method &&
+      !selectedViz?.classification?.breaks?.length
+    ) {
+      computeBreaksForVisualization('$effect:missingBreaks');
+    }
+  });
 </script>
 
 <section id="configure-visualization">
-  <MainToolBarHeader title={m.step2_title()} />
+  <MainToolBarHeader
+    title={m.step2_title()}
+    icon={SettingsAdjust}
+    showDivider
+  />
 
-  <p class="kh-help">
-    {m.step2_description()}
-  </p>
+  <div class="content-area">
+    <p class="kh-help">
+      {m.step2_description()}
+    </p>
+  </div>
 
-  <ExpandableSection
-    title="Symboles"
-    defaultOpen
-    showToggle
-    toggleChecked={true}
-  >
-    <Grid padding noGutter>
-      <Row>
-        <Column>
-          <h6 class="sub">Taille et forme</h6>
-        </Column>
-      </Row>
+  <div class="config-accordion">
+    <SymbolsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onSymbolsChange={handleSymbolsChange}
+      onMappingChange={handleMappingChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
+    />
 
-      <Row>
-        <Column>
-          <RadioButtonGroup legendText="Symboles" bind:selected={symbolsType}>
-            <RadioButton
-              id="symbols-uniques"
-              value="uniques"
-              labelText="Uniques"
-            />
-            <RadioButton
-              id="symbols-prop"
-              value="proportionnels"
-              labelText="Proportionnels"
-            />
-          </RadioButtonGroup>
-        </Column>
-      </Row>
+    <PolygonsConfig
+      dataFields={dataFieldItems}
+      discretizationMethods={discretizationMethods}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
+    />
 
-      {#if symbolsType === 'proportionnels'}
-        <Row>
-          <Column>
-            <RadioButtonGroup
-              legendText="Symboles proportionnels"
-              bind:selected={proportionalType}
-            >
-              <RadioButton
-                id="prop-uniques"
-                value="uniques"
-                labelText="Uniques"
-              />
-              <RadioButton
-                id="prop-doubles"
-                value="doubles"
-                labelText="Doubles"
-              />
-            </RadioButtonGroup>
-          </Column>
-        </Row>
+    <LinesConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
+    />
 
-        <Row>
-          <Column sm={4} md={8} lg={13}>
-            <ComboBox
-              items={dataFieldItems}
-              selectedId={selectedFieldId}
-              on:select={(e) => (selectedFieldId = e.detail.selectedId)}
-              placeholder="Taille selon"
-              labelText=""
-            />
-          </Column>
-          <Column sm={4} md={8} lg={3}>
-            <NumberInput
-              id="max-size"
-              labelText=""
-              bind:value={symbolMaxSize}
-              min={1}
-              max={200}
-              size="xl"
-              hideLabel
-            />
-          </Column>
-        </Row>
-      {/if}
+    <LabelsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onToggleVisibility={handleLabelVisibilityChange}
+    />
 
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="shape" labelText="Forme">
-            <SelectItem value="point" text="Point" />
-            <SelectItem value="carre" text="Carré" />
-            <SelectItem value="triangle" text="Triangle" />
-          </Select>
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <div class="slider">
-            <Slider
-              labelText="Taille"
-              min={1}
-              max={20}
-              step={1}
-              bind:value={symbolSize}
-              hideTextInput
-            />
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Fond</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <RadioButtonGroup legendText="Remplissage" bind:selected={fillType}>
-            <RadioButton id="fill-unique" value="unique" labelText="Unique" />
-            <RadioButton
-              id="fill-classes"
-              value="classes"
-              labelText="En classes"
-            />
-          </RadioButtonGroup>
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="discretization" labelText="Discrétisation">
-            <SelectItem value="jenks" text="Jenks, 4 classes" />
-            <SelectItem value="quantiles" text="Quantiles, 5 classes" />
-          </Select>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <div class="palette">
-            <div class="swatch" style="--from:#b3d4ff; --to:#001d6c"></div>
-            <span>Palette de couleurs</span>
-            <Button
-              kind="ghost"
-              size="small"
-              icon={ArrowsHorizontal}
-              iconDescription={m.invert_palette_tooltip()}
-              on:click={handleInvertPalette}
-            />
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={selectedColorFieldId}
-            on:select={(e) => (selectedColorFieldId = e.detail.selectedId)}
-            placeholder="Couleur selon"
-            labelText=""
-          />
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="symbol-opacity"
-            labelText=""
-            bind:value={symbolOpacity}
-            min={0}
-            max={100}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={12} md={12} lg={12}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={symbolOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Contour</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText="Épaisseur"
-              min={0}
-              max={20}
-              step={1}
-              bind:value={strokeWidth}
-              hideTextInput
-            />
-          </div>
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="stroke-width-value"
-            labelText=""
-            bind:value={strokeWidth}
-            min={0}
-            max={20}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="stroke-color" labelText="Couleur">
-            <SelectItem value="blue" text="Bleu" />
-            <SelectItem value="gray" text="Gris" />
-            <SelectItem value="white" text="Blanc" />
-            <SelectItem value="black" text="Noir" />
-          </Select>
-        </Column>
-        <Column sm={8} md={8} lg={8}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={strokeOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-    </Grid>
-  </ExpandableSection>
-
-  <ExpandableSection
-    title="Feed"
-    defaultOpen={false}
-    showToggle
-    toggleChecked={false}
-  >
-    <Grid padding noGutter>
-      <Row>
-        <Column>
-          <h6 class="sub">Fond</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <RadioButtonGroup
-            legendText="Remplissage"
-            bind:selected={feedFillType}
-          >
-            <RadioButton
-              id="feed-fill-unique"
-              value="unique"
-              labelText="Unique"
-            />
-            <RadioButton
-              id="feed-fill-classes"
-              value="classes"
-              labelText="En classes"
-            />
-          </RadioButtonGroup>
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <ComboBox
-            items={discretizationMethods}
-            selectedId={feedDiscretizationId}
-            on:select={(e) => (feedDiscretizationId = e.detail.selectedId)}
-            placeholder="Discrétisation"
-            labelText=""
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <div class="palette">
-            <div class="swatch" style="--from:#ffb3b3; --to:#6c0000"></div>
-            <span>Palette de couleurs</span>
-            <Button
-              kind="ghost"
-              size="small"
-              icon={ArrowsHorizontal}
-              iconDescription={m.invert_palette_tooltip()}
-              on:click={handleInvertPalette}
-            />
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={feedColorFieldId}
-            on:select={(e) => (feedColorFieldId = e.detail.selectedId)}
-            placeholder="Couleur selon"
-            labelText=""
-          />
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="feed-opacity"
-            labelText=""
-            bind:value={feedOpacity}
-            min={0}
-            max={100}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={12} md={12} lg={12}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={feedOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Contour</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText="Épaisseur"
-              min={0}
-              max={20}
-              step={1}
-              bind:value={feedStrokeWidth}
-              hideTextInput
-            />
-          </div>
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="feed-stroke-width"
-            labelText=""
-            bind:value={feedStrokeWidth}
-            min={0}
-            max={20}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="feed-stroke-color" labelText="Couleur">
-            <SelectItem value="white" text="Blanc" />
-            <SelectItem value="black" text="Noir" />
-            <SelectItem value="gray" text="Gris" />
-          </Select>
-        </Column>
-        <Column sm={8} md={8} lg={8}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={feedStrokeOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-    </Grid>
-  </ExpandableSection>
-
-  <ExpandableSection
-    title="Polygones"
-    defaultOpen={false}
-    showToggle
-    toggleChecked={false}
-  >
-    <Grid padding noGutter>
-      <Row>
-        <Column>
-          <h6 class="sub">Fond</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <RadioButtonGroup
-            legendText="Remplissage"
-            bind:selected={polyFillType}
-          >
-            <RadioButton
-              id="poly-fill-unique"
-              value="unique"
-              labelText="Unique"
-            />
-            <RadioButton
-              id="poly-fill-classes"
-              value="classes"
-              labelText="En classes"
-            />
-          </RadioButtonGroup>
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <ComboBox
-            items={discretizationMethods}
-            selectedId={polyDiscretizationId}
-            on:select={(e) => (polyDiscretizationId = e.detail.selectedId)}
-            placeholder="Discrétisation"
-            labelText=""
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <div class="palette">
-            <div class="swatch" style="--from:#b3e5ff; --to:#003d6c"></div>
-            <span>Palette de couleurs</span>
-            <Button
-              kind="ghost"
-              size="small"
-              icon={ArrowsHorizontal}
-              iconDescription={m.invert_palette_tooltip()}
-              on:click={handleInvertPalette}
-            />
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={polyColorFieldId}
-            on:select={(e) => (polyColorFieldId = e.detail.selectedId)}
-            placeholder="Couleur selon"
-            labelText=""
-          />
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="poly-opacity"
-            labelText=""
-            bind:value={polyOpacity}
-            min={0}
-            max={100}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={12} md={12} lg={12}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={polyOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Contour</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText="Épaisseur"
-              min={0}
-              max={20}
-              step={1}
-              bind:value={polyStrokeWidth}
-              hideTextInput
-            />
-          </div>
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="poly-stroke-width"
-            labelText=""
-            bind:value={polyStrokeWidth}
-            min={0}
-            max={20}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="poly-stroke-color" labelText="Couleur">
-            <SelectItem value="white" text="Blanc" />
-            <SelectItem value="black" text="Noir" />
-            <SelectItem value="gray" text="Gris" />
-          </Select>
-        </Column>
-        <Column sm={8} md={8} lg={8}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={polyStrokeOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-    </Grid>
-  </ExpandableSection>
-
-  <ExpandableSection
-    title="Lignes"
-    defaultOpen={false}
-    showToggle
-    toggleChecked={false}
-  >
-    <Grid padding noGutter>
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText="Épaisseur"
-              min={0}
-              max={20}
-              step={1}
-              bind:value={lineWidth}
-              hideTextInput
-            />
-          </div>
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="line-width"
-            labelText=""
-            bind:value={lineWidth}
-            min={0}
-            max={20}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="line-color" labelText="Couleur">
-            <SelectItem value="blue" text="Bleu" />
-            <SelectItem value="gray" text="Gris" />
-            <SelectItem value="black" text="Noir" />
-          </Select>
-        </Column>
-        <Column sm={8} md={8} lg={8}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={lineOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-    </Grid>
-  </ExpandableSection>
-
-  <ExpandableSection
-    title="Textes"
-    defaultOpen={false}
-    showToggle
-    toggleChecked={true}
-  >
-    <Grid padding noGutter>
-      <Row>
-        <Column>
-          <h6 class="sub">Texte</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={8} md={8} lg={8}>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={textFieldId}
-            on:select={(e) => (textFieldId = e.detail.selectedId)}
-            placeholder="Texte selon"
-            labelText=""
-          />
-        </Column>
-        <Column sm={4} md={4} lg={4}>
-          <Button
-            size="field"
-            kind="tertiary"
-            iconDescription="Ajouter"
-            icon={Add}
-          />
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="label-color" labelText="Couleur">
-            <SelectItem value="black" text="Noir" />
-            <SelectItem value="blue" text="Bleu" />
-            <SelectItem value="gray" text="Gris" />
-          </Select>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={8} md={8} lg={8}>
-          <ComboBox
-            items={dataFieldItems}
-            selectedId={textSecondaryFieldId}
-            on:select={(e) => (textSecondaryFieldId = e.detail.selectedId)}
-            placeholder="Texte secondaire selon"
-            labelText=""
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <Checkbox
-            id="show-missing-data"
-            labelText="Afficher l'absence de données"
-            bind:checked={showMissingData}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={8} md={8} lg={8}>
-          <TextInput
-            id="missing-text"
-            labelText="Texte"
-            bind:value={missingText}
-          />
-        </Column>
-        <Column sm={4} md={4} lg={4}>
-          <Select id="missing-text-color" labelText="Couleur">
-            <SelectItem value="gray-30" text="Gris" />
-            <SelectItem value="blue-60" text="Bleu" />
-          </Select>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText="Taille"
-              min={8}
-              max={32}
-              step={1}
-              bind:value={textSize}
-              hideTextInput
-            />
-          </div>
-        </Column>
-        <Column sm={4} md={8} lg={3}>
-          <NumberInput
-            id="text-size"
-            labelText=""
-            bind:value={textSize}
-            min={8}
-            max={32}
-            size="xl"
-            hideLabel
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={12} md={12} lg={12}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={textOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Fond</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <Select id="label-bg-color" labelText="Couleur">
-            <SelectItem value="none" text="Aucun" />
-            <SelectItem value="white" text="Blanc" />
-            <SelectItem value="gray" text="Gris" />
-          </Select>
-        </Column>
-        <Column sm={8} md={8} lg={8}>
-          <div class="slider-inline">
-            <span class="min">0</span>
-            <div class="slider">
-              <Slider
-                labelText="Opacité"
-                hideTextInput
-                min={0}
-                max={100}
-                step={1}
-                bind:value={labelBgOpacity}
-              />
-            </div>
-            <span class="max">100</span>
-          </div>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <h6 class="sub">Contour</h6>
-        </Column>
-      </Row>
-
-      <Row>
-        <Column sm={4} md={8} lg={8}>
-          <RadioButtonGroup legendText="" bind:selected={labelStrokeType}>
-            <RadioButton
-              id="label-stroke-none"
-              value="aucun"
-              labelText="Aucun"
-            />
-            <RadioButton
-              id="label-stroke-unique"
-              value="unique"
-              labelText="Unique"
-            />
-          </RadioButtonGroup>
-        </Column>
-        <Column sm={4} md={8} lg={8}>
-          <Select
-            id="label-stroke-color"
-            labelText="Couleur"
-            disabled={labelStrokeType === 'aucun'}
-          >
-            <SelectItem value="white" text="Blanc" />
-            <SelectItem value="black" text="Noir" />
-            <SelectItem value="gray" text="Gris" />
-          </Select>
-        </Column>
-      </Row>
-    </Grid>
-  </ExpandableSection>
+    <TextsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={handleTextVisibilityChange}
+    />
+  </div>
 </section>
 
 <style lang="scss">
   #configure-visualization {
-    background-color: var(--cds-ui-02);
-    padding: var(--cds-spacing-05);
+    display: flex;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+
+  .content-area {
+    padding: 16px 16px 8px 16px;
   }
 
   .kh-help {
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-05);
-    font-size: 0.875rem;
-    line-height: 1.4;
+    color: var(--cds-text-secondary, #6f6f6f);
+    margin: 0;
+    font-size: 14px;
+    line-height: 18px;
   }
 
-  .sub {
-    margin: var(--cds-spacing-03) 0;
-    font-size: 0.9rem;
-    font-weight: 600;
-  }
-
-  .slider-inline {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: var(--cds-spacing-03);
-    align-items: center;
-  }
-
-  .palette {
+  .config-accordion {
     display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    margin: var(--cds-spacing-02) 0;
-  }
-
-  .palette .swatch {
-    width: 160px;
-    height: 16px;
-    border-radius: 2px;
-    background: linear-gradient(90deg, var(--from), var(--to));
-    border: 1px solid var(--cds-border-subtle);
+    flex-direction: column;
+    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 </style>

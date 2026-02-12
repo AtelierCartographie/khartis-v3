@@ -10,7 +10,7 @@ import { exportToCsv, exportToGeoparquet } from './io/exporters';
 import { registerFiles } from './io/file-registry';
 import { readGeofile, readLink, readTabular } from './io/readers';
 import { analyse, describeColumns } from './operations/analysis';
-import { addFilter, applyFilters } from './operations/filters';
+
 import { applyJoinAssociation, joinById } from './operations/join';
 import { searchInTable } from './operations/search';
 import { describeTable, dropRows, getRowCount } from './operations/table-ops';
@@ -108,16 +108,6 @@ export const Duck = {
   async drop_rows(table: string, rowsId: number[]): Promise<void> {
     const ctx = getContext();
     return dropRows(ctx, table, rowsId);
-  },
-
-  add_filter(table: string, keyIndex: number, filter: string): void {
-    const ctx = getContext();
-    addFilter(ctx, table, keyIndex, filter);
-  },
-
-  async apply_filters(table: string): Promise<unknown> {
-    const ctx = getContext();
-    return applyFilters(ctx, table);
   },
 
   async copy_to_csv_as_string(

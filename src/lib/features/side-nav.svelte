@@ -29,25 +29,22 @@
 
   const sideNav = useSideNav();
 
-  let isDuplicateModalOpen = $state(false);
-  let isDeleteModalOpen = $state(false);
-
   function openDuplicateModal() {
-    isDuplicateModalOpen = true;
+    globalState.isDuplicateModalOpen = true;
     sideNav.closeSideNav();
   }
 
   function closeDuplicateModal() {
-    isDuplicateModalOpen = false;
+    globalState.isDuplicateModalOpen = false;
   }
 
   function openDeleteModal() {
-    isDeleteModalOpen = true;
+    globalState.isDeleteModalOpen = true;
     sideNav.closeSideNav();
   }
 
   function closeDeleteModal() {
-    isDeleteModalOpen = false;
+    globalState.isDeleteModalOpen = false;
   }
 </script>
 
@@ -75,8 +72,8 @@
               data-testid="sidenav-new-project"
               on:click={sideNav.handleNewProject}
             >
-              <span class="shortcut-icon">⇧⌘N</span>
               {m.sidenav_new_project()}
+              <span class="shortcut-icon">⇧⌘N</span>
             </Button>
 
             <Button
@@ -87,8 +84,8 @@
               data-testid="sidenav-open-project"
               on:click={sideNav.handleOpenProject}
             >
-              <span class="shortcut-icon">⇧⌘O</span>
               {m.sidenav_open_project()}
+              <span class="shortcut-icon">⇧⌘O</span>
             </Button>
 
             <Button
@@ -100,8 +97,8 @@
               disabled={!projectStore.currentProject}
               on:click={sideNav.handleSaveProject}
             >
-              <span class="shortcut-icon">⌘S</span>
               {m.sidenav_save_project()}
+              <span class="shortcut-icon">⌘S</span>
             </Button>
 
             <Button
@@ -111,7 +108,9 @@
               class="menu-bar-item"
               data-testid="sidenav-duplicate-project"
               on:click={openDuplicateModal}
-              >{m.sidenav_duplicate_project()}
+            >
+              {m.sidenav_duplicate_project()}
+              <span class="shortcut-icon">⇧⌘D</span>
             </Button>
 
             <Button
@@ -122,7 +121,9 @@
               data-testid="sidenav-delete-project"
               disabled={!projectStore.currentProject}
               on:click={openDeleteModal}
-              >{m.sidenav_delete_project()}
+            >
+              {m.sidenav_delete_project()}
+              <span class="shortcut-icon">⇧⌘⌫</span>
             </Button>
           </Column>
         </Row>
@@ -241,7 +242,7 @@
 </div>
 
 <DuplicateProjectModal
-  bind:open={isDuplicateModalOpen}
+  bind:open={globalState.isDuplicateModalOpen}
   isLoading={sideNav.isDuplicating}
   onClose={closeDuplicateModal}
   onConfirm={(projectId, newName) =>
@@ -249,7 +250,7 @@
 />
 
 <DeleteConfirmModal
-  bind:open={isDeleteModalOpen}
+  bind:open={globalState.isDeleteModalOpen}
   projectName={projectStore.projectName}
   onClose={closeDeleteModal}
   onConfirm={() => sideNav.handleDeleteConfirm(closeDeleteModal)}
@@ -293,6 +294,6 @@
   .shortcut-icon {
     font-size: 0.65rem;
     color: var(--cds-text-03);
-    margin-right: var(--cds-spacing-03);
+    margin-left: auto;
   }
 </style>

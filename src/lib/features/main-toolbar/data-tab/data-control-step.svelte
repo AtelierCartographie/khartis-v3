@@ -5,7 +5,8 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
     showError,
-    showSuccess
+    showSuccess,
+    showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
   import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
@@ -14,8 +15,11 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
-    InlineNotification
+    InlineNotification,
+    Modal
   } from 'carbon-components-svelte';
+  import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+  import { DataCheck } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import CalculatorPanel from './components/calculator-panel.svelte';
   import CsvOptionsModal, {
@@ -56,8 +60,16 @@
     return tableName;
   });
 
+  const hasDataModifications = $derived(
+    selectedDataset?.id
+      ? datasetsStore.hasModifications(selectedDataset.id)
+      : false
+  );
+
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
+  let deleteFilteredModalOpen = $state(false);
+  let filteredRowsToDelete = $state(0);
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
@@ -66,7 +78,24 @@
   let currentCsvOptions = $state<CsvOptions>({
     header: true,
     decimalSeparator: '.',
-    thousandsSeparator: undefined
+    thousandsSeparator: undefined,
+    delimiter: undefined
+  });
+
+  let confirmReimportOpen = $state(false);
+  let pendingCsvOptions = $state<CsvOptions | null>(null);
+
+  // Sync currentCsvOptions from dataset metadata when dataset changes
+  $effect(() => {
+    const csvOpts = selectedDataset?.metadata?.csvOptions;
+    if (csvOpts) {
+      currentCsvOptions = {
+        header: csvOpts.header,
+        decimalSeparator: csvOpts.decimalSeparator,
+        thousandsSeparator: csvOpts.thousandsSeparator,
+        delimiter: csvOpts.delimiter
+      };
+    }
   });
 
   const isCsvFile = $derived.by(() => {
@@ -109,8 +138,20 @@
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
+    // Check if dataset has transformations - if so, ask for confirmation
+    const hasTransformations =
+      selectedDataset?.metadata?.transformations?.length ?? 0;
+    if (hasTransformations > 0) {
+      pendingCsvOptions = options;
+      confirmReimportOpen = true;
+      return;
+    }
+    await executeReimport(options);
+  }
+
+  async function executeReimport(options: CsvOptions): Promise<void> {
     if (!sourceFile || !currentDuckTable || !selectedDataset) {
-      throw new Error('No source file or table available');
+      throw new Error(m.csv_error_no_source());
     }
 
     let file = sourceFile.originalFile;
@@ -126,7 +167,7 @@
     }
 
     if (!file) {
-      throw new Error('Original file not available for re-import');
+      throw new Error(m.csv_error_file_not_available());
     }
 
     try {
@@ -134,7 +175,8 @@
         tablename: currentDuckTable,
         header: options.header,
         decimal_separator: options.decimalSeparator,
-        thousands_separator: options.thousandsSeparator
+        thousands_separator: options.thousandsSeparator,
+        delimiter: options.delimiter
       });
 
       const duckColumns = (await Duck.analyse(currentDuckTable, {
@@ -142,6 +184,10 @@
       })) as DuckAnalyticsColumn[];
       const newColumns = enrichColumns(duckColumns);
       const newRowCount = await Duck.get_row_count(currentDuckTable);
+
+      if (newRowCount === 0) {
+        showWarning(m.csv_warning_empty_after_reimport(), '');
+      }
 
       datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
@@ -157,6 +203,15 @@
         error instanceof Error ? error.message : ''
       );
       throw error;
+    }
+  }
+
+  async function handleConfirmReimport() {
+    confirmReimportOpen = false;
+    if (pendingCsvOptions) {
+      const options = pendingCsvOptions;
+      pendingCsvOptions = null;
+      await executeReimport(options);
     }
   }
 
@@ -301,6 +356,43 @@
     }
   }
 
+  function handleOpenDeleteFilteredModal(count: number) {
+    filteredRowsToDelete = count;
+    deleteFilteredModalOpen = true;
+  }
+
+  async function handleDeleteFilteredRows() {
+    if (!currentDuckTable || !selectedDataset) return;
+
+    try {
+      const count =
+        await duckDBOrchestrator.deleteFilteredRows(currentDuckTable);
+
+      if (count > 0) {
+        const newRowCount = Duck
+          ? await Duck.get_row_count(currentDuckTable)
+          : 0;
+
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Deleted ${count} filtered rows (new total: ${newRowCount})`
+        );
+        datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+
+        refreshTable();
+        showSuccess(
+          m.rows_deleted_success_title(),
+          m.rows_deleted_success_message({ count })
+        );
+      }
+    } catch (error) {
+      showError(
+        m.rows_deleted_error_title(),
+        error instanceof Error ? error.message : m.rows_deleted_error_message()
+      );
+    }
+  }
+
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
 
@@ -314,18 +406,33 @@
     }
   });
 
+  // Debounce map highlight updates to avoid expensive deck.gl layer rebuilds during search
+  let mapHighlightTimer: ReturnType<typeof setTimeout> | undefined;
+  $effect(() => {
+    const rowIds = searchHighlight.highlightedRowIds;
+    clearTimeout(mapHighlightTimer);
+    mapHighlightTimer = setTimeout(() => {
+      if (rowIds.length > 0) {
+        mapHighlightStore.setHighlightedRows(rowIds);
+      } else {
+        mapHighlightStore.clearHighlights();
+      }
+    }, 800);
+    return () => clearTimeout(mapHighlightTimer);
+  });
+
   $effect(() => {
     if (selectedDataset && currentDuckTable) {
       dataTabStore.markStepComplete(0);
     }
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const skeletonProps = { columns: 5, rows: 12 } as any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
+  const getSkeletonProps = () => ({ columns: 5, rows: 5 }) as any;
 </script>
 
 <section id="data-control-step">
-  <MainToolBarHeader title={m.data_control_step_title()} />
+  <MainToolBarHeader title={m.data_control_step_title()} icon={DataCheck} />
 
   <!-- Panneaux flottants -->
   {#if isToolOpen}
@@ -349,6 +456,7 @@
         <FiltersPanel
           tableName={currentDuckTable || undefined}
           onFilterChange={refreshTable}
+          onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
       </DataToolPanel>
     {/if}
@@ -369,6 +477,12 @@
       onConfirm={handleDeleteRows}
     />
 
+    <DeleteRowsModal
+      bind:open={deleteFilteredModalOpen}
+      rowCount={filteredRowsToDelete}
+      onConfirm={handleDeleteFilteredRows}
+    />
+
     {#if isCsvFile}
       <CsvOptionsModal
         open={csvOptionsModalOpen}
@@ -376,6 +490,26 @@
         onClose={() => (csvOptionsModalOpen = false)}
         onApply={handleApplyCsvOptions}
       />
+
+      <Modal
+        bind:open={confirmReimportOpen}
+        modalHeading={m.csv_confirm_reimport_title()}
+        primaryButtonText={m.csv_options_apply()}
+        secondaryButtonText={m.csv_options_cancel()}
+        on:click:button--secondary={() => {
+          confirmReimportOpen = false;
+          pendingCsvOptions = null;
+        }}
+        on:click:button--primary={handleConfirmReimport}
+        on:close={() => {
+          confirmReimportOpen = false;
+          pendingCsvOptions = null;
+        }}
+        size="sm"
+        danger
+      >
+        <p>{m.csv_confirm_reimport_description()}</p>
+      </Modal>
     {/if}
 
     <!-- Barre d'outils -->
@@ -386,40 +520,43 @@
       onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
       selectionCount={selectedRowIds.length}
+      resetDisabled={!hasDataModifications}
       showCsvOptions={isCsvFile &&
         !!(sourceFile?.originalFile || sourceFile?.content)}
       showSummaryPlots={showSummaryPlots}
     />
   {/if}
 
-  {#if processedDataset && !isBatchProcessing}
-    {#key forceRefreshKey}
-      <AdvancedDataTable
-        dataset={processedDataset}
-        tableName={currentDuckTable || undefined}
-        datasetVersion={duckDBDatasetsVersion}
-        showSummaryPlots={showSummaryPlots}
-        cellHighlights={searchHighlight.cellHighlights}
-        currentCell={searchHighlight.currentCell}
-        highlightedRowIds={searchHighlight.highlightedRowIds}
-        isExpanded={false}
-        isSelectable={true}
-        onSelectionChange={handleSelectionChange}
-      />
-    {/key}
-  {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
-    <!-- Skeleton loader pendant le chargement ou batch processing -->
-    <div class="table-skeleton-wrapper">
-      <DataTableSkeleton {...skeletonProps} />
-    </div>
-  {:else}
-    <div class="empty-state">
-      <p class="empty-message">{m.data_control_empty_title()}</p>
-      <p class="empty-help">
-        {m.data_control_empty_help()}
-      </p>
-    </div>
-  {/if}
+  <div class="content-area">
+    {#if processedDataset && !isBatchProcessing}
+      {#key forceRefreshKey}
+        <AdvancedDataTable
+          dataset={processedDataset}
+          tableName={currentDuckTable || undefined}
+          datasetVersion={duckDBDatasetsVersion}
+          showSummaryPlots={showSummaryPlots}
+          cellHighlights={searchHighlight.cellHighlights}
+          currentCell={searchHighlight.currentCell}
+          highlightedRowIds={searchHighlight.highlightedRowIds}
+          isExpanded={false}
+          isSelectable={true}
+          onSelectionChange={handleSelectionChange}
+        />
+      {/key}
+    {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
+      <!-- Skeleton loader pendant le chargement ou batch processing -->
+      <div class="table-skeleton-wrapper">
+        <DataTableSkeleton {...getSkeletonProps()} />
+      </div>
+    {:else}
+      <div class="empty-state">
+        <p class="empty-message">{m.data_control_empty_title()}</p>
+        <p class="empty-help">
+          {m.data_control_empty_help()}
+        </p>
+      </div>
+    {/if}
+  </div>
 
   {#if hasNullableColumns && !warningsNotificationDismissed}
     <InlineNotification
@@ -440,41 +577,45 @@
     cellHighlights={searchHighlight.cellHighlights}
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
+    isSelectable={true}
+    onSelectionChange={handleSelectionChange}
     onClose={() => (isModalOpen = false)}
   />
 </section>
 
 <style>
   #data-control-step {
-    background-color: var(--cds-ui-02);
-    padding: var(--cds-spacing-05);
-    height: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
     min-height: 0;
   }
 
+  .content-area {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
   .empty-state {
-    padding: var(--cds-spacing-07) var(--cds-spacing-05);
+    padding: 16px;
     text-align: center;
-    color: var(--cds-text-02);
-    background-color: var(--cds-ui-01);
-    border-radius: var(--cds-spacing-02);
-    margin-top: var(--cds-spacing-05);
+    color: #6f6f6f;
   }
 
   .empty-message {
-    margin: 0 0 var(--cds-spacing-03) 0;
-    font-size: 1rem;
+    margin: 0 0 8px 0;
+    font-size: 16px;
     font-weight: 500;
-    color: var(--cds-text-01);
+    color: #161616;
   }
 
   .empty-help {
     margin: 0;
-    font-size: 0.875rem;
-    color: var(--cds-text-02);
+    font-size: 14px;
+    color: #6f6f6f;
   }
 
   .table-skeleton-wrapper {

@@ -1,55 +1,71 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
+  import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
-  const basemapOptions = [
+  const tiledBasemapOptions = [
     {
       value: BasemapStyle.CARTE_FACILE_DESATURATED,
-      label: m.basemap_desaturated(),
-      description: m.basemap_desaturated_desc()
+      label: m.basemap_desaturated()
     },
     {
       value: BasemapStyle.CARTE_FACILE_SIMPLE,
-      label: m.basemap_simple(),
-      description: m.basemap_simple_desc()
+      label: m.basemap_simple()
     },
     {
       value: BasemapStyle.CARTE_FACILE_AERIAL,
-      label: m.basemap_aerial(),
-      description: m.basemap_aerial_desc()
+      label: m.basemap_aerial()
     }
   ];
 
-  let selectedValue = $state(basemapStyleStore.selectedStyle);
+  const selectedStyle = $derived(
+    basemapStyleStore.selectedStyle !== BasemapStyle.BLANK_WHITE
+      ? basemapStyleStore.selectedStyle
+      : BasemapStyle.CARTE_FACILE_DESATURATED
+  );
 
-  function handleChange(value: BasemapStyle): void {
+  function handleStyleChange(value: BasemapStyle): void {
     basemapStyleStore.setStyle(value);
-    selectedValue = value;
+    projectStore.markAsDirty();
   }
 </script>
 
-<div class="basemap-selector">
+<div class="basemap-style-selector">
+  <span class="field-label">
+    {m.basemap_style_label()}
+    <InfoPopover text={m.basemap_style_info()} />
+  </span>
   <RadioButtonGroup
-    legendText={m.customize_basemap()}
-    bind:selected={selectedValue}
-    on:change={(e) => handleChange(e.detail as BasemapStyle)}
+    legendText=""
+    hideLabel
+    selected={selectedStyle}
+    on:change={(e) => handleStyleChange(e.detail as BasemapStyle)}
   >
-    {#each basemapOptions as option (option.value)}
+    {#each tiledBasemapOptions as option (option.value)}
       <RadioButton labelText={option.label} value={option.value} />
     {/each}
   </RadioButtonGroup>
 </div>
 
 <style>
-  .basemap-selector {
-    padding: var(--cds-spacing-05);
+  .field-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    font-size: var(--cds-label-01-font-size, 0.75rem);
+    font-weight: var(--cds-label-01-font-weight, 400);
+    line-height: var(--cds-label-01-line-height, 1.33333);
+    letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
+    color: var(--cds-text-secondary);
+    margin-bottom: var(--cds-spacing-02);
   }
 
-  .basemap-selector :global(.cds--radio-button-group) {
+  .basemap-style-selector :global(.cds--radio-button-group) {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--cds-spacing-03);
   }
 </style>

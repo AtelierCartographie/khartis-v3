@@ -1,3 +1,5 @@
+import * as m from '$lib/paraglide/messages';
+import { DATA_VALIDATION } from '../constants/detection.constants';
 import {
   GeoColumnDetector,
   type GeoDetectionResult
@@ -38,16 +40,51 @@ export interface DataAnalysisResult {
   estimatedProcessingTime?: number;
 }
 
+/**
+ * Performance thresholds for data validation.
+ *
+ * These values balance usability with browser performance limits:
+ * - maxRows: 10k rows is the practical limit for smooth DOM/Canvas rendering
+ * - warningRows: 5k rows triggers performance advisories
+ * - maxColumns: 100 columns prevents layout and memory issues
+ * - warningColumns: 50 columns suggests considering column reduction
+ * - maxCellLength: 2000 chars prevents rendering issues with long text
+ * - maxFileSize: 50MB is the practical limit for client-side processing
+ */
 const PERFORMANCE_THRESHOLDS = {
-  maxRows: 10000,
-  warningRows: 5000,
+  /** Maximum rows before data is truncated (10,000 rows) */
+  maxRows: 10_000,
+  /** Row count that triggers a performance warning (5,000 rows) */
+  warningRows: 5_000,
+  /** Maximum columns supported (100 columns) */
   maxColumns: 100,
+  /** Column count that triggers a warning (50 columns) */
   warningColumns: 50,
-  maxCellLength: 2000,
+  /** Maximum characters per cell before warning (2,000 chars) */
+  maxCellLength: 2_000,
+  /** Maximum estimated file size in bytes (50 MB) */
   maxFileSize: 50 * 1024 * 1024
 } as const;
 
+/**
+ * Number of rows to sample for type detection.
+ * 100 samples provides 95% confidence for type inference
+ * while keeping detection fast for large datasets.
+ */
 const TYPE_DETECTION_SAMPLES = 100;
+
+/**
+ * Chunk sizes for async processing to avoid blocking the main thread.
+ * These values are tuned to yield to the event loop every ~16ms (one frame).
+ */
+const PROCESSING_CHUNK_SIZES = {
+  /** Columns to process per chunk in analyzeColumns() */
+  COLUMN_CHUNK: 10,
+  /** Values to process per chunk in analyzeColumn() */
+  VALUE_CHUNK: 1_000,
+  /** Rows to check per chunk in detectQualityIssues() */
+  ROW_CHUNK: 20
+} as const;
 
 /**
  * Deep Data Validator
@@ -114,14 +151,18 @@ export const DeepDataValidator = {
     data: unknown[][]
   ): Promise<ColumnStatistics[]> {
     const columns: ColumnStatistics[] = [];
-    const COLUMN_CHUNK_SIZE = 10;
 
-    // Process columns in chunks to avoid blocking
-    for (let i = 0; i < headers.length; i += COLUMN_CHUNK_SIZE) {
-      // Yield to event loop between chunks
+    for (
+      let i = 0;
+      i < headers.length;
+      i += PROCESSING_CHUNK_SIZES.COLUMN_CHUNK
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const endIndex = Math.min(i + COLUMN_CHUNK_SIZE, headers.length);
+      const endIndex = Math.min(
+        i + PROCESSING_CHUNK_SIZES.COLUMN_CHUNK,
+        headers.length
+      );
 
       for (let colIndex = i; colIndex < endIndex; colIndex++) {
         const header = headers[colIndex];
@@ -150,7 +191,7 @@ export const DeepDataValidator = {
     const sampleValues: unknown[] = [];
 
     // Process values in chunks to avoid blocking
-    const CHUNK_SIZE = 1000;
+    const CHUNK_SIZE = PROCESSING_CHUNK_SIZES.VALUE_CHUNK;
     for (let i = 0; i < values.length; i += CHUNK_SIZE) {
       // Yield to event loop between chunks
       if (i > 0) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -325,7 +366,7 @@ export const DeepDataValidator = {
     const total = Object.values(types).reduce((a, b) => a + b, 0);
     if (total === 0) return 'string';
 
-    const threshold = total * 0.8;
+    const threshold = total * DATA_VALIDATION.ANOMALY_MULTIPLIER;
 
     if (types.date >= threshold) return 'date';
     if (types.numeric >= threshold) return 'numeric';
@@ -345,8 +386,8 @@ export const DeepDataValidator = {
     const date = new Date(strValue);
     return (
       !isNaN(date.getTime()) &&
-      date.getFullYear() > 1900 &&
-      date.getFullYear() < 2100
+      date.getFullYear() > DATA_VALIDATION.MIN_YEAR &&
+      date.getFullYear() < DATA_VALIDATION.MAX_YEAR
     );
   },
 
@@ -371,7 +412,7 @@ export const DeepDataValidator = {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     columns.forEach((column) => {
-      if (column.nullPercentage > 50) {
+      if (column.nullPercentage > DATA_VALIDATION.NULL_PERCENTAGE_THRESHOLD) {
         issues.push({
           severity: 'warning',
           column: column.name,
@@ -423,19 +464,19 @@ export const DeepDataValidator = {
       }
     });
 
-    // Check for long cells in chunks to avoid blocking
     const maxRowsToCheck = Math.min(data.length, 100);
-    const ROW_CHUNK_SIZE = 20;
 
     for (
       let rowIndex = 0;
       rowIndex < maxRowsToCheck;
-      rowIndex += ROW_CHUNK_SIZE
+      rowIndex += PROCESSING_CHUNK_SIZES.ROW_CHUNK
     ) {
-      // Yield to event loop between chunks
       if (rowIndex > 0) await new Promise((resolve) => setTimeout(resolve, 0));
 
-      const endIndex = Math.min(rowIndex + ROW_CHUNK_SIZE, maxRowsToCheck);
+      const endIndex = Math.min(
+        rowIndex + PROCESSING_CHUNK_SIZES.ROW_CHUNK,
+        maxRowsToCheck
+      );
       for (let currentRow = rowIndex; currentRow < endIndex; currentRow++) {
         const row = data[currentRow];
         for (let cellIndex = 0; cellIndex < row.length; cellIndex++) {
@@ -469,28 +510,29 @@ export const DeepDataValidator = {
 
     if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
       warnings.push(
-        `Large file: ${rowCount} rows. Processing will be limited to the first ${PERFORMANCE_THRESHOLDS.maxRows} rows.`
+        `Dataset exceeds ${PERFORMANCE_THRESHOLDS.maxRows.toLocaleString()} row limit: ${rowCount.toLocaleString()} rows detected. Processing will be limited to the first ${PERFORMANCE_THRESHOLDS.maxRows.toLocaleString()} rows.`
       );
     } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
       warnings.push(
-        `Important file: ${rowCount} rows. Processing may take some time.`
+        `Large dataset: ${rowCount.toLocaleString()} rows (warning threshold: ${PERFORMANCE_THRESHOLDS.warningRows.toLocaleString()}). Processing may take some time.`
       );
     }
 
     if (columnCount > PERFORMANCE_THRESHOLDS.maxColumns) {
       warnings.push(
-        `Too many columns: ${columnCount}. Maximum supported: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
+        `Dataset exceeds ${PERFORMANCE_THRESHOLDS.maxColumns} column limit: ${columnCount} columns detected. Maximum supported: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
       );
     } else if (columnCount > PERFORMANCE_THRESHOLDS.warningColumns) {
       warnings.push(
-        `Many columns: ${columnCount}. Consider selecting only necessary columns.`
+        `Many columns: ${columnCount} (warning threshold: ${PERFORMANCE_THRESHOLDS.warningColumns}). Consider selecting only necessary columns.`
       );
     }
 
     const estimatedSize = rowCount * columnCount * 50;
+    const maxFileSizeMB = PERFORMANCE_THRESHOLDS.maxFileSize / (1024 * 1024);
     if (estimatedSize > PERFORMANCE_THRESHOLDS.maxFileSize) {
       warnings.push(
-        'Estimated file size very large. Consider splitting your data.'
+        `Estimated data size exceeds ${maxFileSizeMB}MB limit. Consider splitting your data.`
       );
     }
 
@@ -539,7 +581,7 @@ export const DeepDataValidator = {
     const severeIssues = qualityIssues.filter((i) => i.severity === 'error');
     if (severeIssues.length > 0) {
       suggestions.push(
-        `${severeIssues.length} critical issue(s) detected. Fix them before continuing.`
+        m.data_quality_critical_issues({ count: severeIssues.length })
       );
     }
 
@@ -558,26 +600,35 @@ export const DeepDataValidator = {
   formatQualityReport(analysis: DataAnalysisResult): string {
     const lines: string[] = [];
 
-    lines.push("=== RAPPORT D'ANALYSE DES DONNÉES ===\n");
+    lines.push(m.data_quality_report_title());
     lines.push(
-      `Lignes: ${analysis.rowCount} | Colonnes: ${analysis.columnCount}`
+      m.data_quality_report_counts({
+        rows: analysis.rowCount,
+        columns: analysis.columnCount
+      })
     );
     lines.push(
-      `Temps de traitement estimé: ${analysis.estimatedProcessingTime}ms\n`
+      m.data_quality_report_estimated_time({
+        ms: analysis.estimatedProcessingTime ?? 0
+      })
     );
 
     if (analysis.geoDetection.hasGeoColumns) {
-      lines.push('COLONNES GÉOGRAPHIQUES DÉTECTÉES:');
+      lines.push(m.data_quality_report_geo_columns_title());
       analysis.geoDetection.geoColumns.forEach((col) => {
         lines.push(
-          `  - ${col.columnName}: ${col.type} (confiance: ${(col.confidence * 100).toFixed(0)}%)`
+          m.data_quality_report_geo_column_item({
+            column: col.columnName,
+            type: col.type,
+            confidence: (col.confidence * 100).toFixed(0)
+          })
         );
       });
       lines.push('');
     }
 
     if (analysis.qualityIssues.length > 0) {
-      lines.push('PROBLÈMES DE QUALITÉ:');
+      lines.push(m.data_quality_report_quality_issues_title());
       analysis.qualityIssues.forEach((issue) => {
         const icon =
           issue.severity === 'error'
@@ -585,18 +636,24 @@ export const DeepDataValidator = {
             : issue.severity === 'warning'
               ? '⚠️'
               : 'ℹ️';
-        lines.push(`  ${icon} ${issue.message}`);
+        lines.push(
+          m.data_quality_report_issue_item({ icon, message: issue.message })
+        );
         if (issue.suggestion) {
-          lines.push(`     → ${issue.suggestion}`);
+          lines.push(
+            m.data_quality_report_issue_suggestion({
+              suggestion: issue.suggestion
+            })
+          );
         }
       });
       lines.push('');
     }
 
     if (analysis.suggestions.length > 0) {
-      lines.push('SUGGESTIONS:');
+      lines.push(m.data_quality_report_suggestions_title());
       analysis.suggestions.forEach((suggestion) => {
-        lines.push(`  • ${suggestion}`);
+        lines.push(m.data_quality_report_suggestion_item({ suggestion }));
       });
     }
 

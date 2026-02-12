@@ -1,3 +1,4 @@
+import { goto } from '$app/navigation';
 import {
   StylingTools,
   ToolbarState,
@@ -8,12 +9,28 @@ import {
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
+const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const MOBILE_BREAKPOINT_VALUE = 1024;
+const TAB_QUERY_PARAM = 'tab';
+
+const VALID_TOOLBAR_STATES = new Set<string>([
+  ToolbarState.Full,
+  ToolbarState.Compact,
+  ToolbarState.Collapsed
+]);
+
+function readToolbarStateFromStorage(): ToolbarState {
+  if (typeof window === 'undefined') return ToolbarState.Full;
+  const stored = localStorage.getItem(TOOLBAR_STATE_STORAGE_KEY);
+  if (stored && VALID_TOOLBAR_STATES.has(stored)) return stored as ToolbarState;
+  return ToolbarState.Full;
+}
 
 class GlobalStore {
   private _state = $state<GlobalState>({
@@ -21,9 +38,11 @@ class GlobalStore {
     mainPanel: true,
     isSideNavOpen: false,
     isCreateProjectModalOpen: false,
+    isDuplicateModalOpen: false,
+    isDeleteModalOpen: false,
     selectedStep: ToolbarStep.Data,
     selectedTool: undefined,
-    toolbarState: ToolbarState.Full,
+    toolbarState: readToolbarStateFromStorage(),
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
@@ -52,9 +71,25 @@ class GlobalStore {
 
   private _pendingDatasetSelections = new Set<string>();
 
+  private getCallerHint(): string | undefined {
+    const stack = new Error().stack;
+    if (!stack) return undefined;
+    const caller = stack
+      .split('\n')
+      .slice(3, 5)
+      .map((line) => line.trim())
+      .join(' | ');
+    return caller || undefined;
+  }
+
   constructor() {
     if (typeof window !== 'undefined' && this._selectedDataButtonId) {
-      this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+      // Defer to next microtask so all module-level singletons (datasetsStore) are initialized
+      queueMicrotask(() => {
+        if (this._selectedDataButtonId) {
+          this.ensureDatasetSelectionForSourceFile(this._selectedDataButtonId);
+        }
+      });
     }
   }
 
@@ -131,6 +166,13 @@ class GlobalStore {
         }
       } else {
         if (this._selectedDataButtonId) {
+          logger.info(
+            '[global-store] clearing selected data button because project has no source files',
+            LogCategory.UI,
+            {
+              previousSelectedDataButtonId: this._selectedDataButtonId
+            }
+          );
           this._selectedDataButtonId = undefined;
           if (typeof window !== 'undefined') {
             localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
@@ -153,6 +195,10 @@ class GlobalStore {
         (sourceFiles.length === 1 && !this._selectedDataButtonId)
     }));
   });
+
+  get selectedDataButtonId(): string | undefined {
+    return this._selectedDataButtonId;
+  }
 
   get settingPanel() {
     return this._state.settingPanel;
@@ -184,6 +230,22 @@ class GlobalStore {
 
   set isCreateProjectModalOpen(value: boolean) {
     this._state.isCreateProjectModalOpen = value;
+  }
+
+  get isDuplicateModalOpen() {
+    return this._state.isDuplicateModalOpen;
+  }
+
+  set isDuplicateModalOpen(value: boolean) {
+    this._state.isDuplicateModalOpen = value;
+  }
+
+  get isDeleteModalOpen() {
+    return this._state.isDeleteModalOpen;
+  }
+
+  set isDeleteModalOpen(value: boolean) {
+    this._state.isDeleteModalOpen = value;
   }
 
   get selectedStep() {
@@ -257,28 +319,110 @@ class GlobalStore {
     this._state.isMobileToolbarOpen = !this._state.isMobileToolbarOpen;
   }
 
-  setNavigationState(selectedStep: ToolbarStep): void {
+  setNavigationState(selectedStep: ToolbarStep, updateUrl = true): void {
+    const previousStep = this.selectedStep;
+    const previousToolbarState = this.toolbarState;
     this.selectedStep = selectedStep;
 
-    if (selectedStep === ToolbarStep.Styling)
+    if (selectedStep === ToolbarStep.Styling) {
       this.toolbarState = ToolbarState.Collapsed;
-    else if (this.toolbarState === ToolbarState.Collapsed)
-      this.toolbarState = ToolbarState.Full;
+      annotationsActions.initPageElements();
+    } else if (this.toolbarState === ToolbarState.Collapsed) {
+      const preferred = readToolbarStateFromStorage();
+      this.toolbarState =
+        preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
+    }
+
+    if (
+      previousStep !== selectedStep ||
+      previousToolbarState !== this.toolbarState
+    ) {
+      logger.info('[global-store] navigation state changed', LogCategory.UI, {
+        fromStep: previousStep,
+        toStep: selectedStep,
+        updateUrl,
+        fromToolbarState: previousToolbarState,
+        toToolbarState: this.toolbarState,
+        caller: this.getCallerHint()
+      });
+    }
+
+    if (updateUrl && typeof window !== 'undefined') {
+      this.syncTabToUrl(selectedStep);
+    }
+  }
+
+  private syncTabToUrl(step: ToolbarStep): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set(TAB_QUERY_PARAM, step);
+    goto(url.toString(), { replaceState: true, keepFocus: true });
+  }
+
+  initializeFromUrl(): void {
+    if (typeof window === 'undefined') return;
+
+    const url = new URL(window.location.href);
+    const tabParam = url.searchParams.get(TAB_QUERY_PARAM);
+
+    if (tabParam && this.isValidToolbarStep(tabParam)) {
+      this.setNavigationState(tabParam as ToolbarStep, false);
+    }
+  }
+
+  private isValidToolbarStep(value: string): value is ToolbarStep {
+    return (
+      value === ToolbarStep.Data ||
+      value === ToolbarStep.Visualizations ||
+      value === ToolbarStep.Styling
+    );
   }
 
   setToolbarState(state: ToolbarState): void {
+    const previousToolbarState = this.toolbarState;
     this.toolbarState = state;
+    if (previousToolbarState !== state) {
+      logger.info('[global-store] toolbar state changed', LogCategory.UI, {
+        fromToolbarState: previousToolbarState,
+        toToolbarState: state,
+        selectedStep: this.selectedStep,
+        caller: this.getCallerHint()
+      });
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, state);
+    }
   }
 
   selectDataButton(id: string): void {
-    if (this._selectedDataButtonId === id) return;
+    if (this._selectedDataButtonId === id) {
+      return;
+    }
+    const previousSelectedDataButtonId = this._selectedDataButtonId;
     this._selectedDataButtonId = id;
+
+    logger.debug('[global-store] data tab selection changed', LogCategory.UI, {
+      previousSelectedDataButtonId,
+      selectedDataButtonId: id
+    });
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
     }
 
     this.ensureDatasetSelectionForSourceFile(id);
+    this.syncMapVisibilityWithSelectedTab(id);
+  }
+
+  private syncMapVisibilityWithSelectedTab(selectedSourceFileId: string): void {
+    const allDatasets = datasetsStore.datasets;
+
+    for (const dataset of allDatasets) {
+      if (dataset.sourceFileId === selectedSourceFileId) {
+        datasetsStore.enableDataset(dataset.id);
+      } else {
+        datasetsStore.disableDataset(dataset.id);
+      }
+    }
   }
 
   setProjectionFilter(id: ProjectionFilterId): void {
@@ -353,7 +497,8 @@ export const globalActions = {
   setMobileView: globalState.setMobileView.bind(globalState),
   openMobileToolbar: globalState.openMobileToolbar.bind(globalState),
   closeMobileToolbar: globalState.closeMobileToolbar.bind(globalState),
-  toggleMobileToolbar: globalState.toggleMobileToolbar.bind(globalState)
+  toggleMobileToolbar: globalState.toggleMobileToolbar.bind(globalState),
+  initializeFromUrl: globalState.initializeFromUrl.bind(globalState)
 };
 
 export const MOBILE_BREAKPOINT = 1024;

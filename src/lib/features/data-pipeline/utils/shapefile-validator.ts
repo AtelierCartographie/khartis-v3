@@ -1,3 +1,7 @@
+import {
+  getBaseName,
+  getFileExtensionWithDot
+} from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 
@@ -26,19 +30,8 @@ const OPTIONAL_EXTENSIONS = [
   '.xml'
 ] as const;
 
-function getFileExtension(filename: string): string {
-  const lastDot = filename.lastIndexOf('.');
-  return lastDot >= 0 ? filename.slice(lastDot).toLowerCase() : '';
-}
-
-function getBaseName(filename: string): string {
-  const lastDot = filename.lastIndexOf('.');
-  const name = lastDot >= 0 ? filename.slice(0, lastDot) : filename;
-  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
-}
-
 export function isShapefileComponent(filename: string): boolean {
-  const ext = getFileExtension(filename);
+  const ext = getFileExtensionWithDot(filename);
   return [...REQUIRED_EXTENSIONS, ...OPTIONAL_EXTENSIONS].includes(
     ext as (typeof REQUIRED_EXTENSIONS)[number]
   );
@@ -46,7 +39,7 @@ export function isShapefileComponent(filename: string): boolean {
 
 export function detectShapefileBaseName(files: File[]): string | null {
   for (const file of files) {
-    const ext = getFileExtension(file.name);
+    const ext = getFileExtensionWithDot(file.name);
     if (ext === '.shp') {
       return getBaseName(file.name);
     }
@@ -69,7 +62,9 @@ export function validateShapefileSet(
     return fileBaseName === baseNameLower && isShapefileComponent(f.name);
   });
 
-  const presentExtensions = matchingFiles.map((f) => getFileExtension(f.name));
+  const presentExtensions = matchingFiles.map((f) =>
+    getFileExtensionWithDot(f.name)
+  );
 
   const requiredMissing = REQUIRED_EXTENSIONS.filter(
     (ext) => !presentExtensions.includes(ext)

@@ -13,7 +13,8 @@
     Row,
     Select,
     SelectItem,
-    Slider
+    Slider,
+    Toggle
   } from 'carbon-components-svelte';
   import {
     geoIndicationsActions,
@@ -23,10 +24,9 @@
   const store = geoIndicationsActions;
   const state = $derived(geoIndicationsState);
 
-  const styleOptions = [
-    { value: 'line', text: m.geo_line_style() },
-    { value: 'dashed', text: m.geo_dashed_style() },
-    { value: 'dotted', text: m.geo_dotted_style() }
+  const formOptions = [
+    { value: 'line', text: m.geo_scale_form_line() },
+    { value: 'box', text: m.geo_scale_form_box() }
   ];
 
   const scaleHex = $derived(
@@ -48,6 +48,20 @@
       state.insetMap.windowColor.hue,
       state.insetMap.windowColor.saturation,
       state.insetMap.windowColor.lightness
+    )
+  );
+  const insetMapContinentHex = $derived(
+    hslToHex(
+      state.insetMap.continentColor.hue,
+      state.insetMap.continentColor.saturation,
+      state.insetMap.continentColor.lightness
+    )
+  );
+  const insetMapSeaHex = $derived(
+    hslToHex(
+      state.insetMap.seaColor.hue,
+      state.insetMap.seaColor.saturation,
+      state.insetMap.seaColor.lightness
     )
   );
 
@@ -72,13 +86,13 @@
         <Row>
           <Column>
             <Select
-              id="style-select"
-              labelText={m.geo_style()}
-              selected={state.scale.style}
-              on:change={(e) => store.setScaleStyle((e as CustomEvent).detail)}
+              id="form-select"
+              labelText={m.geo_scale_form()}
+              selected={state.scale.form}
+              on:change={(e) => store.setScaleForm((e as CustomEvent).detail)}
               size="xl"
             >
-              {#each styleOptions as option (option.value)}
+              {#each formOptions as option (option.value)}
                 <SelectItem value={option.value} text={option.text} />
               {/each}
             </Select>
@@ -314,6 +328,62 @@
         </Row>
 
         <Row>
+          <Column>
+            <Toggle
+              labelText={m.geo_inset_map_use_basemap_colors()}
+              id="use-basemap-colors"
+              toggled={state.insetMap.useBasemapColors}
+              on:toggle={(e) =>
+                store.setInsetMapUseBasemapColors(e.detail.toggled)}
+            />
+          </Column>
+        </Row>
+
+        {#if !state.insetMap.useBasemapColors}
+          <Row>
+            <Column>
+              <ColorPicker
+                triggerLabel={m.geo_inset_map_continent_color()}
+                hex={insetMapContinentHex}
+                hue={state.insetMap.continentColor.hue}
+                saturation={state.insetMap.continentColor.saturation}
+                lightness={state.insetMap.continentColor.lightness}
+                onValidate={({
+                  hue,
+                  saturation,
+                  lightness
+                }: ColorPickerValidateEvent) => {
+                  store.setInsetMapContinentColor({
+                    hue,
+                    saturation,
+                    lightness
+                  });
+                }}
+              />
+            </Column>
+          </Row>
+
+          <Row>
+            <Column>
+              <ColorPicker
+                triggerLabel={m.geo_inset_map_sea_color()}
+                hex={insetMapSeaHex}
+                hue={state.insetMap.seaColor.hue}
+                saturation={state.insetMap.seaColor.saturation}
+                lightness={state.insetMap.seaColor.lightness}
+                onValidate={({
+                  hue,
+                  saturation,
+                  lightness
+                }: ColorPickerValidateEvent) => {
+                  store.setInsetMapSeaColor({ hue, saturation, lightness });
+                }}
+              />
+            </Column>
+          </Row>
+        {/if}
+
+        <Row>
           <Column sm={3} md={6} lg={13}>
             <div class="slider">
               <Slider
@@ -343,13 +413,15 @@
           <Column sm={3} md={6} lg={13}>
             <div class="slider">
               <Slider
-                labelText={m.geo_inset_map_contrast()}
-                min={0}
-                max={100}
+                labelText={m.geo_inset_map_center_longitude()}
+                min={-180}
+                max={180}
                 step={1}
-                value={state.insetMap.contrast}
+                value={state.insetMap.centerLongitude}
                 on:change={(e) =>
-                  store.setInsetMapContrast((e as CustomEvent).detail.value)}
+                  store.setInsetMapCenterLongitude(
+                    (e as CustomEvent).detail.value
+                  )}
                 hideTextInput
                 fullWidth
               />
@@ -359,7 +431,35 @@
           <Column sm={1} md={2} lg={3}>
             <div class="input-wrapper">
               <div class="value-display">
-                {state.insetMap.contrast}%
+                {state.insetMap.centerLongitude}°
+              </div>
+            </div>
+          </Column>
+        </Row>
+
+        <Row>
+          <Column sm={3} md={6} lg={13}>
+            <div class="slider">
+              <Slider
+                labelText={m.geo_inset_map_center_latitude()}
+                min={-90}
+                max={90}
+                step={1}
+                value={state.insetMap.centerLatitude}
+                on:change={(e) =>
+                  store.setInsetMapCenterLatitude(
+                    (e as CustomEvent).detail.value
+                  )}
+                hideTextInput
+                fullWidth
+              />
+            </div>
+          </Column>
+
+          <Column sm={1} md={2} lg={3}>
+            <div class="input-wrapper">
+              <div class="value-display">
+                {state.insetMap.centerLatitude}°
               </div>
             </div>
           </Column>
