@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import {
     createColorValue,
@@ -13,8 +14,7 @@
     Row,
     Select,
     SelectItem,
-    Slider,
-    Toggle
+    Slider
   } from 'carbon-components-svelte';
   import { Add, TrashCan } from 'carbon-icons-svelte';
   import {
@@ -50,10 +50,10 @@
   ];
 
   let selectedShape = $state('arrow');
-  let strokeColor = $state('#8d8d8d');
+  let strokeColor = $state('#ffffff');
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(0);
+  let lightness = $state(100);
 
   $effect(() => {
     if (defaultStyle.strokeColor) {
@@ -68,7 +68,7 @@
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
-        const cv = createColorValue('#000000', hue, saturation, lightness);
+        const cv = createColorValue('#ffffff', hue, saturation, lightness);
         strokeColor = cv.hex;
       }
     }
@@ -164,14 +164,15 @@
       <div class="section">
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
-          <Toggle
-            size="sm"
+          <Switch
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent) => toggleDotted(e.detail ?? true)}
-          >
-            <span slot="labelA">{m.yes()}</span>
-            <span slot="labelB">{m.no()}</span>
-          </Toggle>
+            labelText={m.dashed()}
+            hideLabel
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={toggleDotted}
+          />
         </div>
       </div>
     </Column>

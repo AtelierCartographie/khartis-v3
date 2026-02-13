@@ -8,6 +8,7 @@
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
 
@@ -17,6 +18,19 @@
   function handleLegendClick() {
     legendActions.markAsOpened();
     selectTool(StylingTools.Legend);
+  }
+
+  function handleAnnotationsClick() {
+    if (globalState.selectedTool === StylingTools.Annotations) {
+      selectTool(StylingTools.Annotations);
+      return;
+    }
+
+    annotationsActions.initPageElements({
+      withPlaceholders: true,
+      visible: true
+    });
+    selectTool(StylingTools.Annotations);
   }
 </script>
 
@@ -78,7 +92,7 @@
           icon={Edit}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Annotations}
-          onclick={() => selectTool(StylingTools.Annotations)}
+          onclick={handleAnnotationsClick}
         />
       </Column>
     </Row>

@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { ScaleForm } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
@@ -13,8 +15,7 @@
     Row,
     Select,
     SelectItem,
-    Slider,
-    Toggle
+    Slider
   } from 'carbon-components-svelte';
   import {
     geoIndicationsActions,
@@ -23,10 +24,11 @@
 
   const store = geoIndicationsActions;
   const state = $derived(geoIndicationsState);
+  const geoIndicationsVisible = $derived(state.visible);
 
   const formOptions = [
-    { value: 'line', text: m.geo_scale_form_line() },
-    { value: 'box', text: m.geo_scale_form_box() }
+    { value: ScaleForm.LINE, text: m.geo_scale_form_line() },
+    { value: ScaleForm.BOX, text: m.geo_scale_form_box() }
   ];
 
   const scaleHex = $derived(
@@ -71,9 +73,74 @@
     saturation: number;
     lightness: number;
   };
+
+  function handleVisibilityChange(visible: boolean): void {
+    if (visible !== state.visible) {
+      store.setVisibility(visible);
+    }
+  }
+
+  function handleScaleFormChange(event: Event): void {
+    const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
+    if (form !== state.scale.form) {
+      store.setScaleForm(form);
+    }
+  }
+
+  function getNumericEventValue(event: Event, fallback: number): number {
+    const customEvent = event as CustomEvent<unknown>;
+    const detail = customEvent.detail;
+
+    if (typeof detail === 'number' && Number.isFinite(detail)) {
+      return detail;
+    }
+
+    if (typeof detail === 'string') {
+      const parsed = Number(detail);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    if (detail && typeof detail === 'object' && 'value' in detail) {
+      const rawValue = (detail as { value: unknown }).value;
+      const parsed = Number(rawValue);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+
+    const targetValue = Number(
+      (event.currentTarget as HTMLInputElement | null)?.value
+    );
+    if (Number.isFinite(targetValue)) {
+      return targetValue;
+    }
+
+    return fallback;
+  }
 </script>
 
 <div id="khartis-geo-indications-tool">
+  <Grid padding noGutter fullWidth>
+    <Row>
+      <Column>
+        <div class="switch-row">
+          <span class="switch-label">{m.tool_geo_indications()}</span>
+          <Switch
+            toggled={geoIndicationsVisible}
+            labelText={m.tool_geo_indications()}
+            hideLabel
+            labelA={m.layers_hide()}
+            labelB={m.layers_show()}
+            showStateLabel
+            onchange={handleVisibilityChange}
+          />
+        </div>
+      </Column>
+    </Row>
+  </Grid>
+
   <div class="expandable-stack">
     <ExpandableSection
       title={m.geo_scale()}
@@ -89,7 +156,7 @@
               id="form-select"
               labelText={m.geo_scale_form()}
               selected={state.scale.form}
-              on:change={(e) => store.setScaleForm((e as CustomEvent).detail)}
+              on:change={handleScaleFormChange}
               size="xl"
             >
               {#each formOptions as option (option.value)}
@@ -107,7 +174,9 @@
                 labelText={m.geo_distance()}
                 value={state.scale.distance}
                 on:change={(e) =>
-                  store.setScaleDistance((e as CustomEvent).detail || 0)}
+                  store.setScaleDistance(
+                    getNumericEventValue(e, state.scale.distance)
+                  )}
                 min={0}
                 hideSteppers
                 size="xl"
@@ -215,7 +284,9 @@
                 step={1}
                 value={state.orientation.size}
                 on:change={(e) =>
-                  store.setOrientationSize((e as CustomEvent).detail.value)}
+                  store.setOrientationSize(
+                    getNumericEventValue(e, state.orientation.size)
+                  )}
                 hideTextInput
                 fullWidth
               />
@@ -292,7 +363,9 @@
                 step={1}
                 value={state.insetMap.size}
                 on:change={(e) =>
-                  store.setInsetMapSize((e as CustomEvent).detail.value)}
+                  store.setInsetMapSize(
+                    getNumericEventValue(e, state.insetMap.size)
+                  )}
                 hideTextInput
                 fullWidth
               />
@@ -329,12 +402,13 @@
 
         <Row>
           <Column>
-            <Toggle
+            <Switch
               labelText={m.geo_inset_map_use_basemap_colors()}
-              id="use-basemap-colors"
               toggled={state.insetMap.useBasemapColors}
-              on:toggle={(e) =>
-                store.setInsetMapUseBasemapColors(e.detail.toggled)}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={store.setInsetMapUseBasemapColors}
             />
           </Column>
         </Row>
@@ -393,7 +467,9 @@
                 step={1}
                 value={state.insetMap.zoom}
                 on:change={(e) =>
-                  store.setInsetMapZoom((e as CustomEvent).detail.value)}
+                  store.setInsetMapZoom(
+                    getNumericEventValue(e, state.insetMap.zoom)
+                  )}
                 hideTextInput
                 fullWidth
               />
@@ -420,7 +496,7 @@
                 value={state.insetMap.centerLongitude}
                 on:change={(e) =>
                   store.setInsetMapCenterLongitude(
-                    (e as CustomEvent).detail.value
+                    getNumericEventValue(e, state.insetMap.centerLongitude)
                   )}
                 hideTextInput
                 fullWidth
@@ -448,7 +524,7 @@
                 value={state.insetMap.centerLatitude}
                 on:change={(e) =>
                   store.setInsetMapCenterLatitude(
-                    (e as CustomEvent).detail.value
+                    getNumericEventValue(e, state.insetMap.centerLatitude)
                   )}
                 hideTextInput
                 fullWidth
@@ -484,6 +560,20 @@
     display: flex;
     align-items: flex-end;
     width: 100%;
+  }
+
+  .switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .switch-label {
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
+    font-weight: 400;
   }
 
   .distance-buttons {
