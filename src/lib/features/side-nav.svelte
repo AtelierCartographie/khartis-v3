@@ -1,7 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import {
+    detectApplePlatform,
+    getSideNavShortcutLabels
+  } from '$lib/features/commons/utils/keyboard-shortcuts.utils';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Button,
@@ -28,6 +33,11 @@
   import { useSideNav } from './side-nav/hooks/use-side-nav.svelte';
 
   const sideNav = useSideNav();
+  let shortcutLabels = getSideNavShortcutLabels(false);
+
+  onMount(() => {
+    shortcutLabels = getSideNavShortcutLabels(detectApplePlatform());
+  });
 
   function openDuplicateModal() {
     globalState.isDuplicateModalOpen = true;
@@ -73,7 +83,7 @@
               on:click={sideNav.handleNewProject}
             >
               {m.sidenav_new_project()}
-              <span class="shortcut-icon">⇧⌘N</span>
+              <span class="shortcut-icon">{shortcutLabels.newProject}</span>
             </Button>
 
             <Button
@@ -85,7 +95,7 @@
               on:click={sideNav.handleOpenProject}
             >
               {m.sidenav_open_project()}
-              <span class="shortcut-icon">⇧⌘O</span>
+              <span class="shortcut-icon">{shortcutLabels.openProject}</span>
             </Button>
 
             <Button
@@ -98,7 +108,7 @@
               on:click={sideNav.handleSaveProject}
             >
               {m.sidenav_save_project()}
-              <span class="shortcut-icon">⌘S</span>
+              <span class="shortcut-icon">{shortcutLabels.saveProject}</span>
             </Button>
 
             <Button
@@ -110,7 +120,9 @@
               on:click={openDuplicateModal}
             >
               {m.sidenav_duplicate_project()}
-              <span class="shortcut-icon">⇧⌘D</span>
+              <span class="shortcut-icon"
+                >{shortcutLabels.duplicateProject}</span
+              >
             </Button>
 
             <Button
@@ -123,7 +135,7 @@
               on:click={openDeleteModal}
             >
               {m.sidenav_delete_project()}
-              <span class="shortcut-icon">⇧⌘⌫</span>
+              <span class="shortcut-icon">{shortcutLabels.deleteProject}</span>
             </Button>
           </Column>
         </Row>
