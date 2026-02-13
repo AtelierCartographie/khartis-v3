@@ -15,14 +15,14 @@ const DEFAULT_STATE: GeoIndicationsState = {
     form: ScaleForm.LINE,
     distance: 0,
     units: DistanceUnit.KILOMETERS,
-    color: { hue: 0, saturation: 0, lightness: 100 },
+    color: { hue: 0, saturation: 0, lightness: 0 },
     expanded: true
   },
   orientation: {
     enabled: false,
     style: OrientationIndicatorStyle.ARROW,
     size: 10,
-    color: { hue: 0, saturation: 0, lightness: 100 }
+    color: { hue: 0, saturation: 0, lightness: 0 }
   },
   insetMap: {
     enabled: false,

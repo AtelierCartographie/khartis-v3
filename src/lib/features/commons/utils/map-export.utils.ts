@@ -406,6 +406,8 @@ function renderTextAnnotation(item: Annotation): string {
 
 function renderShapeAnnotation(item: Annotation): string {
   const { x, y } = item.position;
+  const originX = x;
+  const originY = y;
   const shapeType = String(item.content ?? 'circle');
   const style = item.style ?? {};
   const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
@@ -416,31 +418,36 @@ function renderShapeAnnotation(item: Annotation): string {
 
   switch (shapeType) {
     case 'circle':
-      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    case 'line':
+      return `    <line x1="${originX}" y1="${originY + size / 2}" x2="${originX + size}" y2="${originY + size / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     case 'rectangle':
-      return `    <rect x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <rect x="${originX}" y="${originY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     case 'triangle': {
-      const h = size * 0.866;
-      const points = `${x},${y - h / 2} ${x - size / 2},${y + h / 2} ${x + size / 2},${y + h / 2}`;
+      const points = `${originX + size / 2},${originY} ${originX},${originY + size} ${originX + size},${originY + size}`;
       return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     case 'arrow': {
-      const arrowPath = `M${x - size / 2},${y} L${x + size / 4},${y} L${x + size / 4},${y - size / 4} L${x + size / 2},${y} L${x + size / 4},${y + size / 4} L${x + size / 4},${y} Z`;
+      const arrowPath = `M${originX},${originY + size / 2} L${originX + size * 0.7},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.2} L${originX + size},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.8} L${originX + size * 0.7},${originY + size / 2} Z`;
       return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     case 'star': {
       const outerR = size / 2;
       const innerR = outerR * 0.4;
+      const centerX = originX + outerR;
+      const centerY = originY + outerR;
       const points: string[] = [];
       for (let i = 0; i < 10; i++) {
         const r = i % 2 === 0 ? outerR : innerR;
         const angle = (Math.PI / 5) * i - Math.PI / 2;
-        points.push(`${x + r * Math.cos(angle)},${y + r * Math.sin(angle)}`);
+        points.push(
+          `${centerX + r * Math.cos(angle)},${centerY + r * Math.sin(angle)}`
+        );
       }
       return `    <polygon points="${points.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     default:
-      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
   }
 }
 
@@ -448,6 +455,7 @@ function renderDrawingAnnotation(item: Annotation): string {
   const points = Array.isArray(item.content) ? item.content : [];
   if (points.length === 0) return '';
 
+  const { x: originX, y: originY } = item.position;
   const style = item.style ?? {};
   const stroke = resolveColor(style.strokeColor, SVG_COLORS.BLACK);
   const fill =
@@ -460,7 +468,7 @@ function renderDrawingAnnotation(item: Annotation): string {
   const pathData = points
     .map(
       (p: { x: number; y: number }, i: number) =>
-        `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`
+        `${i === 0 ? 'M' : 'L'}${originX + p.x},${originY + p.y}`
     )
     .join(' ');
 
