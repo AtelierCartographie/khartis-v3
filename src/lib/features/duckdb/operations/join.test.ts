@@ -23,7 +23,6 @@ function createBaseContext(): DuckDBContext {
     registered_files: new Set(),
     table_metadata: new Map(),
     table_geoparquet_cache: new Map(),
-    queryCache: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
     cacheState: {
