@@ -64,17 +64,16 @@ export async function analyse(
   const rowCount = await getRowCount(ctx, table);
   const SAMPLE_THRESHOLD = 50000;
   let analysisTable = table;
-  let isSampled = false;
   const sampleViewName = `${table}_sample_${Date.now()}`;
 
   if (rowCount > SAMPLE_THRESHOLD) {
     try {
+      const escapedTableForSample = escapeIdentifier(table);
       await executeQuery(
         ctx.connection,
-        `CREATE VIEW "${sampleViewName}" AS SELECT * FROM "${table}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
+        `CREATE TEMP TABLE "${sampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
       );
       analysisTable = sampleViewName;
-      isSampled = true;
       logger.debug('Using sampled view for analysis', LogCategory.DUCKDB, {
         table,
         sampleViewName,
@@ -126,19 +125,37 @@ export async function analyse(
               return null;
             });
 
+          const escapedAnalysisTable = escapeSqlString(analysisTable);
+
           switch (type) {
             case 'numeric': {
               const [general, numeric, hist] = await Promise.all([
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_numeric(${analysisTable}, "${escapedColName}")`,
+                  `FROM summary_numeric('${escapedAnalysisTable}', "${escapedColName}")`,
                   { useProxy: false }
-                ) as Promise<ArrowTableLike>,
+                )
+                  .then((r) => r as ArrowTableLike)
+                  .catch((e) => {
+                    logger.warn(
+                      `Failed summary_numeric for ${d.name}`,
+                      LogCategory.DUCKDB,
+                      e
+                    );
+                    return null;
+                  }),
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${escapedColName}")`
-                )
+                  `FROM histogram_numeric('${escapedAnalysisTable}', "${escapedColName}")`
+                ).catch((e) => {
+                  logger.warn(
+                    `Failed histogram_numeric for ${d.name}`,
+                    LogCategory.DUCKDB,
+                    e
+                  );
+                  return null;
+                })
               ]);
               summary_general = general;
               summary_numeric = numeric;
@@ -151,13 +168,29 @@ export async function analyse(
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_date(${analysisTable}, "${escapedColName}")`,
+                  `FROM summary_date('${escapedAnalysisTable}', "${escapedColName}")`,
                   { useProxy: false }
-                ) as Promise<ArrowTableLike>,
+                )
+                  .then((r) => r as ArrowTableLike)
+                  .catch((e) => {
+                    logger.warn(
+                      `Failed summary_date for ${d.name}`,
+                      LogCategory.DUCKDB,
+                      e
+                    );
+                    return null;
+                  }),
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_date(${analysisTable}, "${escapedColName}")`
-                )
+                  `FROM histogram_date('${escapedAnalysisTable}', "${escapedColName}")`
+                ).catch((e) => {
+                  logger.warn(
+                    `Failed histogram_date for ${d.name}`,
+                    LogCategory.DUCKDB,
+                    e
+                  );
+                  return null;
+                })
               ]);
               summary_general = general;
               summary_date = dateSum;
@@ -219,15 +252,13 @@ export async function analyse(
 
     return analysis_result;
   } finally {
-    if (isSampled) {
-      try {
-        await executeQuery(
-          ctx.connection,
-          `DROP VIEW IF EXISTS "${sampleViewName}"`
-        );
-      } catch {
-        /* ignore cleanup errors */
-      }
+    try {
+      await executeQuery(
+        ctx.connection,
+        `DROP TABLE IF EXISTS "${sampleViewName}"`
+      );
+    } catch {
+      /* ignore cleanup errors */
     }
   }
 }

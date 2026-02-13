@@ -1,9 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { CACHE_CONSTANTS, DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
@@ -82,8 +79,11 @@ export async function exportToCsv(
   options?: { delimiter?: string; header?: boolean }
 ): Promise<string> {
   const delimiter = options?.delimiter || ',';
+  if (delimiter.length !== 1) {
+    throw new DuckDBError(`Invalid CSV delimiter: must be a single character`);
+  }
   const header = options?.header !== false;
-  const filename = `${table}_export_${Date.now()}.csv`;
+  const filename = `export_${Date.now()}.csv`;
 
   try {
     await executeQuery(
@@ -132,14 +132,12 @@ export async function exportToGeoparquet(
     return cachedBuffer.slice();
   }
 
-  const escapedTableForFile = escapeSqlString(table);
+  const filename = `export_${Date.now()}.parquet`;
   await executeQuery(
     ctx.connection,
-    `COPY "${escapeIdentifier(table)}" TO '${escapedTableForFile}.parquet' (FORMAT PARQUET, CODEC 'ZSTD');`,
+    `COPY "${escapeIdentifier(table)}" TO '${filename}' (FORMAT PARQUET, CODEC 'ZSTD');`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
-
-  const filename = `${table}.parquet`;
   let stableBuffer: Uint8Array | undefined;
 
   try {

@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';
 import type {
@@ -38,16 +39,19 @@ export async function validateGPSColumns(
   });
 
   try {
+    const escapedLat = escapeIdentifier(latCol);
+    const escapedLon = escapeIdentifier(lonCol);
+    const escapedTable = escapeIdentifier(tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${latCol}") as lat_min,
-        MAX("${latCol}") as lat_max,
-        MEDIAN("${latCol}") as lat_median,
-        MIN("${lonCol}") as lon_min,
-        MAX("${lonCol}") as lon_max,
-        MEDIAN("${lonCol}") as lon_median
-      FROM "${tableName}"
-      WHERE "${latCol}" IS NOT NULL AND "${lonCol}" IS NOT NULL`,
+        MIN("${escapedLat}") as lat_min,
+        MAX("${escapedLat}") as lat_max,
+        MEDIAN("${escapedLat}") as lat_median,
+        MIN("${escapedLon}") as lon_min,
+        MAX("${escapedLon}") as lon_max,
+        MEDIAN("${escapedLon}") as lon_median
+      FROM "${escapedTable}"
+      WHERE "${escapedLat}" IS NOT NULL AND "${escapedLon}" IS NOT NULL`,
       { format: 'array' }
     )) as Array<{
       lat_min: number;
@@ -199,17 +203,20 @@ export async function getGPSArrowTable(
   });
 
   const gpsView = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const escapedLon = escapeIdentifier(lon);
+  const escapedLat = escapeIdentifier(lat);
+  const escapedTableName = escapeIdentifier(dataset.tableName);
 
   await Duck.query(`
     CREATE OR REPLACE VIEW "${gpsView}" AS
     SELECT
       *,
-      ST_Point("${lon}", "${lat}") AS geom
-    FROM "${dataset.tableName}"
-    WHERE "${lat}" IS NOT NULL
-      AND "${lon}" IS NOT NULL
-      AND "${lat}" BETWEEN -90 AND 90
-      AND "${lon}" BETWEEN -180 AND 180
+      ST_Point("${escapedLon}", "${escapedLat}") AS geom
+    FROM "${escapedTableName}"
+    WHERE "${escapedLat}" IS NOT NULL
+      AND "${escapedLon}" IS NOT NULL
+      AND "${escapedLat}" BETWEEN -90 AND 90
+      AND "${escapedLon}" BETWEEN -180 AND 180
   `);
 
   const arrowTable = await getArrowTableDirect(gpsView);
@@ -258,18 +265,21 @@ export async function getGPSBounds(
   });
 
   try {
+    const escapedLat = escapeIdentifier(lat);
+    const escapedLon = escapeIdentifier(lon);
+    const escapedTableName = escapeIdentifier(dataset.tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${lon}") as min_lon,
-        MIN("${lat}") as min_lat,
-        MAX("${lon}") as max_lon,
-        MAX("${lat}") as max_lat,
+        MIN("${escapedLon}") as min_lon,
+        MIN("${escapedLat}") as min_lat,
+        MAX("${escapedLon}") as max_lon,
+        MAX("${escapedLat}") as max_lat,
         COUNT(*) as valid_count
-      FROM "${dataset.tableName}"
-      WHERE "${lat}" IS NOT NULL
-        AND "${lon}" IS NOT NULL
-        AND "${lat}" BETWEEN -90 AND 90
-        AND "${lon}" BETWEEN -180 AND 180`,
+      FROM "${escapedTableName}"
+      WHERE "${escapedLat}" IS NOT NULL
+        AND "${escapedLon}" IS NOT NULL
+        AND "${escapedLat}" BETWEEN -90 AND 90
+        AND "${escapedLon}" BETWEEN -180 AND 180`,
       { format: 'array' }
     )) as Array<{
       min_lon: number;
