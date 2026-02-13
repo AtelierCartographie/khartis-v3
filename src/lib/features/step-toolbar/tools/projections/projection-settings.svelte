@@ -1,11 +1,7 @@
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { m } from '$lib/paraglide/messages';
-  import {
-    Button,
-    InlineNotification,
-    Slider,
-    Toggle
-  } from 'carbon-components-svelte';
+  import { Button, InlineNotification, Slider } from 'carbon-components-svelte';
   import { Renew } from 'carbon-icons-svelte';
   import {
     getProjectionState,
@@ -85,12 +81,12 @@
       />
 
       <div class="toggle-row">
-        <Toggle
+        <Switch
           labelText={m.projection_settings_simplified_preview()}
           labelA={m.projection_settings_no()}
           labelB={m.projection_settings_yes()}
           bind:toggled={simplifiedPreview}
-          size="sm"
+          showStateLabel
         />
       </div>
 

@@ -9,6 +9,10 @@ describe('basemapLayersStore.restoreFromSerialized', () => {
     basemapLayersStore.resetToDefaults();
   });
 
+  it('keeps meridians disabled by default', () => {
+    expect(basemapLayersStore.getLayer('meridiens')?.visible).toBe(false);
+  });
+
   it('fills missing fields from defaults when restoring legacy/incomplete layers', () => {
     basemapLayersStore.restoreFromSerialized([
       {

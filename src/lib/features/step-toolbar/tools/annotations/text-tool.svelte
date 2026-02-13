@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
   import * as m from '$lib/paraglide/messages';
@@ -11,17 +12,13 @@
     Select,
     SelectItem,
     Slider,
-    TextArea,
-    Toggle
+    TextArea
   } from 'carbon-components-svelte';
   import {
     Add,
     TextAlignCenter,
     TextAlignLeft,
     TextAlignRight,
-    TextBold,
-    TextItalic,
-    TextUnderline,
     TrashCan
   } from 'carbon-icons-svelte';
   import {
@@ -74,6 +71,18 @@
 
   function handleOpacityChange(e: CustomEvent<number>) {
     annotationsActions.updateDefaultStyle({ opacity: e.detail });
+  }
+
+  function handleBoldChange(checked: boolean) {
+    annotationsActions.updateDefaultStyle({ bold: checked });
+  }
+
+  function handleItalicChange(checked: boolean) {
+    annotationsActions.updateDefaultStyle({ italic: checked });
+  }
+
+  function handleUnderlineChange(checked: boolean) {
+    annotationsActions.updateDefaultStyle({ underlined: checked });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -171,36 +180,32 @@
     <Column>
       <div class="section text-style-controls">
         <div class="style-toggles">
-          <Toggle
-            size="sm"
+          <Switch
             labelText={m.annotations_bold()}
             toggled={defaultStyle.bold || false}
-            ontoggle={() => annotationsActions.toggleStyleProperty('bold')}
-          >
-            <span slot="labelA"><TextBold /></span>
-            <span slot="labelB"><TextBold /></span>
-          </Toggle>
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleBoldChange}
+          />
 
-          <Toggle
-            size="sm"
+          <Switch
             labelText={m.annotations_italic()}
             toggled={defaultStyle.italic || false}
-            ontoggle={() => annotationsActions.toggleStyleProperty('italic')}
-          >
-            <span slot="labelA"><TextItalic /></span>
-            <span slot="labelB"><TextItalic /></span>
-          </Toggle>
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleItalicChange}
+          />
 
-          <Toggle
-            size="sm"
+          <Switch
             labelText={m.annotations_underline()}
             toggled={defaultStyle.underlined || false}
-            ontoggle={() =>
-              annotationsActions.toggleStyleProperty('underlined')}
-          >
-            <span slot="labelA"><TextUnderline /></span>
-            <span slot="labelB"><TextUnderline /></span>
-          </Toggle>
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleUnderlineChange}
+          />
         </div>
 
         <div class="alignment-controls">

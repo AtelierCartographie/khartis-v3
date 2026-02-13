@@ -3,14 +3,18 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { m } from '$lib/paraglide/messages';
   import { Column, Grid, Row } from 'carbon-components-svelte';
-  import { formatActions, getFormatState } from './format.store.svelte';
+  import {
+    DEFAULT_PAGE_COLOR,
+    formatActions,
+    getFormatState
+  } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
 
   const color = $derived(
     typeof formatState.color === 'object' && formatState.color
       ? formatState.color
-      : { hue: 180, saturation: 50, lightness: 50 }
+      : DEFAULT_PAGE_COLOR
   );
   const colorHex = $derived(
     hslToHex(color.hue, color.saturation, color.lightness)

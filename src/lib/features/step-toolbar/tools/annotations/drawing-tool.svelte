@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     AnnotationKind,
     DrawingType
@@ -16,8 +17,7 @@
     RadioButton,
     RadioButtonGroup,
     Row,
-    Slider,
-    Toggle
+    Slider
   } from 'carbon-components-svelte';
   import { Add, TrashCan } from 'carbon-icons-svelte';
   import {
@@ -45,10 +45,10 @@
   }
 
   let drawingType = $state<DrawingType>(DrawingType.LINE);
-  let strokeColor = $state('#8d8d8d');
+  let strokeColor = $state('#ffffff');
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(0);
+  let lightness = $state(100);
 
   let fillColor = $state('#ffffff');
   let fillHue = $state(0);
@@ -69,7 +69,7 @@
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
-        const cv = createColorValue('#000000', hue, saturation, lightness);
+        const cv = createColorValue('#ffffff', hue, saturation, lightness);
         strokeColor = cv.hex;
       }
     }
@@ -192,21 +192,22 @@
       <div class="section">
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
-          <Toggle
-            size="sm"
+          <Switch
             toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent) => {
-              const nextStyle: 'dotted' | 'solid' = e.detail
+            labelText={m.dashed()}
+            hideLabel
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={(checked) => {
+              const nextStyle: 'dotted' | 'solid' = checked
                 ? 'dotted'
                 : 'solid';
               annotationsActions.updateDefaultStyle({
                 strokeStyle: nextStyle
               });
             }}
-          >
-            <span slot="labelA">{m.yes()}</span>
-            <span slot="labelB">{m.no()}</span>
-          </Toggle>
+          />
         </div>
       </div>
     </Column>
