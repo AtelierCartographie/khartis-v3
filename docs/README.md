@@ -59,17 +59,18 @@ Start here:
 
 ## 🛠️ Common Tasks
 
-| Task                      | Documentation                                                      |
-| ------------------------- | ------------------------------------------------------------------ |
-| **Add new feature**       | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-feature)          |
-| **Add new tool**          | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-tool)             |
-| **Add file format**       | [DATA_PIPELINE.md](DATA_PIPELINE.md#add-new-file-format)           |
-| **Add visualization**     | [VISUALIZATION.md](VISUALIZATION.md#add-new-visualization-type)    |
-| **Add classification**    | [VISUALIZATION.md](VISUALIZATION.md#add-new-classification-method) |
-| **Understand state**      | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)                     |
-| **Find type definitions** | [REFERENCE.md](REFERENCE.md#core-type-definitions)                 |
-| **Configure PWA**         | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)                       |
-| **Debug offline issues**  | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md#troubleshooting)       |
+| Task                        | Documentation                                                      |
+| --------------------------- | ------------------------------------------------------------------ |
+| **Add new feature**         | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-feature)          |
+| **Add new tool**            | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-tool)             |
+| **Add file format**         | [DATA_PIPELINE.md](DATA_PIPELINE.md#add-new-file-format)           |
+| **Add visualization**       | [VISUALIZATION.md](VISUALIZATION.md#add-new-visualization-type)    |
+| **Add classification**      | [VISUALIZATION.md](VISUALIZATION.md#add-new-classification-method) |
+| **Understand state**        | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)                     |
+| **Find type definitions**   | [REFERENCE.md](REFERENCE.md#core-type-definitions)                 |
+| **Find keyboard shortcuts** | [REFERENCE.md](REFERENCE.md#application-keyboard-shortcuts)        |
+| **Configure PWA**           | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)                       |
+| **Debug offline issues**    | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md#troubleshooting)       |
 
 ## 🏗️ Project Structure
 
@@ -158,5 +159,5 @@ pnpm test             # Run all tests
 ---
 
 **Documentation Version**: 3.2.0
-**Last Updated**: 2025-12-05
+**Last Updated**: 2026-02-13
 **Codebase**: Khartis v3

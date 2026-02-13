@@ -720,6 +720,44 @@ export const errorLogger = new ErrorLogger();
 - **Escape**: Close modals, dropdowns
 - **Arrow keys**: Navigate lists, toolbars
 
+### Application Keyboard Shortcuts
+
+Shortcuts are handled globally in `src/lib/features/commons/components/keyboard-shortcuts.svelte`.
+
+#### Why a `K` Prefix for Project Actions
+
+- Browser-reserved combinations (`Cmd/Ctrl+Shift+N`, `Cmd/Ctrl+O`, `Cmd/Ctrl+S`) are not reliable in web apps, especially in Arc.
+- Khartis uses a dedicated prefix chord: `Ctrl+K`, then an action letter.
+- `K` stands for **Khartis**, making shortcuts easy to remember and reducing collisions with browser shortcuts.
+- The second key must be pressed within `2s` after `Ctrl+K`.
+
+#### Key Notation by System
+
+| Concept                     | macOS | Windows/Linux |
+| --------------------------- | ----- | ------------- |
+| Project shortcut prefix     | `⌃K`  | `Ctrl+K`      |
+| Zoom modifier               | `⌘`   | `Ctrl`        |
+| Alt/Option modifier display | `⌥`   | `Alt`         |
+
+#### Global Shortcut Map
+
+| Action                  | macOS          | Windows/Linux      |
+| ----------------------- | -------------- | ------------------ |
+| Open side navigation    | `⌃K`, then `B` | `Ctrl+K`, then `B` |
+| New project             | `⌃K`, then `N` | `Ctrl+K`, then `N` |
+| Open project            | `⌃K`, then `O` | `Ctrl+K`, then `O` |
+| Save project            | `⌃K`, then `S` | `Ctrl+K`, then `S` |
+| Duplicate project       | `⌃K`, then `D` | `Ctrl+K`, then `D` |
+| Delete project          | `⌃K`, then `X` | `Ctrl+K`, then `X` |
+| Go to Data tab          | `1`            | `1`                |
+| Go to Visualization tab | `2`            | `2`                |
+| Go to Styling tab       | `3`            | `3`                |
+| Toggle zoom mode        | `⌥+Z`          | `Alt+Z`            |
+| Zoom in                 | `⌘ +`          | `Ctrl +`           |
+| Zoom out                | `⌘ -`          | `Ctrl -`           |
+| Reset zoom              | `⌘ 0`          | `Ctrl 0`           |
+| Close modal/panel       | `Escape`       | `Escape`           |
+
 ### Visual Accessibility
 
 - **Focus ring**: Visible on all interactive elements
