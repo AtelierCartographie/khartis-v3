@@ -384,6 +384,8 @@
     const geo = dataTabState.geolocation;
     const tableName = selectedDataset?.tableName;
 
+    let cancelled = false;
+
     if (
       activeTabIndex === 1 &&
       tableName &&
@@ -397,11 +399,15 @@
         geo.longitudeColumn,
         Duck
       ).then((result) => {
-        gpsValidation = result;
+        if (!cancelled) gpsValidation = result;
       });
     } else {
       gpsValidation = null;
     }
+
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 

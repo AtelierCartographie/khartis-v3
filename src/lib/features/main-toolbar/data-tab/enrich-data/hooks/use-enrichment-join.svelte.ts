@@ -280,12 +280,12 @@ export function useEnrichmentJoin(
       return;
     }
 
+    const geoTableName = getGeoTableName();
+    if (!geoTableName) return;
+
     isFinalizingJoin = true;
 
     try {
-      const geoTableName = getGeoTableName();
-      if (!geoTableName) return;
-
       const enrichmentColumns = enrichmentDataset.columns
         .filter(
           (col) => col.name !== enrichCol.columnName && col.name !== '__id'
