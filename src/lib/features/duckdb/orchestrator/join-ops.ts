@@ -223,49 +223,10 @@ export async function computeJoinStats(
   }
 
   const escapedGeoCol = escapeIdentifier(geoColumn);
-  const escapedTable = escapeIdentifier(dataset.tableName);
+  const escapedTable = escapeSqlString(dataset.tableName);
 
   const result = (await Duck.query(
-    `
-    WITH source_with_counts AS (
-      SELECT
-        "${escapedGeoCol}" as original_name,
-        COUNT(*) OVER (PARTITION BY normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR))) as source_dup_count
-      FROM "${escapedTable}"
-      WHERE "${escapedGeoCol}" IS NOT NULL
-    ),
-    candidates AS (
-      SELECT DISTINCT original_name, source_dup_count FROM source_with_counts
-    ),
-    matches AS (
-      FROM candidates, LATERAL (SELECT * FROM get_similarity(original_name, '${joinTableView}'))
-    ),
-    best_matches AS (
-      SELECT
-        original_name,
-        list(DISTINCT {id: id, name: raw, score: score, type: typo_match}) as candidates,
-        max(score) as best_score,
-        count(*) as match_count,
-        count(DISTINCT id) as distinct_id_count,
-        count(DISTINCT CASE WHEN typo_match = 'exact' THEN id END) as distinct_exact_id_count
-      FROM matches
-      GROUP BY original_name
-    )
-    SELECT
-      c.original_name,
-      c.source_dup_count,
-      CASE
-        WHEN c.source_dup_count > 1 THEN 'duplicate'
-        WHEN bm.best_score IS NULL THEN 'not_found'
-        WHEN bm.best_score = 1 AND bm.distinct_exact_id_count = 1 THEN 'matched'
-        WHEN bm.best_score = 1 AND bm.distinct_exact_id_count > 1 THEN 'ambiguous'
-        ELSE 'check'
-      END as status,
-      bm.candidates,
-      bm.best_score
-    FROM candidates c
-    LEFT JOIN best_matches bm ON c.original_name = bm.original_name
-    `,
+    `FROM analyze_join_quality('${escapedTable}', "${escapedGeoCol}", '${joinTableView}')`,
     { format: 'array' }
   )) as Array<{
     original_name: string;
@@ -548,15 +509,19 @@ export async function joinDataWithBasemap(
   });
 
   const joinedTableName = `joined_${Date.now().toString(36)}`;
+  const escapedDataTable = escapeIdentifier(dataTableName);
+  const escapedDataCol = escapeIdentifier(dataColumnName);
+  const escapedBasemapTable = escapeIdentifier(basemapTableName);
+  const escapedBasemapCol = escapeIdentifier(basemapColumnName);
 
   await Duck.query(`
     CREATE TABLE "${joinedTableName}" AS
     SELECT
       b.*,
-      d.* EXCLUDE ("${dataColumnName}")
-    FROM "${basemapTableName}" b
-    INNER JOIN "${dataTableName}" d
-    ON LOWER(TRIM(b."${basemapColumnName}")) = LOWER(TRIM(d."${dataColumnName}"))
+      d.* EXCLUDE ("${escapedDataCol}")
+    FROM "${escapedBasemapTable}" b
+    INNER JOIN "${escapedDataTable}" d
+    ON LOWER(TRIM(b."${escapedBasemapCol}")) = LOWER(TRIM(d."${escapedDataCol}"))
   `);
 
   const countResult = (await Duck.query(`

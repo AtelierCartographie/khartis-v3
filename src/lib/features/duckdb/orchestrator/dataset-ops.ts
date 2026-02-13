@@ -308,4 +308,55 @@ export function updateDatasetJoinInfo(
   bumpDatasetsVersion();
 }
 
+export async function updateDatasetTableName(
+  sourceFileId: string,
+  newTableName: string,
+  Duck: DuckDBClientForDataset,
+  callbacks: DatasetCallbacks
+): Promise<DuckDBDataset | null> {
+  const existing = findDatasetByIdOrSourceFile(sourceFileId);
+  if (!existing) {
+    logger.warn(
+      'Cannot update table name: dataset not found in orchestrator',
+      LogCategory.DUCKDB,
+      { sourceFileId, newTableName }
+    );
+    return null;
+  }
+
+  try {
+    const columns = await Duck.analyse(newTableName);
+    const rowCount = await callbacks.getRowCount(newTableName);
+
+    updateDatasets((datasets) => {
+      const ds = datasets.get(existing.id);
+      if (ds) {
+        ds.tableName = newTableName;
+        ds.columns = columns;
+        ds.rowCount = rowCount;
+        ds.arrowTableWithMetadata = undefined;
+      }
+    });
+
+    bumpDatasetsVersion();
+    setCurrentTableName(newTableName);
+
+    logger.info('Updated dataset table name in orchestrator', LogCategory.DUCKDB, {
+      datasetId: existing.id,
+      oldTableName: existing.tableName,
+      newTableName,
+      rowCount
+    });
+
+    return findDatasetByIdOrSourceFile(sourceFileId) ?? null;
+  } catch (error) {
+    logger.error(
+      'Failed to update dataset table name',
+      LogCategory.DUCKDB,
+      error
+    );
+    return null;
+  }
+}
+
 export { findDatasetByIdOrSourceFile };

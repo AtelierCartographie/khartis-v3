@@ -63,9 +63,11 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
     best_matches AS (
         SELECT
             original_name,
-            list({id: id, name: variant, score: score, type: typo_match}) as candidates,
+            list(DISTINCT {id: id, name: raw, score: score, type: typo_match}) as candidates,
             max(score) as best_score,
-            count(*) as match_count
+            count(*) as match_count,
+            count(DISTINCT id) as distinct_id_count,
+            count(DISTINCT CASE WHEN typo_match = 'exact' THEN id END) as distinct_exact_id_count
         FROM matches
         GROUP BY original_name
     )
@@ -75,8 +77,8 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
         CASE
             WHEN c.source_dup_count > 1 THEN 'duplicate'
             WHEN bm.best_score IS NULL THEN 'not_found'
-            WHEN bm.best_score = 1 AND bm.match_count = 1 THEN 'matched'
-            WHEN bm.best_score = 1 AND bm.match_count > 1 THEN 'ambiguous'
+            WHEN bm.best_score = 1 AND bm.distinct_exact_id_count = 1 THEN 'matched'
+            WHEN bm.best_score = 1 AND bm.distinct_exact_id_count > 1 THEN 'ambiguous'
             ELSE 'check'
         END as status,
         bm.candidates,
