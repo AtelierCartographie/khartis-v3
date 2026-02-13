@@ -75,11 +75,11 @@ export function generateUniqueTableName(
     if (index === -1) return name;
     return name.slice(0, index);
   };
-  let tablename = normalizeName(filename);
+  const baseName = splitFilename(normalizeName(filename));
+  let tablename = baseName;
   let counter = 1;
-  tablename = splitFilename(tablename);
   while (existingNames.has(tablename)) {
-    tablename = `${tablename}_${counter}`;
+    tablename = `${baseName}_${counter}`;
     counter++;
   }
   return tablename;
@@ -105,7 +105,7 @@ export async function registerFiles(
   let shape_date: number | undefined;
 
   if (shapefile) {
-    const shp = files.reverse().find((file) => file.name.endsWith('.shp'));
+    const shp = [...files].reverse().find((file) => file.name.endsWith('.shp'));
     shape_date = shp?.lastModified;
   }
 
