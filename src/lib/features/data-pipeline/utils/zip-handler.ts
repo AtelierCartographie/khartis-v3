@@ -57,13 +57,22 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       );
     });
 
-    const files: ExtractedFile[] = Object.entries(unzipped)
-      .filter(([path]) => !shouldIgnoreFile(path))
-      .map(([path, content]) => ({
-        name: getFileName(path),
-        path,
-        content
-      }));
+    const MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024; // 500 MB
+    let totalSize = 0;
+    const files: ExtractedFile[] = [];
+
+    for (const [path, content] of Object.entries(unzipped)) {
+      if (shouldIgnoreFile(path)) continue;
+      totalSize += content.byteLength;
+      if (totalSize > MAX_DECOMPRESSED_SIZE) {
+        throw new Error(
+          m.pipeline_error_zip_extract_failed({
+            error: `Decompressed size exceeds ${MAX_DECOMPRESSED_SIZE / (1024 * 1024)}MB limit`
+          })
+        );
+      }
+      files.push({ name: getFileName(path), path, content });
+    }
 
     const shapefileInfo = detectShapefileInArchive(files);
 
