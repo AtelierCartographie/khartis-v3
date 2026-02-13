@@ -7,7 +7,7 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import { Duck } from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { SvelteMap } from 'svelte/reactivity';
 import type { JoinStats } from '../../components';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';
@@ -59,7 +59,7 @@ export function useEnrichmentJoin(
       (selectedDataset as { duckdbTableName?: string; tableName?: string })
         .duckdbTableName ||
       (selectedDataset as { tableName?: string }).tableName ||
-      selectedDataset.id
+      null
     );
   }
 
@@ -354,27 +354,44 @@ export function useEnrichmentJoin(
       });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
 
+      // Register the new enriched table in the DuckDB orchestrator so subsequent operations can find it
+      try {
+        await duckDBOrchestrator.registerExistingTable(
+          enrichedTableName,
+          selectedDataset.sourceFileId || selectedDataset.id,
+          selectedDataset.name || enrichedTableName
+        );
+      } catch (registerError) {
+        logger.warn(
+          'Failed to register enriched table in orchestrator',
+          LogCategory.DATA,
+          { enrichedTableName, error: registerError }
+        );
+      }
+
       logger.success('Enrichment finalized', LogCategory.DATA, {
         newTable: enrichedTableName,
         addedColumns: enrichmentColumns
       });
 
-      if (
-        oldTableName !== enrichedTableName &&
-        oldTableName.includes('_enriched_')
-      ) {
+      // Drop the old table to free memory (both first-time and subsequent enrichments)
+      if (oldTableName !== enrichedTableName) {
         try {
           await Duck.query(
             `DROP TABLE IF EXISTS "${escapeIdentifier(oldTableName)}"`
           );
-          logger.debug('Dropped old enriched table', LogCategory.DATA, {
+          logger.debug('Dropped old table after enrichment', LogCategory.DATA, {
             oldTableName
           });
         } catch (dropError) {
-          logger.warn('Failed to drop old enriched table', LogCategory.DATA, {
-            oldTableName,
-            error: dropError
-          });
+          logger.warn(
+            'Failed to drop old table after enrichment',
+            LogCategory.DATA,
+            {
+              oldTableName,
+              error: dropError
+            }
+          );
         }
       }
 

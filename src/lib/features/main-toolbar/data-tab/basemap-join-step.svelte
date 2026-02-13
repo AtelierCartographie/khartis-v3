@@ -99,6 +99,7 @@
 
     osmBasemapStore.clear();
     dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(2);
     dataTabActions.selectBasemap(basemap.file);
     basemapStyleStore.setReferenceBasemap(basemap.file);
 
@@ -199,13 +200,23 @@
       return;
     }
 
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
     importUploading = true;
     importError = null;
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(2);
 
     try {
       const file = importFiles[0];
       const { basemap: customBasemap, geometryTable } =
         await processBasemapImport(file);
+
+      if (abortSignal.aborted) return;
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
@@ -234,8 +245,53 @@
             customBasemap,
             dataTabState.geolocation.linkedVariableName
           );
+
+          if (abortSignal.aborted) {
+            logger.debug(
+              'Join computation cancelled (basemap changed)',
+              LogCategory.MAP
+            );
+            return;
+          }
+
           dataTabActions.setJoinStats(stats);
+
+          const hasBlockingErrors =
+            stats.toVerifyCount > 0 ||
+            stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE)
+              .length > 0;
+
+          if (!hasBlockingErrors && stats.joinedCount > 0) {
+            logger.info(
+              'Auto-finalizing join - no errors detected',
+              LogCategory.MAP,
+              { joinedCount: stats.joinedCount }
+            );
+
+            try {
+              await duckDBOrchestrator.finalizeJoin(
+                datasetIdForOrchestrator,
+                customBasemap,
+                dataTabState.geolocation.linkedVariableName
+              );
+              dataTabStore.markStepComplete(2);
+              logger.success(
+                'Join auto-finalized, map should update',
+                LogCategory.MAP
+              );
+            } catch (finalizeError) {
+              logger.error(
+                'Failed to auto-finalize join',
+                LogCategory.MAP,
+                finalizeError
+              );
+              showError(m.join_error_title(), m.join_error_message());
+            }
+          }
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') {
+            return;
+          }
           logger.error('Failed to compute join stats', LogCategory.MAP, error);
           showError(m.join_error_title(), m.join_error_message());
         } finally {
@@ -243,6 +299,7 @@
         }
       }
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
       logger.error('Error importing custom basemap', LogCategory.MAP, err);
       importError =
         err instanceof Error ? err.message : m.basemap_custom_error();
@@ -326,6 +383,12 @@
     )
       return;
 
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
     const corrections: Record<string, string> = {};
     dataTabState.basemapJoin.joinMappings.forEach((mapping) => {
       if (
@@ -343,6 +406,9 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
+
+      if (abortSignal.aborted) return;
+
       dataTabActions.applyCorrections();
 
       const basemap = allBasemaps.find((b) => b.file === basemapSelected);
@@ -352,6 +418,15 @@
           basemap,
           dataTabState.geolocation.linkedVariableName
         );
+
+        if (abortSignal.aborted) {
+          logger.debug(
+            'Corrections cancelled (basemap changed)',
+            LogCategory.MAP
+          );
+          return;
+        }
+
         dataTabActions.setJoinStats(stats);
 
         const hasBlockingErrors =
@@ -382,6 +457,7 @@
         );
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       logger.error('Failed to apply corrections', LogCategory.MAP, error);
       showError(m.join_error_title(), m.join_error_message());
     } finally {
@@ -532,13 +608,13 @@
       }
     }
 
-    initializeBasemapCatalog();
+    void initializeBasemapCatalog();
   });
 
   $effect(() => {
     void dataTabState.geolocation.linkedVariableName;
     if (selectedDataset) {
-      loadSuggestions();
+      void loadSuggestions();
     }
   });
 
@@ -547,19 +623,27 @@
     const currentDatasetId = selectedDataset?.id ?? null;
 
     if (previousDatasetId !== null && currentDatasetId !== previousDatasetId) {
-      if (osmBasemapStore.isActive) {
-        logger.info(
-          'Clearing OSM basemap due to dataset change',
-          LogCategory.MAP,
-          {
-            previousDatasetId,
-            newDatasetId: currentDatasetId
-          }
-        );
-        osmBasemapStore.clear();
-        dataTabActions.selectBasemap('');
-        basemapStyleStore.setReferenceBasemap(null);
+      logger.info(
+        'Clearing join state due to dataset change',
+        LogCategory.MAP,
+        {
+          previousDatasetId,
+          newDatasetId: currentDatasetId
+        }
+      );
+
+      if (currentJoinAbortController) {
+        currentJoinAbortController.abort();
+        currentJoinAbortController = null;
       }
+
+      osmBasemapStore.clear();
+      dataTabActions.clearJoinStats();
+      dataTabActions.selectBasemap('');
+      basemapStyleStore.setReferenceBasemap(null);
+      dataTabStore.resetStepCompletion(2);
+      importedBasemap = null;
+      importError = null;
     }
 
     previousDatasetId = currentDatasetId;
@@ -616,6 +700,7 @@
       toVerifyCount={toVerifyCount}
       linkedVariableName={dataTabState.geolocation.linkedVariableName}
       loading={joinLoading}
+      joinFinalized={dataTabStore.hasCompletedStep[2]}
       onApplyCorrections={handleApplyCorrections}
       onFinalizeJoin={handleFinalizeJoin}
     />
