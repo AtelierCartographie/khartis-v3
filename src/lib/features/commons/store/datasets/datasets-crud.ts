@@ -5,6 +5,7 @@ import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
 import { sanitizeTextInput } from '../../utils/sanitize.utils';
 import { projectStore } from '../project.store.svelte';
+import { dataTabActions } from '../data-tab.store.svelte';
 import {
   findById,
   removeById,
@@ -55,6 +56,14 @@ export async function deleteDataset(
   await duckDBOrchestrator.dropTable(dataset.tableName);
 
   removeDataset(state, datasetId);
+
+  // Clean up enrichment state tied to the deleted dataset
+  dataTabActions.setEnrichDataState({
+    enrichmentDatasetId: undefined,
+    enrichmentColumn: undefined,
+    targetColumn: undefined,
+    isEnrichmentActive: false
+  });
 
   return true;
 }

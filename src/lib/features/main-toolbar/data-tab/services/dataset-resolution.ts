@@ -9,11 +9,13 @@ export function resolveDatasetIdForOrchestrator(
 ): string | undefined {
   if (!selectedDataset) return undefined;
 
-  if (selectedDataset.id) {
-    return selectedDataset.id;
+  // Prefer sourceFileId — it's the common key between the UI datasets store
+  // and the DuckDB orchestrator state (which generates its own id).
+  if (selectedDataset.sourceFileId) {
+    return selectedDataset.sourceFileId;
   }
 
-  return selectedDataset.sourceFileId || undefined;
+  return selectedDataset.id || undefined;
 }
 
 export function resolveSelectedDuckTableName(

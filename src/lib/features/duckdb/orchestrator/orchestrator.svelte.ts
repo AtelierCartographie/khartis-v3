@@ -145,6 +145,18 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
   return prefetchPromise;
 }
 
+/** Invalidate cached Arrow table and DuckDB query cache for a table after column mutations. */
+function invalidateDatasetCache(tableName: string): void {
+  const dataset = state.getDatasetByTable(tableName);
+  if (dataset) {
+    dataset.arrowTableWithMetadata = undefined;
+    dataset.geoArrowMetadata = undefined;
+  }
+  if (Duck) {
+    Duck.invalidateTableCache(tableName);
+  }
+}
+
 async function createArrowTableWithMetadata(tableName: string): Promise<{
   arrowTableWithMetadata: Table;
   geoArrowMetadata: GeoArrowMetadata | null;
@@ -281,6 +293,7 @@ export const duckDBOrchestrator = {
 
       datasetOps.updateDatasetJoinInfo(dataset.id, result);
       Duck.invalidateTableCache(dataset.tableName);
+      state.bumpDatasetsVersion();
     } catch (error) {
       logger.error('Failed to finalize join', LogCategory.DATA, {
         datasetId,
@@ -418,6 +431,7 @@ export const duckDBOrchestrator = {
       state.setFilters(tableName, updatedFilters);
     }
 
+    invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
   },
 
@@ -430,6 +444,8 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.changeColumnType(tableName, columnName, newType, Duck);
+    invalidateDatasetCache(tableName);
+    state.bumpDatasetsVersion();
   },
 
   async dropColumn(tableName: string, columnName: string): Promise<void> {
@@ -437,6 +453,8 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.dropColumn(tableName, columnName, Duck);
+    invalidateDatasetCache(tableName);
+    state.bumpDatasetsVersion();
   },
 
   async dropRows(tableName: string, rowIds: number[]): Promise<void> {
@@ -444,6 +462,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.dropRows(tableName, rowIds, Duck);
+    invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
   },
 
@@ -455,6 +474,7 @@ export const duckDBOrchestrator = {
     if (rowIds.length === 0) return 0;
 
     await columnOps.dropRows(tableName, rowIds, Duck);
+    invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
     return rowIds.length;
   },
@@ -468,6 +488,8 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     await columnOps.refineColumn(tableName, columnName, operation, Duck);
+    invalidateDatasetCache(tableName);
+    state.bumpDatasetsVersion();
   },
 
   async replaceInColumn(
@@ -479,13 +501,16 @@ export const duckDBOrchestrator = {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    return columnOps.replaceInColumn(
+    const count = await columnOps.replaceInColumn(
       tableName,
       columnName,
       searchValue,
       replaceValue,
       Duck
     );
+    invalidateDatasetCache(tableName);
+    state.bumpDatasetsVersion();
+    return count;
   },
 
   async addCalculatedColumn(
@@ -507,6 +532,8 @@ export const duckDBOrchestrator = {
     if (dataset) {
       datasetOps.updateDatasetColumns(dataset.id, updatedColumns);
     }
+    invalidateDatasetCache(tableName);
+    state.bumpDatasetsVersion();
   },
 
   async testExpression(
