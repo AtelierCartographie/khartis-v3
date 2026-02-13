@@ -224,16 +224,11 @@ export const duckDBOrchestrator = {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    return datasetOps.updateDatasetTableName(
-      sourceFileId,
-      newTableName,
-      Duck,
-      {
-        getRowCount: getRowCountInternal,
-        createArrowTableWithMetadata,
-        prefetchArrowMetadata
-      }
-    );
+    return datasetOps.updateDatasetTableName(sourceFileId, newTableName, Duck, {
+      getRowCount: getRowCountInternal,
+      createArrowTableWithMetadata,
+      prefetchArrowMetadata
+    });
   },
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {

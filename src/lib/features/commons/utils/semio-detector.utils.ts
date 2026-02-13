@@ -196,7 +196,12 @@ export function detectSemioType(
   switch (typeSimple) {
     case 'numeric':
       results.push(
-        scoreQTA({ uniqueCount, extentMagnitude, shareIntegers, shareRankInterval }),
+        scoreQTA({
+          uniqueCount,
+          extentMagnitude,
+          shareIntegers,
+          shareRankInterval
+        }),
         scoreQTR({
           ratioWords: keywords.ratioWords,
           extentMagnitude,
