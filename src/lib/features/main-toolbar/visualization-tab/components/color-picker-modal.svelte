@@ -11,15 +11,15 @@
 
   let {
     open = $bindable(false),
-    color = '#4589ff',
+    color = '#ffffff',
     onclose,
     onselect
   }: Props = $props();
 
   let hue = $state(0);
-  let saturation = $state(100);
-  let lightness = $state(50);
-  let hexValue = $state('#000000');
+  let saturation = $state(0);
+  let lightness = $state(100);
+  let hexValue = $state('#ffffff');
 
   $effect(() => {
     if (color && open) {
@@ -170,7 +170,7 @@
         labelText={m.hex_color()}
         value={hexValue}
         on:input={handleHexChange}
-        placeholder="#4589ff"
+        placeholder="#ffffff"
       />
     </div>
 

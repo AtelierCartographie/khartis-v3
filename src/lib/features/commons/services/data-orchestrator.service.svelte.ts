@@ -19,10 +19,7 @@ import {
 } from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
-import {
-  visualizationStore,
-  VisualizationType
-} from '../store/visualization.store.svelte';
+import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { importRollbackService } from './import-rollback.service';
@@ -59,12 +56,6 @@ class DataOrchestratorService {
 
       if (dataset.geometry) {
         projectionActions.suggestProjectionForCurrentData();
-      }
-
-      const existingVisualizations =
-        visualizationStore.getVisualizationsByDataset(dataset.id);
-      if (existingVisualizations.length === 0) {
-        this.createDefaultVisualization(dataset.id);
       }
 
       layersActions.syncWithVisualizations();
@@ -425,13 +416,6 @@ class DataOrchestratorService {
       );
       throw error;
     }
-  }
-
-  private createDefaultVisualization(datasetId: string): void {
-    visualizationStore.createVisualization(
-      VisualizationType.CHOROPLETH,
-      datasetId
-    );
   }
 
   async onProjectChanged(): Promise<void> {

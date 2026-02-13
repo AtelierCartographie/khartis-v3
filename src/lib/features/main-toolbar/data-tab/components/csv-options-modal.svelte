@@ -1,11 +1,11 @@
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     InlineLoading,
     Modal,
     Select,
-    SelectItem,
-    Toggle
+    SelectItem
   } from 'carbon-components-svelte';
 
   export interface CsvOptions {
@@ -104,12 +104,13 @@
     <p class="description">{m.csv_options_description()}</p>
 
     <div class="option-group">
-      <Toggle
+      <Switch
         labelText={m.csv_options_header()}
-        labelA=""
-        labelB=""
         bind:toggled={header}
         disabled={isApplying}
+        labelA={m.no()}
+        labelB={m.yes()}
+        showStateLabel
       />
     </div>
 

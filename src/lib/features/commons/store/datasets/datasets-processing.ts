@@ -159,6 +159,7 @@ export async function processFiles(
   files: UploadedFile[],
   vizOps?: VisualizationStoreOperations | null
 ): Promise<void> {
+  void vizOps;
   startProcessing();
   state.error = undefined;
 
@@ -226,11 +227,6 @@ export async function processFiles(
       state.selectedDatasetId = newDatasets[0].id;
     }
 
-    const geoDatasets = newDatasets.filter((d) => d.geometry);
-    if (geoDatasets.length > 0) {
-      createVisualizationsForGeoDatasets(geoDatasets, vizOps);
-    }
-
     notifySkippedFiles(results);
 
     logger.success(
@@ -256,6 +252,7 @@ export async function addFile(
   vizOps?: VisualizationStoreOperations | null,
   autoEnable = true
 ): Promise<DatasetResult | null> {
+  void vizOps;
   const startTime = performance.now();
 
   startProcessing();
@@ -343,11 +340,6 @@ export async function addFile(
         pendingResolvers.forEach((resolve) => resolve(dataset.id));
         internals.pendingDatasetResolvers.delete(dataset.sourceFileId);
       }
-    }
-
-    const geoDatasets = datasets.filter((d) => d.geometry);
-    if (geoDatasets.length > 0) {
-      createVisualizationsForGeoDatasets(geoDatasets, vizOps);
     }
 
     return addedDataset;
