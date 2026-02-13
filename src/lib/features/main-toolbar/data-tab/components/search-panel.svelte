@@ -215,7 +215,7 @@
   }
 
   function handleReplace() {
-    if (!searchQuery || !replaceValue) return;
+    if (!searchQuery) return;
     const query = searchQuery;
     const value = replaceValue;
     const source = searchSource;
@@ -373,7 +373,7 @@
       <Button
         kind="secondary"
         size="small"
-        disabled={!searchQuery || !replaceValue || !hasExactMatches}
+        disabled={!searchQuery || !hasExactMatches}
         on:click={handleReplace}
       >
         {m.search_replace_button()}
