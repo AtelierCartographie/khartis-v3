@@ -8,6 +8,15 @@ import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constant
 //   - detect dual sign
 //   - apply the method independently on each sign
 
+/**
+ * SQL macro for computing quantile break points.
+ *
+ * @macro
+ * @param {string} tabname - The source table name.
+ * @param {string} colname - The numeric column used to compute quantiles.
+ * @param {number} nb - Number of classes.
+ * @returns {string} The SQL macro definition for quantile-based breaks.
+ */
 const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb := 5) AS (
   FROM query_table(tabname::VARCHAR)
   SELECT quantile_disc("colname", list_transform(range(1, nb), c -> c / nb))
@@ -18,11 +27,30 @@ const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
     SELECT quantile_disc("colname", [0.05,0.275,0.5,0.725,0.95])
 );`;
 
+/**
+ * SQL macro for creating equal-width bins.
+ *
+ * @macro
+ * @param {string} tabname - The source table name.
+ * @param {string} colname - The numeric column used to compute width.
+ * @param {number} nb - Number of classes.
+ * @param {boolean} nice - Whether to use "nice" rounded bounds.
+ * @returns {string} The SQL macro definition for equal-width breaks.
+ */
 const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, nb := 5, nice := false) AS (
   FROM query_table(tabname::VARCHAR)
   SELECT equi_width_bins(MIN("colname"), MAX("colname"), nb - 1, nice)
 );`;
 
+/**
+ * SQL macro to progressively compute nested mean-based breaks.
+ *
+ * @macro
+ * @param {string} tabname - The source table name.
+ * @param {string} colname - The numeric column to classify.
+ * @param {number} nb - Number of classes.
+ * @returns {string} The SQL macro definition for nested means breaks.
+ */
 const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colname, nb := 4) AS (
 
     -- breaks is the list of thresholds, which at each iteration grows with new interstitial means
@@ -135,6 +163,18 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
   SELECT list(x)
 );`;
 
+/**
+ * SQL macro to classify a column value based on specified breaks.
+ *
+ * This macro creates a temporary table with distinct break values and assigns
+ * a class number to each value in the column based on its position relative to
+ * the breaks. If the column value is null, the result will also be null.
+ *
+ * @macro
+ * @param {string} colname - The name of the column to classify.
+ * @param {Array<number|string>} breaks - An array of break values to classify the column.
+ * @returns {string} The SQL macro definition for classifying the column.
+ */
 const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
 	WITH t1 AS (
 		SELECT unnest(list_distinct(breaks)) as break
@@ -146,6 +186,20 @@ const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
 	SELECT IF("colname" IS NULL, NULL, class)
 );`;
 
+/**
+ * A macro script for rounding thresholds and generating rounded values within specified limits.
+ *
+ * This script defines several macros:
+ *
+ * 1. `round_left(n)`: Recursively rounds integer part of a number `n`.
+ * 2. `round_right(n)`: Recursively rounds decimal part of a number `n`.
+ * 3. `generate_roundings(n)`: Generates a list of rounded values for `n`.
+ * 4. `best_value_rounded(n, lower_limit, upper_limit)`: Selects the best-rounded value for `n`.
+ * 5. `round_thresholds(breaks, tname, colname)`: Rounds break thresholds.
+ *
+ * @macro
+ * @constant {string} round_thresholds_macro - The macro script for rounding thresholds.
+ */
 const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   WITH RECURSIVE round_left(value, value_rounded, iter) AS (
     SELECT
@@ -216,6 +270,20 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   SELECT list(best_value_rounded(break, lower_limit, upper_limit)).list_sort()
 );`;
 
+/**
+ * A combination of various macro functions for data classification.
+ *
+ * Includes:
+ * - `quantile_macro`
+ * - `q6_macro`
+ * - `equi_width_macro`
+ * - `nested_means_macro`
+ * - `headtail_macro`
+ * - `headtail2_macro`
+ * - `kmeans_macro`
+ * - `add_class_macro`
+ * - `round_thresholds_macro`
+ */
 export const breaks =
   quantile_macro +
   q6_macro +

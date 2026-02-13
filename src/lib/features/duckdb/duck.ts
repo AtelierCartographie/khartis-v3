@@ -34,6 +34,32 @@ import type {
   TableMetadata
 } from './types';
 
+/**
+ * DuckDB facade object exposing the legacy public API.
+ *
+ * Provides helpers to initialize the engine, ingest files, run queries,
+ * run analyses/search/join operations, export datasets and manage table metadata.
+ *
+ * Main API methods:
+ * - initDuckDB()
+ * - query(sql, options?)
+ * - register_files(files, options?)
+ * - read_tabular(input, options?)
+ * - read_geofile(geofile, options?)
+ * - read_link(url, options?)
+ * - describe_table(table)
+ * - get_row_count(table)
+ * - describeColumns(table)
+ * - analyse(table, options?)
+ * - searchInTable(table, searchQuery, options?)
+ * - join_by_id(table, tableId, options?)
+ * - apply_join_association(table, basemap)
+ * - copy_to_csv_as_string(table, options?)
+ * - copy_to_geoparquet_as_buffer(table)
+ * - drop_rows(table, rowsId)
+ * - get_table_metadata(table)
+ * - invalidateTableCache(table)
+ */
 export const Duck = {
   get db() {
     return isInitialized() ? getContext().db : null;

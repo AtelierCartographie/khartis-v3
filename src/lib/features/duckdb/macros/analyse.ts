@@ -43,6 +43,19 @@ const describe_full_macro = `CREATE OR replace MACRO describe_full(tabname) AS T
 	WHERE table_name = tabname
 );`;
 
+/**
+ * SQL macro to create or replace a function named `share_rank_interval`.
+ * This function calculates the share of consecutive values in a specified column.
+ *
+ * The function:
+ * 1. Orders non-null values and computes the previous value with LAG.
+ * 2. Computes value differences between consecutive rows.
+ * 3. Returns the proportion of differences equal to 1.
+ *
+ * @param {string} tabname - The table to analyze.
+ * @param {string} colname - Column used for ranking and diff calculation.
+ * @returns {number} The share of consecutive values in the column.
+ */
 const share_rank_interval_macro = `CREATE OR REPLACE FUNCTION share_rank_interval(tabname, colname) AS (
     WITH ordered_values AS (
         SELECT 
