@@ -115,6 +115,7 @@ export interface EnrichedColumn extends InferredColumn {
 
 export interface GeometryInfo {
   type: string;
+  columnName?: string;
   bounds: [number, number, number, number];
   centroid: [number, number];
   crs?: string;

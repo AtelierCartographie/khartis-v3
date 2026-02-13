@@ -4,7 +4,11 @@ import type { UploadedFile } from '$lib/features/commons/store/create-project.ty
 export function isTabularData(
   data: unknown
 ): data is Record<string, unknown>[] {
-  return Array.isArray(data) && data.every((item) => typeof item === 'object');
+  return (
+    Array.isArray(data) &&
+    data.length > 0 &&
+    data.every((item) => typeof item === 'object' && item !== null)
+  );
 }
 
 export function convertToCSV(data: Record<string, unknown>[]): string {
@@ -18,7 +22,7 @@ export function convertToCSV(data: Record<string, unknown>[]): string {
     const values = headers.map((header) => {
       const value = row[header];
       if (value === null || value === undefined) return '';
-      if (typeof value === 'string' && value.includes(',')) {
+      if (typeof value === 'string' && /[,"\n\r]/.test(value)) {
         return `"${value.replace(/"/g, '""')}"`;
       }
       return value;

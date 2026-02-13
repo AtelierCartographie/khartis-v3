@@ -19,7 +19,12 @@ export async function processRemoteFile(
   options: { tableName?: string; decimalSeparator?: string } = {}
 ): Promise<DatasetResult | ZipDatasetResult> {
   const { tableName: providedTableName, decimalSeparator } = options;
-  const filename = url.split('/').pop() || 'remote_file';
+  let filename: string;
+  try {
+    filename = new URL(url).pathname.split('/').pop() || 'remote_file';
+  } catch {
+    filename = url.split('/').pop() || 'remote_file';
+  }
 
   if (filename.toLowerCase().endsWith('.zip')) {
     return processRemoteZipFile(ctx, url);
