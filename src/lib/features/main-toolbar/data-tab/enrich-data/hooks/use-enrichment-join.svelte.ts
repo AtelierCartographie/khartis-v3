@@ -195,9 +195,7 @@ export function useEnrichmentJoin(
         await Duck.query(
           `CREATE TEMP TABLE "${tempTable}" (original VARCHAR, corrected VARCHAR)`
         );
-        await Duck.query(
-          `INSERT INTO "${tempTable}" VALUES ${valueRows}`
-        );
+        await Duck.query(`INSERT INTO "${tempTable}" VALUES ${valueRows}`);
         await Duck.query(
           `UPDATE "${escapedEnrichmentTableName}"
            SET "${escapedEnrichmentColumn}" = c.corrected

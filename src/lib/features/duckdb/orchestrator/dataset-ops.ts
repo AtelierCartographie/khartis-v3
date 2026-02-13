@@ -341,12 +341,16 @@ export async function updateDatasetTableName(
     bumpDatasetsVersion();
     setCurrentTableName(newTableName);
 
-    logger.info('Updated dataset table name in orchestrator', LogCategory.DUCKDB, {
-      datasetId: existing.id,
-      oldTableName: existing.tableName,
-      newTableName,
-      rowCount
-    });
+    logger.info(
+      'Updated dataset table name in orchestrator',
+      LogCategory.DUCKDB,
+      {
+        datasetId: existing.id,
+        oldTableName: existing.tableName,
+        newTableName,
+        rowCount
+      }
+    );
 
     return findDatasetByIdOrSourceFile(sourceFileId) ?? null;
   } catch (error) {
