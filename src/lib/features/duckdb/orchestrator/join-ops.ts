@@ -480,9 +480,11 @@ export async function getJoinedArrowTable(
 
   const geometryTable = await loadGeometryIntoDuckDB(basemapId);
 
-  const joinedView = `joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const escapedDataset = escapeSqlString(datasetTableName);
-  const escapedGeometry = escapeSqlString(geometryTable);
+  const sanitizedDataset = datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_');
+  const sanitizedBasemap = basemapId.replace(/[^a-zA-Z0-9_]/g, '_');
+  const joinedView = `joined_${sanitizedDataset}_${sanitizedBasemap}`;
+  const escapedDataset = escapeIdentifier(datasetTableName);
+  const escapedGeometry = escapeIdentifier(geometryTable);
 
   const geomColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
