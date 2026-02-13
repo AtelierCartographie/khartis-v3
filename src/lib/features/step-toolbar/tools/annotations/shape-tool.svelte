@@ -25,6 +25,17 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
+  const selectedShapeAnnotation = $derived.by(() => {
+    const selId = annotationsState.selectedId;
+    if (!selId) return null;
+    const item = annotationsState.items.find((i) => i.id === selId);
+    return item && item.type === AnnotationKind.SHAPE ? item : null;
+  });
+
+  const effectiveStyle = $derived(
+    selectedShapeAnnotation?.style ?? defaultStyle
+  );
+
   type StrokeColorDescriptor = {
     hue?: number;
     saturation?: number;
@@ -79,15 +90,15 @@
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ strokeWidth: e.detail });
+    annotationsActions.applyStyle({ strokeWidth: e.detail });
   }
 
   function handleCurvatureChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ curvature: e.detail });
+    annotationsActions.applyStyle({ curvature: e.detail });
   }
 
   function toggleDotted(on: boolean) {
-    annotationsActions.updateDefaultStyle({
+    annotationsActions.applyStyle({
       strokeStyle: on ? 'dotted' : 'solid'
     });
   }
@@ -132,7 +143,7 @@
       <div class="section">
         <Slider
           labelText={m.thickness()}
-          value={defaultStyle.strokeWidth || 2}
+          value={effectiveStyle.strokeWidth || 2}
           min={1}
           max={10}
           step={1}
@@ -148,7 +159,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_curvature()}
-          value={defaultStyle.curvature ?? 40}
+          value={effectiveStyle.curvature ?? 40}
           min={0}
           max={100}
           step={1}
@@ -165,7 +176,7 @@
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
           <Switch
-            toggled={defaultStyle.strokeStyle === 'dotted'}
+            toggled={effectiveStyle.strokeStyle === 'dotted'}
             labelText={m.dashed()}
             hideLabel
             labelA={m.no()}
@@ -199,7 +210,7 @@
             lightness: number;
           }) => {
             strokeColor = hex;
-            annotationsActions.updateDefaultStyle({
+            annotationsActions.applyStyle({
               strokeColor: hex,
               color: { hue, saturation, lightness }
             });
@@ -215,13 +226,13 @@
       <div class="section">
         <Slider
           labelText={m.opacity()}
-          value={toOpacityPercent(defaultStyle.opacity)}
+          value={toOpacityPercent(effectiveStyle.opacity)}
           min={0}
           max={100}
           step={5}
           stepMultiplier={5}
           on:change={(e) =>
-            annotationsActions.updateDefaultStyle({ opacity: e.detail })}
+            annotationsActions.applyStyle({ opacity: e.detail })}
         />
       </div>
     </Column>

@@ -1,4 +1,7 @@
-import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
+import {
+  AnnotationKind,
+  DrawingType
+} from '$lib/features/commons/constants/ui.constants';
 import {
   formatActions,
   getFormatState,
@@ -21,23 +24,50 @@ describe('annotations grid magnetism', () => {
     annotationsActions.reset();
   });
 
+  it('uses black text color by default', () => {
+    expect(getAnnotationsState().defaultStyle.color).toBe('#000000');
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('snaps newly added text annotations to the grid when enabled', () => {
-    vi.spyOn(Math, 'random')
-      .mockReturnValueOnce(0.123)
-      .mockReturnValueOnce(0.456);
-
+  it('places new text annotations on the right side and snaps to grid', () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Demo');
 
     const state = getAnnotationsState();
     const created = state.items[0];
+    const format = getFormatState();
+    const mapWidth = Math.max(
+      1,
+      format.width - format.margins.left - format.margins.right
+    );
 
     expect(created).toBeDefined();
+    expect(created.position.x).toBeGreaterThan(mapWidth / 2);
     expect(created.position.x % PAGE_GRID_SIZE_PX).toBe(0);
     expect(created.position.y % PAGE_GRID_SIZE_PX).toBe(0);
+  });
+
+  it('does not create text annotation when content is empty', () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, '   ');
+
+    expect(getAnnotationsState().items).toHaveLength(0);
+    expect(getAnnotationsState().selectedId).toBeNull();
+  });
+
+  it('stacks new annotations to avoid overlap in a single column first', () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'A');
+    annotationsActions.addAnnotation(AnnotationKind.SHAPE, 'rectangle');
+
+    const [first, second] = getAnnotationsState().items;
+
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    expect(second.position.y).toBeGreaterThan(first.position.y);
+    expect(second.position.y - first.position.y).toBeGreaterThanOrEqual(
+      PAGE_GRID_SIZE_PX * 3
+    );
   });
 
   it('supports global annotations visibility toggle', () => {
@@ -79,6 +109,32 @@ describe('annotations grid magnetism', () => {
 
     const moved = getAnnotationsState().items[0];
     expect(moved.position).toEqual({ x: 37, y: 53 });
+  });
+
+  it('creates drawing annotations with points payload and drawing style', () => {
+    annotationsActions.addAnnotation(AnnotationKind.DRAWING, DrawingType.ZONE);
+
+    const created = getAnnotationsState().items[0];
+
+    expect(created).toBeDefined();
+    expect(Array.isArray(created.content)).toBe(true);
+    expect((created.content as Array<{ x: number; y: number }>).length).toBe(4);
+    expect(created.style?.drawingType).toBe(DrawingType.ZONE);
+  });
+
+  it('duplicates non-text annotations without corrupting their payload', () => {
+    annotationsActions.addAnnotation(AnnotationKind.SHAPE, 'line');
+
+    const originalId = getAnnotationsState().items[0]?.id;
+    if (!originalId) {
+      throw new Error('Expected original annotation id to be defined');
+    }
+
+    annotationsActions.duplicateAnnotation(originalId);
+
+    const [, duplicated] = getAnnotationsState().items;
+    expect(duplicated).toBeDefined();
+    expect(duplicated.content).toBe('line');
   });
 
   it('aligns auto-created page elements to the grid when enabled', () => {
@@ -132,6 +188,42 @@ describe('annotations grid magnetism', () => {
     expect(lastGridRowY - credit.position.y).toBeGreaterThanOrEqual(
       PAGE_GRID_SIZE_PX
     );
+  });
+
+  it('applyStyle updates both defaultStyle and the selected annotation', () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Styled');
+    const id = getAnnotationsState().items[0]?.id;
+
+    expect(id).toBeDefined();
+    if (!id) throw new Error('Expected annotation id');
+
+    annotationsActions.selectAnnotation(id);
+    annotationsActions.applyStyle({ opacity: 50, bold: true });
+
+    const state = getAnnotationsState();
+    const item = state.items.find((i) => i.id === id);
+
+    expect(state.defaultStyle.opacity).toBe(50);
+    expect(state.defaultStyle.bold).toBe(true);
+    expect(item?.style?.opacity).toBe(50);
+    expect(item?.style?.bold).toBe(true);
+  });
+
+  it('applyStyle only updates defaultStyle when no annotation is selected', () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Before');
+    const id = getAnnotationsState().items[0]?.id;
+
+    expect(id).toBeDefined();
+    if (!id) throw new Error('Expected annotation id');
+
+    annotationsActions.selectAnnotation(null);
+    annotationsActions.applyStyle({ fontSize: 32 });
+
+    const state = getAnnotationsState();
+    const item = state.items.find((i) => i.id === id);
+
+    expect(state.defaultStyle.fontSize).toBe(32);
+    expect(item?.style?.fontSize).toBe(12);
   });
 
   it('keeps original layout positions when grid is disabled before init', () => {

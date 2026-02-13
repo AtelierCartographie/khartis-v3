@@ -19,7 +19,7 @@ describe('legend.store default style', () => {
     legendActions.reset();
   });
 
-  it('uses white background and white text by default', () => {
+  it('uses white background and dark text by default', () => {
     const state = getLegendState();
 
     expect(state.style.background.color).toEqual(

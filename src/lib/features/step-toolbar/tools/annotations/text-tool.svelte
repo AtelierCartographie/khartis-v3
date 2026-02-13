@@ -29,6 +29,15 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
+  const selectedText = $derived.by(() => {
+    const selId = annotationsState.selectedId;
+    if (!selId) return null;
+    const item = annotationsState.items.find((i) => i.id === selId);
+    return item && item.type === AnnotationKind.TEXT ? item : null;
+  });
+
+  const effectiveStyle = $derived(selectedText?.style ?? defaultStyle);
+
   const predefinedStyles = [
     { value: 'note', text: m.annotations_note() },
     { value: 'title', text: m.annotations_style_title() },
@@ -36,29 +45,33 @@
     { value: 'caption', text: m.annotations_style_caption() }
   ];
 
-  function handleAddText() {
-    annotationsActions.addAnnotation(AnnotationKind.TEXT, '');
-  }
-
   function handleFontSizeChange(e: CustomEvent<number | string | null>) {
     const detail = e.detail;
     const value =
       typeof detail === 'string' ? parseInt(detail, 10) : (detail ?? 0);
     if (!isNaN(value)) {
-      annotationsActions.updateDefaultStyle({ fontSize: value });
+      annotationsActions.applyStyle({ fontSize: value });
     }
   }
 
   function handleAlignChange(align: TextAlign) {
-    annotationsActions.setTextAlign(align);
+    annotationsActions.applyStyle({ textAlign: align });
   }
 
-  const selectedText = $derived.by(() => {
-    const selId = annotationsState.selectedId;
-    if (!selId) return null;
-    const item = annotationsState.items.find((i) => i.id === selId);
-    return item && item.type === AnnotationKind.TEXT ? item : null;
-  });
+  const textEditorValue = $derived(
+    selectedText
+      ? String(selectedText.content ?? '')
+      : annotationsState.textContent
+  );
+  const canAddText = $derived(textEditorValue.trim().length > 0);
+
+  function handleAddText() {
+    if (!canAddText) {
+      return;
+    }
+
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, textEditorValue);
+  }
 
   function handleContentInput(e: Event) {
     const value = (e.currentTarget as HTMLTextAreaElement).value;
@@ -70,19 +83,7 @@
   }
 
   function handleOpacityChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ opacity: e.detail });
-  }
-
-  function handleBoldChange(checked: boolean) {
-    annotationsActions.updateDefaultStyle({ bold: checked });
-  }
-
-  function handleItalicChange(checked: boolean) {
-    annotationsActions.updateDefaultStyle({ italic: checked });
-  }
-
-  function handleUnderlineChange(checked: boolean) {
-    annotationsActions.updateDefaultStyle({ underlined: checked });
+    annotationsActions.applyStyle({ opacity: e.detail });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -118,12 +119,9 @@
         <TextArea
           id="text-content"
           labelText={m.annotations_content()}
-          value={selectedText
-            ? (selectedText.content as string)
-            : annotationsState.textContent}
+          value={textEditorValue}
           on:input={handleContentInput}
           placeholder={selectedText ? '' : m.annotations_no_content()}
-          disabled={!selectedText}
           rows={4}
         />
       </div>
@@ -137,7 +135,7 @@
           kind="primary"
           icon={Add}
           onclick={handleAddText}
-          disabled={false}
+          disabled={!canAddText}
         >
           {m.annotations_add_text()}
         </Button>
@@ -150,7 +148,7 @@
       <div class="section">
         <NumberInput
           labelText={m.annotations_size()}
-          value={defaultStyle.fontSize || 16}
+          value={effectiveStyle.fontSize || 16}
           min={8}
           max={72}
           step={1}
@@ -165,7 +163,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_opacity()}
-          value={toOpacityPercent(defaultStyle.opacity)}
+          value={toOpacityPercent(effectiveStyle.opacity)}
           min={0}
           max={100}
           step={5}
@@ -182,29 +180,32 @@
         <div class="style-toggles">
           <Switch
             labelText={m.annotations_bold()}
-            toggled={defaultStyle.bold || false}
+            toggled={effectiveStyle.bold || false}
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
-            onchange={handleBoldChange}
+            onchange={(checked) =>
+              annotationsActions.applyStyle({ bold: checked })}
           />
 
           <Switch
             labelText={m.annotations_italic()}
-            toggled={defaultStyle.italic || false}
+            toggled={effectiveStyle.italic || false}
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
-            onchange={handleItalicChange}
+            onchange={(checked) =>
+              annotationsActions.applyStyle({ italic: checked })}
           />
 
           <Switch
             labelText={m.annotations_underline()}
-            toggled={defaultStyle.underlined || false}
+            toggled={effectiveStyle.underlined || false}
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
-            onchange={handleUnderlineChange}
+            onchange={(checked) =>
+              annotationsActions.applyStyle({ underlined: checked })}
           />
         </div>
 
@@ -212,7 +213,7 @@
           <p class="alignment-label">{m.annotations_alignment_label()}</p>
           <div class="alignment-buttons">
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.Left
+              class="alignment-btn {effectiveStyle.textAlign === TextAlign.Left
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Left)}
@@ -221,7 +222,8 @@
               <TextAlignLeft />
             </button>
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.Center
+              class="alignment-btn {effectiveStyle.textAlign ===
+              TextAlign.Center
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Center)}
@@ -230,7 +232,7 @@
               <TextAlignCenter />
             </button>
             <button
-              class="alignment-btn {defaultStyle.textAlign === TextAlign.Right
+              class="alignment-btn {effectiveStyle.textAlign === TextAlign.Right
                 ? 'active'
                 : ''}"
               onclick={() => handleAlignChange(TextAlign.Right)}
@@ -246,7 +248,7 @@
 
   <Row>
     <Column>
-      <div class="section">
+      <div class="section delete-section">
         <Button
           kind="danger-tertiary"
           icon={TrashCan}
@@ -332,5 +334,10 @@
 
   .alignment-btn.active:hover {
     background: var(--cds-button-primary-hover);
+  }
+
+  .delete-section :global(.bx--btn) {
+    width: 100%;
+    max-width: 100%;
   }
 </style>

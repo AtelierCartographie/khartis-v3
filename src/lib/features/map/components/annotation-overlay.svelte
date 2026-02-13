@@ -224,6 +224,11 @@
           type: 'path',
           path: `M 0,${baseSize / 2} L ${baseSize * 0.7},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.2} L ${baseSize},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.8} L ${baseSize * 0.7},${baseSize / 2} Z`
         };
+      case 'line':
+        return {
+          type: 'path',
+          path: `M 0,${baseSize / 2} L ${baseSize},${baseSize / 2}`
+        };
       case 'rectangle':
         return {
           type: 'rect',
