@@ -144,7 +144,7 @@ export async function computeDatasetJoinStats(
         target_val,
         CASE
           WHEN jw_score >= 0.85 THEN jw_score
-          ELSE 0.85
+          ELSE 0.5
         END as score
       FROM scored
       WHERE jw_score >= 0.85
