@@ -254,7 +254,11 @@ export class VizSuggesterService {
       uniques: this.getUniqueCount(column),
       nulls: this.getNullCount(column),
       min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
-      max: typeof column.stats?.max === 'number' ? column.stats.max : undefined
+      max: typeof column.stats?.max === 'number' ? column.stats.max : undefined,
+      share_integers: column.stats?.share_integers,
+      share_floats: column.stats?.share_floats,
+      share_rank_interval: column.stats?.share_rank_interval,
+      extent_magnitude: column.stats?.extent_magnitude
     };
 
     const { semioType, semioScore } = detectSemioType(analysisLike);
