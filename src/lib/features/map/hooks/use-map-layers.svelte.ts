@@ -26,6 +26,7 @@ export interface UseMapLayersProps {
   getWorldBaseTable: () => ArrowTable | null;
   getActiveVisualizations: () => VisualizationConfig[];
   buildLayerContextForViz: (viz: VisualizationConfig) => LayerContext;
+  getShouldRenderDatasetFallbacks?: () => boolean;
 }
 
 export interface UseMapLayersReturn {
@@ -43,8 +44,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getIsMapLoaded,
     getWorldBaseTable,
     getActiveVisualizations,
-    buildLayerContextForViz
+    buildLayerContextForViz,
+    getShouldRenderDatasetFallbacks
   } = props;
+
+  const DATA_PREVIEW_FILL_COLOR: [number, number, number] = [96, 96, 96];
+  const DATA_PREVIEW_STROKE_COLOR: [number, number, number] = [255, 255, 255];
+  const DATA_PREVIEW_FILL_OPACITY = 0.9;
+  const DATA_PREVIEW_STROKE_WIDTH = 1;
+  const DATA_PREVIEW_STROKE_OPACITY = 1;
+
+  function buildDatasetFallbackContext(datasetId: string): LayerContext {
+    return {
+      viz: null,
+      datasetId,
+      fillColor: DATA_PREVIEW_FILL_COLOR,
+      strokeColor: DATA_PREVIEW_STROKE_COLOR,
+      fillOpacity: DATA_PREVIEW_FILL_OPACITY,
+      strokeWidth: DATA_PREVIEW_STROKE_WIDTH,
+      strokeOpacity: DATA_PREVIEW_STROKE_OPACITY,
+      statistics: { min: 0, max: 100 },
+      categoryColorMap: null
+    };
+  }
 
   function findFirstSymbolLayerId(map: MapLibreMap): string | undefined {
     const style = map.getStyle();
@@ -191,6 +213,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         `Processing ${activeVisualizations.length} visualizations`,
         LogCategory.MAP
       );
+      const renderedDatasetIds = new Set<string>();
       for (const viz of activeVisualizations) {
         const vizStart = performance.now();
         try {
@@ -207,6 +230,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const geojsonStart = performance.now();
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
             layers.push(...geojsonLayers);
+            if (geojsonLayers.length > 0) {
+              renderedDatasetIds.add(datasetId);
+            }
             logger.debug(
               `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
               LogCategory.MAP
@@ -224,6 +250,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const arrowStart = performance.now();
             const arrowLayers = createDeckLayers(table, ctx);
             layers.push(...arrowLayers);
+            if (arrowLayers.length > 0) {
+              renderedDatasetIds.add(datasetId);
+            }
             logger.debug(
               `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
               LogCategory.MAP
@@ -246,12 +275,59 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
+      const shouldRenderDatasetFallbacks =
+        getShouldRenderDatasetFallbacks?.() ?? false;
+
+      if (shouldRenderDatasetFallbacks) {
+        const fallbackDatasetIds = new Set<string>([
+          ...tables.keys(),
+          ...geoJSONs.keys()
+        ]);
+
+        for (const renderedDatasetId of renderedDatasetIds) {
+          fallbackDatasetIds.delete(renderedDatasetId);
+        }
+
+        for (const datasetId of fallbackDatasetIds) {
+          const table = tables.get(datasetId);
+          const geojson = geoJSONs.get(datasetId);
+          const fallbackCtx = buildDatasetFallbackContext(datasetId);
+          fallbackCtx.modelMatrix = matrixToApply;
+          fallbackCtx.projectionSuffix = projectionSuffix;
+          fallbackCtx.beforeId = beforeId;
+
+          if (geojson) {
+            const fallbackGeoJsonLayers = createGeoJsonLayers(
+              geojson,
+              fallbackCtx
+            );
+            layers.push(...fallbackGeoJsonLayers);
+          } else if (table) {
+            const geoMetadata = table.schema.metadata?.get('geo');
+            if (!geoMetadata) {
+              logger.warn(
+                'Arrow table missing GeoArrow metadata, skipping fallback preview',
+                LogCategory.MAP,
+                { datasetId }
+              );
+              continue;
+            }
+            const fallbackArrowLayers = createDeckLayers(table, fallbackCtx);
+            layers.push(...fallbackArrowLayers);
+          }
+        }
+      }
+
       const setStart = performance.now();
       const hasExpectedActiveViz = activeVisualizations.length > 0;
+      const hasExpectedDatasetFallbacks =
+        shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =
         shouldShowBasemapLayers && basemapLayersStore.visibleLayers.length > 0;
       const hasExpectedVisibleLayers =
-        hasExpectedActiveViz || hasVisibleBasemapConfig;
+        hasExpectedActiveViz ||
+        hasExpectedDatasetFallbacks ||
+        hasVisibleBasemapConfig;
       const shouldPreservePreviousLayers =
         layers.length === 0 &&
         lastAppliedLayers.length > 0 &&

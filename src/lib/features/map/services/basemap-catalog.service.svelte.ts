@@ -179,7 +179,7 @@ class BasemapCatalogService {
     }
 
     return {
-      score,
+      score: Math.min(score, 100),
       reason: reasons.join(', ') || 'Generic match'
     };
   }

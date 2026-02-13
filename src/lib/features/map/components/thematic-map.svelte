@@ -69,6 +69,9 @@
   const showPageGrid = $derived(
     formatState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
   );
+  const isStylingMode = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
   const mapCanvasWidth = $derived(
     Math.max(1, width - pageMargins.left - pageMargins.right)
   );
@@ -307,7 +310,9 @@
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getWorldBaseTable: () => worldBaseTable,
     getActiveVisualizations: () => mapState.activeVisualizations,
-    buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz)
+    buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
+    getShouldRenderDatasetFallbacks: () =>
+      globalState.selectedStep === ToolbarStep.Data
   });
 
   function updateCanvasSize() {
@@ -950,9 +955,11 @@
       </div>
     {/if}
 
-    <GeoIndicationsOverlay />
-    <LegendOverlay />
-    <AnnotationOverlay />
+    {#if isStylingMode}
+      <GeoIndicationsOverlay />
+      <LegendOverlay />
+      <AnnotationOverlay />
+    {/if}
   </div>
 </div>
 
