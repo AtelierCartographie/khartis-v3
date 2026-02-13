@@ -86,6 +86,10 @@ export interface ColumnStats {
   mean?: number;
   median?: number;
   stdDev?: number;
+  share_integers?: number;
+  share_floats?: number;
+  share_rank_interval?: number;
+  extent_magnitude?: number;
 }
 
 export interface RawColumn {
@@ -315,6 +319,10 @@ export interface DuckAnalyticsColumn {
   mean?: number | string;
   median?: number | string;
   stddev?: number | string;
+  share_integers?: number | string;
+  share_floats?: number | string;
+  share_rank_interval?: number | string;
+  extent_magnitude?: number | string;
 }
 
 export type FileInfo = Pick<File, 'name' | 'size' | 'type'>;
