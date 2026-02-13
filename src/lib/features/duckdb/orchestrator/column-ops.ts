@@ -57,8 +57,60 @@ export async function changeColumnType(
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
+  const ALLOWED_TYPES = [
+    'VARCHAR',
+    'TEXT',
+    'STRING',
+    'INTEGER',
+    'INT',
+    'INT4',
+    'SIGNED',
+    'BIGINT',
+    'INT8',
+    'LONG',
+    'SMALLINT',
+    'INT2',
+    'SHORT',
+    'TINYINT',
+    'INT1',
+    'DOUBLE',
+    'FLOAT8',
+    'NUMERIC',
+    'DECIMAL',
+    'REAL',
+    'FLOAT',
+    'FLOAT4',
+    'BOOLEAN',
+    'BOOL',
+    'LOGICAL',
+    'DATE',
+    'TIMESTAMP',
+    'TIMESTAMP WITH TIME ZONE',
+    'TIME',
+    'INTERVAL',
+    'HUGEINT',
+    'UHUGEINT',
+    'UBIGINT',
+    'UINTEGER',
+    'USMALLINT',
+    'UTINYINT',
+    'BLOB',
+    'BYTEA',
+    'BINARY',
+    'VARBINARY',
+    'UUID',
+    'JSON'
+  ];
+  const normalizedType = newType.trim().toUpperCase();
+  if (
+    !ALLOWED_TYPES.includes(normalizedType) &&
+    !/^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)$/i.test(newType.trim())
+  ) {
+    throw new DuckDBError(`Unsupported column type: ${newType}`);
+  }
+
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${newType}`
+    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}`
   );
 
   await Duck.analyse(tableName, { force: true });
@@ -218,7 +270,16 @@ const BLOCKED_KEYWORDS = [
   'PRAGMA',
   'CALL',
   'EXECUTE',
-  'EXEC'
+  'EXEC',
+  'SELECT',
+  'FROM',
+  'UNION',
+  'JOIN',
+  'INTO',
+  'GRANT',
+  'REVOKE',
+  'TRUNCATE',
+  'MERGE'
 ];
 
 const BLOCKED_PATTERN = new RegExp(
@@ -233,6 +294,12 @@ export function validateExpression(expression: string): void {
 
   if (expression.includes(';')) {
     throw new DuckDBError(m.error_calc_expression_forbidden_semicolon());
+  }
+
+  if (/\([\s]*SELECT\b/i.test(expression)) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({ keyword: 'SUBQUERY' })
+    );
   }
 
   const match = expression.match(BLOCKED_PATTERN);
