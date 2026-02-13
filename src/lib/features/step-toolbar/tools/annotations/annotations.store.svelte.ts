@@ -1,4 +1,7 @@
-import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
+import {
+  AnnotationKind,
+  DrawingType
+} from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
@@ -21,17 +24,17 @@ const DEFAULT_STATE: AnnotationsState = {
   items: [],
   selectedId: null,
   activeType: AnnotationKind.TEXT,
-  predefinedStyle: 'default',
+  predefinedStyle: 'note',
   textContent: '',
   defaultStyle: {
     font: 'cabin',
-    fontSize: 14,
+    fontSize: 12,
     bold: false,
     italic: false,
     underlined: false,
     textAlign: TextAlign.Left,
     opacity: 100,
-    color: '#ffffff'
+    color: '#000000'
   }
 };
 
@@ -45,6 +48,7 @@ type AnnotationsActions = {
   setPredefinedStyle: (styleName: string) => void;
   setTextContent: (content: string) => void;
   updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => void;
+  applyStyle: (styleUpdates: Partial<AnnotationStyle>) => void;
   duplicateAnnotation: (id: string) => void;
   moveAnnotation: (id: string, newPosition: { x: number; y: number }) => void;
   toggleVisibility: (id: string) => void;
@@ -103,6 +107,30 @@ const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
 ];
 const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
+const NON_PAGE_ANNOTATION_TOP_OFFSET = PAGE_GRID_SIZE_PX * 2;
+const NON_PAGE_ANNOTATION_RIGHT_OFFSET = PAGE_GRID_SIZE_PX * 2;
+const NON_PAGE_ANNOTATION_ROW_STEP = PAGE_GRID_SIZE_PX * 4;
+const NON_PAGE_ANNOTATION_COLUMN_STEP = PAGE_GRID_SIZE_PX * 10;
+
+const DEFAULT_ANNOTATION_BOUNDS: Record<
+  AnnotationKind,
+  { width: number; height: number }
+> = {
+  [AnnotationKind.TEXT]: { width: 220, height: PAGE_GRID_SIZE_PX * 3 },
+  [AnnotationKind.SHAPE]: { width: 56, height: 56 },
+  [AnnotationKind.DRAWING]: { width: 132, height: 80 },
+  [AnnotationKind.IMAGE]: { width: 120, height: 120 }
+};
+
+type DrawingPoint = {
+  x: number;
+  y: number;
+};
+
+type MapCanvasLayout = {
+  width: number;
+  height: number;
+};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -195,6 +223,132 @@ function resolvePageLayout(overrides?: {
   };
 }
 
+function resolveMapCanvasLayout(layout: PageLayout): MapCanvasLayout {
+  return {
+    width: Math.max(
+      1,
+      layout.width - layout.margins.left - layout.margins.right
+    ),
+    height: Math.max(
+      1,
+      layout.height - layout.margins.top - layout.margins.bottom
+    )
+  };
+}
+
+function getAnnotationBounds(
+  type: AnnotationKind,
+  style: AnnotationStyle
+): { width: number; height: number } {
+  if (type === AnnotationKind.IMAGE) {
+    const resolvedSize = Number(
+      style.size ?? DEFAULT_ANNOTATION_BOUNDS.image.width
+    );
+    const safeSize = Number.isFinite(resolvedSize)
+      ? Math.max(40, resolvedSize)
+      : DEFAULT_ANNOTATION_BOUNDS.image.width;
+    return { width: safeSize, height: safeSize };
+  }
+
+  return DEFAULT_ANNOTATION_BOUNDS[type];
+}
+
+function clampAnnotationPosition(
+  position: { x: number; y: number },
+  type: AnnotationKind,
+  style: AnnotationStyle,
+  layout: PageLayout
+): { x: number; y: number } {
+  const mapLayout = resolveMapCanvasLayout(layout);
+  const bounds = getAnnotationBounds(type, style);
+
+  const minX = 0;
+  const minY = 0;
+  const maxX = Math.max(minX, mapLayout.width - bounds.width);
+  const maxY = Math.max(minY, mapLayout.height - bounds.height);
+
+  if (!isGridEnabled()) {
+    return {
+      x: clamp(position.x, minX, maxX),
+      y: clamp(position.y, minY, maxY)
+    };
+  }
+
+  const xGridBounds = getGridAlignedBounds(minX, maxX);
+  const yGridBounds = getGridAlignedBounds(minY, maxY);
+
+  return {
+    x: xGridBounds
+      ? clamp(snapToGrid(position.x), xGridBounds.min, xGridBounds.max)
+      : clamp(position.x, minX, maxX),
+    y: yGridBounds
+      ? clamp(snapToGrid(position.y), yGridBounds.min, yGridBounds.max)
+      : clamp(position.y, minY, maxY)
+  };
+}
+
+function resolveDrawingType(
+  content: unknown,
+  fallbackType?: DrawingType
+): DrawingType {
+  if (content === DrawingType.ZONE) {
+    return DrawingType.ZONE;
+  }
+
+  if (content === DrawingType.LINE) {
+    return DrawingType.LINE;
+  }
+
+  return fallbackType ?? DrawingType.LINE;
+}
+
+function createDefaultDrawingPoints(type: DrawingType): DrawingPoint[] {
+  if (type === DrawingType.ZONE) {
+    return [
+      { x: 0, y: 0 },
+      { x: 132, y: 0 },
+      { x: 112, y: 72 },
+      { x: 24, y: 72 }
+    ];
+  }
+
+  return [
+    { x: 0, y: 8 },
+    { x: 44, y: 0 },
+    { x: 92, y: 12 },
+    { x: 132, y: 4 }
+  ];
+}
+
+function getNonPageAnnotationSpawnPosition(
+  type: AnnotationKind,
+  style: AnnotationStyle,
+  existingAnnotationsCount: number,
+  layout: PageLayout
+): { x: number; y: number } {
+  const mapLayout = resolveMapCanvasLayout(layout);
+  const bounds = getAnnotationBounds(type, style);
+  const availableVerticalSpace = Math.max(
+    0,
+    mapLayout.height - NON_PAGE_ANNOTATION_TOP_OFFSET - bounds.height
+  );
+  const maxRows = Math.max(
+    1,
+    Math.floor(availableVerticalSpace / NON_PAGE_ANNOTATION_ROW_STEP) + 1
+  );
+  const column = Math.floor(existingAnnotationsCount / maxRows);
+  const row = existingAnnotationsCount % maxRows;
+
+  const x =
+    mapLayout.width -
+    NON_PAGE_ANNOTATION_RIGHT_OFFSET -
+    bounds.width -
+    column * NON_PAGE_ANNOTATION_COLUMN_STEP;
+  const y = NON_PAGE_ANNOTATION_TOP_OFFSET + row * NON_PAGE_ANNOTATION_ROW_STEP;
+
+  return clampAnnotationPosition({ x, y }, type, style, layout);
+}
+
 function getPageElementPosition(
   role: PageElementRole,
   layout: PageLayout
@@ -282,16 +436,39 @@ const { actions, getState } = createToolStore<
     }
   },
   addAnnotation: (type: AnnotationKind, content: string) => {
-    const position = snapPositionToGrid({
-      x: Math.random() * 300 + 50,
-      y: Math.random() * 200 + 50
-    });
+    if (type === AnnotationKind.TEXT && isEmptyContent(content)) {
+      return;
+    }
+
+    const layout = resolvePageLayout();
+    const drawingType =
+      type === AnnotationKind.DRAWING
+        ? resolveDrawingType(content, s.defaultStyle.drawingType)
+        : null;
+    const style: AnnotationStyle = {
+      ...s.defaultStyle,
+      ...(drawingType ? { drawingType } : {})
+    };
+    const nonPageItemsCount = s.items.filter(
+      (item) => item.role == null
+    ).length;
+    const position = getNonPageAnnotationSpawnPosition(
+      type,
+      style,
+      nonPageItemsCount,
+      layout
+    );
+    const normalizedContent =
+      type === AnnotationKind.DRAWING && drawingType
+        ? createDefaultDrawingPoints(drawingType)
+        : content;
+
     const newAnnotation: Annotation = {
       id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
       type,
-      content,
+      content: normalizedContent,
       position,
-      style: { ...s.defaultStyle }
+      style
     };
     s.items = [...s.items, newAnnotation];
     s.selectedId = newAnnotation.id;
@@ -318,6 +495,14 @@ const { actions, getState } = createToolStore<
     if (style) {
       s.predefinedStyle = styleName;
       s.defaultStyle = { ...s.defaultStyle, ...style };
+
+      if (s.selectedId) {
+        s.items = s.items.map((item) =>
+          item.id === s.selectedId
+            ? { ...item, style: { ...(item.style ?? {}), ...style } }
+            : item
+        );
+      }
     }
   },
   setTextContent: (content: string) => {
@@ -331,13 +516,42 @@ const { actions, getState } = createToolStore<
 
     s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
   },
+  applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
+    const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+    if (styleUpdates.opacity !== undefined) {
+      normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
+    }
+
+    s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
+
+    if (s.selectedId) {
+      s.items = s.items.map((item) =>
+        item.id === s.selectedId
+          ? { ...item, style: { ...(item.style ?? {}), ...normalizedUpdates } }
+          : item
+      );
+    }
+  },
   duplicateAnnotation: (id: string) => {
     const original = s.items.find((item) => item.id === id);
     if (original) {
+      const duplicatedContent =
+        original.type === AnnotationKind.TEXT &&
+        typeof original.content === 'string'
+          ? `${original.content} (copie)`
+          : Array.isArray(original.content)
+            ? original.content.map((point) =>
+                typeof point === 'object' && point !== null
+                  ? { ...point }
+                  : point
+              )
+            : original.content;
+
       const duplicate = {
         ...original,
         id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
-        content: original.content + ' (copie)',
+        content: duplicatedContent,
+        style: original.style ? { ...original.style } : undefined,
         position: snapPositionToGrid({
           x: original.position.x + 20,
           y: original.position.y + 20

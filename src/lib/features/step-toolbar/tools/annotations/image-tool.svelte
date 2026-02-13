@@ -18,6 +18,17 @@
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
+  const selectedImageAnnotation = $derived.by(() => {
+    const selId = annotationsState.selectedId;
+    if (!selId) return null;
+    const item = annotationsState.items.find((i) => i.id === selId);
+    return item && item.type === AnnotationKind.IMAGE ? item : null;
+  });
+
+  const effectiveStyle = $derived(
+    selectedImageAnnotation?.style ?? defaultStyle
+  );
+
   let hiddenUploader: HTMLDivElement | null = null;
 
   function triggerFileDialog() {
@@ -43,10 +54,10 @@
   }
 
   function handleSizeChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ size: e.detail });
+    annotationsActions.applyStyle({ size: e.detail });
   }
   function handleOpacityChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ opacity: e.detail });
+    annotationsActions.applyStyle({ opacity: e.detail });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -81,7 +92,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_size()}
-          value={defaultStyle.size || 100}
+          value={effectiveStyle.size || 100}
           min={1}
           max={100}
           step={1}
@@ -97,7 +108,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_opacity()}
-          value={toOpacityPercent(defaultStyle.opacity)}
+          value={toOpacityPercent(effectiveStyle.opacity)}
           min={0}
           max={100}
           step={5}

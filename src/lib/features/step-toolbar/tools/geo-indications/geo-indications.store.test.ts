@@ -15,6 +15,19 @@ describe('geo-indications defaults', () => {
     geoIndicationsActions.reset();
   });
 
+  it('uses dark text colors for scale and orientation indicators by default', () => {
+    expect(geoIndicationsState.scale.color).toEqual({
+      hue: 0,
+      saturation: 0,
+      lightness: 0
+    });
+    expect(geoIndicationsState.orientation.color).toEqual({
+      hue: 0,
+      saturation: 0,
+      lightness: 0
+    });
+  });
+
   it('keeps all geo indications disabled by default', () => {
     expect(geoIndicationsState.visible).toBe(true);
     expect(geoIndicationsState.scale.enabled).toBe(false);

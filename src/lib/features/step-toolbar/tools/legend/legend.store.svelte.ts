@@ -12,7 +12,7 @@ import type { LegendItem, LegendState, LegendStyle } from './legend.types';
 export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
   hue: 0,
   saturation: 0,
-  lightness: 100
+  lightness: 0
 };
 
 export const DEFAULT_LEGEND_BACKGROUND_COLOR: LegendStyle['background']['color'] =
