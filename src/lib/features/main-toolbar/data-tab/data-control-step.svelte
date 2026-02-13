@@ -71,6 +71,12 @@
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
+
+  $effect(() => {
+    void selectedDataset?.id;
+    selectedRowIds = [];
+  });
+
   let csvOptionsModalOpen = $state(false);
   let showSummaryPlots = $state(true);
   let currentCsvOptions = $state<CsvOptions>({
@@ -230,6 +236,7 @@
 
     try {
       let totalReplaced = 0;
+      const replacedColumns: string[] = [];
 
       if (source === 'all') {
         const textColumns =
@@ -246,6 +253,9 @@
             replaceValue
           );
           totalReplaced += count;
+          if (count > 0) {
+            replacedColumns.push(col.name);
+          }
         }
       } else {
         totalReplaced = await duckDBOrchestrator.replaceInColumn(
@@ -254,6 +264,9 @@
           searchValue,
           replaceValue
         );
+        if (totalReplaced > 0) {
+          replacedColumns.push(source);
+        }
       }
 
       if (totalReplaced > 0) {
@@ -262,38 +275,19 @@
           `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
         );
 
-        if (source === 'all') {
-          const textColumns =
-            selectedDataset.columns?.filter((col) => {
-              const type = String(col.type).toLowerCase();
-              return type === 'text' || type === 'varchar' || type === 'string';
-            }) ?? [];
-          for (const col of textColumns) {
-            await projectStore.addColumnTransformation(
-              selectedDataset.sourceFileId,
-              {
-                type: 'replace',
-                column: col.name,
-                searchValue,
-                newValue: replaceValue,
-                timestamp: new Date().toISOString()
-              }
-            );
-          }
-        } else {
+        const timestamp = new Date().toISOString();
+        for (const column of replacedColumns) {
           await projectStore.addColumnTransformation(
             selectedDataset.sourceFileId,
             {
               type: 'replace',
-              column: source,
+              column,
               searchValue,
               newValue: replaceValue,
-              timestamp: new Date().toISOString()
+              timestamp
             }
           );
         }
-
-        duckDBOrchestrator.bumpDatasetsVersion();
       } else {
         showError(m.replace_no_match_title(), m.replace_no_match_message());
       }

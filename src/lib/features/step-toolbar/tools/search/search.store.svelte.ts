@@ -249,7 +249,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.replaceValue = value;
       },
       replaceNext: async (): Promise<boolean> => {
-        if (!s.replaceValue.trim() || !s.results.length) {
+        if (!s.results.length) {
           return false;
         }
 
@@ -293,7 +293,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
             );
           }
 
-          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
           return true;
         }
@@ -304,7 +303,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         const searchValue = s.searchValue.trim();
         const replaceValue = s.replaceValue.trim();
 
-        if (!searchValue || !replaceValue || !s.results.length) {
+        if (!searchValue || !s.results.length) {
           return 0;
         }
 
@@ -358,7 +357,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
             );
           }
 
-          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
         }
 
