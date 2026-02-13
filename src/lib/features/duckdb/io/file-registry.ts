@@ -4,6 +4,14 @@ import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import type { FileWithId, RegisterFilesOptions } from '../types';
 
+/**
+ * Normalizes a string by removing accents, special characters, etc.
+ * Mirrors legacy normalization behavior while keeping generated identifiers
+ * safe for DuckDB object names.
+ *
+ * @param {string} str - The string to normalize.
+ * @returns {string} The normalized string.
+ */
 function normalizeName(str: string): string {
   let normalized = str
     .normalize('NFD')
@@ -23,10 +31,23 @@ function normalizeName(str: string): string {
   return normalized;
 }
 
+/**
+ * Extract the filename from an URL.
+ *
+ * @param {string} url - Input URL/path.
+ * @returns {string} The extracted filename.
+ */
 export function extractFilename(url: string): string {
   return url.split('/').pop() || '';
 }
 
+/**
+ * Infer the file type from the filename.
+ * Accepts tabular, geodatafile, parquet and arrow formats.
+ *
+ * @param {string} filename - The filename to inspect.
+ * @returns {'tabular' | 'geofile' | 'parquet' | 'arrow'} The resolved type.
+ */
 export function getFileType(
   filename: string
 ): 'tabular' | 'geofile' | 'parquet' | 'arrow' {
@@ -37,6 +58,14 @@ export function getFileType(
   return DUCK_CONST.TYPE.TABULAR;
 }
 
+/**
+ * Generates a unique table name from a filename.
+ * If the normalized name already exists, a suffix is appended.
+ *
+ * @param {string} filename - The original filename.
+ * @param {Map<string, string>} existingNames - Existing table names.
+ * @returns {string} A unique table name.
+ */
 export function generateUniqueTableName(
   filename: string,
   existingNames: Map<string, string>
@@ -56,6 +85,12 @@ export function generateUniqueTableName(
   return tablename;
 }
 
+/**
+ * Adds a stable unique identifier to a file object.
+ * The ID is the file timestamp combined with a normalized filename.
+ *
+ * @param {FileWithId} file - File to update.
+ */
 function addFileId(file: FileWithId): void {
   file.id = file.lastModified + '-' + normalizeName(file.name);
 }
