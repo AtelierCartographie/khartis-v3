@@ -181,7 +181,8 @@ export async function getRowStats(
   const whereClause = buildFilterWhereClause(filters.get(tableName));
 
   if (whereClause) {
-    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${tableName}"`;
+    const escapedTable = escapeIdentifier(tableName);
+    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${escapedTable}"`;
     const result = (await Duck.query(query)) as ArrowTableLike;
     const row = result.get(0) as Record<string, unknown>;
     return {
@@ -202,7 +203,8 @@ export async function getExcludedRowIds(
   const whereClause = buildFilterWhereClause(filters.get(tableName));
   if (!whereClause) return [];
 
-  const query = `SELECT __id FROM "${tableName}" WHERE NOT (${whereClause})`;
+  const escapedTable = escapeIdentifier(tableName);
+  const query = `SELECT __id FROM "${escapedTable}" WHERE NOT (${whereClause})`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
   const ids: number[] = [];

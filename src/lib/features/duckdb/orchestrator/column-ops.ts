@@ -287,6 +287,39 @@ const BLOCKED_PATTERN = new RegExp(
   'i'
 );
 
+const BLOCKED_FUNCTIONS = [
+  'read_csv',
+  'read_csv_auto',
+  'read_parquet',
+  'read_json',
+  'read_json_auto',
+  'read_text',
+  'read_blob',
+  'read_ndjson',
+  'read_ndjson_auto',
+  'scan_parquet',
+  'parquet_scan',
+  'parquet_metadata',
+  'parquet_schema',
+  'parquet_kv_metadata',
+  'iceberg_scan',
+  'delta_scan',
+  'glob',
+  'list_files',
+  'query_table',
+  'query',
+  'sniff_csv',
+  'st_read',
+  'st_drivers',
+  'current_setting',
+  'getenv'
+];
+
+const BLOCKED_FUNCTIONS_PATTERN = new RegExp(
+  `\\b(${BLOCKED_FUNCTIONS.join('|')})\\s*\\(`,
+  'i'
+);
+
 export function validateExpression(expression: string): void {
   if (!expression.trim()) {
     throw new DuckDBError('Expression cannot be empty');
@@ -307,6 +340,15 @@ export function validateExpression(expression: string): void {
     throw new DuckDBError(
       m.error_calc_expression_forbidden_keyword({
         keyword: match[1].toUpperCase()
+      })
+    );
+  }
+
+  const funcMatch = expression.match(BLOCKED_FUNCTIONS_PATTERN);
+  if (funcMatch) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({
+        keyword: funcMatch[1].toUpperCase()
       })
     );
   }
