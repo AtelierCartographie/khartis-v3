@@ -1,7 +1,22 @@
+/**
+ * @constant {string} normalize_text_join_macro
+ * @description SQL macro that normalizes a text string by NFC-normalizing,
+ * stripping accents, converting to lowercase, and trimming whitespace.
+ */
 const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(string) AS (
     nfc_normalize(string).strip_accents().lower().trim()
 );`;
 
+/**
+ * @constant {string} get_similarity_macro
+ * @description SQL macro that calculates the Jaro-Winkler similarity score between
+ * a candidate string and a table of strings, and returns the best matches for each
+ * basemap while filtering out weak matches.
+ *
+ * @param {string} candidate - The candidate string to find similar matches for.
+ * @param {string} join_table - The table of candidate matches to search.
+ * @returns {TABLE} A table with best similarity matches, excluding 'toofar' results.
+ */
 const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, join_table) AS TABLE (
   WITH t0 AS (
     SELECT normalize_text_join(candidate) as search_term
@@ -22,6 +37,15 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
     ORDER BY score DESC
 );`;
 
+/**
+ * @constant {string} analyze_join_quality_macro
+ * @description SQL macro that evaluates match quality between candidates and basemap ids.
+ * It returns a status and candidate-level scoring summary to support UI diagnostics.
+ *
+ * @param {string} candidates_table - The candidate table.
+ * @param {string} geoname_column - Candidate name column.
+ * @param {string} join_table - The basemap join table.
+ */
 const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality(candidates_table, geoname_column, join_table) AS TABLE (
     WITH source_with_counts AS (
         SELECT
@@ -61,6 +85,17 @@ const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality
     LEFT JOIN best_matches bm ON c.original_name = bm.original_name
 );`;
 
+/**
+ * @const {string} get_join_table_from_basemap_macro
+ * @description SQL macro for creating a join table from a basemap.
+ *
+ * Supports one-column and multi-column (main + variants) identifier definitions.
+ *
+ * @param {string} basemap_table - The basemap table name.
+ * @param {string} main_id - The main ID column in the basemap table.
+ * @param {string} [others_id] - Optional list of secondary ID columns.
+ * @returns {TABLE} A normalized candidate table with `raw`, `id`, `variant`, and counts.
+ */
 const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_table_from_basemap
 (basemap_table, main_id) AS TABLE (
   WITH t1 AS (
@@ -100,8 +135,15 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         basemap_table as basemap,
         t1.count as basemap_count,
       ORDER BY variant, raw
-  );`;
+);`;
 
+/**
+ * @const {string} join_synthesis_macro
+ * @description SQL macro for generating a synthesis of join results.
+ *
+ * @param {string} tabname - The table containing join results.
+ * @returns {TABLE} A table with share of basemap and candidate matches.
+ */
 const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS TABLE (
   FROM query_table(tabname)
   SELECT
@@ -112,6 +154,16 @@ const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS
   ORDER BY share_basemap DESC
 );`;
 
+/**
+ * @const {string} apply_join_across_basemaps_macro
+ * @description SQL macro that applies a similarity-based join across basemaps.
+ * For each candidate name, the best scored basemap match is kept.
+ *
+ * @param {string} candidates_table - Candidate input table.
+ * @param {string} geoname_column - Candidate geoname column.
+ * @param {string} join_table - The join lookup table.
+ * @returns {TABLE} Deduplicated best joins by basemap and id.
+ */
 const apply_join_across_basemaps_macro = `CREATE OR REPLACE MACRO apply_join_across_basemaps(candidates_table, geoname_column, join_table) AS TABLE (
     WITH t1 AS (
         FROM query_table(candidates_table)
