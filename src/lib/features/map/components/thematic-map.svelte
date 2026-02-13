@@ -30,8 +30,14 @@
   import { projectionStore } from '../stores/projection.store.svelte';
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
   import type { DeckMapProps } from '../types';
-  import { formatState } from '../../step-toolbar/tools/format/format.store.svelte';
+  import {
+    DEFAULT_PAGE_COLOR,
+    formatState,
+    PAGE_GRID_SIZE_PX
+  } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
@@ -53,12 +59,16 @@
   const formatColor = $derived(
     typeof formatState.color === 'object' && formatState.color
       ? formatState.color
-      : { hue: 0, saturation: 0, lightness: 100 }
+      : DEFAULT_PAGE_COLOR
   );
   const pageBackgroundColor = $derived(
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
+  const seaLayer = $derived(basemapLayersStore.getLayer('mers'));
   const pageMargins = $derived(formatState.margins);
+  const showPageGrid = $derived(
+    formatState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
+  );
   const mapCanvasWidth = $derived(
     Math.max(1, width - pageMargins.left - pageMargins.right)
   );
@@ -67,6 +77,44 @@
   );
   const pageStyle = $derived(
     `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
+  );
+  const mapCanvasStyle = $derived.by(() => {
+    const color = seaLayer?.color ?? pageBackgroundColor;
+    const opacity = Math.max(0, Math.min(100, seaLayer?.opacity ?? 100)) / 100;
+
+    if (!seaLayer?.visible) {
+      return `background-color: ${pageBackgroundColor};`;
+    }
+
+    if (!color.startsWith('#')) {
+      return `background-color: ${color};`;
+    }
+
+    const hex = color.slice(1);
+    const normalizedHex =
+      hex.length === 3
+        ? hex
+            .split('')
+            .map((char) => `${char}${char}`)
+            .join('')
+        : hex;
+
+    if (normalizedHex.length !== 6) {
+      return `background-color: ${color};`;
+    }
+
+    const r = Number.parseInt(normalizedHex.slice(0, 2), 16);
+    const g = Number.parseInt(normalizedHex.slice(2, 4), 16);
+    const b = Number.parseInt(normalizedHex.slice(4, 6), 16);
+
+    if (![r, g, b].every(Number.isFinite)) {
+      return `background-color: ${color};`;
+    }
+
+    return `background-color: rgba(${r}, ${g}, ${b}, ${opacity});`;
+  });
+  const pageGridStyle = $derived(
+    `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
   );
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
@@ -271,6 +319,22 @@
     }
   }
 
+  function syncOrthographicDeckSize(): void {
+    if (!mapContainer || mapInit.viewMode !== 'orthographic') {
+      return;
+    }
+
+    const deckInstance = mapInit.deckInstance;
+    if (!deckInstance) {
+      return;
+    }
+
+    deckInstance.setProps({
+      width: mapContainer.offsetWidth || 800,
+      height: mapContainer.offsetHeight || 600
+    });
+  }
+
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -324,7 +388,16 @@
         height: formatState.height,
         margins
       });
-      legendActions.setPosition(LegendPosition.BOTTOM_LEFT);
+      legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
+    });
+  });
+
+  $effect(() => {
+    void mapCanvasWidth;
+    void mapCanvasHeight;
+
+    untrack(() => {
+      syncOrthographicDeckSize();
     });
   });
 
@@ -821,6 +894,8 @@
         if (canUpdate) {
           if (mapInit.viewMode === 'maplibre') {
             mapInit.map?.resize();
+          } else {
+            syncOrthographicDeckSize();
           }
           scheduleLayerUpdate('resizeObserver');
         }
@@ -853,10 +928,14 @@
     class="map-stage"
     style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
   >
-    <div bind:this={mapContainer} class="map-canvas"></div>
+    <div
+      bind:this={mapContainer}
+      class="map-canvas"
+      style={mapCanvasStyle}
+    ></div>
 
-    {#if formatState.gridEnabled}
-      <div class="page-grid"></div>
+    {#if showPageGrid}
+      <div class="page-grid" style={pageGridStyle}></div>
     {/if}
 
     {#if isSwitchingViewMode}
@@ -897,14 +976,12 @@
     background-image:
       linear-gradient(to right, rgba(22, 22, 22, 0.12) 1px, transparent 1px),
       linear-gradient(to bottom, rgba(22, 22, 22, 0.12) 1px, transparent 1px);
-    background-size: 24px 24px;
   }
 
   .map-canvas {
     position: relative;
     width: 100%;
     height: 100%;
-    background-color: #ffffff;
   }
 
   .map-canvas :global(canvas) {

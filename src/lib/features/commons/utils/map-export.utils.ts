@@ -496,6 +496,8 @@ function renderAnnotationItem(item: Annotation): string {
 }
 
 function renderAnnotationsToSvg(annotations: AnnotationsState): string {
+  if (!annotations.visible) return '';
+
   const visibleItems = annotations.items.filter((i) => i.visible !== false);
   if (visibleItems.length === 0) return '';
 
@@ -523,6 +525,11 @@ function calculateLegendPosition(
     case LegendPosition.BOTTOM_RIGHT:
       return {
         x: width - LEGEND_WIDTH - LEGEND_MARGIN,
+        y: height - LEGEND_HEIGHT - LEGEND_MARGIN
+      };
+    case LegendPosition.BOTTOM_CENTER:
+      return {
+        x: Math.max(LEGEND_MARGIN, Math.round((width - LEGEND_WIDTH) / 2)),
         y: height - LEGEND_HEIGHT - LEGEND_MARGIN
       };
     default:
@@ -557,6 +564,11 @@ function renderClassificationLegend(
   if (colors.length === 0) return '';
 
   const elements: string[] = [];
+  const textColorHex = hslToHex(
+    style.textColor.hue,
+    style.textColor.saturation,
+    style.textColor.lightness
+  );
 
   colors.forEach((color, i) => {
     const y = startY + i * 22;
@@ -569,7 +581,7 @@ function renderClassificationLegend(
     const label = minVal && maxVal ? `${minVal} - ${maxVal}` : maxVal || minVal;
 
     elements.push(
-      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_LEGEND}">${escapeHtml(label)}</text>`
+      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(label)}</text>`
     );
   });
 
@@ -583,6 +595,11 @@ function renderLegendContent(
 ): { content: string; height: number } {
   let yOffset = 16;
   const elements: string[] = [];
+  const textColorHex = hslToHex(
+    style.textColor.hue,
+    style.textColor.saturation,
+    style.textColor.lightness
+  );
 
   for (const item of items) {
     const viz = item.variableId
@@ -591,14 +608,14 @@ function renderLegendContent(
 
     if (item.title) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${SVG_COLORS.TEXT_PRIMARY}">${escapeHtml(item.title)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${textColorHex}">${escapeHtml(item.title)}</text>`
       );
       yOffset += style.fontSize + 10;
     }
 
     if (item.subtitle) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_SECONDARY}">${escapeHtml(item.subtitle)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(item.subtitle)}</text>`
       );
       yOffset += style.fontSize + 6;
     }
@@ -613,7 +630,7 @@ function renderLegendContent(
 
     if (item.note) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${SVG_COLORS.TEXT_MUTED}" font-style="italic">${escapeHtml(item.note)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${textColorHex}" font-style="italic">${escapeHtml(item.note)}</text>`
       );
       yOffset += style.fontSize + 4;
     }

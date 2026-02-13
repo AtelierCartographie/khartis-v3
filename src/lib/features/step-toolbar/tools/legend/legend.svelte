@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
@@ -15,10 +16,10 @@
     Select,
     SelectItem,
     Slider,
-    TextInput,
-    Toggle
+    TextInput
   } from 'carbon-components-svelte';
   import { Document, TextFont, ViewFilled, ViewOff } from 'carbon-icons-svelte';
+  import { onMount } from 'svelte';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import type { LegendItem } from './legend.types';
 
@@ -65,6 +66,7 @@
   const activeTabIndex = $derived(
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
   );
+  const legendVisible = $derived(legendState.visible);
 
   function toggleVisibility(id: string): void {
     const item = items.find((i) => i.id === id);
@@ -86,6 +88,12 @@
     legendActions.setActiveTab(
       newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
     );
+  }
+
+  function handleLegendVisibilityChange(visible: boolean): void {
+    if (visible !== legendState.visible) {
+      legendActions.setVisibility(visible);
+    }
   }
 
   function handleFontFamilyChange(): void {
@@ -121,8 +129,14 @@
   }
 
   function handleOpacityChange(): void {
-    if (localOpacity !== legendState.style.background.opacity) {
-      legendActions.updateBackground({ opacity: localOpacity });
+    const normalizedOpacity = Math.max(
+      0,
+      Math.min(100, Math.round(localOpacity))
+    );
+    localOpacity = normalizedOpacity;
+
+    if (normalizedOpacity !== legendState.style.background.opacity) {
+      legendActions.updateBackground({ opacity: normalizedOpacity });
     }
   }
 
@@ -133,6 +147,10 @@
     'Lato',
     'Open Sans'
   ];
+
+  onMount(() => {
+    legendActions.markAsOpened();
+  });
 </script>
 
 <div id="khartis-legend-tool">
@@ -147,6 +165,23 @@
           activeClass="active"
           fullWidthClass="full-width"
         />
+      </Column>
+    </Row>
+
+    <Row>
+      <Column>
+        <div class="switch-row">
+          <span class="switch-label">{m.tool_legend()}</span>
+          <Switch
+            toggled={legendVisible}
+            labelText={m.tool_legend()}
+            hideLabel
+            labelA={m.layers_hide()}
+            labelB={m.layers_show()}
+            showStateLabel
+            onchange={handleLegendVisibilityChange}
+          />
+        </div>
       </Column>
     </Row>
   </Grid>
@@ -273,11 +308,13 @@
 
       <Row>
         <Column>
-          <Toggle
+          <Switch
             labelText={m.legend_background()}
-            id="legend-bg-toggle"
             toggled={backgroundEnabled}
-            on:toggle={(e) => handleBackgroundEnabledChange(e.detail.toggled)}
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleBackgroundEnabledChange}
           />
         </Column>
 
@@ -349,6 +386,20 @@
     font-size: 0.875rem;
     color: var(--cds-text-secondary);
     line-height: 1.4;
+  }
+
+  .switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .switch-label {
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
+    font-weight: 400;
   }
 
   .divider {

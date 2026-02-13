@@ -35,7 +35,6 @@
 
   const selectStep = (step: ToolbarStep): void => {
     globalActions.setNavigationState(step);
-
     globalState.selectedTool = undefined;
   };
 

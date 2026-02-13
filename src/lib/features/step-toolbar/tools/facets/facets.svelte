@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -7,8 +8,7 @@
     Row,
     MultiSelect,
     RadioButtonGroup,
-    RadioButton,
-    Toggle
+    RadioButton
   } from 'carbon-components-svelte';
   import { Launch } from 'carbon-icons-svelte';
   import { facetsStore } from './facets.store.svelte';
@@ -69,6 +69,13 @@
     await facetsStore.toggleScaleMode();
   }
 
+  function handleScaleModeChange(checked: boolean): void {
+    const isShared = scaleMode === 'shared';
+    if (checked !== isShared) {
+      void handleToggleScale();
+    }
+  }
+
   function handleColumnsChange(value: string | number) {
     const columns = Number(value) as 2 | 3 | 4;
     facetsStore.setColumns(columns);
@@ -117,10 +124,13 @@
 
       <Row padding>
         <Column>
-          <Toggle
+          <Switch
             toggled={scaleMode === 'shared'}
             labelText={m.facets_shared_scale()}
-            on:toggle={handleToggleScale}
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleScaleModeChange}
           />
         </Column>
       </Row>
@@ -191,10 +201,13 @@
 
         <Row padding>
           <Column>
-            <Toggle
+            <Switch
               toggled={scaleMode === 'shared'}
               labelText={m.facets_shared_scale()}
-              on:toggle={handleToggleScale}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={handleScaleModeChange}
             />
           </Column>
         </Row>

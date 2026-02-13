@@ -1,23 +1,27 @@
 <script lang="ts">
-  import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
   import clsx from 'clsx';
 
+  type ColorPayload = {
+    hex: string;
+    hue: number;
+    saturation: number;
+    lightness: number;
+  };
+
   let {
     hex = '#fff',
-    hue = 180,
-    saturation = 50,
-    lightness = 50,
+    hue = 0,
+    saturation = 0,
+    lightness = 100,
+    livePreview = false,
     onCancel = () => {},
-    onValidate = (_color: {
-      hex: string;
-      hue: number;
-      saturation: number;
-      lightness: number;
-    }) => {},
+    onPreview = (_color: ColorPayload) => {},
+    onValidate = (_color: ColorPayload) => {},
     triggerLabel = ''
   } = $props();
 
@@ -26,12 +30,74 @@
   let dropdownEl = $state<HTMLDivElement | null>(null);
   let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
   let openUpward = $state(false);
+  let initialColor = $state<ColorPayload | null>(null);
 
-  function updateHex() {
-    const newHex = hslToHex(hue, saturation, lightness);
-    if (newHex !== hex) {
-      hex = newHex;
+  function clamp(value: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function normalizeHexInput(rawHex: string): string | null {
+    const sanitized = rawHex.trim().replace(/^#/, '');
+
+    if (/^[0-9a-fA-F]{3}$/.test(sanitized)) {
+      const expanded = sanitized
+        .split('')
+        .map((char) => `${char}${char}`)
+        .join('');
+      return `#${expanded.toUpperCase()}`;
     }
+
+    if (/^[0-9a-fA-F]{6}$/.test(sanitized)) {
+      return `#${sanitized.toUpperCase()}`;
+    }
+
+    return null;
+  }
+
+  function buildColorFromHsl(
+    hueValue: number,
+    saturationValue: number,
+    lightnessValue: number
+  ): ColorPayload {
+    const nextHue = clamp(Math.round(hueValue), 0, 360);
+    const nextSaturation = clamp(Math.round(saturationValue), 0, 100);
+    const nextLightness = clamp(Math.round(lightnessValue), 0, 100);
+
+    return {
+      hex: hslToHex(nextHue, nextSaturation, nextLightness),
+      hue: nextHue,
+      saturation: nextSaturation,
+      lightness: nextLightness
+    };
+  }
+
+  function applyColor(color: ColorPayload): void {
+    hex = color.hex;
+    hue = color.hue;
+    saturation = color.saturation;
+    lightness = color.lightness;
+  }
+
+  function getValidatedColor(): ColorPayload {
+    const normalizedHex = normalizeHexInput(hex);
+    if (normalizedHex) {
+      return {
+        hex: normalizedHex,
+        ...hexToHsl(normalizedHex)
+      };
+    }
+
+    return buildColorFromHsl(hue, saturation, lightness);
+  }
+
+  function revertPreviewState(): void {
+    if (!livePreview || !initialColor) {
+      return;
+    }
+
+    const nextColor = initialColor;
+    applyColor(nextColor);
+    onPreview(nextColor);
   }
 
   function updateDropdownPosition() {
@@ -62,20 +128,31 @@
 
   $effect(() => {
     if (
-      hue !== undefined &&
-      saturation !== undefined &&
-      lightness !== undefined
+      hue === undefined ||
+      saturation === undefined ||
+      lightness === undefined
     ) {
-      updateHex();
+      return;
+    }
+
+    const nextColor = buildColorFromHsl(hue, saturation, lightness);
+    hex = nextColor.hex;
+
+    if (colorOpen && livePreview) {
+      onPreview(nextColor);
     }
   });
 
   function handleOutsideClick() {
+    revertPreviewState();
     colorOpen = false;
   }
 
   $effect(() => {
     if (colorOpen) {
+      if (!initialColor) {
+        initialColor = getValidatedColor();
+      }
       updateDropdownPosition();
       window.addEventListener('scroll', updateDropdownPosition, true);
       window.addEventListener('resize', updateDropdownPosition);
@@ -85,6 +162,8 @@
         window.removeEventListener('resize', updateDropdownPosition);
       };
     }
+
+    initialColor = null;
   });
 </script>
 
@@ -221,7 +300,18 @@
               bind:value={hex}
               oninput={(e: InputEvent) => {
                 const target = e.target as HTMLInputElement;
-                hex = target.value;
+                const rawValue = target.value;
+                const normalizedHex = normalizeHexInput(rawValue);
+                if (!normalizedHex) {
+                  hex = rawValue;
+                  return;
+                }
+
+                const parsedColor = hexToHsl(normalizedHex);
+                hex = normalizedHex;
+                hue = parsedColor.hue;
+                saturation = parsedColor.saturation;
+                lightness = parsedColor.lightness;
               }}
             />
           </Column>
@@ -239,6 +329,7 @@
               size="field"
               class="action-button"
               onclick={() => {
+                revertPreviewState();
                 onCancel();
                 colorOpen = false;
               }}>{m.button_cancel()}</Button
@@ -251,7 +342,9 @@
               size="field"
               class="action-button"
               onclick={() => {
-                onValidate({ hex, hue, saturation, lightness });
+                const validatedColor = getValidatedColor();
+                applyColor(validatedColor);
+                onValidate(validatedColor);
                 colorOpen = false;
               }}
             >
