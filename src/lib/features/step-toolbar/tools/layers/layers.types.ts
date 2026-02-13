@@ -15,14 +15,7 @@ export interface Layer {
   parentId?: string;
   isSubLayer?: boolean;
   primitive?: PrimitiveFilter;
-}
-
-export interface Section {
-  readonly id: string;
-  title: string;
-  type: LayerType;
-  layers: Layer[];
-  order: number;
+  basemapLayerId?: string;
 }
 
 export interface DragState {
@@ -32,22 +25,5 @@ export interface DragState {
 }
 
 export interface LayersState {
-  layers: Array<{
-    id: string;
-    name: string;
-    visible: boolean;
-    type: 'visualization' | 'geographic';
-    color: string;
-    opacity?: number;
-    order: number;
-    parentId?: string;
-    isSubLayer?: boolean;
-    primitive?: PrimitiveFilter;
-  }>;
-  expandedSections: Record<string, boolean>;
-  dragState: {
-    dragIndex: number | null;
-    dragOverIndex: number | null;
-    isDragging: boolean;
-  };
+  layers: Omit<Layer, 'icon'>[];
 }
