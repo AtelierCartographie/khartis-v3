@@ -29,6 +29,7 @@
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
+  let previousDatasetId = $state<string | undefined>(undefined);
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
@@ -60,6 +61,19 @@
       fileHook.handleRemoveFile();
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
+    }
+  });
+
+  // Reset enrichment state when the selected dataset changes
+  $effect(() => {
+    const currentId = selectedDataset?.id;
+    if (currentId !== previousDatasetId) {
+      previousDatasetId = currentId;
+      enrichLinkedVariableId = undefined;
+      geoFileColumnId = undefined;
+      joinTabularEnabled = false;
+      fileHook.handleRemoveFile();
+      joinHook.resetJoinState();
     }
   });
 
