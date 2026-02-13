@@ -293,11 +293,14 @@ export async function applyJoinCorrections(
   );
   await Duck.query(`INSERT INTO "${correctionsTable}" VALUES ${valueRows}`);
 
+  const escapedTableName = escapeIdentifier(dataset.tableName);
+  const escapedGeoCol = escapeIdentifier(geoColumn);
+
   await Duck.query(`
-    UPDATE "${dataset.tableName}"
-    SET "${geoColumn}" = c.corrected
+    UPDATE "${escapedTableName}"
+    SET "${escapedGeoCol}" = c.corrected
     FROM "${correctionsTable}" c
-    WHERE "${geoColumn}" = c.original
+    WHERE "${escapedGeoCol}" = c.original
   `);
 
   await Duck.query(`DROP TABLE "${correctionsTable}"`);

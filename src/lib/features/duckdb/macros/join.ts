@@ -23,7 +23,7 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
   ), t1 AS (
     FROM t0, query_table(join_table)
     SELECT
-      jaro_winkler_similarity(search_term, "normalized") as score,
+      jaro_winkler_similarity(search_term, "normalized", 0.85) as score,
       CASE
         WHEN score = 1 THEN 'exact'
         WHEN score >= 0.85 THEN 'partial'
@@ -150,8 +150,8 @@ const join_synthesis_macro = `CREATE OR REPLACE MACRO join_synthesis(tabname) AS
   FROM query_table(tabname)
   SELECT
     basemap,
-    count() / basemap_count as share_basemap,
-    count() / candidate_count as share_candidate
+    count()::DOUBLE / basemap_count as share_basemap,
+    count()::DOUBLE / candidate_count as share_candidate
   GROUP BY basemap, basemap_count, candidate_count
   ORDER BY share_basemap DESC
 );`;
