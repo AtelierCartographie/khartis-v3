@@ -3,6 +3,7 @@ import {
   escapeIdentifier
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
@@ -24,6 +25,14 @@ interface CacheEntry {
 }
 
 const searchCache = new Map<string, CacheEntry>();
+
+registerTableMutationCallback((table: string) => {
+  for (const key of searchCache.keys()) {
+    if (key.startsWith(`${table}:`)) {
+      searchCache.delete(key);
+    }
+  }
+});
 
 function getCacheKey(
   table: string,
