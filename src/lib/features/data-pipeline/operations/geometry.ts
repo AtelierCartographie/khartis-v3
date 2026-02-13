@@ -65,6 +65,7 @@ export async function extractGeometryInfo(
     ) {
       return {
         type: normalizeGeometryType(geometryType),
+        columnName: geometryColumn.name,
         bounds: [-180, -90, 180, 90],
         centroid: [0, 0]
       };
@@ -79,6 +80,7 @@ export async function extractGeometryInfo(
 
     return {
       type: normalizeGeometryType(geometryType),
+      columnName: geometryColumn.name,
       bounds,
       centroid: computeCentroid(bounds),
       crs: 'EPSG:4326',

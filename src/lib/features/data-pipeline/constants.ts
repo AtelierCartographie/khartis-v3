@@ -1,6 +1,6 @@
 export const PIPELINE_CONST = {
   EXTENSIONS: {
-    TABULAR: ['.csv', '.tsv', '.txt', '.parquet', '.arrow'] as const,
+    TABULAR: ['.csv', '.tsv', '.txt'] as const,
     GEO: [
       '.geojson',
       '.json',
