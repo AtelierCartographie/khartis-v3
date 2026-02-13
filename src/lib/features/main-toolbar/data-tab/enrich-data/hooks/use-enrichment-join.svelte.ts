@@ -354,18 +354,18 @@ export function useEnrichmentJoin(
       });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
 
-      // Register the new enriched table in the DuckDB orchestrator so subsequent operations can find it
+      // Update the existing orchestrator dataset entry with the new enriched table name
+      // (avoids creating a duplicate entry with the same sourceFileId)
       try {
-        await duckDBOrchestrator.registerExistingTable(
-          enrichedTableName,
+        await duckDBOrchestrator.updateDatasetTableName(
           selectedDataset.sourceFileId || selectedDataset.id,
-          selectedDataset.name || enrichedTableName
+          enrichedTableName
         );
-      } catch (registerError) {
+      } catch (updateError) {
         logger.warn(
-          'Failed to register enriched table in orchestrator',
+          'Failed to update enriched table in orchestrator',
           LogCategory.DATA,
-          { enrichedTableName, error: registerError }
+          { enrichedTableName, error: updateError }
         );
       }
 
