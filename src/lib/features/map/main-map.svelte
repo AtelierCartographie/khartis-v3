@@ -55,7 +55,14 @@
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
 
-  async function convertDatasetToGeoJSON(
+  /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
+  let loadGeneration = 0;
+
+  function isStaleLoad(generation: number): boolean {
+    return loadGeneration !== generation;
+  }
+
+  async function loadGeoDatasetTable(
     dataset: DatasetResult
   ): Promise<ArrowTable | FeatureCollection | null> {
     const start = performance.now();
@@ -105,9 +112,7 @@
       );
       hasError = true;
       errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Erreur de conversion des donnees';
+        error instanceof Error ? error.message : m.error_loading_subtitle();
       return null;
     }
   }
@@ -120,7 +125,8 @@
   async function loadJoinedBasemap(
     dataset: DatasetResult,
     joinedBasemap: string,
-    tableName: string
+    tableName: string,
+    generation: number
   ): Promise<void> {
     const start = performance.now();
     const datasetId = dataset.id;
@@ -136,6 +142,8 @@
         tableName,
         joinedBasemap
       );
+
+      if (isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
@@ -168,7 +176,8 @@
 
   async function loadGPSData(
     datasetId: string,
-    duckDBDatasetId: string
+    duckDBDatasetId: string,
+    generation?: number
   ): Promise<void> {
     const start = performance.now();
 
@@ -180,6 +189,8 @@
     try {
       const { table } =
         await duckDBOrchestrator.getGPSArrowTable(duckDBDatasetId);
+
+      if (generation !== undefined && isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
@@ -210,11 +221,16 @@
     }
   }
 
-  async function loadDatasetForDisplay(dataset: DatasetResult): Promise<void> {
+  async function loadDatasetForDisplay(
+    dataset: DatasetResult,
+    generation: number
+  ): Promise<void> {
     const datasetId = dataset.id;
 
     if (dataset.geometry) {
-      const result = await convertDatasetToGeoJSON(dataset);
+      const result = await loadGeoDatasetTable(dataset);
+
+      if (isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
         logger.debug(
@@ -252,19 +268,20 @@
       );
 
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
-        await loadGPSData(datasetId, duckDBDataset.id);
+        await loadGPSData(datasetId, duckDBDataset.id, generation);
       } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
         await loadJoinedBasemap(
           dataset,
           duckDBDataset.joinedBasemap,
-          duckDBDataset.tableName
+          duckDBDataset.tableName,
+          generation
         );
       }
     }
   }
 
   $effect(() => {
-    void duckDBDatasetsVersion;
+    const version = duckDBDatasetsVersion;
     const currentEnabledDatasets = enabledDatasets;
 
     if (isInitializing) {
@@ -276,6 +293,7 @@
 
     const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
+    // Remove display entries for datasets that are no longer enabled
     const tableIdsToRemove = [...displayTables.keys()].filter(
       (id) => !currentEnabledIds.has(id)
     );
@@ -292,13 +310,32 @@
       displayGeoJSONs.delete(geojsonId);
     }
 
-    for (const dataset of currentEnabledDatasets) {
-      const alreadyLoaded =
-        displayTables.has(dataset.id) || displayGeoJSONs.has(dataset.id);
-      if (!alreadyLoaded) {
-        loadDatasetForDisplay(dataset);
-      }
-    }
+    // Bump load generation so any in-flight loads from a previous version are discarded
+    const thisGeneration = ++loadGeneration;
+
+    untrack(() => {
+      logger.debug(
+        'Reloading display data for enabled datasets',
+        LogCategory.MAP,
+        {
+          version,
+          datasetCount: currentEnabledDatasets.length,
+          generation: thisGeneration
+        }
+      );
+
+      const loadPromises = currentEnabledDatasets.map((dataset) =>
+        loadDatasetForDisplay(dataset, thisGeneration)
+      );
+
+      Promise.all(loadPromises).catch((error) => {
+        logger.error(
+          'Failed to reload display datasets',
+          LogCategory.MAP,
+          error
+        );
+      });
+    });
   });
 
   $effect(() => {
@@ -371,8 +408,9 @@
       enabledCount: enabledDatasets.length
     });
 
+    const initGeneration = ++loadGeneration;
     const loadPromises = enabledDatasets.map((dataset) =>
-      loadDatasetForDisplay(dataset)
+      loadDatasetForDisplay(dataset, initGeneration)
     );
     await Promise.all(loadPromises);
 
