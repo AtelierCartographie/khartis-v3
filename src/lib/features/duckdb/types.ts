@@ -155,12 +155,6 @@ export interface CacheState {
   accessOrder: string[];
 }
 
-export interface QueryCacheEntry {
-  result: unknown;
-  timestamp: number;
-  tableVersions: Map<string, number>;
-}
-
 export interface ExtensionsLoaded {
   spatial: boolean;
   httpfs: boolean;
@@ -240,7 +234,6 @@ export interface DuckDBContext {
   registered_files: Set<string>;
   table_metadata: Map<string, TableMetadata>;
   table_geoparquet_cache: Map<string, Uint8Array>;
-  queryCache: Map<string, QueryCacheEntry>;
   describeCache: Map<string, DescribeResult>;
   rowCountCache: Map<string, number>;
   cacheState: CacheState;

@@ -207,10 +207,15 @@ export async function initDuckDB(): Promise<void> {
   }
 
   duckInitPromise = (async () => {
-    await initEngine();
-    const allMacros =
-      breaksMacros + analyseMacros + join_macros + search_macros;
-    await loadMacros(allMacros);
+    try {
+      await initEngine();
+      const allMacros =
+        breaksMacros + analyseMacros + join_macros + search_macros;
+      await loadMacros(allMacros);
+    } catch (error) {
+      duckInitPromise = null;
+      throw error;
+    }
   })();
 
   await duckInitPromise;
