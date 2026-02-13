@@ -69,7 +69,6 @@
   let unrecognizedExpanded = $state(false);
 
   const hasBlockingErrors = $derived(toVerifyCount > 0 || duplicateCount > 0);
-  const _hasWarnings = $derived(unrecognizedCount > 0);
 </script>
 
 <div class="join-assisted-section">
