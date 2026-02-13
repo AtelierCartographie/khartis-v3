@@ -55,12 +55,7 @@ export function useEnrichmentJoin(
 
   function getGeoTableName(): string | null {
     if (!selectedDataset) return null;
-    return (
-      (selectedDataset as { duckdbTableName?: string; tableName?: string })
-        .duckdbTableName ||
-      (selectedDataset as { tableName?: string }).tableName ||
-      null
-    );
+    return selectedDataset.tableName || null;
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
@@ -187,11 +182,30 @@ export function useEnrichmentJoin(
       const escapedGeoTableName = escapeIdentifier(geoTableName);
       const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
 
-      for (const [oldValue, newValue] of Object.entries(corrections)) {
+      const correctionEntries = Object.entries(corrections);
+      if (correctionEntries.length > 0) {
+        const valueRows = correctionEntries
+          .map(
+            ([original, corrected]) =>
+              `('${escapeSqlString(original)}', '${escapeSqlString(corrected)}')`
+          )
+          .join(', ');
+
+        const tempTable = `enrich_corrections_${Date.now()}`;
         await Duck.query(
-          `UPDATE "${escapedEnrichmentTableName}" SET "${escapedEnrichmentColumn}" = '${escapeSqlString(newValue)}' WHERE "${escapedEnrichmentColumn}" = '${escapeSqlString(oldValue)}'`,
+          `CREATE TEMP TABLE "${tempTable}" (original VARCHAR, corrected VARCHAR)`
+        );
+        await Duck.query(
+          `INSERT INTO "${tempTable}" VALUES ${valueRows}`
+        );
+        await Duck.query(
+          `UPDATE "${escapedEnrichmentTableName}"
+           SET "${escapedEnrichmentColumn}" = c.corrected
+           FROM "${tempTable}" c
+           WHERE "${escapedEnrichmentColumn}" = c.original`,
           { format: 'array' }
         );
+        await Duck.query(`DROP TABLE "${tempTable}"`);
       }
 
       const stats = await computeDatasetJoinStats({
@@ -312,7 +326,7 @@ export function useEnrichmentJoin(
          SELECT g.*, ${enrichColsSelect}
          FROM "${escapedGeoTableName}" g
          LEFT JOIN "${escapedEnrichmentTableName}" e
-         ON LOWER(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = LOWER(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR))`,
+         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = normalize_text_join(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR))`,
         { format: 'array' }
       );
 
