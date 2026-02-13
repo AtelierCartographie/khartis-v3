@@ -17,10 +17,22 @@ interface DuckDatasetRef {
 }
 
 describe('dataset-resolution', () => {
-  it('prefers dataset id for orchestrator lookups', () => {
+  it('prefers sourceFileId for orchestrator lookups', () => {
     const selectedDataset: DatasetRef = {
       id: 'dataset-b',
       sourceFileId: 'zip-source',
+      tableName: 'table_b'
+    };
+
+    const datasetId = resolveDatasetIdForOrchestrator(selectedDataset);
+
+    expect(datasetId).toBe('zip-source');
+  });
+
+  it('falls back to id when sourceFileId is empty', () => {
+    const selectedDataset: DatasetRef = {
+      id: 'dataset-b',
+      sourceFileId: '',
       tableName: 'table_b'
     };
 

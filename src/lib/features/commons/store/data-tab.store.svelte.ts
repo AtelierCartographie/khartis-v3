@@ -28,8 +28,7 @@ const DEFAULT_STATE: DataTabState = {
     entitiesToVerify: 0,
     duplicateEntities: [],
     unrecognizedEntities: [],
-    joinMappings: [],
-    correctionEnabled: false
+    joinMappings: []
   },
   enrichData: {
     enrichmentDatasetId: undefined,
@@ -127,14 +126,13 @@ export const dataTabActions = {
     dataTabState.basemapJoin.duplicateEntities = [];
     dataTabState.basemapJoin.unrecognizedEntities = [];
     dataTabState.basemapJoin.joinMappings = [];
-    dataTabState.basemapJoin.correctionEnabled = false;
   },
 
   applyCorrections(): void {
-    dataTabState.basemapJoin.correctionEnabled = true;
+    // Corrections applied — join mappings are consumed by applyJoinCorrections
   },
 
   reset(): void {
-    Object.assign(dataTabState, DEFAULT_STATE);
+    Object.assign(dataTabState, structuredClone(DEFAULT_STATE));
   }
 };

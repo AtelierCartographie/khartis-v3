@@ -620,28 +620,38 @@ class DataOrchestratorService {
       LogCategory.DATA
     );
 
+    // Track renames so subsequent operations (e.g. drop after rename) use the current column name
+    const columnRenames = new Map<string, string>();
+
+    function resolveColumnName(originalName: string): string {
+      return columnRenames.get(originalName) ?? originalName;
+    }
+
     for (const transformation of file.columnTransformations) {
       try {
+        const currentColumnName = resolveColumnName(transformation.column);
+
         switch (transformation.type) {
           case COLUMN_TRANSFORMATION_TYPES.RENAME:
             if (transformation.newValue) {
               await duckDBOrchestrator.renameColumn(
                 dataset.tableName,
-                transformation.column,
+                currentColumnName,
                 transformation.newValue
               );
               datasetsStore.renameDatasetColumn(
                 dataset.id,
-                transformation.column,
+                currentColumnName,
                 transformation.newValue
               );
+              columnRenames.set(transformation.column, transformation.newValue);
             }
             break;
 
           case COLUMN_TRANSFORMATION_TYPES.DROP:
             await duckDBOrchestrator.dropColumn(
               dataset.tableName,
-              transformation.column
+              currentColumnName
             );
             break;
 
@@ -649,7 +659,7 @@ class DataOrchestratorService {
             if (transformation.newValue) {
               await duckDBOrchestrator.changeColumnType(
                 dataset.tableName,
-                transformation.column,
+                currentColumnName,
                 transformation.newValue
               );
             }
@@ -668,7 +678,7 @@ class DataOrchestratorService {
               if (refineOp) {
                 await duckDBOrchestrator.refineColumn(
                   dataset.tableName,
-                  transformation.column,
+                  currentColumnName,
                   refineOp
                 );
               }
@@ -676,10 +686,15 @@ class DataOrchestratorService {
             break;
 
           case COLUMN_TRANSFORMATION_TYPES.REPLACE:
-            if (transformation.searchValue && transformation.newValue) {
+            if (
+              transformation.searchValue !== undefined &&
+              transformation.searchValue !== null &&
+              transformation.newValue !== undefined &&
+              transformation.newValue !== null
+            ) {
               await duckDBOrchestrator.replaceInColumn(
                 dataset.tableName,
-                transformation.column,
+                currentColumnName,
                 transformation.searchValue,
                 transformation.newValue
               );
