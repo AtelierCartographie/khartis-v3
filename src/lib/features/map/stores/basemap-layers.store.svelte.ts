@@ -6,19 +6,13 @@ import {
   BasemapCityCategory,
   BasemapCitySymbol
 } from '$lib/features/main-toolbar/constants';
+import {
+  BASEMAP_LAYER_ID,
+  type BasemapLayerId
+} from '$lib/features/commons/constants/basemap.constants';
 
-export { BasemapDottedPattern };
-
-export type BasemapLayerId =
-  | 'terre'
-  | 'mers'
-  | 'lacs'
-  | 'rivieres'
-  | 'relief'
-  | 'equateur'
-  | 'meridiens'
-  | 'frontieres'
-  | 'villes';
+export { BasemapDottedPattern, BASEMAP_LAYER_ID };
+export type { BasemapLayerId };
 
 interface BasemapLayerBase {
   id: BasemapLayerId;
@@ -238,55 +232,43 @@ interface BasemapLayersState {
   version: number;
 }
 
-class BasemapLayersStore {
-  private _state = $state<BasemapLayersState>({
+function createBasemapLayersStore() {
+  const state = $state<BasemapLayersState>({
     layers: cloneDefaults(),
     version: 0
   });
 
-  get version(): number {
-    return this._state.version;
+  function incrementVersion(): void {
+    state.version++;
   }
 
-  private incrementVersion(): void {
-    this._state.version++;
-  }
-
-  get layers(): BasemapLayerConfig[] {
-    return this._state.layers;
-  }
-
-  get visibleLayers(): BasemapLayerConfig[] {
-    return this._state.layers.filter((l) => l.visible);
-  }
-
-  getLayer<T extends BasemapLayerId>(
+  function getLayer<T extends BasemapLayerId>(
     id: T
   ): Extract<BasemapLayerConfig, { id: T }> | undefined {
-    return this._state.layers.find((l) => l.id === id) as
+    return state.layers.find((layer) => layer.id === id) as
       | Extract<BasemapLayerConfig, { id: T }>
       | undefined;
   }
 
-  setLayerVisibility(id: BasemapLayerId, visible: boolean): void {
+  function setLayerVisibility(id: BasemapLayerId, visible: boolean): void {
     if (typeof visible !== 'boolean') {
       return;
     }
 
-    const layer = this._state.layers.find((l) => l.id === id);
+    const layer = state.layers.find((currentLayer) => currentLayer.id === id);
     if (!layer) {
       return;
     }
 
     layer.visible = visible;
-    this.incrementVersion();
+    incrementVersion();
   }
 
-  updateLayer<T extends BasemapLayerId>(
+  function updateLayer<T extends BasemapLayerId>(
     id: T,
     updates: Partial<Omit<Extract<BasemapLayerConfig, { id: T }>, 'id'>>
   ): void {
-    const layer = this._state.layers.find((l) => l.id === id);
+    const layer = state.layers.find((currentLayer) => currentLayer.id === id);
     if (!layer) {
       return;
     }
@@ -300,16 +282,16 @@ class BasemapLayersStore {
     }
 
     Object.assign(layer, sanitizedUpdates);
-    this.incrementVersion();
+    incrementVersion();
   }
 
-  setLayerOrder(orderedIds: BasemapLayerId[]): void {
+  function setLayerOrder(orderedIds: BasemapLayerId[]): void {
     if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
       return;
     }
 
     const layerMap = new Map(
-      this._state.layers.map((layer) => [layer.id, layer] as const)
+      state.layers.map((layer) => [layer.id, layer] as const)
     );
     const ordered: BasemapLayerConfig[] = [];
     const seen = new Set<BasemapLayerId>();
@@ -321,40 +303,59 @@ class BasemapLayersStore {
       seen.add(id);
     }
 
-    for (const layer of this._state.layers) {
+    for (const layer of state.layers) {
       if (seen.has(layer.id)) continue;
       ordered.push(layer);
     }
 
-    this._state.layers = ordered;
-    this.incrementVersion();
+    state.layers = ordered;
+    incrementVersion();
   }
 
-  resetToDefaults(): void {
-    this._state.layers = cloneDefaults();
-    this.incrementVersion();
+  function resetToDefaults(): void {
+    state.layers = cloneDefaults();
+    incrementVersion();
   }
 
-  resetLayer(id: BasemapLayerId): void {
+  function resetLayer(id: BasemapLayerId): void {
     const defaultLayer = DEFAULT_LAYERS.find((l) => l.id === id);
-    const index = this._state.layers.findIndex((l) => l.id === id);
+    const index = state.layers.findIndex((layer) => layer.id === id);
     if (defaultLayer && index !== -1) {
-      this._state.layers[index] = deepClone(defaultLayer);
-      this.incrementVersion();
+      state.layers[index] = deepClone(defaultLayer);
+      incrementVersion();
     }
   }
 
-  restoreFromSerialized(layers: BasemapLayerConfig[]): void {
+  function restoreFromSerialized(layers: BasemapLayerConfig[]): void {
     if (!layers || !Array.isArray(layers)) {
-      this.resetToDefaults();
+      resetToDefaults();
       return;
     }
 
     // Normalize potentially outdated serialized schemas by filling missing
     // per-layer fields from current defaults while preserving user values.
-    this._state.layers = normalizeSerializedLayers(layers);
-    this.incrementVersion();
+    state.layers = normalizeSerializedLayers(layers);
+    incrementVersion();
   }
+
+  return {
+    get version(): number {
+      return state.version;
+    },
+    get layers(): BasemapLayerConfig[] {
+      return state.layers;
+    },
+    get visibleLayers(): BasemapLayerConfig[] {
+      return state.layers.filter((layer) => layer.visible);
+    },
+    getLayer,
+    setLayerVisibility,
+    updateLayer,
+    setLayerOrder,
+    resetToDefaults,
+    resetLayer,
+    restoreFromSerialized
+  };
 }
 
-export const basemapLayersStore = new BasemapLayersStore();
+export const basemapLayersStore = createBasemapLayersStore();

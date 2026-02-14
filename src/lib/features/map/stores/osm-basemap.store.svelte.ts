@@ -6,8 +6,8 @@ import type { BasemapMetadata } from '../types/basemap.types';
  * Store for managing OSM basemap state
  * Tracks when an OSM raster basemap is active
  */
-class OSMBasemapStore {
-  private _state = $state<{
+function createOSMBasemapStore() {
+  const state = $state<{
     activeOSMBasemap: BasemapMetadata | null;
     tileConfig: OSMTileConfig | null;
   }>({
@@ -15,32 +15,34 @@ class OSMBasemapStore {
     tileConfig: null
   });
 
-  get activeOSMBasemap(): BasemapMetadata | null {
-    return this._state.activeOSMBasemap;
+  function clear(): void {
+    state.activeOSMBasemap = null;
+    state.tileConfig = null;
   }
 
-  get tileConfig(): OSMTileConfig | null {
-    return this._state.tileConfig;
-  }
-
-  get isActive(): boolean {
-    return this._state.activeOSMBasemap !== null;
-  }
-
-  setOSMBasemap(basemap: BasemapMetadata | null): void {
+  function setOSMBasemap(basemap: BasemapMetadata | null): void {
     if (basemap && isOSMBasemap(basemap)) {
       const config = getOSMTileConfig(basemap);
-      this._state.activeOSMBasemap = basemap;
-      this._state.tileConfig = config;
-    } else {
-      this.clear();
+      state.activeOSMBasemap = basemap;
+      state.tileConfig = config;
+      return;
     }
+    clear();
   }
 
-  clear(): void {
-    this._state.activeOSMBasemap = null;
-    this._state.tileConfig = null;
-  }
+  return {
+    get activeOSMBasemap(): BasemapMetadata | null {
+      return state.activeOSMBasemap;
+    },
+    get tileConfig(): OSMTileConfig | null {
+      return state.tileConfig;
+    },
+    get isActive(): boolean {
+      return state.activeOSMBasemap !== null;
+    },
+    setOSMBasemap,
+    clear
+  };
 }
 
-export const osmBasemapStore = new OSMBasemapStore();
+export const osmBasemapStore = createOSMBasemapStore();
