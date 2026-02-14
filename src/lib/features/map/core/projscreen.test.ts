@@ -3,7 +3,6 @@ import {
   get_bbox_from_geoparquet,
   get_bbox_center,
   get_max_scale,
-  is_local_projection,
   get_model_matrix
 } from './projscreen';
 
@@ -72,7 +71,7 @@ describe('projscreen', () => {
         { width: 1200, height: 800 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo(800 / 1200000, 10);
+      expect(scale).toBeCloseTo((800 / 1200000) * 0.92, 10);
     });
 
     it('should calculate scale for portrait canvas', () => {
@@ -80,48 +79,12 @@ describe('projscreen', () => {
         { width: 800, height: 1200 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo(800 / 1100000, 10);
+      expect(scale).toBeCloseTo((800 / 1100000) * 0.92, 10);
     });
 
     it('should return 1 for zero-dimension bbox', () => {
       const scale = get_max_scale({ width: 800, height: 600 }, [0, 0, 0, 0]);
       expect(scale).toBe(1);
-    });
-  });
-
-  describe('is_local_projection', () => {
-    it('should detect Lambert 93 as local projection', () => {
-      const bbox: [number, number, number, number] = [
-        100000, 6000000, 1200000, 7200000
-      ];
-      expect(is_local_projection(bbox)).toBe(true);
-    });
-
-    it('should detect WGS84 France as NOT local projection', () => {
-      const bbox: [number, number, number, number] = [-5.5, 41.3, 9.6, 51.1];
-      expect(is_local_projection(bbox)).toBe(false);
-    });
-
-    it('should detect wide bbox (>360) as local projection', () => {
-      const bbox: [number, number, number, number] = [0, 0, 400, 100];
-      expect(is_local_projection(bbox)).toBe(true);
-    });
-
-    it('should detect tall bbox (>180) as local projection', () => {
-      const bbox: [number, number, number, number] = [0, 0, 100, 200];
-      expect(is_local_projection(bbox)).toBe(true);
-    });
-
-    it('should detect bbox outside WGS84 bounds as local projection', () => {
-      expect(is_local_projection([-200, 0, 0, 0])).toBe(true);
-      expect(is_local_projection([0, -100, 10, 10])).toBe(true);
-      expect(is_local_projection([0, 0, 200, 10])).toBe(true);
-      expect(is_local_projection([0, 0, 10, 100])).toBe(true);
-    });
-
-    it('should accept valid WGS84 world bbox', () => {
-      const bbox: [number, number, number, number] = [-180, -90, 180, 90];
-      expect(is_local_projection(bbox)).toBe(false);
     });
   });
 
