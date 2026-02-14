@@ -2,12 +2,16 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
 import type { Geometry, Position } from 'geojson';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   getCategoricalColorMap,
   getColorForValue,
   getSizeForValue
 } from '../../map/utils/data-styling.utils';
-import type { VisualizationConfig } from '../store/visualization.store.svelte';
+import {
+  VisualizationType,
+  type VisualizationConfig
+} from '../store/visualization.store.svelte';
 import { hexToRgb, hslToHex } from './color-utils';
 import { LogCategory, logger } from './logger';
 import type {
@@ -105,7 +109,9 @@ function calculateDatasetBounds(
     };
   }
 
-  const geometryColumn = dataset.columns.find((col) => col.type === COLUMN_TYPE_GEOMETRY);
+  const geometryColumn = dataset.columns.find(
+    (col) => col.type === COLUMN_TYPE_GEOMETRY
+  );
   if (!geometryColumn) return null;
 
   let minX = Infinity;
@@ -280,7 +286,7 @@ function getFeatureStyle(
   let radius = 5;
 
   if (
-    visualization.type === 'choropleth' &&
+    visualization.type === VisualizationType.CHOROPLETH &&
     visualization.mapping.valueColumn
   ) {
     const value = row[visualization.mapping.valueColumn];
@@ -299,7 +305,7 @@ function getFeatureStyle(
   }
 
   if (
-    visualization.type === 'categorical' &&
+    visualization.type === VisualizationType.CATEGORICAL &&
     visualization.mapping.categoryColumn
   ) {
     const category = row[visualization.mapping.categoryColumn];
@@ -326,7 +332,7 @@ function getFeatureStyle(
   }
 
   if (
-    visualization.type === 'proportional' &&
+    visualization.type === VisualizationType.PROPORTIONAL &&
     visualization.mapping.sizeColumn
   ) {
     const value = row[visualization.mapping.sizeColumn];
@@ -411,7 +417,7 @@ function renderShapeAnnotation(item: Annotation): string {
   const { x, y } = item.position;
   const originX = x;
   const originY = y;
-  const shapeType = String(item.content ?? 'circle');
+  const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE);
   const style = item.style ?? {};
   const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
   const stroke = resolveColor(style.strokeColor, SVG_COLORS.DEFAULT_STROKE);
@@ -420,21 +426,21 @@ function renderShapeAnnotation(item: Annotation): string {
   const size = style.size ?? 50;
 
   switch (shapeType) {
-    case 'circle':
+    case SHAPE_TYPE.CIRCLE:
       return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'line':
+    case SHAPE_TYPE.LINE:
       return `    <line x1="${originX}" y1="${originY + size / 2}" x2="${originX + size}" y2="${originY + size / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'rectangle':
+    case SHAPE_TYPE.RECTANGLE:
       return `    <rect x="${originX}" y="${originY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'triangle': {
+    case SHAPE_TYPE.TRIANGLE: {
       const points = `${originX + size / 2},${originY} ${originX},${originY + size} ${originX + size},${originY + size}`;
       return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
-    case 'arrow': {
+    case SHAPE_TYPE.ARROW: {
       const arrowPath = `M${originX},${originY + size / 2} L${originX + size * 0.7},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.2} L${originX + size},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.8} L${originX + size * 0.7},${originY + size / 2} Z`;
       return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
-    case 'star': {
+    case SHAPE_TYPE.STAR: {
       const outerR = size / 2;
       const innerR = outerR * 0.4;
       const centerX = originX + outerR;
@@ -825,8 +831,12 @@ export function exportMapToSvg(
       const svgElement = renderGeometryToSvg(geometry, project, style, radius);
 
       if (svgElement) {
-        const isPolygon = geometry.type === GEOJSON_TYPE.POLYGON || geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
-        const isLine = geometry.type === GEOJSON_TYPE.LINE_STRING || geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
+        const isPolygon =
+          geometry.type === GEOJSON_TYPE.POLYGON ||
+          geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
+        const isLine =
+          geometry.type === GEOJSON_TYPE.LINE_STRING ||
+          geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
         if (isPolygon || isLine) {
           polygons.push(`        ${svgElement}`);
         } else {

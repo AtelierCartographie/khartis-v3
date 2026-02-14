@@ -1,5 +1,6 @@
 import {
   GEOMETRY_COLUMN_TYPE,
+  GEOMETRY_WKT_TYPES,
   hasGeometryType
 } from '$lib/features/commons/constants/geometry.constants';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
@@ -108,9 +109,12 @@ export async function addGeoArrowMetadataFromDuckDB(
 
     if (cachedGeoArrowMetadata) {
       const primaryColumn = cachedGeoArrowMetadata.primary_column;
-      geomColumn = { column_name: primaryColumn, column_type: 'GEOMETRY' };
+      geomColumn = {
+        column_name: primaryColumn,
+        column_type: GEOMETRY_COLUMN_TYPE
+      };
       const columnMeta = cachedGeoArrowMetadata.columns[primaryColumn];
-      geometryType = columnMeta?.geometry_types?.[0] || 'GEOMETRY';
+      geometryType = columnMeta?.geometry_types?.[0] || GEOMETRY_COLUMN_TYPE;
       if (!geometryType.startsWith('ST_')) {
         geometryType = 'ST_' + geometryType;
       }
@@ -127,7 +131,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       }));
 
       geomColumn = columns.find(
-        (c: { column_type: string }) => c.column_type === 'GEOMETRY'
+        (c: { column_type: string }) => c.column_type === GEOMETRY_COLUMN_TYPE
       );
 
       if (!geomColumn) {
@@ -149,7 +153,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       const types = geomTypeResult.map((r) => r.geom_type);
 
       if (types.length === 0) {
-        geometryType = 'GEOMETRY';
+        geometryType = GEOMETRY_COLUMN_TYPE;
       } else if (types.length === 1) {
         geometryType = types[0];
       } else {
@@ -161,13 +165,13 @@ export async function addGeoArrowMetadataFromDuckDB(
         const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
 
         if (hasPolygon || hasMultiPolygon) {
-          geometryType = 'MULTIPOLYGON';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
         } else if (hasLineString || hasMultiLineString) {
-          geometryType = 'MULTILINESTRING';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
         } else if (hasPoint || hasMultiPoint) {
-          geometryType = 'MULTIPOINT';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
         } else {
-          geometryType = 'GEOMETRY';
+          geometryType = GEOMETRY_COLUMN_TYPE;
         }
 
         logger.info(

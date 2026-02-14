@@ -35,7 +35,6 @@ interface OrthographicViewStateChangeParams {
   oldViewState?: DeckOrthographicViewStateMap;
 }
 
-
 export interface MapInitConfig {
   center: [number, number];
   zoom: number;
@@ -69,7 +68,10 @@ const DEFAULT_CONFIG: MapInitConfig = {
   maxZoom: 20
 };
 
-const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: DECK_VIEW_ID, flipY: false });
+const ORTHOGRAPHIC_VIEW = new OrthographicView({
+  id: DECK_VIEW_ID,
+  flipY: false
+});
 let hasPatchedLumaCanvasContext = false;
 let hasWebGL2Support: boolean | null = null;
 

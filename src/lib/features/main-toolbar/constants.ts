@@ -26,21 +26,11 @@ export enum FillMode {
   CATEGORIES = 'categories'
 }
 
-export enum FillType {
-  UNIQUE = 'unique',
-  CLASSES = 'classes'
-}
-
 export enum StrokeMode {
   NONE = 'none',
   UNIQUE = 'unique',
   CLASSES = 'classes',
   CATEGORIES = 'categories'
-}
-
-export enum LabelStrokeType {
-  NONE = 'aucun',
-  UNIQUE = 'unique'
 }
 
 export enum ShapeType {
@@ -181,14 +171,6 @@ export const BASEMAP_LAYER_CONFIG = {
   thickness: { min: 1, max: 20 },
   size: { min: 1, max: 100 }
 } as const;
-
-export enum LabelPosition {
-  CENTER = 'center',
-  TOP = 'top',
-  BOTTOM = 'bottom',
-  LEFT = 'left',
-  RIGHT = 'right'
-}
 
 export const UI_CONSTANTS = {
   SUGGESTIONS_PER_PAGE: 3,

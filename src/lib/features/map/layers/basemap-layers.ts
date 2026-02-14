@@ -27,6 +27,7 @@ import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
+  BASEMAP_LAYER_ID,
   type TerreLayerConfig,
   type MersLayerConfig,
   type ReliefLayerConfig,
@@ -870,13 +871,13 @@ export function createBasemapLayers(
 
     try {
       switch (config.id) {
-        case 'mers': {
+        case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
           if (layer) layers.push(layer);
           break;
         }
 
-        case 'terre':
+        case BASEMAP_LAYER_ID.TERRE:
           if (worldBaseTable) {
             const terreLayers = createTerreLayers(
               worldBaseTable,
@@ -887,7 +888,7 @@ export function createBasemapLayers(
           }
           break;
 
-        case 'lacs':
+        case BASEMAP_LAYER_ID.LACS:
           if (additionalData?.lakesData) {
             const layer = createLacsLayer(
               additionalData.lakesData,
@@ -898,7 +899,7 @@ export function createBasemapLayers(
           }
           break;
 
-        case 'rivieres':
+        case BASEMAP_LAYER_ID.RIVIERES:
           if (additionalData?.riversData) {
             const layer = createRivieresLayer(
               additionalData.riversData,
@@ -909,7 +910,7 @@ export function createBasemapLayers(
           }
           break;
 
-        case 'frontieres':
+        case BASEMAP_LAYER_ID.FRONTIERES:
           if (worldBaseTable) {
             const layer = createFrontieresLayer(
               worldBaseTable,
@@ -920,13 +921,13 @@ export function createBasemapLayers(
           }
           break;
 
-        case 'equateur': {
+        case BASEMAP_LAYER_ID.EQUATEUR: {
           const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
           if (layer) layers.push(layer);
           break;
         }
 
-        case 'meridiens': {
+        case BASEMAP_LAYER_ID.MERIDIENS: {
           const layer = createMeridiensLayer(
             config as MeridiensLayerConfig,
             ctx
@@ -935,7 +936,7 @@ export function createBasemapLayers(
           break;
         }
 
-        case 'villes':
+        case BASEMAP_LAYER_ID.VILLES:
           if (additionalData?.citiesData) {
             const layer = createVillesLayer(
               additionalData.citiesData,
@@ -946,7 +947,7 @@ export function createBasemapLayers(
           }
           break;
 
-        case 'relief':
+        case BASEMAP_LAYER_ID.RELIEF:
           if (worldBaseTable) {
             const layer = createReliefLayer(
               worldBaseTable,

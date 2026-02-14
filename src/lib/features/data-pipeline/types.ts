@@ -145,16 +145,6 @@ export function validationFailure(
   return { isValid: false, errors, warnings };
 }
 
-export function mergeValidationResults(
-  results: ValidationResult[]
-): ValidationResult {
-  return {
-    isValid: results.every((r) => r.isValid),
-    errors: results.flatMap((r) => r.errors),
-    warnings: results.flatMap((r) => r.warnings)
-  };
-}
-
 export interface ColumnAnalysis {
   name?: string;
   type?: ColumnType | string;

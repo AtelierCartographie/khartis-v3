@@ -12,7 +12,10 @@ import {
   WKBGeometryTypeCode
 } from '../constants';
 import type { GeometryInfo } from '../types';
-import { GEOJSON_TYPE, SIMPLE_GEOMETRY_TYPES } from '$lib/features/commons/constants';
+import {
+  GEOJSON_TYPE,
+  SIMPLE_GEOMETRY_TYPES
+} from '$lib/features/commons/constants';
 
 const VALID_LNG_RANGE = { min: -180, max: 180 };
 const VALID_LAT_RANGE = { min: -90, max: 90 };

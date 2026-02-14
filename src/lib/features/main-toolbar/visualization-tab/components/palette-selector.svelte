@@ -13,9 +13,15 @@
   import { ArrowsHorizontal, Checkmark } from 'carbon-icons-svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
-  type PaletteType = 'sequential' | 'diverging' | 'qualitative';
+  const PALETTE_TYPE = {
+    SEQUENTIAL: 'sequential',
+    DIVERGING: 'diverging',
+    QUALITATIVE: 'qualitative'
+  } as const;
 
-  export interface Palette {
+  type PaletteType = (typeof PALETTE_TYPE)[keyof typeof PALETTE_TYPE];
+
+  interface Palette {
     id: string;
     name: string;
     colors: string[];
@@ -35,7 +41,7 @@
 
   let {
     selectedPaletteId = $bindable('blues'),
-    paletteType = $bindable<PaletteType>('sequential'),
+    paletteType = $bindable<PaletteType>(PALETTE_TYPE.SEQUENTIAL),
     colorBlindFilter = $bindable(false),
     numClasses = 5,
     onselect,
@@ -48,42 +54,42 @@
       id: 'blues',
       name: 'Blues',
       colors: ['#f7fbff', '#6baed6', '#08519c'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     },
     {
       id: 'greens',
       name: 'Greens',
       colors: ['#f7fcf5', '#74c476', '#006d2c'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     },
     {
       id: 'oranges',
       name: 'Oranges',
       colors: ['#fff5eb', '#fd8d3c', '#a63603'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     },
     {
       id: 'purples',
       name: 'Purples',
       colors: ['#fcfbfd', '#9e9ac8', '#54278f'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     },
     {
       id: 'reds',
       name: 'Reds',
       colors: ['#fff5f0', '#fc9272', '#a50f15'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     },
     {
       id: 'grays',
       name: 'Grays',
       colors: ['#ffffff', '#969696', '#252525'],
-      type: 'sequential',
+      type: PALETTE_TYPE.SEQUENTIAL,
       colorBlindSafe: true
     }
   ];
@@ -93,35 +99,35 @@
       id: 'rdbu',
       name: 'Red-Blue',
       colors: ['#b2182b', '#f7f7f7', '#2166ac'],
-      type: 'diverging',
+      type: PALETTE_TYPE.DIVERGING,
       colorBlindSafe: true
     },
     {
       id: 'rdylgn',
       name: 'Red-Yellow-Green',
       colors: ['#d73027', '#ffffbf', '#1a9850'],
-      type: 'diverging',
+      type: PALETTE_TYPE.DIVERGING,
       colorBlindSafe: false
     },
     {
       id: 'brbg',
       name: 'Brown-BlueGreen',
       colors: ['#8c510a', '#f5f5f5', '#01665e'],
-      type: 'diverging',
+      type: PALETTE_TYPE.DIVERGING,
       colorBlindSafe: true
     },
     {
       id: 'piyg',
       name: 'Pink-YellowGreen',
       colors: ['#c51b7d', '#f7f7f7', '#4d9221'],
-      type: 'diverging',
+      type: PALETTE_TYPE.DIVERGING,
       colorBlindSafe: false
     },
     {
       id: 'prgn',
       name: 'Purple-Green',
       colors: ['#7b3294', '#f7f7f7', '#008837'],
-      type: 'diverging',
+      type: PALETTE_TYPE.DIVERGING,
       colorBlindSafe: true
     }
   ];
@@ -131,28 +137,28 @@
       id: 'set1',
       name: 'Set 1',
       colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'],
-      type: 'qualitative',
+      type: PALETTE_TYPE.QUALITATIVE,
       colorBlindSafe: false
     },
     {
       id: 'set2',
       name: 'Set 2',
       colors: ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854'],
-      type: 'qualitative',
+      type: PALETTE_TYPE.QUALITATIVE,
       colorBlindSafe: true
     },
     {
       id: 'pastel',
       name: 'Pastel',
       colors: ['#fbb4ae', '#b3cde3', '#ccebc5', '#decbe4', '#fed9a6'],
-      type: 'qualitative',
+      type: PALETTE_TYPE.QUALITATIVE,
       colorBlindSafe: true
     },
     {
       id: 'dark',
       name: 'Dark',
       colors: ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e'],
-      type: 'qualitative',
+      type: PALETTE_TYPE.QUALITATIVE,
       colorBlindSafe: true
     }
   ];
@@ -160,13 +166,13 @@
   const currentPalettes = $derived.by(() => {
     let palettes: Palette[];
     switch (paletteType) {
-      case 'sequential':
+      case PALETTE_TYPE.SEQUENTIAL:
         palettes = sequentialPalettes;
         break;
-      case 'diverging':
+      case PALETTE_TYPE.DIVERGING:
         palettes = divergingPalettes;
         break;
-      case 'qualitative':
+      case PALETTE_TYPE.QUALITATIVE:
         palettes = qualitativePalettes;
         break;
       default:
@@ -247,13 +253,17 @@
     >
       <RadioButton
         id="palette-seq"
-        value="sequential"
+        value={PALETTE_TYPE.SEQUENTIAL}
         labelText="Séquentielle"
       />
-      <RadioButton id="palette-div" value="diverging" labelText="Divergente" />
+      <RadioButton
+        id="palette-div"
+        value={PALETTE_TYPE.DIVERGING}
+        labelText="Divergente"
+      />
       <RadioButton
         id="palette-qual"
-        value="qualitative"
+        value={PALETTE_TYPE.QUALITATIVE}
         labelText="Qualitative"
       />
     </RadioButtonGroup>

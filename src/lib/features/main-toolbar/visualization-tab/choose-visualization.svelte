@@ -9,6 +9,7 @@
   } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
+    PrimitiveFilterType,
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
@@ -124,11 +125,11 @@
 
   function getGeometryIcon(geometry: string) {
     switch (geometry) {
-      case 'point':
+      case PrimitiveFilterType.POINT:
         return CircleFilled;
-      case 'polygon':
+      case PrimitiveFilterType.POLYGON:
         return Shapes;
-      case 'line':
+      case PrimitiveFilterType.LINE:
         return EdgeNode;
       default:
         return CircleFilled;

@@ -35,15 +35,3 @@ export const MIME = {
   WEBP: 'image/webp',
   FORM_DATA: 'multipart/form-data'
 } as const;
-
-export const MIME_PATTERNS = {
-  CSV: 'csv',
-  TAB_SEPARATED: 'tab-separated',
-  PARQUET: 'parquet',
-  ZIP: 'zip',
-  JSON: 'json',
-  GEOJSON: 'geo+json',
-  XML: 'xml',
-  SPREADSHEET: 'spreadsheet',
-  EXCEL: 'excel'
-} as const;

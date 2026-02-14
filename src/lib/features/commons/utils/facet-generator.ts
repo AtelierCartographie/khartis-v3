@@ -1,7 +1,10 @@
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { LogCategory, logger } from './logger';
-import type { ScaleMode } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+import {
+  SCALE_MODE,
+  type ScaleMode
+} from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
 function buildEqualIntervalBreaks(
   min: number,
@@ -34,7 +37,7 @@ function buildFacetClassification(
     return baseClassification;
   }
 
-  if (scaleMode === 'shared') {
+  if (scaleMode === SCALE_MODE.SHARED) {
     return { ...baseClassification };
   }
 
