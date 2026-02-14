@@ -9,8 +9,8 @@ import type {
 
 const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
 
-class BasemapCatalogService {
-  private _state = $state<{
+function createBasemapCatalogService() {
+  const state = $state<{
     catalog: BasemapCatalog | null;
     isLoaded: boolean;
   }>({
@@ -18,20 +18,8 @@ class BasemapCatalogService {
     isLoaded: false
   });
 
-  get catalog(): BasemapCatalog | null {
-    return this._state.catalog;
-  }
-
-  get basemaps(): BasemapMetadata[] {
-    return this._state.catalog?.basemaps ?? [];
-  }
-
-  get isLoaded(): boolean {
-    return this._state.isLoaded;
-  }
-
-  async loadCatalog(): Promise<void> {
-    if (this._state.isLoaded) {
+  async function loadCatalog(): Promise<void> {
+    if (state.isLoaded) {
       return;
     }
 
@@ -44,64 +32,19 @@ class BasemapCatalogService {
 
       const basemaps: BasemapMetadata[] = await response.json();
 
-      this._state.catalog = {
+      state.catalog = {
         basemaps,
         version: '1.0.0'
       };
 
-      this._state.isLoaded = true;
+      state.isLoaded = true;
     } catch (error) {
       logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
       throw error;
     }
   }
 
-  getSuggestions(
-    dataset: ProcessedDataset,
-    limit: number = 3,
-    geoColumnName?: string
-  ): BasemapSuggestion[] {
-    if (!this._state.catalog) {
-      return [];
-    }
-
-    let geoColumn;
-    if (geoColumnName) {
-      geoColumn = dataset.columns.find((c) => c.name === geoColumnName);
-    } else {
-      geoColumn = dataset.columns.find(
-        (c) =>
-          c.type === 'string' &&
-          (c as { subtype?: string }).subtype === 'geographic'
-      );
-    }
-
-    if (!geoColumn) {
-      return [];
-    }
-
-    const suggestions = this._state.catalog.basemaps
-      .map((basemap) => {
-        const { score, reason } = this.calculateMatchScore(
-          dataset,
-          geoColumn.name,
-          basemap
-        );
-
-        return {
-          ...basemap,
-          matchScore: score,
-          matchReason: reason
-        };
-      })
-      .filter((s) => s.matchScore > 0)
-      .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, limit);
-
-    return suggestions;
-  }
-
-  private calculateMatchScore(
+  function calculateMatchScore(
     _dataset: ProcessedDataset,
     geoColumnName: string,
     basemap: BasemapMetadata
@@ -184,14 +127,59 @@ class BasemapCatalogService {
     };
   }
 
-  searchBasemaps(query: string): BasemapMetadata[] {
-    if (!this._state.catalog) {
+  function getSuggestions(
+    dataset: ProcessedDataset,
+    limit: number = 3,
+    geoColumnName?: string
+  ): BasemapSuggestion[] {
+    if (!state.catalog) {
+      return [];
+    }
+
+    let geoColumn;
+    if (geoColumnName) {
+      geoColumn = dataset.columns.find((c) => c.name === geoColumnName);
+    } else {
+      geoColumn = dataset.columns.find(
+        (c) =>
+          c.type === 'string' &&
+          (c as { subtype?: string }).subtype === 'geographic'
+      );
+    }
+
+    if (!geoColumn) {
+      return [];
+    }
+
+    const suggestions = state.catalog.basemaps
+      .map((basemap) => {
+        const { score, reason } = calculateMatchScore(
+          dataset,
+          geoColumn.name,
+          basemap
+        );
+
+        return {
+          ...basemap,
+          matchScore: score,
+          matchReason: reason
+        };
+      })
+      .filter((s) => s.matchScore > 0)
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
+
+    return suggestions;
+  }
+
+  function searchBasemaps(query: string): BasemapMetadata[] {
+    if (!state.catalog) {
       return [];
     }
 
     const queryLower = query.toLowerCase();
 
-    return this._state.catalog.basemaps.filter((basemap) => {
+    return state.catalog.basemaps.filter((basemap) => {
       return (
         basemap.title.toLowerCase().includes(queryLower) ||
         basemap.description.toLowerCase().includes(queryLower) ||
@@ -200,22 +188,23 @@ class BasemapCatalogService {
     });
   }
 
-  getBasemapById(basemapId: string): BasemapMetadata | null {
-    if (!this._state.catalog) {
+  function getBasemapById(basemapId: string): BasemapMetadata | null {
+    if (!state.catalog) {
       return null;
     }
 
     return (
-      this._state.catalog.basemaps.find((b) => b.file === basemapId) ?? null
+      state.catalog.basemaps.find((basemap) => basemap.file === basemapId) ??
+      null
     );
   }
 
-  filterByYear(minYear: number, maxYear?: number): BasemapMetadata[] {
-    if (!this._state.catalog) {
+  function filterByYear(minYear: number, maxYear?: number): BasemapMetadata[] {
+    if (!state.catalog) {
       return [];
     }
 
-    return this._state.catalog.basemaps.filter((basemap) => {
+    return state.catalog.basemaps.filter((basemap) => {
       const year = parseInt(basemap.date);
       if (isNaN(year)) return false;
 
@@ -227,21 +216,39 @@ class BasemapCatalogService {
     });
   }
 
-  addCustomBasemap(basemap: BasemapMetadata): void {
-    if (!this._state.catalog) {
+  function addCustomBasemap(basemap: BasemapMetadata): void {
+    if (!state.catalog) {
       return;
     }
 
-    const existingIndex = this._state.catalog.basemaps.findIndex(
-      (b) => b.file === basemap.file
+    const existingIndex = state.catalog.basemaps.findIndex(
+      (existingBasemap) => existingBasemap.file === basemap.file
     );
 
     if (existingIndex !== -1) {
-      this._state.catalog.basemaps[existingIndex] = basemap;
+      state.catalog.basemaps[existingIndex] = basemap;
     } else {
-      this._state.catalog.basemaps.push(basemap);
+      state.catalog.basemaps.push(basemap);
     }
   }
+
+  return {
+    get catalog(): BasemapCatalog | null {
+      return state.catalog;
+    },
+    get basemaps(): BasemapMetadata[] {
+      return state.catalog?.basemaps ?? [];
+    },
+    get isLoaded(): boolean {
+      return state.isLoaded;
+    },
+    loadCatalog,
+    getSuggestions,
+    searchBasemaps,
+    getBasemapById,
+    filterByYear,
+    addCustomBasemap
+  };
 }
 
-export const basemapCatalogService = new BasemapCatalogService();
+export const basemapCatalogService = createBasemapCatalogService();

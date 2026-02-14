@@ -3,56 +3,62 @@ import { PROJECT_CONST } from '../constants';
 import type { AutoSaveConfig } from '../types';
 
 export type SaveCallback = () => Promise<void>;
+export interface AutoSaveController {
+  updateConfig: (partial: Partial<AutoSaveConfig>) => void;
+  schedule: (isDirty: boolean) => void;
+  cancel: () => void;
+}
 
-export class AutoSaveController {
-  private timer?: number;
+export function createAutoSaveController(
+  save: SaveCallback,
+  initialConfig: AutoSaveConfig = {
+    enabled: true,
+    interval: PROJECT_CONST.TIMINGS.AUTO_SAVE_DELAY
+  }
+): AutoSaveController {
+  let timer: number | undefined;
+  let config: AutoSaveConfig = initialConfig;
 
-  private config: AutoSaveConfig;
-
-  constructor(
-    private readonly save: SaveCallback,
-    initialConfig: AutoSaveConfig = {
-      enabled: true,
-      interval: PROJECT_CONST.TIMINGS.AUTO_SAVE_DELAY
-    }
-  ) {
-    this.config = initialConfig;
+  function updateConfig(partial: Partial<AutoSaveConfig>): void {
+    config = { ...config, ...partial };
   }
 
-  updateConfig(partial: Partial<AutoSaveConfig>): void {
-    this.config = { ...this.config, ...partial };
-  }
-
-  schedule(isDirty: boolean): void {
+  function schedule(isDirty: boolean): void {
     if (typeof window === 'undefined') {
       return;
     }
 
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
     }
 
-    if (!this.config.enabled || !isDirty) {
+    if (!config.enabled || !isDirty) {
       return;
     }
 
-    this.timer = window.setTimeout(() => {
-      this.save().catch((error) => {
+    timer = window.setTimeout(() => {
+      save().catch((error) => {
         logger.error('Auto-save failed', LogCategory.PERSISTENCE, error);
       });
-    }, this.config.interval);
+    }, config.interval);
   }
 
-  cancel(): void {
+  function cancel(): void {
     if (typeof window === 'undefined') {
-      this.timer = undefined;
+      timer = undefined;
       return;
     }
 
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
+    if (timer) {
+      clearTimeout(timer);
+      timer = undefined;
     }
   }
+
+  return {
+    updateConfig,
+    schedule,
+    cancel
+  };
 }
