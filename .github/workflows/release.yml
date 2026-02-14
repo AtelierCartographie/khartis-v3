@@ -40,6 +40,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Compile Paraglide
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Run pipeline tests
+        run: pnpm run test:pipeline
+
       - name: Run semantic-release
         run: pnpm exec semantic-release
         env:
