@@ -1,4 +1,9 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  type FilePayload,
+  type Locator,
+  type Page
+} from '@playwright/test';
 import { accessSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -11,30 +16,20 @@ export interface ConsoleError {
   location?: string;
 }
 
-const IGNORED_CONSOLE_PATTERNS = [
-  'ResizeObserver loop',
-  'favicon.ico',
-  '[vite]',
-  'HMR',
-  'hot module replacement'
-] as const;
+export class ConsoleErrorTracker {
+  private errors: ConsoleError[] = [];
 
-export interface ConsoleErrorTracker {
-  start: () => void;
-  getErrors: () => ConsoleError[];
-  hasErrors: () => boolean;
-  getErrorSummary: () => string;
-  clear: () => void;
-}
+  private page: Page;
 
-export function createConsoleErrorTracker(page: Page): ConsoleErrorTracker {
-  let errors: ConsoleError[] = [];
+  constructor(page: Page) {
+    this.page = page;
+  }
 
-  function start(): void {
-    errors = [];
-    page.on('console', (msg) => {
+  start(): void {
+    this.errors = [];
+    this.page.on('console', (msg) => {
       if (msg.type() === 'error') {
-        errors.push({
+        this.errors.push({
           type: 'error',
           text: msg.text(),
           location: msg.location()?.url
@@ -42,8 +37,8 @@ export function createConsoleErrorTracker(page: Page): ConsoleErrorTracker {
       }
     });
 
-    page.on('pageerror', (error) => {
-      errors.push({
+    this.page.on('pageerror', (error) => {
+      this.errors.push({
         type: 'error',
         text: error.message,
         location: error.stack
@@ -51,42 +46,35 @@ export function createConsoleErrorTracker(page: Page): ConsoleErrorTracker {
     });
   }
 
-  function getErrors(): ConsoleError[] {
-    return errors.filter((trackedError) => {
-      return !IGNORED_CONSOLE_PATTERNS.some((pattern) =>
-        trackedError.text.toLowerCase().includes(pattern.toLowerCase())
+  getErrors(): ConsoleError[] {
+    return this.errors.filter((e) => {
+      // Ignore known benign errors
+      const ignoredPatterns = [
+        'ResizeObserver loop',
+        'favicon.ico',
+        '[vite]',
+        'HMR',
+        'hot module replacement'
+      ];
+      return !ignoredPatterns.some((pattern) =>
+        e.text.toLowerCase().includes(pattern.toLowerCase())
       );
     });
   }
 
-  function hasErrors(): boolean {
-    return getErrors().length > 0;
+  hasErrors(): boolean {
+    return this.getErrors().length > 0;
   }
 
-  function getErrorSummary(): string {
-    const currentErrors = getErrors();
-    if (currentErrors.length === 0) return 'No errors';
-    return currentErrors
-      .map((trackedError) => {
-        if (trackedError.location) {
-          return `[${trackedError.type}] ${trackedError.text}\n  at ${trackedError.location}`;
-        }
-        return `[${trackedError.type}] ${trackedError.text}`;
-      })
-      .join('\n');
+  getErrorSummary(): string {
+    const errors = this.getErrors();
+    if (errors.length === 0) return 'No errors';
+    return errors.map((e) => `[${e.type}] ${e.text}`).join('\n');
   }
 
-  function clear(): void {
-    errors = [];
+  clear(): void {
+    this.errors = [];
   }
-
-  return {
-    start,
-    getErrors,
-    hasErrors,
-    getErrorSummary,
-    clear
-  };
 }
 
 // Paths - utilise tests-datasets/ (pas de mocks dupliqués)
@@ -103,15 +91,15 @@ export const SHP_PATH = join(TEST_DATASETS, 'shp');
 export const MODAL_SELECTOR = '#khartis-create-project .bx--modal-container';
 export const SIDENAV_SELECTOR = '#khartis-side-nav .bx--side-nav';
 
-// Timeouts adaptés pour CI et exécution locale parallèle (2+ workers)
-export const TIMEOUTS = {
-  modal: isCI ? 30000 : 30000,
-  map: isCI ? 60000 : 60000,
-  fileUpload: isCI ? 15000 : 15000,
-  action: isCI ? 25000 : 25000,
+// Timeouts adaptés pour CI (local timeouts optimized for parallel execution)
+const TIMEOUTS = {
+  modal: isCI ? 30000 : 20000,
+  map: isCI ? 60000 : 45000,
+  fileUpload: isCI ? 10000 : 8000,
+  action: isCI ? 20000 : 15000,
   transition: isCI ? 1000 : 500,
   // DuckDB WASM init - higher for parallel execution (resource contention)
-  duckdbInit: isCI ? 120000 : 120000
+  duckdbInit: isCI ? 120000 : 90000
 };
 
 // Core helpers
@@ -131,7 +119,7 @@ export async function waitForModal(
 
 export async function waitForMap(page: Page, timeout?: number): Promise<void> {
   const mapTimeout = timeout ?? TIMEOUTS.map;
-  await page.waitForSelector('.map-canvas, canvas', {
+  await page.waitForSelector('.map-container', {
     state: 'visible',
     timeout: mapTimeout
   });
@@ -139,35 +127,15 @@ export async function waitForMap(page: Page, timeout?: number): Promise<void> {
   await page.waitForTimeout(isCI ? 2000 : 1000);
 }
 
-export interface FileImportAssertions {
-  minRows?: number;
-  minColumns?: number;
-  exactRows?: number;
-  exactColumns?: number;
-}
-
-export interface CreateProjectOptions {
-  projectName?: string;
-  fileAssertions?: FileImportAssertions;
-}
-
 export async function createProject(
   page: Page,
-  filePath: string,
-  projectNameOrOptions?: string | CreateProjectOptions
-): Promise<{ rowCount?: number; columnCount?: number }> {
-  const options: CreateProjectOptions =
-    typeof projectNameOrOptions === 'string'
-      ? { projectName: projectNameOrOptions }
-      : (projectNameOrOptions ?? {});
-
+  filePath: string | FilePayload,
+  projectName?: string
+): Promise<void> {
   const modal = await waitForModal(page);
 
   const fileInput = modal.locator('input[type="file"]').first();
-  await fileInput.setInputFiles(filePath);
-
-  // Small delay to ensure file processing starts
-  await page.waitForTimeout(500);
+  await fileInput.setInputFiles(filePath, { timeout: TIMEOUTS.action * 2 });
 
   // Wait for file processing to complete (not just timeout)
   // Use data-testid selectors for reliability
@@ -175,14 +143,14 @@ export async function createProject(
   const completeIndicator = modal.locator('[data-testid="file-complete"]');
   const errorIndicator = modal.locator('[data-testid="file-error"]');
 
-  // Wait for processing to start or complete (longer timeout for larger files)
+  // Wait for processing to finish (complete or error)
   await expect(
     processingIndicator.or(completeIndicator).or(errorIndicator)
-  ).toBeVisible({ timeout: TIMEOUTS.fileUpload * 2 });
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
 
-  // Wait for processing to complete (longer timeout for geo files)
+  // Wait for processing to complete
   await expect(processingIndicator).toBeHidden({
-    timeout: TIMEOUTS.action * 6
+    timeout: TIMEOUTS.action * 3
   });
 
   // Check for errors
@@ -194,13 +162,7 @@ export async function createProject(
   // Ensure complete tile is visible
   await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
-  // Validate file import if assertions provided
-  let importResult: { rowCount: number; columnCount: number } | undefined;
-  if (options.fileAssertions) {
-    importResult = await assertFileImported(modal, options.fileAssertions);
-  }
-
-  const name = options.projectName || `Test ${Date.now()}`;
+  const name = projectName || `Test ${Date.now()}`;
   const nameInput = modal.locator('[data-testid="project-name-input"]');
 
   // Wait for input to be ready
@@ -233,10 +195,7 @@ export async function createProject(
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
-  // Longer timeout for project creation (includes dataset registration, map rendering)
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
-
-  return importResult ?? {};
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
 }
 
 export async function openSideNav(page: Page): Promise<Locator> {
@@ -251,7 +210,7 @@ export async function openSideNav(page: Page): Promise<Locator> {
 
 export async function freshStart(page: Page): Promise<ConsoleErrorTracker> {
   // Start error tracking before navigation
-  const errorTracker = createConsoleErrorTracker(page);
+  const errorTracker = new ConsoleErrorTracker(page);
   errorTracker.start();
 
   await page.goto('/');
@@ -314,13 +273,8 @@ export function getShapefileComponents(shpPath: string): string[] {
 export async function createShapefileProject(
   page: Page,
   shpPath: string,
-  projectNameOrOptions?: string | CreateProjectOptions
-): Promise<{ rowCount?: number; columnCount?: number }> {
-  const options: CreateProjectOptions =
-    typeof projectNameOrOptions === 'string'
-      ? { projectName: projectNameOrOptions }
-      : (projectNameOrOptions ?? {});
-
+  projectName?: string
+): Promise<void> {
   const modal = await waitForModal(page);
   const shapefileComponents = getShapefileComponents(shpPath);
 
@@ -328,23 +282,20 @@ export async function createShapefileProject(
   const fileInput = dropContainer.locator('input[type="file"]');
   await fileInput.setInputFiles(shapefileComponents);
 
-  // Small delay to ensure file processing starts
-  await page.waitForTimeout(500);
-
   // Wait for file processing to complete (not just timeout)
   // Use data-testid selectors for reliability
   const processingIndicator = modal.locator('[data-testid="file-processing"]');
   const completeIndicator = modal.locator('[data-testid="file-complete"]');
   const errorIndicator = modal.locator('[data-testid="file-error"]');
 
-  // Wait for processing to start (longer timeout for shapefiles)
+  // Wait for processing to start
   await expect(
     processingIndicator.or(completeIndicator).or(errorIndicator)
-  ).toBeVisible({ timeout: TIMEOUTS.fileUpload * 2 });
+  ).toBeVisible({ timeout: TIMEOUTS.fileUpload });
 
   // Wait for processing to complete (longer timeout for shapefiles)
   await expect(processingIndicator).toBeHidden({
-    timeout: TIMEOUTS.action * 6
+    timeout: TIMEOUTS.action * 4
   });
 
   // Check for errors
@@ -356,13 +307,7 @@ export async function createShapefileProject(
   // Ensure complete tile is visible
   await expect(completeIndicator).toBeVisible({ timeout: TIMEOUTS.action });
 
-  // Validate file import if assertions provided
-  let importResult: { rowCount: number; columnCount: number } | undefined;
-  if (options.fileAssertions) {
-    importResult = await assertFileImported(modal, options.fileAssertions);
-  }
-
-  const name = options.projectName || `Test ${Date.now()}`;
+  const name = projectName || `Test ${Date.now()}`;
   const nameInput = modal.locator('[data-testid="project-name-input"]');
 
   // Wait for input to be ready
@@ -401,59 +346,5 @@ export async function createShapefileProject(
   await expect(createBtn).toBeEnabled({ timeout: TIMEOUTS.action * 2 });
   await createBtn.click();
 
-  // Longer timeout for shapefile project creation
-  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 4 });
-
-  return importResult ?? {};
-}
-
-export async function assertFileImported(
-  modal: Locator,
-  options?: FileImportAssertions
-): Promise<{ rowCount: number; columnCount: number }> {
-  const completeIndicator = modal.locator('[data-testid="file-complete"]');
-  await expect(completeIndicator.first()).toBeVisible({
-    timeout: TIMEOUTS.action
-  });
-
-  const rowCountEl = modal.locator('[data-testid="file-row-count"]').first();
-  const colCountEl = modal.locator('[data-testid="file-column-count"]').first();
-
-  // Get actual counts (may not be present for all file types)
-  const rowCountText = await rowCountEl.textContent().catch(() => '0');
-  const colCountText = await colCountEl.textContent().catch(() => '0');
-
-  const rowCount = parseInt(rowCountText || '0', 10);
-  const columnCount = parseInt(colCountText || '0', 10);
-
-  // Validate against options if provided
-  if (options?.minRows !== undefined) {
-    expect(
-      rowCount,
-      `Expected at least ${options.minRows} rows, got ${rowCount}`
-    ).toBeGreaterThanOrEqual(options.minRows);
-  }
-
-  if (options?.minColumns !== undefined) {
-    expect(
-      columnCount,
-      `Expected at least ${options.minColumns} columns, got ${columnCount}`
-    ).toBeGreaterThanOrEqual(options.minColumns);
-  }
-
-  if (options?.exactRows !== undefined) {
-    expect(
-      rowCount,
-      `Expected exactly ${options.exactRows} rows, got ${rowCount}`
-    ).toBe(options.exactRows);
-  }
-
-  if (options?.exactColumns !== undefined) {
-    expect(
-      columnCount,
-      `Expected exactly ${options.exactColumns} columns, got ${columnCount}`
-    ).toBe(options.exactColumns);
-  }
-
-  return { rowCount, columnCount };
+  await expect(modal).toBeHidden({ timeout: TIMEOUTS.action * 3 });
 }

@@ -42,14 +42,18 @@ test.describe('Side Navigation', () => {
     ).toContainText('New project', { timeout: 15000 });
   });
 
-  test('should have all project buttons with correct states', async ({
+  test('should have all project buttons with correct states @smoke', async ({
     page
   }) => {
     test.slow();
     await freshStart(page);
 
-    const csvPath = join(CSV_PATH, 'fossil-fuel-subsidies-gdp-2021.csv');
-    await createProject(page, csvPath);
+    const csvPayload = {
+      name: 'e2e-smoke-light.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('country,value\nFrance,10\nGermany,20\nSpain,30\n')
+    };
+    await createProject(page, csvPayload, `Smoke ${Date.now()}`);
     await waitForMap(page);
 
     await openSideNav(page);
