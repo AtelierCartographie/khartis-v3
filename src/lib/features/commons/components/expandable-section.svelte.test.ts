@@ -13,22 +13,25 @@ afterEach(cleanup);
 
 describe('ExpandableSection', () => {
   it('renders collapsed by default', () => {
-    render(ExpandableSection, { props: { title: 'Test Section' } });
+    const { container } = render(ExpandableSection, {
+      props: { title: 'Test Section' }
+    });
 
     expect(screen.getByText('Test Section')).toBeInTheDocument();
-    expect(screen.queryByTestId('section-body')).not.toBeInTheDocument();
+    expect(container.querySelector('.section-body')).not.toBeInTheDocument();
 
     const header = screen.getByRole('button', { name: 'Toggle section' });
     expect(header).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('renders expanded when defaultOpen is true', () => {
-    render(ExpandableSection, {
+    const { container } = render(ExpandableSection, {
       props: { title: 'Open Section', defaultOpen: true }
     });
 
     const btn = screen.getByRole('button', { name: 'Toggle section' });
     expect(btn).toHaveAttribute('aria-expanded', 'true');
+    expect(container.querySelector('.section-body')).toBeInTheDocument();
   });
 
   it('expands on header click', async () => {

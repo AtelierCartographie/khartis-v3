@@ -79,6 +79,13 @@ function markStepComplete(index: number) {
   }
 }
 
+function resetStepCompletion(index: number) {
+  const maxIndex = getStepCount() - 1;
+  if (index < 0 || index > maxIndex) return;
+
+  state.hasCompletedStep[index] = false;
+}
+
 function updateNavigationPermissions() {
   state.canNavigateToStep[0] = true;
 
@@ -162,6 +169,7 @@ export const dataTabStore = {
   setPrimaryBasemapId,
   setActiveStep,
   markStepComplete,
+  resetStepCompletion,
   updateNavigationPermissions,
   reset,
   nextStep,

@@ -3,6 +3,7 @@ import type { GeoProjection } from 'd3-geo';
 import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
 import type { Feature, FeatureCollection } from 'geojson';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 export interface ProjectionInfo {
   id: string;
@@ -174,7 +175,7 @@ export function projectGeoJSON(
 
   const path = d3geo.geoPath(projection);
 
-  if (geojson.type === 'FeatureCollection') {
+  if (geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION) {
     const featuresWithPaths: FeatureWithPath[] = geojson.features.map(
       (feature) => ({
         ...feature,
@@ -186,7 +187,7 @@ export function projectGeoJSON(
       ...geojson,
       features: featuresWithPaths
     };
-  } else if (geojson.type === 'Feature') {
+  } else if (geojson.type === GEOJSON_TYPE.FEATURE) {
     return {
       ...geojson,
       svgPath: path(geojson) ?? undefined

@@ -6,6 +6,7 @@
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface Props {
     open: boolean;
@@ -89,10 +90,10 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === KEY.ENTER) {
       event.preventDefault();
       saveRename();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
       cancelEditing();
     }

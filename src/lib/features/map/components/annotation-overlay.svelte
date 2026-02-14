@@ -1,19 +1,20 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { StylingTools } from '$lib/features/commons/types/global';
   import {
     AnnotationKind,
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { onDestroy } from 'svelte';
-  import { formatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
-
-  const GRID_SIZE = 24;
+  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let overlayElement = $state<HTMLDivElement | null>(null);
   let dragState = $state<{
@@ -23,21 +24,32 @@
   } | null>(null);
 
   const annotationsState = $derived(getAnnotationsState());
+  const isAnnotationEditing = $derived(
+    globalState.selectedTool === StylingTools.Annotations
+  );
   const visibleItems = $derived(
-    annotationsState.items.filter((i) => i.visible !== false)
+    annotationsState.visible
+      ? annotationsState.items.filter((item) => {
+          if (item.visible === false) {
+            return false;
+          }
+
+          if (
+            item.role &&
+            typeof item.content === 'string' &&
+            item.content.trim().length === 0
+          ) {
+            return false;
+          }
+
+          return true;
+        })
+      : []
   );
   const selectedId = $derived(annotationsState.selectedId);
-  const isGridEnabled = $derived(formatState.gridEnabled);
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
-  }
-
-  function snap(value: number): number {
-    if (!isGridEnabled) {
-      return value;
-    }
-    return Math.round(value / GRID_SIZE) * GRID_SIZE;
   }
 
   function stopDragging(): void {
@@ -62,8 +74,8 @@
     let x = event.clientX - rect.left - dragState.offsetX;
     let y = event.clientY - rect.top - dragState.offsetY;
 
-    x = clamp(snap(x), 0, maxX);
-    y = clamp(snap(y), 0, maxY);
+    x = clamp(x, 0, maxX);
+    y = clamp(y, 0, maxY);
 
     annotationsActions.moveAnnotation(dragState.id, { x, y });
   }
@@ -72,6 +84,10 @@
     event: PointerEvent,
     item: Annotation
   ): void {
+    if (!isAnnotationEditing) {
+      return;
+    }
+
     if (!overlayElement) {
       return;
     }
@@ -88,18 +104,28 @@
       offsetY: event.clientY - rect.top - item.position.y
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
   }
 
   function handleAnnotationClick(event: MouseEvent, itemId: string): void {
     event.stopPropagation();
+
+    if (!isAnnotationEditing) {
+      activateStylingToolFromMap(StylingTools.Annotations);
+      annotationsActions.setPageElementsVisibility(true);
+    }
+
     annotationsActions.selectAnnotation(itemId);
   }
 
   function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
       event.preventDefault();
+      if (!isAnnotationEditing) {
+        activateStylingToolFromMap(StylingTools.Annotations);
+        annotationsActions.setPageElementsVisibility(true);
+      }
       annotationsActions.selectAnnotation(itemId);
     }
   }
@@ -199,6 +225,11 @@
           type: 'path',
           path: `M 0,${baseSize / 2} L ${baseSize * 0.7},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.2} L ${baseSize},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.8} L ${baseSize * 0.7},${baseSize / 2} Z`
         };
+      case 'line':
+        return {
+          type: 'path',
+          path: `M 0,${baseSize / 2} L ${baseSize},${baseSize / 2}`
+        };
       case 'rectangle':
         return {
           type: 'rect',
@@ -263,11 +294,13 @@
     {#each visibleItems as item (item.id)}
       <div
         class="annotation-item"
-        class:selected={selectedId === item.id}
+        class:editable={isAnnotationEditing}
+        class:selected={isAnnotationEditing && selectedId === item.id}
         class:dragging={dragState?.id === item.id}
         style="left: {item.position.x}px; top: {item.position.y}px;"
         role="button"
         tabindex="0"
+        aria-disabled="false"
         aria-label={m.annotationImageAlt()}
         onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
         onpointerdown={(event: PointerEvent) =>
@@ -368,15 +401,20 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 15;
+    z-index: var(--z-content-raised);
   }
 
   .annotation-item {
     position: absolute;
     pointer-events: auto;
-    cursor: move;
+    cursor: pointer;
     touch-action: none;
     outline: none;
+  }
+
+  .annotation-item.editable {
+    pointer-events: auto;
+    cursor: move;
   }
 
   .annotation-item.selected {

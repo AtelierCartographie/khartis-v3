@@ -1,20 +1,18 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import {
   ArrowExtension,
   COMPATIBLE_GEOMETRY_TYPES,
   GeoArrowMetadataKey,
-  GeoColumnName,
-  GeoJsonFeatureType,
-  GeoJsonGeometryType,
   GEO_EXTENSION_TO_TYPE,
   GEO_TYPE_TO_EXTENSION,
-  GEOJSON_GEOMETRY_TYPES,
   GeometryType,
   WKBGeometryTypeCode
 } from '../constants';
 import type { GeometryInfo } from '../types';
+import { GEOJSON_TYPE, SIMPLE_GEOMETRY_TYPES } from '$lib/features/commons/constants';
 
 const VALID_LNG_RANGE = { min: -180, max: 180 };
 const VALID_LAT_RANGE = { min: -90, max: 90 };
@@ -57,7 +55,7 @@ export function isGeoJsonGeometry(geom: unknown): geom is Geometry {
   const g = geom as Record<string, unknown>;
   return (
     typeof g.type === 'string' &&
-    (GEOJSON_GEOMETRY_TYPES as readonly string[]).includes(g.type as string) &&
+    (SIMPLE_GEOMETRY_TYPES as readonly string[]).includes(g.type as string) &&
     Array.isArray(g.coordinates)
   );
 }
@@ -77,7 +75,7 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
       return null;
     }
     return {
-      type: GeoJsonGeometryType.Point,
+      type: GEOJSON_TYPE.POINT,
       coordinates: coords as [number, number]
     };
   }
@@ -93,7 +91,7 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
       return null;
     }
     return {
-      type: GeoJsonGeometryType.LineString,
+      type: GEOJSON_TYPE.LINE_STRING,
       coordinates: lineCoords
     };
   }
@@ -104,7 +102,7 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
 
   if (typeof third === 'number') {
     return {
-      type: GeoJsonGeometryType.Polygon,
+      type: GEOJSON_TYPE.POLYGON,
       coordinates: coords as [number, number][][]
     };
   }
@@ -115,7 +113,7 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
 
   if (typeof fourth === 'number') {
     return {
-      type: GeoJsonGeometryType.MultiPolygon,
+      type: GEOJSON_TYPE.MULTI_POLYGON,
       coordinates: coords as [number, number][][][]
     };
   }
@@ -124,7 +122,7 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
     const fifth = fourth[0];
     if (typeof fifth === 'number') {
       return {
-        type: GeoJsonGeometryType.MultiLineString,
+        type: GEOJSON_TYPE.MULTI_LINE_STRING,
         coordinates: coords as [number, number][][]
       };
     }
@@ -186,7 +184,7 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           });
           return null;
         }
-        return { type: GeoJsonGeometryType.Point, coordinates: point };
+        return { type: GEOJSON_TYPE.POINT, coordinates: point };
       }
 
       case WKBGeometryTypeCode.LINESTRING: {
@@ -195,12 +193,12 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
         for (let i = 0; i < numPoints; i++) {
           coords.push(readPoint());
         }
-        return { type: GeoJsonGeometryType.LineString, coordinates: coords };
+        return { type: GEOJSON_TYPE.LINE_STRING, coordinates: coords };
       }
 
       case WKBGeometryTypeCode.POLYGON:
         return {
-          type: GeoJsonGeometryType.Polygon,
+          type: GEOJSON_TYPE.POLYGON,
           coordinates: readPolygon()
         };
 
@@ -211,7 +209,7 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           offset += 5;
           points.push(readPoint());
         }
-        return { type: GeoJsonGeometryType.MultiPoint, coordinates: points };
+        return { type: GEOJSON_TYPE.MULTI_POINT, coordinates: points };
       }
 
       case WKBGeometryTypeCode.MULTILINESTRING: {
@@ -227,7 +225,7 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           lines.push(line);
         }
         return {
-          type: GeoJsonGeometryType.MultiLineString,
+          type: GEOJSON_TYPE.MULTI_LINE_STRING,
           coordinates: lines
         };
       }
@@ -240,7 +238,7 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
           polygons.push(readPolygon());
         }
         return {
-          type: GeoJsonGeometryType.MultiPolygon,
+          type: GEOJSON_TYPE.MULTI_POLYGON,
           coordinates: polygons
         };
       }
@@ -396,8 +394,8 @@ export function arrowTableToGeoJSON(
       for (const field of table.schema.fields) {
         if (
           field.name === geoColumn ||
-          field.name === GeoColumnName.GEOM ||
-          field.name === GeoColumnName.GEOMETRY
+          field.name === INTERNAL_COLUMN.GEOM ||
+          field.name === INTERNAL_COLUMN.GEOMETRY
         )
           continue;
         const col = table.getChild(field.name);
@@ -411,14 +409,14 @@ export function arrowTableToGeoJSON(
       const parsedGeom = parseGeoJsonGeometry(geom);
       if (parsedGeom) {
         features.push({
-          type: GeoJsonFeatureType.FEATURE,
+          type: GEOJSON_TYPE.FEATURE,
           properties,
           geometry: parsedGeom
         });
       }
     }
 
-    return { type: GeoJsonFeatureType.FEATURE_COLLECTION, features };
+    return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
   } catch (error) {
     logger.error(
       'Failed to convert Arrow table to GeoJSON',

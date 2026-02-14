@@ -1,7 +1,9 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck } from '$lib/features/duckdb';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import type { GeometryInfo } from '../types';
 import { computeCentroid } from '../types';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 export async function extractGeometryInfo(
   tableName: string,
@@ -27,12 +29,15 @@ export async function extractGeometryInfo(
       return undefined;
     }
 
+    const escapedGeomCol = escapeIdentifier(geometryColumn.name);
+    const escapedTable = escapeIdentifier(tableName);
+
     const consolidatedQuery = `
 			WITH bbox AS (
-				SELECT ST_Extent("${geometryColumn.name}") AS extent FROM "${tableName}"
+				SELECT ST_Extent("${escapedGeomCol}") AS extent FROM "${escapedTable}"
 			),
 			first_row AS (
-				SELECT "${geometryColumn.name}" AS geom FROM "${tableName}" WHERE "${geometryColumn.name}" IS NOT NULL LIMIT 1
+				SELECT "${escapedGeomCol}" AS geom FROM "${escapedTable}" WHERE "${escapedGeomCol}" IS NOT NULL LIMIT 1
 			)
 			SELECT
 				ST_GeometryType((SELECT geom FROM first_row)) AS geom_type,
@@ -65,6 +70,7 @@ export async function extractGeometryInfo(
     ) {
       return {
         type: normalizeGeometryType(geometryType),
+        columnName: geometryColumn.name,
         bounds: [-180, -90, 180, 90],
         centroid: [0, 0]
       };
@@ -79,9 +85,10 @@ export async function extractGeometryInfo(
 
     return {
       type: normalizeGeometryType(geometryType),
+      columnName: geometryColumn.name,
       bounds,
       centroid: computeCentroid(bounds),
-      crs: 'EPSG:4326',
+      crs: GEO_CONSTANTS.WGS84_CRS,
       featureCount: undefined
     };
   } catch (error) {
@@ -94,25 +101,25 @@ export async function extractGeometryInfo(
 }
 
 function normalizeGeometryType(type?: string | null): GeometryInfo['type'] {
-  if (!type) return 'Polygon';
+  if (!type) return GEOJSON_TYPE.POLYGON;
   const normalized = type.replace(/^ST_/i, '').toLowerCase();
   switch (normalized) {
     case 'point':
-      return 'Point';
+      return GEOJSON_TYPE.POINT;
 
     case 'multipoint':
-      return 'MultiPoint';
+      return GEOJSON_TYPE.MULTI_POINT;
 
     case 'linestring':
-      return 'LineString';
+      return GEOJSON_TYPE.LINE_STRING;
 
     case 'multilinestring':
-      return 'MultiLineString';
+      return GEOJSON_TYPE.MULTI_LINE_STRING;
 
     case 'multipolygon':
-      return 'MultiPolygon';
+      return GEOJSON_TYPE.MULTI_POLYGON;
 
     default:
-      return 'Polygon';
+      return GEOJSON_TYPE.POLYGON;
   }
 }

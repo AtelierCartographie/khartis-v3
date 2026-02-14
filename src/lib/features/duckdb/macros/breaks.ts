@@ -8,21 +8,51 @@ import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constant
 //   - detect dual sign
 //   - apply the method independently on each sign
 
+/**
+ * SQL macro for calculating quantiles.
+ *
+ * Calculates quantiles for a specified column in a table. The number of quantiles
+ * (default is 5) can be adjusted by providing a different value for `nb`.
+ *
+ * @param tabname - The name of the table to query.
+ * @param colname - The name of the column for which to calculate quantiles.
+ * @param nb - The number of quantiles to calculate (default is 5).
+ */
 const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb := 5) AS (
   FROM query_table(tabname::VARCHAR)
   SELECT quantile_disc("colname", list_transform(range(1, nb), c -> c / nb))
 );`;
 
+// nb is not used, just to harmonize with the other macros
 const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
     FROM query_table(tabname::VARCHAR)
     SELECT quantile_disc("colname", [0.05,0.275,0.5,0.725,0.95])
 );`;
 
+/**
+ * SQL macro for creating equal-width bins (intervalles égaux) with an optional "nice breaks" mode.
+ *
+ * Calculates min and max values of the column and divides the range into `nb` bins.
+ *
+ * @param tabname - The name of the table.
+ * @param colname - The name of the column to bin.
+ * @param nb - The number of bins to create (default is 5).
+ * @param nice - Whether to use "nice" bin boundaries (default is false).
+ */
 const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, nb := 5, nice := false) AS (
   FROM query_table(tabname::VARCHAR)
   SELECT equi_width_bins(MIN("colname"), MAX("colname"), nb - 1, nice)
 );`;
 
+/**
+ * SQL macro that calculates nested means for a given table and column.
+ * Generates a list of threshold values (breaks) that iteratively includes new interstitial means.
+ * By Éric Mauvière, https://observablehq.com/@ericmauviere/nested-means-avec-duckdb
+ *
+ * @param tabname - The name of the table to query.
+ * @param colname - The name of the column to calculate means for.
+ * @param nb - The number of breaks to calculate (default is 4).
+ */
 const nested_means_macro = `CREATE OR REPLACE MACRO nested_means(tabname, colname, nb := 4) AS (
 
     -- breaks is the list of thresholds, which at each iteration grows with new interstitial means
@@ -135,6 +165,17 @@ const kmeans_macro = `CREATE OR REPLACE MACRO kmeans(tabname, colname, nb := 5, 
   SELECT list(x)
 );`;
 
+// Class membership for each value
+/**
+ * SQL macro to classify a column value based on specified breaks.
+ *
+ * Creates a temporary table with distinct break values and assigns a class number
+ * to each value in the column based on its position relative to the breaks.
+ * If the column value is null, the result will also be null.
+ *
+ * @param colname - The name of the column to classify.
+ * @param breaks - An array of break values to classify the column.
+ */
 const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
 	WITH t1 AS (
 		SELECT unnest(list_distinct(breaks)) as break
@@ -146,6 +187,17 @@ const add_class_macro = `CREATE OR REPLACE MACRO add_class(colname, breaks) AS (
 	SELECT IF("colname" IS NULL, NULL, class)
 );`;
 
+// Rounds thresholds without betraying their relative positions in the series
+/**
+ * Macro script for rounding thresholds and generating rounded values within specified limits.
+ *
+ * Defines several sub-macros:
+ * 1. `round_left(n)`: Recursively rounds the integer part of a number `n`.
+ * 2. `round_right(n)`: Recursively rounds the decimal part of a number `n`.
+ * 3. `generate_roundings(n)`: Generates a list of rounded values by concatenating round_left and round_right.
+ * 4. `best_value_rounded(n, lower_limit, upper_limit)`: Selects the best-rounded value within limits.
+ * 5. `round_thresholds(breaks, tname, colname)`: Rounds the thresholds for a given set of breaks.
+ */
 const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   WITH RECURSIVE round_left(value, value_rounded, iter) AS (
     SELECT
@@ -216,6 +268,10 @@ const round_thresholds_macro = `CREATE OR REPLACE MACRO round_left(n) AS (
   SELECT list(best_value_rounded(break, lower_limit, upper_limit)).list_sort()
 );`;
 
+/**
+ * Combination of all macro functions for data classification:
+ * quantile, q6, equi_width, nested_means, headtail, headtail2, kmeans, add_class, round_thresholds.
+ */
 export const breaks =
   quantile_macro +
   q6_macro +

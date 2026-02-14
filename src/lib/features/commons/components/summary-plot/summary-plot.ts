@@ -224,6 +224,18 @@ function create_plot_numeric(
 
 /**
  * Creates a categorical plot using the provided data and options.
+ *
+ * @param {Object} data - The data to be plotted.
+ * @param {Object} [options={}] - Configuration options for the plot.
+ * @param {number} [options.width=150] - Width of the plot.
+ * @param {number} [options.height=56] - Height of the plot.
+ * @param {boolean} [options.geoid=false] - Whether to treat geoid-like labels first.
+ * @param {string} [options.main_color='#d02670'] - Main color used for bars.
+ * @param {string} [options.nulls_color='#ff832b'] - Color for null values.
+ * @param {string} [options.unique_color='#007d79'] - Color for unique category.
+ * @param {string} [options.stroke_main='none'] - Main bar stroke.
+ * @param {string} [options.stroke_nulls='none'] - Null bar stroke.
+ * @param {string} [options.stroke_unique='none'] - Unique bar stroke.
  */
 function create_plot_categorical(
   data: CategoricalData,

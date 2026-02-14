@@ -1,15 +1,18 @@
-class MapLoadingStore {
-  private _state = $state({
+function createMapLoadingStore() {
+  const state = $state({
     isUpdatingLayers: false
   });
 
-  get isUpdatingLayers(): boolean {
-    return this._state.isUpdatingLayers;
+  function setUpdatingLayers(value: boolean): void {
+    state.isUpdatingLayers = value;
   }
 
-  setUpdatingLayers(value: boolean): void {
-    this._state.isUpdatingLayers = value;
-  }
+  return {
+    get isUpdatingLayers(): boolean {
+      return state.isUpdatingLayers;
+    },
+    setUpdatingLayers
+  };
 }
 
-export const mapLoadingStore = new MapLoadingStore();
+export const mapLoadingStore = createMapLoadingStore();

@@ -56,19 +56,20 @@ src/lib/
 **Minimal store pattern:**
 
 ```ts
-export class FeatureStore {
-  protected _state = $state({ enabled: false });
+export function createFeatureStore() {
+  const state = $state({ enabled: false });
 
-  get enabled() {
-    return this._state.enabled;
-  }
-
-  enable() {
-    this._state.enabled = true;
-  }
-  disable() {
-    this._state.enabled = false;
-  }
+  return {
+    get enabled() {
+      return state.enabled;
+    },
+    enable() {
+      state.enabled = true;
+    },
+    disable() {
+      state.enabled = false;
+    }
+  };
 }
 ```
 

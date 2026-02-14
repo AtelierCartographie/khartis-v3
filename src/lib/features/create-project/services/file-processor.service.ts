@@ -1,4 +1,6 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import { MIME } from '$lib/features/commons/constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
 import type { DatasetResult } from '$lib/features/data-pipeline';
@@ -50,24 +52,24 @@ function detectFileTypeFromName(filename: string): FileType {
 function getMimeTypeFromFileType(fileType: FileType): string {
   switch (fileType) {
     case FileType.CSV:
-      return 'text/csv';
+      return MIME.CSV;
     case FileType.TSV:
-      return 'text/tab-separated-values';
+      return MIME.TSV;
     case FileType.GEOJSON:
-      return 'application/geo+json';
+      return MIME.GEOJSON;
     case FileType.GEOPACKAGE:
-      return 'application/geopackage+sqlite3';
+      return MIME.GEOPACKAGE;
     case FileType.GEOPARQUET:
     case FileType.ARROW:
-      return 'application/octet-stream';
+      return MIME.BINARY;
     case FileType.KML:
-      return 'application/vnd.google-earth.kml+xml';
+      return MIME.KML;
     case FileType.KMZ:
-      return 'application/vnd.google-earth.kmz';
+      return MIME.KMZ;
     case FileType.GPX:
-      return 'application/gpx+xml';
+      return MIME.GPX;
     default:
-      return 'application/octet-stream';
+      return MIME.BINARY;
   }
 }
 
@@ -116,152 +118,47 @@ export interface ProcessingCallbacks {
   onAdditionalFile?: (file: UploadedFile) => void;
 }
 
-export class FileProcessorService {
-  constructor(private callbacks: ProcessingCallbacks) {}
-
-  async processFile(uploadedFile: UploadedFile, file: File): Promise<void> {
-    const startTime = performance.now();
-
-    try {
-      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.PROCESSING);
-
-      const processor = this.getProcessor(uploadedFile.fileType);
-      await processor.process(uploadedFile, file);
-    } catch (error) {
-      const duration = performance.now() - startTime;
-      logger.error(
-        '[FileProcessorService:processFile] ERROR',
-        LogCategory.FILE,
-        {
-          fileId: uploadedFile.id,
-          duration: `${duration.toFixed(2)}ms`,
-          error
-        }
-      );
-      const message = getReadableErrorMessage(error);
-      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.ERROR, message);
-    }
-  }
-
-  private getProcessor(fileType: FileType): FileProcessor {
-    if (fileType === FileType.CSV || fileType === FileType.TSV) {
-      return new CsvProcessor(this.callbacks);
-    }
-
-    if (fileType === FileType.GEOJSON) {
-      return new GeoJsonProcessor(this.callbacks);
-    }
-
-    if (fileType === FileType.GEOPACKAGE) {
-      return new GeoPackageProcessor(this.callbacks);
-    }
-
-    if (fileType === FileType.ZIP) {
-      return new ZipProcessor(this.callbacks);
-    }
-
-    return new GenericProcessor(this.callbacks);
-  }
+interface FileProcessor {
+  process: (uploadedFile: UploadedFile, file: File) => Promise<void>;
 }
 
-abstract class FileProcessor {
-  constructor(protected callbacks: ProcessingCallbacks) {}
+async function validateAsync(
+  callbacks: ProcessingCallbacks,
+  uploadedFile: UploadedFile,
+  file: File
+): Promise<boolean> {
+  const validation = FileValidator.validate(file);
 
-  abstract process(uploadedFile: UploadedFile, file: File): Promise<void>;
-
-  protected async validateAsync(
-    uploadedFile: UploadedFile,
-    file: File
-  ): Promise<boolean> {
-    const validation = FileValidator.validate(file);
-
-    if (validation.requiresAsyncValidation) {
-      const asyncValidation = await FileValidator.validateAsync(
-        file,
-        validation
-      );
-      if (!asyncValidation.isValid) {
-        this.callbacks.onDataUpdate(uploadedFile.id, {
-          status: FileStatus.ERROR,
-          errorMessage: asyncValidation.errors.join(', '),
-          validation: asyncValidation
-        });
-        return false;
-      }
-
-      if (asyncValidation.warnings.length > 0) {
-        asyncValidation.warnings.forEach((warning) => {
-          logger.warn(
-            `[FileProcessor:validateAsync] ${warning}`,
-            LogCategory.FILE,
-            {
-              fileId: uploadedFile.id,
-              fileName: file.name
-            }
-          );
-        });
-      }
+  if (validation.requiresAsyncValidation) {
+    const asyncValidation = await FileValidator.validateAsync(file, validation);
+    if (!asyncValidation.isValid) {
+      callbacks.onDataUpdate(uploadedFile.id, {
+        status: FileStatus.ERROR,
+        errorMessage: asyncValidation.errors.join(', '),
+        validation: asyncValidation
+      });
+      return false;
     }
 
-    return true;
+    if (asyncValidation.warnings.length > 0) {
+      asyncValidation.warnings.forEach((warning) => {
+        logger.warn(
+          `[FileProcessor:validateAsync] ${warning}`,
+          LogCategory.FILE,
+          {
+            fileId: uploadedFile.id,
+            fileName: file.name
+          }
+        );
+      });
+    }
   }
+
+  return true;
 }
 
-class CsvProcessor extends FileProcessor {
-  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    if (!(await this.validateAsync(uploadedFile, file))) return;
-
-    const originalContent = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress);
-    });
-
-    const { dataPipeline } = await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
-
-    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
-    const { tableName, columns, rowCount } = dataset;
-    const headers = columns.map((col) => col.name);
-
-    if (rowCount === 0) {
-      this.callbacks.onStatusChange(
-        uploadedFile.id,
-        FileStatus.ERROR,
-        m.pipeline_error_header_only()
-      );
-      return;
-    }
-
-    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
-
-    const sampleData = (await Duck!.query(
-      `SELECT * FROM "${tableName}" LIMIT 100`,
-      { format: 'array' }
-    )) as Array<Record<string, unknown>>;
-
-    const tabularData = convertRowsToTabular(sampleData);
-
-    this.callbacks.onDataUpdate(uploadedFile.id, {
-      parsedData: tabularData,
-      content: originalContent,
-      statistics
-    });
-
-    const deepAnalysisCompleted = await this.performDeepAnalysis(
-      uploadedFile,
-      sampleData,
-      headers
-    );
-
-    if (!deepAnalysisCompleted) {
-      return;
-    }
-
-    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-
-    this.computeDuplicatesAsync(uploadedFile.id, tableName, Duck!);
-  }
-
-  private async computeDuplicatesAsync(
+function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
+  async function computeDuplicatesAsync(
     fileId: string,
     tableName: string,
     Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
@@ -273,7 +170,7 @@ class CsvProcessor extends FileProcessor {
       )) as Array<{ duplicate_count: bigint | number }>;
       const duplicateCount = Number(duplicateResult[0]?.duplicate_count ?? 0);
 
-      this.callbacks.onDataUpdate(fileId, {
+      callbacks.onDataUpdate(fileId, {
         duplicates: {
           hasDuplicates: duplicateCount > 0,
           duplicateCount
@@ -295,7 +192,7 @@ class CsvProcessor extends FileProcessor {
     }
   }
 
-  private async performDeepAnalysis(
+  async function performDeepAnalysis(
     uploadedFile: UploadedFile,
     sampleData: Array<Record<string, unknown>>,
     headers: string[]
@@ -321,17 +218,77 @@ class CsvProcessor extends FileProcessor {
       );
     }
 
-    this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
+    callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
     return true;
   }
+
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
+
+    const originalContent = await readFileContent(file, (progress) => {
+      callbacks.onProgress(uploadedFile.id, progress);
+    });
+
+    const { dataPipeline } = await import('$lib/features/data-pipeline');
+    const { Duck } = await import('$lib/features/duckdb');
+
+    const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
+    const { tableName, columns, rowCount } = dataset;
+    const headers = columns.map((col) => col.name);
+
+    if (rowCount === 0) {
+      callbacks.onStatusChange(
+        uploadedFile.id,
+        FileStatus.ERROR,
+        m.pipeline_error_header_only()
+      );
+      return;
+    }
+
+    const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
+
+    const sampleData = (await Duck!.query(
+      `SELECT * FROM "${tableName}" LIMIT 100`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
+
+    const tabularData = convertRowsToTabular(sampleData);
+
+    callbacks.onDataUpdate(uploadedFile.id, {
+      parsedData: tabularData,
+      content: originalContent,
+      statistics
+    });
+
+    const deepAnalysisCompleted = await performDeepAnalysis(
+      uploadedFile,
+      sampleData,
+      headers
+    );
+
+    if (!deepAnalysisCompleted) {
+      return;
+    }
+
+    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+    computeDuplicatesAsync(uploadedFile.id, tableName, Duck!);
+  }
+
+  return { process };
 }
 
-class GeoJsonProcessor extends FileProcessor {
-  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    if (!(await this.validateAsync(uploadedFile, file))) return;
+function createGeoJsonProcessor(callbacks: ProcessingCallbacks): FileProcessor {
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
     const content = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress);
+      callbacks.onProgress(uploadedFile.id, progress);
     });
 
     try {
@@ -339,7 +296,7 @@ class GeoJsonProcessor extends FileProcessor {
 
       const geoValidation = DataValidator.validateGeoData(parsedData);
       if (!geoValidation.isValid) {
-        this.callbacks.onStatusChange(
+        callbacks.onStatusChange(
           uploadedFile.id,
           FileStatus.ERROR,
           geoValidation.errors.join(', ')
@@ -360,14 +317,14 @@ class GeoJsonProcessor extends FileProcessor {
         });
       }
 
-      this.callbacks.onDataUpdate(uploadedFile.id, {
+      callbacks.onDataUpdate(uploadedFile.id, {
         content,
         parsedData
       });
 
       const spatialValidation = await validateGeospatialFile(content as string);
       if (!spatialValidation.isValid) {
-        this.callbacks.onStatusChange(
+        callbacks.onStatusChange(
           uploadedFile.id,
           FileStatus.ERROR,
           spatialValidation.errors[0]
@@ -375,23 +332,30 @@ class GeoJsonProcessor extends FileProcessor {
         return;
       }
 
-      this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    } catch (_e) {
-      this.callbacks.onStatusChange(
+      callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+    } catch {
+      callbacks.onStatusChange(
         uploadedFile.id,
         FileStatus.ERROR,
         ERROR_INVALID_JSON_FORMAT()
       );
     }
   }
+
+  return { process };
 }
 
-class GeoPackageProcessor extends FileProcessor {
-  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    if (!(await this.validateAsync(uploadedFile, file))) return;
+function createGeoPackageProcessor(
+  callbacks: ProcessingCallbacks
+): FileProcessor {
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
 
     const content = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress);
+      callbacks.onProgress(uploadedFile.id, progress);
     });
 
     const { dataPipeline } = await import('$lib/features/data-pipeline');
@@ -407,43 +371,19 @@ class GeoPackageProcessor extends FileProcessor {
 
     const tabularData = convertRowsToTabular(sampleData);
 
-    this.callbacks.onDataUpdate(uploadedFile.id, {
+    callbacks.onDataUpdate(uploadedFile.id, {
       content,
       parsedData: tabularData
     });
 
-    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
+
+  return { process };
 }
 
-class ZipProcessor extends FileProcessor {
-  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
-    if (!(await this.validateAsync(uploadedFile, file))) return;
-
-    this.callbacks.onProgress(uploadedFile.id, 10);
-
-    const fileContent = await file.arrayBuffer();
-
-    const { dataPipeline, isZipDatasetResult } =
-      await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
-
-    const result = await dataPipeline.processFile(file);
-
-    if (isZipDatasetResult(result)) {
-      await this.processMultipleDatasets(
-        uploadedFile,
-        result,
-        fileContent,
-        Duck
-      );
-      return;
-    }
-
-    await this.processSingleDataset(uploadedFile, result, fileContent, Duck);
-  }
-
-  private async processSingleDataset(
+function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
+  async function processSingleDataset(
     uploadedFile: UploadedFile,
     dataset: Awaited<
       ReturnType<
@@ -485,7 +425,7 @@ class ZipProcessor extends FileProcessor {
     };
     const headers = columns.map((col) => col.name);
 
-    this.callbacks.onProgress(uploadedFile.id, 50);
+    callbacks.onProgress(uploadedFile.id, 50);
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
@@ -496,9 +436,9 @@ class ZipProcessor extends FileProcessor {
 
     const tabularData = convertRowsToTabular(sampleData);
 
-    this.callbacks.onProgress(uploadedFile.id, 80);
+    callbacks.onProgress(uploadedFile.id, 80);
 
-    this.callbacks.onDataUpdate(uploadedFile.id, {
+    callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
       statistics,
       content: fileContent
@@ -512,12 +452,12 @@ class ZipProcessor extends FileProcessor {
       { sampleSize: Math.min(100, dataMatrix.length) }
     );
 
-    this.callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
-    this.callbacks.onProgress(uploadedFile.id, 100);
-    this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+    callbacks.onDataUpdate(uploadedFile.id, { deepAnalysis });
+    callbacks.onProgress(uploadedFile.id, 100);
+    callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
   }
 
-  private async processMultipleDatasets(
+  async function processMultipleDatasets(
     uploadedFile: UploadedFile,
     zipResult: Awaited<
       ReturnType<
@@ -527,6 +467,7 @@ class ZipProcessor extends FileProcessor {
     fileContent: ArrayBuffer,
     Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
   ): Promise<void> {
+    void fileContent;
     const result = zipResult as {
       datasets: DatasetResult[];
       sourceZipName: string;
@@ -573,7 +514,7 @@ class ZipProcessor extends FileProcessor {
           hasGeoColumns: true,
           geoColumns: [
             {
-              columnName: 'geom',
+              columnName: INTERNAL_COLUMN.GEOM,
               type: 'unknown',
               confidence: 1,
               index: 0
@@ -584,7 +525,7 @@ class ZipProcessor extends FileProcessor {
       }
 
       if (i === 0) {
-        this.callbacks.onDataUpdate(uploadedFile.id, {
+        callbacks.onDataUpdate(uploadedFile.id, {
           name,
           fileType: detectedFileType,
           parsedData: tabularData,
@@ -594,9 +535,9 @@ class ZipProcessor extends FileProcessor {
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName
         });
-        this.callbacks.onProgress(uploadedFile.id, progressBase + 50);
-        this.callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-      } else if (this.callbacks.onAdditionalFile) {
+        callbacks.onProgress(uploadedFile.id, progressBase + 50);
+        callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
+      } else if (callbacks.onAdditionalFile) {
         const additionalFile: UploadedFile = {
           id: crypto.randomUUID(),
           name,
@@ -611,23 +552,116 @@ class ZipProcessor extends FileProcessor {
           sourceArchive: result.sourceZipName,
           duckdbTableName: tableName
         };
-        this.callbacks.onAdditionalFile(additionalFile);
+        callbacks.onAdditionalFile(additionalFile);
       }
     }
 
-    this.callbacks.onProgress(uploadedFile.id, 100);
+    callbacks.onProgress(uploadedFile.id, 100);
   }
+
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    if (!(await validateAsync(callbacks, uploadedFile, file))) return;
+
+    callbacks.onProgress(uploadedFile.id, 10);
+
+    const fileContent = await file.arrayBuffer();
+
+    const { dataPipeline, isZipDatasetResult } =
+      await import('$lib/features/data-pipeline');
+    const { Duck } = await import('$lib/features/duckdb');
+
+    const result = await dataPipeline.processFile(file);
+
+    if (isZipDatasetResult(result)) {
+      await processMultipleDatasets(uploadedFile, result, fileContent, Duck);
+      return;
+    }
+
+    await processSingleDataset(uploadedFile, result, fileContent, Duck);
+  }
+
+  return { process };
 }
 
-class GenericProcessor extends FileProcessor {
-  async process(uploadedFile: UploadedFile, file: File): Promise<void> {
+function createGenericProcessor(callbacks: ProcessingCallbacks): FileProcessor {
+  async function process(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
     const content = await readFileContent(file, (progress) => {
-      this.callbacks.onProgress(uploadedFile.id, progress);
+      callbacks.onProgress(uploadedFile.id, progress);
     });
 
-    this.callbacks.onDataUpdate(uploadedFile.id, {
+    callbacks.onDataUpdate(uploadedFile.id, {
       content,
       status: FileStatus.COMPLETE
     });
   }
+
+  return { process };
+}
+
+function getProcessor(
+  fileType: FileType,
+  callbacks: ProcessingCallbacks
+): FileProcessor {
+  if (fileType === FileType.CSV || fileType === FileType.TSV) {
+    return createCsvProcessor(callbacks);
+  }
+
+  if (fileType === FileType.GEOJSON) {
+    return createGeoJsonProcessor(callbacks);
+  }
+
+  if (fileType === FileType.GEOPACKAGE) {
+    return createGeoPackageProcessor(callbacks);
+  }
+
+  if (fileType === FileType.ZIP) {
+    return createZipProcessor(callbacks);
+  }
+
+  return createGenericProcessor(callbacks);
+}
+
+export interface FileProcessorService {
+  processFile: (uploadedFile: UploadedFile, file: File) => Promise<void>;
+}
+
+export function createFileProcessorService(
+  callbacks: ProcessingCallbacks
+): FileProcessorService {
+  async function processFile(
+    uploadedFile: UploadedFile,
+    file: File
+  ): Promise<void> {
+    const startTime = performance.now();
+
+    try {
+      callbacks.onStatusChange(uploadedFile.id, FileStatus.PROCESSING);
+
+      const processor = getProcessor(uploadedFile.fileType, callbacks);
+      await processor.process(uploadedFile, file);
+    } catch (error) {
+      const duration = performance.now() - startTime;
+      logger.error(
+        '[FileProcessorService:processFile] ERROR',
+        LogCategory.FILE,
+        {
+          fileId: uploadedFile.id,
+          duration: `${duration.toFixed(2)}ms`,
+          error
+        }
+      );
+      const message = getReadableErrorMessage(error);
+      callbacks.onStatusChange(uploadedFile.id, FileStatus.ERROR, message);
+    }
+  }
+
+  return {
+    processFile
+  };
 }

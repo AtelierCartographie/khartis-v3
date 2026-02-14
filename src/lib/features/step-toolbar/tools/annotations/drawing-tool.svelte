@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     AnnotationKind,
     DrawingType
@@ -16,8 +17,7 @@
     RadioButton,
     RadioButtonGroup,
     Row,
-    Slider,
-    Toggle
+    Slider
   } from 'carbon-components-svelte';
   import { Add, TrashCan } from 'carbon-icons-svelte';
   import {
@@ -27,6 +27,15 @@
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
+
+  const selectedDrawing = $derived.by(() => {
+    const selId = annotationsState.selectedId;
+    if (!selId) return null;
+    const item = annotationsState.items.find((i) => i.id === selId);
+    return item && item.type === AnnotationKind.DRAWING ? item : null;
+  });
+
+  const effectiveStyle = $derived(selectedDrawing?.style ?? defaultStyle);
 
   type StrokeColorDescriptor = {
     hue?: number;
@@ -45,10 +54,10 @@
   }
 
   let drawingType = $state<DrawingType>(DrawingType.LINE);
-  let strokeColor = $state('#8d8d8d');
+  let strokeColor = $state('#ffffff');
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(0);
+  let lightness = $state(100);
 
   let fillColor = $state('#ffffff');
   let fillHue = $state(0);
@@ -69,7 +78,7 @@
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
-        const cv = createColorValue('#000000', hue, saturation, lightness);
+        const cv = createColorValue('#ffffff', hue, saturation, lightness);
         strokeColor = cv.hex;
       }
     }
@@ -103,17 +112,17 @@
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
     const type = String(event.detail) as DrawingType;
     drawingType = type;
-    annotationsActions.updateDefaultStyle({
+    annotationsActions.applyStyle({
       drawingType: type
     });
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ strokeWidth: e.detail });
+    annotationsActions.applyStyle({ strokeWidth: e.detail });
   }
 
   function handleSmoothnessChange(e: CustomEvent<number>) {
-    annotationsActions.updateDefaultStyle({ smoothness: e.detail });
+    annotationsActions.applyStyle({ smoothness: e.detail });
   }
 
   function toOpacityPercent(value: number | undefined): number {
@@ -160,7 +169,7 @@
       <div class="section">
         <Slider
           labelText={m.thickness()}
-          value={defaultStyle.strokeWidth || 2}
+          value={effectiveStyle.strokeWidth || 2}
           min={1}
           max={10}
           step={1}
@@ -176,7 +185,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_smoothness()}
-          value={defaultStyle.smoothness ?? 50}
+          value={effectiveStyle.smoothness ?? 50}
           min={0}
           max={100}
           step={1}
@@ -192,21 +201,22 @@
       <div class="section">
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
-          <Toggle
-            size="sm"
-            toggled={defaultStyle.strokeStyle === 'dotted'}
-            ontoggle={(e: CustomEvent) => {
-              const nextStyle: 'dotted' | 'solid' = e.detail
+          <Switch
+            toggled={effectiveStyle.strokeStyle === 'dotted'}
+            labelText={m.dashed()}
+            hideLabel
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={(checked) => {
+              const nextStyle: 'dotted' | 'solid' = checked
                 ? 'dotted'
                 : 'solid';
-              annotationsActions.updateDefaultStyle({
+              annotationsActions.applyStyle({
                 strokeStyle: nextStyle
               });
             }}
-          >
-            <span slot="labelA">{m.yes()}</span>
-            <span slot="labelB">{m.no()}</span>
-          </Toggle>
+          />
         </div>
       </div>
     </Column>
@@ -233,7 +243,7 @@
             lightness: number;
           }) => {
             strokeColor = hex;
-            annotationsActions.updateDefaultStyle({
+            annotationsActions.applyStyle({
               strokeColor: hex,
               color: { hue, saturation, lightness }
             });
@@ -266,7 +276,7 @@
               lightness: number;
             }) => {
               fillColor = hex;
-              annotationsActions.updateDefaultStyle({
+              annotationsActions.applyStyle({
                 fillColor: { hue, saturation, lightness }
               });
             }}
@@ -282,13 +292,13 @@
       <div class="section">
         <Slider
           labelText={m.opacity()}
-          value={toOpacityPercent(defaultStyle.opacity)}
+          value={toOpacityPercent(effectiveStyle.opacity)}
           min={0}
           max={100}
           step={5}
           stepMultiplier={5}
           on:change={(e) =>
-            annotationsActions.updateDefaultStyle({ opacity: e.detail })}
+            annotationsActions.applyStyle({ opacity: e.detail })}
         />
       </div>
     </Column>

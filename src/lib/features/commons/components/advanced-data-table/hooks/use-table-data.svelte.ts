@@ -2,6 +2,7 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
+import { EXCLUDED_COLUMNS } from '../../../constants/data.constants';
 import type { ColumnInfo, SortOrder, TableRow } from '../types';
 
 export interface UseTableDataProps {
@@ -30,8 +31,6 @@ export interface UseTableDataReturn {
   ) => void;
 }
 
-const EXCLUDED_COLUMNS = ['geom', 'geometry', '__id'];
-
 function getValue<T>(prop: T | (() => T)): T {
   return typeof prop === 'function' ? (prop as () => T)() : prop;
 }
@@ -59,7 +58,8 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
 
         const filteredAnalysis = analysis.filter(
-          (a: AnalysisResult) => !EXCLUDED_COLUMNS.includes(a.name)
+          (a: AnalysisResult) =>
+            !(EXCLUDED_COLUMNS as readonly string[]).includes(a.name)
         );
 
         columns = filteredAnalysis.map((a: AnalysisResult) => ({
@@ -77,7 +77,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         numRows = count;
       } else if (dataset) {
         columns = dataset.columns.filter(
-          (c) => !EXCLUDED_COLUMNS.includes(c.name)
+          (c) => !(EXCLUDED_COLUMNS as readonly string[]).includes(c.name)
         );
 
         numRows = dataset.data.length;

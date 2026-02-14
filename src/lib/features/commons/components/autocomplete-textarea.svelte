@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { KEY } from '../constants/dom.constants';
+
   export interface Suggestion {
     label: string;
     value: string;
@@ -124,24 +126,24 @@
     if (!showDropdown) return;
 
     switch (e.key) {
-      case 'ArrowDown':
+      case KEY.ARROW_DOWN:
         e.preventDefault();
         selectedIndex = (selectedIndex + 1) % filteredSuggestions.length;
         break;
-      case 'ArrowUp':
+      case KEY.ARROW_UP:
         e.preventDefault();
         selectedIndex =
           (selectedIndex - 1 + filteredSuggestions.length) %
           filteredSuggestions.length;
         break;
-      case 'Enter':
-      case 'Tab':
+      case KEY.ENTER:
+      case KEY.TAB:
         if (filteredSuggestions.length > 0) {
           e.preventDefault();
           insertSuggestion(filteredSuggestions[selectedIndex]);
         }
         break;
-      case 'Escape':
+      case KEY.ESCAPE:
         e.preventDefault();
         showDropdown = false;
         break;
@@ -248,7 +250,7 @@
     left: 0;
     right: 0;
     margin-top: 4px;
-    z-index: 10000;
+    z-index: var(--z-notification);
     max-height: 200px;
     overflow-y: auto;
     background-color: var(--cds-ui-01);

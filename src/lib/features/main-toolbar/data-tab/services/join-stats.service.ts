@@ -24,7 +24,7 @@ interface JoinAnalysisRow {
 interface FuzzyMatchRow {
   source_val: string;
   target_val: string;
-  distance: number;
+  score: number;
 }
 
 export async function computeDatasetJoinStats(
@@ -125,30 +125,32 @@ export async function computeDatasetJoinStats(
         FROM "${escapedTargetTable}"
         WHERE "${escapedTargetCol}" IS NOT NULL
       ),
-      candidates AS (
+      scored AS (
         SELECT
           u.source_val,
-          u.norm_source,
           t.target_val,
-          t.normalized_target
+          u.norm_source,
+          t.normalized_target,
+          jaro_winkler_similarity(u.norm_source, t.normalized_target, 0.85) as jw_score
         FROM unmatched_normalized u
         CROSS JOIN target_normalized t
         WHERE
-          -- Length pre-filter: levenshtein <= 2 is impossible if lengths differ by > 2
-          ABS(length(u.norm_source) - length(t.normalized_target)) <= 2
+          jaro_winkler_similarity(u.norm_source, t.normalized_target, 0.85) > 0
           OR t.normalized_target LIKE '%' || u.norm_source || '%'
           OR u.norm_source LIKE '%' || t.normalized_target || '%'
       )
       SELECT
         source_val,
         target_val,
-        levenshtein(norm_source, normalized_target) as distance
-      FROM candidates
-      WHERE
-        levenshtein(norm_source, normalized_target) <= 2
-        OR normalized_target LIKE '%' || norm_source || '%'
-        OR norm_source LIKE '%' || normalized_target || '%'
-      ORDER BY source_val, distance
+        CASE
+          WHEN jw_score >= 0.85 THEN jw_score
+          ELSE 0.5
+        END as score
+      FROM scored
+      WHERE jw_score >= 0.85
+         OR normalized_target LIKE '%' || norm_source || '%'
+         OR norm_source LIKE '%' || normalized_target || '%'
+      ORDER BY source_val, score DESC
     `;
 
     const fuzzyResults = (await Duck.query(fuzzyMatchQuery, {

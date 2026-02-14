@@ -18,6 +18,7 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { useProjectNavigation } from './hooks';
   import { CreateProjectValidationService } from './services/validation.service';
 
@@ -153,7 +154,7 @@
   });
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Enter' && canCreateProject) {
+    if (event.key === KEY.ENTER && canCreateProject) {
       event.preventDefault();
       handleCreate();
     }

@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import {
   FileType,
   type UploadedFile
@@ -10,8 +11,6 @@ import type {
   ProcessorDataset
 } from '../file-processor.interface';
 import { getFileForDuckDB } from './processor-utils';
-
-const { SHAPEFILE } = PIPELINE_CONST.MIME_TYPES;
 
 export const shapefileProcessor: FileProcessor = {
   supportedFileTypes: [FileType.SHAPEFILE],
@@ -33,7 +32,7 @@ export const shapefileProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const shpFile = getFileForDuckDB(file, SHAPEFILE);
+    const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE);
 
     const companionFiles =
       file.relatedFileObjects?.filter(

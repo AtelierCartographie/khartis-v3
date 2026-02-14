@@ -1,9 +1,10 @@
-import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import { FileStatus, GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   FILE_EXTENSIONS,
   MIME_TYPE_PATTERNS,
   TABULAR_DELIMITERS
 } from '$lib/features/commons/constants/file-types.constants';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
@@ -14,7 +15,7 @@ import {
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
 
-const UTF8_ENCODING = 'UTF-8';
+const UTF8_ENCODING = PIPELINE_CONST.ENCODING.DEFAULT;
 const HTTP_PROTOCOL = 'http:';
 const HTTPS_PROTOCOL = 'https:';
 const DEFAULT_FILENAME = 'download';
@@ -199,7 +200,7 @@ export function validateGeospatialFile(
         errors.push('Invalid GeoJSON: missing type property');
       }
 
-      if (geojson.type === 'FeatureCollection' && !geojson.features) {
+      if (geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION && !geojson.features) {
         errors.push('Invalid GeoJSON: FeatureCollection missing features');
       }
 

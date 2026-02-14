@@ -20,6 +20,7 @@ function hasExtension(name: string, extensions: readonly string[]): boolean {
 }
 
 export function detectFileFormat(name: string): FileFormat {
+  if (hasExtension(name, PARQUET)) return 'geoparquet';
   if (hasExtension(name, TABULAR)) return 'csv';
   if (hasExtension(name, GEO)) {
     const lower = name.toLowerCase();
@@ -30,6 +31,5 @@ export function detectFileFormat(name: string): FileFormat {
     if (lower.endsWith('.kmz')) return 'kmz';
     if (lower.endsWith('.gpx')) return 'gpx';
   }
-  if (hasExtension(name, PARQUET)) return 'geoparquet';
   return 'unknown';
 }

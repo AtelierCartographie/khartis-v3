@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
@@ -13,8 +14,6 @@ import type {
   UploadedFilePayload
 } from '../types';
 import { detectDecimalSeparator } from '../utils/decimal-detector';
-
-const { BINARY } = PIPELINE_CONST.MIME_TYPES;
 
 export interface ProcessFileOptions {
   originalName?: string;
@@ -159,7 +158,7 @@ export async function createFileFromUploadContent(
   name: string,
   type: string
 ): Promise<File> {
-  const resolvedType = type || BINARY;
+  const resolvedType = type || MIME.BINARY;
   if (typeof content === 'string') {
     return new File([content], name, { type: resolvedType });
   }
@@ -203,7 +202,7 @@ export function createCompanionFilesFromUpload(
       data instanceof ArrayBuffer
         ? data
         : new Uint8Array(data as number[]).buffer;
-    const blob = new Blob([buffer], { type: BINARY });
+    const blob = new Blob([buffer], { type: MIME.BINARY });
     companionFiles.push(new File([blob], fileName));
   }
 

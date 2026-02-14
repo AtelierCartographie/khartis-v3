@@ -7,6 +7,19 @@ import { validationFailure, validationSuccess } from '../types';
 export async function validateFile(file: File): Promise<ValidationResult> {
   const { MAX_FILE_SIZE, WARNING_FILE_SIZE } = PIPELINE_CONST.LIMITS;
 
+  const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
+  if (
+    !PIPELINE_CONST.EXTENSIONS.ALL.includes(
+      ext as (typeof PIPELINE_CONST.EXTENSIONS.ALL)[number]
+    )
+  ) {
+    logger.warn('Unsupported file extension', LogCategory.DATA, {
+      fileName: file.name,
+      extension: ext
+    });
+    return validationFailure([m.pipeline_error_unsupported_extension({ ext })]);
+  }
+
   if (file.size === 0) {
     logger.warn('Uploaded file is empty', LogCategory.DATA, {
       fileName: file.name

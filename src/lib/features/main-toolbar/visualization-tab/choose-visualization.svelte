@@ -13,6 +13,7 @@
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -33,6 +34,8 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
+  import { mapSuggestionToType } from './suggestion.utils';
+  import { UI_CONSTANTS } from '../constants';
 
   interface Props {
     onCreateVisualization?: () => void;
@@ -40,19 +43,16 @@
 
   const { onCreateVisualization }: Props = $props();
 
-  const SUGGESTIONS_PER_PAGE = 3;
-  const MAX_SUGGESTIONS = 12;
-
   let selectedFieldId = $state<number>(0);
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
-  let visibleCount = $state(SUGGESTIONS_PER_PAGE);
+  let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
     return dataset.columns
-      .filter((col) => col.type !== 'geometry')
+      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
       .map((col, id) => ({ id, text: col.name }));
   });
 
@@ -78,14 +78,18 @@
         uniques: col.stats?.uniques ?? 0,
         min: col.stats?.min,
         max: col.stats?.max,
-        mean: col.stats?.mean
+        mean: col.stats?.mean,
+        share_integers: col.stats?.share_integers,
+        share_floats: col.stats?.share_floats,
+        share_rank_interval: col.stats?.share_rank_interval,
+        extent_magnitude: col.stats?.extent_magnitude
       }
     }));
 
     const geometryType = (dataset.geometry?.type as GeometryType) || null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
-      maxSuggestions: MAX_SUGGESTIONS
+      maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
     });
   });
 
@@ -137,52 +141,13 @@
 
   function handleShowMore() {
     visibleCount = Math.min(
-      visibleCount + SUGGESTIONS_PER_PAGE,
+      visibleCount + UI_CONSTANTS.SUGGESTIONS_PER_PAGE,
       filteredSuggestions.length
     );
   }
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     selectedSuggestion = suggestion.id;
-  }
-
-  function mapSuggestionToType(suggestionId: string): VisualizationType {
-    const mapping: Record<string, VisualizationType> = {
-      // 0-column suggestions (basic geometries)
-      symbols_uniques: VisualizationType.PROPORTIONAL,
-      polygons_uniques: VisualizationType.CHOROPLETH,
-      lines_uniques: VisualizationType.CHOROPLETH,
-
-      // QTR (quantitative ratio) → CHOROPLETH
-      choropleth: VisualizationType.CHOROPLETH,
-      symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
-      lines_colorful_QTR: VisualizationType.CHOROPLETH,
-
-      // QTA (quantitative absolute) → PROPORTIONAL
-      symbols_proportional: VisualizationType.PROPORTIONAL,
-      lines_proportional: VisualizationType.PROPORTIONAL,
-
-      // QL (qualitative) → CATEGORICAL
-      polygons_colorful_QL: VisualizationType.CATEGORICAL,
-      symbols_differents: VisualizationType.CATEGORICAL,
-      symbols_uniques_colorful_QL: VisualizationType.CATEGORICAL,
-      lines_colorful_QL: VisualizationType.CATEGORICAL,
-
-      // QLO (qualitative ordered) → CATEGORICAL
-      polygons_colorful_QLO: VisualizationType.CATEGORICAL,
-      symbols_differents_QLO: VisualizationType.CATEGORICAL,
-      symbols_uniques_colorful_QLO: VisualizationType.CATEGORICAL,
-      lines_colorful_QLO: VisualizationType.CATEGORICAL,
-
-      // 2-column combinations → BIVARIATE
-      symbols_proportional_colorful_QL: VisualizationType.BIVARIATE,
-      symbols_proportional_colorful_QTR: VisualizationType.BIVARIATE,
-      symbols_proportional_double: VisualizationType.BIVARIATE,
-      lines_proportional_colorful_QL: VisualizationType.BIVARIATE,
-      lines_proportional_colorful_QTR: VisualizationType.BIVARIATE
-    };
-
-    return mapping[suggestionId] ?? VisualizationType.CHOROPLETH;
   }
 
   function handleCreateVisualization() {
@@ -195,11 +160,7 @@
     if (!suggestion) return;
 
     const vizType = mapSuggestionToType(suggestion.id);
-    const viz = visualizationStore.createVisualization(
-      vizType,
-      dataset.id,
-      suggestion.label
-    );
+    const viz = visualizationStore.createVisualization(vizType, dataset.id);
 
     if (suggestion.columns && suggestion.columns.length > 0) {
       const column = suggestion.columns[0];
@@ -252,7 +213,7 @@
 
   $effect(() => {
     void selectedFieldName;
-    visibleCount = SUGGESTIONS_PER_PAGE;
+    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
   $effect(() => {

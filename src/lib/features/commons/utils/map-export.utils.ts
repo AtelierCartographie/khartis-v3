@@ -1,4 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
 import type { Geometry, Position } from 'geojson';
 import {
@@ -23,6 +24,8 @@ import {
   DrawingType,
   LegendPosition
 } from '$lib/features/commons/constants/ui.constants';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 
 interface ExportOptions {
   width: number;
@@ -102,7 +105,7 @@ function calculateDatasetBounds(
     };
   }
 
-  const geometryColumn = dataset.columns.find((col) => col.type === 'geometry');
+  const geometryColumn = dataset.columns.find((col) => col.type === COLUMN_TYPE_GEOMETRY);
   if (!geometryColumn) return null;
 
   let minX = Infinity;
@@ -231,26 +234,26 @@ function renderGeometryToSvg(
   if (!geometry || !geometry.type) return '';
 
   switch (geometry.type) {
-    case 'Point':
+    case GEOJSON_TYPE.POINT:
       return renderPointToSvg(geometry.coordinates, project, style, radius);
 
-    case 'MultiPoint':
+    case GEOJSON_TYPE.MULTI_POINT:
       return geometry.coordinates
         .map((coord) => renderPointToSvg(coord, project, style, radius))
         .join('\n');
 
-    case 'LineString':
+    case GEOJSON_TYPE.LINE_STRING:
       return renderLineToSvg(geometry.coordinates, project, style);
 
-    case 'MultiLineString':
+    case GEOJSON_TYPE.MULTI_LINE_STRING:
       return geometry.coordinates
         .map((line) => renderLineToSvg(line, project, style))
         .join('\n');
 
-    case 'Polygon':
+    case GEOJSON_TYPE.POLYGON:
       return renderPolygonToSvg(geometry.coordinates, project, style);
 
-    case 'MultiPolygon':
+    case GEOJSON_TYPE.MULTI_POLYGON:
       return geometry.coordinates
         .map((polygon) => renderPolygonToSvg(polygon, project, style))
         .join('\n');
@@ -406,6 +409,8 @@ function renderTextAnnotation(item: Annotation): string {
 
 function renderShapeAnnotation(item: Annotation): string {
   const { x, y } = item.position;
+  const originX = x;
+  const originY = y;
   const shapeType = String(item.content ?? 'circle');
   const style = item.style ?? {};
   const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
@@ -416,31 +421,36 @@ function renderShapeAnnotation(item: Annotation): string {
 
   switch (shapeType) {
     case 'circle':
-      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+    case 'line':
+      return `    <line x1="${originX}" y1="${originY + size / 2}" x2="${originX + size}" y2="${originY + size / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     case 'rectangle':
-      return `    <rect x="${x - size / 2}" y="${y - size / 2}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <rect x="${originX}" y="${originY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     case 'triangle': {
-      const h = size * 0.866;
-      const points = `${x},${y - h / 2} ${x - size / 2},${y + h / 2} ${x + size / 2},${y + h / 2}`;
+      const points = `${originX + size / 2},${originY} ${originX},${originY + size} ${originX + size},${originY + size}`;
       return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     case 'arrow': {
-      const arrowPath = `M${x - size / 2},${y} L${x + size / 4},${y} L${x + size / 4},${y - size / 4} L${x + size / 2},${y} L${x + size / 4},${y + size / 4} L${x + size / 4},${y} Z`;
+      const arrowPath = `M${originX},${originY + size / 2} L${originX + size * 0.7},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.2} L${originX + size},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.8} L${originX + size * 0.7},${originY + size / 2} Z`;
       return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     case 'star': {
       const outerR = size / 2;
       const innerR = outerR * 0.4;
+      const centerX = originX + outerR;
+      const centerY = originY + outerR;
       const points: string[] = [];
       for (let i = 0; i < 10; i++) {
         const r = i % 2 === 0 ? outerR : innerR;
         const angle = (Math.PI / 5) * i - Math.PI / 2;
-        points.push(`${x + r * Math.cos(angle)},${y + r * Math.sin(angle)}`);
+        points.push(
+          `${centerX + r * Math.cos(angle)},${centerY + r * Math.sin(angle)}`
+        );
       }
       return `    <polygon points="${points.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
     default:
-      return `    <circle cx="${x}" cy="${y}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
+      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
   }
 }
 
@@ -448,6 +458,7 @@ function renderDrawingAnnotation(item: Annotation): string {
   const points = Array.isArray(item.content) ? item.content : [];
   if (points.length === 0) return '';
 
+  const { x: originX, y: originY } = item.position;
   const style = item.style ?? {};
   const stroke = resolveColor(style.strokeColor, SVG_COLORS.BLACK);
   const fill =
@@ -460,7 +471,7 @@ function renderDrawingAnnotation(item: Annotation): string {
   const pathData = points
     .map(
       (p: { x: number; y: number }, i: number) =>
-        `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`
+        `${i === 0 ? 'M' : 'L'}${originX + p.x},${originY + p.y}`
     )
     .join(' ');
 
@@ -496,6 +507,8 @@ function renderAnnotationItem(item: Annotation): string {
 }
 
 function renderAnnotationsToSvg(annotations: AnnotationsState): string {
+  if (!annotations.visible) return '';
+
   const visibleItems = annotations.items.filter((i) => i.visible !== false);
   if (visibleItems.length === 0) return '';
 
@@ -523,6 +536,11 @@ function calculateLegendPosition(
     case LegendPosition.BOTTOM_RIGHT:
       return {
         x: width - LEGEND_WIDTH - LEGEND_MARGIN,
+        y: height - LEGEND_HEIGHT - LEGEND_MARGIN
+      };
+    case LegendPosition.BOTTOM_CENTER:
+      return {
+        x: Math.max(LEGEND_MARGIN, Math.round((width - LEGEND_WIDTH) / 2)),
         y: height - LEGEND_HEIGHT - LEGEND_MARGIN
       };
     default:
@@ -557,6 +575,11 @@ function renderClassificationLegend(
   if (colors.length === 0) return '';
 
   const elements: string[] = [];
+  const textColorHex = hslToHex(
+    style.textColor.hue,
+    style.textColor.saturation,
+    style.textColor.lightness
+  );
 
   colors.forEach((color, i) => {
     const y = startY + i * 22;
@@ -569,7 +592,7 @@ function renderClassificationLegend(
     const label = minVal && maxVal ? `${minVal} - ${maxVal}` : maxVal || minVal;
 
     elements.push(
-      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_LEGEND}">${escapeHtml(label)}</text>`
+      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(label)}</text>`
     );
   });
 
@@ -583,6 +606,11 @@ function renderLegendContent(
 ): { content: string; height: number } {
   let yOffset = 16;
   const elements: string[] = [];
+  const textColorHex = hslToHex(
+    style.textColor.hue,
+    style.textColor.saturation,
+    style.textColor.lightness
+  );
 
   for (const item of items) {
     const viz = item.variableId
@@ -591,14 +619,14 @@ function renderLegendContent(
 
     if (item.title) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${SVG_COLORS.TEXT_PRIMARY}">${escapeHtml(item.title)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${textColorHex}">${escapeHtml(item.title)}</text>`
       );
       yOffset += style.fontSize + 10;
     }
 
     if (item.subtitle) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${SVG_COLORS.TEXT_SECONDARY}">${escapeHtml(item.subtitle)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(item.subtitle)}</text>`
       );
       yOffset += style.fontSize + 6;
     }
@@ -613,7 +641,7 @@ function renderLegendContent(
 
     if (item.note) {
       elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${SVG_COLORS.TEXT_MUTED}" font-style="italic">${escapeHtml(item.note)}</text>`
+        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${textColorHex}" font-style="italic">${escapeHtml(item.note)}</text>`
       );
       yOffset += style.fontSize + 4;
     }
@@ -707,7 +735,7 @@ export function exportMapToSvg(
 
   const project = createProjection(bounds, opts.width, opts.height);
 
-  let svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+  let svgContent = `<?xml version="1.0" encoding="${PIPELINE_CONST.ENCODING.DEFAULT}"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
   <defs></defs>
   <rect id="background" width="100%" height="100%" fill="${opts.backgroundColor}"/>
@@ -747,7 +775,7 @@ export function exportMapToSvg(
     }
 
     const geometryColumn = dataset.columns.find(
-      (col) => col.type === 'geometry'
+      (col) => col.type === COLUMN_TYPE_GEOMETRY
     );
 
     logger.info('[SVG DEBUG] Geometry column search', LogCategory.EXPORT, {
@@ -797,10 +825,8 @@ export function exportMapToSvg(
       const svgElement = renderGeometryToSvg(geometry, project, style, radius);
 
       if (svgElement) {
-        const isPolygon = ['Polygon', 'MultiPolygon'].includes(geometry.type);
-        const isLine = ['LineString', 'MultiLineString'].includes(
-          geometry.type
-        );
+        const isPolygon = geometry.type === GEOJSON_TYPE.POLYGON || geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
+        const isLine = geometry.type === GEOJSON_TYPE.LINE_STRING || geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
         if (isPolygon || isLine) {
           polygons.push(`        ${svgElement}`);
         } else {

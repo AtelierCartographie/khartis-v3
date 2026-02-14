@@ -139,7 +139,7 @@
     position: sticky;
     left: 0;
     background-color: #ffffff;
-    z-index: 1;
+    z-index: var(--z-base);
     display: flex;
     align-items: center;
     justify-content: center;

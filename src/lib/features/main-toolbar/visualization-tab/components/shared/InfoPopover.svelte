@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Information } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   interface Props {
     text: string;
@@ -99,23 +100,22 @@
     }
 
     function handleKeydown(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      if (e.key === KEY.ESCAPE) {
         pinned = false;
         open = false;
         btnRef?.focus();
       }
     }
 
-    // Defer to avoid catching the click that just opened the tooltip
     const timer = setTimeout(() => {
-      document.addEventListener('click', handleClick);
+      document.addEventListener(EVENT.CLICK, handleClick);
     }, 0);
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
     return () => {
       clearTimeout(timer);
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener(EVENT.CLICK, handleClick);
+      document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
   });
 </script>
@@ -186,7 +186,7 @@
     top: 0;
     left: 0;
     pointer-events: none;
-    z-index: 9999;
+    z-index: var(--z-overlay);
   }
 
   :global(.info-portal-container *) {
@@ -202,7 +202,7 @@
     border-radius: 4px;
     max-width: 240px;
     white-space: normal;
-    z-index: 10001;
+    z-index: var(--z-popover);
     box-shadow:
       0 2px 6px rgba(0, 0, 0, 0.3),
       0 0 1px rgba(0, 0, 0, 0.15);

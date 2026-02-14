@@ -4,6 +4,7 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import {
     dataTabActions,
     dataTabState
@@ -39,19 +40,29 @@
   let columnAnalysis = $state<AnalysisResult[]>([]);
   let columnAnalysisLoaded = $state(false);
   let previousAutoSelectedColumn = $state<string | null>(null);
+  let columnAnalysisAbort: AbortController | null = null;
 
   async function loadColumnAnalysis() {
+    // Cancel any in-flight analysis
+    columnAnalysisAbort?.abort();
+
     if (!selectedDataset?.tableName) {
       columnAnalysis = [];
       columnAnalysisLoaded = false;
       return;
     }
+
+    const controller = new AbortController();
+    columnAnalysisAbort = controller;
+    const tableName = selectedDataset.tableName;
+
     try {
-      columnAnalysis = await duckDBOrchestrator.getFullAnalysis(
-        selectedDataset.tableName
-      );
+      const result = await duckDBOrchestrator.getFullAnalysis(tableName);
+      if (controller.signal.aborted) return;
+      columnAnalysis = result;
       columnAnalysisLoaded = true;
     } catch {
+      if (controller.signal.aborted) return;
       columnAnalysis = [];
       columnAnalysisLoaded = false;
     }
@@ -61,7 +72,10 @@
     if (!selectedDataset) return [];
 
     return selectedDataset.columns
-      .filter((col) => col.name !== 'geometry' && col.name !== '__id')
+      .filter(
+        (col) =>
+          col.name !== INTERNAL_COLUMN.GEOMETRY && col.name !== INTERNAL_COLUMN.ID
+      )
       .map((col, index) => {
         const geoCol = geoDetection?.geoColumns.find(
           (gc) => gc.columnName === col.name
@@ -228,6 +242,7 @@
   let longitudeFieldId = $state<number | undefined>(undefined);
   let previousDatasetId = $state<string | undefined>(undefined);
   let gpsValidation = $state<GPSValidationResult | null>(null);
+  let hasAutoGeoreferenceInitialization = $state(false);
 
   $effect(() => {
     const currentDatasetId = selectedDataset?.id;
@@ -238,6 +253,7 @@
       activeTabIndex = 0;
       columnAnalysisLoaded = false;
       previousAutoSelectedColumn = null;
+      hasAutoGeoreferenceInitialization = false;
       dataTabActions.setGeolocationState({
         geoReference: GeoreferenceType.ENTITIES,
         linkedVariable: null,
@@ -281,12 +297,18 @@
         geoDetection.geoColumns.some((gc) => gc.type === 'latitude') &&
         geoDetection.geoColumns.some((gc) => gc.type === 'longitude');
 
-      if (hasLatLon && activeTabIndex === 0) {
+      if (
+        !hasAutoGeoreferenceInitialization &&
+        hasLatLon &&
+        activeTabIndex === 0
+      ) {
         activeTabIndex = 1;
         dataTabActions.setGeolocationState({
           geoReference: GeoreferenceType.COORDINATES
         });
       }
+
+      hasAutoGeoreferenceInitialization = true;
     }
   });
 
@@ -310,12 +332,23 @@
     const geoid = bestGeoidColumn();
 
     if (linkedVar === null && !linkedName && suggested) {
-      previousAutoSelectedColumn = suggested.columnName;
-      dataTabActions.setGeolocationState({
-        linkedVariable: suggested.id,
-        linkedVariableName: suggested.columnName
-      });
-    } else if (
+      // Only auto-select from geoDetection if column analysis is not yet loaded,
+      // or if there's no geoid that would override it. This prevents flicker
+      // where a suggestion is shown then immediately replaced by a geoid.
+      if (
+        !columnAnalysisLoaded ||
+        !geoid ||
+        geoid.columnName === suggested.columnName
+      ) {
+        previousAutoSelectedColumn = suggested.columnName;
+        dataTabActions.setGeolocationState({
+          linkedVariable: suggested.id,
+          linkedVariableName: suggested.columnName
+        });
+      }
+    }
+
+    if (
       columnAnalysisLoaded &&
       geoid &&
       previousAutoSelectedColumn &&
@@ -355,6 +388,8 @@
     const geo = dataTabState.geolocation;
     const tableName = selectedDataset?.tableName;
 
+    let cancelled = false;
+
     if (
       activeTabIndex === 1 &&
       tableName &&
@@ -368,11 +403,15 @@
         geo.longitudeColumn,
         Duck
       ).then((result) => {
-        gpsValidation = result;
+        if (!cancelled) gpsValidation = result;
       });
     } else {
       gpsValidation = null;
     }
+
+    return () => {
+      cancelled = true;
+    };
   });
 </script>
 
@@ -616,7 +655,7 @@
     align-items: center;
     padding: 0 8px;
     pointer-events: none;
-    z-index: 1;
+    z-index: var(--z-base);
   }
 
   /* Hide ComboBox text when badge is showing */
