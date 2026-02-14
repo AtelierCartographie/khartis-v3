@@ -1,15 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const isCI = !!process.env.CI;
+const e2eScope = process.env.E2E_SCOPE ?? 'full';
+const smokeOnly = e2eScope === 'smoke';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: true,
+  grep: smokeOnly ? /@smoke/ : undefined,
+  fullyParallel: !smokeOnly,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
-  // Limit workers to avoid DuckDB thread exhaustion (each browser creates thread pool)
-  // Keep low to avoid WASM memory and thread contention
-  workers: isCI ? 2 : 2,
+  // Keep smoke deterministic; preserve parallelism for full suite when needed
+  workers: smokeOnly ? 1 : isCI ? 2 : 4,
   reporter: isCI ? [['blob'], ['github']] : 'html',
   globalSetup: './e2e/global-setup.ts',
   timeout: isCI ? 90000 : 60000,

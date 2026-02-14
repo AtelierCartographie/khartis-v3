@@ -20,6 +20,7 @@ report.*.json
 .vercel
 .netlify
 .wrangler
+.turbo/
 /.svelte-kit
 /build
 dist
@@ -91,6 +92,7 @@ CLAUDE.md
 
 # Editors/IDEs
 .vscode/
+.zed/
 .idea/
 *.suo
 *.ntvs*
@@ -103,6 +105,9 @@ CLAUDE.md
 .tmp/
 tmp/
 *.tmp
+
+# Local agent/tool state
+.codex/
 
 # Inlang cache
 project.inlang/cache/
