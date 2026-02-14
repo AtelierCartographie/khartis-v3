@@ -25,6 +25,7 @@
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import * as m from '$lib/paraglide/messages';
+  import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
@@ -302,7 +303,7 @@
     };
 
     if (
-      maybeCollection.type !== 'FeatureCollection' ||
+      maybeCollection.type !== GEOJSON_TYPE.FEATURE_COLLECTION ||
       !Array.isArray(maybeCollection.features)
     ) {
       return null;
@@ -357,10 +358,10 @@
   function buildViewportFeature(bounds: MapBounds): InsetViewportFeature {
     if (bounds.east >= bounds.west) {
       return {
-        type: 'Feature',
+        type: GEOJSON_TYPE.FEATURE,
         properties: EMPTY_GEOJSON_PROPERTIES,
         geometry: {
-          type: 'Polygon',
+          type: GEOJSON_TYPE.POLYGON,
           coordinates: [
             [
               [bounds.west, bounds.north],
@@ -375,10 +376,10 @@
     }
 
     return {
-      type: 'Feature',
+      type: GEOJSON_TYPE.FEATURE,
       properties: EMPTY_GEOJSON_PROPERTIES,
       geometry: {
-        type: 'MultiPolygon',
+        type: GEOJSON_TYPE.MULTI_POLYGON,
         coordinates: [
           [
             [
@@ -939,7 +940,7 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 10;
+    z-index: var(--z-content);
   }
 
   .scale-bar {

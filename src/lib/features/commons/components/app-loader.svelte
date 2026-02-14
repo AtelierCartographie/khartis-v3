@@ -20,7 +20,7 @@
     align-items: center;
     justify-content: center;
     background-color: var(--cds-ui-background);
-    z-index: 9999;
+    z-index: var(--z-overlay);
   }
 
   .loading-inner {

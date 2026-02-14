@@ -1,5 +1,6 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import type { UploadedFile } from '../create-project.types';
 import { DataSourceType, FileType } from '../create-project.types';
@@ -119,7 +120,7 @@ export async function duplicateDataset(
     const copyName = `${dataset.name} (copie)`;
 
     await Duck.query(
-      `CREATE TABLE "${newTableName}" AS SELECT * FROM "${dataset.tableName}"`
+      `CREATE TABLE "${escapeIdentifier(newTableName)}" AS SELECT * FROM "${escapeIdentifier(dataset.tableName)}"`
     );
 
     const originalFile = projectStore.currentProject?.data?.sourceFiles?.find(

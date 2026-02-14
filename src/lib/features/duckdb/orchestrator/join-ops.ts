@@ -1,4 +1,5 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
@@ -453,7 +454,7 @@ export async function getJoinedArrowTable(
   const geomColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
      WHERE table_name = '${escapeSqlString(geometryTable)}'
-     AND column_name NOT IN ('geom', 'geometry', 'wkb_geometry', 'the_geom')
+     AND column_name NOT IN ('${INTERNAL_COLUMN.GEOM}', '${INTERNAL_COLUMN.GEOMETRY}', '${INTERNAL_COLUMN.WKB_GEOMETRY}', '${INTERNAL_COLUMN.THE_GEOM}')
      AND data_type IN ('VARCHAR', 'TEXT')`,
     { format: 'array' }
   )) as Array<{ column_name: string }>;

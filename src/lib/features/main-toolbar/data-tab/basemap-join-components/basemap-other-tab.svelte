@@ -19,6 +19,7 @@
     Upload
   } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface SuggestedBasemap {
     basemap: BasemapMetadata;
@@ -280,7 +281,7 @@
       }}
       onclick={() => fileInputRef?.click()}
       onkeydown={(e: KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') fileInputRef?.click();
+        if (e.key === KEY.ENTER || e.key === KEY.SPACE) fileInputRef?.click();
       }}
     >
       <span class="dropzone-text">{m.basemap_import_dropzone_text()}</span>

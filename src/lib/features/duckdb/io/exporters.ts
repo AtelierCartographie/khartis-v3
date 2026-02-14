@@ -1,6 +1,7 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { CACHE_CONSTANTS, DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
@@ -78,9 +79,15 @@ export async function exportToCsv(
   table: string,
   options?: { delimiter?: string; header?: boolean }
 ): Promise<string> {
-  const delimiter = options?.delimiter || ',';
-  if (delimiter.length !== 1) {
-    throw new DuckDBError(`Invalid CSV delimiter: must be a single character`);
+  const SAFE_DELIMITERS = new Set([
+    ...PIPELINE_CONST.CSV.SUPPORTED_DELIMITERS,
+    ' '
+  ]);
+  const delimiter = options?.delimiter || PIPELINE_CONST.CSV.DEFAULT_DELIMITER;
+  if (delimiter.length !== 1 || !SAFE_DELIMITERS.has(delimiter)) {
+    throw new DuckDBError(
+      `Invalid CSV delimiter: must be one of , ; \\t | (space)`
+    );
   }
   const header = options?.header !== false;
   const filename = `export_${Date.now()}.csv`;

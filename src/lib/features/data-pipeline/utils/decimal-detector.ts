@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../constants';
 
 export interface DecimalDetectionResult {
   separator: '.' | ',';
@@ -90,9 +91,9 @@ export async function detectDecimalSeparator(
 }
 
 function detectFieldDelimiter(headerLine: string): string {
-  const delimiters = [';', ',', '\t', '|'];
+  const delimiters = PIPELINE_CONST.CSV.SUPPORTED_DELIMITERS;
   let maxCount = 0;
-  let detected = ',';
+  let detected: string = PIPELINE_CONST.CSV.DEFAULT_DELIMITER;
 
   for (const d of delimiters) {
     const escapedDelimiter = d === '|' ? '\\|' : d;

@@ -3,6 +3,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import {
   getDescribe,
   getRowCountFromCache,
@@ -83,7 +84,7 @@ export async function dropRows(
 
   await executeQuery(
     ctx.connection,
-    `DELETE FROM "${escapeIdentifier(table)}" WHERE __id IN (${validIds.join(',')})`,
+    `DELETE FROM "${escapeIdentifier(table)}" WHERE ${INTERNAL_COLUMN.ID} IN (${validIds.join(',')})`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
   markTableMutated(ctx, table);

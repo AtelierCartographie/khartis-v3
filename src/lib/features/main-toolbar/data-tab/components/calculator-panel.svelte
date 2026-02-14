@@ -12,6 +12,7 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
   import AutocompleteTextarea, {
     type Suggestion
@@ -27,7 +28,7 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
     selectedDataset?.columns.filter(
-      (c) => c.name !== 'geom' && c.name !== '__id'
+      (c) => c.name !== INTERNAL_COLUMN.GEOM && c.name !== INTERNAL_COLUMN.ID
     ) ?? []
   );
 

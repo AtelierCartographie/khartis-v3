@@ -29,6 +29,22 @@ export async function describeColumns(
   return describe_full as AnalysisResults;
 }
 
+/**
+ * Analyzes the specified table and returns an array of indicators with summaries and histograms.
+ *
+ * For large tables (>50k rows), uses a sample for analysis.
+ * Processes columns in parallel batches by type (numeric, date, string).
+ *
+ * @param ctx - The DuckDB context.
+ * @param table - The name of the table to analyze.
+ * @param options.force - If true, forces a re-analysis bypassing the cache.
+ * @returns An array of indicator objects, each containing:
+ *   - name: The name of the column.
+ *   - type_simple: The simplified type ('numeric', 'date', 'string').
+ *   - summary_general: General summary statistics.
+ *   - summary_numeric/summary_date: Type-specific summary statistics.
+ *   - histogram: Histogram data for summary plots.
+ */
 export async function analyse(
   ctx: DuckDBContext,
   table: string,
@@ -109,10 +125,11 @@ export async function analyse(
           let histogram = null;
 
           const escapedColName = escapeIdentifier(d.name as string);
+          const escapedAnalysisTable = escapeSqlString(analysisTable);
 
           const generalPromise = executeQuery(
             ctx.connection,
-            `FROM summary_general(${analysisTable}, "${escapedColName}")`,
+            `FROM summary_general('${escapedAnalysisTable}', "${escapedColName}")`,
             { useProxy: false }
           )
             .then((r) => r as ArrowTableLike)
@@ -124,8 +141,6 @@ export async function analyse(
               );
               return null;
             });
-
-          const escapedAnalysisTable = escapeSqlString(analysisTable);
 
           switch (type) {
             case 'numeric': {
@@ -203,7 +218,7 @@ export async function analyse(
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_categorical(${analysisTable}, "${escapedColName}")`
+                  `FROM histogram_categorical('${escapedAnalysisTable}', "${escapedColName}")`
                 )
               ]);
               summary_general = general;

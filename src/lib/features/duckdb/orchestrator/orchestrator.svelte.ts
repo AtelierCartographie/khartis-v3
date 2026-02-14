@@ -1,4 +1,5 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
@@ -98,7 +99,10 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
 
   const hasGeometryColumn = dataset.columns.some((column) => {
     const name = column.name.toLowerCase();
-    return name === 'geom' || name === 'geometry';
+    return (
+      name === INTERNAL_COLUMN.GEOM.toLowerCase() ||
+      name === INTERNAL_COLUMN.GEOMETRY.toLowerCase()
+    );
   });
 
   if (!hasGeometryColumn) {
@@ -145,7 +149,6 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
   return prefetchPromise;
 }
 
-/** Invalidate cached Arrow table and DuckDB query cache for a table after column mutations. */
 function invalidateDatasetCache(tableName: string): void {
   const dataset = state.getDatasetByTable(tableName);
   if (dataset) {

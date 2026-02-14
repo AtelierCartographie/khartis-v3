@@ -43,7 +43,7 @@ export interface DuckDBMetadata {
 
 export interface AnalysisResult {
   name: string;
-  type_simple: DuckDBSimplifiedType | 'numeric' | 'date' | 'string';
+  type_simple: DuckDBSimplifiedType;
   min?: number | Date;
   max?: number | Date;
   histogram?: unknown;

@@ -12,6 +12,7 @@
     Launch,
     Upload
   } from 'carbon-icons-svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface Props {
     acceptedExtensions?: string[];
@@ -81,7 +82,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
       fileInputRef?.click();
     }
   }

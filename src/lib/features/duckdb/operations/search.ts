@@ -3,6 +3,7 @@ import {
   escapeIdentifier
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -170,7 +171,7 @@ export async function searchInTable(
         `SELECT
           normalize_text('${escapedQuery}') AS normalized_term,
           (SELECT count(*) FROM "${escapeIdentifier(table)}") AS row_count,
-          (SELECT count(*) FROM duckdb_columns() WHERE table_name = '${escapeSqlString(table)}' AND column_name != '__id') AS col_count`,
+          (SELECT count(*) FROM duckdb_columns() WHERE table_name = '${escapeSqlString(table)}' AND column_name != '${INTERNAL_COLUMN.ID}') AS col_count`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       ) as Promise<
         Array<{
@@ -183,7 +184,7 @@ export async function searchInTable(
         ctx.connection,
         `SELECT column_name FROM duckdb_columns()
          WHERE table_name = '${escapeSqlString(table)}'
-           AND column_name != '__id'
+           AND column_name != '${INTERNAL_COLUMN.ID}'
            AND data_type IN ('VARCHAR', 'TEXT', 'STRING')`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       ) as Promise<Array<{ column_name: string }>>
@@ -326,5 +327,17 @@ export async function searchInTable(
       error
     });
     return emptyResult;
+  } finally {
+    if (isSampled) {
+      try {
+        await executeQuery(
+          ctx.connection,
+          `DROP TABLE IF EXISTS __search_sample`,
+          { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+        );
+      } catch {
+        /* ignore cleanup errors */
+      }
+    }
   }
 }
