@@ -1,5 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
@@ -45,14 +48,16 @@ export async function getTableData(
       /* fallback to SELECT * */
     }
 
-    let query = `SELECT ${selectClause} FROM "${tableName}"`;
+    const escapedTableName = escapeIdentifier(tableName);
+    let query = `SELECT ${selectClause} FROM "${escapedTableName}"`;
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     if (whereClause) {
       query += ` WHERE ${whereClause}`;
     }
 
     if (options?.orderBy && options?.order) {
-      query += ` ORDER BY "${options.orderBy}" ${options.order}`;
+      const escapedOrderBy = escapeIdentifier(options.orderBy);
+      query += ` ORDER BY "${escapedOrderBy}" ${options.order === 'DESC' ? 'DESC' : 'ASC'}`;
     }
 
     if (options?.limit) {
@@ -76,7 +81,8 @@ export async function countRows(
   applyFilters: boolean
 ): Promise<number> {
   const filters = getFiltersMap();
-  let query = `SELECT COUNT(*) as count FROM "${tableName}"`;
+  const escapedTableName = escapeIdentifier(tableName);
+  let query = `SELECT COUNT(*) as count FROM "${escapedTableName}"`;
   const whereClause = applyFilters
     ? buildFilterWhereClause(filters.get(tableName))
     : null;
@@ -115,17 +121,25 @@ export async function getRowPosition(
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     const filterCondition = whereClause ? `AND ${whereClause}` : '';
 
+    if (!Number.isInteger(rowId)) {
+      logger.error('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
+        rowId
+      });
+      return -1;
+    }
+
+    const escapedTable = escapeIdentifier(tableName);
+
     if (options?.orderBy && options?.order) {
-      const sortCol = `"${options.orderBy}"`;
+      const sortCol = `"${escapeIdentifier(options.orderBy)}"`;
       const isAsc = options.order === 'ASC';
 
-      // Count rows that sort before the target row
       const query = `
         WITH target AS (
-          SELECT ${sortCol} as sort_val FROM "${tableName}" WHERE __id = ${rowId}
+          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${rowId}
         )
         SELECT COUNT(*) as position
-        FROM "${tableName}", target
+        FROM "${escapedTable}", target
         WHERE (
           ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
           OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${rowId})
@@ -141,7 +155,7 @@ export async function getRowPosition(
     } else {
       const query = `
         SELECT COUNT(*) as position
-        FROM "${tableName}"
+        FROM "${escapedTable}"
         WHERE __id < ${rowId}
         ${filterCondition}
       `;
@@ -167,7 +181,8 @@ export async function getRowStats(
   const whereClause = buildFilterWhereClause(filters.get(tableName));
 
   if (whereClause) {
-    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${tableName}"`;
+    const escapedTable = escapeIdentifier(tableName);
+    const query = `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE ${whereClause}) as filtered FROM "${escapedTable}"`;
     const result = (await Duck.query(query)) as ArrowTableLike;
     const row = result.get(0) as Record<string, unknown>;
     return {
@@ -188,7 +203,8 @@ export async function getExcludedRowIds(
   const whereClause = buildFilterWhereClause(filters.get(tableName));
   if (!whereClause) return [];
 
-  const query = `SELECT __id FROM "${tableName}" WHERE NOT (${whereClause})`;
+  const escapedTable = escapeIdentifier(tableName);
+  const query = `SELECT __id FROM "${escapedTable}" WHERE NOT (${whereClause})`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
   const ids: number[] = [];

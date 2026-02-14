@@ -189,6 +189,7 @@ export async function serializeProjectData(
   serialized.layoutSettings = {
     format: formatState,
     annotations: {
+      visible: annotationsState.visible,
       items: annotationsState.items,
       activeType: annotationsState.activeType,
       predefinedStyle: annotationsState.predefinedStyle,
@@ -321,6 +322,7 @@ export async function deserializeProjectData(
 
       if (annotations) {
         annotationsActions.setState({
+          visible: annotations.visible ?? true,
           items: annotations.items,
           activeType: annotations.activeType,
           predefinedStyle: annotations.predefinedStyle,
@@ -335,12 +337,16 @@ export async function deserializeProjectData(
           items: legend.items,
           position: legend.position,
           visible: legend.visible,
-          style: legend.style
+          style: legend.style,
+          hasBeenOpened: legend.hasBeenOpened ?? false
         });
       }
 
       if (geoIndications) {
-        geoIndicationsActions.setState(geoIndications);
+        geoIndicationsActions.setState({
+          ...geoIndications,
+          visible: geoIndications.visible ?? true
+        });
       }
 
       if (projection) {

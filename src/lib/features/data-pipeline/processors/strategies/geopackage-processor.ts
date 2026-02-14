@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import {
   FileType,
   type UploadedFile
@@ -10,8 +11,6 @@ import type {
   ProcessorDataset
 } from '../file-processor.interface';
 import { getFileForDuckDB } from './processor-utils';
-
-const { GEOPACKAGE } = PIPELINE_CONST.MIME_TYPES;
 
 export const geopackageProcessor: FileProcessor = {
   supportedFileTypes: [FileType.GEOPACKAGE],
@@ -33,7 +32,7 @@ export const geopackageProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const gpkgFile = getFileForDuckDB(file, GEOPACKAGE);
+    const gpkgFile = getFileForDuckDB(file, MIME.GEOPACKAGE);
 
     await ctx.Duck.register_files([gpkgFile]);
 

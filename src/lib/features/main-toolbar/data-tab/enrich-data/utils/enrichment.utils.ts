@@ -3,6 +3,7 @@ import {
   type GeoColumnResult,
   type GeoDetectionResult
 } from '$lib/features/commons/utils/geo-detector.utils';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 
 export interface EnrichDataFieldItem {
@@ -26,7 +27,7 @@ export function buildEnrichDataFieldItems(
   if (!enrichmentDataset) return [];
 
   return enrichmentDataset.columns
-    .filter((col) => col.name !== '__id')
+    .filter((col) => col.name !== INTERNAL_COLUMN.ID)
     .map((col, index) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc: GeoColumnResult) => gc.columnName === col.name
@@ -55,7 +56,9 @@ export function buildGeoFileColumns(
   return selectedDataset.columns
     .filter(
       (col) =>
-        col.name !== 'geometry' && col.name !== 'geom' && col.name !== '__id'
+        col.name !== INTERNAL_COLUMN.GEOMETRY &&
+        col.name !== INTERNAL_COLUMN.GEOM &&
+        col.name !== INTERNAL_COLUMN.ID
     )
     .map((col, idx) => ({ id: idx, text: col.name, columnName: col.name }));
 }

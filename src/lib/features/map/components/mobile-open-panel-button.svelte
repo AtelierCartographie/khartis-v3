@@ -25,7 +25,7 @@
     position: fixed;
     top: calc(var(--cds-header-height) + var(--cds-spacing-03));
     right: var(--cds-spacing-03);
-    z-index: 800;
+    z-index: var(--z-mobile-open-button);
   }
 
   .open-panel-button-wrapper :global(.bx--btn) {

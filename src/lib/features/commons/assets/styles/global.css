@@ -1,6 +1,23 @@
 :root {
   --cds-main-toolbar-width: 50vw;
   --cds-header-height: 47px;
+
+  /* Z-index layering system */
+  --z-base: 1;
+  --z-map-layer: 5;
+  --z-content: 10;
+  --z-content-raised: 15;
+  --z-content-header: 20;
+  --z-map-overlay: 50;
+  --z-dropdown: 100;
+  --z-mobile-open-button: 800;
+  --z-mobile-overlay: 850;
+  --z-mobile-toolbar: 900;
+  --z-toolbar: 1000;
+  --z-main-toolbar: 1100;
+  --z-overlay: 9999;
+  --z-notification: 10000;
+  --z-popover: 10001;
   --cds-interactive-04: #3c3838;
   --cds-active-primary: rgb(46, 44, 44);
   --cds-hover-primary: #3c3838;

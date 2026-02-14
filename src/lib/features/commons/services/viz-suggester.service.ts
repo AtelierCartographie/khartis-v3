@@ -5,6 +5,7 @@ import {
   type SemioType
 } from '$lib/features/commons/utils/semio-detector.utils';
 import type { ColumnAnalysis } from '$lib/features/data-pipeline';
+import { DuckDBSimplifiedType } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
 export type GeometryType =
@@ -190,220 +191,219 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   }
 ] as const;
 
-export class VizSuggesterService {
-  suggestVisualizations(
-    columns: ColumnAnalysis[],
-    geometryType: GeometryType | null,
-    options: { maxSuggestions?: number; debug?: boolean } = {}
-  ): VizSuggestion[] {
-    const { maxSuggestions = 3, debug = false } = options;
+function simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
+  if (geomType.includes('Point')) return 'point';
+  if (geomType.includes('Line')) return 'line';
+  if (geomType.includes('Polygon')) return 'polygon';
+  return 'polygon';
+}
 
-    if (!geometryType) {
-      return [];
-    }
-
-    const simplifiedGeomType = this.simplifyGeometryType(geometryType);
-
-    const enrichedColumns = columns
-      .map((col) => this.getColumnSemioType(col))
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        const aNulls = this.getNullCount(a);
-        const bNulls = this.getNullCount(b);
-        return aNulls - bNulls;
-      })
-      .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
-      .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
-      .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
-      .filter((col) => this.getUniqueCount(col) > 1);
-
-    if (debug) {
-      logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
-        geometry: simplifiedGeomType,
-        columns: enrichedColumns.map((col) => ({
-          name: col.name,
-          semioType: col.semioType,
-          score: col.score
-        }))
-      });
-    }
-
-    const suggestions = this.generateSuggestions(
-      enrichedColumns,
-      simplifiedGeomType
-    );
-
-    return suggestions.slice(0, maxSuggestions);
-  }
-
-  private simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
-    if (geomType.includes('Point')) return 'point';
-    if (geomType.includes('Line')) return 'line';
-    if (geomType.includes('Polygon')) return 'polygon';
-    return 'polygon';
-  }
-
-  private getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
-    const columnName = column.name ?? '';
-    const columnType = (column.type ?? 'string').toString();
-
-    const analysisLike = {
-      name: columnName,
-      type_simple: this.mapTypeToSimple(columnType),
-      count: this.getTotalCount(column),
-      uniques: this.getUniqueCount(column),
-      nulls: this.getNullCount(column),
-      min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
-      max: typeof column.stats?.max === 'number' ? column.stats.max : undefined
-    };
-
-    const { semioType, semioScore } = detectSemioType(analysisLike);
-
-    return {
-      ...column,
-      name: columnName || '(column)',
-      type: columnType,
-      semioType,
-      score: semioScore
-    };
-  }
-
-  private mapTypeToSimple(columnType: string): 'numeric' | 'date' | 'string' {
-    switch (columnType) {
-      case 'number':
-      case 'integer':
-      case 'bigint':
-        return 'numeric';
-      case 'date':
-        return 'date';
-      case 'string':
-      case 'text':
-      case 'boolean':
-      default:
-        return 'string';
-    }
-  }
-
-  private generateSuggestions(
-    columns: EnrichedColumn[],
-    geometryType: SimplifiedGeometryType
-  ): VizSuggestion[] {
-    const results: VizSuggestion[] = [];
-
-    if (columns.length === 0) {
-      return VIZ_CRITERIA.filter(
-        (viz) =>
-          viz.geometries.includes(geometryType) && viz.semioTypes.length === 0
-      ) as VizSuggestion[];
-    }
-
-    if (columns.length === 1) {
-      results.push(...this.searchVizByType(columns[0], geometryType, 1));
-    } else {
-      const first = columns[0];
-      const second = columns[1];
-
-      results.push(...this.searchVizByType(first, geometryType, 1));
-      results.push(...this.searchVizByType(second, geometryType, 1));
-      results.push(...this.searchVizByType([first, second], geometryType, 2));
-
-      let third: EnrichedColumn | undefined;
-      if (results.length < 3 && columns.length >= 3) {
-        third = columns[2];
-        results.push(...this.searchVizByType(third, geometryType, 1));
-        results.push(...this.searchVizByType([first, third], geometryType, 2));
-        results.push(...this.searchVizByType([second, third], geometryType, 2));
-      }
-
-      if (results.length < 3 && columns.length >= 4) {
-        const fourth = columns[3];
-        const fallbackThird = third ?? columns[2];
-        results.push(...this.searchVizByType(fourth, geometryType, 1));
-        results.push(...this.searchVizByType([first, fourth], geometryType, 2));
-        results.push(
-          ...this.searchVizByType([second, fourth], geometryType, 2)
-        );
-        results.push(
-          ...this.searchVizByType([fallbackThird, fourth], geometryType, 2)
-        );
-      }
-    }
-
-    const unique = results.filter(
-      (viz, index, self) => index === self.findIndex((v) => v.id === viz.id)
-    );
-
-    return unique;
-  }
-
-  private searchVizByType(
-    dataset: EnrichedColumn | EnrichedColumn[],
-    geometryType: SimplifiedGeometryType,
-    nbColumns: 1 | 2
-  ): VizSuggestion[] {
-    if (nbColumns === 1 && !Array.isArray(dataset)) {
-      return VIZ_CRITERIA.filter(
-        (viz) =>
-          viz.geometries.includes(geometryType) &&
-          viz.nbColumns === nbColumns &&
-          viz.semioTypes.includes(dataset.semioType)
-      ).map((viz) => ({
-        ...viz,
-        columns: [dataset.name],
-        score: this.computeSuggestionScore([dataset])
-      })) as VizSuggestion[];
-    }
-
-    if (nbColumns === 2 && Array.isArray(dataset) && dataset.length === 2) {
-      return VIZ_CRITERIA.filter(
-        (viz) =>
-          viz.geometries.includes(geometryType) &&
-          viz.nbColumns === nbColumns &&
-          ((viz.semioTypes[0] === dataset[0].semioType &&
-            viz.semioTypes[1] === dataset[1].semioType) ||
-            (viz.semioTypes[1] === dataset[0].semioType &&
-              viz.semioTypes[0] === dataset[1].semioType))
-      ).map((viz) => ({
-        ...viz,
-        columns: [dataset[0].name, dataset[1].name],
-        score: this.computeSuggestionScore(dataset)
-      })) as VizSuggestion[];
-    }
-
-    return [];
-  }
-
-  private computeSuggestionScore(columns: EnrichedColumn[]): number {
-    if (columns.length === 0) return 0;
-    const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
-    const avgScore = totalScore / columns.length;
-    const MAX_SEMIO_SCORE = 6.5;
-    return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
-  }
-
-  private getTotalCount(column: ColumnAnalysis): number {
-    const stats = column.stats;
-    if (!stats) return 0;
-    if (typeof stats.totalCount === 'number') return stats.totalCount;
-    if (typeof stats.count === 'number') return stats.count;
-    return 0;
-  }
-
-  private getUniqueCount(column: ColumnAnalysis): number {
-    const stats = column.stats;
-    if (!stats) return 0;
-    if (typeof stats.uniqueCount === 'number') return stats.uniqueCount;
-    if (typeof stats.uniques === 'number') return stats.uniques;
-    return 0;
-  }
-
-  private getNullCount(column: ColumnAnalysis): number {
-    const stats = column.stats;
-    if (!stats) return 0;
-    if (typeof stats.nullCount === 'number') return stats.nullCount;
-    if (typeof stats.nulls === 'number') return stats.nulls;
-    return 0;
+function mapTypeToSimple(columnType: string): DuckDBSimplifiedType {
+  switch (columnType) {
+    case 'number':
+    case 'integer':
+    case 'bigint':
+      return DuckDBSimplifiedType.NUMERIC;
+    case 'date':
+      return DuckDBSimplifiedType.DATE;
+    case 'string':
+    case 'text':
+    case 'boolean':
+    default:
+      return DuckDBSimplifiedType.STRING;
   }
 }
 
-export const vizSuggester = new VizSuggesterService();
+function getTotalCount(column: ColumnAnalysis): number {
+  const stats = column.stats;
+  if (!stats) return 0;
+  if (typeof stats.totalCount === 'number') return stats.totalCount;
+  if (typeof stats.count === 'number') return stats.count;
+  return 0;
+}
+
+function getUniqueCount(column: ColumnAnalysis): number {
+  const stats = column.stats;
+  if (!stats) return 0;
+  if (typeof stats.uniqueCount === 'number') return stats.uniqueCount;
+  if (typeof stats.uniques === 'number') return stats.uniques;
+  return 0;
+}
+
+function getNullCount(column: ColumnAnalysis): number {
+  const stats = column.stats;
+  if (!stats) return 0;
+  if (typeof stats.nullCount === 'number') return stats.nullCount;
+  if (typeof stats.nulls === 'number') return stats.nulls;
+  return 0;
+}
+
+function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
+  const columnName = column.name ?? '';
+  const columnType = (column.type ?? 'string').toString();
+
+  const analysisLike = {
+    name: columnName,
+    type_simple: mapTypeToSimple(columnType),
+    count: getTotalCount(column),
+    uniques: getUniqueCount(column),
+    nulls: getNullCount(column),
+    min: typeof column.stats?.min === 'number' ? column.stats.min : undefined,
+    max: typeof column.stats?.max === 'number' ? column.stats.max : undefined,
+    share_integers: column.stats?.share_integers,
+    share_floats: column.stats?.share_floats,
+    share_rank_interval: column.stats?.share_rank_interval,
+    extent_magnitude: column.stats?.extent_magnitude
+  };
+
+  const { semioType, semioScore } = detectSemioType(analysisLike);
+
+  return {
+    ...column,
+    name: columnName || '(column)',
+    type: columnType,
+    semioType,
+    score: semioScore
+  };
+}
+
+function computeSuggestionScore(columns: EnrichedColumn[]): number {
+  if (columns.length === 0) return 0;
+  const totalScore = columns.reduce((sum, col) => sum + col.score, 0);
+  const avgScore = totalScore / columns.length;
+  const MAX_SEMIO_SCORE = 6.5;
+  return Math.round((avgScore / MAX_SEMIO_SCORE) * 100);
+}
+
+function searchVizByType(
+  dataset: EnrichedColumn | EnrichedColumn[],
+  geometryType: SimplifiedGeometryType,
+  nbColumns: 1 | 2
+): VizSuggestion[] {
+  if (nbColumns === 1 && !Array.isArray(dataset)) {
+    return VIZ_CRITERIA.filter(
+      (viz) =>
+        viz.geometries.includes(geometryType) &&
+        viz.nbColumns === nbColumns &&
+        viz.semioTypes.includes(dataset.semioType)
+    ).map((viz) => ({
+      ...viz,
+      columns: [dataset.name],
+      score: computeSuggestionScore([dataset])
+    })) as VizSuggestion[];
+  }
+
+  if (nbColumns === 2 && Array.isArray(dataset) && dataset.length === 2) {
+    return VIZ_CRITERIA.filter(
+      (viz) =>
+        viz.geometries.includes(geometryType) &&
+        viz.nbColumns === nbColumns &&
+        ((viz.semioTypes[0] === dataset[0].semioType &&
+          viz.semioTypes[1] === dataset[1].semioType) ||
+          (viz.semioTypes[1] === dataset[0].semioType &&
+            viz.semioTypes[0] === dataset[1].semioType))
+    ).map((viz) => ({
+      ...viz,
+      columns: [dataset[0].name, dataset[1].name],
+      score: computeSuggestionScore(dataset)
+    })) as VizSuggestion[];
+  }
+
+  return [];
+}
+
+function generateSuggestions(
+  columns: EnrichedColumn[],
+  geometryType: SimplifiedGeometryType
+): VizSuggestion[] {
+  const results: VizSuggestion[] = [];
+
+  if (columns.length === 0) {
+    return VIZ_CRITERIA.filter(
+      (viz) =>
+        viz.geometries.includes(geometryType) && viz.semioTypes.length === 0
+    ) as VizSuggestion[];
+  }
+
+  if (columns.length === 1) {
+    results.push(...searchVizByType(columns[0], geometryType, 1));
+  } else {
+    const first = columns[0];
+    const second = columns[1];
+
+    results.push(...searchVizByType(first, geometryType, 1));
+    results.push(...searchVizByType(second, geometryType, 1));
+    results.push(...searchVizByType([first, second], geometryType, 2));
+
+    let third: EnrichedColumn | undefined;
+    if (results.length < 3 && columns.length >= 3) {
+      third = columns[2];
+      results.push(...searchVizByType(third, geometryType, 1));
+      results.push(...searchVizByType([first, third], geometryType, 2));
+      results.push(...searchVizByType([second, third], geometryType, 2));
+    }
+
+    if (results.length < 3 && columns.length >= 4) {
+      const fourth = columns[3];
+      const fallbackThird = third ?? columns[2];
+      results.push(...searchVizByType(fourth, geometryType, 1));
+      results.push(...searchVizByType([first, fourth], geometryType, 2));
+      results.push(...searchVizByType([second, fourth], geometryType, 2));
+      results.push(
+        ...searchVizByType([fallbackThird, fourth], geometryType, 2)
+      );
+    }
+  }
+
+  const unique = results.filter(
+    (viz, index, self) => index === self.findIndex((v) => v.id === viz.id)
+  );
+
+  return unique;
+}
+
+function suggestVisualizations(
+  columns: ColumnAnalysis[],
+  geometryType: GeometryType | null,
+  options: { maxSuggestions?: number; debug?: boolean } = {}
+): VizSuggestion[] {
+  const { maxSuggestions = 3, debug = false } = options;
+
+  if (!geometryType) {
+    return [];
+  }
+
+  const simplifiedGeomType = simplifyGeometryType(geometryType);
+
+  const enrichedColumns = columns
+    .map((col) => getColumnSemioType(col))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const aNulls = getNullCount(a);
+      const bNulls = getNullCount(b);
+      return aNulls - bNulls;
+    })
+    .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
+    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
+    .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
+    .filter((col) => getUniqueCount(col) > 1);
+
+  if (debug) {
+    logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
+      geometry: simplifiedGeomType,
+      columns: enrichedColumns.map((col) => ({
+        name: col.name,
+        semioType: col.semioType,
+        score: col.score
+      }))
+    });
+  }
+
+  const suggestions = generateSuggestions(enrichedColumns, simplifiedGeomType);
+
+  return suggestions.slice(0, maxSuggestions);
+}
+
+export const vizSuggester = {
+  suggestVisualizations
+};

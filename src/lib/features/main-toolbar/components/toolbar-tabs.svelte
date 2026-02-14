@@ -26,6 +26,8 @@
   import AddDataModal from './add-data-modal.svelte';
   import { dataTabStore } from '../data-tab/data-tab.store.svelte';
   import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { UI_CONSTANTS } from '../constants';
 
   let tabsScroller: HTMLDivElement | null = $state(null);
 
@@ -123,10 +125,10 @@
   }
 
   function handleDatasetEditKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === KEY.ENTER) {
       event.preventDefault();
       saveDatasetRename();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
       cancelDatasetEditing();
     }
@@ -210,10 +212,10 @@
   }
 
   function handleTabKeyPress(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === KEY.ENTER) {
       event.preventDefault();
       saveTabRename();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
       cancelTabEditing();
     }
@@ -391,7 +393,10 @@
     return { name, extension };
   };
 
-  const truncateFileName = (name: string, maxLength: number = 20): string => {
+  const truncateFileName = (
+    name: string,
+    maxLength: number = UI_CONSTANTS.TRUNCATE_FILE_NAME_MAX_LENGTH
+  ): string => {
     if (name.length <= maxLength) return name;
     return name.slice(0, maxLength - 3) + '...';
   };
@@ -708,7 +713,7 @@
     cursor: pointer;
     border-radius: var(--cds-border-radius);
     transition: background-color 0.15s ease;
-    z-index: 10;
+    z-index: var(--z-content);
   }
 
   .tab-menu-button:hover {
@@ -729,7 +734,7 @@
     background-color: var(--cds-ui-01);
     border: 1px solid var(--cds-ui-03);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    z-index: 10000;
+    z-index: var(--z-notification);
     border-radius: 2px;
   }
 

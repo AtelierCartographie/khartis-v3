@@ -7,14 +7,13 @@ import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import { DUCK_CONST } from '../constants';
+import { DUCK_CONST, EXTENSIONS } from '../constants';
 import type {
   CacheState,
   DescribeResult,
   DuckDBContext,
   ExtensionLoadPromises,
   ExtensionsLoaded,
-  QueryCacheEntry,
   TableMetadata
 } from '../types';
 import { executeQuery } from './query';
@@ -25,7 +24,6 @@ const loaded_files: Map<string, string> = new Map();
 const registered_files: Set<string> = new Set();
 const table_metadata: Map<string, TableMetadata> = new Map();
 const table_geoparquet_cache: Map<string, Uint8Array> = new Map();
-const queryCache: Map<string, QueryCacheEntry> = new Map();
 const describeCache: Map<string, DescribeResult> = new Map();
 const rowCountCache: Map<string, number> = new Map();
 const cacheState: CacheState = { size: 0, accessOrder: [] };
@@ -39,7 +37,6 @@ let threadsSupported = false;
 let bundleVariant: 'eh' | 'mvp' = 'eh';
 
 let initPromise: Promise<void> | null = null;
-let initializationStarted = false;
 
 export function isInitialized(): boolean {
   return db !== null && connection !== null;
@@ -56,7 +53,6 @@ export function getContext(): DuckDBContext {
     registered_files,
     table_metadata,
     table_geoparquet_cache,
-    queryCache,
     describeCache,
     rowCountCache,
     cacheState,
@@ -163,9 +159,13 @@ async function loadSpatialExtension(): Promise<void> {
 
   const start = performance.now();
   try {
-    await executeQuery(connection, `INSTALL spatial; LOAD spatial;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    await executeQuery(
+      connection,
+      `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
     extensionsLoaded.spatial = true;
     logger.debug('Spatial extension preloaded', LogCategory.DUCKDB, {
       durationMs: (performance.now() - start).toFixed(2)
@@ -182,9 +182,13 @@ async function loadHTTPFSExtension(): Promise<void> {
 
   const start = performance.now();
   try {
-    await executeQuery(connection, `INSTALL httpfs; LOAD httpfs;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    await executeQuery(
+      connection,
+      `INSTALL ${EXTENSIONS.HTTPFS}; LOAD ${EXTENSIONS.HTTPFS};`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
     extensionsLoaded.httpfs = true;
     logger.debug('HTTPFS extension preloaded', LogCategory.DUCKDB, {
       durationMs: (performance.now() - start).toFixed(2)
@@ -196,40 +200,13 @@ async function loadHTTPFSExtension(): Promise<void> {
   }
 }
 
-async function loadParquetExtension(): Promise<void> {
-  if (!connection) return;
-  const start = performance.now();
-  try {
-    await executeQuery(connection, `INSTALL parquet; LOAD parquet;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
-    logger.debug('Parquet extension preloaded', LogCategory.DUCKDB, {
-      durationMs: (performance.now() - start).toFixed(2)
-    });
-  } catch {
-    logger.debug(
-      'Parquet extension already loaded or not needed',
-      LogCategory.DUCKDB
-    );
-  }
-}
-
 async function preloadExtensions(): Promise<void> {
   const startTime = performance.now();
   logger.info('Preloading DuckDB extensions', LogCategory.DUCKDB);
 
-  const results = await Promise.allSettled([
-    loadSpatialExtension(),
-    loadHTTPFSExtension(),
-    loadParquetExtension()
-  ]);
-
-  const successful = results.filter((r) => r.status === 'fulfilled').length;
-  const failed = results.filter((r) => r.status === 'rejected').length;
+  await Promise.all([loadSpatialExtension(), loadHTTPFSExtension()]);
 
   logger.success('Extensions preloaded', LogCategory.DUCKDB, {
-    successful,
-    failed,
     totalDurationMs: (performance.now() - startTime).toFixed(2)
   });
 }
@@ -240,12 +217,6 @@ export async function initEngine(): Promise<void> {
     await initPromise;
     return;
   }
-  if (initializationStarted) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    return initEngine();
-  }
-
-  initializationStarted = true;
   const startTime = performance.now();
   logger.info('DuckDB initialization started', LogCategory.DUCKDB);
 
@@ -316,7 +287,6 @@ export async function initEngine(): Promise<void> {
       db = null;
       connection = null;
       initPromise = null;
-      initializationStarted = false;
       logger.error('Failed to initialize DuckDB', LogCategory.DUCKDB, {
         duration: `${(performance.now() - startTime).toFixed(2)}ms`,
         error

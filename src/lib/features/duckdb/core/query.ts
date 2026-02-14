@@ -4,6 +4,16 @@ import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBUnsafeBindings, QueryOptions } from '../types';
 
+/**
+ * Executes a SQL query and returns the result in the specified format.
+ * Default format is an Arrow table (via @uwdata/flechette IPC conversion).
+ *
+ * @param connection - The DuckDB connection to use.
+ * @param query - The SQL query to execute.
+ * @param options.format - Result format: 'arrow-table' (default), 'arrow-ipc', or 'array'.
+ * @param options.useProxy - Whether to use Proxy objects for performance optimization (default true).
+ * @returns The query result in the specified format.
+ */
 export async function executeQuery(
   connection: AsyncDuckDBConnection,
   query: string,

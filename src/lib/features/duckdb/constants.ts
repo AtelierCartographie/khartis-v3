@@ -76,6 +76,13 @@ export const CACHE_CONSTANTS = {
 /**
  * Reader configuration for geometry processing.
  */
+export const GEO_CONSTANTS = {
+  /** WGS 84 coordinate reference system used as the target CRS for all geometries */
+  WGS84_CRS: 'EPSG:4326',
+  /** Web Mercator projection commonly used in web mapping */
+  WEB_MERCATOR_CRS: 'EPSG:3857'
+} as const;
+
 export const READER_CONSTANTS = {
   /**
    * Batch size for point geometry reprojection.
@@ -100,4 +107,43 @@ export const READER_CONSTANTS = {
     'EPSG:27572', // Lambert II etendu (France)
     'EPSG:3035' // ETRS89-LAEA (Europe)
   ])
+} as const;
+
+/**
+ * DuckDB extension names.
+ */
+export const EXTENSIONS = {
+  SPATIAL: 'spatial',
+  HTTPFS: 'httpfs'
+} as const;
+
+
+/**
+ * Table name patterns and suffixes.
+ */
+export const TABLE_PATTERNS = {
+  /** Suffix for join result tables */
+  JOIN_RESULTS_SUFFIX: '_join_results',
+  /** Suffix for filtered tables */
+  FILTERED_SUFFIX: '_filtered',
+  /** Unified basemap attributes table name */
+  UNIFIED_BASEMAP_ATTRS: 'unified_basemap_attributes',
+  /** Custom basemap attributes table name */
+  CUSTOM_BASEMAP_ATTRS: 'custom_basemap_attributes'
+} as const;
+
+/**
+ * DuckDB SQL function names.
+ */
+export const SQL_FUNCTIONS = {
+  ST_READ: 'ST_Read',
+  ST_READ_META: 'ST_Read_Meta',
+  ST_TRANSFORM: 'ST_Transform',
+  ST_GEOM_FROM_WKB: 'ST_GeomFromWKB',
+  ST_SIMPLIFY: 'ST_Simplify',
+  ST_SIMPLIFY_PRESERVE_TOPOLOGY: 'ST_SimplifyPreserveTopology',
+  NORMALIZE_TEXT: 'normalize_text',
+  READ_CSV: 'read_csv',
+  READ_CSV_AUTO: 'read_csv_auto',
+  READ_PARQUET: 'read_parquet'
 } as const;

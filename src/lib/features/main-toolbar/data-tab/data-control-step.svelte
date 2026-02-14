@@ -37,6 +37,7 @@
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
   import { resolveSelectedDuckTableName } from './services/dataset-resolution';
+  import { UI_CONSTANTS } from '../constants';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -71,6 +72,12 @@
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
+
+  $effect(() => {
+    void selectedDataset?.id;
+    selectedRowIds = [];
+  });
+
   let csvOptionsModalOpen = $state(false);
   let showSummaryPlots = $state(true);
   let currentCsvOptions = $state<CsvOptions>({
@@ -230,6 +237,7 @@
 
     try {
       let totalReplaced = 0;
+      const replacedColumns: string[] = [];
 
       if (source === 'all') {
         const textColumns =
@@ -246,6 +254,9 @@
             replaceValue
           );
           totalReplaced += count;
+          if (count > 0) {
+            replacedColumns.push(col.name);
+          }
         }
       } else {
         totalReplaced = await duckDBOrchestrator.replaceInColumn(
@@ -254,6 +265,9 @@
           searchValue,
           replaceValue
         );
+        if (totalReplaced > 0) {
+          replacedColumns.push(source);
+        }
       }
 
       if (totalReplaced > 0) {
@@ -262,38 +276,19 @@
           `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
         );
 
-        if (source === 'all') {
-          const textColumns =
-            selectedDataset.columns?.filter((col) => {
-              const type = String(col.type).toLowerCase();
-              return type === 'text' || type === 'varchar' || type === 'string';
-            }) ?? [];
-          for (const col of textColumns) {
-            await projectStore.addColumnTransformation(
-              selectedDataset.sourceFileId,
-              {
-                type: 'replace',
-                column: col.name,
-                searchValue,
-                newValue: replaceValue,
-                timestamp: new Date().toISOString()
-              }
-            );
-          }
-        } else {
+        const timestamp = new Date().toISOString();
+        for (const column of replacedColumns) {
           await projectStore.addColumnTransformation(
             selectedDataset.sourceFileId,
             {
               type: 'replace',
-              column: source,
+              column,
               searchValue,
               newValue: replaceValue,
-              timestamp: new Date().toISOString()
+              timestamp
             }
           );
         }
-
-        duckDBOrchestrator.bumpDatasetsVersion();
       } else {
         showError(m.replace_no_match_title(), m.replace_no_match_message());
       }
@@ -391,7 +386,6 @@
 
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
-  const MAP_HIGHLIGHT_DEBOUNCE_MS = 800;
   const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
 
   $effect(() => {
@@ -415,7 +409,7 @@
       } else {
         mapHighlightStore.clearHighlights();
       }
-    }, MAP_HIGHLIGHT_DEBOUNCE_MS);
+    }, UI_CONSTANTS.MAP_HIGHLIGHT_DEBOUNCE_MS);
     return () => clearTimeout(mapHighlightTimer);
   });
 
@@ -424,9 +418,6 @@
       dataTabStore.markStepComplete(0);
     }
   });
-
-  const DATA_TABLE_SKELETON_COLUMNS = 5;
-  const DATA_TABLE_SKELETON_ROWS = 5;
 </script>
 
 <section id="data-control-step">
@@ -544,8 +535,8 @@
         <DataTableSkeleton
           key={DATA_TABLE_SKELETON_HEADER_KEY}
           empty
-          columns={DATA_TABLE_SKELETON_COLUMNS}
-          rows={DATA_TABLE_SKELETON_ROWS}
+          columns={UI_CONSTANTS.DATA_TABLE_SKELETON_COLUMNS}
+          rows={UI_CONSTANTS.DATA_TABLE_SKELETON_ROWS}
         />
       </div>
     {:else}

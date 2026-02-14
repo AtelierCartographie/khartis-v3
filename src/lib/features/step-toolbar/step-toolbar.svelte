@@ -8,6 +8,12 @@
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
+  import {
+    DOM_IDS,
+    CSS_CLASSES,
+    TEST_IDS,
+    POPOVER_DIMENSIONS
+  } from './step-toolbar.constants';
   import ToolPopover from './tool-popover.svelte';
   import StylingTools from './tools-list/styling-tools.svelte';
   import VisualizationTools from './tools-list/visualization-tools.svelte';
@@ -35,7 +41,6 @@
 
   const selectStep = (step: ToolbarStep): void => {
     globalActions.setNavigationState(step);
-
     globalState.selectedTool = undefined;
   };
 
@@ -45,24 +50,24 @@
 </script>
 
 <nav
-  id="khartis-step-toolbar"
+  id={DOM_IDS.STEP_TOOLBAR}
   class="app-shadow"
   data-outline
   aria-label={m.toolbar_nav_aria()}
 >
-  <header class="step-header">
-    <span class="step-title">{m.step_toolbar_steps()}</span>
+  <header class={CSS_CLASSES.STEP_HEADER}>
+    <span class={CSS_CLASSES.STEP_TITLE}>{m.step_toolbar_steps()}</span>
   </header>
 
   <div
-    class="step-container"
+    class={CSS_CLASSES.STEP_CONTAINER}
     role="group"
     aria-label={m.toolbar_step_selection_aria()}
   >
     <button
-      data-testid="step-data"
-      class={clsx('nav-item', {
-        selected: isStepSelected(ToolbarStep.Data)
+      data-testid={TEST_IDS.STEP_DATA}
+      class={clsx(CSS_CLASSES.NAV_ITEM, {
+        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
       })}
       onclick={() => selectStep(ToolbarStep.Data)}
       aria-pressed={isStepSelected(ToolbarStep.Data)}
@@ -73,9 +78,9 @@
     </button>
 
     <button
-      data-testid="step-visualizations"
-      class={clsx('nav-item', {
-        selected: isStepSelected(ToolbarStep.Visualizations)
+      data-testid={TEST_IDS.STEP_VISUALIZATIONS}
+      class={clsx(CSS_CLASSES.NAV_ITEM, {
+        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
       })}
       onclick={() => selectStep(ToolbarStep.Visualizations)}
       aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
@@ -86,9 +91,9 @@
     </button>
 
     <button
-      data-testid="step-styling"
-      class={clsx('nav-item', {
-        selected: isStepSelected(ToolbarStep.Styling)
+      data-testid={TEST_IDS.STEP_STYLING}
+      class={clsx(CSS_CLASSES.NAV_ITEM, {
+        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)
       })}
       onclick={() => selectStep(ToolbarStep.Styling)}
       aria-pressed={isStepSelected(ToolbarStep.Styling)}
@@ -106,8 +111,8 @@
     open={!!globalState.selectedTool}
     align="right-top"
     viewMode={globalState.projectionViewMode ?? 'list'}
-    listWidth={420}
-    gridWidth="790px"
+    listWidth={POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}
+    gridWidth={POPOVER_DIMENSIONS.DEFAULT_GRID_WIDTH}
   >
     {#snippet content()}
       <ToolContainer />
@@ -116,9 +121,9 @@
 </nav>
 
 <style>
-  #khartis-step-toolbar {
+  :global(#khartis-step-toolbar) {
     position: relative;
-    z-index: 1000;
+    z-index: var(--z-toolbar);
   }
 
   header span {
@@ -151,7 +156,7 @@
     cursor: pointer;
   }
 
-  #khartis-step-toolbar :global(.nav-item svg) {
+  :global(#khartis-step-toolbar .nav-item svg) {
     fill: var(--cds-text-01);
   }
 
@@ -163,11 +168,11 @@
     font-size: 12px;
   }
 
-  #khartis-step-toolbar :global(.tools-grid) {
+  :global(#khartis-step-toolbar .tools-grid) {
     padding: var(--cds-spacing-03) var(--cds-spacing-02);
   }
 
-  #khartis-step-toolbar :global(.bx--popover--right-top) {
+  :global(#khartis-step-toolbar .bx--popover--right-top) {
     top: -13.5vh !important;
   }
 

@@ -1,8 +1,11 @@
 import { isPointGeometry } from '$lib/features/commons/constants/geometry.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import type { Table as ArrowTable } from 'apache-arrow';
-import { DUCK_CONST, READER_CONSTANTS } from '../constants';
+import { DUCK_CONST, GEO_CONSTANTS, READER_CONSTANTS } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
 import { isProjectionSupported, reprojectPoint } from './reprojection';
@@ -32,10 +35,12 @@ export async function tryDuckDBReprojection(
 
   try {
     const escapedFileId = escapeSqlString(fileId);
+    const escapedTable = escapeIdentifier(tablename);
+    const escapedGeom = escapeIdentifier(geomCol);
     await executeQuery(
       ctx.connection,
-      `CREATE OR REPLACE TABLE "${tablename}" AS
-       SELECT * REPLACE (ST_Transform("${geomCol}", 'EPSG:4326') AS "${geomCol}")
+      `CREATE OR REPLACE TABLE "${escapedTable}" AS
+       SELECT * REPLACE (ST_Transform("${escapedGeom}", '${GEO_CONSTANTS.WGS84_CRS}') AS "${escapedGeom}")
        FROM ST_Read('${escapedFileId}');`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
     );
@@ -59,7 +64,7 @@ function reprojectWKT(wkt: string, sourceCRS: string): string | null {
         parseFloat(x),
         parseFloat(y),
         sourceCRS,
-        'EPSG:4326'
+        GEO_CONSTANTS.WGS84_CRS
       );
       if (result.success && result.coordinates) {
         return `${result.coordinates[0]} ${result.coordinates[1]}`;
@@ -77,9 +82,11 @@ async function reprojectPointGeometries(
   geomCol: string,
   sourceCRS: string
 ): Promise<void> {
+  const escapedTable = escapeIdentifier(tablename);
+  const escapedGeom = escapeIdentifier(geomCol);
   const coordsResult = (await executeQuery(
     ctx.connection,
-    `SELECT __temp_rowid, ST_X("${geomCol}") AS x, ST_Y("${geomCol}") AS y FROM "${tablename}"`,
+    `SELECT __temp_rowid, ST_X("${escapedGeom}") AS x, ST_Y("${escapedGeom}") AS y FROM "${escapedTable}"`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
   )) as ArrowTable;
 
@@ -107,7 +114,7 @@ async function reprojectPointGeometries(
         x as number,
         y as number,
         sourceCRS,
-        'EPSG:4326'
+        GEO_CONSTANTS.WGS84_CRS
       );
       if (result.success && result.coordinates) {
         valueRows.push(
@@ -142,8 +149,8 @@ async function reprojectPointGeometries(
 
   await executeQuery(
     ctx.connection,
-    `UPDATE "${tablename}" AS t
-     SET "${geomCol}" = ST_Point(r.lon, r.lat)
+    `UPDATE "${escapedTable}" AS t
+     SET "${escapedGeom}" = ST_Point(r.lon, r.lat)
      FROM "${tempTable}" AS r
      WHERE t.__temp_rowid = r.rowid;`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
@@ -166,9 +173,11 @@ async function reprojectComplexGeometries(
   geomCol: string,
   sourceCRS: string
 ): Promise<void> {
+  const escapedTable = escapeIdentifier(tablename);
+  const escapedGeom = escapeIdentifier(geomCol);
   const wktResult = (await executeQuery(
     ctx.connection,
-    `SELECT __temp_rowid, ST_AsText("${geomCol}") AS wkt FROM "${tablename}"`,
+    `SELECT __temp_rowid, ST_AsText("${escapedGeom}") AS wkt FROM "${escapedTable}"`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
   )) as ArrowTable;
 
@@ -226,8 +235,8 @@ async function reprojectComplexGeometries(
 
   await executeQuery(
     ctx.connection,
-    `UPDATE "${tablename}" AS t
-     SET "${geomCol}" = ST_GeomFromText(r.wkt)::GEOMETRY
+    `UPDATE "${escapedTable}" AS t
+     SET "${escapedGeom}" = ST_GeomFromText(r.wkt)
      FROM "${tempTable}" AS r
      WHERE t.__temp_rowid = r.rowid;`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
@@ -252,10 +261,12 @@ export async function applyProj4Reprojection(
   sourceCRS: string
 ): Promise<void> {
   const escapedFileId = escapeSqlString(fileId);
+  const escapedTable = escapeIdentifier(tablename);
+  const escapedGeom = escapeIdentifier(geomCol);
 
   await executeQuery(
     ctx.connection,
-    `CREATE OR REPLACE TABLE "${tablename}" AS
+    `CREATE OR REPLACE TABLE "${escapedTable}" AS
      SELECT *, ROW_NUMBER() OVER () AS __temp_rowid
      FROM ST_Read('${escapedFileId}');`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
@@ -263,8 +274,8 @@ export async function applyProj4Reprojection(
 
   const result = (await executeQuery(
     ctx.connection,
-    `SELECT ST_GeometryType("${geomCol}") AS geom_type
-     FROM "${tablename}"
+    `SELECT ST_GeometryType("${escapedGeom}") AS geom_type
+     FROM "${escapedTable}"
      LIMIT 1`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
   )) as ArrowTable;
@@ -284,7 +295,7 @@ export async function applyProj4Reprojection(
 
   await executeQuery(
     ctx.connection,
-    `ALTER TABLE "${tablename}" DROP COLUMN __temp_rowid;`,
+    `ALTER TABLE "${escapedTable}" DROP COLUMN __temp_rowid;`,
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }

@@ -7,16 +7,6 @@ export enum GeometryType {
   MULTIPOLYGON = 'MULTIPOLYGON'
 }
 
-export enum GeoJsonGeometryType {
-  Point = 'Point',
-  MultiPoint = 'MultiPoint',
-  LineString = 'LineString',
-  MultiLineString = 'MultiLineString',
-  Polygon = 'Polygon',
-  MultiPolygon = 'MultiPolygon',
-  GeometryCollection = 'GeometryCollection'
-}
-
 export enum ArrowExtension {
   GEOARROW_POINT = 'geoarrow.point',
   GEOARROW_MULTIPOINT = 'geoarrow.multipoint',
@@ -45,22 +35,6 @@ export enum WKBGeometryTypeCode {
 export enum GeoArrowMetadataKey {
   EXTENSION_NAME = 'ARROW:extension:name',
   GEO = 'geo'
-}
-
-export enum GeoColumnName {
-  GEOM = 'geom',
-  GEOMETRY = 'geometry'
-}
-
-export enum ReservedColumnName {
-  GEOM = 'geom',
-  GEOMETRY = 'geometry',
-  INTERNAL_ID = '__id'
-}
-
-export enum GeoJsonFeatureType {
-  FEATURE = 'Feature',
-  FEATURE_COLLECTION = 'FeatureCollection'
 }
 
 export enum DeckLayerId {
@@ -103,6 +77,17 @@ export enum MapLibreLayerType {
   BACKGROUND = 'background'
 }
 
+export enum ViewMode {
+  ORTHOGRAPHIC = 'orthographic',
+  MAPLIBRE = 'maplibre'
+}
+
+export const DECK_VIEW_ID = 'main';
+export const DECK_CANVAS_ID = 'deckgl-overlay';
+export const DECK_DEVICE_TYPE = 'webgl';
+export const BASEMAP_DATASET_ID = 'basemap';
+export const DEFAULT_PROJECTION_SUFFIX = 'default';
+
 export const GEO_TYPE_TO_EXTENSION: Record<GeometryType, ArrowExtension> = {
   [GeometryType.POINT]: ArrowExtension.GEOARROW_POINT,
   [GeometryType.MULTIPOINT]: ArrowExtension.GEOARROW_MULTIPOINT,
@@ -129,15 +114,6 @@ export const COMPATIBLE_GEOMETRY_TYPES: Record<GeometryType, GeometryType[]> = {
   [GeometryType.POLYGON]: [GeometryType.MULTIPOLYGON],
   [GeometryType.MULTIPOLYGON]: [GeometryType.POLYGON]
 };
-
-export const GEOJSON_GEOMETRY_TYPES = [
-  GeoJsonGeometryType.Point,
-  GeoJsonGeometryType.MultiPoint,
-  GeoJsonGeometryType.LineString,
-  GeoJsonGeometryType.MultiLineString,
-  GeoJsonGeometryType.Polygon,
-  GeoJsonGeometryType.MultiPolygon
-] as const;
 
 export function createLayerId(
   prefix: DeckLayerId,

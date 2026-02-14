@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   FileType,
@@ -13,11 +14,9 @@ import type {
   ProcessorDataset
 } from '../file-processor.interface';
 
-const { GEOJSON } = PIPELINE_CONST.MIME_TYPES;
-
 function createGeoFile(file: UploadedFile): File {
   const content = file.content ?? JSON.stringify(file.parsedData);
-  return new File([content], file.name, { type: GEOJSON });
+  return new File([content], file.name, { type: MIME.GEOJSON });
 }
 
 async function processWithSTRead(

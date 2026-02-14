@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   FileType,
@@ -11,8 +12,6 @@ import type {
   ProcessorDataset
 } from '../file-processor.interface';
 import { convertToCSV, isTabularData } from './processor-utils';
-
-const { CSV } = PIPELINE_CONST.MIME_TYPES;
 
 async function processWithArrow(
   ctx: ProcessContext,
@@ -66,7 +65,7 @@ async function processWithLegacy(
   start: number
 ): Promise<ProcessorDataset> {
   const csvData = convertToCSV(file.parsedData as Record<string, unknown>[]);
-  const duckFile = new File([csvData], file.name, { type: CSV });
+  const duckFile = new File([csvData], file.name, { type: MIME.CSV });
 
   await ctx.Duck.register_files([duckFile]);
   const actualTableName =

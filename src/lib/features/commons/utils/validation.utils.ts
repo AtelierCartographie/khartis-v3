@@ -3,6 +3,7 @@ import localforage from 'localforage';
 import { STORAGE_LIMITS } from '../configs/validation.config';
 import { LogCategory, logger } from './logger';
 import { estimateProjectStorageSize } from './size-estimation.utils';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 export type { ValidationResult } from '$lib/features/data-pipeline/types';
 export {
@@ -216,7 +217,7 @@ export const DataValidator = {
 
     const geo = data as { type?: string; features?: unknown[] };
 
-    if (geo.type === 'FeatureCollection') {
+    if (geo.type === GEOJSON_TYPE.FEATURE_COLLECTION) {
       if (!Array.isArray(geo.features)) {
         result.isValid = false;
         result.errors.push(m.validation_geo_feature_collection_invalid());

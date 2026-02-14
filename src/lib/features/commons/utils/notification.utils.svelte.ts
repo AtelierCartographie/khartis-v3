@@ -24,16 +24,11 @@ interface Notification extends NotificationOptions {
   timestamp: Date;
 }
 
-class NotificationManager {
-  private _notifications = $state<Notification[]>([]);
+function createNotificationManager() {
+  let notifications = $state<Notification[]>([]);
+  const defaultTimeout = DEFAULT_NOTIFICATION_TIMEOUT_MS;
 
-  private defaultTimeout = DEFAULT_NOTIFICATION_TIMEOUT_MS;
-
-  get notifications() {
-    return this._notifications;
-  }
-
-  private addNotification(
+  function addNotification(
     type: NotificationType,
     options: NotificationOptions
   ): string {
@@ -45,50 +40,64 @@ class NotificationManager {
       ...options
     };
 
-    this._notifications = [...this._notifications, notification];
+    notifications = [...notifications, notification];
 
     if (options.timeout !== 0) {
       setTimeout(() => {
-        this.removeNotification(id);
-      }, options.timeout || this.defaultTimeout);
+        removeNotification(id);
+      }, options.timeout || defaultTimeout);
     }
 
     return id;
   }
 
-  success(options: NotificationOptions): string {
-    return this.addNotification(NotificationType.SUCCESS, options);
+  function success(options: NotificationOptions): string {
+    return addNotification(NotificationType.SUCCESS, options);
   }
 
-  error(options: NotificationOptions): string {
+  function error(options: NotificationOptions): string {
     logger.error(
       `${options.title}: ${options.subtitle || ''}`,
       LogCategory.NOTIFICATION
     );
-    return this.addNotification(NotificationType.ERROR, {
+    return addNotification(NotificationType.ERROR, {
       ...options,
       timeout: options.timeout ?? ERROR_NOTIFICATION_TIMEOUT_MS
     });
   }
 
-  warning(options: NotificationOptions): string {
-    return this.addNotification(NotificationType.WARNING, options);
+  function warning(options: NotificationOptions): string {
+    return addNotification(NotificationType.WARNING, options);
   }
 
-  info(options: NotificationOptions): string {
-    return this.addNotification(NotificationType.INFO, options);
+  function info(options: NotificationOptions): string {
+    return addNotification(NotificationType.INFO, options);
   }
 
-  removeNotification(id: string): void {
-    this._notifications = this._notifications.filter((n) => n.id !== id);
+  function removeNotification(id: string): void {
+    notifications = notifications.filter(
+      (notification) => notification.id !== id
+    );
   }
 
-  clearAll(): void {
-    this._notifications = [];
+  function clearAll(): void {
+    notifications = [];
   }
+
+  return {
+    get notifications() {
+      return notifications;
+    },
+    success,
+    error,
+    warning,
+    info,
+    removeNotification,
+    clearAll
+  };
 }
 
-export const notificationManager = new NotificationManager();
+export const notificationManager = createNotificationManager();
 
 export function showSuccess(title: string, subtitle?: string): void {
   notificationManager.success({ title, subtitle });

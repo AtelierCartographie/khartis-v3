@@ -7,12 +7,60 @@ import {
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState } from './format.types';
 
+const HUE_MAX = 359;
+const PERCENTAGE_MAX = 100;
+
+export const PAGE_GRID_SIZE_PX = 24;
+
+export const DEFAULT_PAGE_COLOR: FormatState['color'] = {
+  hue: 0,
+  saturation: 0,
+  lightness: 100
+};
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeColorChannel(
+  value: number,
+  min: number,
+  max: number,
+  fallback: number
+): number {
+  const rounded = Math.round(value);
+
+  if (!Number.isFinite(rounded)) {
+    return fallback;
+  }
+
+  return clampNumber(rounded, min, max);
+}
+
+function normalizePageColor(color: FormatState['color']): FormatState['color'] {
+  return {
+    hue: normalizeColorChannel(color.hue, 0, HUE_MAX, DEFAULT_PAGE_COLOR.hue),
+    saturation: normalizeColorChannel(
+      color.saturation,
+      0,
+      PERCENTAGE_MAX,
+      DEFAULT_PAGE_COLOR.saturation
+    ),
+    lightness: normalizeColorChannel(
+      color.lightness,
+      0,
+      PERCENTAGE_MAX,
+      DEFAULT_PAGE_COLOR.lightness
+    )
+  };
+}
+
 const DEFAULT_STATE: FormatState = {
   mode: FormatMode.PRESET,
   model: PageModel.A4_LANDSCAPE,
   width: PAGE_PRESETS[PageModel.A4_LANDSCAPE].width,
   height: PAGE_PRESETS[PageModel.A4_LANDSCAPE].height,
-  color: { hue: 180, saturation: 50, lightness: 50 },
+  color: { ...DEFAULT_PAGE_COLOR },
   margins: { ...DEFAULT_MARGINS },
   gridEnabled: true
 };
@@ -59,7 +107,7 @@ const { state, actions, getState } = createToolStore<
     s.height = Math.max(1, height);
   },
   setColor: (color) => {
-    s.color = color;
+    s.color = normalizePageColor(color);
   },
   setMargins: (margins) => {
     s.margins = margins;

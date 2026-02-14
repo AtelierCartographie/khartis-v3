@@ -1,9 +1,11 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
-import { GeoArrowMetadataKey, GeoJsonGeometryType } from '../constants';
+import { GeoArrowMetadataKey } from '../constants';
 import { parseGeoJsonGeometry } from '../io/geometry-parser';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 const MIN_LAT = -90;
 const MAX_LAT = 90;
@@ -48,54 +50,39 @@ function isValidBbox(
 function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
   if (!geometry) return [];
 
-  if (geometry.type === GeoJsonGeometryType.Point) {
+  if (geometry.type === GEOJSON_TYPE.POINT) {
     return [geometry.coordinates];
   }
 
   if (
-    geometry.type === GeoJsonGeometryType.MultiPoint ||
-    geometry.type === GeoJsonGeometryType.LineString
+    geometry.type === GEOJSON_TYPE.MULTI_POINT ||
+    geometry.type === GEOJSON_TYPE.LINE_STRING
   ) {
     return geometry.coordinates;
   }
 
   if (
-    geometry.type === GeoJsonGeometryType.MultiLineString ||
-    geometry.type === GeoJsonGeometryType.Polygon
+    geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING ||
+    geometry.type === GEOJSON_TYPE.POLYGON
   ) {
     return geometry.coordinates.flat();
   }
 
-  if (geometry.type === GeoJsonGeometryType.MultiPolygon) {
+  if (geometry.type === GEOJSON_TYPE.MULTI_POLYGON) {
     return geometry.coordinates.flat(2);
   }
 
-  if (geometry.type === GeoJsonGeometryType.GeometryCollection) {
+  if (geometry.type === GEOJSON_TYPE.GEOMETRY_COLLECTION) {
     return geometry.geometries.flatMap(extractCoordsFromGeometry);
   }
 
   return [];
 }
 
-const GEO_COLUMN_NAMES = [
-  'geom',
-  'geometry',
-  'geo',
-  'shape',
-  'wkb_geometry',
-  'geo_point_2d',
-  'geo_shape',
-  'the_geom',
-  'coordinates',
-  'location',
-  'point',
-  'position'
-];
-
 function findGeoColumn(jsTable: ArrowTable): string | null {
   for (const field of jsTable.schema.fields) {
     const name = field.name.toLowerCase();
-    if (GEO_COLUMN_NAMES.includes(name)) {
+    if ((GEO_COLUMN_NAMES as readonly string[]).includes(name)) {
       return field.name;
     }
   }

@@ -30,6 +30,11 @@
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
+  import { annotationsActions } from '../step-toolbar/tools/annotations/annotations.store.svelte';
+  import {
+    getLegendState,
+    legendActions
+  } from '../step-toolbar/tools/legend/legend.store.svelte';
   import { selectTool } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
   import { VizSubTab } from './constants';
@@ -49,6 +54,8 @@
   const vizCount = $derived(
     visualizationStore.activeVisualizations?.length ?? 0
   );
+  const legendState = $derived(getLegendState());
+  const showLegendBadge = $derived(!legendState.hasBeenOpened);
 
   const selectStep = (step: ToolbarStep): void => {
     if (globalState.selectedStep === step && globalState.isMobileToolbarOpen) {
@@ -73,6 +80,22 @@
   };
 
   const handleStylingToolSelect = (tool: StylingTools) => {
+    if (tool === StylingTools.Legend) {
+      legendActions.markAsOpened();
+    }
+
+    if (tool === StylingTools.Annotations) {
+      if (globalState.selectedTool === StylingTools.Annotations) {
+        globalState.selectedTool = undefined;
+        return;
+      }
+
+      annotationsActions.initPageElements({
+        withPlaceholders: true,
+        visible: true
+      });
+    }
+
     globalState.selectedTool = tool;
   };
 
@@ -148,13 +171,18 @@
               <Document size={32} />
               <span>{m.tool_format()}</span>
             </button>
-            <button
-              class="tool-btn"
-              onclick={() => handleStylingToolSelect(StylingTools.Legend)}
-            >
-              <ListBoxes size={32} />
-              <span>{m.tool_legend()}</span>
-            </button>
+            <div class="tool-button-wrapper">
+              <button
+                class="tool-btn"
+                onclick={() => handleStylingToolSelect(StylingTools.Legend)}
+              >
+                <ListBoxes size={32} />
+                <span>{m.tool_legend()}</span>
+              </button>
+              {#if showLegendBadge}
+                <span class="notification-badge"></span>
+              {/if}
+            </div>
             <button
               class="tool-btn"
               onclick={() =>
@@ -307,7 +335,7 @@
     right: 0;
     bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     background: var(--cds-ui-01);
-    z-index: 900;
+    z-index: var(--z-mobile-toolbar);
     transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
@@ -444,6 +472,25 @@
     text-align: center;
   }
 
+  .tool-button-wrapper {
+    position: relative;
+  }
+
+  .tool-button-wrapper .tool-btn {
+    width: 100%;
+  }
+
+  .notification-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--cds-support-error, #da1e28);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+
   .mobile-tools-bar {
     position: fixed;
     bottom: calc(
@@ -457,7 +504,7 @@
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
     background: var(--cds-ui-01);
     border-radius: 8px;
-    z-index: 850;
+    z-index: var(--z-mobile-overlay);
   }
 
   .mobile-bottom-nav {
@@ -471,7 +518,7 @@
     background: var(--cds-ui-01);
     border-top: 1px solid var(--cds-ui-03);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 1000;
+    z-index: var(--z-toolbar);
     height: calc(60px + env(safe-area-inset-bottom, 0px));
   }
 

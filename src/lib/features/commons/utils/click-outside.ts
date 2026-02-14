@@ -1,3 +1,5 @@
+import { EVENT, CUSTOM_EVENT } from '../constants/dom.constants';
+
 export function clickOutside(
   node: HTMLElement,
   params?: { enabled?: boolean; excludeSelectors?: string[] }
@@ -18,18 +20,18 @@ export function clickOutside(
         }
       }
 
-      node.dispatchEvent(new CustomEvent('outsideclick'));
+      node.dispatchEvent(new CustomEvent(CUSTOM_EVENT.OUTSIDE_CLICK));
     }
   }
 
   function startListening() {
     setTimeout(() => {
-      document.addEventListener('click', handleClick, true);
+      document.addEventListener(EVENT.CLICK, handleClick, true);
     }, 0);
   }
 
   function stopListening() {
-    document.removeEventListener('click', handleClick, true);
+    document.removeEventListener(EVENT.CLICK, handleClick, true);
   }
 
   if (enabled) {

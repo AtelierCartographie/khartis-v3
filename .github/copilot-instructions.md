@@ -94,45 +94,43 @@ src/lib/
 
 ```typescript
 // Example: src/lib/features/step-toolbar/tools/annotations/annotations.store.svelte.ts
-export class AnnotationsStore {
+export function createAnnotationsStore() {
   // Private reactive state (NEVER expose directly)
-  private _state = $state<AnnotationsState>({
+  const state = $state<AnnotationsState>({
     items: [],
     selectedId: null,
     activeType: 'text'
   });
 
-  // Public getters (read-only access)
-  get items() {
-    return this._state.items;
-  }
-  get selectedId() {
-    return this._state.selectedId;
-  }
+  return {
+    // Public getters (read-only access)
+    get items() {
+      return state.items;
+    },
+    get selectedId() {
+      return state.selectedId;
+    },
 
-  // Derived state (computed from reactive state)
-  get selectedItem() {
-    return $derived(
-      this._state.items.find((i) => i.id === this._state.selectedId)
-    );
-  }
+    // Derived state (computed from reactive state)
+    get selectedItem() {
+      return $derived(state.items.find((i) => i.id === state.selectedId));
+    },
 
-  // Explicit mutation methods (NEVER mutate _state directly outside these)
-  addItem(item: AnnotationType): void {
-    this._state.items = [...this._state.items, item];
-  }
-
-  selectItem(id: string | null): void {
-    this._state.selectedId = id;
-  }
-
-  removeItem(id: string): void {
-    this._state.items = this._state.items.filter((i) => i.id !== id);
-  }
+    // Explicit mutation methods (NEVER mutate state directly outside these)
+    addItem(item: AnnotationType): void {
+      state.items = [...state.items, item];
+    },
+    selectItem(id: string | null): void {
+      state.selectedId = id;
+    },
+    removeItem(id: string): void {
+      state.items = state.items.filter((i) => i.id !== id);
+    }
+  };
 }
 
 // Singleton export
-export const annotationsStore = new AnnotationsStore();
+export const annotationsStore = createAnnotationsStore();
 ```
 
 **Key Rules**:

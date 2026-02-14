@@ -6,6 +6,15 @@
   import { createProjectActions } from '../store/create-project.store.svelte';
   import { projectStore } from '../store/project.store.svelte';
   import { ToolbarState, ToolbarStep } from '../types/global';
+  import {
+    detectApplePlatform,
+    hasAnyPrimaryModifier,
+    hasPlatformPrimaryModifier,
+    PROJECT_SHORTCUT_TIMEOUT_MS,
+    isShortcutCode,
+    SHORTCUT_CODE
+  } from '../utils/keyboard-shortcuts.utils';
+  import { KEY, EVENT } from '../constants/dom.constants';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
     '1': ToolbarStep.Data,
@@ -14,6 +23,21 @@
   };
 
   onMount(() => {
+    const isApplePlatform = detectApplePlatform();
+    let projectShortcutExpiresAt = 0;
+
+    function clearProjectShortcutPrefix(): void {
+      projectShortcutExpiresAt = 0;
+    }
+
+    function hasProjectShortcutPrefix(): boolean {
+      return projectShortcutExpiresAt > Date.now();
+    }
+
+    function setProjectShortcutPrefix(): void {
+      projectShortcutExpiresAt = Date.now() + PROJECT_SHORTCUT_TIMEOUT_MS;
+    }
+
     function isInputField(target: HTMLElement): boolean {
       return (
         target.tagName === 'INPUT' ||
@@ -53,8 +77,8 @@
 
     function handleZoomKey(key: string): boolean {
       switch (key) {
-        case '+':
-        case '=':
+        case KEY.PLUS:
+        case KEY.EQUALS:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.zoomIn();
           } else {
@@ -62,7 +86,7 @@
           }
           return true;
 
-        case '-':
+        case KEY.MINUS:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.zoomOut();
           } else {
@@ -70,7 +94,7 @@
           }
           return true;
 
-        case '0':
+        case KEY.ZERO:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.resetZoom();
           } else {
@@ -112,10 +136,70 @@
       globalState.isDeleteModalOpen = true;
     }
 
+    function handleOpenSideNav(): void {
+      globalState.isSideNavOpen = true;
+    }
+
+    function handleProjectShortcutChord(event: KeyboardEvent): boolean {
+      if (!hasProjectShortcutPrefix()) {
+        return false;
+      }
+
+      if (event.metaKey || event.altKey || event.shiftKey) {
+        clearProjectShortcutPrefix();
+        return false;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.openSideNav)) {
+        event.preventDefault();
+        handleOpenSideNav();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.newProject)) {
+        event.preventDefault();
+        handleNewProject();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.openProject)) {
+        event.preventDefault();
+        handleOpenProject();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.duplicateProject)) {
+        event.preventDefault();
+        handleDuplicateProject();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.deleteProject)) {
+        event.preventDefault();
+        handleDeleteProject();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      if (isShortcutCode(event.code, SHORTCUT_CODE.saveProject)) {
+        event.preventDefault();
+        handleSaveProject();
+        clearProjectShortcutPrefix();
+        return true;
+      }
+
+      clearProjectShortcutPrefix();
+      return false;
+    }
+
     function handleKeyDown(event: KeyboardEvent): void {
       const target = event.target as HTMLElement;
 
-      if (event.key === 'Escape') {
+      if (event.key === KEY.ESCAPE) {
         const handled = handleEscapeKey();
         if (handled) {
           event.preventDefault();
@@ -127,7 +211,15 @@
         return;
       }
 
-      const hasModifier = event.ctrlKey || event.metaKey || event.altKey;
+      if (handleProjectShortcutChord(event)) {
+        return;
+      }
+
+      const hasShortcutModifier = hasPlatformPrimaryModifier(
+        event,
+        isApplePlatform
+      );
+      const hasModifier = hasShortcutModifier || event.altKey;
 
       if (!hasModifier && event.key in NAVIGATION_SHORTCUTS) {
         event.preventDefault();
@@ -135,51 +227,39 @@
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && handleZoomKey(event.key)) {
+      if (hasShortcutModifier && handleZoomKey(event.key)) {
         event.preventDefault();
         return;
       }
 
-      if (event.altKey && event.key === 'z') {
+      if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        event.altKey &&
+        isShortcutCode(event.code, SHORTCUT_CODE.zoomModeToggle)
+      ) {
         event.preventDefault();
         handleZoomModeToggle();
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.shiftKey) {
-        if (event.key === 'n' || event.key === 'N') {
-          event.preventDefault();
-          handleNewProject();
-          return;
-        }
-        if (event.key === 'o' || event.key === 'O') {
-          event.preventDefault();
-          handleOpenProject();
-          return;
-        }
-        if (event.key === 'd' || event.key === 'D') {
-          event.preventDefault();
-          handleDuplicateProject();
-          return;
-        }
-        if (event.key === 'Backspace') {
-          event.preventDefault();
-          handleDeleteProject();
-          return;
-        }
-      }
+      const startsProjectShortcutPrefix =
+        event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        isShortcutCode(event.code, SHORTCUT_CODE.projectPrefix);
 
-      if (
-        (event.ctrlKey || event.metaKey) &&
-        (event.key === 's' || event.key === 'S')
-      ) {
+      if (startsProjectShortcutPrefix) {
         event.preventDefault();
-        handleSaveProject();
+        setProjectShortcutPrefix();
+        return;
       }
     }
 
     function handleWheel(event: WheelEvent): void {
-      if (!(event.ctrlKey || event.metaKey)) {
+      if (!hasAnyPrimaryModifier(event)) {
         return;
       }
 
@@ -201,15 +281,15 @@
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('wheel', handleWheel, {
+    document.addEventListener(EVENT.KEYDOWN, handleKeyDown);
+    document.addEventListener(EVENT.WHEEL, handleWheel, {
       passive: false,
       capture: true
     });
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('wheel', handleWheel, { capture: true });
+      document.removeEventListener(EVENT.KEYDOWN, handleKeyDown);
+      document.removeEventListener(EVENT.WHEEL, handleWheel, { capture: true });
     };
   });
 </script>

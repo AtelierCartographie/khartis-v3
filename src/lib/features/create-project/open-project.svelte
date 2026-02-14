@@ -328,7 +328,7 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    z-index: 10;
+    z-index: var(--z-content);
   }
 
   .project-card-wrapper :global(.bx--overflow-menu__icon) {
