@@ -67,19 +67,3 @@ export function get_model_matrix_from_bbox(
 
   return new Matrix4().scale([scale, scale, 1]).translate([-cx, -cy, 0]);
 }
-
-export function is_local_projection(
-  bbox: [number, number, number, number]
-): boolean {
-  const width = Math.abs(bbox[2] - bbox[0]);
-  const height = Math.abs(bbox[3] - bbox[1]);
-
-  return (
-    width > 360 ||
-    height > 180 ||
-    bbox[0] < -180 ||
-    bbox[2] > 180 ||
-    bbox[1] < -90 ||
-    bbox[3] > 90
-  );
-}

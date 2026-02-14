@@ -76,8 +76,3 @@ export function isGeospatialFile(name: string): boolean {
   const lower = name.toLowerCase();
   return PIPELINE_CONST.EXTENSIONS.GEO.some((ext) => lower.endsWith(ext));
 }
-
-export function isParquetFile(name: string): boolean {
-  const lower = name.toLowerCase();
-  return PIPELINE_CONST.EXTENSIONS.PARQUET.some((ext) => lower.endsWith(ext));
-}

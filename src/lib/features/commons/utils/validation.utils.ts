@@ -8,8 +8,7 @@ import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 export type { ValidationResult } from '$lib/features/data-pipeline/types';
 export {
   validationSuccess,
-  validationFailure,
-  mergeValidationResults
+  validationFailure
 } from '$lib/features/data-pipeline/types';
 
 import type { ValidationResult } from '$lib/features/data-pipeline/types';

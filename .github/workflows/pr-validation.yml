@@ -299,7 +299,7 @@ jobs:
 
   merge-reports:
     name: Merge E2E Reports
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && needs.e2e-tests.result == 'success' }}
     needs: e2e-tests
     runs-on: ubuntu-latest
     steps:
@@ -331,17 +331,16 @@ jobs:
           merge-multiple: true
 
       - name: Merge into HTML Report
-        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
+        run: npx playwright merge-reports --reporter html ./all-blob-reports
 
       - name: Generate E2E test summary
         if: always()
         run: |
           echo "## 🎭 E2E Tests Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -f report.md ]; then
-            cat report.md >> $GITHUB_STEP_SUMMARY
-          fi
+          BLOB_COUNT=$(find all-blob-reports -type f -name "*.zip" | wc -l | tr -d ' ')
+          echo "✅ Blob reports merged: ${BLOB_COUNT:-0}" >> $GITHUB_STEP_SUMMARY
+          echo "📄 HTML report uploaded as \`playwright-report\` artifact." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload HTML report
         uses: actions/upload-artifact@v4

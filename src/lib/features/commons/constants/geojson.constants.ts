@@ -19,8 +19,6 @@ export const GEOJSON_TYPE = {
   SPHERE: 'Sphere'
 } as const;
 
-export type GeoJsonTypeName = (typeof GEOJSON_TYPE)[keyof typeof GEOJSON_TYPE];
-
 export const SIMPLE_GEOMETRY_TYPES = [
   GEOJSON_TYPE.POINT,
   GEOJSON_TYPE.MULTI_POINT,

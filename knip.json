@@ -3,14 +3,7 @@
   "entry": [
     "src/routes/**/*.svelte",
     "src/routes/**/+*.{js,ts}",
-    "src/hooks.server.ts",
-    "src/app.d.ts",
-    "vite.config.ts",
-    "svelte.config.js",
-    "playwright.config.ts",
-    "eslint.config.js",
     "pwa-assets.config.js",
-    "commitlint.config.js",
     "scripts/**/*.sh"
   ],
   "project": ["src/**/*.{ts,js,svelte}"],
@@ -22,7 +15,7 @@
     "src/paraglide/server.js",
     "src/paraglide/registry.js"
   ],
-  "ignoreDependencies": ["@commitlint/cli", "@inlang/paraglide-js"],
+  "ignoreDependencies": ["@commitlint/cli"],
   "ignoreBinaries": ["semantic-release", "run"],
   "ignoreExportsUsedInFile": true,
   "rules": {

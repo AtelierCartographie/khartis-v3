@@ -1,5 +1,5 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import { MIME } from '$lib/features/commons/constants';
+import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
@@ -16,37 +16,48 @@ import { showWarning } from '$lib/features/commons/utils/notification.utils.svel
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
 import * as m from '$lib/paraglide/messages';
 
+const TABULAR_TEXT_EXTENSION = 'txt';
+
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
-  switch (ext) {
-    case 'csv':
-      return FileType.CSV;
-    case 'tsv':
-    case 'txt':
-      return FileType.TSV;
-    case 'geojson':
-    case 'json':
-      return FileType.GEOJSON;
-    case 'shp':
-      return FileType.SHAPEFILE;
-    case 'gpkg':
-      return FileType.GEOPACKAGE;
-    case 'geoparquet':
-    case 'parquet':
-      return FileType.GEOPARQUET;
-    case 'arrow':
-      return FileType.ARROW;
-    case 'kml':
-      return FileType.KML;
-    case 'kmz':
-      return FileType.KMZ;
-    case 'gpx':
-      return FileType.GPX;
-    case 'zip':
-      return FileType.ZIP;
-    default:
-      return FileType.UNKNOWN;
+  const matches = <T extends readonly string[]>(values: T): boolean =>
+    values.includes(ext as T[number]);
+
+  if (matches(FILE_EXTENSIONS.CSV)) {
+    return FileType.CSV;
   }
+  if (matches(FILE_EXTENSIONS.TSV) || ext === TABULAR_TEXT_EXTENSION) {
+    return FileType.TSV;
+  }
+  if (matches(FILE_EXTENSIONS.GEOJSON)) {
+    return FileType.GEOJSON;
+  }
+  if (matches(FILE_EXTENSIONS.SHAPEFILE)) {
+    return FileType.SHAPEFILE;
+  }
+  if (matches(FILE_EXTENSIONS.GEOPACKAGE)) {
+    return FileType.GEOPACKAGE;
+  }
+  if (matches(FILE_EXTENSIONS.GEOPARQUET)) {
+    return FileType.GEOPARQUET;
+  }
+  if (matches(FILE_EXTENSIONS.ARROW)) {
+    return FileType.ARROW;
+  }
+  if (matches(FILE_EXTENSIONS.KML)) {
+    return FileType.KML;
+  }
+  if (matches(FILE_EXTENSIONS.KMZ)) {
+    return FileType.KMZ;
+  }
+  if (matches(FILE_EXTENSIONS.GPX)) {
+    return FileType.GPX;
+  }
+  if (matches(FILE_EXTENSIONS.ZIP)) {
+    return FileType.ZIP;
+  }
+
+  return FileType.UNKNOWN;
 }
 
 function getMimeTypeFromFileType(fileType: FileType): string {

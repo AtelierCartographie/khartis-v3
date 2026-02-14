@@ -59,7 +59,9 @@
 
   const filledSegments = $derived(
     matchPercentage !== undefined
-      ? Math.round((matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS)
+      ? Math.round(
+          (matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS
+        )
       : 0
   );
 

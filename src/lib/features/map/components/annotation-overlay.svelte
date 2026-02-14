@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { SHAPE_TYPE } from '$lib/features/commons/constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import {
@@ -220,34 +221,34 @@
     const baseSize = 40;
 
     switch (shapeType) {
-      case 'arrow':
+      case SHAPE_TYPE.ARROW:
         return {
           type: 'path',
           path: `M 0,${baseSize / 2} L ${baseSize * 0.7},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.2} L ${baseSize},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.8} L ${baseSize * 0.7},${baseSize / 2} Z`
         };
-      case 'line':
+      case SHAPE_TYPE.LINE:
         return {
           type: 'path',
           path: `M 0,${baseSize / 2} L ${baseSize},${baseSize / 2}`
         };
-      case 'rectangle':
+      case SHAPE_TYPE.RECTANGLE:
         return {
           type: 'rect',
           path: `M 0,0 L ${baseSize},0 L ${baseSize},${baseSize} L 0,${baseSize} Z`
         };
-      case 'circle':
+      case SHAPE_TYPE.CIRCLE:
         return {
-          type: 'circle',
+          type: SHAPE_TYPE.CIRCLE,
           cx: baseSize / 2,
           cy: baseSize / 2,
           r: baseSize / 2
         };
-      case 'triangle':
+      case SHAPE_TYPE.TRIANGLE:
         return {
           type: 'path',
           path: `M ${baseSize / 2},0 L ${baseSize},${baseSize} L 0,${baseSize} Z`
         };
-      case 'star':
+      case SHAPE_TYPE.STAR:
         return {
           type: 'path',
           path: createStarPath(
@@ -260,7 +261,7 @@
         };
       default:
         return {
-          type: 'circle',
+          type: SHAPE_TYPE.CIRCLE,
           cx: baseSize / 2,
           cy: baseSize / 2,
           r: baseSize / 2
@@ -315,7 +316,7 @@
         {:else if item.type === AnnotationKind.SHAPE}
           {@const shapeData = renderShape(
             item,
-            String(item.content ?? 'circle')
+            String(item.content ?? SHAPE_TYPE.CIRCLE)
           )}
           {@const shapeStyle = getShapeStyle(item)}
           <svg
@@ -324,7 +325,7 @@
             class="annotation-shape"
             style="opacity: {shapeStyle.opacity};"
           >
-            {#if shapeData.type === 'circle'}
+            {#if shapeData.type === SHAPE_TYPE.CIRCLE}
               <circle
                 cx={shapeData.cx}
                 cy={shapeData.cy}
