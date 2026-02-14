@@ -491,12 +491,12 @@ export async function openSideNav(page: Page): Promise<Locator>;
 export async function freshStart(page: Page): Promise<void>;
 
 // Console error tracking for test validation
-export class ConsoleErrorTracker {
-  private errors: string[] = [];
-  start(page: Page): void;
-  getErrors(): string[];
-  clear(): void;
-}
+export type ConsoleErrorTracker = {
+  start: (page: Page) => void;
+  getErrors: () => string[];
+  clear: () => void;
+};
+export function createConsoleErrorTracker(): ConsoleErrorTracker;
 
 // Assert no console errors during test
 export async function assertNoConsoleErrors(tracker: ConsoleErrorTracker): void;

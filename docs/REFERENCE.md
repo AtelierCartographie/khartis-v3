@@ -200,18 +200,35 @@ datasetMutation.subscribe(() => cache.clear());
 ### Error Classes
 
 ```ts
-class DataValidationError extends Error {
-  constructor(
-    message: string,
-    public details?: any
-  ) {
-    super(message);
-  }
+type DataValidationError = Error & { details?: unknown };
+
+function createDataValidationError(
+  message: string,
+  details?: unknown
+): DataValidationError {
+  const error = new Error(message) as DataValidationError;
+  error.name = 'DataValidationError';
+  error.details = details;
+  return error;
 }
 
-class ExpressionError extends Error {}
-class SizeLimitError extends Error {}
-class FileGroupError extends Error {}
+function createExpressionError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'ExpressionError';
+  return error;
+}
+
+function createSizeLimitError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'SizeLimitError';
+  return error;
+}
+
+function createFileGroupError(message: string): Error {
+  const error = new Error(message);
+  error.name = 'FileGroupError';
+  return error;
+}
 ```
 
 **Usage:**
@@ -220,7 +237,7 @@ class FileGroupError extends Error {}
 try {
   validateData(dataset);
 } catch (error) {
-  if (error instanceof DataValidationError) {
+  if (error instanceof Error && error.name === 'DataValidationError') {
     showNotification(error.message, 'error');
   }
 }
@@ -233,135 +250,157 @@ try {
 Located in `src/lib/features/commons/errors/pipeline.errors.ts`:
 
 ```typescript
-// Base error class
-export class PipelineError extends Error {
-  constructor(
-    message: string,
-    public readonly code: string,
-    public readonly details?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = this.constructor.name;
-  }
+type PipelineError = Error & {
+  code: string;
+  details?: Record<string, unknown>;
+};
+
+function createPipelineError(
+  message: string,
+  code: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = new Error(message) as PipelineError;
+  error.name = 'PipelineError';
+  error.code = code;
+  error.details = details;
+  return error;
 }
 
-// Data validation errors
-export class DataValidationError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly field?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'DATA_VALIDATION_ERROR', { field, ...details });
-  }
+export function createDataValidationError(
+  message: string,
+  field?: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'DATA_VALIDATION_ERROR', {
+    field,
+    ...details
+  });
+  error.name = 'DataValidationError';
+  return error;
 }
 
-// File grouping errors (e.g., incomplete shapefiles)
-export class FileGroupError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly missingFiles: string[],
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'FILE_GROUP_ERROR', { missingFiles, ...details });
-  }
+export function createFileGroupError(
+  message: string,
+  missingFiles: string[],
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'FILE_GROUP_ERROR', {
+    missingFiles,
+    ...details
+  });
+  error.name = 'FileGroupError';
+  return error;
 }
 
-// Size limit errors
-export class SizeLimitError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly actualSize: number,
-    public readonly maxSize: number,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'SIZE_LIMIT_ERROR', { actualSize, maxSize, ...details });
-  }
+export function createSizeLimitError(
+  message: string,
+  actualSize: number,
+  maxSize: number,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'SIZE_LIMIT_ERROR', {
+    actualSize,
+    maxSize,
+    ...details
+  });
+  error.name = 'SizeLimitError';
+  return error;
 }
 
-// File parsing errors
-export class ParseError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly fileType?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'PARSE_ERROR', { fileType, ...details });
-  }
+export function createParseError(
+  message: string,
+  fileType?: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'PARSE_ERROR', {
+    fileType,
+    ...details
+  });
+  error.name = 'ParseError';
+  return error;
 }
 
-// DuckDB operation errors
-export class DuckDBError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly query?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'DUCKDB_ERROR', { query, ...details });
-  }
+export function createDuckDBError(
+  message: string,
+  query?: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'DUCKDB_ERROR', {
+    query,
+    ...details
+  });
+  error.name = 'DuckDBError';
+  return error;
 }
 
-// Non-fatal errors (show toast but don't trigger rollback)
-export class NonFatalError extends PipelineError {
-  constructor(
-    message: string,
-    code: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, code, details);
-  }
+export function createNonFatalError(
+  message: string,
+  code: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, code, details);
+  error.name = 'NonFatalError';
+  return error;
 }
 
-export class DuplicateFileError extends NonFatalError {
-  constructor(
-    message: string,
-    public readonly fileName: string
-  ) {
-    super(message, 'DUPLICATE_FILE', { fileName });
-  }
+export function createDuplicateFileError(
+  message: string,
+  fileName: string
+): PipelineError {
+  const error = createNonFatalError(message, 'DUPLICATE_FILE', { fileName });
+  error.name = 'DuplicateFileError';
+  return error;
 }
 
-// Expression/formula evaluation errors
-export class ExpressionError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly expression?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'EXPRESSION_ERROR', { expression, ...details });
-  }
+export function createExpressionError(
+  message: string,
+  expression?: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'EXPRESSION_ERROR', {
+    expression,
+    ...details
+  });
+  error.name = 'ExpressionError';
+  return error;
 }
 
-// Geographic matching errors
-export class GeoMatchError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly matchRate?: number,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'GEO_MATCH_ERROR', { matchRate, ...details });
-  }
+export function createGeoMatchError(
+  message: string,
+  matchRate?: number,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'GEO_MATCH_ERROR', {
+    matchRate,
+    ...details
+  });
+  error.name = 'GeoMatchError';
+  return error;
 }
 
-// Type inference errors
-export class TypeInferenceError extends PipelineError {
-  constructor(
-    message: string,
-    public readonly column?: string,
-    details?: Record<string, unknown>
-  ) {
-    super(message, 'TYPE_INFERENCE_ERROR', { column, ...details });
-  }
+export function createTypeInferenceError(
+  message: string,
+  column?: string,
+  details?: Record<string, unknown>
+): PipelineError {
+  const error = createPipelineError(message, 'TYPE_INFERENCE_ERROR', {
+    column,
+    ...details
+  });
+  error.name = 'TypeInferenceError';
+  return error;
 }
 
-// Data quality warning (non-fatal)
-export class DataQualityWarning extends NonFatalError {
-  constructor(
-    message: string,
-    public readonly warnings: string[]
-  ) {
-    super(message, 'DATA_QUALITY_WARNING', { warnings });
-  }
+export function createDataQualityWarning(
+  message: string,
+  warnings: string[]
+): PipelineError {
+  const error = createNonFatalError(message, 'DATA_QUALITY_WARNING', {
+    warnings
+  });
+  error.name = 'DataQualityWarning';
+  return error;
 }
 ```
 
@@ -554,36 +593,38 @@ if (!result.ok) {
 ### Error Monitoring
 
 ```typescript
-class ErrorMonitor {
-  private errors: Map<string, number> = new Map();
-  private readonly threshold = 5;
-  private readonly window = 60000; // 1 minute
+export function createErrorMonitor() {
+  const errors = new Map<string, number>();
+  const threshold = 5;
+  const windowMs = 60000; // 1 minute
 
-  track(error: Error): void {
-    const key = `${error.name}:${error.message}`;
-    const count = (this.errors.get(key) || 0) + 1;
-    this.errors.set(key, count);
-
-    // Alert if error frequency is too high
-    if (count >= this.threshold) {
-      this.alertHighFrequency(error);
-    }
-
-    // Clear old errors
-    setTimeout(() => {
-      this.errors.delete(key);
-    }, this.window);
-  }
-
-  private alertHighFrequency(error: Error): void {
+  const alertHighFrequency = (error: Error): void => {
     logger.warn(`High error frequency detected: ${error.name}`, {
       message: error.message,
-      count: this.errors.get(`${error.name}:${error.message}`)
+      count: errors.get(`${error.name}:${error.message}`)
     });
-  }
+  };
+
+  return {
+    track(error: Error): void {
+      const key = `${error.name}:${error.message}`;
+      const count = (errors.get(key) || 0) + 1;
+      errors.set(key, count);
+
+      // Alert if error frequency is too high
+      if (count >= threshold) {
+        alertHighFrequency(error);
+      }
+
+      // Clear old errors
+      setTimeout(() => {
+        errors.delete(key);
+      }, windowMs);
+    }
+  };
 }
 
-export const errorMonitor = new ErrorMonitor();
+export const errorMonitor = createErrorMonitor();
 ```
 
 ### User-Friendly Error Messages
@@ -633,44 +674,44 @@ interface ErrorLog {
   url: string;
 }
 
-class ErrorLogger {
-  private logs: ErrorLog[] = [];
-  private readonly maxLogs = 100;
+export function createErrorLogger() {
+  let logs: ErrorLog[] = [];
+  const maxLogs = 100;
 
-  log(error: Error, context?: any): void {
-    const log: ErrorLog = {
-      timestamp: new Date(),
-      message: error.message,
-      stack: error.stack,
-      code: (error as any).code,
-      context,
-      userAgent: navigator.userAgent,
-      url: window.location.href
-    };
+  return {
+    log(error: Error & { code?: string }, context?: unknown): void {
+      const log: ErrorLog = {
+        timestamp: new Date(),
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        context,
+        userAgent: navigator.userAgent,
+        url: window.location.href
+      };
 
-    this.logs.push(log);
+      logs.push(log);
 
-    // Trim old logs
-    if (this.logs.length > this.maxLogs) {
-      this.logs = this.logs.slice(-this.maxLogs);
+      // Trim old logs
+      if (logs.length > maxLogs) {
+        logs = logs.slice(-maxLogs);
+      }
+
+      // Send to console in development
+      if (import.meta.env.DEV) {
+        console.error('Error logged:', log);
+      }
+    },
+    export(): string {
+      return JSON.stringify(logs, null, 2);
+    },
+    clear(): void {
+      logs = [];
     }
-
-    // Send to console in development
-    if (import.meta.env.DEV) {
-      console.error('Error logged:', log);
-    }
-  }
-
-  export(): string {
-    return JSON.stringify(this.logs, null, 2);
-  }
-
-  clear(): void {
-    this.logs = [];
-  }
+  };
 }
 
-export const errorLogger = new ErrorLogger();
+export const errorLogger = createErrorLogger();
 ```
 
 ## Performance Strategy

@@ -216,17 +216,17 @@ Sorted by `updatedAt` descending on load.
 Manages highlighted rows on map (search results, filters).
 
 ```typescript
-class MapHighlightStore {
-  get highlightedRowIds(): Set<number>; // Current highlights
-  get version(): number; // Change tracker
-  get hasHighlights(): boolean; // Derived
+type MapHighlightStore = {
+  readonly highlightedRowIds: Set<number>; // Current highlights
+  readonly version: number; // Change tracker
+  readonly hasHighlights: boolean; // Derived
 
-  setHighlightedRows(rowIds: number[]): void;
-  clearHighlights(): void;
-  isRowHighlighted(rowId: number): boolean;
-}
+  setHighlightedRows: (rowIds: number[]) => void;
+  clearHighlights: () => void;
+  isRowHighlighted: (rowId: number) => boolean;
+};
 
-export const mapHighlightStore = new MapHighlightStore();
+export const mapHighlightStore: MapHighlightStore = createMapHighlightStore();
 ```
 
 **Use case**: Search panel sets highlights → layer-factory applies 30% opacity to non-highlighted.
@@ -238,20 +238,20 @@ export const mapHighlightStore = new MapHighlightStore();
 Manages 9 configurable basemap layers (terre, mers, lacs, rivieres, relief, equateur, meridiens, frontieres, villes).
 
 ```typescript
-class BasemapLayersStore {
-  get version(): number; // Triggers re-render
-  get layers(): BasemapLayerConfig[]; // All 9 layers
-  get visibleLayers(): BasemapLayerConfig[]; // Filtered
+type BasemapLayersStore = {
+  readonly version: number; // Triggers re-render
+  readonly layers: BasemapLayerConfig[]; // All 9 layers
+  readonly visibleLayers: BasemapLayerConfig[]; // Filtered
 
-  getLayer<T>(id: T): Extract<BasemapLayerConfig, { id: T }>;
-  setLayerVisibility(id: BasemapLayerId, visible: boolean): void;
-  updateLayer<T>(id: T, updates: Partial<...>): void;
-  resetToDefaults(): void;
-  resetLayer(id: BasemapLayerId): void;
-  restoreFromSerialized(layers: BasemapLayerConfig[]): void;
-}
+  getLayer: <T>(id: T) => Extract<BasemapLayerConfig, { id: T }>;
+  setLayerVisibility: (id: BasemapLayerId, visible: boolean) => void;
+  updateLayer: <T>(id: T, updates: Partial<...>) => void;
+  resetToDefaults: () => void;
+  resetLayer: (id: BasemapLayerId) => void;
+  restoreFromSerialized: (layers: BasemapLayerConfig[]) => void;
+};
 
-export const basemapLayersStore = new BasemapLayersStore();
+export const basemapLayersStore: BasemapLayersStore = createBasemapLayersStore();
 ```
 
 **UI Integration**: `visualization-tab/components/basemap-layers/` (7 layer-specific components)
@@ -339,7 +339,7 @@ src/lib/features/project-management/
 │   ├── exporter.ts       # exportProject, createArchive
 │   └── importer.ts       # importProject
 ├── operations/
-│   ├── auto-save.ts      # AutoSaveController class
+│   ├── auto-save.ts      # createAutoSaveController factory
 │   └── duplicate.ts      # duplicateProject function
 └── utils/
     └── json-helpers.ts   # JSON utilities
@@ -352,7 +352,7 @@ src/lib/features/project-management/
 | `serialize/deserialize`       | `core/serializer.ts`      | Convert between runtime and persisted representations                |
 | `exportProject/createArchive` | `io/exporter.ts`          | Export to JSON or compressed `.kh` archive                           |
 | `importProject`               | `io/importer.ts`          | Import and validate project files                                    |
-| `AutoSaveController`          | `operations/auto-save.ts` | Debounced persistence after mutations                                |
+| `createAutoSaveController`    | `operations/auto-save.ts` | Debounced persistence after mutations                                |
 | `duplicateProject`            | `operations/duplicate.ts` | Clone existing projects                                              |
 
 ## Feature Pattern
@@ -372,42 +372,41 @@ src/lib/features/<feature-name>/
 ### Store Pattern
 
 ```ts
-export class FeatureStore {
-  // Private state
-  protected _state = $state({
+export function createFeatureStore() {
+  const state = $state({
     enabled: false,
     data: null as MyData | null
   });
 
-  // Public getters
-  get enabled() {
-    return this._state.enabled;
-  }
-  get data() {
-    return this._state.data;
-  }
+  return {
+    // Public getters
+    get enabled() {
+      return state.enabled;
+    },
+    get data() {
+      return state.data;
+    },
 
-  // Derived state
-  get isValid() {
-    return $derived(this._state.data !== null);
-  }
+    // Derived state
+    get isValid() {
+      return $derived(state.data !== null);
+    },
 
-  // Actions (explicit mutations)
-  enable() {
-    this._state.enabled = true;
-  }
-
-  disable() {
-    this._state.enabled = false;
-  }
-
-  setData(data: MyData) {
-    this._state.data = data;
-  }
+    // Actions (explicit mutations)
+    enable() {
+      state.enabled = true;
+    },
+    disable() {
+      state.enabled = false;
+    },
+    setData(data: MyData) {
+      state.data = data;
+    }
+  };
 }
 
 // Export singleton
-export const featureStore = new FeatureStore();
+export const featureStore = createFeatureStore();
 ```
 
 ## Project Creation Flow
