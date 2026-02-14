@@ -74,7 +74,8 @@
     return selectedDataset.columns
       .filter(
         (col) =>
-          col.name !== INTERNAL_COLUMN.GEOMETRY && col.name !== INTERNAL_COLUMN.ID
+          col.name !== INTERNAL_COLUMN.GEOMETRY &&
+          col.name !== INTERNAL_COLUMN.ID
       )
       .map((col, index) => {
         const geoCol = geoDetection?.geoColumns.find(

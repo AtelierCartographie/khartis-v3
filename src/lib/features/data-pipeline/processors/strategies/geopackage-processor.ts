@@ -4,7 +4,6 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,

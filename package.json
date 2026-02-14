@@ -104,7 +104,6 @@
     "@inlang/paraglide-js": "^2.11.0",
     "@luma.gl/core": "9.2.6",
     "@math.gl/core": "^4.1.0",
-    "@observablehq/plot": "^0.6.17",
     "@uwdata/flechette": "^2.3.0",
     "apache-arrow": "^21.1.0",
     "carbon-components-svelte": "^0.100.0",

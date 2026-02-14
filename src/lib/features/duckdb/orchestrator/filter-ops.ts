@@ -10,6 +10,7 @@ import type {
   DataTableFilterInput,
   FilterOperator
 } from '../types';
+import { FilterOperatorEnum } from '../types';
 
 export function formatFilterValue(value: string | number | undefined): string {
   if (value === undefined || value === null) {
@@ -59,27 +60,27 @@ export function buildFilterSQL(
   };
 
   switch (filter.operator) {
-    case 'gte':
+    case FilterOperatorEnum.GTE:
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef} >= ${value}`;
 
-    case 'lte':
+    case FilterOperatorEnum.LTE:
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef} <= ${value}`;
 
-    case 'contains':
+    case FilterOperatorEnum.CONTAINS:
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef}::TEXT ILIKE '%' || ${value} || '%'`;
 
-    case 'equals':
+    case FilterOperatorEnum.EQUALS:
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef} = ${value}`;
 
-    case 'not_equals':
+    case FilterOperatorEnum.NOT_EQUALS:
       assertFilterValue(filter.value, filter.operator);
       return `${columnRef} <> ${value}`;
 
-    case 'between': {
+    case FilterOperatorEnum.BETWEEN: {
       if (filter.value === undefined || filter.secondaryValue === undefined) {
         throw new DuckDBError(m.filter_between_requires_two_values());
       }
@@ -95,16 +96,16 @@ export function buildFilterSQL(
       return `${columnRef} BETWEEN ${value} AND ${secondValue}`;
     }
 
-    case 'top_asc':
+    case FilterOperatorEnum.TOP_ASC:
       return buildTopFilter('ASC');
 
-    case 'top_desc':
+    case FilterOperatorEnum.TOP_DESC:
       return buildTopFilter('DESC');
 
-    case 'empty':
+    case FilterOperatorEnum.EMPTY:
       return `(${columnRef} IS NULL OR TRIM(${columnRef}::TEXT) = '')`;
 
-    case 'not_empty':
+    case FilterOperatorEnum.NOT_EMPTY:
       return `(${columnRef} IS NOT NULL AND TRIM(${columnRef}::TEXT) <> '')`;
 
     default:
@@ -127,40 +128,40 @@ export function describeFilter(filter: DataTableFilterInput): string {
       : valueLabel;
 
   switch (filter.operator) {
-    case 'gte':
+    case FilterOperatorEnum.GTE:
       return `${column} ≥ ${valueLabel}`;
 
-    case 'lte':
+    case FilterOperatorEnum.LTE:
       return `${column} ≤ ${valueLabel}`;
 
-    case 'contains':
+    case FilterOperatorEnum.CONTAINS:
       return m.filter_label_contains({ column, value: valueLabel });
 
-    case 'equals':
+    case FilterOperatorEnum.EQUALS:
       return `${column} = ${valueLabel}`;
 
-    case 'not_equals':
+    case FilterOperatorEnum.NOT_EQUALS:
       return `${column} ≠ ${valueLabel}`;
 
-    case 'between':
+    case FilterOperatorEnum.BETWEEN:
       return m.filter_label_between({ column, value: betweenLabel });
 
-    case 'top_asc':
+    case FilterOperatorEnum.TOP_ASC:
       return m.filter_label_top_asc({
         limit: String(filter.limit ?? filter.value ?? ''),
         column
       });
 
-    case 'top_desc':
+    case FilterOperatorEnum.TOP_DESC:
       return m.filter_label_top_desc({
         limit: String(filter.limit ?? filter.value ?? ''),
         column
       });
 
-    case 'empty':
+    case FilterOperatorEnum.EMPTY:
       return m.filter_label_empty({ column });
 
-    case 'not_empty':
+    case FilterOperatorEnum.NOT_EMPTY:
       return m.filter_label_not_empty({ column });
 
     default:

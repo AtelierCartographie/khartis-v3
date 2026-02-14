@@ -3,6 +3,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
@@ -37,8 +38,8 @@ export async function getTableData(
       const geomCols = columns
         .filter(
           (c) =>
-            String(c.type || '').toUpperCase() === 'GEOMETRY' ||
-            String(c.type_simple || '') === 'geometry'
+            String(c.type || '').toUpperCase() === GEOMETRY_COLUMN_TYPE ||
+            String(c.type_simple || '') === GEOMETRY_COLUMN_TYPE.toLowerCase()
         )
         .map((c) => `"${c.name}"`);
       if (geomCols.length > 0) {

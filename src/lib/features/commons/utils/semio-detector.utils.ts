@@ -1,4 +1,7 @@
-import type { AnalysisResult } from '$lib/features/duckdb';
+import {
+  DuckDBSimplifiedType,
+  type AnalysisResult
+} from '$lib/features/duckdb';
 
 export type SemioType =
   | 'geoid'
@@ -158,7 +161,7 @@ export function detectSemioType(
   const results: SemioScore[] = [];
 
   const columnName = analysis.name ?? '';
-  const typeSimple = analysis.type_simple ?? 'string';
+  const typeSimple = analysis.type_simple ?? DuckDBSimplifiedType.STRING;
 
   const totalCount = (analysis.count as number) ?? 0;
   const uniqueCount = (analysis.uniques as number) ?? 0;
@@ -194,7 +197,7 @@ export function detectSemioType(
   const shareRankInterval = (analysis.share_rank_interval as number) ?? 0;
 
   switch (typeSimple) {
-    case 'numeric':
+    case DuckDBSimplifiedType.NUMERIC:
       results.push(
         scoreQTA({
           uniqueCount,
@@ -221,14 +224,14 @@ export function detectSemioType(
       );
       break;
 
-    case 'date':
+    case DuckDBSimplifiedType.DATE:
       results.push({
         semioType: uniqueCount <= 10 ? SEMIO_TYPES.QL : SEMIO_TYPES.QTR,
         score: 2
       });
       break;
 
-    case 'string':
+    case DuckDBSimplifiedType.STRING:
     default:
       results.push(
         scoreQL({ shareUniques, uniqueCount }),

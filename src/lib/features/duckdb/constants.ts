@@ -117,7 +117,6 @@ export const EXTENSIONS = {
   HTTPFS: 'httpfs'
 } as const;
 
-
 /**
  * Table name patterns and suffixes.
  */

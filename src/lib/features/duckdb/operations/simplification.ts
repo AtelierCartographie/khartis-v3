@@ -1,7 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
-import { Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
+import { Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
 import { addGeoArrowMetadataFromDuckDB } from '../orchestrator/arrow-ops';
@@ -185,39 +185,4 @@ export function calculateToleranceFromRate(
   const extent = Math.max(maxX - minX, maxY - minY);
 
   return (extent * rate) / 10000;
-}
-
-export async function tableToArrowWithGeoMetadata(
-  Duck: DuckDBClientForArrow,
-  tableName: string,
-  originalSchema?: Schema
-): Promise<Table> {
-  const buffer = (await Duck.query(`SELECT * FROM "${tableName}"`, {
-    format: 'arrow-ipc' as never
-  })) as ArrayBuffer | Uint8Array;
-
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let arrowTable = tableFromIPC(ipcBuffer);
-
-  if (originalSchema?.metadata) {
-    const geoMetadata = originalSchema.metadata.get('geo');
-    if (geoMetadata) {
-      const newSchema = new Schema(
-        arrowTable.schema.fields,
-        new Map([['geo', geoMetadata]])
-      );
-      arrowTable = new Table(newSchema, arrowTable.batches);
-
-      logger.debug(
-        'GeoArrow metadata preserved from original schema',
-        LogCategory.DUCKDB,
-        {
-          tableName
-        }
-      );
-    }
-  }
-
-  return arrowTable;
 }

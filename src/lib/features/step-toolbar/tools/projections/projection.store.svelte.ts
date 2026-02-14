@@ -177,7 +177,9 @@ const { actions, getState } = createToolStore<
           center: s.center
         });
 
-        return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
+        return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION
+          ? projected
+          : null;
       }
 
       const projected = projectGeoJSON(geojson, s.selected, {
@@ -187,7 +189,9 @@ const { actions, getState } = createToolStore<
         center: s.center || [s.longitude, s.latitude]
       });
 
-      return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
+      return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION
+        ? projected
+        : null;
     },
     getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
       return getProjectionById(s.selected);
