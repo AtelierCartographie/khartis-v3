@@ -33,7 +33,6 @@ export interface BasemapJoinState {
     basemapOptions: string[];
     selectedMapping: string;
   }>;
-  correctionEnabled: boolean;
 }
 
 export interface EnrichDataState {

@@ -5,6 +5,8 @@ import {
 import { FileType } from '../store/create-project.types';
 import { getFileExtension } from './file.utils';
 import { LogCategory, logger } from './logger';
+import { GEOJSON_TYPE, SIMPLE_GEOMETRY_TYPES } from '$lib/features/commons/constants';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -15,10 +17,6 @@ export interface FileValidationConfig {
   strictMode: boolean;
 }
 
-/**
- * Detailed validation result, inherits from ValidationResult
- * and adds file-specific information
- */
 export interface DetailedValidationResult extends ValidationResult {
   fileType: FileType;
   requiresAsyncValidation: boolean;
@@ -399,9 +397,9 @@ export const FileValidator = {
       new Uint8Array(buffer)[2] === 0xbf;
 
     if (hasBOM) {
-      result.metadata!.encoding = 'UTF-8 with BOM';
+      result.metadata!.encoding = `${PIPELINE_CONST.ENCODING.DEFAULT} with BOM`;
     } else {
-      result.metadata!.encoding = 'UTF-8';
+      result.metadata!.encoding = PIPELINE_CONST.ENCODING.DEFAULT;
     }
   },
 
@@ -428,21 +426,16 @@ export const FileValidator = {
           );
         } else if (
           ![
-            'Feature',
-            'FeatureCollection',
-            'Point',
-            'LineString',
-            'Polygon',
-            'MultiPoint',
-            'MultiLineString',
-            'MultiPolygon',
-            'GeometryCollection'
+            GEOJSON_TYPE.FEATURE,
+            GEOJSON_TYPE.FEATURE_COLLECTION,
+            ...SIMPLE_GEOMETRY_TYPES,
+            GEOJSON_TYPE.GEOMETRY_COLLECTION
           ].includes(parsed.type)
         ) {
           result.errors.push(`Invalid GeoJSON type: ${parsed.type}`);
         }
 
-        if (parsed.type === 'FeatureCollection' && !parsed.features) {
+        if (parsed.type === GEOJSON_TYPE.FEATURE_COLLECTION && !parsed.features) {
           result.errors.push('FeatureCollection without "features" property');
         }
       }
@@ -506,10 +499,7 @@ export const FileValidator = {
     _files: File[],
     _results: Map<string, DetailedValidationResult>,
     _globalErrors: string[]
-  ): void {
-    // Shapefile validation is handled in processShapefileGroup
-    // to support progressive import (adding .shx, .dbf after .shp)
-  },
+  ): void {},
 
   requiresAsyncValidation(fileType: FileType): boolean {
     return [

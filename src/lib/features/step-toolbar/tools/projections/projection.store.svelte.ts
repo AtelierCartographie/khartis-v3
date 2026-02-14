@@ -13,9 +13,12 @@ import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionState } from './projections.types';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+
+const DEFAULT_PROJECTION = 'mercator';
 
 const DEFAULT_STATE: ProjectionState = {
-  selected: 'mercator',
+  selected: DEFAULT_PROJECTION,
   viewMode: ViewMode.LIST,
   longitude: 0,
   latitude: 0,
@@ -48,9 +51,11 @@ type ProjectionActions = {
   getCurrentProjectionInfo: () => ProjectionInfo | undefined;
 };
 
+const MERCATOR_PROJECTION_TYPE = 'mercator';
+
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
   const mercatorLike = new Set([
-    'mercator',
+    MERCATOR_PROJECTION_TYPE,
     'equirectangular',
     'albers',
     'lambert-conformal',
@@ -59,7 +64,7 @@ function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
     'rect-3'
   ]);
 
-  return mercatorLike.has(projectionId) ? 'mercator' : 'globe';
+  return mercatorLike.has(projectionId) ? MERCATOR_PROJECTION_TYPE : 'globe';
 }
 
 const { actions, getState } = createToolStore<
@@ -138,7 +143,7 @@ const { actions, getState } = createToolStore<
               return null;
             }
             return {
-              type: 'Feature' as const,
+              type: GEOJSON_TYPE.FEATURE,
               geometry: d.geometry,
               properties: d as Record<string, unknown>
             };
@@ -153,7 +158,7 @@ const { actions, getState } = createToolStore<
       }
 
       const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
-        type: 'FeatureCollection',
+        type: GEOJSON_TYPE.FEATURE_COLLECTION,
         features
       };
 
@@ -172,7 +177,7 @@ const { actions, getState } = createToolStore<
           center: s.center
         });
 
-        return projected.type === 'FeatureCollection' ? projected : null;
+        return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
       }
 
       const projected = projectGeoJSON(geojson, s.selected, {
@@ -182,7 +187,7 @@ const { actions, getState } = createToolStore<
         center: s.center || [s.longitude, s.latitude]
       });
 
-      return projected.type === 'FeatureCollection' ? projected : null;
+      return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
     },
     getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
       return getProjectionById(s.selected);

@@ -29,6 +29,22 @@ export async function describeColumns(
   return describe_full as AnalysisResults;
 }
 
+/**
+ * Analyzes the specified table and returns an array of indicators with summaries and histograms.
+ *
+ * For large tables (>50k rows), uses a sample for analysis.
+ * Processes columns in parallel batches by type (numeric, date, string).
+ *
+ * @param ctx - The DuckDB context.
+ * @param table - The name of the table to analyze.
+ * @param options.force - If true, forces a re-analysis bypassing the cache.
+ * @returns An array of indicator objects, each containing:
+ *   - name: The name of the column.
+ *   - type_simple: The simplified type ('numeric', 'date', 'string').
+ *   - summary_general: General summary statistics.
+ *   - summary_numeric/summary_date: Type-specific summary statistics.
+ *   - histogram: Histogram data for summary plots.
+ */
 export async function analyse(
   ctx: DuckDBContext,
   table: string,
@@ -64,17 +80,16 @@ export async function analyse(
   const rowCount = await getRowCount(ctx, table);
   const SAMPLE_THRESHOLD = 50000;
   let analysisTable = table;
-  let isSampled = false;
   const sampleViewName = `${table}_sample_${Date.now()}`;
 
   if (rowCount > SAMPLE_THRESHOLD) {
     try {
+      const escapedTableForSample = escapeIdentifier(table);
       await executeQuery(
         ctx.connection,
-        `CREATE VIEW "${sampleViewName}" AS SELECT * FROM "${table}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
+        `CREATE TEMP TABLE "${sampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
       );
       analysisTable = sampleViewName;
-      isSampled = true;
       logger.debug('Using sampled view for analysis', LogCategory.DUCKDB, {
         table,
         sampleViewName,
@@ -110,12 +125,11 @@ export async function analyse(
           let histogram = null;
 
           const escapedColName = escapeIdentifier(d.name as string);
+          const escapedAnalysisTable = escapeSqlString(analysisTable);
 
-          // Run summary_general in parallel with type-specific queries
-          // Use analysisTable (sampled when > 50K rows) instead of full table
           const generalPromise = executeQuery(
             ctx.connection,
-            `FROM summary_general(${analysisTable}, "${escapedColName}")`,
+            `FROM summary_general('${escapedAnalysisTable}', "${escapedColName}")`,
             { useProxy: false }
           )
             .then((r) => r as ArrowTableLike)
@@ -134,13 +148,29 @@ export async function analyse(
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_numeric(${analysisTable}, "${escapedColName}")`,
+                  `FROM summary_numeric('${escapedAnalysisTable}', "${escapedColName}")`,
                   { useProxy: false }
-                ) as Promise<ArrowTableLike>,
+                )
+                  .then((r) => r as ArrowTableLike)
+                  .catch((e) => {
+                    logger.warn(
+                      `Failed summary_numeric for ${d.name}`,
+                      LogCategory.DUCKDB,
+                      e
+                    );
+                    return null;
+                  }),
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_numeric(${analysisTable}, "${escapedColName}")`
-                )
+                  `FROM histogram_numeric('${escapedAnalysisTable}', "${escapedColName}")`
+                ).catch((e) => {
+                  logger.warn(
+                    `Failed histogram_numeric for ${d.name}`,
+                    LogCategory.DUCKDB,
+                    e
+                  );
+                  return null;
+                })
               ]);
               summary_general = general;
               summary_numeric = numeric;
@@ -153,13 +183,29 @@ export async function analyse(
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM summary_date(${analysisTable}, "${escapedColName}")`,
+                  `FROM summary_date('${escapedAnalysisTable}', "${escapedColName}")`,
                   { useProxy: false }
-                ) as Promise<ArrowTableLike>,
+                )
+                  .then((r) => r as ArrowTableLike)
+                  .catch((e) => {
+                    logger.warn(
+                      `Failed summary_date for ${d.name}`,
+                      LogCategory.DUCKDB,
+                      e
+                    );
+                    return null;
+                  }),
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_date(${analysisTable}, "${escapedColName}")`
-                )
+                  `FROM histogram_date('${escapedAnalysisTable}', "${escapedColName}")`
+                ).catch((e) => {
+                  logger.warn(
+                    `Failed histogram_date for ${d.name}`,
+                    LogCategory.DUCKDB,
+                    e
+                  );
+                  return null;
+                })
               ]);
               summary_general = general;
               summary_date = dateSum;
@@ -172,7 +218,7 @@ export async function analyse(
                 generalPromise,
                 executeQuery(
                   ctx.connection,
-                  `FROM histogram_categorical(${analysisTable}, "${escapedColName}")`
+                  `FROM histogram_categorical('${escapedAnalysisTable}', "${escapedColName}")`
                 )
               ]);
               summary_general = general;
@@ -221,15 +267,13 @@ export async function analyse(
 
     return analysis_result;
   } finally {
-    if (isSampled) {
-      try {
-        await executeQuery(
-          ctx.connection,
-          `DROP VIEW IF EXISTS "${sampleViewName}"`
-        );
-      } catch (_e) {
-        // ignore
-      }
+    try {
+      await executeQuery(
+        ctx.connection,
+        `DROP TABLE IF EXISTS "${sampleViewName}"`
+      );
+    } catch {
+      /* ignore cleanup errors */
     }
   }
 }

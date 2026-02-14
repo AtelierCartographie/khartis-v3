@@ -10,6 +10,7 @@ import {
   type AnalysisResult,
   type ArrowTableLike
 } from '../types';
+import { SQL_FUNCTIONS } from '../constants';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -57,8 +58,60 @@ export async function changeColumnType(
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
+  const ALLOWED_TYPES = [
+    'VARCHAR',
+    'TEXT',
+    'STRING',
+    'INTEGER',
+    'INT',
+    'INT4',
+    'SIGNED',
+    'BIGINT',
+    'INT8',
+    'LONG',
+    'SMALLINT',
+    'INT2',
+    'SHORT',
+    'TINYINT',
+    'INT1',
+    'DOUBLE',
+    'FLOAT8',
+    'NUMERIC',
+    'DECIMAL',
+    'REAL',
+    'FLOAT',
+    'FLOAT4',
+    'BOOLEAN',
+    'BOOL',
+    'LOGICAL',
+    'DATE',
+    'TIMESTAMP',
+    'TIMESTAMP WITH TIME ZONE',
+    'TIME',
+    'INTERVAL',
+    'HUGEINT',
+    'UHUGEINT',
+    'UBIGINT',
+    'UINTEGER',
+    'USMALLINT',
+    'UTINYINT',
+    'BLOB',
+    'BYTEA',
+    'BINARY',
+    'VARBINARY',
+    'UUID',
+    'JSON'
+  ];
+  const normalizedType = newType.trim().toUpperCase();
+  if (
+    !ALLOWED_TYPES.includes(normalizedType) &&
+    !/^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)$/i.test(newType.trim())
+  ) {
+    throw new DuckDBError(`Unsupported column type: ${newType}`);
+  }
+
   await Duck.query(
-    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${newType}`
+    `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}`
   );
 
   await Duck.analyse(tableName, { force: true });
@@ -156,15 +209,12 @@ export async function replaceInColumn(
   const escapedSearchValue = escapeSqlString(searchValue);
   const escapedReplaceValue = escapeSqlString(replaceValue);
 
-  // Pre-compute the normalized search value once (instead of per-row)
   const normResult = (await Duck.query(
     `SELECT normalize_text('${escapedSearchValue}') as norm`,
     { format: 'array' }
   )) as Array<{ norm: string }>;
   const normalizedSearch = normResult?.[0]?.norm ?? '';
 
-  // Use simple equality on normalized text instead of expensive jaro_winkler_similarity
-  // jaro_winkler_similarity(...) = 1 is semantically identical to equality after normalization
   const exactMatchCondition = `normalize_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
 
   const countResult = (await Duck.query(
@@ -221,11 +271,53 @@ const BLOCKED_KEYWORDS = [
   'PRAGMA',
   'CALL',
   'EXECUTE',
-  'EXEC'
+  'EXEC',
+  'SELECT',
+  'FROM',
+  'UNION',
+  'JOIN',
+  'INTO',
+  'GRANT',
+  'REVOKE',
+  'TRUNCATE',
+  'MERGE'
 ];
 
 const BLOCKED_PATTERN = new RegExp(
   `\\b(${BLOCKED_KEYWORDS.join('|')})\\b`,
+  'i'
+);
+
+const BLOCKED_FUNCTIONS = [
+  SQL_FUNCTIONS.READ_CSV,
+  SQL_FUNCTIONS.READ_CSV_AUTO,
+  SQL_FUNCTIONS.READ_PARQUET,
+  'read_json',
+  'read_json_auto',
+  'read_text',
+  'read_blob',
+  'read_ndjson',
+  'read_ndjson_auto',
+  'scan_parquet',
+  'parquet_scan',
+  'parquet_metadata',
+  'parquet_schema',
+  'parquet_kv_metadata',
+  'iceberg_scan',
+  'delta_scan',
+  'glob',
+  'list_files',
+  'query_table',
+  'query',
+  'sniff_csv',
+  'st_read',
+  'st_drivers',
+  'current_setting',
+  'getenv'
+];
+
+const BLOCKED_FUNCTIONS_PATTERN = new RegExp(
+  `\\b(${BLOCKED_FUNCTIONS.join('|')})\\s*\\(`,
   'i'
 );
 
@@ -238,11 +330,30 @@ export function validateExpression(expression: string): void {
     throw new DuckDBError(m.error_calc_expression_forbidden_semicolon());
   }
 
-  const match = expression.match(BLOCKED_PATTERN);
+  // Strip string literals before checking for blocked keywords
+  // so that 'FROM PARIS' inside a string doesn't trigger false positives
+  const stripped = expression.replace(/'[^']*'/g, "''");
+
+  if (/\([\s]*SELECT\b/i.test(stripped)) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({ keyword: 'SUBQUERY' })
+    );
+  }
+
+  const match = stripped.match(BLOCKED_PATTERN);
   if (match) {
     throw new DuckDBError(
       m.error_calc_expression_forbidden_keyword({
         keyword: match[1].toUpperCase()
+      })
+    );
+  }
+
+  const funcMatch = stripped.match(BLOCKED_FUNCTIONS_PATTERN);
+  if (funcMatch) {
+    throw new DuckDBError(
+      m.error_calc_expression_forbidden_keyword({
+        keyword: funcMatch[1].toUpperCase()
       })
     );
   }

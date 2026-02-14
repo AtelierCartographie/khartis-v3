@@ -13,145 +13,26 @@ import {
   ParseError
 } from '../errors/pipeline.errors';
 import type { UploadedFile } from '../store/create-project.types';
-import { FileType } from '../store/create-project.types';
+import {
+  FileType,
+  COLUMN_TRANSFORMATION_TYPES
+} from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
-import {
-  visualizationStore,
-  VisualizationType
-} from '../store/visualization.store.svelte';
+import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { importRollbackService } from './import-rollback.service';
 
-class DataOrchestratorService {
-  private _geometryDatasetsVersion = $state(0);
+function createDataOrchestratorService() {
+  let geometryDatasetsVersion = $state(0);
+  const processedFileIds = new Set<string>();
+  const processingFiles = new Set<string>();
 
-  async initialize(): Promise<void> {
-    await projectStore.waitForInit();
-
-    const currentProject = projectStore.currentProject;
-
-    if (currentProject?.data?.sourceFiles) {
-      await this.processProjectFiles(currentProject.data.sourceFiles);
-    }
-  }
-
-  async onFileAdded(file: UploadedFile, autoEnable = true): Promise<void> {
-    const snapshot = importRollbackService.createSnapshot(file);
-
-    try {
-      const dataset = await datasetsStore.addFile(file, autoEnable);
-
-      if (!dataset) {
-        logger.error('Dataset not found after processing', LogCategory.DATA, {
-          fileId: file.id
-        });
-        return;
-      }
-
-      await this.processFileInDuckDB(file, dataset);
-
-      this.processedFileIds.add(file.id);
-
-      if (dataset.geometry) {
-        projectionActions.suggestProjectionForCurrentData();
-      }
-
-      const existingVisualizations =
-        visualizationStore.getVisualizationsByDataset(dataset.id);
-      if (existingVisualizations.length === 0) {
-        this.createDefaultVisualization(dataset.id);
-      }
-
-      layersActions.syncWithVisualizations();
-    } catch (error) {
-      logger.error('File import failed', LogCategory.DATA, formatError(error));
-
-      if (isFatalError(error)) {
-        await importRollbackService.rollback(snapshot);
-
-        showError(
-          "Erreur fatale lors de l'import",
-          error instanceof Error ? error.message : 'Erreur inconnue'
-        );
-      } else {
-        showWarning(
-          'Avertissement',
-          error instanceof Error
-            ? error.message
-            : "Avertissement lors de l'import"
-        );
-      }
-
-      if (isFatalError(error)) {
-        throw error;
-      }
-    }
-  }
-
-  get geometryDatasetsVersion() {
-    return this._geometryDatasetsVersion;
-  }
-
-  async onFileRemoved(fileId: string): Promise<void> {
-    const dataset = datasetsStore.getDatasetBySourceFile(fileId);
-
-    if (dataset) {
-      const visualizations = visualizationStore.getVisualizationsByDataset(
-        dataset.id
-      );
-      visualizations.forEach((viz) => {
-        visualizationStore.removeVisualization(viz.id);
-      });
-
-      const duckDataset = duckDBOrchestrator
-        .getAllDatasets()
-        .find((d) => d.sourceFileId === fileId);
-      if (duckDataset) {
-        await duckDBOrchestrator.dropTable(duckDataset.tableName);
-        await this.cleanupDuckDBResources(duckDataset.tableName);
-        this._geometryDatasetsVersion++;
-      }
-
-      datasetsStore.removeDataset(dataset.id);
-      layersActions.syncWithVisualizations();
-    }
-
-    this.processedFileIds.delete(fileId);
-    this.cleanupOrphanedDatasets();
-  }
-
-  /**
-   * Cleanup DuckDB resources to prevent memory leaks
-   * Removes file handles, cache entries, and metadata
-   */
-  private async cleanupDuckDBResources(tableName: string): Promise<void> {
+  async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
       const { Duck } = await import('$lib/features/duckdb');
-
-      if (!Duck) {
-        return;
-      }
-
-      if (Duck.loaded_files.has(tableName)) {
-        Duck.loaded_files.delete(tableName);
-      }
-
-      const registeredFile = Array.from(Duck.registered_files).find((id) =>
-        id.includes(tableName)
-      );
-      if (registeredFile) {
-        Duck.registered_files.delete(registeredFile);
-      }
-
-      if (Duck.table_metadata.has(tableName)) {
-        Duck.table_metadata.delete(tableName);
-      }
-
-      if (Duck.table_geoparquet_cache.has(tableName)) {
-        Duck.table_geoparquet_cache.delete(tableName);
-      }
+      Duck?.cleanupTableResources(tableName);
     } catch (error) {
       logger.warn(
         'Failed to cleanup DuckDB resources',
@@ -161,17 +42,16 @@ class DataOrchestratorService {
     }
   }
 
-  private cleanupOrphanedDatasets(): void {
+  function cleanupOrphanedDatasets(): void {
     const currentProject = projectStore.currentProject;
     if (!currentProject?.data?.sourceFiles) return;
 
     const validSourceFileIds = new Set(
       currentProject.data.sourceFiles.map((f) => f.id)
     );
-
     const allDatasets = datasetsStore.getAllDatasets();
     const orphanedDatasets = allDatasets.filter(
-      (d) => !validSourceFileIds.has(d.sourceFileId)
+      (dataset) => !validSourceFileIds.has(dataset.sourceFileId)
     );
 
     if (orphanedDatasets.length > 0) {
@@ -181,39 +61,9 @@ class DataOrchestratorService {
     }
   }
 
-  private async prepareFileForDuckDB(
-    file: UploadedFile,
-    dataset: DatasetResult | undefined
-  ): Promise<UploadedFile | null> {
-    const requiresGeoProcessing =
-      !!dataset?.geometry ||
-      file.fileType === FileType.GEOJSON ||
-      file.fileType === FileType.SHAPEFILE ||
-      file.fileType === FileType.GEOPACKAGE ||
-      file.fileType === FileType.GEOPARQUET ||
-      file.fileType === FileType.KML ||
-      file.fileType === FileType.KMZ;
-
-    if (!requiresGeoProcessing) {
-      return null;
-    }
-
-    if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) {
-      return null;
-    }
-
-    if (dataset?.tableName) {
-      return null;
-    }
-
-    if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
-      return await this.convertKMLForDuckDB(file);
-    }
-
-    return file;
-  }
-
-  private async convertKMLForDuckDB(file: UploadedFile): Promise<UploadedFile> {
+  async function convertKMLForDuckDB(
+    file: UploadedFile
+  ): Promise<UploadedFile> {
     try {
       let geojsonObject: GeoJSONFeatureCollection;
 
@@ -254,115 +104,31 @@ class DataOrchestratorService {
     }
   }
 
-  private async processFileInDuckDB(
+  async function prepareFileForDuckDB(
     file: UploadedFile,
-    datasetOverride?: DatasetResult
-  ): Promise<void> {
-    const dataset =
-      datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
+    dataset: DatasetResult | undefined
+  ): Promise<UploadedFile | null> {
+    const requiresGeoProcessing =
+      !!dataset?.geometry ||
+      file.fileType === FileType.GEOJSON ||
+      file.fileType === FileType.SHAPEFILE ||
+      file.fileType === FileType.GEOPACKAGE ||
+      file.fileType === FileType.GEOPARQUET ||
+      file.fileType === FileType.KML ||
+      file.fileType === FileType.KMZ;
 
-    if (!dataset) {
-      return;
+    if (!requiresGeoProcessing) return null;
+    if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
+    if (dataset?.tableName) return null;
+
+    if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
+      return convertKMLForDuckDB(file);
     }
 
-    const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
-
-    if (duckDBFile) {
-      try {
-        const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
-        if (duckResult && dataset) {
-          datasetsStore.updateDatasetTableName(
-            dataset.id,
-            duckResult.tableName
-          );
-
-          const updatedDataset = datasetsStore.datasets.find(
-            (d) => d.id === dataset.id
-          );
-          if (updatedDataset) {
-            updatedDataset.metadata = {
-              ...updatedDataset.metadata,
-              geoDuckTableReady: true
-            };
-          }
-
-          this._geometryDatasetsVersion++;
-        }
-      } catch (error) {
-        logger.error(
-          'Failed to process Geo file via DuckDB orchestrator',
-          LogCategory.DUCKDB,
-          error
-        );
-        throw error;
-      }
-      return;
-    }
-
-    if (dataset.tableName) {
-      try {
-        const registered = await duckDBOrchestrator.registerExistingTable(
-          dataset.tableName,
-          dataset.sourceFileId || file.id,
-          file.name,
-          {
-            geoDetection: dataset.geoDetection
-          }
-        );
-
-        if (registered === null) {
-          logger.info(
-            'DuckDB table missing, re-processing file from scratch',
-            LogCategory.DUCKDB,
-            {
-              fileId: file.id,
-              fileName: file.name,
-              oldTableName: dataset.tableName
-            }
-          );
-
-          const duckDBFile = await this.prepareFileForDuckDB(file, dataset);
-          if (duckDBFile) {
-            const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
-            if (duckResult && dataset) {
-              datasetsStore.updateDatasetTableName(
-                dataset.id,
-                duckResult.tableName
-              );
-
-              const updatedDataset = datasetsStore.datasets.find(
-                (d) => d.id === dataset.id
-              );
-              if (updatedDataset) {
-                updatedDataset.metadata = {
-                  ...updatedDataset.metadata,
-                  geoDuckTableReady: true
-                };
-              }
-
-              this._geometryDatasetsVersion++;
-            }
-          } else if (file.parsedData && Array.isArray(file.parsedData)) {
-            await this.recreateTableFromParsedData(
-              file,
-              dataset.tableName,
-              dataset
-            );
-          }
-        }
-      } catch (registerError) {
-        logger.error('Failed to register table', LogCategory.DUCKDB, {
-          error:
-            registerError instanceof Error
-              ? registerError.message
-              : 'Unknown error',
-          tableName: dataset.tableName
-        });
-      }
-    }
+    return file;
   }
 
-  private async recreateTableFromParsedData(
+  async function recreateTableFromParsedData(
     file: UploadedFile,
     tableName: string,
     dataset: DatasetResult
@@ -424,41 +190,189 @@ class DataOrchestratorService {
     }
   }
 
-  private createDefaultVisualization(datasetId: string): void {
-    visualizationStore.createVisualization(
-      VisualizationType.CHOROPLETH,
-      datasetId
-    );
-  }
+  async function processFileInDuckDB(
+    file: UploadedFile,
+    datasetOverride?: DatasetResult
+  ): Promise<void> {
+    const dataset =
+      datasetOverride ?? datasetsStore.getDatasetBySourceFile(file.id);
 
-  async onProjectChanged(): Promise<void> {
-    await duckDBOrchestrator.waitForInitialization();
-
-    visualizationStore.clear();
-    datasetsStore.clear();
-    layersActions.reset();
-    projectionActions.reset();
-
-    this.processedFileIds.clear();
-
-    const currentProject = projectStore.currentProject;
-    if (currentProject?.data?.sourceFiles) {
-      await this.processProjectFiles(currentProject.data.sourceFiles);
+    if (!dataset) {
+      return;
     }
 
-    // Lazy import to avoid circular dependency (global → project → data-orchestrator → global)
-    const { globalActions } = await import('../store/global.svelte');
-    globalActions.ensureTabSelected();
+    const duckDBFile = await prepareFileForDuckDB(file, dataset);
+
+    if (duckDBFile) {
+      try {
+        const duckResult = await duckDBOrchestrator.processFile(duckDBFile);
+        if (duckResult && dataset) {
+          datasetsStore.updateDatasetTableName(
+            dataset.id,
+            duckResult.tableName
+          );
+
+          const updatedDataset = datasetsStore.datasets.find(
+            (d) => d.id === dataset.id
+          );
+          if (updatedDataset) {
+            updatedDataset.metadata = {
+              ...updatedDataset.metadata,
+              geoDuckTableReady: true
+            };
+          }
+
+          geometryDatasetsVersion++;
+        }
+      } catch (error) {
+        logger.error(
+          'Failed to process Geo file via DuckDB orchestrator',
+          LogCategory.DUCKDB,
+          error
+        );
+        throw error;
+      }
+      return;
+    }
+
+    if (dataset.tableName) {
+      try {
+        const registered = await duckDBOrchestrator.registerExistingTable(
+          dataset.tableName,
+          dataset.sourceFileId || file.id,
+          file.name,
+          {
+            geoDetection: dataset.geoDetection
+          }
+        );
+
+        if (registered === null) {
+          logger.info(
+            'DuckDB table missing, re-processing file from scratch',
+            LogCategory.DUCKDB,
+            {
+              fileId: file.id,
+              fileName: file.name,
+              oldTableName: dataset.tableName
+            }
+          );
+
+          const fileForDuckDB = await prepareFileForDuckDB(file, dataset);
+          if (fileForDuckDB) {
+            const duckResult =
+              await duckDBOrchestrator.processFile(fileForDuckDB);
+            if (duckResult && dataset) {
+              datasetsStore.updateDatasetTableName(
+                dataset.id,
+                duckResult.tableName
+              );
+
+              const updatedDataset = datasetsStore.datasets.find(
+                (d) => d.id === dataset.id
+              );
+              if (updatedDataset) {
+                updatedDataset.metadata = {
+                  ...updatedDataset.metadata,
+                  geoDuckTableReady: true
+                };
+              }
+
+              geometryDatasetsVersion++;
+            }
+          } else if (file.parsedData && Array.isArray(file.parsedData)) {
+            await recreateTableFromParsedData(file, dataset.tableName, dataset);
+          }
+        }
+      } catch (registerError) {
+        logger.error('Failed to register table', LogCategory.DUCKDB, {
+          error:
+            registerError instanceof Error
+              ? registerError.message
+              : 'Unknown error',
+          tableName: dataset.tableName
+        });
+      }
+    }
   }
 
-  private processedFileIds = new Set<string>();
+  async function onFileAdded(
+    file: UploadedFile,
+    autoEnable = true
+  ): Promise<void> {
+    const snapshot = importRollbackService.createSnapshot(file);
 
-  private processingFiles = new Set<string>();
+    try {
+      const dataset = await datasetsStore.addFile(file, autoEnable);
 
-  /**
-   * Process items with limited concurrency to prevent memory/CPU saturation
-   */
-  private async processWithLimit<T>(
+      if (!dataset) {
+        logger.error('Dataset not found after processing', LogCategory.DATA, {
+          fileId: file.id
+        });
+        return;
+      }
+
+      await processFileInDuckDB(file, dataset);
+      processedFileIds.add(file.id);
+
+      if (dataset.geometry) {
+        projectionActions.suggestProjectionForCurrentData();
+      }
+
+      layersActions.syncWithVisualizations();
+    } catch (error) {
+      logger.error('File import failed', LogCategory.DATA, formatError(error));
+
+      if (isFatalError(error)) {
+        await importRollbackService.rollback(snapshot);
+
+        showError(
+          "Erreur fatale lors de l'import",
+          error instanceof Error ? error.message : 'Erreur inconnue'
+        );
+      } else {
+        showWarning(
+          'Avertissement',
+          error instanceof Error
+            ? error.message
+            : "Avertissement lors de l'import"
+        );
+      }
+
+      if (isFatalError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  async function onFileRemoved(fileId: string): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(fileId);
+
+    if (dataset) {
+      const visualizations = visualizationStore.getVisualizationsByDataset(
+        dataset.id
+      );
+      visualizations.forEach((viz) => {
+        visualizationStore.removeVisualization(viz.id);
+      });
+
+      const duckDataset = duckDBOrchestrator
+        .getAllDatasets()
+        .find((d) => d.sourceFileId === fileId);
+      if (duckDataset) {
+        await duckDBOrchestrator.dropTable(duckDataset.tableName);
+        await cleanupDuckDBResources(duckDataset.tableName);
+        geometryDatasetsVersion++;
+      }
+
+      datasetsStore.removeDataset(dataset.id);
+      layersActions.syncWithVisualizations();
+    }
+
+    processedFileIds.delete(fileId);
+    cleanupOrphanedDatasets();
+  }
+
+  async function processWithLimit<T>(
     items: T[],
     limit: number,
     processor: (item: T, index: number, total: number) => Promise<void>
@@ -484,24 +398,166 @@ class DataOrchestratorService {
     await Promise.all(workers);
   }
 
-  private async processProjectFiles(files: UploadedFile[]): Promise<void> {
+  async function applyColumnTransformations(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.columnTransformations) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.columnTransformations.length} column transformations for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    const columnRenames = new Map<string, string>();
+
+    function resolveColumnName(originalName: string): string {
+      return columnRenames.get(originalName) ?? originalName;
+    }
+
+    for (const transformation of file.columnTransformations) {
+      try {
+        const currentColumnName = resolveColumnName(transformation.column);
+
+        switch (transformation.type) {
+          case COLUMN_TRANSFORMATION_TYPES.RENAME:
+            if (transformation.newValue) {
+              await duckDBOrchestrator.renameColumn(
+                dataset.tableName,
+                currentColumnName,
+                transformation.newValue
+              );
+              datasetsStore.renameDatasetColumn(
+                dataset.id,
+                currentColumnName,
+                transformation.newValue
+              );
+              columnRenames.set(transformation.column, transformation.newValue);
+            }
+            break;
+
+          case COLUMN_TRANSFORMATION_TYPES.DROP:
+            await duckDBOrchestrator.dropColumn(
+              dataset.tableName,
+              currentColumnName
+            );
+            break;
+
+          case COLUMN_TRANSFORMATION_TYPES.TYPE_CHANGE:
+            if (transformation.newValue) {
+              await duckDBOrchestrator.changeColumnType(
+                dataset.tableName,
+                currentColumnName,
+                transformation.newValue
+              );
+            }
+            break;
+
+          case COLUMN_TRANSFORMATION_TYPES.REFINE:
+            if (transformation.newValue) {
+              const operationMap: Record<string, RefineOperation> = {
+                uppercase: RefineOperation.UPPERCASE,
+                lowercase: RefineOperation.LOWERCASE,
+                titlecase: RefineOperation.TITLECASE,
+                trim: RefineOperation.TRIM,
+                trim_all: RefineOperation.TRIM_ALL
+              };
+              const refineOp = operationMap[transformation.newValue];
+              if (refineOp) {
+                await duckDBOrchestrator.refineColumn(
+                  dataset.tableName,
+                  currentColumnName,
+                  refineOp
+                );
+              }
+            }
+            break;
+
+          case COLUMN_TRANSFORMATION_TYPES.REPLACE:
+            if (
+              transformation.searchValue !== undefined &&
+              transformation.searchValue !== null &&
+              transformation.newValue !== undefined &&
+              transformation.newValue !== null
+            ) {
+              await duckDBOrchestrator.replaceInColumn(
+                dataset.tableName,
+                currentColumnName,
+                transformation.searchValue,
+                transformation.newValue
+              );
+            }
+            break;
+        }
+      } catch (err) {
+        logger.warn(
+          `Failed to apply transformation ${transformation.type} on column ${transformation.column}`,
+          LogCategory.DATA,
+          { error: err }
+        );
+      }
+    }
+
+    duckDBOrchestrator.bumpDatasetsVersion();
+  }
+
+  async function applyRowDeletions(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+
+    if (!dataset?.tableName || !file.deletedRowIds) {
+      return;
+    }
+
+    logger.debug(
+      `[DataOrchestrator] Applying ${file.deletedRowIds.length} row deletions for ${file.name}`,
+      LogCategory.DATA
+    );
+
+    try {
+      await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
+
+      const { Duck } = await import('$lib/features/duckdb');
+      const newRowCount = Duck
+        ? await Duck.get_row_count(dataset.tableName)
+        : 0;
+      datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
+
+      logger.debug(
+        `[DataOrchestrator] Applied row deletions, new row count: ${newRowCount}`,
+        LogCategory.DATA
+      );
+    } catch (err) {
+      logger.warn(
+        `Failed to apply row deletions for ${file.name}`,
+        LogCategory.DATA,
+        {
+          error: err
+        }
+      );
+    }
+  }
+
+  function determineProjectConcurrency(): number {
+    return 1;
+  }
+
+  async function processProjectFiles(files: UploadedFile[]): Promise<void> {
     const unprocessedFiles = files.filter(
-      (f) => !this.processedFileIds.has(f.id) && !this.processingFiles.has(f.id)
+      (file) => !processedFileIds.has(file.id) && !processingFiles.has(file.id)
     );
 
     if (unprocessedFiles.length === 0) {
       return;
     }
 
-    // Determine which source file should be visible on the map
     const { globalState } = await import('../store/global.svelte');
     const selectedSourceFileId =
       globalState.selectedDataButtonId ?? unprocessedFiles[0]?.id;
 
-    // Process selected file first so the map shows its data immediately
     if (selectedSourceFileId) {
       const idx = unprocessedFiles.findIndex(
-        (f) => f.id === selectedSourceFileId
+        (file) => file.id === selectedSourceFileId
       );
       if (idx > 0) {
         const [selected] = unprocessedFiles.splice(idx, 1);
@@ -509,14 +565,13 @@ class DataOrchestratorService {
       }
     }
 
-    unprocessedFiles.forEach((f) => this.processingFiles.add(f.id));
-
+    unprocessedFiles.forEach((file) => processingFiles.add(file.id));
     duckDBOrchestrator.beginBatch();
 
     try {
-      const concurrency = this.determineProjectConcurrency();
+      const concurrency = determineProjectConcurrency();
 
-      await this.processWithLimit(
+      await processWithLimit(
         unprocessedFiles,
         concurrency,
         async (file, index, total) => {
@@ -550,7 +605,9 @@ class DataOrchestratorService {
                   logger.warn(
                     `Failed to restore companion file ${name}`,
                     LogCategory.DATA,
-                    { error: err }
+                    {
+                      error: err
+                    }
                   );
                 }
               }
@@ -587,17 +644,16 @@ class DataOrchestratorService {
             LogCategory.DATA
           );
 
-          // Only auto-enable the dataset if it belongs to the selected tab
           const autoEnable = file.id === selectedSourceFileId;
 
           try {
-            await this.onFileAdded(file, autoEnable);
+            await onFileAdded(file, autoEnable);
 
             if (
               file.columnTransformations &&
               file.columnTransformations.length > 0
             ) {
-              await this.applyColumnTransformations(file);
+              await applyColumnTransformations(file);
             }
 
             if (file.deletedRowIds && file.deletedRowIds.length > 0) {
@@ -605,152 +661,61 @@ class DataOrchestratorService {
                 `[DataOrchestrator] Found ${file.deletedRowIds.length} deleted rows to apply for ${file.name}`,
                 LogCategory.DATA
               );
-              await this.applyRowDeletions(file);
+              await applyRowDeletions(file);
             }
-          } catch {
-            /* Silently ignore errors during file processing */
+          } catch (fileError) {
+            logger.error(
+              `Failed to process file during project restore: ${file.name}`,
+              LogCategory.DATA,
+              fileError
+            );
           }
         }
       );
     } catch (error) {
       logger.error('Failed to process project files', LogCategory.DATA, error);
     } finally {
-      unprocessedFiles.forEach((f) => this.processingFiles.delete(f.id));
-
+      unprocessedFiles.forEach((file) => processingFiles.delete(file.id));
       duckDBOrchestrator.endBatch();
     }
   }
 
-  private async applyColumnTransformations(file: UploadedFile): Promise<void> {
-    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-
-    if (!dataset?.tableName || !file.columnTransformations) {
-      return;
-    }
-
-    logger.debug(
-      `[DataOrchestrator] Applying ${file.columnTransformations.length} column transformations for ${file.name}`,
-      LogCategory.DATA
-    );
-
-    for (const transformation of file.columnTransformations) {
-      try {
-        switch (transformation.type) {
-          case 'rename':
-            if (transformation.newValue) {
-              await duckDBOrchestrator.renameColumn(
-                dataset.tableName,
-                transformation.column,
-                transformation.newValue
-              );
-              datasetsStore.renameDatasetColumn(
-                dataset.id,
-                transformation.column,
-                transformation.newValue
-              );
-            }
-            break;
-
-          case 'drop':
-            await duckDBOrchestrator.dropColumn(
-              dataset.tableName,
-              transformation.column
-            );
-            break;
-
-          case 'type_change':
-            if (transformation.newValue) {
-              await duckDBOrchestrator.changeColumnType(
-                dataset.tableName,
-                transformation.column,
-                transformation.newValue
-              );
-            }
-            break;
-
-          case 'refine':
-            if (transformation.newValue) {
-              const operationMap: Record<string, RefineOperation> = {
-                uppercase: RefineOperation.UPPERCASE,
-                lowercase: RefineOperation.LOWERCASE,
-                titlecase: RefineOperation.TITLECASE,
-                trim: RefineOperation.TRIM,
-                trim_all: RefineOperation.TRIM_ALL
-              };
-              const refineOp = operationMap[transformation.newValue];
-              if (refineOp) {
-                await duckDBOrchestrator.refineColumn(
-                  dataset.tableName,
-                  transformation.column,
-                  refineOp
-                );
-              }
-            }
-            break;
-
-          case 'replace':
-            if (transformation.searchValue && transformation.newValue) {
-              await duckDBOrchestrator.replaceInColumn(
-                dataset.tableName,
-                transformation.column,
-                transformation.searchValue,
-                transformation.newValue
-              );
-            }
-            break;
-        }
-      } catch (err) {
-        logger.warn(
-          `Failed to apply transformation ${transformation.type} on column ${transformation.column}`,
-          LogCategory.DATA,
-          { error: err }
-        );
-      }
-    }
-
-    duckDBOrchestrator.bumpDatasetsVersion();
-  }
-
-  private async applyRowDeletions(file: UploadedFile): Promise<void> {
-    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
-
-    if (!dataset?.tableName || !file.deletedRowIds) {
-      return;
-    }
-
-    logger.debug(
-      `[DataOrchestrator] Applying ${file.deletedRowIds.length} row deletions for ${file.name}`,
-      LogCategory.DATA
-    );
-
-    try {
-      await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
-
-      const { Duck } = await import('$lib/features/duckdb');
-      const newRowCount = Duck
-        ? await Duck.get_row_count(dataset.tableName)
-        : 0;
-      datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
-
-      logger.debug(
-        `[DataOrchestrator] Applied row deletions, new row count: ${newRowCount}`,
-        LogCategory.DATA
-      );
-    } catch (err) {
-      logger.warn(
-        `Failed to apply row deletions for ${file.name}`,
-        LogCategory.DATA,
-        { error: err }
-      );
+  async function initialize(): Promise<void> {
+    await projectStore.waitForInit();
+    const currentProject = projectStore.currentProject;
+    if (currentProject?.data?.sourceFiles) {
+      await processProjectFiles(currentProject.data.sourceFiles);
     }
   }
 
-  private determineProjectConcurrency(): number {
-    if (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) {
-      return Math.max(1, Math.min(4, navigator.hardwareConcurrency - 1));
+  async function onProjectChanged(): Promise<void> {
+    await duckDBOrchestrator.waitForInitialization();
+
+    visualizationStore.clear();
+    datasetsStore.clear();
+    layersActions.reset();
+    projectionActions.reset();
+
+    processedFileIds.clear();
+
+    const currentProject = projectStore.currentProject;
+    if (currentProject?.data?.sourceFiles) {
+      await processProjectFiles(currentProject.data.sourceFiles);
     }
-    return 2;
+
+    const { globalActions } = await import('../store/global.svelte');
+    globalActions.ensureTabSelected();
   }
+
+  return {
+    get geometryDatasetsVersion() {
+      return geometryDatasetsVersion;
+    },
+    initialize,
+    onFileAdded,
+    onFileRemoved,
+    onProjectChanged
+  };
 }
 
-export const dataOrchestratorService = new DataOrchestratorService();
+export const dataOrchestratorService = createDataOrchestratorService();

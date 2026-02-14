@@ -12,17 +12,17 @@
   } from 'carbon-icons-svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
-
-  const PROJECTION_BADGE_STORAGE_KEY = 'khartis_projection_tool_opened';
-  const FACETS_BADGE_STORAGE_KEY = 'khartis_facets_tool_opened';
+  import { STORAGE_KEYS, CSS_CLASSES } from '../step-toolbar.constants';
 
   let hasOpenedProjectionTool = $state(
     typeof window !== 'undefined' &&
-      localStorage.getItem(PROJECTION_BADGE_STORAGE_KEY) === '1'
+      localStorage.getItem(STORAGE_KEYS.PROJECTION_TOOL_OPENED) ===
+        STORAGE_KEYS.STORAGE_VALUE_OPENED
   );
   let hasOpenedFacetsTool = $state(
     typeof window !== 'undefined' &&
-      localStorage.getItem(FACETS_BADGE_STORAGE_KEY) === '1'
+      localStorage.getItem(STORAGE_KEYS.FACETS_TOOL_OPENED) ===
+        STORAGE_KEYS.STORAGE_VALUE_OPENED
   );
 
   const showProjectionBadge = $derived(!hasOpenedProjectionTool);
@@ -31,7 +31,10 @@
   function handleProjectionClick() {
     hasOpenedProjectionTool = true;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(PROJECTION_BADGE_STORAGE_KEY, '1');
+      localStorage.setItem(
+        STORAGE_KEYS.PROJECTION_TOOL_OPENED,
+        STORAGE_KEYS.STORAGE_VALUE_OPENED
+      );
     }
     selectTool(VisualizationTools.Projection);
   }
@@ -39,14 +42,17 @@
   function handleFacetsClick() {
     hasOpenedFacetsTool = true;
     if (typeof window !== 'undefined') {
-      localStorage.setItem(FACETS_BADGE_STORAGE_KEY, '1');
+      localStorage.setItem(
+        STORAGE_KEYS.FACETS_TOOL_OPENED,
+        STORAGE_KEYS.STORAGE_VALUE_OPENED
+      );
     }
     selectTool(VisualizationTools.Facets);
   }
 </script>
 
 <ToolsListContainer>
-  <Grid noGutter padding={false} class="tools-grid">
+  <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
     <Row>
       <Column>
         <Button
@@ -77,7 +83,7 @@
 
     <Row>
       <Column>
-        <div class="tool-button-wrapper">
+        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
           <Button
             tooltipPosition="right"
             kind="ghost"
@@ -89,7 +95,7 @@
             onclick={handleProjectionClick}
           />
           {#if showProjectionBadge}
-            <span class="notification-badge"></span>
+            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
           {/if}
         </div>
       </Column>
@@ -112,7 +118,7 @@
 
     <Row>
       <Column>
-        <div class="tool-button-wrapper">
+        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
           <Button
             tooltipPosition="right"
             kind="ghost"
@@ -123,7 +129,7 @@
             onclick={handleFacetsClick}
           />
           {#if showFacetsBadge}
-            <span class="notification-badge"></span>
+            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
           {/if}
         </div>
       </Column>
@@ -132,12 +138,12 @@
 </ToolsListContainer>
 
 <style>
-  .tool-button-wrapper {
+  :global(.tool-button-wrapper) {
     position: relative;
     display: inline-block;
   }
 
-  .notification-badge {
+  :global(.notification-badge) {
     position: absolute;
     top: 2px;
     right: 2px;

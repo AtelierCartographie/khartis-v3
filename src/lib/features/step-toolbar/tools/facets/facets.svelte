@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -7,8 +8,7 @@
     Row,
     MultiSelect,
     RadioButtonGroup,
-    RadioButton,
-    Toggle
+    RadioButton
   } from 'carbon-components-svelte';
   import { Launch } from 'carbon-icons-svelte';
   import { facetsStore } from './facets.store.svelte';
@@ -47,11 +47,11 @@
 
   const showWarning = $derived(selectedVarIds.length > 9);
 
+  const FACETS_HELP_URL =
+    'https://cartographie.sciencespo.fr/khartis/help/facets';
+
   function handleLearnMore() {
-    window.open(
-      'https://cartographie.sciencespo.fr/khartis/help/facets',
-      '_blank'
-    );
+    window.open(FACETS_HELP_URL, '_blank');
   }
 
   async function handleGenerate() {
@@ -67,6 +67,13 @@
 
   async function handleToggleScale() {
     await facetsStore.toggleScaleMode();
+  }
+
+  function handleScaleModeChange(checked: boolean): void {
+    const isShared = scaleMode === 'shared';
+    if (checked !== isShared) {
+      void handleToggleScale();
+    }
   }
 
   function handleColumnsChange(value: string | number) {
@@ -117,10 +124,13 @@
 
       <Row padding>
         <Column>
-          <Toggle
+          <Switch
             toggled={scaleMode === 'shared'}
             labelText={m.facets_shared_scale()}
-            on:toggle={handleToggleScale}
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleScaleModeChange}
           />
         </Column>
       </Row>
@@ -191,10 +201,13 @@
 
         <Row padding>
           <Column>
-            <Toggle
+            <Switch
               toggled={scaleMode === 'shared'}
               labelText={m.facets_shared_scale()}
-              on:toggle={handleToggleScale}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={handleScaleModeChange}
             />
           </Column>
         </Row>

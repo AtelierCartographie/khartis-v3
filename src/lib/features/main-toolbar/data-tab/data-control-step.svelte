@@ -36,6 +36,8 @@
   import { dataToolsStore, DataToolType } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
+  import { resolveSelectedDuckTableName } from './services/dataset-resolution';
+  import { UI_CONSTANTS } from '../constants';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -51,13 +53,10 @@
 
   const currentDuckTable = $derived.by(() => {
     void duckDBDatasetsVersion;
-    const allDuckDatasets = duckDBOrchestrator.getAllDatasets();
-    const tableName = selectedDataset?.sourceFileId
-      ? allDuckDatasets.find(
-          (d) => d.sourceFileId === selectedDataset.sourceFileId
-        )?.tableName || null
-      : null;
-    return tableName;
+    return resolveSelectedDuckTableName(
+      selectedDataset,
+      duckDBOrchestrator.getAllDatasets()
+    );
   });
 
   const hasDataModifications = $derived(
@@ -73,6 +72,12 @@
   let warningsNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
+
+  $effect(() => {
+    void selectedDataset?.id;
+    selectedRowIds = [];
+  });
+
   let csvOptionsModalOpen = $state(false);
   let showSummaryPlots = $state(true);
   let currentCsvOptions = $state<CsvOptions>({
@@ -85,7 +90,6 @@
   let confirmReimportOpen = $state(false);
   let pendingCsvOptions = $state<CsvOptions | null>(null);
 
-  // Sync currentCsvOptions from dataset metadata when dataset changes
   $effect(() => {
     const csvOpts = selectedDataset?.metadata?.csvOptions;
     if (csvOpts) {
@@ -138,7 +142,6 @@
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
-    // Check if dataset has transformations - if so, ask for confirmation
     const hasTransformations =
       selectedDataset?.metadata?.transformations?.length ?? 0;
     if (hasTransformations > 0) {
@@ -234,6 +237,7 @@
 
     try {
       let totalReplaced = 0;
+      const replacedColumns: string[] = [];
 
       if (source === 'all') {
         const textColumns =
@@ -250,6 +254,9 @@
             replaceValue
           );
           totalReplaced += count;
+          if (count > 0) {
+            replacedColumns.push(col.name);
+          }
         }
       } else {
         totalReplaced = await duckDBOrchestrator.replaceInColumn(
@@ -258,6 +265,9 @@
           searchValue,
           replaceValue
         );
+        if (totalReplaced > 0) {
+          replacedColumns.push(source);
+        }
       }
 
       if (totalReplaced > 0) {
@@ -266,38 +276,19 @@
           `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
         );
 
-        if (source === 'all') {
-          const textColumns =
-            selectedDataset.columns?.filter((col) => {
-              const type = String(col.type).toLowerCase();
-              return type === 'text' || type === 'varchar' || type === 'string';
-            }) ?? [];
-          for (const col of textColumns) {
-            await projectStore.addColumnTransformation(
-              selectedDataset.sourceFileId,
-              {
-                type: 'replace',
-                column: col.name,
-                searchValue,
-                newValue: replaceValue,
-                timestamp: new Date().toISOString()
-              }
-            );
-          }
-        } else {
+        const timestamp = new Date().toISOString();
+        for (const column of replacedColumns) {
           await projectStore.addColumnTransformation(
             selectedDataset.sourceFileId,
             {
               type: 'replace',
-              column: source,
+              column,
               searchValue,
               newValue: replaceValue,
-              timestamp: new Date().toISOString()
+              timestamp
             }
           );
         }
-
-        duckDBOrchestrator.bumpDatasetsVersion();
       } else {
         showError(m.replace_no_match_title(), m.replace_no_match_message());
       }
@@ -395,6 +386,7 @@
 
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
+  const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
 
   $effect(() => {
     if (activeTool !== DataToolType.Search) {
@@ -417,7 +409,7 @@
       } else {
         mapHighlightStore.clearHighlights();
       }
-    }, 800);
+    }, UI_CONSTANTS.MAP_HIGHLIGHT_DEBOUNCE_MS);
     return () => clearTimeout(mapHighlightTimer);
   });
 
@@ -426,15 +418,11 @@
       dataTabStore.markStepComplete(0);
     }
   });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Carbon DataTableSkeleton has complex generic types
-  const getSkeletonProps = () => ({ columns: 5, rows: 5 }) as any;
 </script>
 
 <section id="data-control-step">
   <MainToolBarHeader title={m.data_control_step_title()} icon={DataCheck} />
 
-  <!-- Panneaux flottants -->
   {#if isToolOpen}
     {#if activeTool === DataToolType.Search}
       <DataToolPanel title={m.data_tool_search()}>
@@ -512,7 +500,6 @@
       </Modal>
     {/if}
 
-    <!-- Barre d'outils -->
     <DataToolsBar
       onDelete={handleOpenDeleteModal}
       onReset={handleOpenReset}
@@ -544,9 +531,13 @@
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
-      <!-- Skeleton loader pendant le chargement ou batch processing -->
       <div class="table-skeleton-wrapper">
-        <DataTableSkeleton {...getSkeletonProps()} />
+        <DataTableSkeleton
+          key={DATA_TABLE_SKELETON_HEADER_KEY}
+          empty
+          columns={UI_CONSTANTS.DATA_TABLE_SKELETON_COLUMNS}
+          rows={UI_CONSTANTS.DATA_TABLE_SKELETON_ROWS}
+        />
       </div>
     {:else}
       <div class="empty-state">

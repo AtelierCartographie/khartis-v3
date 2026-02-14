@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
@@ -15,10 +16,17 @@
     Select,
     SelectItem,
     Slider,
-    TextInput,
-    Toggle
+    TextInput
   } from 'carbon-components-svelte';
   import { Document, TextFont, ViewFilled, ViewOff } from 'carbon-icons-svelte';
+  import { onMount } from 'svelte';
+  import {
+    LEGEND_DEFAULTS,
+    LEGEND_FONT_SIZES,
+    AVAILABLE_FONTS,
+    DOM_IDS,
+    CSS_CLASSES
+  } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import type { LegendItem } from './legend.types';
 
@@ -33,8 +41,8 @@
   const items = $derived(legendState.items);
 
   let localFontFamily = $state('');
-  let localFontSize = $state(12);
-  let localOpacity = $state(100);
+  let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
+  let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
 
   $effect(() => {
     localFontFamily = legendState.style.fontFamily;
@@ -65,6 +73,7 @@
   const activeTabIndex = $derived(
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
   );
+  const legendVisible = $derived(legendState.visible);
 
   function toggleVisibility(id: string): void {
     const item = items.find((i) => i.id === id);
@@ -86,6 +95,12 @@
     legendActions.setActiveTab(
       newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
     );
+  }
+
+  function handleLegendVisibilityChange(visible: boolean): void {
+    if (visible !== legendState.visible) {
+      legendActions.setVisibility(visible);
+    }
   }
 
   function handleFontFamilyChange(): void {
@@ -121,21 +136,23 @@
   }
 
   function handleOpacityChange(): void {
-    if (localOpacity !== legendState.style.background.opacity) {
-      legendActions.updateBackground({ opacity: localOpacity });
+    const normalizedOpacity = Math.max(
+      0,
+      Math.min(100, Math.round(localOpacity))
+    );
+    localOpacity = normalizedOpacity;
+
+    if (normalizedOpacity !== legendState.style.background.opacity) {
+      legendActions.updateBackground({ opacity: normalizedOpacity });
     }
   }
 
-  const availableFonts = [
-    'Cabin',
-    'IBM Plex Sans',
-    'Inter',
-    'Lato',
-    'Open Sans'
-  ];
+  onMount(() => {
+    legendActions.markAsOpened();
+  });
 </script>
 
-<div id="khartis-legend-tool">
+<div id={DOM_IDS.LEGEND_TOOL}>
   <Grid padding noGutter fullWidth>
     <Row>
       <Column>
@@ -143,10 +160,27 @@
           items={tabItems}
           activeIndex={activeTabIndex}
           onChange={handleTabChange}
-          className="legend-tabs"
+          className={CSS_CLASSES.LEGEND_TABS}
           activeClass="active"
           fullWidthClass="full-width"
         />
+      </Column>
+    </Row>
+
+    <Row>
+      <Column>
+        <div class="switch-row">
+          <span class="switch-label">{m.tool_legend()}</span>
+          <Switch
+            toggled={legendVisible}
+            labelText={m.tool_legend()}
+            hideLabel
+            labelA={m.layers_hide()}
+            labelB={m.layers_show()}
+            showStateLabel
+            onchange={handleLegendVisibilityChange}
+          />
+        </div>
       </Column>
     </Row>
   </Grid>
@@ -223,13 +257,13 @@
       <Row>
         <Column sm={2} md={4} lg={8}>
           <Select
-            id="legend-font-select"
+            id={DOM_IDS.FONT_SELECT}
             labelText={m.legend_font()}
             bind:selected={localFontFamily}
             on:change={handleFontFamilyChange}
             size="xl"
           >
-            {#each availableFonts as f (f)}
+            {#each AVAILABLE_FONTS as f (f)}
               <SelectItem value={f} text={f} />
             {/each}
           </Select>
@@ -237,13 +271,13 @@
 
         <Column sm={2} md={4} lg={8}>
           <Select
-            id="legend-font-size"
+            id={DOM_IDS.FONT_SIZE}
             labelText={m.legend_font_size()}
             bind:selected={localFontSize}
             on:change={handleFontSizeChange}
             size="xl"
           >
-            {#each [10, 11, 12, 14, 16, 18, 20, 24] as s (s)}
+            {#each LEGEND_FONT_SIZES as s (s)}
               <SelectItem value={s} text={String(s)} />
             {/each}
           </Select>
@@ -273,11 +307,13 @@
 
       <Row>
         <Column>
-          <Toggle
+          <Switch
             labelText={m.legend_background()}
-            id="legend-bg-toggle"
             toggled={backgroundEnabled}
-            on:toggle={(e) => handleBackgroundEnabledChange(e.detail.toggled)}
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleBackgroundEnabledChange}
           />
         </Column>
 
@@ -317,7 +353,7 @@
         <Column sm={1} md={2} lg={3}>
           <div class="input-wrapper">
             <input
-              id="legend-opacity"
+              id={DOM_IDS.OPACITY}
               class="number"
               type="number"
               min={0}
@@ -335,13 +371,16 @@
 </div>
 
 <style>
-  #khartis-legend-tool .expandable-stack :global(.section-container) {
+  :global(#khartis-legend-tool .expandable-stack .section-container) {
     margin-bottom: 0;
   }
 
-  #khartis-legend-tool
-    .expandable-stack
-    :global(.section-container + .section-container) {
+  :global(
+    #khartis-legend-tool
+      .expandable-stack
+      .section-container
+      + .section-container
+  ) {
     border-top: 0;
   }
 
@@ -349,6 +388,20 @@
     font-size: 0.875rem;
     color: var(--cds-text-secondary);
     line-height: 1.4;
+  }
+
+  .switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .switch-label {
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
+    font-weight: 400;
   }
 
   .divider {
@@ -360,15 +413,15 @@
     width: 100%;
   }
 
-  #khartis-legend-tool .slider :global(.bx--slider) {
+  :global(#khartis-legend-tool .slider .bx--slider) {
     min-width: 200px !important;
   }
 
-  #khartis-legend-tool .slider :global(.bx--slider__track) {
+  :global(#khartis-legend-tool .slider .bx--slider__track) {
     background: var(--cds-ui-03);
   }
 
-  #khartis-legend-tool .slider :global(.bx--slider__filled-track) {
+  :global(#khartis-legend-tool .slider .bx--slider__filled-track) {
     background: var(--cds-text-01);
   }
 

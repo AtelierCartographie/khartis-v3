@@ -21,15 +21,29 @@ import type { DataExportFormat } from '../types';
 import { Duck } from '$lib/features/duckdb';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 
-export class ExportError extends Error {
-  constructor(
-    public title: string,
-    message: string
-  ) {
-    super(message);
-    this.name = 'ExportError';
-  }
+export interface ExportError extends Error {
+  title: string;
 }
+
+interface ExportErrorConstructor {
+  new (title: string, message: string): ExportError;
+  readonly prototype: ExportError;
+}
+
+export const ExportError: ExportErrorConstructor = function ExportError(
+  this: ExportError,
+  title: string,
+  message: string
+): ExportError {
+  const error = new Error(message) as ExportError;
+  Object.setPrototypeOf(error, ExportError.prototype);
+  error.name = 'ExportError';
+  error.title = title;
+  Error.captureStackTrace?.(error, ExportError);
+  return error;
+} as unknown as ExportErrorConstructor;
+
+Object.setPrototypeOf(ExportError.prototype, Error.prototype);
 
 export async function exportProject(fileName: string): Promise<void> {
   if (!projectStore.currentProject) {

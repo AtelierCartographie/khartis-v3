@@ -1,8 +1,10 @@
+import { MIME } from '$lib/features/commons/constants';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
@@ -30,7 +32,7 @@ export const shapefileProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const shpFile = getFileForDuckDB(file, 'application/x-shapefile');
+    const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE);
 
     const companionFiles =
       file.relatedFileObjects?.filter(

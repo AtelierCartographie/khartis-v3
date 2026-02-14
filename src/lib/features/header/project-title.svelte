@@ -4,6 +4,7 @@
   import { m } from '$lib/paraglide/messages.js';
   import { Button, TextInput } from 'carbon-components-svelte';
   import { Save } from 'carbon-icons-svelte';
+  import { KEY } from '../commons/constants/dom.constants';
 
   let inputValue = $state(projectStore.projectName);
   let originalName = $state(projectStore.projectName);
@@ -36,10 +37,10 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
+    if (event.key === KEY.ENTER) {
       event.preventDefault();
       handleSave();
-    } else if (event.key === 'Escape') {
+    } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
       inputValue = originalName;
     }

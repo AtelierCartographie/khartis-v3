@@ -1,7 +1,8 @@
+import { MIME } from '$lib/features/commons/constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { isGeospatialFile } from '../constants';
+import { PIPELINE_CONST, isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
@@ -17,7 +18,12 @@ export async function processRemoteFile(
   options: { tableName?: string; decimalSeparator?: string } = {}
 ): Promise<DatasetResult | ZipDatasetResult> {
   const { tableName: providedTableName, decimalSeparator } = options;
-  const filename = url.split('/').pop() || 'remote_file';
+  let filename: string;
+  try {
+    filename = new URL(url).pathname.split('/').pop() || 'remote_file';
+  } catch {
+    filename = url.split('/').pop() || 'remote_file';
+  }
 
   if (filename.toLowerCase().endsWith('.zip')) {
     return processRemoteZipFile(ctx, url);
@@ -30,7 +36,7 @@ export async function processRemoteFile(
   });
 
   const dataset = await buildDatasetFromDuckTable(ctx, {
-    file: { name: filename, size: 0, type: 'application/octet-stream' },
+    file: { name: filename, size: 0, type: MIME.BINARY },
     tableName,
     isGeoFile: isGeospatialFile(filename),
     format: detectFileFormat(filename)
@@ -47,7 +53,7 @@ export async function processRemoteZipFile(
 ): Promise<DatasetResult | ZipDatasetResult> {
   const start = performance.now();
   logger.info(
-    'Downloading and processing remote ZIP archive',
+    'Downloading and processing remote MIME.ZIP archive',
     LogCategory.DATA,
     { url }
   );
@@ -65,14 +71,14 @@ export async function processRemoteZipFile(
 
     const arrayBuffer = await response.arrayBuffer();
     const filename = url.split('/').pop() || 'remote.zip';
-    const file = new File([arrayBuffer], filename, { type: 'application/zip' });
+    const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
     const result = await processZipFile(ctx, file);
 
     if ('datasets' in result) {
       for (const dataset of result.datasets) {
         dataset.sourceFileId = url;
       }
-      logger.success('Remote ZIP archive processed (multi)', LogCategory.DATA, {
+      logger.success('Remote MIME.ZIP archive processed (multi)', LogCategory.DATA, {
         url,
         datasetCount: result.datasets.length,
         durationMs: (performance.now() - start).toFixed(2)
@@ -81,14 +87,14 @@ export async function processRemoteZipFile(
     }
 
     result.sourceFileId = url;
-    logger.success('Remote ZIP archive processed', LogCategory.DATA, {
+    logger.success('Remote MIME.ZIP archive processed', LogCategory.DATA, {
       url,
       datasetId: result.id,
       durationMs: (performance.now() - start).toFixed(2)
     });
     return result;
   } catch (error) {
-    logger.error('Failed to process remote ZIP archive', LogCategory.DATA, {
+    logger.error('Failed to process remote MIME.ZIP archive', LogCategory.DATA, {
       url,
       error
     });

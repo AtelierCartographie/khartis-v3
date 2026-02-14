@@ -60,7 +60,6 @@
   let submenuTriggerRef = $state<HTMLElement | null>(null);
   let submenuPosition = $state({ top: 0, left: 0 });
 
-  // --- Histogram data types ---
   interface NumericBin {
     bin: number | null;
     count: number;
@@ -105,7 +104,6 @@
         duplicates: number;
       };
 
-  /** Detect if this column is a geographic identifier */
   const isGeoid = $derived(
     analysis?.semioType === 'geoid' &&
       (analysis?.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD
@@ -114,7 +112,6 @@
   const histogramData: HistogramData | null = $derived.by(() => {
     if (!showSummaryPlots || !analysis) return null;
 
-    // Geographic columns: dedicated metric display (spec 2.5.b)
     if (isGeoid) {
       return {
         kind: 'geographic' as const,
@@ -159,7 +156,6 @@
     return null;
   });
 
-  /** Derive the badge type from column analysis */
   const badgeType: VariableBadgeType = $derived.by(() => {
     const isGeoid =
       analysis?.semioType === 'geoid' &&
@@ -317,7 +313,6 @@
 <th>
   <div class="col-header">
     <div class="col-title-row">
-      <!-- Pill/Tag badge with column name and type icon -->
       <VariableBadge
         label={column.name}
         type={badgeType}
@@ -555,7 +550,6 @@
       <div class="summary-plot-wrapper">
         <div class="summary-plot">
           {#if histogramData?.kind === 'geographic'}
-            <!-- Geographic column: uniform pills for uniques/nulls/duplicates (spec 2.5.b) -->
             <div class="hist-geo-pills">
               <span class="hist-geo-pill hist-geo-uniques">
                 {m.summary_plot_unique_values({
@@ -578,7 +572,6 @@
               {/if}
             </div>
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
-            <!-- Show warnings in histogram area when present -->
             <div class="hist-warnings">
               {#each columnWarnings as warning, index (warning.message + index)}
                 <div class="hist-warning-line">
@@ -590,7 +583,6 @@
             </div>
           {:else if histogramData?.kind === 'categorical'}
             {#if histogramData.isAllUnique}
-              <!-- All unique values: single teal bar -->
               <div class="hist-unique-bar">
                 <span class="hist-unique-text">
                   {m.summary_plot_unique_values({
@@ -599,7 +591,6 @@
                 </span>
               </div>
             {:else}
-              <!-- Multiple categories: equal-width bars -->
               <div class="hist-cat-bars">
                 {#each histogramData.items as item, i (item.category ?? `null-${i}`)}
                   <div
@@ -625,7 +616,6 @@
               </div>
             {/if}
           {:else if histogramData?.kind === 'numeric'}
-            <!-- Numeric/date histogram: varying height bars -->
             <div class="hist-num-area">
               <div class="hist-num-bars">
                 {#each histogramData.bins as bin (bin.bin)}
@@ -668,7 +658,6 @@
               {/if}
             </div>
           {:else}
-            <!-- No histogram data available -->
             <div class="hist-empty">
               {m.column_unique_count({ count: analysis.uniques ?? 0 })}
             </div>
@@ -701,7 +690,6 @@
     gap: 4px;
   }
 
-  /* ========== Actions ========== */
   .col-actions {
     display: flex;
     align-items: center;
@@ -736,7 +724,7 @@
     background-color: var(--cds-ui-01, #f4f4f4);
     border: 1px solid var(--cds-ui-03, #e0e0e0);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    z-index: 10000;
+    z-index: var(--z-notification);
     max-height: 400px;
     overflow-y: auto;
   }
@@ -806,7 +794,6 @@
     min-width: 140px;
   }
 
-  /* ========== Sort row (below pill, centered) ========== */
   .sort-row {
     display: flex;
     justify-content: flex-start;
@@ -843,7 +830,6 @@
     opacity: 1;
   }
 
-  /* ========== Summary plot (CSS histograms) ========== */
   .summary-plot-wrapper {
     margin: 0 -8px;
     padding: 13px 8px 12px;
@@ -857,7 +843,6 @@
     overflow: hidden;
   }
 
-  /* --- Categorical: all unique (single teal bar) --- */
   .hist-unique-bar {
     flex: 1;
     background-color: #007d79;
@@ -881,7 +866,6 @@
     text-overflow: ellipsis;
   }
 
-  /* --- Categorical: multiple categories --- */
   .hist-cat-bars {
     flex: 1;
     display: flex;
@@ -934,7 +918,6 @@
     flex-shrink: 0;
   }
 
-  /* --- Numeric / date histogram --- */
   .hist-num-area {
     flex: 1;
     display: flex;
@@ -1008,7 +991,6 @@
     flex-shrink: 0;
   }
 
-  /* --- Warnings in histogram area --- */
   .hist-warnings {
     flex: 1;
     display: flex;
@@ -1045,7 +1027,6 @@
     text-overflow: ellipsis;
   }
 
-  /* --- Geographic: uniform pills for uniques/nulls/duplicates --- */
   .hist-geo-pills {
     display: flex;
     flex-direction: column;
@@ -1079,7 +1060,6 @@
     background-color: #a2191f;
   }
 
-  /* --- Empty state --- */
   .hist-empty {
     flex: 1;
     display: flex;
@@ -1091,7 +1071,6 @@
     color: #525252;
   }
 
-  /* ========== Warning badge ========== */
   .warning-badge {
     display: flex;
     align-items: center;
@@ -1120,7 +1099,7 @@
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 12px;
-    z-index: 10001;
+    z-index: var(--z-popover);
     max-width: 280px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
@@ -1163,7 +1142,7 @@
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 11px;
-    z-index: 10001;
+    z-index: var(--z-popover);
     max-width: 220px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     white-space: nowrap;

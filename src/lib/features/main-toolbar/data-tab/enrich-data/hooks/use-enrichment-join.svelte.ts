@@ -1,12 +1,17 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import { Duck } from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import { SvelteMap } from 'svelte/reactivity';
 import type { JoinStats } from '../../components';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';
+import { canFinalizeJoin } from '../../services/join-validation';
 
 export interface UseEnrichmentJoinProps {
   getEnrichmentDataset: () => DatasetResult | null;
@@ -50,12 +55,7 @@ export function useEnrichmentJoin(
 
   function getGeoTableName(): string | null {
     if (!selectedDataset) return null;
-    return (
-      (selectedDataset as { duckdbTableName?: string; tableName?: string })
-        .duckdbTableName ||
-      (selectedDataset as { tableName?: string }).tableName ||
-      selectedDataset.id
-    );
+    return selectedDataset.tableName || null;
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
@@ -79,6 +79,8 @@ export function useEnrichmentJoin(
     try {
       const geoTableName = getGeoTableName();
       if (!geoTableName) return;
+      const escapedGeoTableName = escapeIdentifier(geoTableName);
+      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
 
       const stats = await computeDatasetJoinStats({
         sourceTableName: enrichmentDataset.tableName,
@@ -88,9 +90,9 @@ export function useEnrichmentJoin(
       });
 
       const targetValues = (await Duck.query(
-        `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
-         FROM "${geoTableName}"
-         WHERE "${geoCol.columnName}" IS NOT NULL
+        `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
+         FROM "${escapedGeoTableName}"
+         WHERE "${escapedGeoColumn}" IS NOT NULL
          ORDER BY val`,
         { format: 'array' }
       )) as Array<{ val: string }>;
@@ -173,12 +175,35 @@ export function useEnrichmentJoin(
 
       const geoTableName = getGeoTableName();
       if (!geoTableName) return;
+      const escapedEnrichmentTableName = escapeIdentifier(
+        enrichmentDataset.tableName
+      );
+      const escapedEnrichmentColumn = escapeIdentifier(enrichCol.columnName);
+      const escapedGeoTableName = escapeIdentifier(geoTableName);
+      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
 
-      for (const [oldValue, newValue] of Object.entries(corrections)) {
+      const correctionEntries = Object.entries(corrections);
+      if (correctionEntries.length > 0) {
+        const valueRows = correctionEntries
+          .map(
+            ([original, corrected]) =>
+              `('${escapeSqlString(original)}', '${escapeSqlString(corrected)}')`
+          )
+          .join(', ');
+
+        const tempTable = `enrich_corrections_${Date.now()}`;
         await Duck.query(
-          `UPDATE "${enrichmentDataset.tableName}" SET "${enrichCol.columnName}" = '${newValue.replace(/'/g, "''")}' WHERE "${enrichCol.columnName}" = '${oldValue.replace(/'/g, "''")}'`,
+          `CREATE TEMP TABLE "${tempTable}" (original VARCHAR, corrected VARCHAR)`
+        );
+        await Duck.query(`INSERT INTO "${tempTable}" VALUES ${valueRows}`);
+        await Duck.query(
+          `UPDATE "${escapedEnrichmentTableName}"
+           SET "${escapedEnrichmentColumn}" = c.corrected
+           FROM "${tempTable}" c
+           WHERE "${escapedEnrichmentColumn}" = c.original`,
           { format: 'array' }
         );
+        await Duck.query(`DROP TABLE "${tempTable}"`);
       }
 
       const stats = await computeDatasetJoinStats({
@@ -189,9 +214,9 @@ export function useEnrichmentJoin(
       });
 
       const targetValues = (await Duck.query(
-        `SELECT DISTINCT CAST("${geoCol.columnName}" AS VARCHAR) as val
-         FROM "${geoTableName}"
-         WHERE "${geoCol.columnName}" IS NOT NULL
+        `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
+         FROM "${escapedGeoTableName}"
+         WHERE "${escapedGeoColumn}" IS NOT NULL
          ORDER BY val`,
         { format: 'array' }
       )) as Array<{ val: string }>;
@@ -231,7 +256,7 @@ export function useEnrichmentJoin(
 
   async function handleFinalizeEnrichment(): Promise<void> {
     const enrichmentDataset = getEnrichmentDataset();
-    if (!enrichmentDataset || !selectedDataset) return;
+    if (!enrichmentDataset || !selectedDataset || !joinStats) return;
 
     const enrichCol = getEnrichDataFieldItems().find(
       (item) => item.id === getEnrichLinkedVariableId()
@@ -242,12 +267,25 @@ export function useEnrichmentJoin(
 
     if (!enrichCol || !geoCol) return;
 
+    if (!canFinalizeJoin(joinStats)) {
+      logger.warn(
+        'Cannot finalize enrichment join with unresolved entities',
+        LogCategory.DATA,
+        {
+          toVerify: joinStats.toVerifyCount,
+          duplicates: joinStats.duplicateCount,
+          joinedCount: joinStats.joinedCount
+        }
+      );
+      return;
+    }
+
+    const geoTableName = getGeoTableName();
+    if (!geoTableName) return;
+
     isFinalizingJoin = true;
 
     try {
-      const geoTableName = getGeoTableName();
-      if (!geoTableName) return;
-
       const enrichmentColumns = enrichmentDataset.columns
         .filter(
           (col) => col.name !== enrichCol.columnName && col.name !== '__id'
@@ -267,21 +305,34 @@ export function useEnrichmentJoin(
       });
 
       const oldTableName = geoTableName;
+      const escapedGeoTableName = escapeIdentifier(geoTableName);
+      const escapedEnrichmentTableName = escapeIdentifier(
+        enrichmentDataset.tableName
+      );
+      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
+      const escapedEnrichmentColumn = escapeIdentifier(enrichCol.columnName);
 
       const enrichColsSelect = enrichmentColumns
-        .map((col) => `e."${col}"`)
+        .map((col) => `e."${escapeIdentifier(col)}"`)
         .join(', ');
 
       const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
+      const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
 
       await Duck.query(
-        `CREATE TABLE "${enrichedTableName}" AS
+        `CREATE TABLE "${escapedEnrichedTableName}" AS
          SELECT g.*, ${enrichColsSelect}
-         FROM "${geoTableName}" g
-         LEFT JOIN "${enrichmentDataset.tableName}" e
-         ON LOWER(CAST(g."${geoCol.columnName}" AS VARCHAR)) = LOWER(CAST(e."${enrichCol.columnName}" AS VARCHAR))`,
+         FROM "${escapedGeoTableName}" g
+         LEFT JOIN "${escapedEnrichmentTableName}" e
+         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = normalize_text_join(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR))`,
         { format: 'array' }
       );
+
+      const rowCountResult = (await Duck.query(
+        `SELECT COUNT(*) as count FROM "${escapedEnrichedTableName}"`,
+        { format: 'array' }
+      )) as Array<{ count: number }>;
+      const newRowCount = Number(rowCountResult?.[0]?.count ?? 0);
 
       const newColumns = await Duck.analyse(enrichedTableName);
 
@@ -313,26 +364,46 @@ export function useEnrichmentJoin(
           }
         }))
       });
+      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+
+      // Update the existing orchestrator dataset entry with the new enriched table name
+      // (avoids creating a duplicate entry with the same sourceFileId)
+      try {
+        await duckDBOrchestrator.updateDatasetTableName(
+          selectedDataset.sourceFileId || selectedDataset.id,
+          enrichedTableName
+        );
+      } catch (updateError) {
+        logger.warn(
+          'Failed to update enriched table in orchestrator',
+          LogCategory.DATA,
+          { enrichedTableName, error: updateError }
+        );
+      }
 
       logger.success('Enrichment finalized', LogCategory.DATA, {
         newTable: enrichedTableName,
         addedColumns: enrichmentColumns
       });
 
-      if (
-        oldTableName !== enrichedTableName &&
-        oldTableName.includes('_enriched_')
-      ) {
+      // Drop the old table to free memory (both first-time and subsequent enrichments)
+      if (oldTableName !== enrichedTableName) {
         try {
-          await Duck.query(`DROP TABLE IF EXISTS "${oldTableName}"`);
-          logger.debug('Dropped old enriched table', LogCategory.DATA, {
+          await Duck.query(
+            `DROP TABLE IF EXISTS "${escapeIdentifier(oldTableName)}"`
+          );
+          logger.debug('Dropped old table after enrichment', LogCategory.DATA, {
             oldTableName
           });
         } catch (dropError) {
-          logger.warn('Failed to drop old enriched table', LogCategory.DATA, {
-            oldTableName,
-            error: dropError
-          });
+          logger.warn(
+            'Failed to drop old table after enrichment',
+            LogCategory.DATA,
+            {
+              oldTableName,
+              error: dropError
+            }
+          );
         }
       }
 

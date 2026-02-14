@@ -46,22 +46,17 @@
   }: Props = $props();
 
   const isSubLayer = $derived(Boolean(layer.isSubLayer));
-  const isDraggable = $derived(!isSubLayer);
 
   function handleDragStart(event: DragEvent): void {
-    if (!isDraggable) return;
     if (!event.dataTransfer) return;
-
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', '');
     onDragStart(index);
   }
 
   function handleDragOver(event: DragEvent): void {
-    if (!isDraggable) return;
     event.preventDefault();
     if (!event.dataTransfer) return;
-
     event.dataTransfer.dropEffect = 'move';
     onDragOver(index);
   }
@@ -71,63 +66,73 @@
   }
 
   function handleDrop(event: DragEvent): void {
-    if (!isDraggable) return;
     event.preventDefault();
     onDragEnd();
-  }
-
-  function handleToggleVisibility(): void {
-    onToggleVisibility(layer.id);
-  }
-
-  function handleOpenSettings(): void {
-    onOpenSettings(layer.id);
   }
 </script>
 
 <div id="khartis-layer-item-tool">
-  <div
-    class="layer-item"
-    class:sub-layer={isSubLayer}
-    class:dragging={isDragging}
-    class:drag-over={isDragOver}
-    role="listitem"
-    draggable={isDraggable}
-    ondragstart={isDraggable ? handleDragStart : undefined}
-    ondragover={isDraggable ? handleDragOver : undefined}
-    ondragenter={isDraggable ? handleDragEnter : undefined}
-    ondrop={isDraggable ? handleDrop : undefined}
-    ondragleave={isDraggable ? onDragLeave : undefined}
-    ondragend={isDraggable ? onDragEnd : undefined}
-  >
-    <div class="layer-indicator" style="background-color: {layer.color}"></div>
+  {#if isSubLayer}
+    <div
+      class="sublayer-card"
+      class:dragging={isDragging}
+      class:drag-over={isDragOver}
+      role="listitem"
+    >
+      <div class="color-bar" style:background-color={layer.color}></div>
 
-    {#if isDraggable}
-      <Draggable class="layer-drag-handle" />
-    {/if}
+      <Draggable size={16} class="sublayer-drag-icon" />
 
-    <layer.icon size={16} class="layer-icon" style="fill: {layer.color}" />
+      <div class="sublayer-content">
+        {#if layer.icon}
+          <layer.icon size={16} style="fill: {layer.color}" />
+        {/if}
+        <span class="sublayer-name">{layer.name}</span>
+      </div>
 
-    <span class="layer-name">{layer.name}</span>
+      <div class="sublayer-actions">
+        <Button
+          kind="ghost"
+          size="small"
+          icon={layer.visible ? ViewFilled : ViewOff}
+          iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
+          onclick={() => onToggleVisibility(layer.id)}
+        />
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Settings}
+          iconDescription={m.layers_settings()}
+          onclick={() => onOpenSettings(layer.id)}
+        />
+      </div>
+    </div>
+  {:else}
+    <div
+      class="layer-card"
+      class:dragging={isDragging}
+      class:drag-over={isDragOver}
+      role="listitem"
+      draggable={true}
+      ondragstart={handleDragStart}
+      ondragover={handleDragOver}
+      ondragenter={handleDragEnter}
+      ondrop={handleDrop}
+      ondragleave={onDragLeave}
+      ondragend={onDragEnd}
+    >
+      <Draggable size={16} class="layer-drag-icon" />
 
-    <div class="layer-actions">
-      <Button
-        kind="ghost"
-        size="small"
-        icon={layer.visible ? ViewFilled : ViewOff}
-        iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
-        onclick={handleToggleVisibility}
-      />
+      <span class="layer-title">{layer.name}</span>
 
-      <Button
-        kind="ghost"
-        size="small"
-        icon={Settings}
-        iconDescription={m.layers_settings()}
-        onclick={handleOpenSettings}
-      />
-
-      {#if !isSubLayer}
+      <div class="layer-actions">
+        <Button
+          kind="ghost"
+          size="small"
+          icon={layer.visible ? ViewFilled : ViewOff}
+          iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
+          onclick={() => onToggleVisibility(layer.id)}
+        />
         <OverflowMenu
           size="sm"
           flipped
@@ -147,80 +152,120 @@
             on:click={() => onDeleteLayer?.(layer.id)}
           />
         </OverflowMenu>
-      {/if}
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
-  .layer-item {
+  /* Parent layer card — 64px, strong border */
+  .layer-card {
     display: flex;
     align-items: center;
-    padding: var(--cds-spacing-03);
-    border: 1px solid var(--cds-border-subtle);
-    margin-bottom: 1px;
-    background-color: var(--cds-ui-01);
-    margin: var(--cds-spacing-02) 0;
-    position: relative;
-    border-left: 4px solid transparent;
-    cursor: grab;
-    transition: all 0.2s ease;
-  }
-
-  .layer-item.sub-layer {
+    height: 64px;
+    padding: 16px 8px 16px 12px;
+    gap: 8px;
     background-color: var(--cds-layer-01);
-    border-color: var(--cds-border-subtle-01);
-    cursor: default;
+    border: 1px solid var(--cds-border-strong-01);
+    cursor: grab;
+    transition: background-color 0.15s ease;
   }
 
-  .layer-item:hover {
-    background-color: var(--cds-hover-ui);
+  .layer-card:hover {
+    background-color: var(--cds-layer-hover-01);
   }
 
-  .layer-item.dragging {
+  .layer-card.dragging {
     opacity: 0.5;
     cursor: grabbing;
   }
 
-  .layer-item.drag-over {
-    border-top: 2px solid var(--cds-interactive-01);
-    background-color: var(--cds-hover-selected-ui);
+  .layer-card.drag-over {
+    border-top: 2px solid var(--cds-interactive);
+    background-color: var(--cds-layer-selected-hover-01);
   }
 
-  .layer-indicator {
-    position: absolute;
-    left: -4px;
-    top: 0;
-    bottom: 0;
-    width: 4px;
+  #khartis-layer-item-tool :global(.layer-drag-icon) {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary);
   }
 
-  #khartis-layer-item-tool :global(.layer-icon) {
-    fill: var(--cds-icon-secondary);
-  }
-
-  #khartis-layer-item-tool :global(.drag-handle) {
-    cursor: grab;
-  }
-
-  #khartis-layer-item-tool :global(.drag-handle:hover) {
-    cursor: grab;
-  }
-
-  .layer-name {
+  .layer-title {
     flex: 1;
-    font-size: 12px;
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
     color: var(--cds-text-primary);
-    margin-left: var(--cds-spacing-03);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .layer-actions {
     display: flex;
-    gap: var(--cds-spacing-02);
+    align-items: center;
+    flex-shrink: 0;
   }
 
-  #khartis-layer-item-tool :global(.layer-drag-handle) {
-    margin-left: var(--cds-spacing-02);
-    margin-right: var(--cds-spacing-04);
+  /* Sublayer card — 32px, tile border */
+  .sublayer-card {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 8px 0 1px;
+    gap: 7px;
+    background-color: var(--cds-layer-01);
+    border: 1px solid var(--cds-border-tile-01);
+    transition: background-color 0.15s ease;
+  }
+
+  .sublayer-card:hover {
+    background-color: var(--cds-layer-hover-01);
+  }
+
+  .sublayer-card.dragging {
+    opacity: 0.5;
+  }
+
+  .sublayer-card.drag-over {
+    border-top: 2px solid var(--cds-interactive);
+  }
+
+  .color-bar {
+    width: 4px;
+    height: 30px;
+    flex-shrink: 0;
+  }
+
+  #khartis-layer-item-tool :global(.sublayer-drag-icon) {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary);
+  }
+
+  .sublayer-content {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+    padding-left: 1px;
+  }
+
+  .sublayer-name {
+    flex: 1;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sublayer-actions {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 </style>

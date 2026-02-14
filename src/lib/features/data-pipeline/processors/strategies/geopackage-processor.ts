@@ -1,8 +1,10 @@
+import { MIME } from '$lib/features/commons/constants';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
@@ -30,7 +32,7 @@ export const geopackageProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const gpkgFile = getFileForDuckDB(file, 'application/geopackage+sqlite3');
+    const gpkgFile = getFileForDuckDB(file, MIME.GEOPACKAGE);
 
     await ctx.Duck.register_files([gpkgFile]);
 

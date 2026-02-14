@@ -4,6 +4,11 @@
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
   import type { Snippet } from 'svelte';
+  import {
+    DOM_IDS,
+    CSS_CLASSES,
+    POPOVER_DIMENSIONS
+  } from './step-toolbar.constants';
 
   const {
     open = false,
@@ -30,7 +35,7 @@
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
 
   function handleOutsideClick(event: CustomEvent) {
-    const toolbar = document.getElementById('khartis-step-toolbar');
+    const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const target = event.detail?.originalEvent?.target as Node;
 
     if (!toolbar || !toolbar.contains(target)) {
@@ -40,10 +45,10 @@
 </script>
 
 <div
-  id="khartis-tool-popover"
+  id={DOM_IDS.TOOL_POPOVER}
   use:clickOutside={{
     enabled: open,
-    excludeSelectors: ['#khartis-step-toolbar', '#khartis-color-picker']
+    excludeSelectors: [`#${DOM_IDS.STEP_TOOLBAR}`, `#${DOM_IDS.COLOR_PICKER}`]
   }}
   onoutsideclick={handleOutsideClick}
 >
@@ -51,34 +56,34 @@
     open={open}
     align={align}
     light={light}
-    class="tool-popover"
-    style={`--tool-popover-width:${widthCss};`}
+    class={CSS_CLASSES.TOOL_POPOVER}
+    style={`--tool-popover-width:${widthCss};--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
   >
-    <div class="popover-scroll">
+    <div class={CSS_CLASSES.POPOVER_SCROLL}>
       {@render (content as Snippet | undefined)?.()}
     </div>
   </Popover>
 </div>
 
 <style>
-  #khartis-tool-popover :global(.bx--popover-contents) {
+  :global(#khartis-tool-popover .bx--popover-contents) {
     width: var(--tool-popover-width) !important;
     max-width: var(--tool-popover-width) !important;
-    max-height: 70vh;
+    max-height: var(--popover-max-height);
     overflow: visible;
     padding-bottom: var(--cds-spacing-03);
   }
 
   .popover-scroll {
-    max-height: 70vh;
+    max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
     padding: var(--cds-spacing-03) var(--cds-spacing-06) var(--cds-spacing-03)
       var(--cds-spacing-06);
   }
 
-  #khartis-tool-popover :global(.bx--list-box__menu) {
-    max-height: 11rem;
-    z-index: 1000;
+  :global(#khartis-tool-popover .bx--list-box__menu) {
+    max-height: var(--dropdown-max-height);
+    z-index: var(--z-toolbar);
   }
 </style>

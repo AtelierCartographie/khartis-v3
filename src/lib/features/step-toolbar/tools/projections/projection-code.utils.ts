@@ -1,4 +1,5 @@
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
+import { GEO_CONSTANTS } from '$lib/features/duckdb';
 import proj4 from 'proj4';
 
 const PROJ4_HINT = /(?:\+proj=|EPSG:\d+)/i;
@@ -6,6 +7,7 @@ const WKT_HINT =
   /\b(?:PROJCS|GEOGCS|GEODCRS|PROJCRS|BOUNDCRS|COMPOUNDCRS|VERTCRS)\b/i;
 
 const CUSTOM_PROJECTION_ALIAS = 'CUSTOM:INPUT';
+const DEFAULT_FALLBACK_PROJECTION = 'mercator';
 
 export interface ParsedProjectionCode {
   normalizedCode: string;
@@ -91,7 +93,7 @@ function inferProjectionId(code: string): string {
     return 'mercator';
   }
 
-  return 'mercator';
+  return DEFAULT_FALLBACK_PROJECTION;
 }
 
 function isKnownProjectionId(projectionId: string): boolean {
@@ -100,7 +102,7 @@ function isKnownProjectionId(projectionId: string): boolean {
 
 function validateWithProj4(code: string): boolean {
   try {
-    proj4(code, 'EPSG:4326', [0, 0]);
+    proj4(code, GEO_CONSTANTS.WGS84_CRS, [0, 0]);
     return true;
   } catch {
     try {
@@ -137,7 +139,7 @@ export function parseProjectionCode(code: string): ParsedProjectionCode | null {
   const inferredProjectionId = inferProjectionId(normalizedCode);
   const projectionId = isKnownProjectionId(inferredProjectionId)
     ? inferredProjectionId
-    : 'mercator';
+    : DEFAULT_FALLBACK_PROJECTION;
 
   return {
     normalizedCode,

@@ -16,6 +16,7 @@
   import ProjectName from './project-name.svelte';
   import ProjectTab from './project-tab.svelte';
   import TryWithExample from './try-with-example.svelte';
+  import { KEY } from '../commons/constants/dom.constants';
 
   interface Props {
     open?: boolean;
@@ -42,16 +43,16 @@
   function handleTabKeydown(e: KeyboardEvent, currentTab: number) {
     let newTab = currentTab;
 
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    if (e.key === KEY.ARROW_RIGHT || e.key === KEY.ARROW_DOWN) {
       e.preventDefault();
       newTab = currentTab === TAB_COUNT ? 1 : currentTab + 1;
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    } else if (e.key === KEY.ARROW_LEFT || e.key === KEY.ARROW_UP) {
       e.preventDefault();
       newTab = currentTab === 1 ? TAB_COUNT : currentTab - 1;
-    } else if (e.key === 'Home') {
+    } else if (e.key === KEY.HOME) {
       e.preventDefault();
       newTab = 1;
-    } else if (e.key === 'End') {
+    } else if (e.key === KEY.END) {
       e.preventDefault();
       newTab = TAB_COUNT;
     }

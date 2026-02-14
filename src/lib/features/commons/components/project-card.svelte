@@ -3,6 +3,7 @@
   import { Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
+  import { KEY } from '../constants/dom.constants';
 
   interface ProjectCardProps {
     title: string;
@@ -31,7 +32,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if ((event.key === 'Enter' || event.key === ' ') && !disabled) {
+    if ((event.key === KEY.ENTER || event.key === KEY.SPACE) && !disabled) {
       event.preventDefault();
       handleCardClick();
     }

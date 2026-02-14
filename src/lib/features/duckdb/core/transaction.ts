@@ -2,32 +2,36 @@ import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 
-class TransactionMutex {
-  private queue: Array<() => void> = [];
+function createTransactionMutex() {
+  const queue: Array<() => void> = [];
+  let locked = false;
 
-  private locked = false;
-
-  async acquire(): Promise<void> {
-    if (!this.locked) {
-      this.locked = true;
+  async function acquire(): Promise<void> {
+    if (!locked) {
+      locked = true;
       return;
     }
     await new Promise<void>((resolve) => {
-      this.queue.push(resolve);
+      queue.push(resolve);
     });
   }
 
-  release(): void {
-    const next = this.queue.shift();
+  function release(): void {
+    const next = queue.shift();
     if (next) {
       next();
-    } else {
-      this.locked = false;
+      return;
     }
+    locked = false;
   }
+
+  return {
+    acquire,
+    release
+  };
 }
 
-const transactionMutex = new TransactionMutex();
+const transactionMutex = createTransactionMutex();
 
 export async function runInTransaction(
   connection: AsyncDuckDBConnection | null,

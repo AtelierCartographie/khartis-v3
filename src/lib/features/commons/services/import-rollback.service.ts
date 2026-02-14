@@ -5,10 +5,6 @@ import { projectStore } from '../store/project.store.svelte';
 import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 
-/**
- * Snapshot of the state before import attempt
- * Used to rollback on fatal errors
- */
 interface ImportSnapshot {
   fileId: string;
   fileName: string;
@@ -22,19 +18,8 @@ interface ImportSnapshot {
   visualizationIds: string[];
 }
 
-/**
- * Import Rollback Service
- *
- * Handles automatic rollback of file imports on fatal errors.
- * - Takes snapshot before import
- * - Restores state if fatal error occurs
- * - Does NOT rollback for non-fatal errors (duplicates, warnings)
- */
-class ImportRollbackService {
-  /**
-   * Create snapshot of current state before import
-   */
-  createSnapshot(file: UploadedFile): ImportSnapshot {
+function createImportRollbackService() {
+  function createSnapshot(file: UploadedFile): ImportSnapshot {
     const currentProject = projectStore.currentProject;
     const existingDataset = datasetsStore.getDatasetBySourceFile(file.id);
     const existingVisualizationsIds = existingDataset
@@ -63,11 +48,7 @@ class ImportRollbackService {
     return snapshot;
   }
 
-  /**
-   * Rollback to snapshot state
-   * Only called on FATAL errors
-   */
-  async rollback(snapshot: ImportSnapshot): Promise<void> {
+  async function rollback(snapshot: ImportSnapshot): Promise<void> {
     const cleanupResults = {
       projectFile: false,
       dataset: false,
@@ -114,7 +95,7 @@ class ImportRollbackService {
         if (duckDataset) {
           await duckDBOrchestrator.dropTable(duckDataset.tableName);
 
-          await this.cleanupDuckDBResources(duckDataset.tableName);
+          await cleanupDuckDBResources(duckDataset.tableName);
           cleanupResults.duckDBTable = true;
           cleanupResults.duckDBCache = true;
         }
@@ -129,36 +110,10 @@ class ImportRollbackService {
     }
   }
 
-  /**
-   * Cleanup DuckDB resources (cache, file handles, metadata)
-   * Same as in DataOrchestrator but extracted for reuse
-   */
-  private async cleanupDuckDBResources(tableName: string): Promise<void> {
+  async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
       const { Duck } = await import('$lib/features/duckdb');
-
-      if (!Duck) {
-        return;
-      }
-
-      if (Duck.loaded_files.has(tableName)) {
-        Duck.loaded_files.delete(tableName);
-      }
-
-      const registeredFile = Array.from(Duck.registered_files).find((id) =>
-        id.includes(tableName)
-      );
-      if (registeredFile) {
-        Duck.registered_files.delete(registeredFile);
-      }
-
-      if (Duck.table_metadata.has(tableName)) {
-        Duck.table_metadata.delete(tableName);
-      }
-
-      if (Duck.table_geoparquet_cache.has(tableName)) {
-        Duck.table_geoparquet_cache.delete(tableName);
-      }
+      Duck?.cleanupTableResources(tableName);
     } catch (error) {
       logger.warn(
         'Failed to cleanup DuckDB state during rollback',
@@ -167,6 +122,11 @@ class ImportRollbackService {
       );
     }
   }
+
+  return {
+    createSnapshot,
+    rollback
+  };
 }
 
-export const importRollbackService = new ImportRollbackService();
+export const importRollbackService = createImportRollbackService();

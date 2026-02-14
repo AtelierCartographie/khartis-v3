@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { KEY } from '../constants/dom.constants';
+
   export interface Suggestion {
     label: string;
     value: string;
@@ -47,13 +49,11 @@
     cursorPosition = position;
     const text = value;
 
-    // Look for unclosed quote for variable suggestions
     const beforeCursor = text.slice(0, position);
     const lastQuoteIndex = beforeCursor.lastIndexOf('"');
     const quoteCount = (beforeCursor.match(/"/g) || []).length;
 
     if (quoteCount % 2 === 1 && lastQuoteIndex !== -1) {
-      // We're inside quotes - suggest variables
       const partial = beforeCursor.slice(lastQuoteIndex + 1).toLowerCase();
       filteredSuggestions = suggestions
         .filter((s) => s.type === 'variable')
@@ -64,7 +64,6 @@
       return;
     }
 
-    // Check for function/operator suggestions (after space, operator, or at start)
     const { word } = getWordAtCursor(text, position);
     if (word.length >= 1) {
       const lowerWord = word.toLowerCase();
@@ -94,7 +93,6 @@
     let newCursorPosition: number;
 
     if (suggestion.type === 'variable') {
-      // Replace from last quote to cursor
       const beforeCursor = text.slice(0, position);
       const lastQuoteIndex = beforeCursor.lastIndexOf('"');
       const before = text.slice(0, lastQuoteIndex + 1);
@@ -102,7 +100,6 @@
       newValue = before + suggestion.value + '"' + after;
       newCursorPosition = before.length + suggestion.value.length + 1;
     } else if (suggestion.type === 'function') {
-      // Replace the partial word with the function template
       const { start } = getWordAtCursor(text, position);
       const before = text.slice(0, start);
       const after = text.slice(position);
@@ -117,7 +114,6 @@
     showDropdown = false;
     onchange?.(value);
 
-    // Restore focus and cursor position
     requestAnimationFrame(() => {
       if (textareaRef) {
         textareaRef.focus();
@@ -130,24 +126,24 @@
     if (!showDropdown) return;
 
     switch (e.key) {
-      case 'ArrowDown':
+      case KEY.ARROW_DOWN:
         e.preventDefault();
         selectedIndex = (selectedIndex + 1) % filteredSuggestions.length;
         break;
-      case 'ArrowUp':
+      case KEY.ARROW_UP:
         e.preventDefault();
         selectedIndex =
           (selectedIndex - 1 + filteredSuggestions.length) %
           filteredSuggestions.length;
         break;
-      case 'Enter':
-      case 'Tab':
+      case KEY.ENTER:
+      case KEY.TAB:
         if (filteredSuggestions.length > 0) {
           e.preventDefault();
           insertSuggestion(filteredSuggestions[selectedIndex]);
         }
         break;
-      case 'Escape':
+      case KEY.ESCAPE:
         e.preventDefault();
         showDropdown = false;
         break;
@@ -160,7 +156,6 @@
   }
 
   function handleBlur() {
-    // Delay hiding to allow click on suggestion
     setTimeout(() => {
       showDropdown = false;
     }, 200);
@@ -255,7 +250,7 @@
     left: 0;
     right: 0;
     margin-top: 4px;
-    z-index: 10000;
+    z-index: var(--z-notification);
     max-height: 200px;
     overflow-y: auto;
     background-color: var(--cds-ui-01);

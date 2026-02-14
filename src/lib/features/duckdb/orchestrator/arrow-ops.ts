@@ -4,8 +4,10 @@ import {
 } from '$lib/features/commons/constants/geometry.constants';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { ArrowExtension } from '$lib/features/map/constants/map.constants';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
+import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
 export interface DuckDBClientForArrow {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -37,7 +39,7 @@ export async function fetchArrowTableWithGeometry(
   }
 
   const buffer = (await Duck.query(query, {
-    format: 'arrow-ipc' as never
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
   })) as ArrayBuffer | Uint8Array;
 
   const ipcBuffer =
@@ -56,7 +58,7 @@ async function fetchTableWithGeometryAsWkb(
         ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
       )
       FROM "${tableName}"`,
-    { format: 'arrow-ipc' as never }
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   )) as ArrayBuffer | Uint8Array;
 
   const ipcBuffer =
@@ -141,7 +143,7 @@ export async function addGeoArrowMetadataFromDuckDB(
         `SELECT DISTINCT ST_GeometryType("${geomColumn.column_name}") as geom_type
          FROM "${tableName}"
          WHERE "${geomColumn.column_name}" IS NOT NULL`,
-        { format: 'array' as never }
+        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ geom_type: string }>;
 
       const types = geomTypeResult.map((r) => r.geom_type);
@@ -183,7 +185,9 @@ export async function addGeoArrowMetadataFromDuckDB(
       geomColumnIndex !== -1 &&
       table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
 
-    const encoding = isGeoJsonString ? 'geojson' : 'ogc.wkb';
+    const encoding = isGeoJsonString
+      ? ArrowExtension.GEOJSON
+      : ArrowExtension.OGC_WKB;
 
     const geoMetadata = {
       version: '1.0.0',
@@ -195,7 +199,7 @@ export async function addGeoArrowMetadataFromDuckDB(
           crs: {
             type: 'name',
             properties: {
-              name: 'EPSG:4326'
+              name: GEO_CONSTANTS.WGS84_CRS
             }
           },
           bbox: [-180, -90, 180, 90]
@@ -253,7 +257,7 @@ export async function addGeoArrowMetadataFromDuckDB(
         'ARROW:extension:metadata',
         JSON.stringify({
           geometry_type: geometryType.replace('ST_', ''),
-          crs: 'EPSG:4326'
+          crs: GEO_CONSTANTS.WGS84_CRS
         })
       );
       const fieldMetadataMap = new Map<string, string>(updatedMetadata);

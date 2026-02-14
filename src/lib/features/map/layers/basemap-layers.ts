@@ -16,7 +16,14 @@ import type {
 } from 'geojson';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { ArrowExtension, createLayerId, DeckLayerId } from '../constants';
+import {
+  ArrowExtension,
+  createLayerId,
+  DeckLayerId,
+  BASEMAP_DATASET_ID,
+  DEFAULT_PROJECTION_SUFFIX
+} from '../constants';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
@@ -61,7 +68,11 @@ function buildLayerId(
   layerType: DeckLayerId,
   projectionSuffix: string | undefined
 ): string {
-  return createLayerId(layerType, 'basemap', projectionSuffix || 'default');
+  return createLayerId(
+    layerType,
+    BASEMAP_DATASET_ID,
+    projectionSuffix || DEFAULT_PROJECTION_SUFFIX
+  );
 }
 
 function isGeoArrowPolygonEncoding(geometryInfo: GeometryInfo): boolean {
@@ -242,13 +253,13 @@ export function createMersLayer(
   const layerId = buildLayerId(DeckLayerId.BASEMAP_MERS, ctx.projectionSuffix);
 
   const oceanGeoJSON: FeatureCollection = {
-    type: 'FeatureCollection',
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
     features: [
       {
-        type: 'Feature',
+        type: GEOJSON_TYPE.FEATURE,
         properties: {},
         geometry: {
-          type: 'Polygon',
+          type: GEOJSON_TYPE.POLYGON,
           coordinates: [
             [
               [-180, -90],
@@ -380,13 +391,13 @@ export function createEquateurLayer(
   );
 
   const equatorGeoJSON: FeatureCollection = {
-    type: 'FeatureCollection',
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
     features: [
       {
-        type: 'Feature',
+        type: GEOJSON_TYPE.FEATURE,
         properties: { name: 'Equator' },
         geometry: {
-          type: 'LineString',
+          type: GEOJSON_TYPE.LINE_STRING,
           coordinates: [
             [-180, 0],
             [180, 0]
@@ -451,13 +462,13 @@ export function createMeridiensLayer(
     ]);
 
   const graticuleGeoJSON: Feature<MultiLineString> = {
-    type: 'Feature',
+    type: GEOJSON_TYPE.FEATURE,
     properties: {},
     geometry: graticule()
   };
 
   const featuresCollection: FeatureCollection<LineString | MultiLineString> = {
-    type: 'FeatureCollection',
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
     features: [graticuleGeoJSON]
   };
 
@@ -736,16 +747,16 @@ function convertCitiesToPolygons(
       isStar
     );
     return {
-      type: 'Feature' as const,
+      type: GEOJSON_TYPE.FEATURE,
       properties: f.properties,
       geometry: {
-        type: 'Polygon' as const,
+        type: GEOJSON_TYPE.POLYGON,
         coordinates: [polygon]
       }
     };
   });
 
-  return { type: 'FeatureCollection', features };
+  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
 }
 
 function filterCitiesByCategory(
@@ -772,7 +783,7 @@ function filterCitiesByCategory(
     }
   });
 
-  return { type: 'FeatureCollection', features };
+  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
 }
 
 export function createVillesLayer(

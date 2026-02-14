@@ -43,6 +43,8 @@
 
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
 
+  const DEFAULT_DATA_FILENAME = 'example-data.csv';
+
   const CATEGORY_LABELS: Record<string, () => string> = {
     try_example_all: m.try_example_all,
     try_example_symbols: m.try_example_symbols,
@@ -80,14 +82,14 @@
 
       const fileName = example.dataUrl
         ? example.dataUrl.split('/').pop()
-        : 'example-data.csv';
+        : DEFAULT_DATA_FILENAME;
       const fileType = example.dataUrl?.endsWith('.json')
         ? 'application/json'
         : 'text/csv';
 
       const fileContent =
         typeof data === 'string' ? data : JSON.stringify(data);
-      const file = new File([fileContent], fileName || 'example-data.csv', {
+      const file = new File([fileContent], fileName || DEFAULT_DATA_FILENAME, {
         type: fileType
       });
 

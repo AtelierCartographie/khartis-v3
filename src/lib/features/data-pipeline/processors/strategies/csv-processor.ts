@@ -1,9 +1,11 @@
+import { MIME } from '$lib/features/commons/constants';
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
@@ -63,7 +65,7 @@ async function processWithLegacy(
   start: number
 ): Promise<ProcessorDataset> {
   const csvData = convertToCSV(file.parsedData as Record<string, unknown>[]);
-  const duckFile = new File([csvData], file.name, { type: 'text/csv' });
+  const duckFile = new File([csvData], file.name, { type: MIME.CSV });
 
   await ctx.Duck.register_files([duckFile]);
   const actualTableName =

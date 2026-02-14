@@ -20,9 +20,18 @@ function evictGeoParquetEntry(ctx: DuckDBContext, table: string): void {
   }
 }
 
+let onTableMutatedCallback: ((table: string) => void) | null = null;
+
+export function registerTableMutationCallback(
+  callback: (table: string) => void
+): void {
+  onTableMutatedCallback = callback;
+}
+
 export function markTableMutated(ctx: DuckDBContext, table: string): void {
   invalidateTableCache(ctx, table);
   evictGeoParquetEntry(ctx, table);
+  onTableMutatedCallback?.(table);
 }
 
 export function getTableMetadata(

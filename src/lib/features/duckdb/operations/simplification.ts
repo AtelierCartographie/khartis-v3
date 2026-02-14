@@ -1,6 +1,8 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
 import { Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
+import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
 import { addGeoArrowMetadataFromDuckDB } from '../orchestrator/arrow-ops';
 
@@ -28,11 +30,13 @@ async function countVertices(
   tableName: string,
   geometryColumn: string
 ): Promise<number> {
+  const escapedGeom = escapeIdentifier(geometryColumn);
+  const escapedTable = escapeIdentifier(tableName);
   const result = (await Duck.query(
-    `SELECT SUM(ST_NPoints("${geometryColumn}")) as total_vertices
-     FROM "${tableName}"
-     WHERE "${geometryColumn}" IS NOT NULL`,
-    { format: 'array' as never }
+    `SELECT SUM(ST_NPoints("${escapedGeom}")) as total_vertices
+     FROM "${escapedTable}"
+     WHERE "${escapedGeom}" IS NOT NULL`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
   )) as Array<{ total_vertices: number | null }>;
 
   return result[0]?.total_vertices ?? 0;
@@ -62,25 +66,32 @@ export async function simplifyGeometryTable(
     geometryColumn
   );
 
+  if (!Number.isFinite(tolerance) || tolerance < 0) {
+    throw new Error(`Invalid simplification tolerance: ${tolerance}`);
+  }
+
+  const escapedGeom = escapeIdentifier(geometryColumn);
+  const escapedSource = escapeIdentifier(sourceTable);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
+  const escapedTarget = escapeIdentifier(targetTable);
 
   const simplifyFunction = preserveTopology
-    ? 'ST_SimplifyPreserveTopology'
-    : 'ST_Simplify';
+    ? SQL_FUNCTIONS.ST_SIMPLIFY_PRESERVE_TOPOLOGY
+    : SQL_FUNCTIONS.ST_SIMPLIFY;
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
     : 'CREATE OR REPLACE TABLE';
 
   await Duck.query(`
-    ${createStatement} "${targetTable}" AS
+    ${createStatement} "${escapedTarget}" AS
     SELECT * REPLACE (
-      ${simplifyFunction}("${geometryColumn}", ${tolerance}) AS "${geometryColumn}"
+      ${simplifyFunction}("${escapedGeom}", ${tolerance}) AS "${escapedGeom}"
     )
-    FROM "${sourceTable}"
-    WHERE "${geometryColumn}" IS NOT NULL
+    FROM "${escapedSource}"
+    WHERE "${escapedGeom}" IS NOT NULL
   `);
 
   const simplifiedVertices = await countVertices(
@@ -123,9 +134,15 @@ export async function getSimplifiedArrowTable(
   const geometryColumn = options.geometryColumn ?? 'geom';
   const preserveTopology = options.preserveTopology ?? true;
 
+  if (!Number.isFinite(tolerance) || tolerance < 0) {
+    throw new Error(`Invalid simplification tolerance: ${tolerance}`);
+  }
+
+  const escapedGeom = escapeIdentifier(geometryColumn);
+  const escapedTable = escapeIdentifier(tableName);
   const simplifyFunction = preserveTopology
-    ? 'ST_SimplifyPreserveTopology'
-    : 'ST_Simplify';
+    ? SQL_FUNCTIONS.ST_SIMPLIFY_PRESERVE_TOPOLOGY
+    : SQL_FUNCTIONS.ST_SIMPLIFY;
 
   logger.debug('Fetching simplified Arrow table', LogCategory.DUCKDB, {
     tableName,
@@ -135,11 +152,11 @@ export async function getSimplifiedArrowTable(
 
   const buffer = (await Duck.query(
     `SELECT * REPLACE (
-       ST_AsWKB(${simplifyFunction}("${geometryColumn}", ${tolerance})) AS "${geometryColumn}"
+       ST_AsWKB(${simplifyFunction}("${escapedGeom}", ${tolerance})) AS "${escapedGeom}"
      )
-     FROM "${tableName}"
-     WHERE "${geometryColumn}" IS NOT NULL`,
-    { format: 'arrow-ipc' as never }
+     FROM "${escapedTable}"
+     WHERE "${escapedGeom}" IS NOT NULL`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   )) as ArrayBuffer | Uint8Array;
 
   const ipcBuffer =

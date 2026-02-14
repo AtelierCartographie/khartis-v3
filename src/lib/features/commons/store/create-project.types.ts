@@ -42,11 +42,19 @@ export type ColumnTransformationType =
   | 'refine'
   | 'replace';
 
+export const COLUMN_TRANSFORMATION_TYPES = {
+  RENAME: 'rename',
+  DROP: 'drop',
+  TYPE_CHANGE: 'type_change',
+  REFINE: 'refine',
+  REPLACE: 'replace'
+} as const;
+
 export interface ColumnTransformation {
   type: ColumnTransformationType;
   column: string;
-  newValue?: string; // For rename: new name, for type_change: new type, for replace: replace value
-  searchValue?: string; // For replace: search value
+  newValue?: string;
+  searchValue?: string;
   timestamp: string;
 }
 

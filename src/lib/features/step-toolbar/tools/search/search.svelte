@@ -1,6 +1,7 @@
 <script lang="ts">
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -37,13 +38,15 @@
     return datasetsStore.selectedDataset ?? datasetsStore.enabledDatasets[0];
   });
 
+  const ALL_SOURCES_ID = 'all';
+
   const sourceOptions = $derived.by(() => {
     const datasetColumns = searchDataset?.columns ?? [];
 
     return [
-      { id: 'all', text: m.search_all_variables() },
+      { id: ALL_SOURCES_ID, text: m.search_all_variables() },
       ...datasetColumns
-        .filter((column) => column.type !== 'geometry')
+        .filter((column) => column.type !== COLUMN_TYPE_GEOMETRY)
         .map((column) => ({
           id: column.name,
           text: column.name
@@ -92,7 +95,7 @@
       (option) => option.id === selectedSource
     );
     if (!isKnownSource) {
-      searchActions.setSelectedSource('all');
+      searchActions.setSelectedSource(ALL_SOURCES_ID);
     }
   });
 

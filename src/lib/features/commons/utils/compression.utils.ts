@@ -1,6 +1,8 @@
 import { combineUint8Arrays } from './array.utils';
 import { LogCategory, logger } from './logger';
 
+const GZIP_FORMAT = 'gzip';
+
 export async function compressData(data: string): Promise<ArrayBuffer> {
   const encoder = new TextEncoder();
   const uint8Array = encoder.encode(data);
@@ -18,7 +20,7 @@ export async function compressData(data: string): Promise<ArrayBuffer> {
         window as Window & {
           CompressionStream: new (format: string) => TransformStream;
         }
-      ).CompressionStream('gzip')
+      ).CompressionStream(GZIP_FORMAT)
     ) as ReadableStream<Uint8Array>;
 
     const chunks: Uint8Array[] = [];
@@ -52,7 +54,7 @@ export async function decompressData(data: ArrayBuffer): Promise<string> {
           window as Window & {
             DecompressionStream: new (format: string) => TransformStream;
           }
-        ).DecompressionStream('gzip')
+        ).DecompressionStream(GZIP_FORMAT)
       ) as ReadableStream<Uint8Array>;
 
       const chunks: Uint8Array[] = [];

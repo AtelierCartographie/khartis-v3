@@ -1,34 +1,36 @@
-class MapHighlightStore {
-  private _highlightedRowIds = $state<Set<number>>(new Set());
+function createMapHighlightStore() {
+  let highlightedRowIds = $state<Set<number>>(new Set());
+  let version = $state(0);
 
-  private _version = $state(0);
-
-  get highlightedRowIds(): Set<number> {
-    return this._highlightedRowIds;
+  function setHighlightedRows(rowIds: number[]): void {
+    highlightedRowIds = new Set(rowIds);
+    version++;
   }
 
-  get version(): number {
-    return this._version;
+  function clearHighlights(): void {
+    if (highlightedRowIds.size === 0) return;
+    highlightedRowIds = new Set();
+    version++;
   }
 
-  get hasHighlights(): boolean {
-    return this._highlightedRowIds.size > 0;
+  function isRowHighlighted(rowId: number): boolean {
+    return highlightedRowIds.has(rowId);
   }
 
-  setHighlightedRows(rowIds: number[]): void {
-    this._highlightedRowIds = new Set(rowIds);
-    this._version++;
-  }
-
-  clearHighlights(): void {
-    if (this._highlightedRowIds.size === 0) return;
-    this._highlightedRowIds = new Set();
-    this._version++;
-  }
-
-  isRowHighlighted(rowId: number): boolean {
-    return this._highlightedRowIds.has(rowId);
-  }
+  return {
+    get highlightedRowIds(): Set<number> {
+      return highlightedRowIds;
+    },
+    get version(): number {
+      return version;
+    },
+    get hasHighlights(): boolean {
+      return highlightedRowIds.size > 0;
+    },
+    setHighlightedRows,
+    clearHighlights,
+    isRowHighlighted
+  };
 }
 
-export const mapHighlightStore = new MapHighlightStore();
+export const mapHighlightStore = createMapHighlightStore();

@@ -44,7 +44,10 @@ export const geoparquetProcessor: FileProcessor = {
     await insertArrowTableIntoDuckDB(arrowTable, ctx.tableName);
 
     if (geoMetadata) {
-      const geomColumn = geoMetadata.primary_column;
+      const geomColumn = geoMetadata.primary_column.replace(
+        /[^a-zA-Z0-9_]/g,
+        '_'
+      );
       try {
         await ctx.Duck.query(`
           CREATE OR REPLACE TABLE "${ctx.tableName}" AS

@@ -1,7 +1,9 @@
+import { MIME } from '$lib/features/commons/constants';
 import { DataValidationError } from '$lib/features/commons/errors/pipeline.errors';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
+import { PIPELINE_CONST } from './constants';
 import { validateFile } from './core/validators';
 import {
   createCompanionFilesFromUpload,
@@ -170,7 +172,7 @@ const Pipeline = {
     const file = await createFileFromUploadContent(
       content,
       name,
-      options.type ?? 'text/csv'
+      options.type ?? MIME.CSV
     );
     return this.processFile(file) as Promise<DatasetResult>;
   },

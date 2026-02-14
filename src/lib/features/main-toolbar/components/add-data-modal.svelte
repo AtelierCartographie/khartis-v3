@@ -3,12 +3,16 @@
     createProjectActions,
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
-  import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateNewProject from '$lib/features/create-project/create-new-project.svelte';
+  import {
+    canSubmitImport,
+    getValidImportFiles,
+    hasPendingImportFiles
+  } from '$lib/features/create-project/services/import-readiness.service';
   import * as m from '$lib/paraglide/messages';
   import { Modal } from 'carbon-components-svelte';
   import { dataTabStore } from '../data-tab/data-tab.store.svelte';
@@ -32,26 +36,25 @@
 
   let isImporting = $state(false);
 
-  const closeModal = () => {
+  const closeModal = (force = false) => {
+    if (!force && isBusy) {
+      return;
+    }
     open = false;
     createProjectActions.clearUploadState();
     uploaderResetKey++;
   };
 
+  const handleClose = () => closeModal();
+
   const handleImport = async (e: CustomEvent) => {
     e.preventDefault();
-
-    const validFiles = createProjectState.newProject.uploadedFiles.filter(
-      (f) =>
-        f.status === FileStatus.COMPLETE &&
-        (!f.validation?.errors || f.validation.errors.length === 0)
-    );
 
     if (validFiles.length === 0) {
       return;
     }
 
-    if (isLoading) {
+    if (isBusy) {
       return;
     }
 
@@ -68,7 +71,7 @@
           globalActions.selectDataButton(lastFile.id);
         }
 
-        closeModal();
+        closeModal(true);
       } catch (error) {
         logger.error('Failed to add files to project', LogCategory.FILE, error);
       } finally {
@@ -79,44 +82,43 @@
     }
   };
 
-  const hasValidFiles = $derived(
-    createProjectState.newProject.uploadedFiles.some(
-      (f) =>
-        f.status === FileStatus.COMPLETE &&
-        (!f.validation?.errors || f.validation.errors.length === 0)
+  const uploadedFiles = $derived(createProjectState.newProject.uploadedFiles);
+
+  const validFiles = $derived(getValidImportFiles(uploadedFiles));
+
+  const hasPendingFiles = $derived(
+    hasPendingImportFiles(
+      uploadedFiles,
+      createProjectState.newProject.isProcessingFiles
     )
   );
 
-  const hasErrors = $derived(
-    createProjectState.newProject.uploadedFiles.some(
-      (f) => f.validation?.errors && f.validation.errors.length > 0
+  const canImport = $derived(
+    canSubmitImport(
+      uploadedFiles,
+      createProjectState.newProject.isProcessingFiles
     )
   );
 
-  const isProcessing = $derived(
-    createProjectState.newProject.uploadedFiles.some(
-      (f) => f.status === FileStatus.PROCESSING
-    )
-  );
+  const isBusy = $derived(hasPendingFiles || isImporting);
 
-  const canImport = $derived(hasValidFiles && !hasErrors && !isProcessing);
-
-  const isLoading = $derived(isProcessing || isImporting);
+  const preventClose = $derived(isBusy);
 </script>
 
 <Modal
-  primaryButtonDisabled={!canImport || isLoading}
+  primaryButtonDisabled={!canImport || isBusy}
   secondaryButtonText={m.cancel()}
-  secondaryButtonDisabled={isLoading}
+  secondaryButtonDisabled={isBusy}
   open={open}
   modalHeading={m.add_data_modal_title()}
-  primaryButtonText={isLoading
+  primaryButtonText={isBusy
     ? m.add_data_modal_loading()
     : m.add_data_modal_confirm()}
+  preventCloseOnClickOutside={preventClose}
   size="sm"
-  on:click:button--secondary={closeModal}
+  on:click:button--secondary={handleClose}
   on:click:button--primary={handleImport}
-  on:close={closeModal}
+  on:close={handleClose}
 >
   <CreateNewProject isModal resetToken={uploaderResetKey} />
 </Modal>

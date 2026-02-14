@@ -9,6 +9,7 @@
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
+  import { KEY } from '../../commons/constants/dom.constants';
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
 
@@ -54,7 +55,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
       event.preventDefault();
       handleResetZoom();
     }
@@ -110,7 +111,7 @@
     position: fixed;
     bottom: 24px;
     left: 24px;
-    z-index: 1000;
+    z-index: var(--z-toolbar);
   }
 
   .zoom-button {

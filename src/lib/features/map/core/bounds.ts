@@ -1,9 +1,11 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { GEO_COLUMN_NAMES } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import type { LngLatBoundsLike } from 'maplibre-gl';
-import { GeoArrowMetadataKey, GeoJsonGeometryType } from '../constants';
+import { GeoArrowMetadataKey } from '../constants';
 import { parseGeoJsonGeometry } from '../io/geometry-parser';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 const MIN_LAT = -90;
 const MAX_LAT = 90;
@@ -48,54 +50,39 @@ function isValidBbox(
 function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
   if (!geometry) return [];
 
-  if (geometry.type === GeoJsonGeometryType.Point) {
+  if (geometry.type === GEOJSON_TYPE.POINT) {
     return [geometry.coordinates];
   }
 
   if (
-    geometry.type === GeoJsonGeometryType.MultiPoint ||
-    geometry.type === GeoJsonGeometryType.LineString
+    geometry.type === GEOJSON_TYPE.MULTI_POINT ||
+    geometry.type === GEOJSON_TYPE.LINE_STRING
   ) {
     return geometry.coordinates;
   }
 
   if (
-    geometry.type === GeoJsonGeometryType.MultiLineString ||
-    geometry.type === GeoJsonGeometryType.Polygon
+    geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING ||
+    geometry.type === GEOJSON_TYPE.POLYGON
   ) {
     return geometry.coordinates.flat();
   }
 
-  if (geometry.type === GeoJsonGeometryType.MultiPolygon) {
+  if (geometry.type === GEOJSON_TYPE.MULTI_POLYGON) {
     return geometry.coordinates.flat(2);
   }
 
-  if (geometry.type === GeoJsonGeometryType.GeometryCollection) {
+  if (geometry.type === GEOJSON_TYPE.GEOMETRY_COLLECTION) {
     return geometry.geometries.flatMap(extractCoordsFromGeometry);
   }
 
   return [];
 }
 
-const GEO_COLUMN_NAMES = [
-  'geom',
-  'geometry',
-  'geo',
-  'shape',
-  'wkb_geometry',
-  'geo_point_2d',
-  'geo_shape',
-  'the_geom',
-  'coordinates',
-  'location',
-  'point',
-  'position'
-];
-
 function findGeoColumn(jsTable: ArrowTable): string | null {
   for (const field of jsTable.schema.fields) {
     const name = field.name.toLowerCase();
-    if (GEO_COLUMN_NAMES.includes(name)) {
+    if ((GEO_COLUMN_NAMES as readonly string[]).includes(name)) {
       return field.name;
     }
   }
@@ -105,7 +92,6 @@ function findGeoColumn(jsTable: ArrowTable): string | null {
 function extractCoordFromValue(value: unknown): [number, number] | null {
   if (!value) return null;
 
-  // Handle { lon, lat } or { lng, lat } format (common in open data)
   if (typeof value === 'object' && value !== null) {
     const obj = value as Record<string, unknown>;
     const lon = obj.lon ?? obj.lng ?? obj.longitude ?? obj.x;
@@ -115,7 +101,6 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
     }
   }
 
-  // Handle string JSON format
   if (typeof value === 'string') {
     try {
       const parsed = JSON.parse(value);
@@ -125,7 +110,6 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
     }
   }
 
-  // Handle [lng, lat] array format
   if (Array.isArray(value) && value.length >= 2) {
     const [lng, lat] = value;
     if (typeof lng === 'number' && typeof lat === 'number') {
@@ -177,7 +161,6 @@ function calculateBoundsFromGeometryData(
   for (let i = 0; i < jsTable.numRows; i += step) {
     const geom = geomVector.get(i);
 
-    // First try to parse as standard geometry (WKB, GeoJSON, GeoArrow)
     const parsed = parseGeoJsonGeometry(geom);
     if (parsed) {
       parsedCount++;
@@ -194,7 +177,6 @@ function calculateBoundsFromGeometryData(
       continue;
     }
 
-    // Fallback: try to extract simple coordinate from { lon, lat } format
     const coord = extractCoordFromValue(geom);
     if (coord) {
       coordCount++;
@@ -254,7 +236,6 @@ export function calculateBoundsFromGeoArrow(
     const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
     let primaryColumn: string | null = null;
 
-    // Step 1: Try to get bbox from GeoArrow metadata
     if (geoMetadata) {
       const jsonMeta = JSON.parse(geoMetadata);
       primaryColumn = jsonMeta.primary_column ?? null;
@@ -295,7 +276,6 @@ export function calculateBoundsFromGeoArrow(
       }
     }
 
-    // Step 2: Try to calculate from primary geometry column
     if (primaryColumn) {
       logger.info(
         'No bbox in metadata, calculating from primary column',
@@ -306,7 +286,6 @@ export function calculateBoundsFromGeoArrow(
       if (bounds) return bounds;
     }
 
-    // Step 3: Try to find and use any known geometry column
     const geoColumn = findGeoColumn(jsTable);
     if (geoColumn && geoColumn !== primaryColumn) {
       logger.info(
@@ -318,7 +297,6 @@ export function calculateBoundsFromGeoArrow(
       if (bounds) return bounds;
     }
 
-    // Step 4: Last resort - try all columns that might contain coordinates
     logger.info('Trying all columns to find coordinates', LogCategory.MAP, {
       fields: jsTable.schema.fields.map((f) => f.name)
     });

@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   FileType,
@@ -6,6 +7,7 @@ import {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
+import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,
@@ -14,7 +16,7 @@ import type {
 
 function createGeoFile(file: UploadedFile): File {
   const content = file.content ?? JSON.stringify(file.parsedData);
-  return new File([content], file.name, { type: 'application/json' });
+  return new File([content], file.name, { type: MIME.GEOJSON });
 }
 
 async function processWithSTRead(

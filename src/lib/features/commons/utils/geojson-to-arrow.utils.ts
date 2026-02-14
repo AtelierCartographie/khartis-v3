@@ -8,6 +8,10 @@ import {
   type DataType,
   type Table
 } from 'apache-arrow';
+import { INTERNAL_COLUMN } from '../constants/data.constants';
+
+const GEOMETRY_COLUMN_NAME = INTERNAL_COLUMN.GEOM;
+
 interface SchemaInfo {
   fields: Map<string, DataType>;
   hasGeometry: boolean;
@@ -15,13 +19,6 @@ interface SchemaInfo {
 
 type ColumnData = Record<string, unknown[]>;
 
-/**
- * Convert a GeoJSON FeatureCollection to an Apache Arrow Table
- * This eliminates the JSON.stringify bottleneck by building columnar data directly
- *
- * @param geojson - The GeoJSON FeatureCollection to convert
- * @returns Apache Arrow Table ready for DuckDB insertion
- */
 export function convertGeoJSONToArrow(
   geojson: GeoJSONFeatureCollection
 ): Table {
@@ -33,25 +30,13 @@ export function convertGeoJSONToArrow(
     );
   }
 
-  // Step 1: Infer schema from all features
   const schemaInfo = inferGeoJSONSchema(features);
-
-  // Step 2: Extract columnar data
   const columns = extractColumnarData(features, schemaInfo);
-
-  // Step 3: Create Arrow table
   const table = tableFromArrays(columns);
 
   return table;
 }
 
-/**
- * Infer Arrow schema from GeoJSON features
- * Scans all features to discover properties and their types
- *
- * @param features - Array of GeoJSON features
- * @returns Schema information with field types
- */
 export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
   const propertyTypes = new Map<string, Set<string>>();
   let hasGeometry = false;
@@ -79,11 +64,9 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
   const fields = new Map<string, DataType>();
 
   for (const [key, types] of propertyTypes) {
-    // Remove 'null' from type set for inference
     types.delete('null');
 
     if (types.size === 0) {
-      // All values were null - default to Utf8
       fields.set(key, new Utf8());
     } else if (types.size === 1) {
       const type = Array.from(types)[0];
@@ -104,7 +87,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
         fields.set(key, new Utf8());
       }
     } else {
-      // Mixed types - convert everything to string
       fields.set(key, new Utf8());
     }
   }
@@ -112,13 +94,6 @@ export function inferGeoJSONSchema(features: GeoJSONFeature[]): SchemaInfo {
   return { fields, hasGeometry };
 }
 
-/**
- * Extract columnar data from GeoJSON features based on inferred schema
- *
- * @param features - Array of GeoJSON features
- * @param schema - Inferred schema information
- * @returns Column data ready for Arrow table creation
- */
 export function extractColumnarData(
   features: GeoJSONFeature[],
   schema: SchemaInfo
@@ -130,7 +105,7 @@ export function extractColumnarData(
   }
 
   if (schema.hasGeometry) {
-    columns['geom'] = [];
+    columns[GEOMETRY_COLUMN_NAME] = [];
   }
 
   for (const feature of features) {
@@ -154,9 +129,9 @@ export function extractColumnarData(
 
     if (schema.hasGeometry) {
       if (feature.geometry) {
-        columns['geom'].push(JSON.stringify(feature.geometry));
+        columns[GEOMETRY_COLUMN_NAME].push(JSON.stringify(feature.geometry));
       } else {
-        columns['geom'].push(null);
+        columns[GEOMETRY_COLUMN_NAME].push(null);
       }
     }
   }

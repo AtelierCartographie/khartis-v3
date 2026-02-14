@@ -16,8 +16,8 @@
     <div class="table-info">
       <span class="filter-count" title={m.filter_count_tooltip()}>
         {m.filter_count_display({
-          filtered: filterStats.filtered.toLocaleString('fr-FR'),
-          total: filterStats.total.toLocaleString('fr-FR')
+          filtered: filterStats.filtered.toLocaleString(),
+          total: filterStats.total.toLocaleString()
         })}
       </span>
     </div>

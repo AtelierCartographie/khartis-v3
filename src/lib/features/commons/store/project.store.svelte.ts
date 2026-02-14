@@ -6,7 +6,10 @@ import type {
   SavedProjectMetadata,
   VisualizationConfig
 } from '$lib/features/project-management';
-import { AutoSaveController } from '$lib/features/project-management';
+import {
+  createAutoSaveController,
+  type AutoSaveController
+} from '$lib/features/project-management';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -40,211 +43,253 @@ import {
   addDeletedRows as addDeletedRowsFn
 } from './project';
 
-class ProjectStore implements ProjectStateContainer {
-  _state = $state(createProjectState());
+function createProjectStore() {
+  const state = $state(createProjectState());
+  let initPromise: Promise<void> | undefined;
 
-  autoSave: AutoSaveController;
-
-  initPromise?: Promise<void>;
-
-  constructor() {
-    this.autoSave = new AutoSaveController(() => this.saveCurrentProject());
-
-    if (typeof window !== 'undefined') {
-      this.initPromise = this.initialize();
+  const container: ProjectStateContainer = {
+    _state: state,
+    autoSave: createAutoSaveController(() => saveCurrentProject()),
+    get initPromise() {
+      return initPromise;
+    },
+    set initPromise(value: Promise<void> | undefined) {
+      initPromise = value;
     }
-  }
+  };
 
-  private async initialize(): Promise<void> {
-    this._state.isLoading = true;
+  async function initialize(): Promise<void> {
+    state.isLoading = true;
     try {
-      await loadLastProjectFn(this);
+      await loadLastProjectFn(container);
     } finally {
-      this._state.isLoading = false;
-      this._state.isInitialized = true;
+      state.isLoading = false;
+      state.isInitialized = true;
     }
   }
 
-  async waitForInit(): Promise<void> {
-    if (this.initPromise) {
-      await this.initPromise;
+  async function waitForInit(): Promise<void> {
+    if (initPromise) {
+      await initPromise;
     }
   }
 
-  get currentProject(): KhartisProject | undefined {
-    return this._state.currentProject;
+  async function addFilesToProject(newFiles: UploadedFile[]): Promise<void> {
+    return addFilesToProjectFn(container, newFiles);
   }
 
-  get projectName(): string {
-    return this._state.currentProject?.manifest.name || '';
+  function addVirtualSourceFile(file: UploadedFile): void {
+    addVirtualSourceFileFn(container, file);
+    markAsDirty();
   }
 
-  get isDirty(): boolean {
-    return this._state.isDirty;
+  async function removeFileFromProject(fileId: string): Promise<void> {
+    return removeFileFromProjectFn(container, fileId);
   }
 
-  get canUndo(): boolean {
-    return canUndoFn(this);
+  async function renameFile(fileId: string, newName: string): Promise<void> {
+    return renameFileFn(container, fileId, newName);
   }
 
-  get canRedo(): boolean {
-    return canRedoFn(this);
-  }
-
-  get history(): ProjectHistoryEntry[] {
-    return this._state.history;
-  }
-
-  get isInitialized(): boolean {
-    return this._state.isInitialized;
-  }
-
-  get isLoading(): boolean {
-    return this._state.isLoading;
-  }
-
-  async addFilesToProject(newFiles: UploadedFile[]): Promise<void> {
-    return addFilesToProjectFn(this, newFiles);
-  }
-
-  addVirtualSourceFile(file: UploadedFile): void {
-    addVirtualSourceFileFn(this, file);
-    this.markAsDirty();
-  }
-
-  async removeFileFromProject(fileId: string): Promise<void> {
-    return removeFileFromProjectFn(this, fileId);
-  }
-
-  async renameFile(fileId: string, newName: string): Promise<void> {
-    return renameFileFn(this, fileId, newName);
-  }
-
-  async addColumnTransformation(
+  async function addColumnTransformation(
     fileId: string,
     transformation: ColumnTransformation
   ): Promise<void> {
-    return addColumnTransformationFn(this, fileId, transformation);
+    return addColumnTransformationFn(container, fileId, transformation);
   }
 
-  async clearColumnTransformations(fileId: string): Promise<void> {
-    return clearColumnTransformationsFn(this, fileId);
+  async function clearColumnTransformations(fileId: string): Promise<void> {
+    return clearColumnTransformationsFn(container, fileId);
   }
 
-  async addDeletedRows(fileId: string, rowIds: number[]): Promise<void> {
-    return addDeletedRowsFn(this, fileId, rowIds);
+  async function addDeletedRows(
+    fileId: string,
+    rowIds: number[]
+  ): Promise<void> {
+    return addDeletedRowsFn(container, fileId, rowIds);
   }
 
-  async createProject(name: string, files: UploadedFile[]): Promise<void> {
-    return createProjectFn(this, name, files);
+  async function createProject(
+    name: string,
+    files: UploadedFile[]
+  ): Promise<void> {
+    return createProjectFn(container, name, files);
   }
 
-  async loadProject(id: string): Promise<void> {
-    return loadProjectFn(this, id);
+  async function loadProject(id: string): Promise<void> {
+    return loadProjectFn(container, id);
   }
 
-  async saveCurrentProject(): Promise<void> {
-    return saveCurrentProjectFn(this);
+  async function saveCurrentProject(): Promise<void> {
+    return saveCurrentProjectFn(container);
   }
 
-  async deleteProject(id: string): Promise<void> {
-    return deleteProjectFn(this, id);
+  async function deleteProject(id: string): Promise<void> {
+    return deleteProjectFn(container, id);
   }
 
-  async duplicateProject(id: string, newName?: string): Promise<string> {
-    return duplicateProjectFn(this, id, newName);
+  async function duplicateProject(
+    id: string,
+    newName?: string
+  ): Promise<string> {
+    return duplicateProjectFn(container, id, newName);
   }
 
-  async listProjects(): Promise<SavedProjectMetadata[]> {
+  async function listProjects(): Promise<SavedProjectMetadata[]> {
     return listProjectsFn();
   }
 
-  async exportProject(customName?: string): Promise<void> {
-    return exportProjectFn(this, customName);
+  async function exportProject(customName?: string): Promise<void> {
+    return exportProjectFn(container, customName);
   }
 
-  async importProject(file: File): Promise<void> {
-    return importProjectFn(this, file);
+  async function importProject(file: File): Promise<void> {
+    return importProjectFn(container, file);
   }
 
-  markAsDirty(): void {
-    markDirtyFn(this);
+  function markAsDirty(): void {
+    markDirtyFn(container);
   }
 
-  updateProjectName(name: string): void {
-    if (!this._state.currentProject) {
+  function updateProjectName(name: string): void {
+    if (!state.currentProject) {
       return;
     }
 
-    this._state.currentProject.manifest.name = name;
-    this._state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(this);
-    addToHistoryFn(this, 'Project name updated');
+    state.currentProject.manifest.name = name;
+    state.currentProject.manifest.updatedAt = new Date();
+    markDirtyFn(container);
+    addToHistoryFn(container, 'Project name updated');
   }
 
-  updateProjectData(data: Partial<ProjectData>): void {
-    if (!this._state.currentProject) {
+  function updateProjectData(data: Partial<ProjectData>): void {
+    if (!state.currentProject) {
       return;
     }
 
-    this._state.currentProject.data = {
-      ...this._state.currentProject.data,
+    state.currentProject.data = {
+      ...state.currentProject.data,
       ...data
     };
-    this._state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(this);
-    addToHistoryFn(this, 'Project data updated');
+    state.currentProject.manifest.updatedAt = new Date();
+    markDirtyFn(container);
+    addToHistoryFn(container, 'Project data updated');
   }
 
-  updateVisualization(config: Partial<VisualizationConfig>): void {
-    if (!this._state.currentProject) {
+  function updateVisualization(config: Partial<VisualizationConfig>): void {
+    if (!state.currentProject) {
       return;
     }
 
-    this._state.currentProject.visualization = {
-      ...this._state.currentProject.visualization,
+    state.currentProject.visualization = {
+      ...state.currentProject.visualization,
       ...config
     } as VisualizationConfig;
 
-    this._state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(this);
-    addToHistoryFn(this, 'Visualization updated');
+    state.currentProject.manifest.updatedAt = new Date();
+    markDirtyFn(container);
+    addToHistoryFn(container, 'Visualization updated');
   }
 
-  updateLayout(config: Partial<LayoutConfig>): void {
-    if (!this._state.currentProject) {
+  function updateLayout(config: Partial<LayoutConfig>): void {
+    if (!state.currentProject) {
       return;
     }
 
-    this._state.currentProject.layout = {
-      ...this._state.currentProject.layout,
+    state.currentProject.layout = {
+      ...state.currentProject.layout,
       ...config
     };
 
-    this._state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(this);
-    addToHistoryFn(this, 'Layout updated');
+    state.currentProject.manifest.updatedAt = new Date();
+    markDirtyFn(container);
+    addToHistoryFn(container, 'Layout updated');
   }
 
-  undo(): void {
-    if (undoFn(this)) {
-      markDirtyFn(this);
+  function undo(): void {
+    if (undoFn(container)) {
+      markDirtyFn(container);
     }
   }
 
-  redo(): void {
-    if (redoFn(this)) {
-      markDirtyFn(this);
+  function redo(): void {
+    if (redoFn(container)) {
+      markDirtyFn(container);
     }
   }
 
-  async clearProject(): Promise<void> {
-    return clearProjectFn(this);
+  async function clearProject(): Promise<void> {
+    return clearProjectFn(container);
   }
 
-  setAutoSave(enabled: boolean, interval?: number): void {
-    setAutoSaveFn(this, enabled, interval);
+  function setAutoSave(enabled: boolean, interval?: number): void {
+    setAutoSaveFn(container, enabled, interval);
   }
+
+  if (typeof window !== 'undefined') {
+    initPromise = initialize();
+  }
+
+  return {
+    _state: state,
+    autoSave: container.autoSave as AutoSaveController,
+    get initPromise(): Promise<void> | undefined {
+      return initPromise;
+    },
+    set initPromise(value: Promise<void> | undefined) {
+      initPromise = value;
+      container.initPromise = value;
+    },
+    waitForInit,
+    get currentProject(): KhartisProject | undefined {
+      return state.currentProject;
+    },
+    get projectName(): string {
+      return state.currentProject?.manifest.name || '';
+    },
+    get isDirty(): boolean {
+      return state.isDirty;
+    },
+    get canUndo(): boolean {
+      return canUndoFn(container);
+    },
+    get canRedo(): boolean {
+      return canRedoFn(container);
+    },
+    get history(): ProjectHistoryEntry[] {
+      return state.history;
+    },
+    get isInitialized(): boolean {
+      return state.isInitialized;
+    },
+    get isLoading(): boolean {
+      return state.isLoading;
+    },
+    addFilesToProject,
+    addVirtualSourceFile,
+    removeFileFromProject,
+    renameFile,
+    addColumnTransformation,
+    clearColumnTransformations,
+    addDeletedRows,
+    createProject,
+    loadProject,
+    saveCurrentProject,
+    deleteProject,
+    duplicateProject,
+    listProjects,
+    exportProject,
+    importProject,
+    markAsDirty,
+    updateProjectName,
+    updateProjectData,
+    updateVisualization,
+    updateLayout,
+    undo,
+    redo,
+    clearProject,
+    setAutoSave
+  };
 }
 
-export const projectStore = new ProjectStore();
+export const projectStore = createProjectStore();

@@ -1,10 +1,3 @@
-/**
- * Serialization Types - Centralized type definitions for project serialization
- *
- * These types provide proper typing for serialization/deserialization operations,
- * replacing 'any' types throughout the codebase.
- */
-
 import type {
   ColumnTransformation,
   UploadedFile
@@ -20,10 +13,6 @@ import type { GeoIndicationsState } from '$lib/features/step-toolbar/tools/geo-i
 import type { LegendState } from '$lib/features/step-toolbar/tools/legend/legend.types';
 import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
 
-/**
- * Serialized project data structure (JSON-safe)
- * All Date objects are converted to ISO strings
- */
 export interface SerializedProject {
   id: string;
   manifest: {
@@ -39,9 +28,6 @@ export interface SerializedProject {
   resources?: unknown; // TODO: Type resources
 }
 
-/**
- * Custom basemap attribute for serialization
- */
 export interface SerializedBasemapAttribute {
   raw: string;
   id: string;
@@ -51,27 +37,18 @@ export interface SerializedBasemapAttribute {
   basemap_count: number;
 }
 
-/**
- * Basemap settings for serialization (CDC 2.B.3)
- */
 export interface SerializedBasemapSettings {
   layers: BasemapLayerConfig[];
   style: BasemapStyle;
   mapProjection: MapProjectionType;
 }
 
-/**
- * Visualization settings for serialization (CDC 2.B.2)
- */
 export interface SerializedVisualizationSettings {
   visualizations: VisualizationConfig[];
   selectedVisualizationId?: string;
   activeVisualizationIds: string[];
 }
 
-/**
- * Layout/Habillage settings for serialization (CDC 2.C)
- */
 export interface SerializedLayoutSettings {
   format: FormatState;
   annotations: Omit<AnnotationsState, 'selectedId' | 'textContent'>;
@@ -80,9 +57,6 @@ export interface SerializedLayoutSettings {
   projection: Omit<ProjectionState, 'viewMode' | 'autoFit'>;
 }
 
-/**
- * Serialized project data (files and datasets)
- */
 export interface SerializedProjectData {
   sourceFiles?: SerializedUploadedFile[];
   customBasemaps?: {

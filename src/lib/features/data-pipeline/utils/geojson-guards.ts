@@ -5,6 +5,7 @@ import type {
   Geometry,
   GeometryCollection
 } from 'geojson';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -15,7 +16,7 @@ export function isFeatureCollection(
 ): value is FeatureCollection {
   return (
     isRecord(value) &&
-    value.type === 'FeatureCollection' &&
+    value.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
     Array.isArray(value.features)
   );
 }
@@ -27,7 +28,7 @@ export function isFeatureArray(value: unknown): value is Feature[] {
 export function isFeature(value: unknown): value is Feature {
   return (
     isRecord(value) &&
-    value.type === 'Feature' &&
+    value.type === GEOJSON_TYPE.FEATURE &&
     (value.geometry === null || isRecord(value.geometry))
   );
 }
@@ -37,7 +38,7 @@ export function isGeometryCollection(
 ): value is GeometryCollection {
   return (
     isRecord(value) &&
-    value.type === 'GeometryCollection' &&
+    value.type === GEOJSON_TYPE.GEOMETRY_COLLECTION &&
     Array.isArray(value.geometries)
   );
 }
@@ -61,18 +62,18 @@ export function normalizeGeojsonInput(input: GeoJSONLike): FeatureCollection {
   }
 
   if (isFeatureArray(input)) {
-    return { type: 'FeatureCollection', features: input };
+    return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: input };
   }
 
   if (isFeature(input)) {
-    return { type: 'FeatureCollection', features: [input] };
+    return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features: [input] };
   }
 
   if (isGeometryCollection(input)) {
     return {
-      type: 'FeatureCollection',
+      type: GEOJSON_TYPE.FEATURE_COLLECTION,
       features: input.geometries.map((geometry) => ({
-        type: 'Feature' as const,
+        type: GEOJSON_TYPE.FEATURE,
         properties: {},
         geometry
       }))
@@ -81,8 +82,8 @@ export function normalizeGeojsonInput(input: GeoJSONLike): FeatureCollection {
 
   if (isGeometry(input)) {
     return {
-      type: 'FeatureCollection',
-      features: [{ type: 'Feature' as const, properties: {}, geometry: input }]
+      type: GEOJSON_TYPE.FEATURE_COLLECTION,
+      features: [{ type: GEOJSON_TYPE.FEATURE, properties: {}, geometry: input }]
     };
   }
 

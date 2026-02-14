@@ -1,7 +1,8 @@
+import { MIME } from '$lib/features/commons/constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { isGeospatialFile } from '../constants';
+import { PIPELINE_CONST, isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
@@ -157,7 +158,7 @@ export async function createFileFromUploadContent(
   name: string,
   type: string
 ): Promise<File> {
-  const resolvedType = type || 'application/octet-stream';
+  const resolvedType = type || MIME.BINARY;
   if (typeof content === 'string') {
     return new File([content], name, { type: resolvedType });
   }
@@ -201,7 +202,7 @@ export function createCompanionFilesFromUpload(
       data instanceof ArrayBuffer
         ? data
         : new Uint8Array(data as number[]).buffer;
-    const blob = new Blob([buffer], { type: 'application/octet-stream' });
+    const blob = new Blob([buffer], { type: MIME.BINARY });
     companionFiles.push(new File([blob], fileName));
   }
 

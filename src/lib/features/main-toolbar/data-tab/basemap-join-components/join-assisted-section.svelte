@@ -35,6 +35,7 @@
     toVerifyCount: number;
     linkedVariableName: string | undefined;
     loading?: boolean;
+    joinFinalized?: boolean;
     onApplyCorrections: () => void;
     onFinalizeJoin: () => void;
   }
@@ -47,6 +48,7 @@
     toVerifyCount,
     linkedVariableName,
     loading = false,
+    joinFinalized = false,
     onApplyCorrections,
     onFinalizeJoin
   }: Props = $props();
@@ -67,11 +69,9 @@
   let unrecognizedExpanded = $state(false);
 
   const hasBlockingErrors = $derived(toVerifyCount > 0 || duplicateCount > 0);
-  const _hasWarnings = $derived(unrecognizedCount > 0);
 </script>
 
 <div class="join-assisted-section">
-  <!-- Header -->
   <div class="section-header">
     <span class="section-title">{m.section_join_assisted()}</span>
     <span class="section-header-icon">
@@ -85,9 +85,7 @@
       <SkeletonText paragraph lines={3} />
     </div>
   {:else}
-    <!-- Category rows -->
     <div class="category-rows">
-      <!-- Joined entities -->
       {#if joinedCount > 0}
         <div class="category-row">
           <button
@@ -120,7 +118,6 @@
         </div>
       {/if}
 
-      <!-- Entities to verify -->
       {#if toVerifyCount > 0}
         <div class="category-row">
           <button
@@ -194,7 +191,6 @@
         </div>
       {/if}
 
-      <!-- Duplicate entities -->
       {#if duplicateCount > 0}
         <div class="category-row">
           <button
@@ -229,7 +225,6 @@
         </div>
       {/if}
 
-      <!-- Unrecognized entities -->
       {#if unrecognizedCount > 0}
         <div class="category-row">
           <button
@@ -267,7 +262,6 @@
       {/if}
     </div>
 
-    <!-- Notifications -->
     {#if hasBlockingErrors}
       <div class="notifications-row">
         <InlineNotification
@@ -291,6 +285,15 @@
             </svelte:fragment>
           </InlineNotification>
         {/if}
+      </div>
+    {:else if joinedCount > 0 && joinFinalized}
+      <div class="notification-success">
+        <span class="notification-success-icon">
+          <CheckmarkFilled size={20} />
+        </span>
+        <span class="notification-success-text"
+          >{m.join_finalized_message()}</span
+        >
       </div>
     {:else if joinedCount > 0}
       <div class="notification-validation">
@@ -607,6 +610,27 @@
     min-width: 0;
     max-width: none;
     margin: 0;
+  }
+
+  .notification-success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background-color: #defbe6;
+    border-left: 3px solid #24a148;
+    margin-top: 16px;
+  }
+
+  .notification-success-icon :global(svg) {
+    fill: #198038;
+  }
+
+  .notification-success-text {
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #044317;
   }
 
   .notification-validation {

@@ -167,15 +167,17 @@ BREAKING CHANGE: Legacy authentication method removed
 ### Store Pattern (Svelte 5 Runes)
 
 ```typescript
-export class FeatureStore {
-  private _state = $state({ data: null });
+export function createFeatureStore() {
+  const state = $state({ data: null });
 
-  get data() {
-    return this._state.data;
-  }
-  setData(data) {
-    this._state.data = data;
-  }
+  return {
+    get data() {
+      return state.data;
+    },
+    setData(data) {
+      state.data = data;
+    }
+  };
 }
 ```
 

@@ -3,6 +3,11 @@ import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
+import { MIME, GEOJSON_TYPE } from '../constants';
+import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+
+const CSV_BOM = '\uFEFF';
+const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
 
 export const generateExportFilename = generateFilename;
 
@@ -23,8 +28,7 @@ export async function exportToCsv(
       header: true
     });
 
-    const bom = '\uFEFF';
-    return new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
+    return new Blob([CSV_BOM + csvString], { type: CSV_MIME_TYPE_UTF8 });
   }
 
   const rows = data as Record<string, unknown>[];
@@ -43,8 +47,7 @@ export async function exportToCsv(
   }
 
   const csv = csvRows.join('\n');
-  const bom = '\uFEFF';
-  return new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
+  return new Blob([CSV_BOM + csv], { type: CSV_MIME_TYPE_UTF8 });
 }
 
 function escapeCSVField(value: unknown): string {
@@ -77,7 +80,7 @@ export async function exportDatasetToCsv(
 
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
-      .filter((col) => col.type !== 'geometry')
+      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
       .map((col) => `"${escapeIdentifier(col.name)}"`)
       .join(', ');
 
@@ -100,9 +103,8 @@ export async function exportDatasetToCsv(
     }
   }
 
-  // Fallback to JavaScript implementation
   const headers = dataset.columns
-    .filter((col) => col.type !== 'geometry')
+    .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
     .map((col) => col.name);
 
   const data = dataset.data.map((row) => {
@@ -121,20 +123,20 @@ export function exportToGeoJson(data: unknown): Blob {
 
   let geojson: unknown;
 
-  if (dataObj.type === 'FeatureCollection' || dataObj.type === 'Feature') {
+  if (dataObj.type === GEOJSON_TYPE.FEATURE_COLLECTION || dataObj.type === GEOJSON_TYPE.FEATURE) {
     geojson = dataObj;
   } else if (Array.isArray(data)) {
     geojson = {
-      type: 'FeatureCollection',
+      type: GEOJSON_TYPE.FEATURE_COLLECTION,
       features: data
         .filter(
           (item: Record<string, unknown>) =>
-            item.type === 'Feature' || (item.geometry && item.properties)
+            item.type === GEOJSON_TYPE.FEATURE || (item.geometry && item.properties)
         )
         .map((item: Record<string, unknown>) => {
-          if (item.type === 'Feature') return item;
+          if (item.type === GEOJSON_TYPE.FEATURE) return item;
           return {
-            type: 'Feature' as const,
+            type: GEOJSON_TYPE.FEATURE,
             geometry: item.geometry,
             properties: (item.properties as Record<string, unknown>) || {}
           };
@@ -145,12 +147,12 @@ export function exportToGeoJson(data: unknown): Blob {
   }
 
   const jsonString = JSON.stringify(geojson, null, 2);
-  return new Blob([jsonString], { type: 'application/geo+json' });
+  return new Blob([jsonString], { type: MIME.GEOJSON });
 }
 
 export function exportToJson(data: unknown): Blob {
   const jsonString = JSON.stringify(data, null, 2);
-  return new Blob([jsonString], { type: 'application/json' });
+  return new Blob([jsonString], { type: MIME.JSON });
 }
 
 async function exportDatasetsToCsvWithGeometry(
@@ -163,7 +165,7 @@ async function exportDatasetsToCsvWithGeometry(
       const exportRow: Record<string, unknown> = {};
 
       for (const col of dataset.columns) {
-        if (col.type === 'geometry') {
+        if (col.type === COLUMN_TYPE_GEOMETRY) {
           const geometry = row[col.name];
           if (geometry && typeof geometry === 'object') {
             exportRow['geometry_wkt'] = geometryToWkt(geometry);
@@ -202,17 +204,17 @@ function geometryToWkt(geometry: unknown): string {
   }
 
   switch (type) {
-    case 'Point':
+    case GEOJSON_TYPE.POINT:
       return `POINT(${formatCoords(coords)})`;
-    case 'MultiPoint':
+    case GEOJSON_TYPE.MULTI_POINT:
       return `MULTIPOINT(${formatMultiCoords(coords as unknown[][])})`;
-    case 'LineString':
+    case GEOJSON_TYPE.LINE_STRING:
       return `LINESTRING(${formatLineCoords(coords as unknown[])})`;
-    case 'MultiLineString':
+    case GEOJSON_TYPE.MULTI_LINE_STRING:
       return `MULTILINESTRING(${formatMultiLineCoords(coords as unknown[][])})`;
-    case 'Polygon':
+    case GEOJSON_TYPE.POLYGON:
       return `POLYGON(${formatPolygonCoords(coords as unknown[][])})`;
-    case 'MultiPolygon':
+    case GEOJSON_TYPE.MULTI_POLYGON:
       return `MULTIPOLYGON(${formatMultiPolygonCoords(coords as unknown[][][])})`;
     default:
       return JSON.stringify(geometry);
@@ -263,24 +265,20 @@ export async function exportProcessedDatasets(
       return exportDatasetToCsv(datasets[0]);
     }
 
-    // For multiple datasets, check if they have DuckDB tables
     const haveDuckDBTables = datasets.every((d) => d.duckdbTableName);
 
     if (haveDuckDBTables) {
-      // Ensure DuckDB is initialized
       await initDuckDB();
       if (!Duck) {
         throw new Error(m.error_duckdb_not_initialized());
       }
 
-      // Use DuckDB UNION ALL to combine tables
       const unionViewName = `export_union_${Date.now()}`;
 
       try {
-        // Build UNION ALL query
         const unionParts = datasets.map((dataset) => {
           const nonGeomColumns = dataset.columns
-            .filter((col) => col.type !== 'geometry')
+            .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
             .map((col) => `"${escapeIdentifier(col.name)}"`)
             .join(', ');
           const escapedName = escapeSqlString(dataset.name);
@@ -307,7 +305,6 @@ export async function exportProcessedDatasets(
       }
     }
 
-    // Fallback to JavaScript implementation
     const allData: Record<string, unknown>[] = [];
     for (const dataset of datasets) {
       const dataWithSource = dataset.data.map((row) => ({
@@ -321,7 +318,7 @@ export async function exportProcessedDatasets(
       new Set(
         datasets.flatMap((d) =>
           d.columns
-            .filter((col) => col.type !== 'geometry')
+            .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
             .map((col) => col.name)
         )
       )
@@ -340,12 +337,12 @@ export async function exportProcessedDatasets(
       }
 
       const geometryColumn = dataset.columns.find(
-        (col) => col.type === 'geometry'
+        (col) => col.type === COLUMN_TYPE_GEOMETRY
       );
       dataset.data.forEach((row) => {
         const properties: Record<string, unknown> = {};
         dataset.columns
-          .filter((col) => col.type !== 'geometry')
+          .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
           .forEach((col) => {
             properties[col.name] = row[col.name];
           });

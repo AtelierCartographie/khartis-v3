@@ -22,6 +22,7 @@ import {
   DEFAULT_STYLE_OPACITY,
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
+import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 
 export enum VisualizationType {
   CHOROPLETH = 'choropleth',
@@ -106,13 +107,11 @@ export interface VisualizationConfig {
     strokeWidth?: number;
     strokeOpacity?: number;
     strokeDashed?: boolean;
-    // Line properties
     lineWidth?: number;
     lineMaxWidth?: number;
     lineColor?: string | string[];
     lineOpacity?: number;
     lineDashed?: boolean;
-    // Text properties
     textColor?: string | string[];
     textOpacity?: number;
     textSize?: number;
@@ -123,7 +122,6 @@ export interface VisualizationConfig {
     textHaloColor?: string;
     textHaloWidth?: number;
     textDxpMasking?: boolean;
-    // Label properties
     labelColor?: string | string[];
     labelOpacity?: number;
     labelSize?: number;
@@ -162,471 +160,614 @@ interface VisualizationState {
   version: number;
 }
 
-class VisualizationStore {
-  private _state = $state<VisualizationState>({
+interface SerializedVisualizationSettings {
+  visualizations: VisualizationConfig[];
+  selectedVisualizationId?: string;
+  activeVisualizationIds: string[];
+}
+
+type VisualizationSymbols = NonNullable<VisualizationConfig['symbols']>;
+
+export interface VisualizationStore {
+  readonly version: number;
+  readonly visualizations: VisualizationConfig[];
+  readonly selectedVisualization: VisualizationConfig | undefined;
+  readonly activeVisualizations: VisualizationConfig[];
+  createVisualization: (
+    type: VisualizationType,
+    datasetId: string,
+    name?: string
+  ) => VisualizationConfig;
+  updateModes: (id: string, modes: Partial<VisualizationModes>) => void;
+  togglePrimitiveFilter: (id: string, primitive: PrimitiveFilter) => void;
+  updateSymbols: (
+    id: string,
+    symbols: Partial<VisualizationConfig['symbols']>
+  ) => void;
+  updateMissingData: (
+    id: string,
+    missingData: Partial<MissingDataConfig>
+  ) => void;
+  updateClassification: (
+    id: string,
+    classification: Partial<ClassificationConfig>
+  ) => void;
+  updateVisualization: (
+    id: string,
+    updates: Partial<VisualizationConfig>
+  ) => void;
+  duplicateVisualization: (id: string) => VisualizationConfig | null;
+  removeVisualization: (id: string) => void;
+  createBulkVisualizations: (configs: VisualizationConfig[]) => void;
+  removeBulkVisualizations: (ids: string[]) => void;
+  setVisualizationOrder: (orderedIds: string[]) => void;
+  toggleVisualization: (id: string) => void;
+  selectVisualization: (id: string) => void;
+  invertPalette: (id: string) => void;
+  getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
+  getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
+  clear: () => void;
+  restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
+}
+
+const DEFAULT_VISUALIZATION_NAME = 'Visualisation';
+const DATASET_NOT_FOUND_ERROR = 'Dataset not found';
+
+const COLUMN_TYPE_NUMBER = 'number';
+const COLUMN_TYPE_STRING = 'string';
+
+const DEFAULT_SYMBOL_SIZE = 12;
+const DEFAULT_SYMBOL_MIN_SIZE = 5;
+const DEFAULT_SYMBOL_MAX_SIZE = 50;
+const DEFAULT_SYMBOL_OPACITY = 0.8;
+
+const DEFAULT_MISSING_DATA_COLOR = '#c6c6c6';
+const DEFAULT_QUANTILES_CLASS_COUNT = 5;
+
+const DEFAULT_CHOROPLETH_COLORS = [
+  '#eff3ff',
+  '#bdd7e7',
+  '#6baed6',
+  '#3182bd',
+  '#08519c'
+];
+
+const DEFAULT_CATEGORICAL_COLORS = [
+  '#e41a1c',
+  '#377eb8',
+  '#4daf4a',
+  '#984ea3',
+  '#ff7f00',
+  '#ffff33',
+  '#a65628',
+  '#f781bf'
+];
+
+function incrementVersion(state: VisualizationState): void {
+  state.version++;
+}
+
+function getDefaultStyle(
+  type: VisualizationType
+): VisualizationConfig['style'] {
+  switch (type) {
+    case VisualizationType.CHOROPLETH:
+      return {
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+        strokeColor: DEFAULT_STROKE_COLOR,
+        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
+      };
+
+    case VisualizationType.PROPORTIONAL:
+      return {
+        fillColor: DEFAULT_FILL_COLOR,
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_LOW,
+        strokeColor: DEFAULT_STROKE_COLOR,
+        strokeWidth: DEFAULT_STROKE_WIDTH.MEDIUM,
+        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
+      };
+
+    case VisualizationType.CATEGORICAL:
+      return {
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
+        strokeColor: DEFAULT_STROKE_COLOR,
+        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
+      };
+
+    default:
+      return {
+        fillColor: DEFAULT_FILL_COLOR,
+        fillOpacity: DEFAULT_STYLE_OPACITY.FILL,
+        strokeColor: DEFAULT_STROKE_COLOR,
+        strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
+        strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
+      };
+  }
+}
+
+function getDefaultMapping(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationConfig['mapping'] {
+  const numericColumns = dataset.columns.filter(
+    (column) => column.type === COLUMN_TYPE_NUMBER
+  );
+  const stringColumns = dataset.columns.filter(
+    (column) => column.type === COLUMN_TYPE_STRING
+  );
+  const geometryColumn = dataset.columns.find(
+    (column) => column.type === COLUMN_TYPE_GEOMETRY
+  );
+
+  const mapping: VisualizationConfig['mapping'] = {
+    geometryColumn: geometryColumn?.name
+  };
+
+  switch (type) {
+    case VisualizationType.CHOROPLETH:
+      mapping.valueColumn = numericColumns[0]?.name;
+      break;
+
+    case VisualizationType.PROPORTIONAL:
+      mapping.sizeColumn = numericColumns[0]?.name;
+      break;
+
+    case VisualizationType.CATEGORICAL:
+      mapping.categoryColumn = stringColumns[0]?.name;
+      break;
+
+    case VisualizationType.BIVARIATE:
+      mapping.valueColumn = numericColumns[0]?.name;
+      mapping.colorColumn = numericColumns[1]?.name;
+      break;
+  }
+
+  return mapping;
+}
+
+function getDefaultClassification(
+  type: VisualizationType
+): ClassificationConfig | undefined {
+  if (
+    type === VisualizationType.CHOROPLETH ||
+    type === VisualizationType.BIVARIATE
+  ) {
+    return {
+      method: ClassificationMethod.QUANTILES,
+      classes: DEFAULT_QUANTILES_CLASS_COUNT,
+      colors: [...DEFAULT_CHOROPLETH_COLORS]
+    };
+  }
+
+  if (type === VisualizationType.CATEGORICAL) {
+    return {
+      method: ClassificationMethod.MANUAL,
+      classes: 0,
+      colors: [...DEFAULT_CATEGORICAL_COLORS]
+    };
+  }
+
+  return undefined;
+}
+
+function getDefaultModes(type: VisualizationType): VisualizationModes {
+  switch (type) {
+    case VisualizationType.PROPORTIONAL:
+      return {
+        symbol: SymbolMode.PROPORTIONAL,
+        fill: FillMode.UNIQUE,
+        stroke: StrokeMode.UNIQUE
+      };
+    case VisualizationType.CATEGORICAL:
+      return {
+        symbol: SymbolMode.CATEGORIES,
+        fill: FillMode.CATEGORIES,
+        stroke: StrokeMode.NONE
+      };
+    case VisualizationType.CHOROPLETH:
+      return {
+        symbol: SymbolMode.UNIQUE,
+        fill: FillMode.CLASSES,
+        stroke: StrokeMode.UNIQUE
+      };
+    default:
+      return {
+        symbol: SymbolMode.UNIQUE,
+        fill: FillMode.UNIQUE,
+        stroke: StrokeMode.NONE
+      };
+  }
+}
+
+function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
+  return {
+    type: ShapeType.POINT,
+    size: DEFAULT_SYMBOL_SIZE,
+    minSize: DEFAULT_SYMBOL_MIN_SIZE,
+    maxSize: DEFAULT_SYMBOL_MAX_SIZE,
+    sizeScale:
+      type === VisualizationType.PROPORTIONAL
+        ? ScaleType.SQRT
+        : ScaleType.LINEAR,
+    opacity: DEFAULT_SYMBOL_OPACITY
+  };
+}
+
+function getDefaultMissingData(): MissingDataConfig {
+  return {
+    show: true,
+    shape: MissingDataShape.CIRCLE,
+    size: 2,
+    color: DEFAULT_MISSING_DATA_COLOR,
+    pattern: false
+  };
+}
+
+function createVisualizationStore(): VisualizationStore {
+  const state = $state<VisualizationState>({
     visualizations: [],
-    activeVisualizationIds: new Set(),
+    activeVisualizationIds: new Set<string>(),
     version: 0
   });
 
-  get version() {
-    return this._state.version;
+  function getVisualizationById(id: string): VisualizationConfig | undefined {
+    return findById(state.visualizations, id);
   }
 
-  private incrementVersion() {
-    this._state.version++;
+  function applyVisualizationUpdate(
+    id: string,
+    resolveUpdates: (
+      visualization: VisualizationConfig
+    ) => Partial<VisualizationConfig> | null
+  ): void {
+    const visualization = getVisualizationById(id);
+    if (!visualization) {
+      return;
+    }
+
+    const updates = resolveUpdates(visualization);
+    if (!updates) {
+      return;
+    }
+
+    state.visualizations = updateById(state.visualizations, id, {
+      ...updates,
+      id
+    });
+    incrementVersion(state);
   }
 
-  get visualizations() {
-    return this._state.visualizations;
-  }
-
-  get selectedVisualization() {
-    if (!this._state.selectedVisualizationId) return undefined;
-    return findById(
-      this._state.visualizations,
-      this._state.selectedVisualizationId
-    );
-  }
-
-  get activeVisualizations() {
-    return this._state.visualizations.filter((v) =>
-      this._state.activeVisualizationIds.has(v.id)
-    );
-  }
-
-  createVisualization(
+  function createVisualization(
     type: VisualizationType,
     datasetId: string,
     name?: string
   ): VisualizationConfig {
     const dataset = findById(datasetsStore.datasets, datasetId);
     if (!dataset) {
-      throw new Error('Dataset not found');
+      throw new Error(DATASET_NOT_FOUND_ERROR);
     }
 
-    const config: VisualizationConfig = {
+    const visualization: VisualizationConfig = {
       id: crypto.randomUUID(),
       name:
         name ||
         generateUniqueNameWithCounter(
-          'Visualisation',
-          this._state.visualizations.map((v) => v.name)
+          DEFAULT_VISUALIZATION_NAME,
+          state.visualizations.map((item) => item.name)
         ),
       type,
       datasetId,
       enabled: true,
-      modes: this.getDefaultModes(type),
-      style: this.getDefaultStyle(type),
-      mapping: this.getDefaultMapping(type, dataset),
-      classification: this.getDefaultClassification(type),
-      symbols: this.getDefaultSymbols(type),
-      missingData: this.getDefaultMissingData()
+      modes: getDefaultModes(type),
+      style: getDefaultStyle(type),
+      mapping: getDefaultMapping(type, dataset),
+      classification: getDefaultClassification(type),
+      symbols: getDefaultSymbols(type),
+      missingData: getDefaultMissingData()
     };
 
-    this._state.visualizations.push(config);
-    this._state.selectedVisualizationId = config.id;
-    this._state.activeVisualizationIds.add(config.id);
-    this.incrementVersion();
+    state.visualizations.push(visualization);
+    state.selectedVisualizationId = visualization.id;
+    state.activeVisualizationIds.add(visualization.id);
+    incrementVersion(state);
 
-    return config;
+    return visualization;
   }
 
-  updateModes(id: string, modes: Partial<VisualizationModes>): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      modes: { ...viz.modes, ...modes } as VisualizationModes
+  function updateModes(id: string, modes: Partial<VisualizationModes>): void {
+    applyVisualizationUpdate(id, (visualization) => ({
+      modes: { ...visualization.modes, ...modes } as VisualizationModes
+    }));
+  }
+
+  function togglePrimitiveFilter(id: string, primitive: PrimitiveFilter): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const currentFilters =
+        visualization.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+      const nextFilters = currentFilters.includes(primitive)
+        ? currentFilters.filter((item) => item !== primitive)
+        : [...currentFilters, primitive];
+
+      return {
+        primitiveFilters: nextFilters.length > 0 ? nextFilters : currentFilters
+      };
     });
-    this.incrementVersion();
   }
 
-  togglePrimitiveFilter(id: string, primitive: PrimitiveFilter): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz) return;
-    const current = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-    const updated = current.includes(primitive)
-      ? current.filter((p) => p !== primitive)
-      : [...current, primitive];
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      primitiveFilters: updated.length > 0 ? updated : current
-    });
-    this.incrementVersion();
-  }
-
-  updateSymbols(
+  function updateSymbols(
     id: string,
     symbols: Partial<VisualizationConfig['symbols']>
   ): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz?.symbols) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      symbols: { ...viz.symbols, ...symbols }
+    applyVisualizationUpdate(id, (visualization) => {
+      if (!visualization.symbols) {
+        return null;
+      }
+
+      return {
+        symbols: {
+          ...visualization.symbols,
+          ...(symbols as Partial<VisualizationSymbols>)
+        }
+      };
     });
-    this.incrementVersion();
   }
 
-  updateMissingData(id: string, missingData: Partial<MissingDataConfig>): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz?.missingData) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      missingData: { ...viz.missingData, ...missingData }
+  function updateMissingData(
+    id: string,
+    missingData: Partial<MissingDataConfig>
+  ): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      if (!visualization.missingData) {
+        return null;
+      }
+
+      return {
+        missingData: { ...visualization.missingData, ...missingData }
+      };
     });
-    this.incrementVersion();
   }
 
-  updateClassification(
+  function updateClassification(
     id: string,
     classification: Partial<ClassificationConfig>
   ): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz?.classification) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      classification: { ...viz.classification, ...classification }
+    applyVisualizationUpdate(id, (visualization) => {
+      if (!visualization.classification) {
+        return null;
+      }
+
+      return {
+        classification: { ...visualization.classification, ...classification }
+      };
     });
-    this.incrementVersion();
   }
 
-  updateVisualization(id: string, updates: Partial<VisualizationConfig>): void {
-    if (!findById(this._state.visualizations, id)) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      ...updates,
-      id
-    });
-    this.incrementVersion();
+  function updateVisualization(
+    id: string,
+    updates: Partial<VisualizationConfig>
+  ): void {
+    applyVisualizationUpdate(id, () => updates);
   }
 
-  duplicateVisualization(id: string): VisualizationConfig | null {
-    const original = findById(this._state.visualizations, id);
+  function duplicateVisualization(id: string): VisualizationConfig | null {
+    const original = getVisualizationById(id);
     if (!original) {
       return null;
     }
 
-    const existingNames = this._state.visualizations.map((v) => v.name);
-    const duplicatedName = generateDuplicateName(original.name, existingNames);
+    const duplicatedName = generateDuplicateName(
+      original.name,
+      state.visualizations.map((item) => item.name)
+    );
 
-    const duplicate: VisualizationConfig = {
+    const duplicatedVisualization: VisualizationConfig = {
       ...deepClone(original),
       id: crypto.randomUUID(),
       name: duplicatedName
     };
 
-    this._state.visualizations.push(duplicate);
-    this._state.selectedVisualizationId = duplicate.id;
-    this._state.activeVisualizationIds.add(duplicate.id);
-    this.incrementVersion();
+    state.visualizations.push(duplicatedVisualization);
+    state.selectedVisualizationId = duplicatedVisualization.id;
+    state.activeVisualizationIds.add(duplicatedVisualization.id);
+    incrementVersion(state);
 
-    return duplicate;
+    return duplicatedVisualization;
   }
 
-  removeVisualization(id: string): void {
-    const filteredVisualizations = this._state.visualizations.filter(
-      (v) => v.id !== id
+  function removeVisualization(id: string): void {
+    const remainingVisualizations = state.visualizations.filter(
+      (visualization) => visualization.id !== id
     );
 
-    this._state.activeVisualizationIds.delete(id);
+    state.activeVisualizationIds.delete(id);
 
-    if (this._state.selectedVisualizationId === id) {
-      this._state.selectedVisualizationId = filteredVisualizations[0]?.id;
+    if (state.selectedVisualizationId === id) {
+      state.selectedVisualizationId = remainingVisualizations[0]?.id;
     }
 
-    this._state.visualizations = filteredVisualizations;
-    this.incrementVersion();
+    state.visualizations = remainingVisualizations;
+    incrementVersion(state);
   }
 
-  createBulkVisualizations(configs: VisualizationConfig[]): void {
+  function createBulkVisualizations(configs: VisualizationConfig[]): void {
     if (configs.length === 0) {
       return;
     }
 
     configs.forEach((config) => {
-      this._state.visualizations.push(config);
-      this._state.activeVisualizationIds.add(config.id);
+      state.visualizations.push(config);
+      state.activeVisualizationIds.add(config.id);
     });
 
-    this.incrementVersion();
+    incrementVersion(state);
   }
 
-  removeBulkVisualizations(ids: string[]): void {
+  function removeBulkVisualizations(ids: string[]): void {
     if (ids.length === 0) {
       return;
     }
 
     const idsSet = new Set(ids);
-    const filteredVisualizations = this._state.visualizations.filter(
-      (v) => !idsSet.has(v.id)
+    const remainingVisualizations = state.visualizations.filter(
+      (visualization) => !idsSet.has(visualization.id)
     );
 
-    ids.forEach((id) => {
-      this._state.activeVisualizationIds.delete(id);
+    ids.forEach((idToRemove) => {
+      state.activeVisualizationIds.delete(idToRemove);
     });
 
     if (
-      this._state.selectedVisualizationId &&
-      idsSet.has(this._state.selectedVisualizationId)
+      state.selectedVisualizationId &&
+      idsSet.has(state.selectedVisualizationId)
     ) {
-      this._state.selectedVisualizationId = filteredVisualizations[0]?.id;
+      state.selectedVisualizationId = remainingVisualizations[0]?.id;
     }
 
-    this._state.visualizations = filteredVisualizations;
-    this.incrementVersion();
+    state.visualizations = remainingVisualizations;
+    incrementVersion(state);
   }
 
-  setVisualizationOrder(orderedIds: string[]): void {
-    if (!orderedIds.length) {
+  function setVisualizationOrder(orderedIds: string[]): void {
+    if (orderedIds.length === 0) {
       return;
     }
 
-    const idSet = new Set(orderedIds);
     const orderedVisualizations: VisualizationConfig[] = [];
+    const orderedIdsSet = new Set(orderedIds);
 
-    for (const id of orderedIds) {
-      const visualization = findById(this._state.visualizations, id);
+    orderedIds.forEach((id) => {
+      const visualization = getVisualizationById(id);
       if (visualization) {
         orderedVisualizations.push(visualization);
       }
-    }
+    });
 
-    if (!orderedVisualizations.length) {
+    if (orderedVisualizations.length === 0) {
       return;
     }
 
-    const remaining = this._state.visualizations.filter(
-      (viz) => !idSet.has(viz.id)
+    const remainingVisualizations = state.visualizations.filter(
+      (visualization) => !orderedIdsSet.has(visualization.id)
     );
-    this._state.visualizations = [...orderedVisualizations, ...remaining];
-    this.incrementVersion();
+
+    state.visualizations = [
+      ...orderedVisualizations,
+      ...remainingVisualizations
+    ];
+    incrementVersion(state);
   }
 
-  toggleVisualization(id: string): void {
-    if (this._state.activeVisualizationIds.has(id)) {
-      this._state.activeVisualizationIds.delete(id);
+  function toggleVisualization(id: string): void {
+    if (state.activeVisualizationIds.has(id)) {
+      state.activeVisualizationIds.delete(id);
     } else {
-      this._state.activeVisualizationIds.add(id);
+      state.activeVisualizationIds.add(id);
     }
-    this.incrementVersion();
+    incrementVersion(state);
   }
 
-  selectVisualization(id: string): void {
-    const viz = findById(this._state.visualizations, id);
-    if (viz) {
-      this._state.selectedVisualizationId = id;
+  function selectVisualization(id: string): void {
+    if (!getVisualizationById(id)) {
+      return;
     }
+    state.selectedVisualizationId = id;
   }
 
-  invertPalette(id: string): void {
-    const viz = findById(this._state.visualizations, id);
-    if (!viz?.classification?.colors) return;
-    this._state.visualizations = updateById(this._state.visualizations, id, {
-      classification: {
-        ...viz.classification,
-        colors: [...viz.classification.colors].reverse()
+  function invertPalette(id: string): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      if (!visualization.classification?.colors) {
+        return null;
       }
+
+      return {
+        classification: {
+          ...visualization.classification,
+          colors: [...visualization.classification.colors].reverse()
+        }
+      };
     });
-    this.incrementVersion();
   }
 
-  getVisualizationsByDataset(datasetId: string): VisualizationConfig[] {
-    return this._state.visualizations.filter((v) => v.datasetId === datasetId);
+  function getVisualizationsByDataset(
+    datasetId: string
+  ): VisualizationConfig[] {
+    return state.visualizations.filter(
+      (visualization) => visualization.datasetId === datasetId
+    );
   }
 
-  getVisualizationsUsingColumn(columnName: string): VisualizationConfig[] {
-    return this._state.visualizations.filter((viz) => {
-      const mapping = viz.mapping;
+  function getVisualizationsUsingColumn(
+    columnName: string
+  ): VisualizationConfig[] {
+    return state.visualizations.filter((visualization) => {
+      const mapping = visualization.mapping;
       return (
-        mapping?.valueColumn === columnName ||
-        mapping?.categoryColumn === columnName ||
-        mapping?.sizeColumn === columnName ||
-        mapping?.colorColumn === columnName
+        mapping.valueColumn === columnName ||
+        mapping.categoryColumn === columnName ||
+        mapping.sizeColumn === columnName ||
+        mapping.colorColumn === columnName
       );
     });
   }
 
-  private getDefaultStyle(type: VisualizationType) {
-    switch (type) {
-      case VisualizationType.CHOROPLETH:
-        return {
-          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
-          strokeColor: DEFAULT_STROKE_COLOR,
-          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-        };
-
-      case VisualizationType.PROPORTIONAL:
-        return {
-          fillColor: DEFAULT_FILL_COLOR,
-          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_LOW,
-          strokeColor: DEFAULT_STROKE_COLOR,
-          strokeWidth: DEFAULT_STROKE_WIDTH.MEDIUM,
-          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-        };
-
-      case VisualizationType.CATEGORICAL:
-        return {
-          fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
-          strokeColor: DEFAULT_STROKE_COLOR,
-          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-        };
-
-      default:
-        return {
-          fillColor: DEFAULT_FILL_COLOR,
-          fillOpacity: DEFAULT_STYLE_OPACITY.FILL,
-          strokeColor: DEFAULT_STROKE_COLOR,
-          strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
-          strokeOpacity: DEFAULT_STYLE_OPACITY.STROKE
-        };
-    }
+  function clear(): void {
+    state.visualizations = [];
+    state.selectedVisualizationId = undefined;
+    state.activeVisualizationIds.clear();
+    incrementVersion(state);
   }
 
-  private getDefaultMapping(
-    type: VisualizationType,
-    dataset: ProcessedDataset | DatasetResult
-  ) {
-    const numericColumns = dataset.columns.filter((c) => c.type === 'number');
-    const stringColumns = dataset.columns.filter((c) => c.type === 'string');
-    const geometryColumn = dataset.columns.find((c) => c.type === 'geometry');
-
-    const mapping: VisualizationConfig['mapping'] = {
-      geometryColumn: geometryColumn?.name
-    };
-
-    switch (type) {
-      case VisualizationType.CHOROPLETH:
-        mapping.valueColumn = numericColumns[0]?.name;
-        break;
-
-      case VisualizationType.PROPORTIONAL:
-        mapping.sizeColumn = numericColumns[0]?.name;
-        break;
-
-      case VisualizationType.CATEGORICAL:
-        mapping.categoryColumn = stringColumns[0]?.name;
-        break;
-
-      case VisualizationType.BIVARIATE:
-        mapping.valueColumn = numericColumns[0]?.name;
-        mapping.colorColumn = numericColumns[1]?.name;
-        break;
-    }
-
-    return mapping;
-  }
-
-  private getDefaultClassification(type: VisualizationType) {
-    if (
-      type === VisualizationType.CHOROPLETH ||
-      type === VisualizationType.BIVARIATE
-    ) {
-      return {
-        method: ClassificationMethod.QUANTILES,
-        classes: 5,
-        colors: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c']
-      };
-    }
-
-    if (type === VisualizationType.CATEGORICAL) {
-      return {
-        method: ClassificationMethod.MANUAL,
-        classes: 0,
-        colors: [
-          '#e41a1c',
-          '#377eb8',
-          '#4daf4a',
-          '#984ea3',
-          '#ff7f00',
-          '#ffff33',
-          '#a65628',
-          '#f781bf'
-        ]
-      };
-    }
-
-    return undefined;
-  }
-
-  private getDefaultModes(type: VisualizationType): VisualizationModes {
-    switch (type) {
-      case VisualizationType.PROPORTIONAL:
-        return {
-          symbol: SymbolMode.PROPORTIONAL,
-          fill: FillMode.UNIQUE,
-          stroke: StrokeMode.UNIQUE
-        };
-      case VisualizationType.CATEGORICAL:
-        return {
-          symbol: SymbolMode.CATEGORIES,
-          fill: FillMode.CATEGORIES,
-          stroke: StrokeMode.NONE
-        };
-      case VisualizationType.CHOROPLETH:
-        return {
-          symbol: SymbolMode.UNIQUE,
-          fill: FillMode.CLASSES,
-          stroke: StrokeMode.UNIQUE
-        };
-      default:
-        return {
-          symbol: SymbolMode.UNIQUE,
-          fill: FillMode.UNIQUE,
-          stroke: StrokeMode.NONE
-        };
-    }
-  }
-
-  private getDefaultSymbols(
-    type: VisualizationType
-  ): VisualizationConfig['symbols'] | undefined {
-    if (type === VisualizationType.PROPORTIONAL) {
-      return {
-        type: ShapeType.POINT,
-        size: 12,
-        minSize: 5,
-        maxSize: 50,
-        sizeScale: ScaleType.SQRT,
-        opacity: 0.8
-      };
-    }
-    return {
-      type: ShapeType.POINT,
-      size: 12,
-      minSize: 5,
-      maxSize: 50,
-      sizeScale: ScaleType.LINEAR,
-      opacity: 0.8
-    };
-  }
-
-  private getDefaultMissingData(): MissingDataConfig {
-    return {
-      show: true,
-      shape: MissingDataShape.CIRCLE,
-      size: 2,
-      color: '#c6c6c6',
-      pattern: false
-    };
-  }
-
-  clear(): void {
-    this._state.visualizations = [];
-    this._state.selectedVisualizationId = undefined;
-    this._state.activeVisualizationIds.clear();
-    this.incrementVersion();
-  }
-
-  restoreFromSerialized(settings: {
-    visualizations: VisualizationConfig[];
-    selectedVisualizationId?: string;
-    activeVisualizationIds: string[];
-  }): void {
-    this._state.visualizations = settings.visualizations || [];
-    this._state.selectedVisualizationId = settings.selectedVisualizationId;
-    this._state.activeVisualizationIds = new Set(
+  function restoreFromSerialized(
+    settings: SerializedVisualizationSettings
+  ): void {
+    state.visualizations = settings.visualizations || [];
+    state.selectedVisualizationId = settings.selectedVisualizationId;
+    state.activeVisualizationIds = new Set(
       settings.activeVisualizationIds || []
     );
-    this.incrementVersion();
+    incrementVersion(state);
   }
+
+  return {
+    get version(): number {
+      return state.version;
+    },
+    get visualizations(): VisualizationConfig[] {
+      return state.visualizations;
+    },
+    get selectedVisualization(): VisualizationConfig | undefined {
+      if (!state.selectedVisualizationId) {
+        return undefined;
+      }
+      return findById(state.visualizations, state.selectedVisualizationId);
+    },
+    get activeVisualizations(): VisualizationConfig[] {
+      return state.visualizations.filter((visualization) =>
+        state.activeVisualizationIds.has(visualization.id)
+      );
+    },
+    createVisualization,
+    updateModes,
+    togglePrimitiveFilter,
+    updateSymbols,
+    updateMissingData,
+    updateClassification,
+    updateVisualization,
+    duplicateVisualization,
+    removeVisualization,
+    createBulkVisualizations,
+    removeBulkVisualizations,
+    setVisualizationOrder,
+    toggleVisualization,
+    selectVisualization,
+    invertPalette,
+    getVisualizationsByDataset,
+    getVisualizationsUsingColumn,
+    clear,
+    restoreFromSerialized
+  };
 }
 
-export const visualizationStore = new VisualizationStore();
+export const visualizationStore = createVisualizationStore();

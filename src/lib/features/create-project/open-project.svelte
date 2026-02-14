@@ -32,6 +32,8 @@
     getOnClose: () => onClose
   });
 
+  const KHARTIS_FILE_EXTENSIONS = ['.kh', '.khartis'];
+
   let savedProjects = $state<SavedProjectMetadata[]>([]);
   let selectedProjectId = $state<string | null>(null);
   let isLoading = $state(true);
@@ -80,9 +82,13 @@
   async function handleFileImport(event: CustomEvent<readonly File[]>) {
     const files = Array.from(event.detail);
 
-    const khFile = files.find(
-      (f) => f.name.endsWith('.kh') || f.name.endsWith('.khartis')
-    );
+    const khFile = files.find((f) => {
+      const normalizedName = f.name.toLowerCase();
+      return (
+        normalizedName.endsWith(KHARTIS_FILE_EXTENSIONS[0]) ||
+        normalizedName.endsWith(KHARTIS_FILE_EXTENSIONS[1])
+      );
+    });
 
     if (!khFile) {
       logger.error('No valid Khartis file found', LogCategory.PROJECT, {
@@ -267,7 +273,7 @@
     <div class="flex items-end gap-3 mt-5 mb-3">
       <FileUploaderDropContainer
         labelText={m.open_project_drag_drop_kh()}
-        accept={['.kh', '.khartis']}
+        accept={KHARTIS_FILE_EXTENSIONS}
         validateFiles={validateKhartisFiles}
         disabled={isImporting}
         on:change={handleFileImport}
@@ -322,7 +328,7 @@
     position: absolute;
     top: 8px;
     right: 8px;
-    z-index: 10;
+    z-index: var(--z-content);
   }
 
   .project-card-wrapper :global(.bx--overflow-menu__icon) {

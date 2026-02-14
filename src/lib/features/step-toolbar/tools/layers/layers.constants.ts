@@ -1,18 +1,2 @@
-import type { Section } from './layers.types.js';
-
-export const DEFAULT_SECTIONS: readonly Section[] = [
-  {
-    id: 'visualization',
-    title: 'Visualization',
-    type: 'visualization',
-    layers: [],
-    order: 0
-  },
-  {
-    id: 'geographic',
-    title: 'Geographic',
-    type: 'geographic',
-    layers: [],
-    order: 1
-  }
-];
+export const VIZ_SUBLAYER_COLOR = '#0e6027';
+export const BASEMAP_SUBLAYER_COLOR = '#8a3800';

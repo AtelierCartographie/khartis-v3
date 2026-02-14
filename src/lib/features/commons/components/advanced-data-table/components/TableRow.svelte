@@ -139,7 +139,7 @@
     position: sticky;
     left: 0;
     background-color: #ffffff;
-    z-index: 1;
+    z-index: var(--z-base);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -194,7 +194,6 @@
     font-style: italic;
   }
 
-  /* Cell-level highlights (takes priority over row highlight) */
   td.cell-highlight-current {
     background-color: #a56eff !important;
     color: white !important;

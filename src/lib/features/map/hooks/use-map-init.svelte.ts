@@ -8,7 +8,14 @@ import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.sto
 export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { BASEMAP_STYLES, BasemapStyle } from '../constants';
+import {
+  BASEMAP_STYLES,
+  BasemapStyle,
+  DECK_VIEW_ID,
+  DECK_CANVAS_ID,
+  DECK_DEVICE_TYPE
+} from '../constants';
+import { ViewMode } from '../constants/map.constants';
 import { createTooltipHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
@@ -28,7 +35,6 @@ interface OrthographicViewStateChangeParams {
   oldViewState?: DeckOrthographicViewStateMap;
 }
 
-export type ViewMode = 'orthographic' | 'maplibre';
 
 export interface MapInitConfig {
   center: [number, number];
@@ -63,7 +69,7 @@ const DEFAULT_CONFIG: MapInitConfig = {
   maxZoom: 20
 };
 
-const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: 'main', flipY: false });
+const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: DECK_VIEW_ID, flipY: false });
 let hasPatchedLumaCanvasContext = false;
 let hasWebGL2Support: boolean | null = null;
 
@@ -142,14 +148,20 @@ function createDeckWithDeferredResizeObserver(
     'ResizeObserver'
   );
   const NativeResizeObserver = globalWindow.ResizeObserver;
+  type ResizeObserverCtor = new (
+    callback: ResizeObserverCallback
+  ) => ResizeObserver;
 
-  class DeferredResizeObserver extends NativeResizeObserver {
-    constructor(callback: ResizeObserverCallback) {
-      super((entries, observer) => {
-        queueMicrotask(() => callback(entries, observer));
-      });
-    }
-  }
+  const DeferredResizeObserver: ResizeObserverCtor = function (
+    this: ResizeObserver,
+    callback: ResizeObserverCallback
+  ): ResizeObserver {
+    return new NativeResizeObserver((entries, observer) => {
+      queueMicrotask(() => callback(entries, observer));
+    });
+  } as unknown as ResizeObserverCtor;
+
+  DeferredResizeObserver.prototype = NativeResizeObserver.prototype;
 
   try {
     Object.defineProperty(globalWindow, 'ResizeObserver', {
@@ -185,8 +197,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   const shouldUseMapLibre =
     osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
   const initialViewMode: ViewMode = shouldUseMapLibre
-    ? 'maplibre'
-    : 'orthographic';
+    ? ViewMode.MAPLIBRE
+    : ViewMode.ORTHOGRAPHIC;
   let currentViewMode = $state<ViewMode>(initialViewMode);
   let containerRef = $state<HTMLDivElement | null>(null);
 
@@ -212,7 +224,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     orthographicFallbackCanvas?.remove();
 
     const fallbackCanvas = document.createElement('canvas');
-    fallbackCanvas.id = 'deckgl-overlay';
+    fallbackCanvas.id = DECK_CANVAS_ID;
     fallbackCanvas.width = Math.max(1, container.clientWidth || 800);
     fallbackCanvas.height = Math.max(1, container.clientHeight || 600);
     Object.assign(fallbackCanvas.style, {
@@ -252,7 +264,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     if (!supportsWebGL2()) {
       ensureOrthographicFallbackCanvas(container);
       deckInstance = null;
-      currentViewMode = 'orthographic';
+      currentViewMode = ViewMode.ORTHOGRAPHIC;
       isMapLoaded = true;
       mapInstanceStore.setDeckInstance(null);
       mapInstanceStore.setMapLoaded(true);
@@ -282,7 +294,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         new Deck({
           parent: container,
           deviceProps: {
-            type: 'webgl'
+            type: DECK_DEVICE_TYPE
           },
           views: [ORTHOGRAPHIC_VIEW],
           initialViewState: {
@@ -329,7 +341,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     );
 
     deckInstance = orthographicDeck;
-    currentViewMode = 'orthographic';
+    currentViewMode = ViewMode.ORTHOGRAPHIC;
     mapInstanceStore.setDeckInstance(orthographicDeck);
   }
 
@@ -346,7 +358,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
 
     containerRef = container;
-    currentViewMode = 'maplibre';
+    currentViewMode = ViewMode.MAPLIBRE;
     removeOrthographicFallbackCanvas();
 
     map = new maplibregl.Map({
@@ -418,9 +430,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
   function initialize(
     container: HTMLDivElement,
-    viewMode: ViewMode = 'orthographic'
+    viewMode: ViewMode = ViewMode.ORTHOGRAPHIC
   ): void {
-    if (viewMode === 'orthographic') {
+    if (viewMode === ViewMode.ORTHOGRAPHIC) {
       initializeOrthographic(container);
     } else {
       initializeMapLibre(container);
@@ -428,7 +440,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function switchToMapLibreMode(): void {
-    if (currentViewMode === 'maplibre' || !containerRef) {
+    if (currentViewMode === ViewMode.MAPLIBRE || !containerRef) {
       return;
     }
 
@@ -437,7 +449,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function switchToOrthographicMode(): void {
-    if (currentViewMode === 'orthographic' || !containerRef) {
+    if (currentViewMode === ViewMode.ORTHOGRAPHIC || !containerRef) {
       return;
     }
 

@@ -1,19 +1,3 @@
-/**
- * @module SemioDetector
- * @description Semiological type detection for dataset columns
- *
- * Determines the semiological type of each column:
- * - geoid: Geographic identifier (for joins with basemaps)
- * - geolat: Latitude coordinate
- * - geolon: Longitude coordinate
- * - QTA: Absolute Quantitative (counts, sizes)
- * - QTR: Relative Quantitative (ratios, percentages)
- * - QL: Qualitative (categories)
- * - QLO: Ordered Qualitative (ranks)
- *
- * Extracted from VizSuggesterService for reuse across the application.
- */
-
 import type { AnalysisResult } from '$lib/features/duckdb';
 
 export type SemioType =
@@ -66,6 +50,8 @@ interface GeoLonIndicators {
 interface QTAIndicators {
   uniqueCount: number;
   extentMagnitude: number;
+  shareIntegers: number;
+  shareRankInterval: number;
 }
 
 interface QTRIndicators {
@@ -73,6 +59,7 @@ interface QTRIndicators {
   extentMagnitude: number;
   min: number;
   max: number;
+  shareFloats: number;
 }
 
 interface QLIndicators {
@@ -82,6 +69,7 @@ interface QLIndicators {
 
 interface QLOIndicators {
   rankWords: boolean;
+  shareRankInterval: number;
 }
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
@@ -110,13 +98,17 @@ function scoreGeoLon(indicators: GeoLonIndicators): SemioScore {
 
 function scoreQTA(indicators: QTAIndicators): SemioScore {
   let score = 0;
-  if (indicators.uniqueCount > 20) score += 1;
-  if (indicators.extentMagnitude >= 2) score += 2;
+  if (indicators.shareIntegers >= 0.7) score += 1;
+  if (indicators.shareIntegers >= 0.9) score += 1;
+  if (indicators.shareRankInterval <= 0.1) score += 1;
+  if (indicators.extentMagnitude >= 2) score += 1;
   return { semioType: SEMIO_TYPES.QTA, score };
 }
 
 function scoreQTR(indicators: QTRIndicators): SemioScore {
   let score = 0;
+  if (indicators.shareFloats >= 0.7) score += 1;
+  if (indicators.shareFloats >= 0.9) score += 1;
   if (indicators.ratioWords) score += 3;
   if (indicators.extentMagnitude <= 2) score += 1;
   if (indicators.min < 0 && indicators.max > 0) score += 0.5;
@@ -133,6 +125,7 @@ function scoreQL(indicators: QLIndicators): SemioScore {
 function scoreQLO(indicators: QLOIndicators): SemioScore {
   let score = 0;
   if (indicators.rankWords) score += 4;
+  if (indicators.shareRankInterval >= 0.8) score += 2;
   return { semioType: SEMIO_TYPES.QLO, score };
 }
 
@@ -159,12 +152,6 @@ function detectKeywordsFromName(columnName: string): {
   };
 }
 
-/**
- * Detects the semiological type of a column based on its analysis results.
- *
- * @param analysis - The analysis result from DuckDB containing column statistics
- * @returns The detected semiological type and confidence score
- */
 export function detectSemioType(
   analysis: AnalysisResult
 ): SemioDetectionResult {
@@ -198,20 +185,32 @@ export function detectSemioType(
         }
       : detectKeywordsFromName(columnName);
 
-  const extentMagnitude = max > 0 ? Math.log10(max / Math.max(min, 1)) : 0;
+  const extentMagnitude =
+    (analysis.extent_magnitude as number) ??
+    (max > 0 ? Math.log10(max / Math.max(min, 1)) : 0);
+
+  const shareIntegers = (analysis.share_integers as number) ?? 0;
+  const shareFloats = (analysis.share_floats as number) ?? 0;
+  const shareRankInterval = (analysis.share_rank_interval as number) ?? 0;
 
   switch (typeSimple) {
     case 'numeric':
       results.push(
-        scoreQTA({ uniqueCount, extentMagnitude }),
+        scoreQTA({
+          uniqueCount,
+          extentMagnitude,
+          shareIntegers,
+          shareRankInterval
+        }),
         scoreQTR({
           ratioWords: keywords.ratioWords,
           extentMagnitude,
           min,
-          max
+          max,
+          shareFloats
         }),
         scoreQL({ shareUniques, uniqueCount }),
-        scoreQLO({ rankWords: keywords.rankWords }),
+        scoreQLO({ rankWords: keywords.rankWords, shareRankInterval }),
         scoreGeoId({
           shareUniques,
           shareNulls,
@@ -233,7 +232,7 @@ export function detectSemioType(
     default:
       results.push(
         scoreQL({ shareUniques, uniqueCount }),
-        scoreQLO({ rankWords: keywords.rankWords }),
+        scoreQLO({ rankWords: keywords.rankWords, shareRankInterval }),
         scoreGeoId({
           shareUniques,
           shareNulls,

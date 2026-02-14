@@ -1,9 +1,10 @@
-import { FileStatus } from '$lib/features/commons/constants/ui.constants';
+import { FileStatus, GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   FILE_EXTENSIONS,
   MIME_TYPE_PATTERNS,
   TABULAR_DELIMITERS
 } from '$lib/features/commons/constants/file-types.constants';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { ParseError } from '../errors/pipeline.errors';
 import {
   type FileValidation,
@@ -13,6 +14,11 @@ import {
 } from '../store/create-project.types';
 import { LogCategory, logger } from './logger';
 import { sanitizeDisplayName } from './string.utils';
+
+const UTF8_ENCODING = PIPELINE_CONST.ENCODING.DEFAULT;
+const HTTP_PROTOCOL = 'http:';
+const HTTPS_PROTOCOL = 'https:';
+const DEFAULT_FILENAME = 'download';
 
 export type ColumnStatSummary = {
   type: string;
@@ -153,7 +159,7 @@ export async function readFileContent(
 
     const fileType = detectFileType(file);
     if (fileType === FileType.CSV || fileType === FileType.GEOJSON) {
-      reader.readAsText(file, 'UTF-8');
+      reader.readAsText(file, UTF8_ENCODING);
     } else {
       reader.readAsArrayBuffer(file);
     }
@@ -180,9 +186,6 @@ export function createUploadedFile(
   };
 }
 
-// Note: CSV parsing, delimiter detection, type inference, duplicate detection,
-// and statistics are now handled by DuckDB via dataPipeline.processFile()
-
 export function validateGeospatialFile(
   content: ArrayBuffer | string
 ): FileValidation {
@@ -197,7 +200,7 @@ export function validateGeospatialFile(
         errors.push('Invalid GeoJSON: missing type property');
       }
 
-      if (geojson.type === 'FeatureCollection' && !geojson.features) {
+      if (geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION && !geojson.features) {
         errors.push('Invalid GeoJSON: FeatureCollection missing features');
       }
 
@@ -235,11 +238,6 @@ export function validateGeospatialFile(
   };
 }
 
-/**
- * Extracts tabular data from pasted text (CSV/TSV only).
- * JSON/GeoJSON paste is not supported - use file upload for geospatial data.
- * DuckDB handles the actual parsing via read_csv().
- */
 export function extractDataFromPaste(pastedText: string): {
   fileType: FileType;
   content: string;
@@ -247,13 +245,11 @@ export function extractDataFromPaste(pastedText: string): {
   const trimmed = pastedText.trim();
   if (!trimmed) return null;
 
-  // Check if it looks like tabular data (has delimiter in first line)
   const firstLine = trimmed.split('\n')[0];
   const hasDelimiter = TABULAR_DELIMITERS.some((d) => firstLine.includes(d));
 
   if (!hasDelimiter) return null;
 
-  // Determine TSV vs CSV based on dominant delimiter
   const tabCount = (firstLine.match(/\t/g) || []).length;
   const fileType = tabCount > 0 ? FileType.TSV : FileType.CSV;
 
@@ -263,7 +259,10 @@ export function extractDataFromPaste(pastedText: string): {
 export function isValidUrl(url: string): boolean {
   try {
     const parsedUrl = new URL(url);
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    return (
+      parsedUrl.protocol === HTTP_PROTOCOL ||
+      parsedUrl.protocol === HTTPS_PROTOCOL
+    );
   } catch {
     return false;
   }
@@ -280,9 +279,9 @@ export function getFilenameFromUrl(url: string): string {
   try {
     const parsedUrl = new URL(url);
     const pathname = parsedUrl.pathname;
-    const filename = pathname.split('/').pop() || 'download';
+    const filename = pathname.split('/').pop() || DEFAULT_FILENAME;
     return filename;
   } catch {
-    return 'download';
+    return DEFAULT_FILENAME;
   }
 }

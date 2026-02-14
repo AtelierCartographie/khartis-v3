@@ -12,10 +12,11 @@ import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.
 import type { SearchState } from './search.types';
 
 const MIN_SEARCH_LENGTH = 2;
+const ALL_SOURCES_ID = 'all';
 
 const DEFAULT_STATE: SearchState = {
   searchValue: '',
-  selectedSource: 'all',
+  selectedSource: ALL_SOURCES_ID,
   replaceValue: '',
   results: [],
   currentResultIndex: 0,
@@ -172,7 +173,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
 
       try {
         const columnFilter =
-          s.selectedSource === 'all' ? undefined : s.selectedSource;
+          s.selectedSource === ALL_SOURCES_ID ? undefined : s.selectedSource;
         const stats = await duckDBOrchestrator.searchInTable(tableName, query, {
           threshold: 0.85,
           column: columnFilter
@@ -248,7 +249,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.replaceValue = value;
       },
       replaceNext: async (): Promise<boolean> => {
-        if (!s.replaceValue.trim() || !s.results.length) {
+        if (!s.results.length) {
           return false;
         }
 
@@ -292,7 +293,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
             );
           }
 
-          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
           return true;
         }
@@ -303,7 +303,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         const searchValue = s.searchValue.trim();
         const replaceValue = s.replaceValue.trim();
 
-        if (!searchValue || !replaceValue || !s.results.length) {
+        if (!searchValue || !s.results.length) {
           return 0;
         }
 
@@ -313,7 +313,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         }
 
         const targetColumns =
-          s.selectedSource === 'all'
+          s.selectedSource === ALL_SOURCES_ID
             ? [...new Set(s.results.map((result) => result.columnName))]
             : [s.selectedSource];
 
@@ -357,7 +357,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
             );
           }
 
-          duckDBOrchestrator.bumpDatasetsVersion();
           await performSearch();
         }
 

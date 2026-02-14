@@ -1,6 +1,9 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -53,12 +56,13 @@ export async function readLink(
           throw new DuckDBError('Unable to determine target table name');
         }
         const escapedFilename = escapeSqlString(filename);
+        const escapedTable = escapeIdentifier(finalTablename);
 
         switch (file_type) {
           case DUCK_CONST.TYPE.TABULAR:
             await executeQuery(
               ctx.connection,
-              `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFilename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
+              `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM read_csv('${escapedFilename}', header=true, decimal_separator="${decimal_separator}", normalize_names=true, nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES});`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
             break;
@@ -69,7 +73,7 @@ export async function readLink(
           case DUCK_CONST.TYPE.ARROW:
             await executeQuery(
               ctx.connection,
-              `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFilename}');`,
+              `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM read_parquet('${escapedFilename}');`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
             break;
@@ -77,7 +81,7 @@ export async function readLink(
           case DUCK_CONST.TYPE.GEOFILE:
             await executeQuery(
               ctx.connection,
-              `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM ST_Read('${escapedFilename}');`,
+              `CREATE OR REPLACE TABLE "${escapedTable}" AS FROM ST_Read('${escapedFilename}');`,
               { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
             );
             break;

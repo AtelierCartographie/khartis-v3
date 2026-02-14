@@ -223,7 +223,7 @@
     display: flex;
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
-    z-index: 1100;
+    z-index: var(--z-main-toolbar);
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);

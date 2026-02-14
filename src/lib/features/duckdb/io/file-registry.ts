@@ -46,11 +46,11 @@ export function generateUniqueTableName(
     if (index === -1) return name;
     return name.slice(0, index);
   };
-  let tablename = normalizeName(filename);
+  const baseName = splitFilename(normalizeName(filename));
+  let tablename = baseName;
   let counter = 1;
-  tablename = splitFilename(tablename);
   while (existingNames.has(tablename)) {
-    tablename = `${tablename}_${counter}`;
+    tablename = `${baseName}_${counter}`;
     counter++;
   }
   return tablename;
@@ -60,6 +60,17 @@ function addFileId(file: FileWithId): void {
   file.id = file.lastModified + '-' + normalizeName(file.name);
 }
 
+/**
+ * Registers a list of files with the DuckDB database.
+ *
+ * Iterates over the provided files, assigns a unique ID to each file,
+ * and registers it with DuckDB if it hasn't been registered already.
+ *
+ * @param db - The DuckDB instance.
+ * @param registered_files - Set of already-registered file IDs.
+ * @param files - An array of File objects to be registered.
+ * @param options.shapefile - If true, all sibling files will share the same id (necessary for the spatial extension).
+ */
 export async function registerFiles(
   db: AsyncDuckDB,
   registered_files: Set<string>,
@@ -70,7 +81,7 @@ export async function registerFiles(
   let shape_date: number | undefined;
 
   if (shapefile) {
-    const shp = files.reverse().find((file) => file.name.endsWith('.shp'));
+    const shp = [...files].reverse().find((file) => file.name.endsWith('.shp'));
     shape_date = shp?.lastModified;
   }
 

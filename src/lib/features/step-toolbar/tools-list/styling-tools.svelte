@@ -8,8 +8,10 @@
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
+  import { CSS_CLASSES } from '../step-toolbar.constants';
 
   const legendState = $derived(getLegendState());
   const showLegendBadge = $derived(!legendState.hasBeenOpened);
@@ -18,10 +20,23 @@
     legendActions.markAsOpened();
     selectTool(StylingTools.Legend);
   }
+
+  function handleAnnotationsClick() {
+    if (globalState.selectedTool === StylingTools.Annotations) {
+      selectTool(StylingTools.Annotations);
+      return;
+    }
+
+    annotationsActions.initPageElements({
+      withPlaceholders: true,
+      visible: true
+    });
+    selectTool(StylingTools.Annotations);
+  }
 </script>
 
 <ToolsListContainer>
-  <Grid noGutter padding={false} class="tools-grid">
+  <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
     <Row>
       <Column>
         <Button
@@ -38,7 +53,7 @@
 
     <Row>
       <Column>
-        <div class="tool-button-wrapper">
+        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
           <Button
             tooltipPosition="right"
             kind="ghost"
@@ -49,7 +64,7 @@
             onclick={handleLegendClick}
           />
           {#if showLegendBadge}
-            <span class="notification-badge"></span>
+            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
           {/if}
         </div>
       </Column>
@@ -78,7 +93,7 @@
           icon={Edit}
           size="small"
           isSelected={globalState.selectedTool === StylingTools.Annotations}
-          onclick={() => selectTool(StylingTools.Annotations)}
+          onclick={handleAnnotationsClick}
         />
       </Column>
     </Row>
@@ -100,12 +115,12 @@
 </ToolsListContainer>
 
 <style>
-  .tool-button-wrapper {
+  :global(.tool-button-wrapper) {
     position: relative;
     display: inline-block;
   }
 
-  .notification-badge {
+  :global(.notification-badge) {
     position: absolute;
     top: 2px;
     right: 2px;

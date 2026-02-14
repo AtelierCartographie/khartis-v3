@@ -11,39 +11,17 @@ interface ProjectsState {
   error?: string;
 }
 
-class ProjectsStore {
-  private _state = $state<ProjectsState>({
+function createProjectsStore() {
+  const state = $state<ProjectsState>({
     projects: [],
     currentProject: undefined,
     isLoading: false,
     error: undefined
   });
 
-  constructor() {
-    if (typeof window !== 'undefined') {
-      this.refresh();
-    }
-  }
-
-  get projects(): SavedProjectMetadata[] {
-    return this._state.projects;
-  }
-
-  get currentProject(): SavedProjectMetadata | undefined {
-    return this._state.currentProject;
-  }
-
-  get isLoading(): boolean {
-    return this._state.isLoading;
-  }
-
-  get error(): string | undefined {
-    return this._state.error;
-  }
-
-  async refresh(): Promise<void> {
-    this._state.isLoading = true;
-    this._state.error = undefined;
+  async function refresh(): Promise<void> {
+    state.isLoading = true;
+    state.error = undefined;
 
     try {
       const metadata = await projectRepository.listMetadata();
@@ -53,34 +31,34 @@ class ProjectsStore {
         updatedAt: new Date(entry.updatedAt)
       }));
 
-      this._state.projects = normalized;
+      state.projects = normalized;
 
       const currentId = projectStore.currentProject?.id;
-      this._state.currentProject = currentId
-        ? this._state.projects.find((project) => project.id === currentId)
+      state.currentProject = currentId
+        ? state.projects.find((project) => project.id === currentId)
         : undefined;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to load projects';
-      this._state.error = message;
+      state.error = message;
     } finally {
-      this._state.isLoading = false;
+      state.isLoading = false;
     }
   }
 
-  getProjectById(id: string): SavedProjectMetadata | undefined {
-    return this._state.projects.find((project) => project.id === id);
+  function getProjectById(id: string): SavedProjectMetadata | undefined {
+    return state.projects.find((project) => project.id === id);
   }
 
-  async duplicateProject(
+  async function duplicateProject(
     id: string
   ): Promise<SavedProjectMetadata | undefined> {
     const newProjectId = await projectStore.duplicateProject(id);
-    await this.refresh();
-    return this.getProjectById(newProjectId);
+    await refresh();
+    return getProjectById(newProjectId);
   }
 
-  async updateProject(
+  async function updateProject(
     id: string,
     updates: Partial<Pick<SavedProjectMetadata, 'name' | 'description'>>
   ): Promise<SavedProjectMetadata | undefined> {
@@ -107,15 +85,39 @@ class ProjectsStore {
 
     project.manifest.updatedAt = new Date();
     await projectRepository.save(project);
-    await this.refresh();
+    await refresh();
 
-    return this.getProjectById(id);
+    return getProjectById(id);
   }
 
-  async openProject(id: string): Promise<void> {
+  async function openProject(id: string): Promise<void> {
     await projectStore.loadProject(id);
-    await this.refresh();
+    await refresh();
   }
+
+  if (typeof window !== 'undefined') {
+    refresh();
+  }
+
+  return {
+    get projects(): SavedProjectMetadata[] {
+      return state.projects;
+    },
+    get currentProject(): SavedProjectMetadata | undefined {
+      return state.currentProject;
+    },
+    get isLoading(): boolean {
+      return state.isLoading;
+    },
+    get error(): string | undefined {
+      return state.error;
+    },
+    refresh,
+    getProjectById,
+    duplicateProject,
+    updateProject,
+    openProject
+  };
 }
 
-export const projectsStore = new ProjectsStore();
+export const projectsStore = createProjectsStore();
