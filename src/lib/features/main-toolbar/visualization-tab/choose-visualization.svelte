@@ -13,6 +13,7 @@
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -34,6 +35,7 @@
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { mapSuggestionToType } from './suggestion.utils';
+  import { UI_CONSTANTS } from '../constants';
 
   interface Props {
     onCreateVisualization?: () => void;
@@ -41,19 +43,16 @@
 
   const { onCreateVisualization }: Props = $props();
 
-  const SUGGESTIONS_PER_PAGE = 3;
-  const MAX_SUGGESTIONS = 12;
-
   let selectedFieldId = $state<number>(0);
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
-  let visibleCount = $state(SUGGESTIONS_PER_PAGE);
+  let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
     return dataset.columns
-      .filter((col) => col.type !== 'geometry')
+      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
       .map((col, id) => ({ id, text: col.name }));
   });
 
@@ -90,7 +89,7 @@
     const geometryType = (dataset.geometry?.type as GeometryType) || null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
-      maxSuggestions: MAX_SUGGESTIONS
+      maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
     });
   });
 
@@ -142,7 +141,7 @@
 
   function handleShowMore() {
     visibleCount = Math.min(
-      visibleCount + SUGGESTIONS_PER_PAGE,
+      visibleCount + UI_CONSTANTS.SUGGESTIONS_PER_PAGE,
       filteredSuggestions.length
     );
   }
@@ -214,7 +213,7 @@
 
   $effect(() => {
     void selectedFieldName;
-    visibleCount = SUGGESTIONS_PER_PAGE;
+    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
   $effect(() => {

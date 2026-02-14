@@ -44,17 +44,16 @@ const describe_full_macro = `CREATE OR replace MACRO describe_full(tabname) AS T
 );`;
 
 /**
- * SQL macro to create or replace a function named `share_rank_interval`.
- * This function calculates the share of consecutive values in a specified column.
+ * SQL macro that calculates the share of consecutive values in a specified column.
  *
- * The function:
- * 1. Orders non-null values and computes the previous value with LAG.
- * 2. Computes value differences between consecutive rows.
- * 3. Returns the proportion of differences equal to 1.
+ * Steps:
+ * 1. CTE `ordered_values`: selects column values and their previous values ordered by the column.
+ * 2. CTE `differences`: calculates the difference between each value and its previous value.
+ * 3. Calculates the share of consecutive values (diff = 1) over the total count of non-null values.
  *
- * @param {string} tabname - The table to analyze.
- * @param {string} colname - Column used for ranking and diff calculation.
- * @returns {number} The share of consecutive values in the column.
+ * @param tabname - The name of the table to query.
+ * @param colname - The name of the column to analyze.
+ * @returns The share of consecutive values in the specified column.
  */
 const share_rank_interval_macro = `CREATE OR REPLACE FUNCTION share_rank_interval(tabname, colname) AS (
     WITH ordered_values AS (
@@ -124,6 +123,10 @@ const summary_date_macro = `CREATE OR REPLACE MACRO summary_date(tabname, colnam
 	        max("colname") AS max
 );`;
 
+// HISTOGRAM NUMERIC
+// /!\ The built-in histogram_values() macro in DuckDB throws an error in this usage.
+// Replaced with a custom macro that only uses the parts needed for Khartis.
+// cf https://github.com/duckdb/duckdb/pull/12590
 const histogram_numeric_macro = `CREATE OR REPLACE MACRO histogram_numeric(tabname, colname) AS TABLE(
 	WITH bins AS (
 		FROM query_table(tabname::VARCHAR)
@@ -167,6 +170,7 @@ const histogram_date_macro = `CREATE OR REPLACE MACRO histogram_date(tabname, co
 	FROM nulls_count
 );`;
 
+// HISTOGRAM CATEGORICAL
 const histogram_categorical_macro = `CREATE OR REPLACE MACRO histogram_categorical(tabname, colname) AS TABLE (
 	WITH nrow AS (
 		SELECT count(*) AS total FROM query_table(tabname)

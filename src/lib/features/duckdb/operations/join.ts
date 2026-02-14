@@ -7,10 +7,27 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
-import { DUCK_CONST } from '../constants';
+import { DUCK_CONST, TABLE_PATTERNS } from '../constants';
 import { executeQuery } from '../core/query';
 import type { AnalysisResults, DuckDBContext, JoinByIdOptions } from '../types';
 
+/**
+ * Joins a table to one or multiple basemaps based on Jaro-Winkler similarity of an ID column.
+ *
+ * Provides a unified interface for joining to either multiple basemaps
+ * (using `basemaps_table`) or a single basemap (using `basemap_table`, `basemap_id`,
+ * and optionally `basemap_others_id`). Uses the `apply_join_across_basemaps` SQL macro
+ * and generates a synthesis of join results via `join_synthesis`.
+ *
+ * @param ctx - The DuckDB context.
+ * @param table - The name of the table to join.
+ * @param table_id - The name of the ID column in the table.
+ * @param options.basemaps_table - The name of the table containing multiple basemaps.
+ * @param options.basemap_table - The name of a single basemap table.
+ * @param options.basemap_id - The main ID column in the single basemap table.
+ * @param options.basemap_others_id - Other ID column names in the single basemap table (optional).
+ * @returns A synthesis: basemap, share_basemap, share_candidate.
+ */
 export async function joinById(
   ctx: DuckDBContext,
   table: string,
@@ -43,7 +60,7 @@ export async function joinById(
     ? escapeSqlString(basemap_others_id)
     : undefined;
 
-  const table_name = `${table}_join_results`;
+  const table_name = `${table}${TABLE_PATTERNS.JOIN_RESULTS_SUFFIX}`;
   const escapedTableName = escapeSqlString(table_name);
   const escapedGeoCol = escapeIdentifier(table_id);
   let basemap_join_ref_name: string | null = null;
@@ -69,12 +86,12 @@ export async function joinById(
   };
 
   if (basemaps_table) {
-    const unified_table = 'unified_basemap_attributes';
+    const unified_table = TABLE_PATTERNS.UNIFIED_BASEMAP_ATTRS;
 
     const customTableCheck = (await executeQuery(
       ctx.connection,
       `SELECT COUNT(*) as cnt FROM information_schema.tables
-       WHERE table_name = 'custom_basemap_attributes'`,
+       WHERE table_name = '${TABLE_PATTERNS.CUSTOM_BASEMAP_ATTRS}'`,
       { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     )) as Array<{ cnt: number }>;
     const hasCustomTable = Number(customTableCheck?.[0]?.cnt ?? 0) > 0;
@@ -83,7 +100,7 @@ export async function joinById(
     if (hasCustomTable) {
       const customCheck = (await executeQuery(
         ctx.connection,
-        `SELECT COUNT(*) as count FROM custom_basemap_attributes`,
+        `SELECT COUNT(*) as count FROM ${TABLE_PATTERNS.CUSTOM_BASEMAP_ATTRS}`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ count: number }>;
       hasCustomAttributes = Number(customCheck?.[0]?.count ?? 0) > 0;
@@ -95,7 +112,7 @@ export async function joinById(
         `CREATE OR REPLACE TABLE "${escapeIdentifier(unified_table)}" AS
         SELECT * FROM "${escapeIdentifier(basemaps_table!)}"
         UNION ALL
-        SELECT * FROM custom_basemap_attributes`,
+        SELECT * FROM ${TABLE_PATTERNS.CUSTOM_BASEMAP_ATTRS}`,
         { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
       );
       markTableMutated(ctx, unified_table);
@@ -152,6 +169,17 @@ export async function joinById(
   return synthesis as AnalysisResults;
 }
 
+/**
+ * Applies a join association to a table based on a previously performed join operation.
+ *
+ * Retrieves the join association stored during a previous `joinById` call and applies it,
+ * adding columns from the join table to the original table: basemap_id and typo_match
+ * (exact, partial, etc.). Deduplicates by keeping only the best score per geoname.
+ *
+ * @param ctx - The DuckDB context.
+ * @param table - The name of the table to which the join association will be applied.
+ * @param basemap - The name of the basemap to filter the join results by.
+ */
 export async function applyJoinAssociation(
   ctx: DuckDBContext,
   table: string,

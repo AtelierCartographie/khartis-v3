@@ -4,6 +4,7 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import {
     dataTabActions,
     dataTabState
@@ -71,7 +72,10 @@
     if (!selectedDataset) return [];
 
     return selectedDataset.columns
-      .filter((col) => col.name !== 'geometry' && col.name !== '__id')
+      .filter(
+        (col) =>
+          col.name !== INTERNAL_COLUMN.GEOMETRY && col.name !== INTERNAL_COLUMN.ID
+      )
       .map((col, index) => {
         const geoCol = geoDetection?.geoColumns.find(
           (gc) => gc.columnName === col.name
@@ -651,7 +655,7 @@
     align-items: center;
     padding: 0 8px;
     pointer-events: none;
-    z-index: 1;
+    z-index: var(--z-base);
   }
 
   /* Hide ComboBox text when badge is showing */

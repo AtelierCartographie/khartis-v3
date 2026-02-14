@@ -2,7 +2,8 @@ export { Duck, initDuckDB } from './duck';
 export { duckDBOrchestrator } from './orchestrator/orchestrator.svelte';
 export { validateGPSColumns } from './orchestrator/gps-ops';
 export type { GPSValidationResult } from './orchestrator/gps-ops';
-export { RefineOperation } from './types';
+export { DuckDBSimplifiedType, RefineOperation } from './types';
+export { GEO_CONSTANTS } from './constants';
 export type {
   AnalyseOptions,
   AnalysisResult,

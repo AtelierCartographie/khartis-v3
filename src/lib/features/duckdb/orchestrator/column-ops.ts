@@ -10,6 +10,7 @@ import {
   type AnalysisResult,
   type ArrowTableLike
 } from '../types';
+import { SQL_FUNCTIONS } from '../constants';
 
 export interface DuckDBClient {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
@@ -288,9 +289,9 @@ const BLOCKED_PATTERN = new RegExp(
 );
 
 const BLOCKED_FUNCTIONS = [
-  'read_csv',
-  'read_csv_auto',
-  'read_parquet',
+  SQL_FUNCTIONS.READ_CSV,
+  SQL_FUNCTIONS.READ_CSV_AUTO,
+  SQL_FUNCTIONS.READ_PARQUET,
   'read_json',
   'read_json_auto',
   'read_text',
@@ -329,13 +330,17 @@ export function validateExpression(expression: string): void {
     throw new DuckDBError(m.error_calc_expression_forbidden_semicolon());
   }
 
-  if (/\([\s]*SELECT\b/i.test(expression)) {
+  // Strip string literals before checking for blocked keywords
+  // so that 'FROM PARIS' inside a string doesn't trigger false positives
+  const stripped = expression.replace(/'[^']*'/g, "''");
+
+  if (/\([\s]*SELECT\b/i.test(stripped)) {
     throw new DuckDBError(
       m.error_calc_expression_forbidden_keyword({ keyword: 'SUBQUERY' })
     );
   }
 
-  const match = expression.match(BLOCKED_PATTERN);
+  const match = stripped.match(BLOCKED_PATTERN);
   if (match) {
     throw new DuckDBError(
       m.error_calc_expression_forbidden_keyword({
@@ -344,7 +349,7 @@ export function validateExpression(expression: string): void {
     );
   }
 
-  const funcMatch = expression.match(BLOCKED_FUNCTIONS_PATTERN);
+  const funcMatch = stripped.match(BLOCKED_FUNCTIONS_PATTERN);
   if (funcMatch) {
     throw new DuckDBError(
       m.error_calc_expression_forbidden_keyword({

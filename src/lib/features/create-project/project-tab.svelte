@@ -2,6 +2,7 @@
   import { RadioButton } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
+  import { KEY } from '../commons/constants/dom.constants';
 
   interface ProjectCardProps {
     title: string;
@@ -26,7 +27,7 @@
   }: ProjectCardProps = $props();
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter' || e.key === ' ') {
+    if (e.key === KEY.ENTER || e.key === KEY.SPACE) {
       e.preventDefault();
       onclick?.(e);
     }

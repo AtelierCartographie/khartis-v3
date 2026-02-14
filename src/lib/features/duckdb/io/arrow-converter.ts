@@ -1,5 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { getContext, isInitialized } from '../core/engine';
 
 export function convertTabularDataToArrow(
@@ -14,7 +15,7 @@ export function convertTabularDataToArrow(
   if (options.addRowId) {
     const ids = new Int32Array(data.length);
     for (let i = 0; i < data.length; i++) ids[i] = i + 1;
-    vectors['__id'] = vectorFromArray(ids);
+    vectors[INTERNAL_COLUMN.ID] = vectorFromArray(ids);
   }
 
   for (const col of columns) {

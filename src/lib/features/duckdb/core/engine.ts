@@ -7,7 +7,7 @@ import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url'
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
-import { DUCK_CONST } from '../constants';
+import { DUCK_CONST, EXTENSIONS } from '../constants';
 import type {
   CacheState,
   DescribeResult,
@@ -159,9 +159,13 @@ async function loadSpatialExtension(): Promise<void> {
 
   const start = performance.now();
   try {
-    await executeQuery(connection, `INSTALL spatial; LOAD spatial;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    await executeQuery(
+      connection,
+      `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
     extensionsLoaded.spatial = true;
     logger.debug('Spatial extension preloaded', LogCategory.DUCKDB, {
       durationMs: (performance.now() - start).toFixed(2)
@@ -178,9 +182,13 @@ async function loadHTTPFSExtension(): Promise<void> {
 
   const start = performance.now();
   try {
-    await executeQuery(connection, `INSTALL httpfs; LOAD httpfs;`, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
+    await executeQuery(
+      connection,
+      `INSTALL ${EXTENSIONS.HTTPFS}; LOAD ${EXTENSIONS.HTTPFS};`,
+      {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }
+    );
     extensionsLoaded.httpfs = true;
     logger.debug('HTTPFS extension preloaded', LogCategory.DUCKDB, {
       durationMs: (performance.now() - start).toFixed(2)
@@ -196,17 +204,9 @@ async function preloadExtensions(): Promise<void> {
   const startTime = performance.now();
   logger.info('Preloading DuckDB extensions', LogCategory.DUCKDB);
 
-  const results = await Promise.allSettled([
-    loadSpatialExtension(),
-    loadHTTPFSExtension()
-  ]);
-
-  const successful = results.filter((r) => r.status === 'fulfilled').length;
-  const failed = results.filter((r) => r.status === 'rejected').length;
+  await Promise.all([loadSpatialExtension(), loadHTTPFSExtension()]);
 
   logger.success('Extensions preloaded', LogCategory.DUCKDB, {
-    successful,
-    failed,
     totalDurationMs: (performance.now() - startTime).toFixed(2)
   });
 }

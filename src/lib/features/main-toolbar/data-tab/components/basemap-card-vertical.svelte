@@ -4,6 +4,8 @@
   import { RadioButton } from 'carbon-components-svelte';
   import { Calendar, Earth } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { UI_CONSTANTS } from '../../constants';
 
   interface BasemapCardVerticalProps {
     basemap: BasemapMetadata;
@@ -30,7 +32,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (!disabled && (event.key === 'Enter' || event.key === ' ')) {
+    if (!disabled && (event.key === KEY.ENTER || event.key === KEY.SPACE)) {
       event.preventDefault();
       handleCardClick();
     }
@@ -55,11 +57,9 @@
     matchScore !== undefined ? Math.round(matchScore) : undefined
   );
 
-  const TOTAL_SEGMENTS = 4;
-
   const filledSegments = $derived(
     matchPercentage !== undefined
-      ? Math.round((matchPercentage / 100) * TOTAL_SEGMENTS)
+      ? Math.round((matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS)
       : 0
   );
 
@@ -150,7 +150,7 @@
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        {#each Array(TOTAL_SEGMENTS) as _, i (i)}
+        {#each Array(UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS) as _, i (i)}
           <div class="segment" class:filled={i < filledSegments}></div>
         {/each}
       </div>

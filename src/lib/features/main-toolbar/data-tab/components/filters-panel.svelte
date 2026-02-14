@@ -11,6 +11,7 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { ColumnType } from '$lib/features/data-pipeline';
   import {
     duckDBOrchestrator,
@@ -31,7 +32,7 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
     selectedDataset?.columns.filter(
-      (c) => c.name !== 'geom' && c.name !== '__id'
+      (c) => c.name !== INTERNAL_COLUMN.GEOM && c.name !== INTERNAL_COLUMN.ID
     ) ?? []
   );
 

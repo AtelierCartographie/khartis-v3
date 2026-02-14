@@ -37,6 +37,7 @@
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
   import { resolveSelectedDuckTableName } from './services/dataset-resolution';
+  import { UI_CONSTANTS } from '../constants';
 
   const selectedDataset = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -385,7 +386,6 @@
 
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
-  const MAP_HIGHLIGHT_DEBOUNCE_MS = 800;
   const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
 
   $effect(() => {
@@ -409,7 +409,7 @@
       } else {
         mapHighlightStore.clearHighlights();
       }
-    }, MAP_HIGHLIGHT_DEBOUNCE_MS);
+    }, UI_CONSTANTS.MAP_HIGHLIGHT_DEBOUNCE_MS);
     return () => clearTimeout(mapHighlightTimer);
   });
 
@@ -418,9 +418,6 @@
       dataTabStore.markStepComplete(0);
     }
   });
-
-  const DATA_TABLE_SKELETON_COLUMNS = 5;
-  const DATA_TABLE_SKELETON_ROWS = 5;
 </script>
 
 <section id="data-control-step">
@@ -538,8 +535,8 @@
         <DataTableSkeleton
           key={DATA_TABLE_SKELETON_HEADER_KEY}
           empty
-          columns={DATA_TABLE_SKELETON_COLUMNS}
-          rows={DATA_TABLE_SKELETON_ROWS}
+          columns={UI_CONSTANTS.DATA_TABLE_SKELETON_COLUMNS}
+          rows={UI_CONSTANTS.DATA_TABLE_SKELETON_ROWS}
         />
       </div>
     {:else}

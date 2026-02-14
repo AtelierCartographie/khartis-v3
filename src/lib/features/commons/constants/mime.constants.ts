@@ -1,0 +1,49 @@
+/**
+ * MIME type constants
+ *
+ * Standard MIME type strings used for file handling, Blob creation,
+ * and content type detection throughout the application.
+ */
+
+export const MIME = {
+  CSV: 'text/csv',
+  TSV: 'text/tab-separated-values',
+  JSON: 'application/json',
+  GEOJSON: 'application/geo+json',
+  PARQUET: 'application/parquet',
+  GEOPARQUET: 'application/x-geoparquet',
+  SHAPEFILE: 'application/x-shapefile',
+  SHAPEFILE_SHP: 'application/x-shapefile',
+  SHAPEFILE_DBF: 'application/x-dbf',
+  SHAPEFILE_PRJ: 'text/plain',
+  SHAPEFILE_CPG: 'text/plain',
+  SHAPEFILE_SHX: 'application/octet-stream',
+  GEOPACKAGE: 'application/geopackage+sqlite3',
+  KML: 'application/vnd.google-earth.kml+xml',
+  KMZ: 'application/vnd.google-earth.kmz',
+  GPX: 'application/gpx+xml',
+  ARROW: 'application/vnd.apache.arrow.file',
+  BINARY: 'application/octet-stream',
+  ZIP: 'application/zip',
+  XML: 'application/xml',
+  TEXT: 'text/plain',
+  HTML: 'text/html',
+  PDF: 'application/pdf',
+  PNG: 'image/png',
+  JPEG: 'image/jpeg',
+  SVG: 'image/svg+xml',
+  WEBP: 'image/webp',
+  FORM_DATA: 'multipart/form-data'
+} as const;
+
+export const MIME_PATTERNS = {
+  CSV: 'csv',
+  TAB_SEPARATED: 'tab-separated',
+  PARQUET: 'parquet',
+  ZIP: 'zip',
+  JSON: 'json',
+  GEOJSON: 'geo+json',
+  XML: 'xml',
+  SPREADSHEET: 'spreadsheet',
+  EXCEL: 'excel'
+} as const;

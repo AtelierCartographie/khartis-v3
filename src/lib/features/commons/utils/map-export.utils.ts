@@ -1,4 +1,5 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
 import type { Geometry, Position } from 'geojson';
 import {
@@ -23,6 +24,8 @@ import {
   DrawingType,
   LegendPosition
 } from '$lib/features/commons/constants/ui.constants';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 
 interface ExportOptions {
   width: number;
@@ -102,7 +105,7 @@ function calculateDatasetBounds(
     };
   }
 
-  const geometryColumn = dataset.columns.find((col) => col.type === 'geometry');
+  const geometryColumn = dataset.columns.find((col) => col.type === COLUMN_TYPE_GEOMETRY);
   if (!geometryColumn) return null;
 
   let minX = Infinity;
@@ -231,26 +234,26 @@ function renderGeometryToSvg(
   if (!geometry || !geometry.type) return '';
 
   switch (geometry.type) {
-    case 'Point':
+    case GEOJSON_TYPE.POINT:
       return renderPointToSvg(geometry.coordinates, project, style, radius);
 
-    case 'MultiPoint':
+    case GEOJSON_TYPE.MULTI_POINT:
       return geometry.coordinates
         .map((coord) => renderPointToSvg(coord, project, style, radius))
         .join('\n');
 
-    case 'LineString':
+    case GEOJSON_TYPE.LINE_STRING:
       return renderLineToSvg(geometry.coordinates, project, style);
 
-    case 'MultiLineString':
+    case GEOJSON_TYPE.MULTI_LINE_STRING:
       return geometry.coordinates
         .map((line) => renderLineToSvg(line, project, style))
         .join('\n');
 
-    case 'Polygon':
+    case GEOJSON_TYPE.POLYGON:
       return renderPolygonToSvg(geometry.coordinates, project, style);
 
-    case 'MultiPolygon':
+    case GEOJSON_TYPE.MULTI_POLYGON:
       return geometry.coordinates
         .map((polygon) => renderPolygonToSvg(polygon, project, style))
         .join('\n');
@@ -732,7 +735,7 @@ export function exportMapToSvg(
 
   const project = createProjection(bounds, opts.width, opts.height);
 
-  let svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+  let svgContent = `<?xml version="1.0" encoding="${PIPELINE_CONST.ENCODING.DEFAULT}"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
   <defs></defs>
   <rect id="background" width="100%" height="100%" fill="${opts.backgroundColor}"/>
@@ -772,7 +775,7 @@ export function exportMapToSvg(
     }
 
     const geometryColumn = dataset.columns.find(
-      (col) => col.type === 'geometry'
+      (col) => col.type === COLUMN_TYPE_GEOMETRY
     );
 
     logger.info('[SVG DEBUG] Geometry column search', LogCategory.EXPORT, {
@@ -822,10 +825,8 @@ export function exportMapToSvg(
       const svgElement = renderGeometryToSvg(geometry, project, style, radius);
 
       if (svgElement) {
-        const isPolygon = ['Polygon', 'MultiPolygon'].includes(geometry.type);
-        const isLine = ['LineString', 'MultiLineString'].includes(
-          geometry.type
-        );
+        const isPolygon = geometry.type === GEOJSON_TYPE.POLYGON || geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
+        const isLine = geometry.type === GEOJSON_TYPE.LINE_STRING || geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
         if (isPolygon || isLine) {
           polygons.push(`        ${svgElement}`);
         } else {
