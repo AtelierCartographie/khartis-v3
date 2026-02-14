@@ -2,6 +2,7 @@
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Component } from 'svelte';
   import { untrack } from 'svelte';
+  import { KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface SectionHeaderWithIconProps {
     title: string;
@@ -36,7 +37,7 @@
   aria-expanded={collapsible ? expanded : undefined}
   onclick={collapsible ? toggleExpanded : undefined}
   onkeydown={(event: KeyboardEvent) => {
-    if (collapsible && (event.key === 'Enter' || event.key === ' ')) {
+    if (collapsible && (event.key === KEY.ENTER || event.key === KEY.SPACE)) {
       event.preventDefault();
       toggleExpanded();
     }

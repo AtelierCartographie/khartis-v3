@@ -755,7 +755,7 @@
   thead {
     position: sticky;
     top: 0;
-    z-index: 10;
+    z-index: var(--z-content);
     background-color: #e0e0e0;
   }
 
@@ -768,7 +768,7 @@
     background-color: #e0e0e0;
     position: sticky;
     left: 0;
-    z-index: 1;
+    z-index: var(--z-base);
     overflow: visible;
   }
 
@@ -856,7 +856,7 @@
     position: absolute;
     inset: 0;
     background-color: var(--cds-ui-background);
-    z-index: 20;
+    z-index: var(--z-content-header);
     overflow: hidden;
   }
 

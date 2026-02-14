@@ -12,6 +12,7 @@ export interface ColorState {
 }
 
 export interface GeoIndicationsState {
+  visible: boolean;
   scale: {
     enabled: boolean;
     form: ScaleForm;

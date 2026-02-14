@@ -1,49 +1,56 @@
-export class ProcessingSemaphore {
-  private active = 0;
+export interface ProcessingSemaphore {
+  run: <T>(fn: () => Promise<T>) => Promise<T>;
+  readonly activeCount: number;
+  readonly queuedCount: number;
+  readonly isAtCapacity: boolean;
+}
 
-  private readonly queue: Array<() => void> = [];
-
-  constructor(private readonly maxConcurrent: number = 2) {
-    if (maxConcurrent < 1) {
-      throw new Error('maxConcurrent must be at least 1');
-    }
+export function createProcessingSemaphore(
+  maxConcurrent: number = 2
+): ProcessingSemaphore {
+  if (maxConcurrent < 1) {
+    throw new Error('maxConcurrent must be at least 1');
   }
 
-  private async acquire(): Promise<void> {
-    while (this.active >= this.maxConcurrent) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  async function acquire(): Promise<void> {
+    while (active >= maxConcurrent) {
       await new Promise<void>((resolve) => {
-        this.queue.push(resolve);
+        queue.push(resolve);
       });
     }
-    this.active++;
+    active++;
   }
 
-  private release(): void {
-    this.active--;
-    const next = this.queue.shift();
+  function release(): void {
+    active--;
+    const next = queue.shift();
     if (next) {
       next();
     }
   }
 
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire();
+  async function run<T>(fn: () => Promise<T>): Promise<T> {
+    await acquire();
     try {
       return await fn();
     } finally {
-      this.release();
+      release();
     }
   }
 
-  get activeCount(): number {
-    return this.active;
-  }
-
-  get queuedCount(): number {
-    return this.queue.length;
-  }
-
-  get isAtCapacity(): boolean {
-    return this.active >= this.maxConcurrent;
-  }
+  return {
+    run,
+    get activeCount(): number {
+      return active;
+    },
+    get queuedCount(): number {
+      return queue.length;
+    },
+    get isAtCapacity(): boolean {
+      return active >= maxConcurrent;
+    }
+  };
 }

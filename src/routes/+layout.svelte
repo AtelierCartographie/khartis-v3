@@ -9,12 +9,14 @@
     globalState,
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { EVENT } from '$lib/features/commons/constants/dom.constants';
 
   initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -24,6 +26,10 @@
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
+  import {
+    annotationsActions,
+    getAnnotationsState
+  } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
@@ -41,6 +47,8 @@
 
   let { children } = $props();
   let isLoading = $state(true);
+  let previousStep = $state<ToolbarStep | null>(null);
+  let stylingElementsInitializedForProject = $state<string | null>(null);
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
@@ -61,16 +69,15 @@
     globalActions.initializeFromUrl();
 
     handleResize();
-    window.addEventListener('resize', handleResize);
+    window.addEventListener(EVENT.RESIZE, handleResize);
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (projectStore.isDirty) {
         e.preventDefault();
-        // Legacy browsers require returnValue to be set
         e.returnValue = '';
       }
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
 
     const initApp = async () => {
       try {
@@ -131,6 +138,37 @@
   const pageTransformStyle = $derived(
     `transform: scale(${pageZoomScale}); transform-origin: center center;`
   );
+
+  $effect(() => {
+    const currentStep = globalState.selectedStep;
+    const currentProjectId = projectStore.currentProject?.id ?? null;
+    const enteringStylingStep =
+      currentStep === ToolbarStep.Styling &&
+      previousStep !== ToolbarStep.Styling;
+    const shouldInitStylingElements =
+      enteringStylingStep &&
+      currentProjectId !== null &&
+      stylingElementsInitializedForProject !== currentProjectId;
+
+    if (shouldInitStylingElements) {
+      const hasPageElements = getAnnotationsState().items.some(
+        (item) => item.role != null
+      );
+
+      if (hasPageElements) {
+        annotationsActions.setPageElementsVisibility(true);
+      } else {
+        annotationsActions.initPageElements({
+          withPlaceholders: true,
+          visible: true
+        });
+      }
+
+      stylingElementsInitializedForProject = currentProjectId;
+    }
+
+    previousStep = currentStep;
+  });
 </script>
 
 <Theme persist />
@@ -228,7 +266,7 @@
     position: absolute;
     top: var(--cds-spacing-03);
     right: var(--cds-spacing-03);
-    z-index: 10;
+    z-index: var(--z-content);
     pointer-events: none;
     opacity: 0.85;
   }

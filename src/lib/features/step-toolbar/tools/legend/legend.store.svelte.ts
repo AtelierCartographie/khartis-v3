@@ -7,31 +7,54 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type { LegendItem, LegendState, LegendStyle } from './legend.types';
+
+export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
+  hue: 0,
+  saturation: 0,
+  lightness: 0
+};
+
+export const DEFAULT_LEGEND_BACKGROUND_COLOR: LegendStyle['background']['color'] =
+  {
+    hue: 0,
+    saturation: 0,
+    lightness: 100
+  };
 
 const DEFAULT_STATE: LegendState = {
   items: [],
   position: LegendPosition.TOP_RIGHT,
   visible: true,
   style: {
-    fontFamily: 'Cabin',
-    fontSize: 12,
-    textColor: { hue: 0, saturation: 0, lightness: 0 },
+    fontFamily: LEGEND_DEFAULTS.FONT_FAMILY,
+    fontSize: LEGEND_DEFAULTS.FONT_SIZE,
+    textColor: { ...DEFAULT_LEGEND_TEXT_COLOR },
     background: {
       enabled: true,
-      color: { hue: 180, saturation: 50, lightness: 50 },
-      opacity: 100
+      color: { ...DEFAULT_LEGEND_BACKGROUND_COLOR },
+      opacity: LEGEND_DEFAULTS.OPACITY
     }
   },
   activeTab: LegendTab.CONTENT,
   hasBeenOpened: false
 };
 
+function normalizeOpacityValue(opacity: number): number | null {
+  const rounded = Math.round(opacity);
+  if (!Number.isFinite(rounded)) {
+    return null;
+  }
+  return Math.max(0, Math.min(100, rounded));
+}
+
 type LegendActions = {
   addLegendItem: (item: Omit<LegendItem, 'id'>) => LegendItem;
   removeLegendItem: (id: string) => void;
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
   toggleLegendVisibility: () => void;
+  setVisibility: (visible: boolean) => void;
   setPosition: (position: LegendPosition) => void;
   setActiveTab: (tab: LegendTab) => void;
   updateStyle: (updates: Partial<LegendStyle>) => void;
@@ -56,7 +79,7 @@ function createLegendItemFromVisualization(
   visualization: VisualizationConfig
 ): LegendItem {
   return {
-    id: `legend-viz-${visualization.id}`,
+    id: `${LEGEND_ID_PREFIXES.VIZ}${visualization.id}`,
     name: visualization.name,
     visible: true,
     title: visualization.name,
@@ -134,7 +157,7 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     addLegendItem: (item: Omit<LegendItem, 'id'>): LegendItem => {
       const newItem: LegendItem = {
         ...item,
-        id: `legend-${Date.now()}`
+        id: `${LEGEND_ID_PREFIXES.CUSTOM}${Date.now()}`
       };
       s.items = [...s.items, newItem];
       return newItem;
@@ -150,6 +173,9 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     toggleLegendVisibility: () => {
       s.visible = !s.visible;
     },
+    setVisibility: (visible: boolean) => {
+      s.visible = visible;
+    },
     setPosition: (position: LegendPosition) => {
       s.position = position;
     },
@@ -162,7 +188,17 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     updateBackground: (
       updates: Partial<LegendState['style']['background']>
     ) => {
-      Object.assign(s.style.background, updates);
+      const normalizedUpdates = { ...updates };
+      if (updates.opacity !== undefined) {
+        const normalizedOpacity = normalizeOpacityValue(updates.opacity);
+        if (normalizedOpacity === null) {
+          delete normalizedUpdates.opacity;
+        } else {
+          normalizedUpdates.opacity = normalizedOpacity;
+        }
+      }
+
+      Object.assign(s.style.background, normalizedUpdates);
     },
     markAsOpened: () => {
       s.hasBeenOpened = true;

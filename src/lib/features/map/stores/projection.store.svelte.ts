@@ -15,87 +15,87 @@ interface ProjectionState {
 
 const DEFAULT_CANVAS_SIZE: CanvasSize = { width: 800, height: 600 };
 
-class ProjectionStore {
-  private _state = $state<ProjectionState>({
+function createProjectionStore() {
+  const state = $state<ProjectionState>({
     referenceBbox: null,
     referenceGeoMetadata: null,
     canvasSize: DEFAULT_CANVAS_SIZE,
     modelMatrix: null
   });
 
-  get referenceBbox(): BBox | null {
-    return this._state.referenceBbox;
-  }
-
-  get modelMatrix(): Matrix4 | null {
-    return this._state.modelMatrix;
-  }
-
-  get canvasSize(): CanvasSize {
-    return this._state.canvasSize;
-  }
-
-  get hasProjection(): boolean {
-    return this._state.modelMatrix !== null;
-  }
-
-  setReferenceBboxFromMetadata(geoMetadata: string): void {
-    const bbox = get_bbox_from_geoparquet(geoMetadata);
-    if (bbox) {
-      this._state.referenceBbox = bbox;
-      this._state.referenceGeoMetadata = geoMetadata;
-      this.recalculateModelMatrix();
-    }
-  }
-
-  setReferenceBbox(bbox: BBox, geoMetadata?: string): void {
-    this._state.referenceBbox = bbox;
-    this._state.referenceGeoMetadata = geoMetadata ?? null;
-    this.recalculateModelMatrix();
-  }
-
-  updateCanvasSize(size: CanvasSize): void {
-    if (
-      size.width !== this._state.canvasSize.width ||
-      size.height !== this._state.canvasSize.height
-    ) {
-      this._state.canvasSize = size;
-      this.recalculateModelMatrix();
-    }
-  }
-
-  private recalculateModelMatrix(): void {
-    const { referenceBbox, referenceGeoMetadata, canvasSize } = this._state;
+  function recalculateModelMatrix(): void {
+    const { referenceBbox, referenceGeoMetadata, canvasSize } = state;
 
     if (referenceGeoMetadata) {
-      this._state.modelMatrix = get_model_matrix(
-        referenceGeoMetadata,
-        canvasSize
-      );
-    } else if (referenceBbox) {
-      this._state.modelMatrix = get_model_matrix_from_bbox(
-        referenceBbox,
-        canvasSize
-      );
-    } else {
-      this._state.modelMatrix = null;
+      state.modelMatrix = get_model_matrix(referenceGeoMetadata, canvasSize);
+      return;
+    }
+
+    if (referenceBbox) {
+      state.modelMatrix = get_model_matrix_from_bbox(referenceBbox, canvasSize);
+      return;
+    }
+
+    state.modelMatrix = null;
+  }
+
+  function setReferenceBboxFromMetadata(geoMetadata: string): void {
+    const bbox = get_bbox_from_geoparquet(geoMetadata);
+    if (bbox) {
+      state.referenceBbox = bbox;
+      state.referenceGeoMetadata = geoMetadata;
+      recalculateModelMatrix();
     }
   }
 
-  clear(): void {
-    this._state.referenceBbox = null;
-    this._state.referenceGeoMetadata = null;
-    this._state.modelMatrix = null;
+  function setReferenceBbox(bbox: BBox, geoMetadata?: string): void {
+    state.referenceBbox = bbox;
+    state.referenceGeoMetadata = geoMetadata ?? null;
+    recalculateModelMatrix();
   }
 
-  reset(): void {
-    this._state = {
-      referenceBbox: null,
-      referenceGeoMetadata: null,
-      canvasSize: DEFAULT_CANVAS_SIZE,
-      modelMatrix: null
-    };
+  function updateCanvasSize(size: CanvasSize): void {
+    if (
+      size.width !== state.canvasSize.width ||
+      size.height !== state.canvasSize.height
+    ) {
+      state.canvasSize = size;
+      recalculateModelMatrix();
+    }
   }
+
+  function clear(): void {
+    state.referenceBbox = null;
+    state.referenceGeoMetadata = null;
+    state.modelMatrix = null;
+  }
+
+  function reset(): void {
+    state.referenceBbox = null;
+    state.referenceGeoMetadata = null;
+    state.canvasSize = DEFAULT_CANVAS_SIZE;
+    state.modelMatrix = null;
+  }
+
+  return {
+    get referenceBbox(): BBox | null {
+      return state.referenceBbox;
+    },
+    get modelMatrix(): Matrix4 | null {
+      return state.modelMatrix;
+    },
+    get canvasSize(): CanvasSize {
+      return state.canvasSize;
+    },
+    get hasProjection(): boolean {
+      return state.modelMatrix !== null;
+    },
+    setReferenceBboxFromMetadata,
+    setReferenceBbox,
+    updateCanvasSize,
+    clear,
+    reset
+  };
 }
 
-export const projectionStore = new ProjectionStore();
+export const projectionStore = createProjectionStore();

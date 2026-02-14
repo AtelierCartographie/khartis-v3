@@ -4,6 +4,7 @@ import {
 } from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
+import { PIPELINE_CONST } from '../constants';
 
 export interface ShapefileValidation {
   isComplete: boolean;
@@ -14,21 +15,8 @@ export interface ShapefileValidation {
   hasMinimumRequired: boolean;
 }
 
-const REQUIRED_EXTENSIONS = ['.shp', '.shx', '.dbf'] as const;
-const OPTIONAL_EXTENSIONS = [
-  '.prj',
-  '.cpg',
-  '.sbn',
-  '.sbx',
-  '.fbn',
-  '.fbx',
-  '.ain',
-  '.aih',
-  '.ixs',
-  '.mxs',
-  '.atx',
-  '.xml'
-] as const;
+const REQUIRED_EXTENSIONS = PIPELINE_CONST.EXTENSIONS.SHAPEFILE_REQUIRED;
+const OPTIONAL_EXTENSIONS = PIPELINE_CONST.EXTENSIONS.SHAPEFILE_OPTIONAL;
 
 export function isShapefileComponent(filename: string): boolean {
   const ext = getFileExtensionWithDot(filename);

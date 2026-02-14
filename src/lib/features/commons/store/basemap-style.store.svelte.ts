@@ -5,48 +5,51 @@ import {
   getBasemapStyle
 } from '../../map/constants/basemap-styles';
 
-class BasemapStyleStore {
-  private _state = $state({
+function createBasemapStyleStore() {
+  const state = $state({
     selectedStyle: DEFAULT_BASEMAP_STYLE,
     referenceBasemapId: null as string | null
   });
 
-  get selectedStyle(): BasemapStyle {
-    return this._state.selectedStyle;
+  function setReferenceBasemap(id: string | null): void {
+    state.referenceBasemapId = id;
   }
 
-  get selectedStyleUrl(): string | maplibregl.StyleSpecification {
-    return getBasemapStyle(this._state.selectedStyle);
+  function setStyle(style: BasemapStyle): void {
+    state.selectedStyle = style;
   }
 
-  get requiresMapLibre(): boolean {
-    return this._state.selectedStyle !== BasemapStyle.BLANK_WHITE;
+  function reset(): void {
+    state.selectedStyle = DEFAULT_BASEMAP_STYLE;
+    state.referenceBasemapId = null;
   }
 
-  get referenceBasemapId(): string | null {
-    return this._state.referenceBasemapId;
-  }
-
-  setReferenceBasemap(id: string | null): void {
-    this._state.referenceBasemapId = id;
-  }
-
-  setStyle(style: BasemapStyle): void {
-    this._state.selectedStyle = style;
-  }
-
-  reset(): void {
-    this._state.selectedStyle = DEFAULT_BASEMAP_STYLE;
-    this._state.referenceBasemapId = null;
-  }
-
-  restoreFromSerialized(style: BasemapStyle): void {
+  function restoreFromSerialized(style: BasemapStyle): void {
     if (!style || !Object.values(BasemapStyle).includes(style)) {
-      this.reset();
+      reset();
       return;
     }
-    this._state.selectedStyle = style;
+    state.selectedStyle = style;
   }
+
+  return {
+    get selectedStyle(): BasemapStyle {
+      return state.selectedStyle;
+    },
+    get selectedStyleUrl(): string | maplibregl.StyleSpecification {
+      return getBasemapStyle(state.selectedStyle);
+    },
+    get requiresMapLibre(): boolean {
+      return state.selectedStyle !== BasemapStyle.BLANK_WHITE;
+    },
+    get referenceBasemapId(): string | null {
+      return state.referenceBasemapId;
+    },
+    setReferenceBasemap,
+    setStyle,
+    reset,
+    restoreFromSerialized
+  };
 }
 
-export const basemapStyleStore = new BasemapStyleStore();
+export const basemapStyleStore = createBasemapStyleStore();

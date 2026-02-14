@@ -1,8 +1,12 @@
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import { Duck } from '$lib/features/duckdb';
+import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import { generateCustomBasemapAttributes } from './generate-basemap-attributes';
 import { addGeoArrowMetadata } from './read-geojson-arrow';
 import * as m from '$lib/paraglide/messages';
@@ -75,12 +79,15 @@ async function processGeofileBasemapImport(
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    projection: 'EPSG:4326',
+    projection: GEO_CONSTANTS.WGS84_CRS,
     layers: [
       {
-        name: 'geom',
+        name: INTERNAL_COLUMN.GEOM,
         type: layerType,
-        count: Number(analysis.find((col) => col.name === 'geom')?.count) || 0
+        count:
+          Number(
+            analysis.find((col) => col.name === INTERNAL_COLUMN.GEOM)?.count
+          ) || 0
       }
     ],
     isCustom: true
@@ -89,7 +96,7 @@ async function processGeofileBasemapImport(
   await generateCustomBasemapAttributes(tableName, customBasemap.file);
 
   const arrowResult = await duck.query(
-    `SELECT * EXCLUDE (geom), ST_AsWKB(geom) as geom FROM "${tableName}"`,
+    `SELECT * EXCLUDE (${INTERNAL_COLUMN.GEOM}), ST_AsWKB(${INTERNAL_COLUMN.GEOM}) as ${INTERNAL_COLUMN.GEOM} FROM "${tableName}"`,
     { format: 'arrow-ipc' }
   );
   const geometryTable = addGeoArrowMetadata(
@@ -135,7 +142,7 @@ async function processParquetBasemapImport(
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    projection: 'EPSG:4326',
+    projection: GEO_CONSTANTS.WGS84_CRS,
     layers: [
       {
         name: geomColName,
@@ -235,7 +242,7 @@ export function createOSMBasemap(
     source: m.osm_basemap_source(),
     date: new Date().getFullYear().toString(),
     bbox: [-180, -90, 180, 90],
-    projection: 'EPSG:3857',
+    projection: GEO_CONSTANTS.WEB_MERCATOR_CRS,
     layers: [{ name: 'base', type: BasemapLayerType.POLYGON }],
     isCustom: true
   };
@@ -244,13 +251,14 @@ export function createOSMBasemap(
 async function queryBasemapBounds(
   tableName: string
 ): Promise<BasemapBounds | null> {
+  const escapedTable = escapeIdentifier(tableName);
   const bboxQuery = (await Duck.query(
     `SELECT
       ST_XMin(ST_Extent(geom)) as minX,
       ST_YMin(ST_Extent(geom)) as minY,
       ST_XMax(ST_Extent(geom)) as maxX,
       ST_YMax(ST_Extent(geom)) as maxY
-    FROM "${tableName}"`,
+    FROM "${escapedTable}"`,
     { format: 'array', useProxy: false }
   )) as Array<{
     minX: number | null;
@@ -279,9 +287,10 @@ async function queryBasemapBounds(
 }
 
 async function queryGeometryType(tableName: string): Promise<BasemapLayerType> {
+  const escapedTable = escapeIdentifier(tableName);
   const geomTypeQuery = (await Duck.query(
     `SELECT DISTINCT ST_GeometryType(geom) as geom_type
-     FROM "${tableName}"
+     FROM "${escapedTable}"
      LIMIT 1`,
     { format: 'array', useProxy: false }
   )) as Array<{ geom_type?: string }>;

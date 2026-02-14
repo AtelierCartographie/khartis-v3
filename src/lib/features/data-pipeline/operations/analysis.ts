@@ -29,7 +29,21 @@ export function enrichColumns(
       max: column.max,
       mean: column.mean ? Number(column.mean) : undefined,
       median: column.median ? Number(column.median) : undefined,
-      stdDev: column.stddev ? Number(column.stddev) : undefined
+      stdDev: column.stddev ? Number(column.stddev) : undefined,
+      share_integers:
+        column.share_integers != null
+          ? Number(column.share_integers)
+          : undefined,
+      share_floats:
+        column.share_floats != null ? Number(column.share_floats) : undefined,
+      share_rank_interval:
+        column.share_rank_interval != null
+          ? Number(column.share_rank_interval)
+          : undefined,
+      extent_magnitude:
+        column.extent_magnitude != null
+          ? Number(column.extent_magnitude)
+          : undefined
     }
   }));
 }
@@ -116,7 +130,7 @@ function buildDatasetResult(params: {
       geoColumns: geometryInfo
         ? [
             {
-              columnName: geometryInfo.type ? 'geom' : '',
+              columnName: geometryInfo.columnName ?? 'geom',
               type: 'unknown' as const,
               confidence: 1,
               index: 0,

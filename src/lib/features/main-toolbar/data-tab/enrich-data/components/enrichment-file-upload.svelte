@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -37,7 +38,7 @@
   <div class="import-grid">
     <FileUploaderDropContainer
       labelText={m.enrich_drag_drop_csv()}
-      accept={['.csv', '.tsv', '.txt']}
+      accept={[...PIPELINE_CONST.EXTENSIONS.TABULAR]}
       disabled={isUploading}
       on:change={(e) => onFileUpload(e.detail)}
     />

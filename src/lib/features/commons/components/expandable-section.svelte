@@ -5,6 +5,7 @@
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
   import Switch from './switch.svelte';
+  import { KEY } from '../constants/dom.constants';
 
   interface Props {
     title: string;
@@ -151,7 +152,8 @@
       disabled={disabled}
       onclick={toggle}
       onkeydown={(e: KeyboardEvent) =>
-        (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggle())}
+        (e.key === KEY.ENTER || e.key === KEY.SPACE) &&
+        (e.preventDefault(), toggle())}
     >
       <div class="section-title-group">
         <span class="section-title {titleClass}">

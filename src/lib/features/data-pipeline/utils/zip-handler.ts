@@ -2,6 +2,7 @@ import {
   IGNORED_FILE_PREFIXES,
   SHAPEFILE_EXTENSIONS
 } from '$lib/features/commons/constants/ui.constants';
+import { MIME } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '../constants';
 import { getFileExtensionWithDot } from '$lib/features/commons/utils/file.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -57,13 +58,22 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       );
     });
 
-    const files: ExtractedFile[] = Object.entries(unzipped)
-      .filter(([path]) => !shouldIgnoreFile(path))
-      .map(([path, content]) => ({
-        name: getFileName(path),
-        path,
-        content
-      }));
+    const MAX_DECOMPRESSED_SIZE = 500 * 1024 * 1024;
+    let totalSize = 0;
+    const files: ExtractedFile[] = [];
+
+    for (const [path, content] of Object.entries(unzipped)) {
+      if (shouldIgnoreFile(path)) continue;
+      totalSize += content.byteLength;
+      if (totalSize > MAX_DECOMPRESSED_SIZE) {
+        throw new Error(
+          m.pipeline_error_zip_extract_failed({
+            error: `Decompressed size exceeds ${MAX_DECOMPRESSED_SIZE / (1024 * 1024)}MB limit`
+          })
+        );
+      }
+      files.push({ name: getFileName(path), path, content });
+    }
 
     const shapefileInfo = detectShapefileInArchive(files);
 
@@ -139,25 +149,25 @@ export function createFileFromExtracted(
 
 function getMimeTypeForExtension(ext: string): string {
   const mimeTypes: Record<string, string> = {
-    '.csv': 'text/csv',
-    '.tsv': 'text/tab-separated-values',
-    '.txt': 'text/plain',
-    '.json': 'application/json',
-    '.geojson': 'application/geo+json',
-    '.parquet': 'application/octet-stream',
-    '.geoparquet': 'application/octet-stream',
-    '.arrow': 'application/vnd.apache.arrow.file',
-    '.shp': 'application/x-shapefile',
-    '.shx': 'application/octet-stream',
-    '.dbf': 'application/x-dbf',
-    '.prj': 'text/plain',
-    '.cpg': 'text/plain',
-    '.gpkg': 'application/geopackage+sqlite3',
-    '.kml': 'application/vnd.google-earth.kml+xml',
-    '.kmz': 'application/vnd.google-earth.kmz',
-    '.gpx': 'application/gpx+xml'
+    '.csv': MIME.CSV,
+    '.tsv': MIME.TSV,
+    '.txt': MIME.TEXT,
+    '.json': MIME.JSON,
+    '.geojson': MIME.GEOJSON,
+    '.parquet': MIME.BINARY,
+    '.geoparquet': MIME.BINARY,
+    '.arrow': MIME.ARROW,
+    '.shp': MIME.SHAPEFILE_SHP,
+    '.shx': MIME.SHAPEFILE_SHX,
+    '.dbf': MIME.SHAPEFILE_DBF,
+    '.prj': MIME.SHAPEFILE_PRJ,
+    '.cpg': MIME.SHAPEFILE_CPG,
+    '.gpkg': MIME.GEOPACKAGE,
+    '.kml': MIME.KML,
+    '.kmz': MIME.KMZ,
+    '.gpx': MIME.GPX
   };
-  return mimeTypes[ext] || 'application/octet-stream';
+  return mimeTypes[ext] || MIME.BINARY;
 }
 
 export function getShapefileFilesFromArchive(

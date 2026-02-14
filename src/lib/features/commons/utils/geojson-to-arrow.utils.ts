@@ -8,8 +8,9 @@ import {
   type DataType,
   type Table
 } from 'apache-arrow';
+import { INTERNAL_COLUMN } from '../constants/data.constants';
 
-const GEOMETRY_COLUMN_NAME = 'geom';
+const GEOMETRY_COLUMN_NAME = INTERNAL_COLUMN.GEOM;
 
 interface SchemaInfo {
   fields: Map<string, DataType>;

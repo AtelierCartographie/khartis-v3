@@ -43,7 +43,7 @@
     position: fixed;
     bottom: 16px;
     right: 16px;
-    z-index: 10000;
+    z-index: var(--z-notification);
     display: flex;
     flex-direction: column-reverse;
     gap: 8px;

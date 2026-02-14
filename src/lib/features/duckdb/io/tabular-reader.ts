@@ -15,6 +15,19 @@ import {
 } from './file-registry';
 import { addRowId } from './reader-utils';
 
+/**
+ * Reads tabular data from a given input and creates a table in DuckDB.
+ *
+ * @param ctx - The DuckDB context (db, connection, loaded_files, etc.).
+ * @param input - The input data: a string (copy-paste) or a File object.
+ * @param options.tablename - The name of the table to create. Auto-generated if not provided.
+ * @param options.decimal_separator - The decimal separator used in the CSV data (default ',').
+ * @param options.thousands_separator - Optional thousands separator.
+ * @param options.delimiter - Optional column delimiter.
+ * @param options.header - Whether the first row is a header (default true).
+ * @param options.format - The format of the input data: 'csv' (default), 'parquet', or 'arrow'.
+ * @returns The name of the created table.
+ */
 export async function readTabular(
   ctx: DuckDBContext,
   input: string | File,

@@ -34,6 +34,32 @@ import type {
   TableMetadata
 } from './types';
 
+/**
+ * DuckDB facade object exposing the legacy public API.
+ *
+ * Provides helpers to initialize the engine, ingest files, run queries,
+ * run analyses/search/join operations, export datasets and manage table metadata.
+ *
+ * Main API methods:
+ * - initDuckDB()
+ * - query(sql, options?)
+ * - register_files(files, options?)
+ * - read_tabular(input, options?)
+ * - read_geofile(geofile, options?)
+ * - read_link(url, options?)
+ * - describe_table(table)
+ * - get_row_count(table)
+ * - describeColumns(table)
+ * - analyse(table, options?)
+ * - searchInTable(table, searchQuery, options?)
+ * - join_by_id(table, tableId, options?)
+ * - apply_join_association(table, basemap)
+ * - copy_to_csv_as_string(table, options?)
+ * - copy_to_geoparquet_as_buffer(table)
+ * - drop_rows(table, rowsId)
+ * - get_table_metadata(table)
+ * - invalidateTableCache(table)
+ */
 export const Duck = {
   get db() {
     return isInitialized() ? getContext().db : null;
@@ -167,6 +193,23 @@ export const Duck = {
   get_table_metadata(table: string): TableMetadata {
     const ctx = getContext();
     return getTableMetadata(ctx, table);
+  },
+
+  cleanupTableResources(tableName: string): void {
+    if (!isInitialized()) return;
+    const ctx = getContext();
+
+    ctx.loaded_files.delete(tableName);
+
+    const registeredFile = Array.from(ctx.registered_files).find((id) =>
+      id.includes(tableName)
+    );
+    if (registeredFile) {
+      ctx.registered_files.delete(registeredFile);
+    }
+
+    ctx.table_metadata.delete(tableName);
+    ctx.table_geoparquet_cache.delete(tableName);
   }
 };
 
@@ -181,10 +224,15 @@ export async function initDuckDB(): Promise<void> {
   }
 
   duckInitPromise = (async () => {
-    await initEngine();
-    const allMacros =
-      breaksMacros + analyseMacros + join_macros + search_macros;
-    await loadMacros(allMacros);
+    try {
+      await initEngine();
+      const allMacros =
+        breaksMacros + analyseMacros + join_macros + search_macros;
+      await loadMacros(allMacros);
+    } catch (error) {
+      duckInitPromise = null;
+      throw error;
+    }
   })();
 
   await duckInitPromise;

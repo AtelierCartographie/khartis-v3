@@ -13,6 +13,7 @@ import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { ProjectionState } from './projections.types';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -142,7 +143,7 @@ const { actions, getState } = createToolStore<
               return null;
             }
             return {
-              type: 'Feature' as const,
+              type: GEOJSON_TYPE.FEATURE,
               geometry: d.geometry,
               properties: d as Record<string, unknown>
             };
@@ -157,7 +158,7 @@ const { actions, getState } = createToolStore<
       }
 
       const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
-        type: 'FeatureCollection',
+        type: GEOJSON_TYPE.FEATURE_COLLECTION,
         features
       };
 
@@ -176,7 +177,7 @@ const { actions, getState } = createToolStore<
           center: s.center
         });
 
-        return projected.type === 'FeatureCollection' ? projected : null;
+        return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
       }
 
       const projected = projectGeoJSON(geojson, s.selected, {
@@ -186,7 +187,7 @@ const { actions, getState } = createToolStore<
         center: s.center || [s.longitude, s.latitude]
       });
 
-      return projected.type === 'FeatureCollection' ? projected : null;
+      return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION ? projected : null;
     },
     getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
       return getProjectionById(s.selected);

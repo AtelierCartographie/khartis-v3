@@ -47,6 +47,7 @@ export interface AnnotationStyle {
 }
 
 export interface AnnotationsState {
+  visible: boolean;
   items: Annotation[];
   selectedId: string | null;
   activeType: AnnotationKind;

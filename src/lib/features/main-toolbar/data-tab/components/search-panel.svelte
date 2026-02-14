@@ -14,10 +14,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
   import * as m from '$lib/paraglide/messages';
-  import { SearchSource } from '../../constants';
-
-  const SEARCH_DEBOUNCE_MS = 500;
-  const MIN_SEARCH_LENGTH = 3;
+  import { SearchSource, UI_CONSTANTS } from '../../constants';
 
   export type CellHighlightType = 'exact' | 'contains' | 'partial';
 
@@ -118,7 +115,7 @@
     if (
       !tableName ||
       !trimmedQuery ||
-      trimmedQuery.length < MIN_SEARCH_LENGTH
+      trimmedQuery.length < UI_CONSTANTS.MIN_SEARCH_LENGTH
     ) {
       clearSearchResults();
       isSearching = false;
@@ -128,7 +125,7 @@
     isSearching = true;
     searchDebounceTimer = setTimeout(() => {
       executeSearch();
-    }, SEARCH_DEBOUNCE_MS);
+    }, UI_CONSTANTS.SEARCH_DEBOUNCE_MS);
   }
 
   async function executeSearch() {
@@ -136,7 +133,7 @@
     if (
       !tableName ||
       !trimmedQuery ||
-      trimmedQuery.length < MIN_SEARCH_LENGTH
+      trimmedQuery.length < UI_CONSTANTS.MIN_SEARCH_LENGTH
     ) {
       clearSearchResults();
       isSearching = false;
@@ -197,7 +194,7 @@
         pendingSearchQuery = null;
         if (
           pending === searchQuery.trim() &&
-          pending.length >= MIN_SEARCH_LENGTH
+          pending.length >= UI_CONSTANTS.MIN_SEARCH_LENGTH
         ) {
           isSearching = true;
           executeSearch();
@@ -208,14 +205,14 @@
 
   function handleSourceChange() {
     dataToolsStore.setSearchSource(searchSource);
-    if (searchQuery.trim().length >= MIN_SEARCH_LENGTH) {
+    if (searchQuery.trim().length >= UI_CONSTANTS.MIN_SEARCH_LENGTH) {
       isSearching = true;
       executeSearch();
     }
   }
 
   function handleReplace() {
-    if (!searchQuery || !replaceValue) return;
+    if (!searchQuery) return;
     const query = searchQuery;
     const value = replaceValue;
     const source = searchSource;
@@ -373,7 +370,7 @@
       <Button
         kind="secondary"
         size="small"
-        disabled={!searchQuery || !replaceValue || !hasExactMatches}
+        disabled={!searchQuery || !hasExactMatches}
         on:click={handleReplace}
       >
         {m.search_replace_button()}

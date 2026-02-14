@@ -35,6 +35,7 @@
     toVerifyCount: number;
     linkedVariableName: string | undefined;
     loading?: boolean;
+    joinFinalized?: boolean;
     onApplyCorrections: () => void;
     onFinalizeJoin: () => void;
   }
@@ -47,6 +48,7 @@
     toVerifyCount,
     linkedVariableName,
     loading = false,
+    joinFinalized = false,
     onApplyCorrections,
     onFinalizeJoin
   }: Props = $props();
@@ -67,7 +69,6 @@
   let unrecognizedExpanded = $state(false);
 
   const hasBlockingErrors = $derived(toVerifyCount > 0 || duplicateCount > 0);
-  const _hasWarnings = $derived(unrecognizedCount > 0);
 </script>
 
 <div class="join-assisted-section">
@@ -284,6 +285,15 @@
             </svelte:fragment>
           </InlineNotification>
         {/if}
+      </div>
+    {:else if joinedCount > 0 && joinFinalized}
+      <div class="notification-success">
+        <span class="notification-success-icon">
+          <CheckmarkFilled size={20} />
+        </span>
+        <span class="notification-success-text"
+          >{m.join_finalized_message()}</span
+        >
       </div>
     {:else if joinedCount > 0}
       <div class="notification-validation">
@@ -600,6 +610,27 @@
     min-width: 0;
     max-width: none;
     margin: 0;
+  }
+
+  .notification-success {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background-color: #defbe6;
+    border-left: 3px solid #24a148;
+    margin-top: 16px;
+  }
+
+  .notification-success-icon :global(svg) {
+    fill: #198038;
+  }
+
+  .notification-success-text {
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #044317;
   }
 
   .notification-validation {

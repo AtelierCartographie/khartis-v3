@@ -99,7 +99,7 @@
   .toggle-tab.active {
     color: var(--cds-text-primary);
     background-color: var(--cds-ui-03);
-    z-index: 1;
+    z-index: var(--z-base);
     flex: 1;
   }
 

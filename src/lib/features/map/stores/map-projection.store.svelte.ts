@@ -1,40 +1,52 @@
 export type MapProjectionType = 'mercator' | 'globe';
 
 const DEFAULT_MAP_PROJECTION: MapProjectionType = 'mercator';
+const PROJECTION_MERCATOR: MapProjectionType = 'mercator';
+const PROJECTION_GLOBE: MapProjectionType = 'globe';
 
-class MapProjectionStore {
-  private _state = $state({
+function createMapProjectionStore() {
+  const state = $state({
     projection: DEFAULT_MAP_PROJECTION as MapProjectionType
   });
 
-  get projection(): MapProjectionType {
-    return this._state.projection;
+  function setProjection(projection: MapProjectionType): void {
+    state.projection = projection;
   }
 
-  get isGlobe(): boolean {
-    return this._state.projection === 'globe';
+  function toggle(): void {
+    state.projection =
+      state.projection === PROJECTION_MERCATOR
+        ? PROJECTION_GLOBE
+        : PROJECTION_MERCATOR;
   }
 
-  setProjection(projection: MapProjectionType): void {
-    this._state.projection = projection;
+  function reset(): void {
+    state.projection = DEFAULT_MAP_PROJECTION;
   }
 
-  toggle(): void {
-    this._state.projection =
-      this._state.projection === 'mercator' ? 'globe' : 'mercator';
-  }
-
-  reset(): void {
-    this._state.projection = DEFAULT_MAP_PROJECTION;
-  }
-
-  restoreFromSerialized(projection: MapProjectionType): void {
-    if (!projection || (projection !== 'mercator' && projection !== 'globe')) {
-      this.reset();
+  function restoreFromSerialized(projection: MapProjectionType): void {
+    if (
+      !projection ||
+      (projection !== PROJECTION_MERCATOR && projection !== PROJECTION_GLOBE)
+    ) {
+      reset();
       return;
     }
-    this._state.projection = projection;
+    state.projection = projection;
   }
+
+  return {
+    get projection(): MapProjectionType {
+      return state.projection;
+    },
+    get isGlobe(): boolean {
+      return state.projection === PROJECTION_GLOBE;
+    },
+    setProjection,
+    toggle,
+    reset,
+    restoreFromSerialized
+  };
 }
 
-export const mapProjectionStore = new MapProjectionStore();
+export const mapProjectionStore = createMapProjectionStore();

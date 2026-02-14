@@ -11,20 +11,30 @@ export interface ConsoleError {
   location?: string;
 }
 
-export class ConsoleErrorTracker {
-  private errors: ConsoleError[] = [];
+const IGNORED_CONSOLE_PATTERNS = [
+  'ResizeObserver loop',
+  'favicon.ico',
+  '[vite]',
+  'HMR',
+  'hot module replacement'
+] as const;
 
-  private page: Page;
+export interface ConsoleErrorTracker {
+  start: () => void;
+  getErrors: () => ConsoleError[];
+  hasErrors: () => boolean;
+  getErrorSummary: () => string;
+  clear: () => void;
+}
 
-  constructor(page: Page) {
-    this.page = page;
-  }
+export function createConsoleErrorTracker(page: Page): ConsoleErrorTracker {
+  let errors: ConsoleError[] = [];
 
-  start(): void {
-    this.errors = [];
-    this.page.on('console', (msg) => {
+  function start(): void {
+    errors = [];
+    page.on('console', (msg) => {
       if (msg.type() === 'error') {
-        this.errors.push({
+        errors.push({
           type: 'error',
           text: msg.text(),
           location: msg.location()?.url
@@ -32,8 +42,8 @@ export class ConsoleErrorTracker {
       }
     });
 
-    this.page.on('pageerror', (error) => {
-      this.errors.push({
+    page.on('pageerror', (error) => {
+      errors.push({
         type: 'error',
         text: error.message,
         location: error.stack
@@ -41,42 +51,42 @@ export class ConsoleErrorTracker {
     });
   }
 
-  getErrors(): ConsoleError[] {
-    return this.errors.filter((e) => {
-      // Ignore known benign errors
-      const ignoredPatterns = [
-        'ResizeObserver loop',
-        'favicon.ico',
-        '[vite]',
-        'HMR',
-        'hot module replacement'
-      ];
-      return !ignoredPatterns.some((pattern) =>
-        e.text.toLowerCase().includes(pattern.toLowerCase())
+  function getErrors(): ConsoleError[] {
+    return errors.filter((trackedError) => {
+      return !IGNORED_CONSOLE_PATTERNS.some((pattern) =>
+        trackedError.text.toLowerCase().includes(pattern.toLowerCase())
       );
     });
   }
 
-  hasErrors(): boolean {
-    return this.getErrors().length > 0;
+  function hasErrors(): boolean {
+    return getErrors().length > 0;
   }
 
-  getErrorSummary(): string {
-    const errors = this.getErrors();
-    if (errors.length === 0) return 'No errors';
-    return errors
-      .map((e) => {
-        if (e.location) {
-          return `[${e.type}] ${e.text}\n  at ${e.location}`;
+  function getErrorSummary(): string {
+    const currentErrors = getErrors();
+    if (currentErrors.length === 0) return 'No errors';
+    return currentErrors
+      .map((trackedError) => {
+        if (trackedError.location) {
+          return `[${trackedError.type}] ${trackedError.text}\n  at ${trackedError.location}`;
         }
-        return `[${e.type}] ${e.text}`;
+        return `[${trackedError.type}] ${trackedError.text}`;
       })
       .join('\n');
   }
 
-  clear(): void {
-    this.errors = [];
+  function clear(): void {
+    errors = [];
   }
+
+  return {
+    start,
+    getErrors,
+    hasErrors,
+    getErrorSummary,
+    clear
+  };
 }
 
 // Paths - utilise tests-datasets/ (pas de mocks dupliqués)
@@ -241,7 +251,7 @@ export async function openSideNav(page: Page): Promise<Locator> {
 
 export async function freshStart(page: Page): Promise<ConsoleErrorTracker> {
   // Start error tracking before navigation
-  const errorTracker = new ConsoleErrorTracker(page);
+  const errorTracker = createConsoleErrorTracker(page);
   errorTracker.start();
 
   await page.goto('/');
