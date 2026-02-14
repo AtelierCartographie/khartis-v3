@@ -14,6 +14,7 @@
     isShortcutCode,
     SHORTCUT_CODE
   } from '../utils/keyboard-shortcuts.utils';
+  import { KEY, EVENT } from '../constants/dom.constants';
 
   const NAVIGATION_SHORTCUTS: Record<string, ToolbarStep> = {
     '1': ToolbarStep.Data,
@@ -76,8 +77,8 @@
 
     function handleZoomKey(key: string): boolean {
       switch (key) {
-        case '+':
-        case '=':
+        case KEY.PLUS:
+        case KEY.EQUALS:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.zoomIn();
           } else {
@@ -85,7 +86,7 @@
           }
           return true;
 
-        case '-':
+        case KEY.MINUS:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.zoomOut();
           } else {
@@ -93,7 +94,7 @@
           }
           return true;
 
-        case '0':
+        case KEY.ZERO:
           if (zoomModeStore.isMapMode) {
             mapInstanceStore.resetZoom();
           } else {
@@ -198,7 +199,7 @@
     function handleKeyDown(event: KeyboardEvent): void {
       const target = event.target as HTMLElement;
 
-      if (event.key === 'Escape') {
+      if (event.key === KEY.ESCAPE) {
         const handled = handleEscapeKey();
         if (handled) {
           event.preventDefault();
@@ -280,15 +281,15 @@
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('wheel', handleWheel, {
+    document.addEventListener(EVENT.KEYDOWN, handleKeyDown);
+    document.addEventListener(EVENT.WHEEL, handleWheel, {
       passive: false,
       capture: true
     });
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('wheel', handleWheel, { capture: true });
+      document.removeEventListener(EVENT.KEYDOWN, handleKeyDown);
+      document.removeEventListener(EVENT.WHEEL, handleWheel, { capture: true });
     };
   });
 </script>

@@ -1,3 +1,4 @@
+import { MIME } from '$lib/features/commons/constants';
 import {
   ExampleCategory,
   FileStatus
@@ -6,7 +7,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
 import {
-  FileProcessorService,
+  createFileProcessorService,
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
@@ -319,7 +320,7 @@ export const createProjectActions = {
       onAdditionalFile: (file: UploadedFile) => this.addUploadedFile(file)
     };
 
-    const processor = new FileProcessorService(callbacks);
+    const processor = createFileProcessorService(callbacks);
     await processor.processFile(uploadedFile, file);
   },
 
@@ -776,21 +777,21 @@ export const createProjectActions = {
 };
 
 const MIME_EXTENSION_MAP: Record<string, string> = {
-  'text/csv': '.csv',
+  [MIME.CSV]: '.csv',
   'application/csv': '.csv',
-  'text/tab-separated-values': '.tsv',
-  'application/json': '.json',
-  'application/geo+json': '.geojson',
+  [MIME.TSV]: '.tsv',
+  [MIME.JSON]: '.json',
+  [MIME.GEOJSON]: '.geojson',
   'application/vnd.geo+json': '.geojson',
-  'application/geopackage+sqlite3': '.gpkg',
+  [MIME.GEOPACKAGE]: '.gpkg',
   'application/x-sqlite3': '.gpkg',
   'application/geoparquet': '.geoparquet',
   'application/x-parquet': '.parquet',
-  'application/parquet': '.parquet',
-  'application/vnd.google-earth.kml+xml': '.kml',
-  'application/vnd.google-earth.kmz': '.kmz',
-  'application/x-shapefile': '.shp',
-  'application/zip': '.zip',
+  [MIME.PARQUET]: '.parquet',
+  [MIME.KML]: '.kml',
+  [MIME.KMZ]: '.kmz',
+  [MIME.SHAPEFILE]: '.shp',
+  [MIME.ZIP]: '.zip',
   'application/x-zip-compressed': '.zip'
 };
 

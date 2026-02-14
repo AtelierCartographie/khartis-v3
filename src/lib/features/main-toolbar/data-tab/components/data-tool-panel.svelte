@@ -59,7 +59,7 @@
     width: 280px;
     background: var(--cds-ui-02);
     border: 1px solid var(--cds-border-subtle);
-    z-index: 100;
+    z-index: var(--z-dropdown);
     display: flex;
     flex-direction: column;
     transition: right 0.2s ease-out;

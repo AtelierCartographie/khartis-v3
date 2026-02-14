@@ -5,6 +5,7 @@
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { EVENT } from '../constants/dom.constants';
 
   type ColorPayload = {
     hex: string;
@@ -154,12 +155,12 @@
         initialColor = getValidatedColor();
       }
       updateDropdownPosition();
-      window.addEventListener('scroll', updateDropdownPosition, true);
-      window.addEventListener('resize', updateDropdownPosition);
+      window.addEventListener(EVENT.SCROLL, updateDropdownPosition, true);
+      window.addEventListener(EVENT.RESIZE, updateDropdownPosition);
 
       return () => {
-        window.removeEventListener('scroll', updateDropdownPosition, true);
-        window.removeEventListener('resize', updateDropdownPosition);
+        window.removeEventListener(EVENT.SCROLL, updateDropdownPosition, true);
+        window.removeEventListener(EVENT.RESIZE, updateDropdownPosition);
       };
     }
 
@@ -413,7 +414,7 @@
 
   .color-dropdown {
     position: fixed;
-    z-index: 9999;
+    z-index: var(--z-overlay);
     background: var(--cds-field-01);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--cds-ui-04);

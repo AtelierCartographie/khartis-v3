@@ -14,6 +14,7 @@
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let overlayElement = $state<HTMLDivElement | null>(null);
   let dragState = $state<{
@@ -103,8 +104,8 @@
       offsetY: event.clientY - rect.top - item.position.y
     };
 
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
   }
 
   function handleAnnotationClick(event: MouseEvent, itemId: string): void {
@@ -119,7 +120,7 @@
   }
 
   function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
-    if (event.key === 'Enter' || event.key === ' ') {
+    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
       event.preventDefault();
       if (!isAnnotationEditing) {
         activateStylingToolFromMap(StylingTools.Annotations);
@@ -400,7 +401,7 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    z-index: 15;
+    z-index: var(--z-content-raised);
   }
 
   .annotation-item {

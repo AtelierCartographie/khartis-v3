@@ -1,6 +1,7 @@
 <script lang="ts">
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
@@ -45,7 +46,7 @@
     return [
       { id: ALL_SOURCES_ID, text: m.search_all_variables() },
       ...datasetColumns
-        .filter((column) => column.type !== 'geometry')
+        .filter((column) => column.type !== COLUMN_TYPE_GEOMETRY)
         .map((column) => ({
           id: column.name,
           text: column.name

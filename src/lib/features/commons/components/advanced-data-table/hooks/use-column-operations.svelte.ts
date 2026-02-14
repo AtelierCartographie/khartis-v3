@@ -3,15 +3,7 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
-import {
-  changeColumnType,
-  dropColumn
-} from '$lib/features/duckdb/orchestrator/column-ops';
-import {
-  Duck,
-  duckDBOrchestrator,
-  RefineOperation
-} from '$lib/features/duckdb';
+import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
 
@@ -106,7 +98,7 @@ export function useColumnOperations(
     }
 
     const duckType = mapColumnTypeToDuckDB(newType);
-    await changeColumnType(tableName, columnName, duckType, Duck);
+    await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
     await props.onColumnsChange();
     props.onRecordTransformation?.(
       `Type changé (${newType}) sur ${columnName}`
@@ -135,7 +127,7 @@ export function useColumnOperations(
     }
 
     try {
-      await dropColumn(tableName, columnName, Duck);
+      await duckDBOrchestrator.dropColumn(tableName, columnName);
       await props.onColumnsChange();
       props.onColumnDeleted?.(columnName);
       props.onRecordTransformation?.(`Colonne supprimée: ${columnName}`);

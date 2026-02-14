@@ -157,3 +157,25 @@ export enum SimplificationTarget {
   BASEMAP = 'basemap',
   GEODATA = 'geodata'
 }
+
+/**
+ * Z-index layering system - maps to CSS custom properties in global.css
+ * Use these via CSS: `z-index: var(--z-toolbar);`
+ */
+export const Z_INDEX = {
+  BASE: 1,
+  MAP_LAYER: 5,
+  CONTENT: 10,
+  CONTENT_RAISED: 15,
+  CONTENT_HEADER: 20,
+  MAP_OVERLAY: 50,
+  DROPDOWN: 100,
+  MOBILE_OPEN_BUTTON: 800,
+  MOBILE_OVERLAY: 850,
+  MOBILE_TOOLBAR: 900,
+  TOOLBAR: 1000,
+  MAIN_TOOLBAR: 1100,
+  OVERLAY: 9999,
+  NOTIFICATION: 10000,
+  POPOVER: 10001
+} as const;

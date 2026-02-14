@@ -1,8 +1,17 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow';
-import { DUCK_CONST } from '../constants';
+import {
+  DUCK_CONST,
+  EXTENSIONS,
+  GEO_CONSTANTS,
+  SQL_FUNCTIONS
+} from '../constants';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
 import type {
@@ -28,15 +37,19 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
   if (ctx.extensionsLoaded.spatial) return;
 
   try {
-    await executeQuery(ctx.connection, `LOAD spatial;`, {
+    await executeQuery(ctx.connection, `LOAD ${EXTENSIONS.SPATIAL};`, {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     ctx.extensionsLoaded.spatial = true;
   } catch {
     try {
-      await executeQuery(ctx.connection, `INSTALL spatial; LOAD spatial;`, {
-        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-      });
+      await executeQuery(
+        ctx.connection,
+        `INSTALL ${EXTENSIONS.SPATIAL}; LOAD ${EXTENSIONS.SPATIAL};`,
+        {
+          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+        }
+      );
       ctx.extensionsLoaded.spatial = true;
     } catch (error) {
       logger.error(
@@ -53,7 +66,10 @@ async function detectGeofileMetadata(
   ctx: DuckDBContext,
   fileId: string
 ): Promise<GeofileMetadata> {
-  const defaultResult: GeofileMetadata = { crs: null, geometryColumn: 'geom' };
+  const defaultResult: GeofileMetadata = {
+    crs: null,
+    geometryColumn: INTERNAL_COLUMN.GEOM
+  };
   try {
     await ensureSpatialExtension(ctx);
 
@@ -82,7 +98,9 @@ async function detectGeofileMetadata(
       return {
         crs,
         geometryColumn:
-          geomName && typeof geomName === 'string' ? geomName : 'geom'
+          geomName && typeof geomName === 'string'
+            ? geomName
+            : INTERNAL_COLUMN.GEOM
       };
     }
     return defaultResult;
@@ -94,7 +112,9 @@ async function detectGeofileMetadata(
 function needsReprojection(crs: string | null): boolean {
   if (!crs) return false;
   const normalizedCRS = crs.toUpperCase();
-  return normalizedCRS !== 'EPSG:4326' && normalizedCRS !== 'WGS 84';
+  return (
+    normalizedCRS !== GEO_CONSTANTS.WGS84_CRS && normalizedCRS !== 'WGS 84'
+  );
 }
 
 export async function readGeofile(
@@ -115,7 +135,7 @@ export async function readGeofile(
       const escapedFileIdMeta = escapeSqlString(geofileWithId.id);
       const result = await executeQuery(
         ctx.connection,
-        `FROM ST_Read_Meta('${escapedFileIdMeta}')
+        `FROM ${SQL_FUNCTIONS.ST_READ_META}('${escapedFileIdMeta}')
 				SELECT
 					file_name AS name,
 					driver_short_name AS format,
@@ -139,13 +159,14 @@ export async function readGeofile(
     if (shouldReproject) {
       logger.info('Reprojecting geometry to WGS84', LogCategory.DUCKDB, {
         sourceCRS: geoMeta.crs,
-        targetCRS: 'EPSG:4326',
+        targetCRS: GEO_CONSTANTS.WGS84_CRS,
         geometryColumn: geomCol,
         filename: geofile.name
       });
     }
 
     const finalTablename = tablename;
+    const escapedFinalTable = escapeIdentifier(finalTablename);
     await runInTransaction(
       ctx.connection,
       async () => {
@@ -189,7 +210,7 @@ export async function readGeofile(
               );
               await executeQuery(
                 ctx.connection,
-                `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM ST_Read('${escapedGeoFileId}');`,
+                `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
                 { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
               );
             }
@@ -197,7 +218,7 @@ export async function readGeofile(
         } else {
           await executeQuery(
             ctx.connection,
-            `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM ST_Read('${escapedGeoFileId}');`,
+            `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
             { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
           );
         }

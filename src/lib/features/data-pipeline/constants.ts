@@ -1,3 +1,5 @@
+import { MIME } from '$lib/features/commons/constants';
+
 export const PIPELINE_CONST = {
   EXTENSIONS: {
     TABULAR: ['.csv', '.tsv', '.txt'] as const,
@@ -10,8 +12,23 @@ export const PIPELINE_CONST = {
       '.kmz',
       '.gpx'
     ] as const,
-    PARQUET: ['.parquet', '.geoparquet'] as const,
+    PARQUET: ['.parquet', '.geoparquet', '.gpq'] as const,
     ZIP: ['.zip'] as const,
+    SHAPEFILE_REQUIRED: ['.shp', '.shx', '.dbf'] as const,
+    SHAPEFILE_OPTIONAL: [
+      '.prj',
+      '.cpg',
+      '.sbn',
+      '.sbx',
+      '.fbn',
+      '.fbx',
+      '.ain',
+      '.aih',
+      '.ixs',
+      '.mxs',
+      '.atx',
+      '.xml'
+    ] as const,
     ALL: [
       '.csv',
       '.tsv',
@@ -26,23 +43,10 @@ export const PIPELINE_CONST = {
       '.kmz',
       '.gpx',
       '.geoparquet',
+      '.gpq',
       '.zip'
     ] as const
   },
-  MIME_TYPES: {
-    CSV: 'text/csv',
-    JSON: 'application/json',
-    GEOJSON: 'application/geo+json',
-    PARQUET: 'application/octet-stream',
-    ARROW: 'application/vnd.apache.arrow.file',
-    SHAPEFILE: 'application/x-shapefile',
-    GEOPACKAGE: 'application/geopackage+sqlite3',
-    KML: 'application/vnd.google-earth.kml+xml',
-    KMZ: 'application/vnd.google-earth.kmz',
-    GPX: 'application/gpx+xml',
-    ZIP: 'application/zip',
-    BINARY: 'application/octet-stream'
-  } as const,
   LIMITS: {
     MAX_FILE_SIZE: 100 * 1024 * 1024,
     WARNING_FILE_SIZE: 50 * 1024 * 1024,
@@ -52,8 +56,21 @@ export const PIPELINE_CONST = {
   QUALITY: {
     HIGH_NULL_RATIO_THRESHOLD: 0.5,
     LOW_CARDINALITY_THRESHOLD: 0.01
+  },
+  CSV: {
+    SUPPORTED_DELIMITERS: [';', ',', '\t', '|'] as const,
+    DEFAULT_DELIMITER: ','
+  },
+  ENCODING: {
+    DEFAULT: 'UTF-8'
   }
 } as const;
+
+/**
+ * @deprecated Use MIME from '$lib/features/commons/constants' instead.
+ * Re-exported for backwards compatibility during migration.
+ */
+export { MIME };
 
 export function isGeospatialFile(name: string): boolean {
   const lower = name.toLowerCase();

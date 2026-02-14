@@ -3,6 +3,7 @@
   import { RadioButton, Tag } from 'carbon-components-svelte';
   import { Checkmark, Earth, Information } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { KEY } from '../constants/dom.constants';
 
   interface ProjectionCardProps {
     title: string;
@@ -39,7 +40,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if ((event.key === 'Enter' || event.key === ' ') && !disabled) {
+    if ((event.key === KEY.ENTER || event.key === KEY.SPACE) && !disabled) {
       event.preventDefault();
       handleCardClick();
     }

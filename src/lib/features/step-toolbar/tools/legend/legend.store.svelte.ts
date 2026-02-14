@@ -7,6 +7,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type { LegendItem, LegendState, LegendStyle } from './legend.types';
 
 export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
@@ -27,13 +28,13 @@ const DEFAULT_STATE: LegendState = {
   position: LegendPosition.TOP_RIGHT,
   visible: true,
   style: {
-    fontFamily: 'Cabin',
-    fontSize: 12,
+    fontFamily: LEGEND_DEFAULTS.FONT_FAMILY,
+    fontSize: LEGEND_DEFAULTS.FONT_SIZE,
     textColor: { ...DEFAULT_LEGEND_TEXT_COLOR },
     background: {
       enabled: true,
       color: { ...DEFAULT_LEGEND_BACKGROUND_COLOR },
-      opacity: 100
+      opacity: LEGEND_DEFAULTS.OPACITY
     }
   },
   activeTab: LegendTab.CONTENT,
@@ -78,7 +79,7 @@ function createLegendItemFromVisualization(
   visualization: VisualizationConfig
 ): LegendItem {
   return {
-    id: `legend-viz-${visualization.id}`,
+    id: `${LEGEND_ID_PREFIXES.VIZ}${visualization.id}`,
     name: visualization.name,
     visible: true,
     title: visualization.name,
@@ -156,7 +157,7 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     addLegendItem: (item: Omit<LegendItem, 'id'>): LegendItem => {
       const newItem: LegendItem = {
         ...item,
-        id: `legend-${Date.now()}`
+        id: `${LEGEND_ID_PREFIXES.CUSTOM}${Date.now()}`
       };
       s.items = [...s.items, newItem];
       return newItem;

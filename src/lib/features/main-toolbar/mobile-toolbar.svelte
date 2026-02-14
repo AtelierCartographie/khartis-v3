@@ -335,7 +335,7 @@
     right: 0;
     bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     background: var(--cds-ui-01);
-    z-index: 900;
+    z-index: var(--z-mobile-toolbar);
     transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
@@ -504,7 +504,7 @@
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
     background: var(--cds-ui-01);
     border-radius: 8px;
-    z-index: 850;
+    z-index: var(--z-mobile-overlay);
   }
 
   .mobile-bottom-nav {
@@ -518,7 +518,7 @@
     background: var(--cds-ui-01);
     border-top: 1px solid var(--cds-ui-03);
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    z-index: 1000;
+    z-index: var(--z-toolbar);
     height: calc(60px + env(safe-area-inset-bottom, 0px));
   }
 

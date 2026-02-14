@@ -1,4 +1,5 @@
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
+import { GEO_CONSTANTS } from '$lib/features/duckdb';
 import proj4 from 'proj4';
 
 const PROJ4_HINT = /(?:\+proj=|EPSG:\d+)/i;
@@ -101,7 +102,7 @@ function isKnownProjectionId(projectionId: string): boolean {
 
 function validateWithProj4(code: string): boolean {
   try {
-    proj4(code, 'EPSG:4326', [0, 0]);
+    proj4(code, GEO_CONSTANTS.WGS84_CRS, [0, 0]);
     return true;
   } catch {
     try {

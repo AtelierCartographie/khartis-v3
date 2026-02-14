@@ -19,7 +19,10 @@ export { projectStorage } from './core/storage';
 
 export { duplicateProject } from './operations/duplicate';
 
-export { AutoSaveController } from './operations/auto-save';
+export {
+  createAutoSaveController,
+  type AutoSaveController
+} from './operations/auto-save';
 
 export const projectFiles = {
   exportProject: async (

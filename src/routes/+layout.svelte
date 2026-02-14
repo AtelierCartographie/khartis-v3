@@ -16,6 +16,7 @@
   import CreateProject from '$lib/features/create-project/create-project.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { EVENT } from '$lib/features/commons/constants/dom.constants';
 
   initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -68,16 +69,15 @@
     globalActions.initializeFromUrl();
 
     handleResize();
-    window.addEventListener('resize', handleResize);
+    window.addEventListener(EVENT.RESIZE, handleResize);
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (projectStore.isDirty) {
         e.preventDefault();
-        // Legacy browsers require returnValue to be set
         e.returnValue = '';
       }
     };
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
 
     const initApp = async () => {
       try {
@@ -266,7 +266,7 @@
     position: absolute;
     top: var(--cds-spacing-03);
     right: var(--cds-spacing-03);
-    z-index: 10;
+    z-index: var(--z-content);
     pointer-events: none;
     opacity: 0.85;
   }

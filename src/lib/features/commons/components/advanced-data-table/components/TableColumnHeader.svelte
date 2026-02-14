@@ -724,7 +724,7 @@
     background-color: var(--cds-ui-01, #f4f4f4);
     border: 1px solid var(--cds-ui-03, #e0e0e0);
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-    z-index: 10000;
+    z-index: var(--z-notification);
     max-height: 400px;
     overflow-y: auto;
   }
@@ -1099,7 +1099,7 @@
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 12px;
-    z-index: 10001;
+    z-index: var(--z-popover);
     max-width: 280px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
@@ -1142,7 +1142,7 @@
     padding: 6px 10px;
     border-radius: 4px;
     font-size: 11px;
-    z-index: 10001;
+    z-index: var(--z-popover);
     max-width: 220px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     white-space: nowrap;

@@ -1,4 +1,5 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -54,7 +55,7 @@ export function buildFilterSQL(
     if (!Number.isFinite(limit) || limit <= 0) {
       throw new DuckDBError(m.filter_top_requires_number());
     }
-    return `__id IN (SELECT __id FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
+    return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };
 
   switch (filter.operator) {

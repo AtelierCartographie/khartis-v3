@@ -11,6 +11,7 @@
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import { projectStore } from '../../commons/store/project.store.svelte';
   import { visualizationStore } from '../../commons/store/visualization.store.svelte';
+  import { ViewMode } from '../constants/map.constants';
   import {
     useMapBasemap,
     useMapBounds,
@@ -186,7 +187,7 @@
     }
 
     if (
-      mapInit.viewMode === 'maplibre' &&
+      mapInit.viewMode === ViewMode.MAPLIBRE &&
       mapInit.map &&
       !mapInit.map.isStyleLoaded()
     ) {
@@ -275,7 +276,7 @@
       const shouldUseMapLibre =
         osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
 
-      if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
+      if (shouldUseMapLibre && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         isSwitchingViewMode = true;
         mapInit.switchToMapLibreMode();
         return;
@@ -325,7 +326,7 @@
   }
 
   function syncOrthographicDeckSize(): void {
-    if (!mapContainer || mapInit.viewMode !== 'orthographic') {
+    if (!mapContainer || mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
 
@@ -433,11 +434,11 @@
 
       const shouldUseMapLibre = osmActive || requiresMapLibre;
 
-      if (shouldUseMapLibre && mapInit.viewMode === 'orthographic') {
+      if (shouldUseMapLibre && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         isSwitchingViewMode = true;
         mapBasemap.cleanup();
         mapInit.switchToMapLibreMode();
-      } else if (!shouldUseMapLibre && mapInit.viewMode === 'maplibre') {
+      } else if (!shouldUseMapLibre && mapInit.viewMode === ViewMode.MAPLIBRE) {
         isSwitchingViewMode = true;
         mapBasemap.cleanup();
         mapInit.switchToOrthographicMode();
@@ -460,7 +461,7 @@
     if (
       pendingOrthographicFit &&
       mapInit.isMapLoaded &&
-      mapInit.viewMode === 'orthographic'
+      mapInit.viewMode === ViewMode.ORTHOGRAPHIC
     ) {
       pendingOrthographicFit = false;
       untrack(() => mapInstanceStore.fitToOrthographicBounds());
@@ -506,7 +507,7 @@
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
       logEffect('firstTable');
-      if (mapInit.viewMode === 'orthographic') {
+      if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         const bounds = calculateBoundsFromGeoArrow(firstTable);
         if (bounds) {
           const [[minX, minY], [maxX, maxY]] = bounds as [
@@ -539,9 +540,9 @@
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
       logEffect('firstGeoJSON');
-      if (mapInit.viewMode === 'maplibre' && mapInit.map) {
+      if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
         untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
-      } else if (mapInit.viewMode === 'orthographic') {
+      } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
           const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
           if (bounds) {
@@ -693,7 +694,7 @@
           // Fit to world basemap bounds after a view reset (all data removed)
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
-            if (mapInit.viewMode === 'maplibre' && mapInit.map) {
+            if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
               const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
               if (bounds) {
                 mapBounds.fitToBounds(bounds, true);
@@ -781,13 +782,13 @@
             scheduleLayerUpdate('effect:referenceBasemapChanged');
 
             // Fit map view to new basemap bounds
-            if (mapInit.viewMode === 'maplibre' && mapInit.map) {
+            if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
               const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
               if (bounds) {
                 mapBounds.resetFitState();
                 mapBounds.fitToBounds(bounds, true);
               }
-            } else if (mapInit.viewMode === 'orthographic') {
+            } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
               const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
               if (bounds) {
                 const [[minX, minY], [maxX, maxY]] = bounds as [
@@ -852,7 +853,7 @@
         // Fit orthographic viewport to world basemap bounds
         // (bypasses the guard in updateProjectionFromTable which skips
         // when referenceBbox is already set from a previous basemap)
-        if (mapInit.viewMode === 'orthographic') {
+        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
@@ -879,8 +880,8 @@
 
   onMount(() => {
     const initialViewMode = basemapStyleStore.requiresMapLibre
-      ? 'maplibre'
-      : 'orthographic';
+      ? ViewMode.MAPLIBRE
+      : ViewMode.ORTHOGRAPHIC;
     mapInit.initialize(mapContainer, initialViewMode);
 
     updateCanvasSize();
@@ -897,7 +898,7 @@
         // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
-          if (mapInit.viewMode === 'maplibre') {
+          if (mapInit.viewMode === ViewMode.MAPLIBRE) {
             mapInit.map?.resize();
           } else {
             syncOrthographicDeckSize();
@@ -978,7 +979,7 @@
   .page-grid {
     position: absolute;
     inset: 0;
-    z-index: 5;
+    z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
       linear-gradient(to right, rgba(22, 22, 22, 0.12) 1px, transparent 1px),
@@ -998,7 +999,7 @@
   .view-mode-loader {
     position: absolute;
     inset: 0;
-    z-index: 100;
+    z-index: var(--z-dropdown);
     pointer-events: none;
   }
 
@@ -1011,7 +1012,7 @@
     position: absolute;
     top: 16px;
     right: 16px;
-    z-index: 50;
+    z-index: var(--z-map-overlay);
     background: var(--cds-ui-01);
     border-radius: 50%;
     padding: 8px;
@@ -1039,7 +1040,7 @@
   }
 
   :global(.deck-tooltip) {
-    z-index: 10000 !important;
+    z-index: var(--z-notification) !important;
     pointer-events: none !important;
   }
 </style>

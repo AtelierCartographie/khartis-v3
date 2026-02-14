@@ -1,6 +1,7 @@
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { Duck } from '$lib/features/duckdb';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import {
   Field,
   Schema,
@@ -11,13 +12,12 @@ import {
 import {
   ArrowExtension,
   GeoArrowMetadataKey,
-  GeoColumnName,
-  GeoJsonGeometryType,
   GeometryEncoding
 } from '../constants';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
 const GEO_METADATA_VERSION = '1.0.0';
-const DEFAULT_CRS_NAME = 'EPSG:4326';
+const DEFAULT_CRS_NAME = GEO_CONSTANTS.WGS84_CRS;
 const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
 
 const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
@@ -31,23 +31,23 @@ const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
 };
 
 const ARROW_EXTENSION_TO_GEOJSON_TYPES: Record<string, string[]> = {
-  [ArrowExtension.GEOARROW_POINT]: [GeoJsonGeometryType.Point],
+  [ArrowExtension.GEOARROW_POINT]: [GEOJSON_TYPE.POINT],
   [ArrowExtension.GEOARROW_MULTIPOINT]: [
-    GeoJsonGeometryType.Point,
-    GeoJsonGeometryType.MultiPoint
+    GEOJSON_TYPE.POINT,
+    GEOJSON_TYPE.MULTI_POINT
   ],
-  [ArrowExtension.GEOARROW_LINESTRING]: [GeoJsonGeometryType.LineString],
+  [ArrowExtension.GEOARROW_LINESTRING]: [GEOJSON_TYPE.LINE_STRING],
   [ArrowExtension.GEOARROW_MULTILINESTRING]: [
-    GeoJsonGeometryType.LineString,
-    GeoJsonGeometryType.MultiLineString
+    GEOJSON_TYPE.LINE_STRING,
+    GEOJSON_TYPE.MULTI_LINE_STRING
   ],
   [ArrowExtension.GEOARROW_POLYGON]: [
-    GeoJsonGeometryType.Polygon,
-    GeoJsonGeometryType.MultiPolygon
+    GEOJSON_TYPE.POLYGON,
+    GEOJSON_TYPE.MULTI_POLYGON
   ],
   [ArrowExtension.GEOARROW_MULTIPOLYGON]: [
-    GeoJsonGeometryType.Polygon,
-    GeoJsonGeometryType.MultiPolygon
+    GEOJSON_TYPE.POLYGON,
+    GEOJSON_TYPE.MULTI_POLYGON
   ]
 };
 
@@ -89,8 +89,8 @@ function resolveGeometryEncoding(
       return {
         arrowExtension: mapped,
         geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[mapped] ?? [
-          GeoJsonGeometryType.Polygon,
-          GeoJsonGeometryType.MultiPolygon
+          GEOJSON_TYPE.POLYGON,
+          GEOJSON_TYPE.MULTI_POLYGON
         ]
       };
     }
@@ -104,8 +104,8 @@ function resolveGeometryEncoding(
       return {
         arrowExtension: extensionName,
         geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[extensionName] ?? [
-          GeoJsonGeometryType.Polygon,
-          GeoJsonGeometryType.MultiPolygon
+          GEOJSON_TYPE.POLYGON,
+          GEOJSON_TYPE.MULTI_POLYGON
         ]
       };
     }
@@ -113,8 +113,8 @@ function resolveGeometryEncoding(
       return {
         arrowExtension: ArrowExtension.OGC_WKB,
         geometryTypes: [
-          GeoJsonGeometryType.Polygon,
-          GeoJsonGeometryType.MultiPolygon
+          GEOJSON_TYPE.POLYGON,
+          GEOJSON_TYPE.MULTI_POLYGON
         ]
       };
     }
@@ -125,8 +125,8 @@ function resolveGeometryEncoding(
     return {
       arrowExtension: detected,
       geometryTypes: ARROW_EXTENSION_TO_GEOJSON_TYPES[detected] ?? [
-        GeoJsonGeometryType.Polygon,
-        GeoJsonGeometryType.MultiPolygon
+        GEOJSON_TYPE.POLYGON,
+        GEOJSON_TYPE.MULTI_POLYGON
       ]
     };
   }
@@ -134,8 +134,8 @@ function resolveGeometryEncoding(
   return {
     arrowExtension: ArrowExtension.OGC_WKB,
     geometryTypes: [
-      GeoJsonGeometryType.Polygon,
-      GeoJsonGeometryType.MultiPolygon
+      GEOJSON_TYPE.POLYGON,
+      GEOJSON_TYPE.MULTI_POLYGON
     ]
   };
 }
@@ -145,7 +145,7 @@ export function addGeoArrowMetadata(
   geoParquetEncoding?: string
 ): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === GeoColumnName.GEOM || f.name === GeoColumnName.GEOMETRY
+    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -239,7 +239,7 @@ export async function readGeoJSONAsArrow(
 
 function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === GeoColumnName.GEOM || f.name === GeoColumnName.GEOMETRY
+    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -255,8 +255,8 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
       [geoColumnName]: {
         encoding: GeometryEncoding.GEOJSON,
         geometry_types: [
-          GeoJsonGeometryType.Polygon,
-          GeoJsonGeometryType.MultiPolygon
+          GEOJSON_TYPE.POLYGON,
+          GEOJSON_TYPE.MULTI_POLYGON
         ],
         crs: {
           type: 'name',
@@ -301,7 +301,7 @@ async function readParquetGeoEncoding(
 
     if (result.length > 0 && result[0].value) {
       const geo = JSON.parse(result[0].value);
-      const primaryCol = geo.primary_column ?? 'geom';
+      const primaryCol = geo.primary_column ?? INTERNAL_COLUMN.GEOM;
       return geo.columns?.[primaryCol]?.encoding;
     }
   } catch (error) {

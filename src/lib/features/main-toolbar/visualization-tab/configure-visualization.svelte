@@ -16,6 +16,7 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LabelsConfig from './components/labels-config.svelte';
@@ -32,7 +33,7 @@
     const dataset = datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
     return dataset.columns
-      .filter((col) => col.type !== 'geometry')
+      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
       .map((col, id) => ({ id, text: col.name }));
   });
 

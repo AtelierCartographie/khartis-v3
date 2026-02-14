@@ -193,6 +193,23 @@ export const Duck = {
   get_table_metadata(table: string): TableMetadata {
     const ctx = getContext();
     return getTableMetadata(ctx, table);
+  },
+
+  cleanupTableResources(tableName: string): void {
+    if (!isInitialized()) return;
+    const ctx = getContext();
+
+    ctx.loaded_files.delete(tableName);
+
+    const registeredFile = Array.from(ctx.registered_files).find((id) =>
+      id.includes(tableName)
+    );
+    if (registeredFile) {
+      ctx.registered_files.delete(registeredFile);
+    }
+
+    ctx.table_metadata.delete(tableName);
+    ctx.table_geoparquet_cache.delete(tableName);
   }
 };
 

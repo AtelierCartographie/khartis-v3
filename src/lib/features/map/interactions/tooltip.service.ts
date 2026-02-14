@@ -1,8 +1,8 @@
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { ReservedColumnName } from '../constants';
 import type { TooltipContent, TooltipEntry } from '../types';
 
 const DEFAULT_TOOLTIP_STYLE: Partial<CSSStyleDeclaration> = {
@@ -25,9 +25,9 @@ export function formatTooltipValue(value: unknown): string {
 
 function isReservedColumn(columnName: string): boolean {
   return (
-    columnName === ReservedColumnName.GEOM ||
-    columnName === ReservedColumnName.GEOMETRY ||
-    columnName === ReservedColumnName.INTERNAL_ID
+    columnName === INTERNAL_COLUMN.GEOM ||
+    columnName === INTERNAL_COLUMN.GEOMETRY ||
+    columnName === INTERNAL_COLUMN.ID
   );
 }
 
