@@ -11,18 +11,21 @@ on:
     branches:
       - staging
       - main
+  merge_group:
+    types:
+      - checks_requested
 
 env:
   NODE_VERSION: '22'
 
 concurrency:
-  group: pr-validation-${{ github.event.pull_request.number }}
+  group: pr-validation-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
   quality-checks:
     name: Quality Checks
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
