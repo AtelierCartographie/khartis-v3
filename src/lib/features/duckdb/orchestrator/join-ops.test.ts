@@ -299,6 +299,56 @@ describe('finalizeJoin behavior', () => {
     expect(applyJoinAssociationMock).toHaveBeenCalledTimes(1);
   });
 
+  it('skips join recomputation when skipJoinComputation is set and join table exists', async () => {
+    const queryMock = vi.fn(async (sql: string) => {
+      if (
+        sql.includes('information_schema.tables') &&
+        sql.includes('dataset_table_join_results')
+      ) {
+        return [{ table_name: 'dataset_table_join_results' }];
+      }
+      if (sql.includes('COUNT(*) as cnt')) {
+        return [{ cnt: 3 }];
+      }
+      return [];
+    });
+    const joinByIdMock = vi.fn(async () => []);
+    const applyJoinAssociationMock = vi.fn(async () => []);
+
+    const duckClient: DuckDBClientForJoin = {
+      query: queryMock,
+      join_by_id: joinByIdMock,
+      apply_join_association: applyJoinAssociationMock
+    };
+
+    await finalizeJoin(dataset, TEST_BASEMAP, 'country', duckClient, {
+      skipJoinComputation: true
+    });
+
+    expect(joinByIdMock).not.toHaveBeenCalled();
+    expect(applyJoinAssociationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails when requested geo column does not exist in dataset', async () => {
+    const queryMock = vi.fn(async () => []);
+    const joinByIdMock = vi.fn(async () => []);
+    const applyJoinAssociationMock = vi.fn(async () => []);
+
+    const duckClient: DuckDBClientForJoin = {
+      query: queryMock,
+      join_by_id: joinByIdMock,
+      apply_join_association: applyJoinAssociationMock
+    };
+
+    await expect(
+      finalizeJoin(dataset, TEST_BASEMAP, 'unknown_geo_col', duckClient)
+    ).rejects.toThrow("Column 'unknown_geo_col' not found in dataset");
+
+    expect(queryMock).not.toHaveBeenCalled();
+    expect(joinByIdMock).not.toHaveBeenCalled();
+    expect(applyJoinAssociationMock).not.toHaveBeenCalled();
+  });
+
   it('finalizes OSM joins in GPS mode without running geocoding joins', async () => {
     const queryMock = vi.fn(async () => []);
     const joinByIdMock = vi.fn(async () => []);
@@ -322,6 +372,36 @@ describe('finalizeJoin behavior', () => {
       gpsMode: true,
       gpsColumns: { lat: 'lat', lon: 'lon' }
     });
+    expect(joinByIdMock).not.toHaveBeenCalled();
+    expect(applyJoinAssociationMock).not.toHaveBeenCalled();
+  });
+
+  it('fails OSM finalize when GPS columns are missing', async () => {
+    const datasetWithoutGps: DuckDBDataset = {
+      ...dataset,
+      columns: [{ name: 'country', type_simple: 'string' } as AnalysisResult]
+    };
+    const queryMock = vi.fn(async () => []);
+    const joinByIdMock = vi.fn(async () => []);
+    const applyJoinAssociationMock = vi.fn(async () => []);
+
+    const duckClient: DuckDBClientForJoin = {
+      query: queryMock,
+      join_by_id: joinByIdMock,
+      apply_join_association: applyJoinAssociationMock
+    };
+    const osmBasemap: BasemapMetadata = {
+      ...TEST_BASEMAP,
+      file: 'osm_carto_123'
+    };
+
+    await expect(
+      finalizeJoin(datasetWithoutGps, osmBasemap, '', duckClient)
+    ).rejects.toThrow(
+      'GPS columns (latitude/longitude) not found in dataset for OSM basemap'
+    );
+
+    expect(queryMock).not.toHaveBeenCalled();
     expect(joinByIdMock).not.toHaveBeenCalled();
     expect(applyJoinAssociationMock).not.toHaveBeenCalled();
   });

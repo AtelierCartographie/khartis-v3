@@ -42,7 +42,7 @@
     "lint": "prettier --check . && eslint .",
     "test:unit": "NODE_OPTIONS='--max-old-space-size=4096' vitest",
     "test:unit:ui": "NODE_OPTIONS='--max-old-space-size=4096' vitest --run",
-    "test:pipeline": "NODE_OPTIONS='--max-old-space-size=4096' vitest run src/lib/features/data-pipeline/__tests__/pipeline-integration.test.ts src/lib/features/data-pipeline/__tests__/serialization-safety.test.ts src/lib/features/duckdb/orchestrator/join-ops.test.ts src/lib/features/duckdb/operations/join.test.ts",
+    "test:pipeline": "NODE_OPTIONS='--max-old-space-size=4096' vitest run src/lib/features/data-pipeline/__tests__/*.test.ts src/lib/features/duckdb/operations/*.test.ts src/lib/features/duckdb/orchestrator/*.test.ts",
     "test": "pnpm run test:pipeline",
     "reset:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf pnpm-lock.yaml",
     "update:packages": "pnpm update --interactive",
