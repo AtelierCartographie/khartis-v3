@@ -1,35 +1,41 @@
 export type ZoomMode = 'map' | 'page';
+const ZOOM_MODE_MAP: ZoomMode = 'map';
+const ZOOM_MODE_PAGE: ZoomMode = 'page';
 
-class ZoomModeStore {
-  private _mode = $state<ZoomMode>('map');
+function createZoomModeStore() {
+  let mode = $state<ZoomMode>(ZOOM_MODE_MAP);
 
-  get mode(): ZoomMode {
-    return this._mode;
+  function setMapMode(): void {
+    mode = ZOOM_MODE_MAP;
   }
 
-  get isMapMode(): boolean {
-    return this._mode === 'map';
+  function setPageMode(): void {
+    mode = ZOOM_MODE_PAGE;
   }
 
-  get isPageMode(): boolean {
-    return this._mode === 'page';
+  function toggle(): void {
+    mode = mode === ZOOM_MODE_MAP ? ZOOM_MODE_PAGE : ZOOM_MODE_MAP;
   }
 
-  setMapMode(): void {
-    this._mode = 'map';
+  function setMode(nextMode: ZoomMode): void {
+    mode = nextMode;
   }
 
-  setPageMode(): void {
-    this._mode = 'page';
-  }
-
-  toggle(): void {
-    this._mode = this._mode === 'map' ? 'page' : 'map';
-  }
-
-  setMode(mode: ZoomMode): void {
-    this._mode = mode;
-  }
+  return {
+    get mode(): ZoomMode {
+      return mode;
+    },
+    get isMapMode(): boolean {
+      return mode === ZOOM_MODE_MAP;
+    },
+    get isPageMode(): boolean {
+      return mode === ZOOM_MODE_PAGE;
+    },
+    setMapMode,
+    setPageMode,
+    toggle,
+    setMode
+  };
 }
 
-export const zoomModeStore = new ZoomModeStore();
+export const zoomModeStore = createZoomModeStore();

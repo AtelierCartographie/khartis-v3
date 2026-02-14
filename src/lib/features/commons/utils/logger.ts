@@ -40,54 +40,47 @@ interface RecentLog {
   key: string;
 }
 
-class Logger {
-  private config: LoggerConfig;
+const LOOP_DETECTION_WINDOW_MS = 100;
+const LOOP_DETECTION_THRESHOLD = 10;
 
-  private recentLogs: RecentLog[] = [];
-
-  private readonly LOOP_DETECTION_WINDOW = 100;
-
-  private readonly LOOP_DETECTION_THRESHOLD = 10;
-
-  constructor() {
-    const isTest =
-      import.meta.env.MODE === 'test' ||
-      typeof import.meta.env.VITEST !== 'undefined';
-    const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
-    const debugEnabled =
-      import.meta.env.VITE_DEBUG === 'true' ||
-      import.meta.env.VITE_DEBUG_AUTH === 'true';
-
-    this.config = {
-      enabled: !isTest && (isDev || debugEnabled),
-      categories: this.parseCategories(import.meta.env.VITE_LOG_CATEGORIES),
-      minLevel:
-        this.parseLogLevel(import.meta.env.VITE_LOG_LEVEL) || LogLevel.DEBUG,
-      includeStack: import.meta.env.VITE_LOG_STACK === 'true'
-    };
+function parseCategories(value: string | undefined): Set<LogCategory> {
+  if (!value || value === 'all') {
+    return new Set(Object.values(LogCategory));
   }
+  return new Set(
+    value
+      .split(',')
+      .map((c) => c.trim().toUpperCase() as LogCategory)
+      .filter((c) => Object.values(LogCategory).includes(c))
+  );
+}
 
-  private parseCategories(value: string | undefined): Set<LogCategory> {
-    if (!value || value === 'all') {
-      return new Set(Object.values(LogCategory));
-    }
-    return new Set(
-      value
-        .split(',')
-        .map((c) => c.trim().toUpperCase() as LogCategory)
-        .filter((c) => Object.values(LogCategory).includes(c))
-    );
-  }
+function parseLogLevel(value: string | undefined): LogLevel | null {
+  if (!value) return null;
+  const level = value.toUpperCase() as LogLevel;
+  return Object.values(LogLevel).includes(level) ? level : null;
+}
 
-  private parseLogLevel(value: string | undefined): LogLevel | null {
-    if (!value) return null;
-    const level = value.toUpperCase() as LogLevel;
-    return Object.values(LogLevel).includes(level) ? level : null;
-  }
+function createLogger() {
+  const isTest =
+    import.meta.env.MODE === 'test' ||
+    typeof import.meta.env.VITEST !== 'undefined';
+  const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+  const debugEnabled =
+    import.meta.env.VITE_DEBUG === 'true' ||
+    import.meta.env.VITE_DEBUG_AUTH === 'true';
 
-  private shouldLog(category: LogCategory, level: LogLevel): boolean {
-    if (!this.config.enabled) return false;
-    if (!this.config.categories.has(category)) return false;
+  const config: LoggerConfig = {
+    enabled: !isTest && (isDev || debugEnabled),
+    categories: parseCategories(import.meta.env.VITE_LOG_CATEGORIES),
+    minLevel: parseLogLevel(import.meta.env.VITE_LOG_LEVEL) || LogLevel.DEBUG,
+    includeStack: import.meta.env.VITE_LOG_STACK === 'true'
+  };
+  let recentLogs: RecentLog[] = [];
+
+  function shouldLog(category: LogCategory, level: LogLevel): boolean {
+    if (!config.enabled) return false;
+    if (!config.categories.has(category)) return false;
 
     const levels = [
       LogLevel.DEBUG,
@@ -96,41 +89,39 @@ class Logger {
       LogLevel.ERROR,
       LogLevel.SUCCESS
     ];
-    const minIndex = levels.indexOf(this.config.minLevel);
+    const minIndex = levels.indexOf(config.minLevel);
     const currentIndex = levels.indexOf(level);
     return currentIndex >= minIndex;
   }
 
-  private detectInfiniteLoop(message: string, category: LogCategory): boolean {
+  function detectInfiniteLoop(message: string, category: LogCategory): boolean {
     const key = `${category}:${message}`;
     const now = Date.now();
 
-    // Clean logs older than detection window
-    this.recentLogs = this.recentLogs.filter(
-      (log) => now - log.time < this.LOOP_DETECTION_WINDOW
+    recentLogs = recentLogs.filter(
+      (recentLog) => now - recentLog.time < LOOP_DETECTION_WINDOW_MS
     );
 
-    // Count occurrences of same log
-    const sameLogCount = this.recentLogs.filter(
-      (log) => log.key === key
+    const sameLogCount = recentLogs.filter(
+      (recentLog) => recentLog.key === key
     ).length;
 
-    if (sameLogCount >= this.LOOP_DETECTION_THRESHOLD) {
+    if (sameLogCount >= LOOP_DETECTION_THRESHOLD) {
       console.error('🚨 INFINITE LOOP DETECTED:', {
         key,
         occurrences: sameLogCount,
-        window: `${this.LOOP_DETECTION_WINDOW}ms`,
-        recentLogs: this.recentLogs.slice(-5)
+        window: `${LOOP_DETECTION_WINDOW_MS}ms`,
+        recentLogs: recentLogs.slice(-5)
       });
-      this.recentLogs = [];
+      recentLogs = [];
       return true;
     }
 
-    this.recentLogs.push({ time: now, key });
+    recentLogs.push({ time: now, key });
     return false;
   }
 
-  private getIcon(level: LogLevel): string {
+  function getIcon(level: LogLevel): string {
     switch (level) {
       case LogLevel.ERROR:
         return '🔴';
@@ -152,7 +143,7 @@ class Logger {
     }
   }
 
-  private getColor(level: LogLevel): string {
+  function getColor(level: LogLevel): string {
     switch (level) {
       case LogLevel.ERROR:
         return 'color: #ff0000; font-weight: bold';
@@ -174,24 +165,24 @@ class Logger {
     }
   }
 
-  log(message: string, options: LogOptions): void {
+  function log(message: string, options: LogOptions): void {
     const level = options.level || LogLevel.INFO;
 
-    if (!this.shouldLog(options.category, level)) return;
+    if (!shouldLog(options.category, level)) return;
 
-    if (this.detectInfiniteLoop(message, options.category)) {
+    if (detectInfiniteLoop(message, options.category)) {
       return;
     }
 
-    const icon = this.getIcon(level);
+    const icon = getIcon(level);
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
     const prefix = `${icon} [${timestamp}] [${options.category}]`;
 
-    const style = this.getColor(level);
+    const style = getColor(level);
 
     let data = options.data;
     if (
-      this.config.includeStack &&
+      config.includeStack &&
       level === LogLevel.ERROR &&
       data instanceof Error
     ) {
@@ -210,36 +201,36 @@ class Logger {
     }
   }
 
-  startTiming(label: string, category: LogCategory): () => void {
+  function startTiming(label: string, category: LogCategory): () => void {
     const start = performance.now();
     return () => {
       const duration = performance.now() - start;
-      this.debug(`${label} completed`, category, {
+      debug(`${label} completed`, category, {
         duration: `${duration.toFixed(2)}ms`,
         durationMs: duration
       });
     };
   }
 
-  async time<T>(
+  async function time<T>(
     label: string,
     category: LogCategory,
     fn: () => Promise<T>
   ): Promise<T> {
     const start = performance.now();
-    this.debug(`${label} started`, category);
+    debug(`${label} started`, category);
 
     try {
       const result = await fn();
       const duration = performance.now() - start;
-      this.success(`${label} completed`, category, {
+      success(`${label} completed`, category, {
         duration: `${duration.toFixed(2)}ms`,
         durationMs: duration
       });
       return result;
     } catch (error) {
       const duration = performance.now() - start;
-      this.error(`${label} failed`, category, {
+      errorLog(`${label} failed`, category, {
         duration: `${duration.toFixed(2)}ms`,
         durationMs: duration,
         error
@@ -248,39 +239,61 @@ class Logger {
     }
   }
 
-  error(message: string, category: LogCategory, data?: unknown): void {
-    this.log(message, { category, level: LogLevel.ERROR, data });
+  function errorLog(
+    message: string,
+    category: LogCategory,
+    data?: unknown
+  ): void {
+    log(message, { category, level: LogLevel.ERROR, data });
   }
 
-  warn(message: string, category: LogCategory, data?: unknown): void {
-    this.log(message, { category, level: LogLevel.WARN, data });
+  function warn(message: string, category: LogCategory, data?: unknown): void {
+    log(message, { category, level: LogLevel.WARN, data });
   }
 
-  info(message: string, category: LogCategory, data?: unknown): void {
-    this.log(message, { category, level: LogLevel.INFO, data });
+  function info(message: string, category: LogCategory, data?: unknown): void {
+    log(message, { category, level: LogLevel.INFO, data });
   }
 
-  debug(message: string, category: LogCategory, data?: unknown): void {
-    this.log(message, { category, level: LogLevel.DEBUG, data });
+  function debug(message: string, category: LogCategory, data?: unknown): void {
+    log(message, { category, level: LogLevel.DEBUG, data });
   }
 
-  success(message: string, category: LogCategory, data?: unknown): void {
-    this.log(message, { category, level: LogLevel.SUCCESS, data });
+  function success(
+    message: string,
+    category: LogCategory,
+    data?: unknown
+  ): void {
+    log(message, { category, level: LogLevel.SUCCESS, data });
   }
 
-  group(title: string, category: LogCategory): void {
-    if (!this.config.enabled) return;
+  function group(title: string, category: LogCategory): void {
+    if (!config.enabled) return;
     console.group(`[${category}] ${title}`);
   }
 
-  groupEnd(): void {
-    if (!this.config.enabled) return;
+  function groupEnd(): void {
+    if (!config.enabled) return;
     console.groupEnd();
   }
 
-  isEnabled(): boolean {
-    return this.config.enabled;
+  function isEnabled(): boolean {
+    return config.enabled;
   }
+
+  return {
+    log,
+    startTiming,
+    time,
+    error: errorLog,
+    warn,
+    info,
+    debug,
+    success,
+    group,
+    groupEnd,
+    isEnabled
+  };
 }
 
-export const logger = new Logger();
+export const logger = createLogger();
