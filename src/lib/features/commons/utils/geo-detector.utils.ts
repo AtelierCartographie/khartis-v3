@@ -363,28 +363,6 @@ export const GeoColumnDetector = {
       };
     }
 
-    const latMatch =
-      stringValues.filter((v) => VALUE_PATTERNS.latitude(v)).length /
-      stringValues.length;
-    if (latMatch > GEO_DETECTION.MATCH_THRESHOLD) {
-      return {
-        type: 'latitude',
-        confidence: latMatch,
-        matchedPatterns: ['Value pattern: Latitude range']
-      };
-    }
-
-    const lonMatch =
-      stringValues.filter((v) => VALUE_PATTERNS.longitude(v)).length /
-      stringValues.length;
-    if (lonMatch > GEO_DETECTION.MATCH_THRESHOLD) {
-      return {
-        type: 'longitude',
-        confidence: lonMatch,
-        matchedPatterns: ['Value pattern: Longitude range']
-      };
-    }
-
     const countryMatch = GeoColumnDetector.matchAgainstSamples(
       stringValues,
       COUNTRY_SAMPLES
