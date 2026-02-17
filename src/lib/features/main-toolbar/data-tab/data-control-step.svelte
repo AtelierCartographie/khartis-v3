@@ -64,6 +64,10 @@
       ? datasetsStore.hasModifications(selectedDataset.id)
       : false
   );
+  const hiddenColumnsCount = $derived.by(() => {
+    if (!selectedDataset?.id) return 0;
+    return datasetsStore.getHiddenColumns(selectedDataset.id).length;
+  });
 
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
@@ -133,12 +137,38 @@
     forceRefreshKey++;
   }
 
+  async function handleCalculatedColumnCreated() {
+    refreshTable();
+
+    if (!selectedDataset || !currentDuckTable || !Duck) return;
+
+    try {
+      const duckColumns = (await Duck.analyse(currentDuckTable, {
+        force: true
+      })) as DuckAnalyticsColumn[];
+      const newColumns = enrichColumns(duckColumns);
+      datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
+    } catch {
+      // Keep UI responsive even if metadata refresh fails; table data is already updated in DuckDB.
+    }
+  }
+
   function handleOpenReset() {
     resetModalOpen = true;
   }
 
   function handleOpenCsvOptions() {
     csvOptionsModalOpen = true;
+  }
+
+  function handleShowHiddenColumns() {
+    if (!selectedDataset?.id) return;
+    const hiddenColumns = datasetsStore.getHiddenColumns(selectedDataset.id);
+    if (!hiddenColumns.length) return;
+    for (const columnName of hiddenColumns) {
+      datasetsStore.showColumn(selectedDataset.id, columnName);
+    }
+    refreshTable();
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
@@ -436,13 +466,14 @@
       <DataToolPanel title={m.data_tool_calculator()}>
         <CalculatorPanel
           tableName={currentDuckTable || undefined}
-          onColumnCreated={refreshTable}
+          onColumnCreated={handleCalculatedColumnCreated}
         />
       </DataToolPanel>
     {:else if activeTool === DataToolType.Filters}
       <DataToolPanel title={m.data_tool_filters()}>
         <FiltersPanel
           tableName={currentDuckTable || undefined}
+          datasetVersion={duckDBDatasetsVersion}
           onFilterChange={refreshTable}
           onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
@@ -506,10 +537,12 @@
       onExpand={() => (isModalOpen = true)}
       onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
+      onShowHiddenColumns={handleShowHiddenColumns}
       selectionCount={selectedRowIds.length}
       resetDisabled={!hasDataModifications}
       showCsvOptions={isCsvFile &&
         !!(sourceFile?.originalFile || sourceFile?.content)}
+      showHiddenColumns={hiddenColumnsCount > 0}
       showSummaryPlots={showSummaryPlots}
     />
   {/if}

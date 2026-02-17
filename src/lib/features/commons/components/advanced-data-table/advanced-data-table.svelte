@@ -215,6 +215,15 @@
       filters.filterStats.total > 0
   );
 
+  // Defensive guard: during rapid dataset/table switches, transient invalid
+  // column entries can appear and break keyed reconciliation in Svelte.
+  const safeVisibleColumns = $derived.by(() =>
+    columnOps.visibleColumns.filter(
+      (column): column is { name: string; type: string } =>
+        typeof column?.name === 'string' && column.name.length > 0
+    )
+  );
+
   async function handleSort(column: string, order: 'ASC' | 'DESC') {
     sort.sortTable(column, order);
   }
@@ -582,7 +591,7 @@
                   {/if}
                 </div>
               </th>
-              {#each columnOps.visibleColumns as column (column.name)}
+              {#each safeVisibleColumns as column, columnIndex (`${column.name}-${columnIndex}`)}
                 <TableColumnHeader
                   column={column}
                   analysis={tableData.columnAnalysis.get(column.name)}
@@ -609,7 +618,7 @@
               <TableRow
                 row={row}
                 rowIndex={rowIndex}
-                visibleColumns={columnOps.visibleColumns}
+                visibleColumns={safeVisibleColumns}
                 highlightType={getRowHighlightType(rowIndex, row)}
                 getCellHighlight={(colName) =>
                   getCellHighlightType(rowId, colName)}
