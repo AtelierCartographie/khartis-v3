@@ -32,6 +32,7 @@
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
@@ -57,7 +58,7 @@
     const tableName = selectedDataset.tableName;
 
     try {
-      const result = await duckDBOrchestrator.getFullAnalysis(tableName);
+      const result = await duckDBOrchestrator.getFullAnalysis(tableName, true);
       if (controller.signal.aborted) return;
       columnAnalysis = result;
       columnAnalysisLoaded = true;
@@ -71,31 +72,45 @@
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
 
-    return selectedDataset.columns
+    const datasetColumnNames = selectedDataset.columns
       .filter(
         (col) =>
           col.name !== INTERNAL_COLUMN.GEOMETRY &&
           col.name !== INTERNAL_COLUMN.ID
       )
-      .map((col, index) => {
-        const geoCol = geoDetection?.geoColumns.find(
-          (gc) => gc.columnName === col.name
-        );
+      .map((col) => col.name);
 
-        let displayText = col.name;
-        if (geoCol) {
-          const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-          displayText = `${col.name} – ${description}`;
-        }
+    const analysisColumnNames = columnAnalysis
+      .filter(
+        (col) =>
+          col.name !== INTERNAL_COLUMN.GEOMETRY &&
+          col.name !== INTERNAL_COLUMN.ID
+      )
+      .map((col) => col.name);
 
-        return {
-          id: index,
-          text: displayText,
-          columnName: col.name,
-          isGeo: !!geoCol,
-          confidence: geoCol?.confidence || 0
-        };
-      });
+    const allColumnNames = [
+      ...new Set([...datasetColumnNames, ...analysisColumnNames])
+    ];
+
+    return allColumnNames.map((columnName, index) => {
+      const geoCol = geoDetection?.geoColumns.find(
+        (gc) => gc.columnName === columnName
+      );
+
+      let displayText = columnName;
+      if (geoCol) {
+        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        displayText = `${columnName} – ${description}`;
+      }
+
+      return {
+        id: index,
+        text: displayText,
+        columnName,
+        isGeo: !!geoCol,
+        confidence: geoCol?.confidence || 0
+      };
+    });
   });
 
   const bestGeoidColumn = $derived(() => {
@@ -267,6 +282,7 @@
 
   $effect(() => {
     const tableName = selectedDataset?.tableName;
+    void duckDBDatasetsVersion;
     if (tableName) {
       loadColumnAnalysis();
     }
