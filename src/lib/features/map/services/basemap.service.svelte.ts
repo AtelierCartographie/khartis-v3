@@ -284,6 +284,29 @@ function createBasemapService() {
       throw new Error('DuckDB not initialized');
     }
 
+    // Custom basemaps imported by the user are already materialized as DuckDB tables.
+    // Reuse that table directly instead of trying to fetch a static geometry file.
+    if (/^custom_basemap_/i.test(basemapId)) {
+      const escapedBasemapId = escapeSqlString(basemapId);
+      const existingTable = (await Duck.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedBasemapId}'`,
+        { format: 'array' }
+      )) as Array<{ table_name: string }>;
+
+      if (existingTable?.length) {
+        geometryTablesInDuckDB.add(basemapId);
+        logger.debug(
+          'Using existing custom basemap table from DuckDB',
+          LogCategory.MAP,
+          {
+            basemapId,
+            tableName: basemapId
+          }
+        );
+        return basemapId;
+      }
+    }
+
     const start = performance.now();
     logger.info('Loading basemap geometry into DuckDB', LogCategory.MAP, {
       basemapId
