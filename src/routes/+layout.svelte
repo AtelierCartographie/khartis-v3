@@ -49,6 +49,7 @@
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
+  const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
@@ -77,7 +78,9 @@
         e.returnValue = '';
       }
     };
-    window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+    if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
+      window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+    }
 
     const initApp = async () => {
       try {
@@ -125,8 +128,10 @@
     initApp();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener(EVENT.RESIZE, handleResize);
+      if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
+        window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+      }
     };
   });
 
