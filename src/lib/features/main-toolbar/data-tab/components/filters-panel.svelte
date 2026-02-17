@@ -23,11 +23,17 @@
 
   interface Props {
     tableName?: string;
+    datasetVersion?: number;
     onFilterChange?: () => void;
     onDeleteFilteredRows?: (count: number) => void;
   }
 
-  let { tableName, onFilterChange, onDeleteFilteredRows }: Props = $props();
+  let {
+    tableName,
+    datasetVersion,
+    onFilterChange,
+    onDeleteFilteredRows
+  }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
@@ -221,6 +227,7 @@
   }
 
   $effect(() => {
+    void datasetVersion;
     if (tableName) {
       refreshFilters();
     }
