@@ -49,6 +49,26 @@ interface SerializeOptions {
   preserveBinary?: boolean;
 }
 
+async function ensureDuckDbReady(operation: string): Promise<boolean> {
+  try {
+    await duckDBOrchestrator.waitForInitialization();
+  } catch (error) {
+    logger.warn(
+      `DuckDB initialization failed while ${operation}`,
+      LogCategory.PROJECT,
+      error
+    );
+    return false;
+  }
+
+  if (!Duck) {
+    logger.warn(`DuckDB unavailable while ${operation}`, LogCategory.PROJECT);
+    return false;
+  }
+
+  return true;
+}
+
 export async function serialize(
   project: KhartisProject,
   options?: SerializeOptions
@@ -137,7 +157,10 @@ export async function serializeProjectData(
     (b: BasemapMetadata) => b.isCustom
   );
 
-  if (customBasemaps.length > 0 && Duck) {
+  if (
+    customBasemaps.length > 0 &&
+    (await ensureDuckDbReady('serializing custom basemap attributes'))
+  ) {
     try {
       const tableExists = await Duck.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = 'custom_basemap_attributes'`,
@@ -233,7 +256,10 @@ export async function deserializeProjectData(
     ) as SerializedUploadedFile[];
   }
 
-  if (data.customBasemaps && Duck) {
+  if (
+    data.customBasemaps &&
+    (await ensureDuckDbReady('restoring custom basemaps'))
+  ) {
     try {
       const { metadata, attributes } = data.customBasemaps;
 
@@ -268,9 +294,9 @@ export async function deserializeProjectData(
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      logger.error(
+      logger.warn(
         'Failed to restore custom basemaps',
-        LogCategory.DATA,
+        LogCategory.PROJECT,
         error
       );
     }
