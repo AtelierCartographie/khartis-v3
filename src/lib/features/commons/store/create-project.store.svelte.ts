@@ -100,6 +100,23 @@ export const createProjectActions = {
     );
   },
 
+  findCompleteShapefile(baseName: string): UploadedFile | undefined {
+    const normalizedBaseName = baseName.toLowerCase();
+    return createProjectState.newProject.uploadedFiles.find((file) => {
+      if (
+        file.status !== FileStatus.COMPLETE ||
+        file.fileType !== FileType.SHAPEFILE
+      ) {
+        return false;
+      }
+
+      const fileBaseName =
+        file.shapefileBaseName?.toLowerCase() ??
+        file.name.toLowerCase().replace(/\.shp$/i, '');
+      return fileBaseName === normalizedBaseName;
+    });
+  },
+
   async mergeIntoIncompleteShapefile(
     incompleteFile: UploadedFile,
     newFiles: File[],
@@ -147,6 +164,40 @@ export const createProjectActions = {
     }
   },
 
+  mergeIntoCompleteShapefile(
+    completeFile: UploadedFile,
+    newFiles: File[]
+  ): void {
+    const existingFiles = completeFile.relatedFileObjects ?? [];
+    const existingNames = new Set(
+      existingFiles.map((file) => file.name.toLowerCase())
+    );
+    const filesToAdd = newFiles.filter(
+      (file) => !existingNames.has(file.name.toLowerCase())
+    );
+
+    if (filesToAdd.length === 0) return;
+
+    const mergedFiles = [...existingFiles, ...filesToAdd];
+    completeFile.relatedFileObjects = mergedFiles;
+    completeFile.relatedFiles = mergedFiles.map((file) => file.name);
+    completeFile.size = mergedFiles.reduce((sum, file) => sum + file.size, 0);
+
+    if (!completeFile.originalFile) {
+      const shpFile = mergedFiles.find((file) =>
+        file.name.toLowerCase().endsWith('.shp')
+      );
+      if (shpFile) {
+        completeFile.originalFile = shpFile;
+      }
+    }
+
+    logger.info('Shapefile companion files merged', LogCategory.FILE, {
+      shapefile: completeFile.name,
+      addedFiles: filesToAdd.map((file) => file.name)
+    });
+  },
+
   async processFiles(
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
@@ -165,6 +216,19 @@ export const createProjectActions = {
             sourceType
           );
           fileGroups.delete(baseName);
+          continue;
+        }
+
+        const hasShpComponent = groupFiles.some((file) =>
+          file.name.toLowerCase().endsWith('.shp')
+        );
+
+        if (!hasShpComponent) {
+          const completeShapefile = this.findCompleteShapefile(baseName);
+          if (completeShapefile) {
+            this.mergeIntoCompleteShapefile(completeShapefile, groupFiles);
+            fileGroups.delete(baseName);
+          }
         }
       }
 
