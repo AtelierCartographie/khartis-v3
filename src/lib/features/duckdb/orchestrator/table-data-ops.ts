@@ -205,7 +205,10 @@ export async function getExcludedRowIds(
   if (!whereClause) return [];
 
   const escapedTable = escapeIdentifier(tableName);
-  const query = `SELECT __id FROM "${escapedTable}" WHERE NOT (${whereClause})`;
+  // Treat NULL predicate results as excluded rows too.
+  // Example: rows with NULL values on filtered columns should be removable
+  // when deleting "excluded" rows from a filter.
+  const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
   const ids: number[] = [];

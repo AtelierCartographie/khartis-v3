@@ -178,7 +178,19 @@ export async function refineColumn(
   const operations: Record<RefineOperation, string> = {
     [RefineOperation.UPPERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = UPPER("${escapedCol}")`,
     [RefineOperation.LOWERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = LOWER("${escapedCol}")`,
-    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = INITCAP("${escapedCol}")`,
+    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = CASE
+      WHEN "${escapedCol}" IS NULL THEN NULL
+      ELSE array_to_string(
+        list_transform(
+          string_split(lower("${escapedCol}"::VARCHAR), ' '),
+          x -> CASE
+            WHEN x = '' THEN x
+            ELSE upper(substr(x, 1, 1)) || substr(x, 2)
+          END
+        ),
+        ' '
+      )
+    END`,
     [RefineOperation.TRIM]: `UPDATE "${escapedTable}" SET "${escapedCol}" = TRIM("${escapedCol}")`,
     [RefineOperation.TRIM_ALL]: `UPDATE "${escapedTable}" SET "${escapedCol}" = REGEXP_REPLACE("${escapedCol}", '\\s+', ' ', 'g')`
   };
