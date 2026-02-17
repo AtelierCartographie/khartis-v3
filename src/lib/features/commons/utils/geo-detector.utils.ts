@@ -152,6 +152,15 @@ const NUTS_SAMPLES = [
   'NL31'
 ] as const;
 
+function hasSufficientDistinctCodeValues(values: string[]): boolean {
+  const uniqueCount = new Set(values.map((v) => v.toUpperCase())).size;
+  const requiredDistinctCount = Math.min(
+    10,
+    Math.max(3, Math.ceil(values.length * 0.05))
+  );
+  return uniqueCount >= requiredDistinctCount;
+}
+
 export const GPS_COLUMN_PATTERNS = {
   latitude: COLUMN_NAME_PATTERNS.latitude,
   longitude: COLUMN_NAME_PATTERNS.longitude
@@ -303,7 +312,10 @@ export const GeoColumnDetector = {
     const iso2Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso2(v)).length /
       stringValues.length;
-    if (iso2Match > GEO_DETECTION.MATCH_THRESHOLD) {
+    if (
+      iso2Match > GEO_DETECTION.MATCH_THRESHOLD &&
+      hasSufficientDistinctCodeValues(stringValues)
+    ) {
       return {
         type: 'iso2',
         confidence: iso2Match,
@@ -314,7 +326,10 @@ export const GeoColumnDetector = {
     const iso3Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso3(v)).length /
       stringValues.length;
-    if (iso3Match > GEO_DETECTION.MATCH_THRESHOLD) {
+    if (
+      iso3Match > GEO_DETECTION.MATCH_THRESHOLD &&
+      hasSufficientDistinctCodeValues(stringValues)
+    ) {
       return {
         type: 'iso3',
         confidence: iso3Match,
