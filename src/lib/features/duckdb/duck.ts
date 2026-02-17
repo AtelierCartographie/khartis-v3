@@ -1,4 +1,4 @@
-import { getTableMetadata, invalidateTableCache } from './cache/cache-manager';
+import { getTableMetadata, markTableMutated } from './cache/cache-manager';
 import {
   getContext,
   initEngine,
@@ -187,7 +187,7 @@ export const Duck = {
 
   invalidateTableCache(table: string): void {
     const ctx = getContext();
-    invalidateTableCache(ctx, table);
+    markTableMutated(ctx, table);
   },
 
   get_table_metadata(table: string): TableMetadata {
