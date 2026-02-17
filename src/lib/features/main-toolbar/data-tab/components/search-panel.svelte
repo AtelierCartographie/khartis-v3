@@ -203,7 +203,11 @@
     }
   }
 
-  function handleSourceChange() {
+  function handleSourceChange(event: Event) {
+    const target = event.target as HTMLSelectElement | null;
+    if (target?.value) {
+      searchSource = target.value;
+    }
     dataToolsStore.setSearchSource(searchSource);
     if (searchQuery.trim().length >= UI_CONSTANTS.MIN_SEARCH_LENGTH) {
       isSearching = true;
