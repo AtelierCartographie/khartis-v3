@@ -52,9 +52,8 @@ export function useColumnOperations(
 
     if (!datasetId) return columns;
 
-    return columns.filter(
-      (col) => !datasetsStore.isColumnHidden(datasetId, col.name)
-    );
+    const hiddenColumns = new Set(datasetsStore.getHiddenColumns(datasetId));
+    return columns.filter((col) => !hiddenColumns.has(col.name));
   });
 
   function isColumnHidden(columnName: string): boolean {

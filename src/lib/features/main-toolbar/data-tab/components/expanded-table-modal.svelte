@@ -58,6 +58,11 @@
     return sourceFile?.name || dataset?.name || m.dataset_default_name();
   });
   const fileInfo = $derived(getFileInfo(displayName));
+  const tableRenderKey = $derived(
+    `${dataset?.id ?? 'no-dataset'}::${tableName ?? 'no-table'}::${
+      datasetVersion ?? 0
+    }`
+  );
 
   function startEditing() {
     if (!dataset?.sourceFileId) return;
@@ -151,18 +156,20 @@
     </div>
 
     <div class="modal-table-container">
-      <AdvancedDataTable
-        dataset={dataset}
-        tableName={tableName}
-        datasetVersion={datasetVersion}
-        showSummaryPlots={true}
-        cellHighlights={cellHighlights}
-        currentCell={currentCell}
-        highlightedRowIds={highlightedRowIds}
-        isExpanded={true}
-        isSelectable={isSelectable}
-        onSelectionChange={onSelectionChange}
-      />
+      {#key tableRenderKey}
+        <AdvancedDataTable
+          dataset={dataset}
+          tableName={tableName}
+          datasetVersion={datasetVersion}
+          showSummaryPlots={true}
+          cellHighlights={cellHighlights}
+          currentCell={currentCell}
+          highlightedRowIds={highlightedRowIds}
+          isExpanded={true}
+          isSelectable={isSelectable}
+          onSelectionChange={onSelectionChange}
+        />
+      {/key}
     </div>
   </Modal>
 </div>
