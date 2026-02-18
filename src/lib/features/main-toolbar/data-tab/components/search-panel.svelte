@@ -265,7 +265,9 @@
   const isSampled = $derived(searchStats.isSampled === true);
 
   const resultCountText = $derived(() => {
-    if (!searchQuery.trim()) return '';
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || trimmedQuery.length < UI_CONSTANTS.MIN_SEARCH_LENGTH)
+      return '';
     if (!hasResults) return m.search_no_results();
 
     const parts: string[] = [];
