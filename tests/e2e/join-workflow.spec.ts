@@ -72,6 +72,15 @@ test.describe.serial('TC-JOIN-002: Suggestions de fonds', () => {
     await expect(
       suggestionBlock.or(page.getByText(/suggestion|Suggestion/i).first())
     ).toBeVisible({ timeout: 10000 });
+
+    await page.waitForTimeout(2000);
+
+    const selectedBasemapCard = page
+      .locator('.suggestions-scroll .basemap-card.selected')
+      .first();
+    await expect(selectedBasemapCard).toBeVisible({ timeout: 10000 });
+
+    await expect(selectedBasemapCard).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
