@@ -145,6 +145,7 @@
       <ComboBox
         items={searchComboBoxItems()}
         selectedId={searchSelectedId}
+        bind:value={searchQuery}
         placeholder={m.basemap_search_placeholder()}
         shouldFilterItem={(item, value) => {
           if (!value) return true;

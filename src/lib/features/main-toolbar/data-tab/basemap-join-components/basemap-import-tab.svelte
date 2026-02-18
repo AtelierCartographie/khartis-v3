@@ -35,6 +35,7 @@
     '.geojson',
     '.json',
     '.shp',
+    '.zip',
     '.gpkg',
     '.kml',
     '.parquet'

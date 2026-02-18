@@ -11,6 +11,11 @@ import { generateCustomBasemapAttributes } from './generate-basemap-attributes';
 import { addGeoArrowMetadata } from './read-geojson-arrow';
 import * as m from '$lib/paraglide/messages';
 import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
+import {
+  createFileFromExtracted,
+  extractZip,
+  getShapefileFilesFromArchive
+} from '$lib/features/data-pipeline/utils/zip-handler';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -39,6 +44,18 @@ interface GeoParquetMeta {
 export async function processBasemapImport(
   file: File
 ): Promise<BasemapImportResult> {
+  const isZip = file.name.toLowerCase().endsWith('.zip');
+  if (isZip) {
+    return processZipShapefileImport(file);
+  }
+
+  const isShapefile = file.name.toLowerCase().endsWith('.shp');
+  if (isShapefile) {
+    throw new Error(
+      m.error_shapefile_missing_components({ components: '.shx, .dbf' })
+    );
+  }
+
   const duck = Duck;
   if (!duck) {
     throw new Error('DuckDB not initialized');
@@ -56,12 +73,54 @@ export async function processBasemapImport(
   return processGeofileBasemapImport(duck, file, tableName);
 }
 
+async function processZipShapefileImport(
+  zipFile: File
+): Promise<BasemapImportResult> {
+  const extraction = await extractZip(zipFile);
+  if (!extraction.isShapefileArchive || !extraction.shapefileBaseName) {
+    throw new Error(
+      m.error_shapefile_missing_components({
+        components: '.shp, .shx, .dbf'
+      })
+    );
+  }
+
+  const shapefileParts = getShapefileFilesFromArchive(
+    extraction.files,
+    extraction.shapefileBaseName
+  );
+  const shapefileFiles = shapefileParts.map((part) =>
+    createFileFromExtracted(part)
+  );
+  const mainShpFile = shapefileFiles.find((part) =>
+    part.name.toLowerCase().endsWith('.shp')
+  );
+
+  if (!mainShpFile) {
+    throw new Error(m.error_shapefile_no_shp_found());
+  }
+
+  const duck = Duck;
+  if (!duck) {
+    throw new Error('DuckDB not initialized');
+  }
+
+  await duck.register_files(shapefileFiles, { shapefile: true });
+
+  const tableName = `custom_basemap_${Date.now()}`;
+  return processGeofileBasemapImport(duck, mainShpFile, tableName, true);
+}
+
 async function processGeofileBasemapImport(
   duck: typeof Duck,
   file: File,
-  tableName: string
+  tableName: string,
+  shapefile = false
 ): Promise<BasemapImportResult> {
-  await duck.read_geofile(file, { tablename: tableName });
+  await duck.read_geofile(file, {
+    tablename: tableName,
+    shapefile
+  });
 
   const analysis = await duck.analyse(tableName);
   const bounds = await queryBasemapBounds(tableName);
