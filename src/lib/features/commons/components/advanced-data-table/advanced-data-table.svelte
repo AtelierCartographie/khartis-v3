@@ -17,7 +17,7 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, type Component } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
@@ -40,6 +40,19 @@
 
   const LOCAL_UPDATE_DELAY_MS = 100;
   const SCROLL_TO_CELL_DEBOUNCE_MS = 150;
+
+  interface DataTableSkeletonRuntimeProps {
+    columns?: number;
+    rows?: number;
+    size?: 'compact' | 'short' | 'tall';
+    zebra?: boolean;
+    showHeader?: boolean;
+    headers?: ReadonlyArray<string | { value?: unknown; empty?: boolean }>;
+    showToolbar?: boolean;
+  }
+
+  const TypedDataTableSkeleton =
+    DataTableSkeleton as unknown as Component<DataTableSkeletonRuntimeProps>;
 
   export type HighlightType =
     | 'exact'
@@ -67,6 +80,7 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
+    onColumnDeleted?: (columnName: string) => void;
   }
 
   let {
@@ -81,7 +95,8 @@
     isSelectable = false,
     isReadOnly = false,
     datasetVersion,
-    onSelectionChange
+    onSelectionChange,
+    onColumnDeleted
   }: Props = $props();
 
   let histogramVisible = $state(true);
@@ -187,6 +202,7 @@
       await tableData.loadRowsData();
     },
     onRecordTransformation: recordTransformation,
+    onColumnDeleted: (columnName: string) => onColumnDeleted?.(columnName),
     onColumnRenamed: (oldName: string) => {
       columnToRename = oldName;
       newColumnName = oldName;
@@ -519,15 +535,6 @@
   const skeletonRows = $derived(
     Math.floor((effectiveMaxRows * rowHeight) / skeletonRowHeight)
   );
-
-  const getSkeletonProps = () =>
-    ({
-      columns: 5,
-      rows: skeletonRows,
-      size: 'compact',
-      showHeader: false,
-      showToolbar: false
-    }) as any;
 </script>
 
 <div class="advanced-data-table">
@@ -635,7 +642,13 @@
 
       {#if !tableData.isFullyLoaded}
         <div class="skeleton-overlay" style="max-height: {maxHeight}px;">
-          <DataTableSkeleton {...getSkeletonProps()} />
+          <TypedDataTableSkeleton
+            columns={5}
+            rows={skeletonRows}
+            size="compact"
+            showHeader={false}
+            showToolbar={false}
+          />
         </div>
       {/if}
     </div>
