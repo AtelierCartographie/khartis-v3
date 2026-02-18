@@ -675,7 +675,7 @@
     padding: 7px 8px 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     min-width: 128px;
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
   }
 
   .col-header {
@@ -808,7 +808,7 @@
     background: none;
     padding: 0;
     margin: 0;
-    color: #8d8d8d;
+    color: var(--cds-text-03, #8d8d8d);
     cursor: pointer;
     line-height: 0;
     opacity: 0.5;
@@ -822,18 +822,18 @@
 
   .sort-btn:hover {
     opacity: 0.8;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
   }
 
   .sort-btn.active {
-    color: #161616;
+    color: var(--cds-text-01, #161616);
     opacity: 1;
   }
 
   .summary-plot-wrapper {
     margin: 0 -8px;
     padding: 13px 8px 12px;
-    background-color: #f4f4f4;
+    background-color: var(--cds-ui-01, #f4f4f4);
   }
 
   .summary-plot {
@@ -912,7 +912,7 @@
   .hist-footer {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 11px;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     line-height: 14px;
     letter-spacing: 0.32px;
     flex-shrink: 0;
@@ -931,7 +931,7 @@
     align-items: flex-end;
     gap: 1px;
     padding: 0 2px;
-    border-bottom: 1px solid #8d8d8d;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
   .hist-num-bar {
@@ -947,7 +947,7 @@
     width: 12px;
     flex-shrink: 0;
     padding: 0 2px;
-    border-bottom: 1px solid #8d8d8d;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
   .hist-null-bar {
@@ -976,7 +976,7 @@
     font-variant-numeric: tabular-nums;
     line-height: 14px;
     letter-spacing: 0.32px;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1022,7 +1022,7 @@
   }
 
   .hist-warning-line span {
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -1068,7 +1068,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     line-height: 16px;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
   }
 
   .warning-badge {
@@ -1087,7 +1087,7 @@
   .warning-badge:hover,
   .warning-badge:focus {
     color: var(--cds-support-01);
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--cds-hover-ui);
     outline: none;
   }
 

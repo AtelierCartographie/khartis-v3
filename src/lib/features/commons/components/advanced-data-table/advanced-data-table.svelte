@@ -746,7 +746,7 @@
   .table-container {
     overflow-y: auto;
     overflow-x: auto;
-    background-color: #ffffff;
+    background-color: var(--cds-ui-01, #ffffff);
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -778,7 +778,7 @@
     position: sticky;
     top: 0;
     z-index: var(--z-content);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
   }
 
   thead .selection-header-spacer {
@@ -787,7 +787,7 @@
     max-width: 32px;
     padding: 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
     position: sticky;
     left: 0;
     z-index: var(--z-base);
@@ -797,8 +797,8 @@
   tr.histograms-open .selection-header-spacer {
     background: linear-gradient(
       to bottom,
-      #e0e0e0 calc(100% - 63px),
-      #f4f4f4 calc(100% - 63px)
+      var(--cds-ui-03, #e0e0e0) calc(100% - 63px),
+      var(--cds-ui-01, #f4f4f4) calc(100% - 63px)
     );
   }
 
@@ -808,7 +808,7 @@
     max-width: 52px;
     padding: 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
     vertical-align: top;
     overflow: visible;
     position: relative;
@@ -836,7 +836,7 @@
     justify-content: center;
     height: 63px;
     flex-shrink: 0;
-    background-color: #f4f4f4;
+    background-color: var(--cds-ui-01, #f4f4f4);
     line-height: 1.2;
   }
 
@@ -844,7 +844,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     font-weight: 600;
-    color: #161616;
+    color: var(--cds-text-01, #161616);
     line-height: 1;
   }
 
@@ -852,7 +852,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 10px;
     font-weight: 400;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     line-height: 1;
   }
 
@@ -865,13 +865,13 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     cursor: pointer;
     transition: color 0.15s;
   }
 
   .histogram-toggle:hover {
-    color: #161616;
+    color: var(--cds-text-01, #161616);
   }
 
   .skeleton-overlay {
