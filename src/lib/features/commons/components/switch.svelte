@@ -87,7 +87,7 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background-color: var(--cds-layer-01, #ffffff);
+    background-color: var(--cds-gray-100, #161616);
     transition: transform 0.12s ease;
   }
 
