@@ -383,3 +383,66 @@ test.describe.serial('TC-JOIN-015: Activation OSM avec coordonnées', () => {
     ).toBeVisible({ timeout: 10000 });
   });
 });
+
+test.describe.serial('TC-JOIN-016: Apply corrections button', () => {
+  test('affiche et clique sur le bouton Appliquer les corrections', async ({
+    page
+  }) => {
+    const fuzzyCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fuzzy-countries.csv'
+    );
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fuzzyCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const entityColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await entityColumn.isVisible()) {
+      await entityColumn.click();
+      await page.getByRole('option', { name: /entity/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click({ force: true });
+
+    await page.waitForTimeout(3000);
+
+    const worldBasemap = page.getByText(/World|countries/i).first();
+    if (await worldBasemap.isVisible()) {
+      await worldBasemap.click({ force: true });
+    }
+
+    await page.waitForTimeout(5000);
+
+    const toVerifySection = page
+      .getByText(/à vérifier|to verify|Vérifier|Verify/i)
+      .first();
+    await expect(toVerifySection).toBeVisible({ timeout: 15000 });
+
+    const applyCorrectionsButton = page
+      .getByRole('button', { name: /Appliquer|Apply|correction/i })
+      .first();
+    await expect(applyCorrectionsButton).toBeVisible({ timeout: 10000 });
+
+    await applyCorrectionsButton.click({ force: true });
+
+    await page.waitForTimeout(2000);
+
+    const correctionDialog = page
+      .locator('[role="dialog"], .bx--modal, .correction-panel')
+      .first();
+    await expect(correctionDialog).toBeVisible({ timeout: 5000 });
+  });
+});
