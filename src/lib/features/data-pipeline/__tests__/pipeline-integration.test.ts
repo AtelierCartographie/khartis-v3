@@ -103,6 +103,12 @@ const CSV_VALID: CsvTestCase[] = [
     minCols: 4
   },
   {
+    id: 'fossil-fuel-bis',
+    relativePath: 'csv/fossil-fuel-subsidies-gdp-2021-bis.csv',
+    minRows: 10,
+    minCols: 4
+  },
+  {
     id: 'naissances',
     relativePath: 'csv/naissances-par-commune-departement-et-region-2018.csv',
     minRows: 34_000,
@@ -113,6 +119,18 @@ const CSV_VALID: CsvTestCase[] = [
     relativePath: 'csv/sites-seveso-idf.csv',
     minRows: 90,
     minCols: 3
+  },
+  {
+    id: 'seveso-invalid-gps',
+    relativePath: 'csv/sites-seveso-idf-invalid-gps.csv',
+    minRows: 4,
+    minCols: 3
+  },
+  {
+    id: 'fuzzy-countries',
+    relativePath: 'csv/fuzzy-countries.csv',
+    minRows: 4,
+    minCols: 2
   },
   {
     id: 'world-bank',
