@@ -294,4 +294,73 @@ describe('JoinAssistedSection', () => {
     );
     expect(selectElements.length).toBe(2);
   });
+
+  describe('notification display logic (TC-JOIN-007, TC-JOIN-009)', () => {
+    it('shows validation notification when only duplicates exist (no to_verify)', () => {
+      const props = createProps();
+      props.joinedCount = 10;
+      props.toVerifyCount = 0;
+      props.duplicates = ['France', 'Germany'];
+      props.joinFinalized = false;
+
+      const { container } = render(JoinAssistedSection, { props });
+
+      const validationNotification = container.querySelector(
+        '.notification-validation'
+      );
+      expect(validationNotification).not.toBeNull();
+    });
+
+    it('shows success notification when only duplicates exist and join is finalized', () => {
+      const props = createProps();
+      props.joinedCount = 10;
+      props.toVerifyCount = 0;
+      props.duplicates = ['France', 'Germany'];
+      props.joinFinalized = true;
+
+      const { container } = render(JoinAssistedSection, { props });
+
+      const successNotification = container.querySelector(
+        '.notification-success'
+      );
+      expect(successNotification).not.toBeNull();
+    });
+
+    it('shows correction notification when to_verify items exist with duplicates', () => {
+      const props = createProps();
+      props.joinedCount = 8;
+      props.toVerifyCount = 2;
+      props.duplicates = ['France'];
+
+      const { container } = render(JoinAssistedSection, { props });
+
+      const correctionNotification = container.querySelector(
+        '.notification-slot .bx--inline-notification'
+      );
+      expect(correctionNotification).not.toBeNull();
+    });
+
+    it('does not show blocking notification when only duplicates exist', () => {
+      const props = createProps();
+      props.joinedCount = 10;
+      props.toVerifyCount = 0;
+      props.duplicates = ['France', 'Germany'];
+
+      const { container } = render(JoinAssistedSection, { props });
+
+      const notificationsRow = container.querySelector('.notifications-row');
+      expect(notificationsRow).toBeNull();
+    });
+
+    it('shows blocking notification when to_verify items exist', () => {
+      const props = createProps();
+      props.joinedCount = 10;
+      props.toVerifyCount = 2;
+
+      const { container } = render(JoinAssistedSection, { props });
+
+      const notificationsRow = container.querySelector('.notifications-row');
+      expect(notificationsRow).not.toBeNull();
+    });
+  });
 });
