@@ -50,6 +50,7 @@
   let {
     tables,
     geoJSONs,
+    dataVersion = 0,
     width,
     height,
     onReady,
@@ -142,6 +143,7 @@
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let isSwitchingViewMode = $state(false);
   let pendingLayerUpdate = $state(false);
+  let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const RESIZE_DEBOUNCE_MS = 150;
@@ -163,6 +165,24 @@
     if (effectTriggerLog.length > 50) {
       effectTriggerLog.shift();
     }
+  }
+
+  function queueStyleIdleRetry(source?: string): void {
+    const map = mapInit.map;
+    if (!map || waitingForStyleIdle) return;
+
+    waitingForStyleIdle = true;
+    map.once('idle', () => {
+      waitingForStyleIdle = false;
+      logger.debug(
+        `Map idle after style reload (from: ${source || 'unknown'})`,
+        LogCategory.MAP
+      );
+      if (pendingLayerUpdate) {
+        pendingLayerUpdate = false;
+        scheduleLayerUpdate('mapIdleAfterStyle');
+      }
+    });
   }
 
   function scheduleLayerUpdate(source?: string): void {
@@ -196,6 +216,7 @@
         LogCategory.MAP
       );
       pendingLayerUpdate = true;
+      queueStyleIdleRetry(source);
       return;
     }
     if (layerUpdateTimeoutId) {
@@ -208,22 +229,38 @@
     layerUpdateTimeoutId = setTimeout(() => {
       layerUpdateTimeoutId = null;
       if (
-        mapInit.isMapLoaded &&
-        !isSwitchingViewMode &&
-        !mapBasemap.isStyleLoading
+        !mapInit.isMapLoaded ||
+        isSwitchingViewMode ||
+        mapBasemap.isStyleLoading
       ) {
-        logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
-        mapLoadingStore.setUpdatingLayers(true);
-        const start = performance.now();
-        mapLayers.updateLayers(tables, geoJSONs);
+        return;
+      }
+
+      if (
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        mapInit.map &&
+        !mapInit.map.isStyleLoaded()
+      ) {
         logger.debug(
-          `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
+          `Deferred at execution (style not loaded, pending=true) from: ${source}`,
           LogCategory.MAP
         );
-        requestAnimationFrame(() => {
-          mapLoadingStore.setUpdatingLayers(false);
-        });
+        pendingLayerUpdate = true;
+        queueStyleIdleRetry(source);
+        return;
       }
+
+      logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
+      mapLoadingStore.setUpdatingLayers(true);
+      const start = performance.now();
+      mapLayers.updateLayers(tables, geoJSONs);
+      logger.debug(
+        `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
+        LogCategory.MAP
+      );
+      requestAnimationFrame(() => {
+        mapLoadingStore.setUpdatingLayers(false);
+      });
     }, LAYER_UPDATE_DEBOUNCE_MS);
   }
 
@@ -353,6 +390,7 @@
     onStyleLoaded: () => {
       logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
+      waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
         scheduleLayerUpdate('onStyleLoaded-pending');
@@ -737,6 +775,7 @@
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
     highlightVersion: mapHighlightStore.version,
+    dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`
   });
 
@@ -913,6 +952,7 @@
     return () => {
       resizeObserver.disconnect();
       mapInit.destroy();
+      waitingForStyleIdle = false;
       if (maxWaitTimeoutId) {
         clearTimeout(maxWaitTimeoutId);
       }

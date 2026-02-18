@@ -119,7 +119,13 @@
       return;
     }
 
-    const nextOpacity = visible ? (selectedViz.style.labelOpacity ?? 1) : 0;
+    const currentOpacity = selectedViz.style.labelOpacity;
+    const nextOpacity =
+      visible && (!currentOpacity || currentOpacity <= 0)
+        ? 1
+        : visible
+          ? currentOpacity
+          : 0;
     visualizationStore.updateVisualization(selectedViz.id, {
       style: {
         ...selectedViz.style,
@@ -133,7 +139,13 @@
       return;
     }
 
-    const nextOpacity = visible ? (selectedViz.style.textOpacity ?? 1) : 0;
+    const currentOpacity = selectedViz.style.textOpacity;
+    const nextOpacity =
+      visible && (!currentOpacity || currentOpacity <= 0)
+        ? 1
+        : visible
+          ? currentOpacity
+          : 0;
     visualizationStore.updateVisualization(selectedViz.id, {
       style: {
         ...selectedViz.style,
@@ -330,6 +342,7 @@
       dataFields={dataFieldItems}
       visualization={selectedViz}
       onStyleChange={handleStyleChange}
+      onMappingChange={handleMappingChange}
       onToggleVisibility={handleLabelVisibilityChange}
     />
 

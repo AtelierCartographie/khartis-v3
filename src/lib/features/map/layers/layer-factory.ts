@@ -1,8 +1,8 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
 import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { FeatureCollection } from 'geojson';
+import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import * as m from '$lib/paraglide/messages';
@@ -19,7 +19,12 @@ import {
   ScaleType,
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
-import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
+import type {
+  DeckDataRow,
+  GeometryInfo,
+  LayerContext,
+  RGBColor
+} from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   shouldApplyCategorical,
@@ -37,6 +42,9 @@ import {
 } from './layer-helpers';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
+const DEFAULT_TEXT_SIZE = 12;
+const DEFAULT_HALO_WIDTH = 2;
+const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 
 export type { LayerContext };
 
@@ -53,6 +61,277 @@ function createThematicLayerId(
     resolveThematicScopeId(ctx),
     ctx.projectionSuffix
   );
+}
+
+interface TextLayerDatum {
+  position: [number, number];
+  text: string;
+}
+
+function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
+  if (typeof opacity !== 'number') return fallback;
+  const normalized = opacity > 1 ? opacity / 100 : opacity;
+  return Math.min(Math.max(normalized, 0), 1);
+}
+
+function resolveTextAnchor(
+  align: 'left' | 'center' | 'right' | undefined
+): 'start' | 'middle' | 'end' {
+  switch (align) {
+    case 'left':
+      return 'start';
+    case 'right':
+      return 'end';
+    default:
+      return 'middle';
+  }
+}
+
+function resolveStyleColor(
+  styleColor: string | string[] | undefined,
+  fallback: RGBColor
+): RGBColor {
+  if (Array.isArray(styleColor) && typeof styleColor[0] === 'string') {
+    return hexToRgb(styleColor[0]);
+  }
+  if (typeof styleColor === 'string') {
+    return hexToRgb(styleColor);
+  }
+  return fallback;
+}
+
+function toTextValue(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function collectCoordinates(
+  value: unknown,
+  output: Array<[number, number]>
+): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    return;
+  }
+
+  const maybeLng = value[0];
+  const maybeLat = value[1];
+
+  if (
+    typeof maybeLng === 'number' &&
+    typeof maybeLat === 'number' &&
+    Number.isFinite(maybeLng) &&
+    Number.isFinite(maybeLat)
+  ) {
+    output.push([maybeLng, maybeLat]);
+    return;
+  }
+
+  for (const nested of value) {
+    collectCoordinates(nested, output);
+  }
+}
+
+function getGeometryAnchor(
+  geometry: Geometry | null | undefined
+): [number, number] | null {
+  if (!geometry || !('coordinates' in geometry)) {
+    return null;
+  }
+
+  const coordinates: Array<[number, number]> = [];
+  collectCoordinates(geometry.coordinates, coordinates);
+
+  if (coordinates.length === 0) {
+    return null;
+  }
+
+  if (geometry.type === 'LineString' || geometry.type === 'MultiLineString') {
+    return coordinates[Math.floor(coordinates.length / 2)] ?? null;
+  }
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const [lng, lat] of coordinates) {
+    if (lng < minX) minX = lng;
+    if (lng > maxX) maxX = lng;
+    if (lat < minY) minY = lat;
+    if (lat > maxY) maxY = lat;
+  }
+
+  return [(minX + maxX) / 2, (minY + maxY) / 2];
+}
+
+function createTextLayerData(
+  geojson: FeatureCollection,
+  primaryColumn: string,
+  secondaryColumn?: string
+): TextLayerDatum[] {
+  const output: TextLayerDatum[] = [];
+
+  for (const feature of geojson.features) {
+    const primaryText = toTextValue(feature.properties?.[primaryColumn]);
+    if (!primaryText) {
+      continue;
+    }
+
+    const position = getGeometryAnchor(feature.geometry);
+    if (!position) {
+      continue;
+    }
+
+    const secondaryText = secondaryColumn
+      ? toTextValue(feature.properties?.[secondaryColumn])
+      : null;
+
+    output.push({
+      position,
+      text: secondaryText ? `${primaryText}\n${secondaryText}` : primaryText
+    });
+  }
+
+  return output;
+}
+
+function createTextOverlayLayers(
+  jsTable: ArrowTable,
+  geometryInfo: GeometryInfo,
+  ctx: LayerContext
+): Layer<DeckDataRow>[] {
+  const viz = ctx.viz;
+  if (!viz?.mapping.labelColumn) {
+    return [];
+  }
+
+  const labelOpacity = normalizeOpacity(viz.style.labelOpacity, 1);
+  const textOpacity = normalizeOpacity(viz.style.textOpacity, 1);
+  const shouldRenderLabelLayer = labelOpacity > 0;
+  const shouldRenderTextLayer = textOpacity > 0;
+
+  if (!shouldRenderLabelLayer && !shouldRenderTextLayer) {
+    return [];
+  }
+
+  let geojsonData: FeatureCollection | null = null;
+  try {
+    geojsonData = arrowTableToGeoJSON(jsTable, geometryInfo.geoColumn);
+  } catch (error) {
+    logger.warn(
+      'Failed to convert geometry for text overlays, skipping labels/texts',
+      LogCategory.MAP,
+      {
+        datasetId: ctx.datasetId,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    return [];
+  }
+
+  if (!geojsonData) {
+    return [];
+  }
+
+  const layers: Layer<DeckDataRow>[] = [];
+
+  if (shouldRenderLabelLayer) {
+    const labelData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
+    if (labelData.length > 0) {
+      const labelColor = resolveStyleColor(viz.style.labelColor, ctx.fillColor);
+      const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
+
+      layers.push(
+        new TextLayer<TextLayerDatum>({
+          id: labelLayerId,
+          data: labelData,
+          getPosition: (d) => d.position,
+          getText: (d) => d.text,
+          getColor: withOpacity(labelColor, labelOpacity),
+          getSize: viz.style.labelSize ?? DEFAULT_TEXT_SIZE,
+          sizeUnits: 'pixels',
+          getTextAnchor: resolveTextAnchor(viz.style.labelAlign),
+          getAlignmentBaseline: 'center',
+          fontFamily: DEFAULT_TEXT_FONT,
+          fontWeight: '400',
+          characterSet: 'auto',
+          outlineColor: withOpacity(
+            resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
+            1
+          ),
+          outlineWidth: viz.style.labelHalo
+            ? (viz.style.labelHaloWidth ?? DEFAULT_HALO_WIDTH)
+            : 0,
+          billboard: true,
+          pickable: false,
+          ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+          ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+          updateTriggers: {
+            getText: [viz.mapping.labelColumn],
+            getColor: [viz.style.labelColor, labelOpacity],
+            getSize: [viz.style.labelSize],
+            getTextAnchor: [viz.style.labelAlign],
+            outlineColor: [viz.style.labelHaloColor],
+            outlineWidth: [viz.style.labelHalo, viz.style.labelHaloWidth]
+          }
+        }) as unknown as Layer<DeckDataRow>
+      );
+    }
+  }
+
+  if (shouldRenderTextLayer) {
+    const textData = createTextLayerData(
+      geojsonData,
+      viz.mapping.labelColumn,
+      viz.mapping.secondaryLabelColumn
+    );
+    if (textData.length > 0) {
+      const textColor = resolveStyleColor(viz.style.textColor, ctx.fillColor);
+      const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
+
+      layers.push(
+        new TextLayer<TextLayerDatum>({
+          id: textLayerId,
+          data: textData,
+          getPosition: (d) => d.position,
+          getText: (d) => d.text,
+          getColor: withOpacity(textColor, textOpacity),
+          getSize: viz.style.textSize ?? DEFAULT_TEXT_SIZE,
+          sizeUnits: 'pixels',
+          getTextAnchor: resolveTextAnchor(viz.style.textAlign),
+          getAlignmentBaseline: 'center',
+          fontFamily: DEFAULT_TEXT_FONT,
+          fontWeight: viz.style.textBold ? '700' : '400',
+          characterSet: 'auto',
+          outlineColor: withOpacity(
+            resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
+            1
+          ),
+          outlineWidth: viz.style.textHalo
+            ? (viz.style.textHaloWidth ?? DEFAULT_HALO_WIDTH)
+            : 0,
+          billboard: true,
+          pickable: false,
+          ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+          ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+          updateTriggers: {
+            getText: [
+              viz.mapping.labelColumn,
+              viz.mapping.secondaryLabelColumn
+            ],
+            getColor: [viz.style.textColor, textOpacity],
+            getSize: [viz.style.textSize],
+            getTextAnchor: [viz.style.textAlign],
+            outlineColor: [viz.style.textHaloColor],
+            outlineWidth: [viz.style.textHalo, viz.style.textHaloWidth]
+          }
+        }) as unknown as Layer<DeckDataRow>
+      );
+    }
+  }
+
+  return layers;
 }
 
 export function createPointLayers(
@@ -744,36 +1023,41 @@ export function createDeckLayers(
   };
 
   const primitive = primitiveMap[resolvedGeometryType];
-  if (
+  const isPrimitiveFilteredOut =
     primitive &&
     ctx.viz?.primitiveFilters &&
-    !ctx.viz.primitiveFilters.includes(primitive)
-  ) {
-    return [];
+    !ctx.viz.primitiveFilters.includes(primitive);
+
+  let thematicLayers: Layer<DeckDataRow>[] = [];
+  if (!isPrimitiveFilteredOut) {
+    switch (resolvedGeometryType) {
+      case GeometryType.POINT:
+      case GeometryType.MULTIPOINT:
+        thematicLayers = createPointLayers(jsTable, geometryInfo, ctx);
+        break;
+
+      case GeometryType.LINESTRING:
+      case GeometryType.MULTILINESTRING:
+        thematicLayers = createLineLayers(jsTable, geometryInfo, ctx);
+        break;
+
+      case GeometryType.POLYGON:
+      case GeometryType.MULTIPOLYGON:
+        thematicLayers = createPolygonLayers(jsTable, geometryInfo, ctx);
+        break;
+
+      default:
+        logger.error(
+          'Unsupported geometry type for Deck layer',
+          LogCategory.MAP,
+          {
+            geometryType: resolvedGeometryType,
+            datasetId: ctx.datasetId
+          }
+        );
+    }
   }
 
-  switch (resolvedGeometryType) {
-    case GeometryType.POINT:
-    case GeometryType.MULTIPOINT:
-      return createPointLayers(jsTable, geometryInfo, ctx);
-
-    case GeometryType.LINESTRING:
-    case GeometryType.MULTILINESTRING:
-      return createLineLayers(jsTable, geometryInfo, ctx);
-
-    case GeometryType.POLYGON:
-    case GeometryType.MULTIPOLYGON:
-      return createPolygonLayers(jsTable, geometryInfo, ctx);
-
-    default:
-      logger.error(
-        'Unsupported geometry type for Deck layer',
-        LogCategory.MAP,
-        {
-          geometryType: resolvedGeometryType,
-          datasetId: ctx.datasetId
-        }
-      );
-      return [];
-  }
+  const textLayers = createTextOverlayLayers(jsTable, geometryInfo, ctx);
+  return [...thematicLayers, ...textLayers];
 }
