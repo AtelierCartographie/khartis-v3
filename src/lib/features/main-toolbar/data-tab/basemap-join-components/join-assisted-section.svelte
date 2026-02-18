@@ -67,7 +67,7 @@
   let duplicatesExpanded = $state(false);
   let unrecognizedExpanded = $state(false);
 
-  const hasBlockingErrors = $derived(toVerifyCount > 0 || duplicateCount > 0);
+  const hasBlockingErrors = $derived(toVerifyCount > 0);
   const showCorrectionNotification = $derived(
     hasBlockingErrors && toVerifyCount > 0
   );

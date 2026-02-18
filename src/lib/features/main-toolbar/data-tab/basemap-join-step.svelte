@@ -7,7 +7,6 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -43,6 +42,7 @@
     shouldResetJoinState
   } from './services/dataset-identity';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
+  import { hasBlockingJoinIssues } from './services/join-validation';
 
   let activeTabIndex = $state(0);
 
@@ -206,12 +206,9 @@
 
       dataTabActions.setJoinStats(stats);
 
-      const hasBlockingErrors =
-        stats.toVerifyCount > 0 ||
-        stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE).length >
-          0;
+      const hasBlocking = hasBlockingJoinIssues(stats);
 
-      if (!hasBlockingErrors && stats.joinedCount > 0) {
+      if (!hasBlocking && stats.joinedCount > 0) {
         logger.info(
           'Auto-finalizing join - no errors detected',
           LogCategory.MAP,
@@ -493,10 +490,9 @@
 
         dataTabActions.setJoinStats(stats);
 
-        const hasBlockingErrors =
-          stats.toVerifyCount > 0 || stats.duplicateCount > 0;
+        const hasBlocking = hasBlockingJoinIssues(stats);
 
-        if (hasBlockingErrors || stats.joinedCount === 0) {
+        if (hasBlocking || stats.joinedCount === 0) {
           logger.info(
             'Corrections applied but join still requires manual validation',
             LogCategory.MAP,
@@ -543,8 +539,12 @@
       return;
     }
 
-    const hasBlockingErrors = toVerifyCount > 0 || duplicates.length > 0;
-    if (hasBlockingErrors) {
+    const hasBlocking = hasBlockingJoinIssues({
+      joinedCount,
+      toVerifyCount,
+      duplicateCount: duplicates.length
+    });
+    if (hasBlocking) {
       logger.warn(
         'Cannot finalize join with unresolved entities',
         LogCategory.MAP,
