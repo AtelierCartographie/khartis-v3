@@ -92,6 +92,11 @@ export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
   PrimitiveFilterType.POLYGON
 ];
 
+export interface YearFilter {
+  column: string;
+  value: number | string;
+}
+
 export interface VisualizationConfig {
   id: string;
   name: string;
@@ -151,6 +156,7 @@ export interface VisualizationConfig {
     opacity?: number;
   };
   missingData?: MissingDataConfig;
+  yearFilter?: YearFilter;
 }
 
 interface VisualizationState {
@@ -206,6 +212,7 @@ export interface VisualizationStore {
   invertPalette: (id: string) => void;
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
   getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
+  setYearFilter: (id: string, filter: YearFilter | null) => void;
   clear: () => void;
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
@@ -748,6 +755,10 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function setYearFilter(id: string, filter: YearFilter | null): void {
+    applyVisualizationUpdate(id, () => ({ yearFilter: filter ?? undefined }));
+  }
+
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
@@ -801,6 +812,7 @@ function createVisualizationStore(): VisualizationStore {
     invertPalette,
     getVisualizationsByDataset,
     getVisualizationsUsingColumn,
+    setYearFilter,
     clear,
     restoreFromSerialized
   };

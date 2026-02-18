@@ -18,9 +18,26 @@ export interface DuckDBClientForArrow {
   copy_to_geoparquet_as_buffer(tableName: string): Promise<Uint8Array>;
 }
 
+export interface YearFilterClause {
+  column: string;
+  value: number | string;
+}
+
+export function buildYearFilterWhereClause(
+  filter: YearFilterClause | undefined
+): string | null {
+  if (!filter) return null;
+  const value =
+    typeof filter.value === 'number'
+      ? filter.value
+      : `'${String(filter.value).replace(/'/g, "''")}'`;
+  return `"${filter.column}" = ${value}`;
+}
+
 export async function fetchArrowTableWithGeometry(
   tableName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckDBClientForArrow,
+  whereClause?: string | null
 ): Promise<Table> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -37,6 +54,10 @@ export async function fetchArrowTableWithGeometry(
     query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ST_AsWKB("${geomColumn.column_name}") AS "${geomColumn.column_name}" FROM "${tableName}"`;
   } else {
     query = `SELECT * FROM "${tableName}"`;
+  }
+
+  if (whereClause) {
+    query += ` WHERE ${whereClause}`;
   }
 
   const buffer = (await Duck.query(query, {
@@ -358,8 +379,31 @@ export async function getArrowTableDirect(
   tableName: string,
   Duck: DuckDBClientForArrow,
   getCachedTable: () => Table | undefined,
-  setCache: (table: Table) => void
+  setCache: (table: Table) => void,
+  whereClause?: string | null
 ): Promise<Table> {
+  if (whereClause) {
+    const baseTable = await fetchArrowTableWithGeometry(
+      tableName,
+      Duck,
+      whereClause
+    );
+    const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
+      baseTable,
+      tableName,
+      Duck
+    );
+    logger.info(
+      'Created filtered Arrow table with metadata',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        whereClause
+      }
+    );
+    return tableWithMetadata;
+  }
+
   const cached = getCachedTable();
   if (cached) {
     logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
