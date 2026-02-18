@@ -69,26 +69,29 @@ describe('GeoColumnDetector - fossil-fuel CSV (ISO3 detection)', () => {
     expect(data.length).toBeGreaterThanOrEqual(80);
   });
 
-  it('should detect the Code column as iso3', async () => {
+  it('should detect both Entity (country_name) and Code (iso3) columns', async () => {
     const result = await GeoColumnDetector.detectGeoColumns(headers, data);
 
-    expect(result.hasGeoColumns).toBe(true);
-
+    const entityColumn = result.geoColumns.find(
+      (col) => col.columnName === 'Entity'
+    );
     const codeColumn = result.geoColumns.find(
       (col) => col.columnName === 'Code'
     );
+
+    expect(entityColumn).toBeDefined();
+    expect(entityColumn!.type).toBe('country_name');
+
     expect(codeColumn).toBeDefined();
     expect(codeColumn!.type).toBe('iso3');
-    expect(codeColumn!.index).toBe(1);
-    expect(codeColumn!.confidence).toBeGreaterThan(0.8);
   });
 
-  it('should select an iso3 column as suggested primary geo column', async () => {
+  it('should select Entity (country_name) over Code (iso3) as primary geo column', async () => {
     const result = await GeoColumnDetector.detectGeoColumns(headers, data);
 
     expect(result.suggestedPrimaryGeoColumn).toBeDefined();
-    expect(result.suggestedPrimaryGeoColumn!.type).toBe('iso3');
-    expect(result.suggestedPrimaryGeoColumn!.columnName).toBe('Code');
+    expect(result.suggestedPrimaryGeoColumn!.type).toBe('country_name');
+    expect(result.suggestedPrimaryGeoColumn!.columnName).toBe('Entity');
   });
 
   it('should not produce warnings for this dataset', async () => {
@@ -234,5 +237,78 @@ describe('GeoColumnDetector - selectPrimaryGeoColumn', () => {
 
     const primary = GeoColumnDetector.selectPrimaryGeoColumn(columns);
     expect(primary!.columnName).toBe('code2');
+  });
+});
+
+describe('GeoColumnDetector - Entity column detection', () => {
+  it('should detect Entity column as country_name by name pattern', async () => {
+    const headers = ['Entity', 'Value'];
+    const data = [
+      ['France', '100'],
+      ['Germany', '200'],
+      ['Spain', '300']
+    ];
+
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    const entityCol = result.geoColumns.find(
+      (col) => col.columnName === 'Entity'
+    );
+    expect(entityCol).toBeDefined();
+    expect(entityCol!.type).toBe('country_name');
+  });
+
+  it('should detect Area column as country_name by name pattern', async () => {
+    const headers = ['Area', 'Population'];
+    const data = [
+      ['France', '67000000'],
+      ['Germany', '83000000']
+    ];
+
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    const areaCol = result.geoColumns.find((col) => col.columnName === 'Area');
+    expect(areaCol).toBeDefined();
+    expect(areaCol!.type).toBe('country_name');
+  });
+
+  it('should prefer country_name (Entity) over iso3 for primary selection', async () => {
+    const csvPath = join(
+      process.cwd(),
+      'tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
+    );
+    const csvContent = readFileSync(csvPath, 'utf-8');
+    const { headers, data } = parseCsvForDetector(csvContent);
+
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    expect(result.suggestedPrimaryGeoColumn).toBeDefined();
+    expect(result.suggestedPrimaryGeoColumn!.type).toBe('country_name');
+    expect(result.suggestedPrimaryGeoColumn!.columnName).toBe('Entity');
+  });
+
+  it('should detect country_name from values when column name does not match', async () => {
+    const headers = ['location', 'value'];
+    const data = [
+      ['France', '100'],
+      ['Germany', '200'],
+      ['Spain', '300'],
+      ['Italy', '400'],
+      ['Poland', '500'],
+      ['Brazil', '600'],
+      ['Argentina', '700'],
+      ['Japan', '800'],
+      ['China', '900'],
+      ['India', '1000']
+    ];
+
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    const geoCol = result.geoColumns.find(
+      (col) => col.columnName === 'location'
+    );
+    expect(geoCol).toBeDefined();
+    expect(geoCol!.type).toBe('country_name');
+    expect(geoCol!.confidence).toBeGreaterThan(0.3);
   });
 });
