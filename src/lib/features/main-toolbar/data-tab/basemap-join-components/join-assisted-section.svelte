@@ -86,180 +86,167 @@
     </div>
   {:else}
     <div class="category-rows">
-      {#if joinedCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (joinedExpanded = !joinedExpanded)}
-            aria-expanded={joinedExpanded}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (joinedExpanded = !joinedExpanded)}
+          aria-expanded={joinedExpanded}
+        >
+          <span class="category-icon icon-success">
+            <CheckmarkFilled size={20} />
+          </span>
+          <div class="category-count count-success">{joinedCount}</div>
+          <span class="category-label label-success"
+            >{m.join_entities_joined({ count: joinedCount })}</span
           >
-            <span class="category-icon icon-success">
-              <CheckmarkFilled size={20} />
-            </span>
-            <div class="category-count count-success">{joinedCount}</div>
-            <span class="category-label label-success"
-              >{m.join_entities_joined({ count: joinedCount })}</span
-            >
-            <span class="category-chevron">
-              {#if joinedExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if joinedExpanded}
-            <div class="category-body">
-              <p class="category-body-text">
-                {m.join_entities_joined_desc()}
-              </p>
-            </div>
-          {/if}
-        </div>
-      {/if}
+          <span class="category-chevron">
+            {#if joinedExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if joinedExpanded}
+          <div class="category-body">
+            <p class="category-body-text">
+              {m.join_entities_joined_desc()}
+            </p>
+          </div>
+        {/if}
+      </div>
 
-      {#if toVerifyCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
-            aria-expanded={toVerifyExpanded}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
+          aria-expanded={toVerifyExpanded}
+        >
+          <span class="category-icon icon-warning">
+            <WarningFilled size={20} />
+          </span>
+          <div class="category-count count-warning">{toVerifyCount}</div>
+          <span class="category-label label-warning"
+            >{m.join_entities_to_verify({ count: toVerifyCount })}</span
           >
-            <span class="category-icon icon-warning">
-              <WarningFilled size={20} />
-            </span>
-            <div class="category-count count-warning">{toVerifyCount}</div>
-            <span class="category-label label-warning"
-              >{m.join_entities_to_verify({ count: toVerifyCount })}</span
-            >
-            <span class="category-chevron">
-              {#if toVerifyExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if toVerifyExpanded && joinRows.length > 0}
-            <div class="category-body">
-              <div class="join-table">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
+          <span class="category-chevron">
+            {#if toVerifyExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if toVerifyExpanded && joinRows.length > 0}
+          <div class="category-body">
+            <div class="join-table">
+              <div class="table-header">
+                <div class="table-header-left">
+                  <span class="table-header-label">{m.join_data_column()}</span>
+                  {#if linkedVariableName}
+                    <VariableBadge label={linkedVariableName} type="geo-ref" />
+                  {/if}
+                </div>
+                <div class="table-header-right">
+                  <span class="table-header-label"
+                    >{m.join_basemap_column()}</span
+                  >
+                </div>
+              </div>
+              {#each deduplicatedJoinRows as row, i (i)}
+                <div class="table-row">
+                  <div class="table-cell cell-data">{row.dataValue}</div>
+                  <div class="table-cell cell-equals">=</div>
+                  <div class="table-cell cell-select">
+                    <Select
+                      id={`join-${i}`}
+                      labelText=""
+                      selected={row.selectedMapping}
+                      on:change={(e) => {
+                        const target = e.target as HTMLSelectElement;
+                        const selectedValue =
+                          target?.value || row.selectedMapping;
+                        dataTabActions.updateJoinMapping(i, selectedValue);
+                      }}
+                      size="sm"
                     >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
-                    {/if}
-                  </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_basemap_column()}</span
-                    >
+                      {#each row.basemapOptions as opt (opt)}
+                        <SelectItem value={opt} text={opt} />
+                      {/each}
+                    </Select>
                   </div>
                 </div>
-                {#each deduplicatedJoinRows as row, i (i)}
-                  <div class="table-row">
-                    <div class="table-cell cell-data">{row.dataValue}</div>
-                    <div class="table-cell cell-equals">=</div>
-                    <div class="table-cell cell-select">
-                      <Select
-                        id={`join-${i}`}
-                        labelText=""
-                        selected={row.selectedMapping}
-                        on:change={(e) => {
-                          const target = e.target as HTMLSelectElement;
-                          const selectedValue =
-                            target?.value || row.selectedMapping;
-                          dataTabActions.updateJoinMapping(i, selectedValue);
-                        }}
-                        size="sm"
-                      >
-                        {#each row.basemapOptions as opt (opt)}
-                          <SelectItem value={opt} text={opt} />
-                        {/each}
-                      </Select>
-                    </div>
-                  </div>
-                {/each}
-              </div>
+              {/each}
             </div>
-          {/if}
-        </div>
-      {/if}
+          </div>
+        {/if}
+      </div>
 
-      {#if duplicateCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-            aria-expanded={duplicatesExpanded}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+          aria-expanded={duplicatesExpanded}
+        >
+          <span class="category-icon icon-warning-alt">
+            <WarningAltFilled size={20} />
+          </span>
+          <div class="category-count count-warning-alt">{duplicateCount}</div>
+          <span class="category-label label-warning-alt"
+            >{m.join_entities_duplicate({ count: duplicateCount })}</span
           >
-            <span class="category-icon icon-warning-alt">
-              <WarningAltFilled size={20} />
-            </span>
-            <div class="category-count count-warning-alt">{duplicateCount}</div>
-            <span class="category-label label-warning-alt"
-              >{m.join_entities_duplicate({ count: duplicateCount })}</span
-            >
-            <span class="category-chevron">
-              {#if duplicatesExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if duplicatesExpanded}
-            <div class="category-body">
-              <ul class="entity-list">
-                {#each duplicates as entity (entity)}
-                  <li class="entity-item">{entity}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </div>
-      {/if}
+          <span class="category-chevron">
+            {#if duplicatesExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if duplicatesExpanded && duplicateCount > 0}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each duplicates as entity (entity)}
+                <li class="entity-item">{entity}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
 
-      {#if unrecognizedCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
-            aria-expanded={unrecognizedExpanded}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
+          aria-expanded={unrecognizedExpanded}
+        >
+          <span class="category-icon icon-error">
+            <ErrorFilled size={20} />
+          </span>
+          <div class="category-count count-error">{unrecognizedCount}</div>
+          <span class="category-label label-error"
+            >{m.join_entities_unrecognized({
+              count: unrecognizedCount
+            })}</span
           >
-            <span class="category-icon icon-error">
-              <ErrorFilled size={20} />
-            </span>
-            <div class="category-count count-error">{unrecognizedCount}</div>
-            <span class="category-label label-error"
-              >{m.join_entities_unrecognized({
-                count: unrecognizedCount
-              })}</span
-            >
-            <span class="category-chevron">
-              {#if unrecognizedExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if unrecognizedExpanded}
-            <div class="category-body">
-              <ul class="entity-list">
-                {#each unknowns as entity (entity)}
-                  <li class="entity-item">{entity}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </div>
-      {/if}
+          <span class="category-chevron">
+            {#if unrecognizedExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if unrecognizedExpanded && unrecognizedCount > 0}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each unknowns as entity (entity)}
+                <li class="entity-item">{entity}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
     </div>
 
     {#if hasBlockingErrors}
