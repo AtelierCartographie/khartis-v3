@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProcessedDataset, ColumnInfo } from '$lib/features/data-pipeline';
+import type { GeoColumnResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type {
   BasemapMetadata,
   BasemapSuggestion
@@ -68,7 +69,8 @@ function createMockColumn(
 }
 
 function createMockDataset(
-  columns: (ColumnInfo & { subtype?: string })[]
+  columns: (ColumnInfo & { subtype?: string })[],
+  geoColumns?: GeoColumnResult[]
 ): ProcessedDataset {
   return {
     id: 'test-dataset',
@@ -91,7 +93,14 @@ function createMockDataset(
     metadata: {
       processedAt: new Date(),
       transformations: []
-    }
+    },
+    geoDetection: geoColumns
+      ? {
+          hasGeoColumns: true,
+          geoColumns: geoColumns,
+          warnings: []
+        }
+      : undefined
   };
 }
 
@@ -193,6 +202,78 @@ describe('basemap-catalog.service', () => {
       ]);
       const suggestions = service.getSuggestions(dataset, 3, 'country');
       expect(suggestions.length).toBeGreaterThan(0);
+    });
+
+    it('prioritizes world basemap for country_name geo type', async () => {
+      const dataset = createMockDataset(
+        [createMockColumn('Name', 'string', 'geographic')],
+        [
+          {
+            index: 0,
+            columnName: 'Name',
+            type: 'country_name',
+            confidence: 0.95
+          }
+        ]
+      );
+      const suggestions = service.getSuggestions(dataset, 3);
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions[0].file).toBe('world-countries-50m');
+      expect(suggestions[0].matchScore).toBeGreaterThanOrEqual(60);
+    });
+
+    it('prioritizes world basemap for iso2 geo type', async () => {
+      const dataset = createMockDataset(
+        [createMockColumn('Code', 'string', 'geographic')],
+        [
+          {
+            index: 0,
+            columnName: 'Code',
+            type: 'iso2',
+            confidence: 0.95
+          }
+        ]
+      );
+      const suggestions = service.getSuggestions(dataset, 3);
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions[0].file).toBe('world-countries-50m');
+      expect(suggestions[0].matchScore).toBeGreaterThanOrEqual(60);
+    });
+
+    it('prioritizes world basemap for iso3 geo type', async () => {
+      const dataset = createMockDataset(
+        [createMockColumn('ISO3', 'string', 'geographic')],
+        [
+          {
+            index: 0,
+            columnName: 'ISO3',
+            type: 'iso3',
+            confidence: 0.95
+          }
+        ]
+      );
+      const suggestions = service.getSuggestions(dataset, 3);
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions[0].file).toBe('world-countries-50m');
+      expect(suggestions[0].matchScore).toBeGreaterThanOrEqual(60);
+    });
+
+    it('prioritizes NUTS basemap for nuts geo type', async () => {
+      const dataset = createMockDataset(
+        [createMockColumn('NUTSCode', 'string', 'geographic')],
+        [
+          {
+            index: 0,
+            columnName: 'NUTSCode',
+            type: 'nuts',
+            confidence: 0.95
+          }
+        ]
+      );
+      const suggestions = service.getSuggestions(dataset, 3);
+      expect(suggestions.length).toBeGreaterThan(0);
+      expect(suggestions[0].file).toBe('nuts2-europe-2021');
+      expect(suggestions[0].matchScore).toBeGreaterThanOrEqual(60);
     });
   });
 

@@ -1,5 +1,6 @@
 import { base } from '$app/paths';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
+import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import type {
   BasemapCatalog,
@@ -47,7 +48,8 @@ function createBasemapCatalogService() {
   function calculateMatchScore(
     _dataset: ProcessedDataset,
     geoColumnName: string,
-    basemap: BasemapMetadata
+    basemap: BasemapMetadata,
+    geoColumnType?: GeoColumnInfo['type']
   ): { score: number; reason: string } {
     let score = 0;
     const reasons: string[] = [];
@@ -55,6 +57,22 @@ function createBasemapCatalogService() {
     const columnNameLower = geoColumnName.toLowerCase();
     const basemapTitleLower = basemap.title.toLowerCase();
     const basemapDescLower = basemap.description.toLowerCase();
+
+    const isCountryType =
+      geoColumnType === 'country_name' ||
+      geoColumnType === 'iso2' ||
+      geoColumnType === 'iso3';
+
+    const isWorldBasemap =
+      basemap.file.includes('world') ||
+      basemapTitleLower.includes('world') ||
+      basemapTitleLower.includes('countries') ||
+      basemapTitleLower.includes('monde');
+
+    if (isCountryType && isWorldBasemap) {
+      score += 60;
+      reasons.push('Country type match');
+    }
 
     if (
       columnNameLower.includes('region') &&
@@ -72,6 +90,14 @@ function createBasemapCatalogService() {
     ) {
       score += 50;
       reasons.push('Department match');
+    }
+
+    if (
+      geoColumnType === 'nuts' &&
+      (basemapTitleLower.includes('nuts') || basemapDescLower.includes('nuts'))
+    ) {
+      score += 60;
+      reasons.push('NUTS type match');
     }
 
     if (
@@ -151,12 +177,18 @@ function createBasemapCatalogService() {
       return [];
     }
 
+    const geoColumnInfo = dataset.geoDetection?.geoColumns?.find(
+      (gc) => gc.columnName === geoColumn!.name
+    );
+    const geoColumnType = geoColumnInfo?.type;
+
     const suggestions = state.catalog.basemaps
       .map((basemap) => {
         const { score, reason } = calculateMatchScore(
           dataset,
-          geoColumn.name,
-          basemap
+          geoColumn!.name,
+          basemap,
+          geoColumnType
         );
 
         return {
