@@ -132,6 +132,7 @@
           classes: currentNumClasses,
           numClasses: currentNumClasses,
           breaks: result.breaks,
+          counts: result.counts,
           colors,
           breakpointValue: currentBreakpoint
         });
@@ -163,11 +164,13 @@
   function handleBreaksChange(breaks: ClassBreak[]) {
     currentBreaks = breaks;
     const breakValues = breaks.slice(0, -1).map((b) => b.max);
+    const countValues = breaks.map((b) => b.count);
     onchange?.({
       method: panelMethodToStoreMethod(currentMethod),
       classes: currentNumClasses,
       numClasses: currentNumClasses,
       breaks: breakValues,
+      counts: countValues,
       breakpointValue: currentBreakpoint
     });
   }

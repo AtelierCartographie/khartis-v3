@@ -65,6 +65,7 @@ export interface ClassificationConfig {
   classes: number;
   numClasses?: number;
   breaks?: number[];
+  counts?: number[];
   colors?: string[];
   labels?: string[];
   breakpointValue?: number | null;
