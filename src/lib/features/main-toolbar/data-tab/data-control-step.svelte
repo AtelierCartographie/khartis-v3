@@ -4,6 +4,14 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
+  import type {
+    EnrichDataState,
+    GeolocationState
+  } from '$lib/features/commons/store/data-tab.types';
+  import {
     showError,
     showSuccess,
     showWarning
@@ -169,6 +177,51 @@
       datasetsStore.showColumn(selectedDataset.id, columnName);
     }
     refreshTable();
+  }
+
+  function handleColumnDeleted(columnName: string) {
+    const geolocationUpdates: Partial<GeolocationState> = {};
+    let geolocationChanged = false;
+
+    if (dataTabState.geolocation.linkedVariableName === columnName) {
+      geolocationUpdates.linkedVariable = null;
+      geolocationUpdates.linkedVariableName = '';
+      geolocationChanged = true;
+    }
+
+    if (dataTabState.geolocation.latitudeColumn === columnName) {
+      geolocationUpdates.latitudeColumn = undefined;
+      geolocationChanged = true;
+    }
+
+    if (dataTabState.geolocation.longitudeColumn === columnName) {
+      geolocationUpdates.longitudeColumn = undefined;
+      geolocationChanged = true;
+    }
+
+    if (geolocationChanged) {
+      dataTabActions.setGeolocationState(geolocationUpdates);
+      dataTabActions.clearJoinStats();
+      dataTabStore.resetStepCompletion(1);
+      dataTabStore.resetStepCompletion(2);
+    }
+
+    const enrichUpdates: Partial<EnrichDataState> = {};
+    let enrichChanged = false;
+
+    if (dataTabState.enrichData.targetColumn === columnName) {
+      enrichUpdates.targetColumn = undefined;
+      enrichChanged = true;
+    }
+
+    if (dataTabState.enrichData.enrichmentColumn === columnName) {
+      enrichUpdates.enrichmentColumn = undefined;
+      enrichChanged = true;
+    }
+
+    if (enrichChanged) {
+      dataTabActions.setEnrichDataState(enrichUpdates);
+    }
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
@@ -386,7 +439,7 @@
     if (!currentDuckTable || !selectedDataset) return;
 
     try {
-      const count =
+      const { count, rowIds } =
         await duckDBOrchestrator.deleteFilteredRows(currentDuckTable);
 
       if (count > 0) {
@@ -399,6 +452,7 @@
           `Deleted ${count} filtered rows (new total: ${newRowCount})`
         );
         datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+        await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 
         refreshTable();
         showSuccess(
@@ -560,6 +614,7 @@
           highlightedRowIds={searchHighlight.highlightedRowIds}
           isExpanded={false}
           isSelectable={true}
+          onColumnDeleted={handleColumnDeleted}
           onSelectionChange={handleSelectionChange}
         />
       {/key}
@@ -602,6 +657,7 @@
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
     isSelectable={true}
+    onColumnDeleted={handleColumnDeleted}
     onSelectionChange={handleSelectionChange}
     onClose={() => (isModalOpen = false)}
   />

@@ -18,6 +18,7 @@
     highlightedRowIds?: number[];
     isSelectable?: boolean;
     onSelectionChange?: (ids: number[], count: number) => void;
+    onColumnDeleted?: (columnName: string) => void;
     onClose: () => void;
   }
 
@@ -31,6 +32,7 @@
     highlightedRowIds = [],
     isSelectable = false,
     onSelectionChange,
+    onColumnDeleted,
     onClose
   }: Props = $props();
 
@@ -167,6 +169,7 @@
           highlightedRowIds={highlightedRowIds}
           isExpanded={true}
           isSelectable={isSelectable}
+          onColumnDeleted={onColumnDeleted}
           onSelectionChange={onSelectionChange}
         />
       {/key}
