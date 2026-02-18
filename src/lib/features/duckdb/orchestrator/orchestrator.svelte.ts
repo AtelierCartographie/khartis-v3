@@ -483,17 +483,20 @@ export const duckDBOrchestrator = {
     state.bumpDatasetsVersion();
   },
 
-  async deleteFilteredRows(tableName: string): Promise<number> {
+  async deleteFilteredRows(tableName: string): Promise<{
+    count: number;
+    rowIds: number[];
+  }> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const rowIds = await tableDataOps.getExcludedRowIds(tableName, Duck);
-    if (rowIds.length === 0) return 0;
+    if (rowIds.length === 0) return { count: 0, rowIds: [] };
 
     await columnOps.dropRows(tableName, rowIds, Duck);
     invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
-    return rowIds.length;
+    return { count: rowIds.length, rowIds };
   },
 
   async refineColumn(

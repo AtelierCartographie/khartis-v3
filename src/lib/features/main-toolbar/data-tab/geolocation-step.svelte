@@ -80,19 +80,7 @@
       )
       .map((col) => col.name);
 
-    const analysisColumnNames = columnAnalysis
-      .filter(
-        (col) =>
-          col.name !== INTERNAL_COLUMN.GEOMETRY &&
-          col.name !== INTERNAL_COLUMN.ID
-      )
-      .map((col) => col.name);
-
-    const allColumnNames = [
-      ...new Set([...datasetColumnNames, ...analysisColumnNames])
-    ];
-
-    return allColumnNames.map((columnName, index) => {
+    return datasetColumnNames.map((columnName, index) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc) => gc.columnName === columnName
       );
@@ -112,6 +100,10 @@
       };
     });
   });
+
+  const availableColumnNames = $derived(
+    new Set(dataFieldItems().map((item) => item.columnName))
+  );
 
   const bestGeoidColumn = $derived(() => {
     const geoidColumns = columnAnalysis
@@ -327,6 +319,51 @@
 
       hasAutoGeoreferenceInitialization = true;
     }
+  });
+
+  $effect(() => {
+    const availableColumns = availableColumnNames;
+    const geolocation = dataTabState.geolocation;
+
+    if (availableColumns.size === 0) return;
+
+    const geolocationUpdates: Partial<typeof geolocation> = {};
+    let hasUpdates = false;
+
+    if (
+      geolocation.linkedVariableName &&
+      !availableColumns.has(geolocation.linkedVariableName)
+    ) {
+      geolocationUpdates.linkedVariable = null;
+      geolocationUpdates.linkedVariableName = '';
+      previousAutoSelectedColumn = null;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.latitudeColumn &&
+      !availableColumns.has(geolocation.latitudeColumn)
+    ) {
+      geolocationUpdates.latitudeColumn = undefined;
+      latitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.longitudeColumn &&
+      !availableColumns.has(geolocation.longitudeColumn)
+    ) {
+      geolocationUpdates.longitudeColumn = undefined;
+      longitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (!hasUpdates) return;
+
+    dataTabActions.setGeolocationState(geolocationUpdates);
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(1);
+    dataTabStore.resetStepCompletion(2);
   });
 
   async function autoSelectBasemap() {
