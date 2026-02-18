@@ -71,7 +71,7 @@ describe('projscreen', () => {
         { width: 1200, height: 800 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo((800 / 1200000) * 0.92, 10);
+      expect(scale).toBeCloseTo((800 / 1200000) * 0.97, 10);
     });
 
     it('should calculate scale for portrait canvas', () => {
@@ -79,7 +79,7 @@ describe('projscreen', () => {
         { width: 800, height: 1200 },
         [0, 0, 1100000, 1200000]
       );
-      expect(scale).toBeCloseTo((800 / 1100000) * 0.92, 10);
+      expect(scale).toBeCloseTo((800 / 1100000) * 0.97, 10);
     });
 
     it('should return 1 for zero-dimension bbox', () => {

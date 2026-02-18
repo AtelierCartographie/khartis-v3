@@ -38,6 +38,10 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import {
+    getDatasetIdentity,
+    shouldResetJoinState
+  } from './services/dataset-identity';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
 
   let activeTabIndex = $state(0);
@@ -69,7 +73,7 @@
   let importedBasemap = $state<BasemapMetadata | null>(null);
   let showSuggestionModal = $state(false);
   let joinLoading = $state(false);
-  let suggestionsDatasetId = $state<string | null>(null);
+  let suggestionsDatasetIdentity = $state<string | null>(null);
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -600,9 +604,10 @@
       );
       basemapSuggestions = suggestions;
 
-      const currentDatasetId = selectedDataset.id;
-      const isDatasetChanged = suggestionsDatasetId !== currentDatasetId;
-      suggestionsDatasetId = currentDatasetId;
+      const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
+      const isDatasetChanged =
+        suggestionsDatasetIdentity !== currentDatasetIdentity;
+      suggestionsDatasetIdentity = currentDatasetIdentity;
 
       if (
         suggestions.length > 0 &&
@@ -812,17 +817,24 @@
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
   });
 
-  let previousDatasetId: string | null = null;
+  let previousDatasetIdentity: string | null = null;
   $effect(() => {
-    const currentDatasetId = selectedDataset?.id ?? null;
+    const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
+    const hasDatasets = datasetsStore.datasets.length > 0;
 
-    if (previousDatasetId !== null && currentDatasetId !== previousDatasetId) {
+    if (
+      shouldResetJoinState({
+        previousIdentity: previousDatasetIdentity,
+        currentIdentity: currentDatasetIdentity,
+        hasDatasets
+      })
+    ) {
       logger.info(
         'Clearing join state due to dataset change',
         LogCategory.MAP,
         {
-          previousDatasetId,
-          newDatasetId: currentDatasetId
+          previousDatasetIdentity,
+          newDatasetIdentity: currentDatasetIdentity
         }
       );
 
@@ -842,7 +854,9 @@
       previousLinkedVariableName = null;
     }
 
-    previousDatasetId = currentDatasetId;
+    if (currentDatasetIdentity !== null || !hasDatasets) {
+      previousDatasetIdentity = currentDatasetIdentity;
+    }
   });
 </script>
 

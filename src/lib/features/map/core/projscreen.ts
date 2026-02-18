@@ -1,7 +1,7 @@
 import { Matrix4 } from '@math.gl/core';
 import type { CanvasSize } from '../types';
 
-const FIT_BOUNDS_PADDING_FACTOR = 0.92;
+const FIT_BOUNDS_PADDING_FACTOR = 0.97;
 
 interface GeoParquetColumnMeta {
   bbox: [number, number, number, number];

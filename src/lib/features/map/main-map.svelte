@@ -339,13 +339,14 @@
 
     const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-    // Remove display entries for datasets that are no longer enabled
-    const tableIdsToRemove = [...displayTables.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    // displayTables/displayGeoJSONs are outputs of this effect.
+    // Read them untracked to avoid a self-triggering reload loop.
+    const tableIdsToRemove = untrack(() =>
+      [...displayTables.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
-    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    const geojsonIdsToRemove = untrack(() =>
+      [...displayGeoJSONs.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
     const datasetIdsToRemove = new Set([
