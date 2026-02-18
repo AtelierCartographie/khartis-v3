@@ -66,7 +66,9 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedFieldId = $state<number>(0);
+  let selectedValueFieldId = $state<number>(0);
+  let selectedSizeFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
@@ -74,16 +76,50 @@
         (f) => f.text === visualization.mapping.valueColumn
       );
       if (fieldIndex >= 0) {
-        selectedFieldId = fieldIndex;
+        selectedValueFieldId = dataFields[fieldIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.sizeColumn && dataFields.length > 0) {
+      const sizeIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.sizeColumn
+      );
+      if (sizeIndex >= 0) {
+        selectedSizeFieldId = dataFields[sizeIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
       }
     }
   });
 
-  function handleFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
-    const field = dataFields[fieldId];
+  function handleValueFieldSelect(fieldId: number) {
+    selectedValueFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
+    }
+  }
+
+  function handleSizeFieldSelect(fieldId: number) {
+    selectedSizeFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ sizeColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -118,8 +154,13 @@
         visualization.style.lineWidth ?? VISUALIZATION_DEFAULTS.lineWidth;
       maxThickness =
         visualization.style.lineMaxWidth ?? VISUALIZATION_DEFAULTS.lineMaxWidth;
+      const lineOpacity = visualization.style.lineOpacity;
       opacity =
-        visualization.style.lineOpacity ?? VISUALIZATION_DEFAULTS.lineOpacity;
+        lineOpacity !== undefined
+          ? lineOpacity <= 1
+            ? Math.round(lineOpacity * 100)
+            : lineOpacity
+          : VISUALIZATION_DEFAULTS.lineOpacity;
       color = (visualization.style.lineColor as string) ?? DEFAULT_COLORS.line;
       dashed = visualization.style.lineDashed ?? false;
     }
@@ -178,7 +219,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ lineOpacity: value });
+    onStyleChange?.({ lineOpacity: value / 100 });
   }
 
   function handleDashedChange(value: boolean) {
@@ -293,8 +334,8 @@
         <Dropdown
           titleText={m.thickness_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedSizeFieldId}
+          on:select={(e) => handleSizeFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -310,8 +351,8 @@
         <Dropdown
           titleText={m.thickness_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedValueFieldId}
+          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -351,8 +392,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedValueFieldId}
+          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -371,7 +412,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedCategoryFieldId}
+          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>

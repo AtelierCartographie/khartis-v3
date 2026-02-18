@@ -154,8 +154,13 @@
 
   $effect(() => {
     if (visualization?.style) {
+      const textOpacity = visualization.style.textOpacity;
       opacity =
-        visualization.style.textOpacity ?? VISUALIZATION_DEFAULTS.textOpacity;
+        textOpacity !== undefined
+          ? textOpacity <= 1
+            ? Math.round(textOpacity * 100)
+            : textOpacity
+          : VISUALIZATION_DEFAULTS.textOpacity;
       color = (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
       bold = visualization.style.textBold ?? false;
       italic = visualization.style.textItalic ?? false;
@@ -208,7 +213,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ textOpacity: value });
+    onStyleChange?.({ textOpacity: value / 100 });
   }
 
   function handleBoldChange(value: boolean) {

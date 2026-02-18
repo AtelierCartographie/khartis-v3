@@ -48,6 +48,7 @@
     symbolMode,
     onSymbolsChange,
     onMappingChange,
+    onClassificationChange,
     onMissingDataChange,
     onOpenDiscretization,
     onModesChange,
@@ -58,6 +59,8 @@
   let discretizationModalOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   let selectedFieldId = $state<number>(0);
+  let fillClassFieldId = $state<number>(0);
+  let fillCategoryFieldId = $state<number>(0);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.POINT);
   let showMissingData = $state<boolean>(true);
@@ -75,6 +78,40 @@
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   $effect(() => {
+    if (dataFields.length > 0 && visualization?.mapping) {
+      const mappedFieldName =
+        symbolMode === SymbolMode.PROPORTIONAL
+          ? visualization.mapping.sizeColumn
+          : visualization.mapping.valueColumn;
+
+      if (mappedFieldName) {
+        const fieldIndex = dataFields.findIndex(
+          (field) => field.text === mappedFieldName
+        );
+        if (fieldIndex >= 0) {
+          selectedFieldId = dataFields[fieldIndex].id;
+        }
+      }
+
+      if (visualization.mapping.valueColumn) {
+        const valueFieldIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.valueColumn
+        );
+        if (valueFieldIndex >= 0) {
+          fillClassFieldId = dataFields[valueFieldIndex].id;
+        }
+      }
+
+      if (visualization.mapping.categoryColumn) {
+        const categoryFieldIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.categoryColumn
+        );
+        if (categoryFieldIndex >= 0) {
+          fillCategoryFieldId = dataFields[categoryFieldIndex].id;
+        }
+      }
+    }
+
     if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
@@ -187,14 +224,34 @@
     selectedFieldId = fieldId;
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      if (symbolMode === SymbolMode.PROPORTIONAL) {
+        onMappingChange?.({ sizeColumn: field.text });
+      } else {
+        onMappingChange?.({ valueColumn: field.text });
+      }
     }
   }
 
   function handleClassificationChange(
-    _classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>
   ) {
-    // Placeholder for future classification handling
+    onClassificationChange?.(classification);
+  }
+
+  function handleFillClassFieldSelect(fieldId: number) {
+    fillClassFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
+  }
+
+  function handleFillCategoryFieldSelect(fieldId: number) {
+    fillCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ categoryColumn: field.text });
+    }
   }
 
   function handleShapeSelectChange(e: Event) {
@@ -326,7 +383,8 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={fillClassFieldId}
+      on:select={(e) => handleFillClassFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
@@ -363,7 +421,8 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={fillCategoryFieldId}
+      on:select={(e) => handleFillCategoryFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
