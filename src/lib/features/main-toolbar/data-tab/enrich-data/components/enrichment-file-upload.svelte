@@ -47,8 +47,12 @@
       <TextArea
         value={pastedDataValue}
         on:input={(e) => {
-          const value = (e as CustomEvent<string | number | null>).detail;
-          onPastedDataChange(value == null ? '' : String(value));
+          const target = e.target as HTMLTextAreaElement | null;
+          const detailValue = (e as CustomEvent<string | number | null>).detail;
+          const valueFromDetail =
+            typeof detailValue === 'string' ? detailValue : null;
+          const value = valueFromDetail ?? target?.value ?? '';
+          onPastedDataChange(value);
         }}
         placeholder={m.enrich_paste_data()}
         rows={5}
@@ -70,8 +74,12 @@
       <TextInput
         value={onlineUrlValue}
         on:input={(e) => {
-          const value = (e as CustomEvent<string | number | null>).detail;
-          onUrlChange(value == null ? '' : String(value));
+          const target = e.target as HTMLInputElement | null;
+          const detailValue = (e as CustomEvent<string | number | null>).detail;
+          const valueFromDetail =
+            typeof detailValue === 'string' ? detailValue : null;
+          const value = valueFromDetail ?? target?.value ?? '';
+          onUrlChange(value);
         }}
         placeholder={m.url_placeholder()}
         size="sm"

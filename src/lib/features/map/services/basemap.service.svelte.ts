@@ -1,9 +1,13 @@
 import { base } from '$app/paths';
 import { Duck } from '$lib/features/duckdb';
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { tableFromIPC, type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../commons/utils/logger';
-import { escapeSqlString } from '../../commons/utils/sanitize.utils';
+import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
 import type {
@@ -15,6 +19,7 @@ import type {
   MultiLineString
 } from 'geojson';
 import {
+  addGeoArrowMetadata,
   readGeoJSONAsArrow,
   readGeoParquetViaDuckDB
 } from '../utils/read-geojson-arrow';
@@ -241,7 +246,9 @@ function createBasemapService() {
       const start = performance.now();
       logger.info('Loading basemap', LogCategory.MAP, { basemapId });
 
-      const geometryTable = await loadGeometryFromParquet(metadata.file);
+      const geometryTable = metadata.isCustom
+        ? await loadCustomBasemapGeometry(metadata)
+        : await loadGeometryFromParquet(metadata.file);
       const layerTables = await loadBasemapLayers(metadata.layers);
 
       currentBasemap = {
@@ -269,12 +276,55 @@ function createBasemapService() {
     }
   }
 
+  async function loadCustomBasemapGeometry(
+    metadata: BasemapMetadata
+  ): Promise<ArrowTable> {
+    if (!Duck) {
+      throw new Error('DuckDB not initialized');
+    }
+
+    const customTableName = metadata.file;
+    const escapedTableName = escapeSqlString(customTableName);
+    const tableExists = (await Duck.query(
+      `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableName}'`,
+      { format: 'array' }
+    )) as Array<{ table_name: string }>;
+
+    if (!tableExists?.length) {
+      throw new Error(`Custom basemap table not found: ${customTableName}`);
+    }
+
+    const geomColumnName =
+      metadata.layers.find((layer) => layer.name)?.name ?? 'geom';
+    const escapedTableIdentifier = escapeIdentifier(customTableName);
+    const escapedGeomIdentifier = escapeIdentifier(geomColumnName);
+
+    const arrowResult = await Duck.query(
+      `SELECT * EXCLUDE ("${escapedGeomIdentifier}"), ST_AsWKB("${escapedGeomIdentifier}") AS ${INTERNAL_COLUMN.GEOM} FROM "${escapedTableIdentifier}"`,
+      { format: 'arrow-ipc' }
+    );
+
+    return addGeoArrowMetadata(
+      tableFromIPC(arrowResult as Uint8Array),
+      'WKB_BLOB'
+    );
+  }
+
   async function loadGeometryIntoDuckDB(basemapId: string): Promise<string> {
-    const tableName = `basemap_geom_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    const normalizedBasemapId =
+      typeof basemapId === 'string' ? basemapId.trim() : '';
+    if (!normalizedBasemapId) {
+      throw new Error('Invalid basemap id for geometry loading');
+    }
+
+    const isCustomBasemap = /^custom_basemap_/i.test(normalizedBasemapId);
+    const tableName = isCustomBasemap
+      ? normalizedBasemapId
+      : `basemap_geom_${normalizedBasemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
     if (geometryTablesInDuckDB.has(tableName)) {
       logger.debug('Basemap geometry already in DuckDB', LogCategory.MAP, {
-        basemapId,
+        basemapId: normalizedBasemapId,
         tableName
       });
       return tableName;
@@ -286,40 +336,43 @@ function createBasemapService() {
 
     // Custom basemaps imported by the user are already materialized as DuckDB tables.
     // Reuse that table directly instead of trying to fetch a static geometry file.
-    if (/^custom_basemap_/i.test(basemapId)) {
-      const escapedBasemapId = escapeSqlString(basemapId);
+    if (isCustomBasemap) {
+      const escapedBasemapId = escapeSqlString(normalizedBasemapId);
       const existingTable = (await Duck.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedBasemapId}'`,
         { format: 'array' }
       )) as Array<{ table_name: string }>;
 
       if (existingTable?.length) {
-        geometryTablesInDuckDB.add(basemapId);
+        geometryTablesInDuckDB.add(tableName);
         logger.debug(
           'Using existing custom basemap table from DuckDB',
           LogCategory.MAP,
           {
-            basemapId,
-            tableName: basemapId
+            basemapId: normalizedBasemapId,
+            tableName
           }
         );
-        return basemapId;
+        return tableName;
       }
     }
 
     const start = performance.now();
     logger.info('Loading basemap geometry into DuckDB', LogCategory.MAP, {
-      basemapId
+      basemapId: normalizedBasemapId
     });
 
     try {
-      const { response, isGeoJSON } = await fetchGeometryFile(basemapId);
+      const { response, isGeoJSON } =
+        await fetchGeometryFile(normalizedBasemapId);
 
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
       const geometryFile = new File(
         [blob],
-        isGeoJSON ? `${basemapId}.geojson` : `${basemapId}.parquet`,
+        isGeoJSON
+          ? `${normalizedBasemapId}.geojson`
+          : `${normalizedBasemapId}.parquet`,
         { type: 'application/octet-stream' }
       );
 
@@ -329,7 +382,7 @@ function createBasemapService() {
       geometryTablesInDuckDB.add(tableName);
 
       logger.success('Basemap geometry loaded into DuckDB', LogCategory.MAP, {
-        basemapId,
+        basemapId: normalizedBasemapId,
         tableName,
         durationMs: (performance.now() - start).toFixed(2)
       });
@@ -340,7 +393,7 @@ function createBasemapService() {
         'Failed to load basemap geometry into DuckDB',
         LogCategory.MAP,
         {
-          basemapId,
+          basemapId: normalizedBasemapId,
           error
         }
       );
@@ -375,10 +428,7 @@ function createBasemapService() {
     return loadBasemap(DEFAULT_BASEMAP_ID);
   }
 
-  function registerCustomBasemap(
-    metadata: BasemapMetadata,
-    geometryTable: ArrowTable
-  ): void {
+  function upsertCustomBasemapMetadata(metadata: BasemapMetadata): void {
     const idx = availableBasemaps.findIndex(
       (basemap) => basemap.file === metadata.file
     );
@@ -387,6 +437,17 @@ function createBasemapService() {
     } else {
       availableBasemaps[idx] = metadata;
     }
+  }
+
+  function registerCustomBasemapMetadata(metadata: BasemapMetadata): void {
+    upsertCustomBasemapMetadata(metadata);
+  }
+
+  function registerCustomBasemap(
+    metadata: BasemapMetadata,
+    geometryTable: ArrowTable
+  ): void {
+    upsertCustomBasemapMetadata(metadata);
 
     const loaded: LoadedBasemap = {
       metadata,
@@ -637,6 +698,7 @@ function createBasemapService() {
     loadGeometryIntoDuckDB,
     loadBasemap,
     loadDefaultBasemap,
+    registerCustomBasemapMetadata,
     registerCustomBasemap,
     get availableBasemaps(): BasemapMetadata[] {
       return availableBasemaps;

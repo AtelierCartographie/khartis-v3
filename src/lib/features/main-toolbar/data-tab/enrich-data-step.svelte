@@ -218,6 +218,7 @@
         basemapTabIndex={basemapHook.basemapTabIndex}
         selectedBasemapId={basemapHook.selectedBasemapId}
         basemaps={basemapHook.basemaps}
+        suggestedBasemaps={basemapHook.suggestedBasemaps}
         basemapImportUploading={basemapHook.basemapImportUploading}
         basemapImportError={basemapHook.basemapImportError}
         importedCustomBasemap={basemapHook.importedCustomBasemap}

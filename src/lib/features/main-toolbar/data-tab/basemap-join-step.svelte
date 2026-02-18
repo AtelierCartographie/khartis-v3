@@ -69,6 +69,7 @@
   let importedBasemap = $state<BasemapMetadata | null>(null);
   let showSuggestionModal = $state(false);
   let joinLoading = $state(false);
+  let suggestionsDatasetId = $state<string | null>(null);
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -93,6 +94,23 @@
       score: number;
     }[];
   });
+
+  function hasAvailableBasemap(basemapId: string): boolean {
+    if (!basemapId) return false;
+    return allBasemaps.some((basemap) => basemap.file === basemapId);
+  }
+
+  async function autoSelectFirstSuggestedBasemap(): Promise<void> {
+    if (basemapSuggestions.length === 0) return;
+
+    const firstSuggestion = allBasemaps.find(
+      (basemap) => basemap.file === basemapSuggestions[0]?.file
+    );
+
+    if (!firstSuggestion) return;
+
+    await handleSelectBasemap(firstSuggestion);
+  }
 
   function isDatasetNotFoundError(error: unknown): boolean {
     return error instanceof Error && error.message === 'Dataset not found';
@@ -581,6 +599,19 @@
         dataTabState.geolocation.linkedVariableName
       );
       basemapSuggestions = suggestions;
+
+      const currentDatasetId = selectedDataset.id;
+      const isDatasetChanged = suggestionsDatasetId !== currentDatasetId;
+      suggestionsDatasetId = currentDatasetId;
+
+      if (
+        suggestions.length > 0 &&
+        (isDatasetChanged ||
+          !dataTabState.basemapJoin.selectedBasemap ||
+          !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
+      ) {
+        await autoSelectFirstSuggestedBasemap();
+      }
     } catch (error) {
       logger.error(
         'Failed to load basemap suggestions',
@@ -613,6 +644,9 @@
             const customBasemapData =
               savedBasemap.data as unknown as BasemapMetadata;
             basemapCatalogService.addCustomBasemap(customBasemapData);
+            if (savedBasemap.type === 'custom') {
+              basemapService.registerCustomBasemapMetadata(customBasemapData);
+            }
 
             if (savedBasemap.type === 'osm') {
               osmBasemapStore.setOSMBasemap(customBasemapData);
@@ -704,6 +738,18 @@
     void dataTabState.geolocation.linkedVariableName;
     if (selectedDataset) {
       void loadSuggestions();
+    }
+  });
+
+  $effect(() => {
+    void basemapSuggestions.length;
+    void basemapSelected;
+
+    if (
+      basemapSuggestions.length > 0 &&
+      (!basemapSelected || !hasAvailableBasemap(basemapSelected))
+    ) {
+      void autoSelectFirstSuggestedBasemap();
     }
   });
 
