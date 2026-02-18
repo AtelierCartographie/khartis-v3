@@ -207,6 +207,57 @@ describe('JoinAssistedSection', () => {
     updateJoinMappingSpy.mockRestore();
   });
 
+  it('displays decreased to_verify count after selecting a mapping', async () => {
+    vi.spyOn(dataTabActions, 'updateJoinMapping').mockImplementation(() => {});
+    const props = createProps();
+    props.toVerifyCount = 3;
+    props.joinRows = [
+      {
+        dataValue: 'Francia',
+        selectedMapping: 'France',
+        basemapOptions: ['France', 'French Guiana']
+      },
+      {
+        dataValue: 'Alemania',
+        selectedMapping: 'Germany',
+        basemapOptions: ['Germany']
+      },
+      {
+        dataValue: 'España',
+        selectedMapping: 'Spain',
+        basemapOptions: ['Spain']
+      }
+    ];
+
+    const { container, rerender } = render(JoinAssistedSection, { props });
+
+    const verifyCountBefore = container.querySelector(
+      '.category-row-verify .category-count'
+    );
+    expect(verifyCountBefore?.textContent).toBe('3');
+
+    const verifyHeader = container.querySelector(
+      '.category-row-verify .category-row-header'
+    );
+    await fireEvent.click(verifyHeader!);
+
+    const selectElement = container.querySelector(
+      '.category-row-verify select'
+    ) as HTMLSelectElement;
+    await fireEvent.change(selectElement!, {
+      target: { value: 'French Guiana' }
+    });
+
+    props.toVerifyCount = 2;
+    props.joinRows = props.joinRows.slice(1);
+    await rerender(props);
+
+    const verifyCountAfter = container.querySelector(
+      '.category-row-verify .category-count'
+    );
+    expect(verifyCountAfter?.textContent).toBe('2');
+  });
+
   it('displays join table with correct data and options for to_verify items', async () => {
     const props = createProps();
     props.toVerifyCount = 2;
