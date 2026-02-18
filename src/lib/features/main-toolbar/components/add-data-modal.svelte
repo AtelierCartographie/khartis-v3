@@ -63,12 +63,12 @@
         isImporting = true;
 
         await projectStore.addFilesToProject(validFiles);
-        const lastFile = validFiles[validFiles.length - 1];
-        if (lastFile?.id) {
+        const firstFile = validFiles[0];
+        if (firstFile?.id) {
           dataTabActions.reset();
           dataTabStore.reset();
           dataToolsStore.reset();
-          globalActions.selectDataButton(lastFile.id);
+          globalActions.selectDataButton(firstFile.id);
         }
 
         closeModal(true);
