@@ -239,6 +239,7 @@
         const colors = generateColorsForBreaks(numClasses);
         visualizationStore.updateClassification(selectedViz.id, {
           breaks: result.breaks,
+          counts: result.counts,
           colors
         });
         logger.success(
