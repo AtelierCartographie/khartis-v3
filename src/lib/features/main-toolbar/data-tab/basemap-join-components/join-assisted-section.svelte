@@ -572,8 +572,8 @@
     height: 32px;
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
-    background-color: #ffffff;
-    border-bottom: 1px solid #8d8d8d;
+    background-color: var(--cds-field-01, #ffffff);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
   .cell-select :global(.bx--select__arrow) {

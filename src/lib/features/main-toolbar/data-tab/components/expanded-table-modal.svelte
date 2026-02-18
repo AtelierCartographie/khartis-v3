@@ -192,7 +192,7 @@
   }
 
   #khartis-expanded-table-modal :global(.bx--modal) {
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
@@ -202,7 +202,7 @@
     height: 100vh !important;
     margin: 0 !important;
     border-radius: 0 !important;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-content) {
@@ -211,7 +211,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-header) {
@@ -219,13 +219,13 @@
     flex-shrink: 0;
     padding: var(--cds-spacing-05);
     padding-bottom: var(--cds-spacing-03);
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container) {
     display: flex;
     flex-direction: column;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   .custom-header {
