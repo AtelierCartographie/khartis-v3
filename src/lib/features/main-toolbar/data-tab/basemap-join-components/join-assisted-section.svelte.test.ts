@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import JoinAssistedSection from './join-assisted-section.svelte';
+import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 
 afterEach(cleanup);
 
@@ -163,5 +164,83 @@ describe('JoinAssistedSection', () => {
     expect(
       container.querySelector('.category-row-unrecognized .count-error')
     ).not.toBeNull();
+  });
+
+  it('calls updateJoinMapping when selecting a mapping for a to_verify item', async () => {
+    const updateJoinMappingSpy = vi
+      .spyOn(dataTabActions, 'updateJoinMapping')
+      .mockImplementation(() => {});
+    const props = createProps();
+    props.toVerifyCount = 2;
+    props.joinRows = [
+      {
+        dataValue: 'Francia',
+        selectedMapping: 'France',
+        basemapOptions: ['France', 'French Guiana', 'French Polynesia']
+      },
+      {
+        dataValue: 'Alemania',
+        selectedMapping: 'Germany',
+        basemapOptions: ['Germany']
+      }
+    ];
+
+    const { container } = render(JoinAssistedSection, { props });
+
+    const verifyHeader = container.querySelector(
+      '.category-row-verify .category-row-header'
+    );
+    await fireEvent.click(verifyHeader!);
+
+    const selectElement = container.querySelector(
+      '.category-row-verify select'
+    ) as HTMLSelectElement;
+    expect(selectElement).not.toBeNull();
+
+    await fireEvent.change(selectElement!, {
+      target: { value: 'French Guiana' }
+    });
+
+    expect(updateJoinMappingSpy).toHaveBeenCalledTimes(1);
+    expect(updateJoinMappingSpy).toHaveBeenCalledWith(0, 'French Guiana');
+
+    updateJoinMappingSpy.mockRestore();
+  });
+
+  it('displays join table with correct data and options for to_verify items', async () => {
+    const props = createProps();
+    props.toVerifyCount = 2;
+    props.linkedVariableName = 'Entity';
+    props.joinRows = [
+      {
+        dataValue: 'Francia',
+        selectedMapping: 'France',
+        basemapOptions: ['France', 'French Guiana']
+      },
+      {
+        dataValue: 'Alemania',
+        selectedMapping: 'Germany',
+        basemapOptions: ['Germany']
+      }
+    ];
+
+    const { container } = render(JoinAssistedSection, { props });
+
+    const verifyHeader = container.querySelector(
+      '.category-row-verify .category-row-header'
+    );
+    await fireEvent.click(verifyHeader!);
+
+    const dataCells = container.querySelectorAll(
+      '.category-row-verify .cell-data'
+    );
+    expect(dataCells.length).toBe(2);
+    expect(dataCells[0]?.textContent).toBe('Francia');
+    expect(dataCells[1]?.textContent).toBe('Alemania');
+
+    const selectElements = container.querySelectorAll(
+      '.category-row-verify select'
+    );
+    expect(selectElements.length).toBe(2);
   });
 });
