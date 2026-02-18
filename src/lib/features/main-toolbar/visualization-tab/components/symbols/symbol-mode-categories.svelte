@@ -21,6 +21,7 @@
     dataFields = [],
     visualization,
     onMappingChange,
+    onSymbolsChange,
     onMissingDataChange,
     onInvertPalette,
     onOpenDiscretization
@@ -37,6 +38,15 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
 
   $effect(() => {
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (field) => field.text === visualization.mapping.categoryColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedFieldId = dataFields[fieldIndex].id;
+      }
+    }
+
     if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
@@ -77,8 +87,13 @@
     selectedFieldId = fieldId;
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onMappingChange?.({ categoryColumn: field.text });
     }
+  }
+
+  function handleOpacityChange(value: number) {
+    symbolOpacity = value;
+    onSymbolsChange?.({ opacity: value / 100 });
   }
 </script>
 
@@ -112,6 +127,7 @@
   bind:value={symbolOpacity}
   min={SLIDER_LIMITS.opacity.min}
   max={SLIDER_LIMITS.opacity.max}
+  onchange={handleOpacityChange}
 />
 
 <MissingDataSection

@@ -35,7 +35,10 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { mapSuggestionToType } from './suggestion.utils';
+  import {
+    mapSuggestionToType,
+    resolveDatasetGeometryType
+  } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -87,7 +90,15 @@
       }
     }));
 
-    const geometryType = (dataset.geometry?.type as GeometryType) || null;
+    const geometryType =
+      resolveDatasetGeometryType(
+        dataset as {
+          geometry?: { type?: string | null };
+          sourceFileId?: string;
+        }
+      ) ||
+      (dataset.geometry?.type as GeometryType) ||
+      null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
       maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS

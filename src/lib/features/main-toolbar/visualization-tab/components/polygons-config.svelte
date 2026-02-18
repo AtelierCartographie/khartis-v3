@@ -69,6 +69,7 @@
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
@@ -76,16 +77,33 @@
         (f) => f.text === visualization.mapping.valueColumn
       );
       if (fieldIndex >= 0) {
-        selectedFieldId = fieldIndex;
+        selectedFieldId = dataFields[fieldIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedCategoryFieldId = dataFields[fieldIndex].id;
       }
     }
   });
 
-  function handleFieldSelect(fieldId: number) {
+  function handleValueFieldSelect(fieldId: number) {
     selectedFieldId = fieldId;
-    const field = dataFields[fieldId];
+    const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -230,7 +248,7 @@
           titleText={m.color_according()}
           items={dataFields}
           selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -249,7 +267,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedCategoryFieldId}
+          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
