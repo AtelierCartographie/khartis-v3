@@ -16,10 +16,12 @@
   const PALETTE_TYPE = {
     SEQUENTIAL: 'sequential',
     DIVERGING: 'diverging',
-    QUALITATIVE: 'qualitative'
+    QUALITATIVE: 'qualitative',
+    PATTERN: 'pattern'
   } as const;
 
   type PaletteType = (typeof PALETTE_TYPE)[keyof typeof PALETTE_TYPE];
+  type PatternId = 'diagonal' | 'horizontal' | 'vertical' | 'dots' | 'cross';
 
   interface Palette {
     id: string;
@@ -27,6 +29,7 @@
     colors: string[];
     type: PaletteType;
     colorBlindSafe?: boolean;
+    patternId?: PatternId;
   }
 
   interface Props {
@@ -163,6 +166,49 @@
     }
   ];
 
+  const patternPalettes: Palette[] = [
+    {
+      id: 'pattern-diagonal',
+      name: m.pattern_diagonal(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'diagonal'
+    },
+    {
+      id: 'pattern-horizontal',
+      name: m.pattern_horizontal(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'horizontal'
+    },
+    {
+      id: 'pattern-vertical',
+      name: m.pattern_vertical(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'vertical'
+    },
+    {
+      id: 'pattern-dots',
+      name: m.pattern_dots(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'dots'
+    },
+    {
+      id: 'pattern-cross',
+      name: m.pattern_cross(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'cross'
+    }
+  ];
+
   const currentPalettes = $derived.by(() => {
     let palettes: Palette[];
     switch (paletteType) {
@@ -174,6 +220,9 @@
         break;
       case PALETTE_TYPE.QUALITATIVE:
         palettes = qualitativePalettes;
+        break;
+      case PALETTE_TYPE.PATTERN:
+        palettes = patternPalettes;
         break;
       default:
         palettes = sequentialPalettes;
@@ -243,6 +292,31 @@
     );
     return `linear-gradient(90deg, ${stops.join(', ')})`;
   }
+
+  function buildPatternBackground(palette: Palette): string {
+    const accent = palette.colors[0] ?? '#3d3d3d';
+    const base = palette.colors[1] ?? '#f4f4f4';
+    switch (palette.patternId) {
+      case 'horizontal':
+        return `repeating-linear-gradient(0deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      case 'vertical':
+        return `repeating-linear-gradient(90deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      case 'dots':
+        return `radial-gradient(${accent} 16%, transparent 17%), linear-gradient(${base}, ${base})`;
+      case 'cross':
+        return `repeating-linear-gradient(0deg, transparent 0 5px, ${accent} 5px 7px), repeating-linear-gradient(90deg, transparent 0 5px, ${accent} 5px 7px), linear-gradient(${base}, ${base})`;
+      case 'diagonal':
+      default:
+        return `repeating-linear-gradient(45deg, ${accent} 0 4px, ${base} 4px 8px)`;
+    }
+  }
+
+  function buildPaletteBackground(palette: Palette): string {
+    if (palette.type === PALETTE_TYPE.PATTERN) {
+      return buildPatternBackground(palette);
+    }
+    return buildGradient(palette.colors);
+  }
 </script>
 
 <div class="palette-selector">
@@ -265,6 +339,11 @@
         id="palette-qual"
         value={PALETTE_TYPE.QUALITATIVE}
         labelText="Qualitative"
+      />
+      <RadioButton
+        id="palette-pattern"
+        value={PALETTE_TYPE.PATTERN}
+        labelText={m.pattern()}
       />
     </RadioButtonGroup>
   </div>
@@ -289,7 +368,7 @@
         >
           <div
             class="palette-preview"
-            style="--gradient: {buildGradient(palette.colors)}"
+            style="--preview-bg: {buildPaletteBackground(palette)}"
           >
             {#if selectedPaletteId === palette.id}
               <div class="check-icon">
@@ -403,7 +482,11 @@
     width: 120px;
     height: 20px;
     border-radius: 3px;
-    background: var(--gradient);
+    background: var(--preview-bg);
+    background-size:
+      auto,
+      8px 8px,
+      auto;
     border: 1px solid var(--cds-border-subtle);
     position: relative;
     flex-shrink: 0;
