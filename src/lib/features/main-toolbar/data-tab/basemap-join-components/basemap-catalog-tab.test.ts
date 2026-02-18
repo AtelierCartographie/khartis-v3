@@ -152,6 +152,20 @@ describe('basemap-catalog-tab filtering', () => {
       const results = filterBasemaps(mockBasemaps, '  World  ', 'all');
       expect(results.length).toBe(2);
     });
+
+    it('can exclude suggested basemaps from filtered results', () => {
+      const filteredResults = filterBasemaps(mockBasemaps, 'France', 'all');
+      expect(filteredResults.length).toBe(2);
+
+      const suggestedFile = 'france-region-2025';
+      const suggestionIds = new Set([suggestedFile]);
+      const displayResults = filteredResults.filter(
+        (b) => !suggestionIds.has(b.file)
+      );
+
+      expect(displayResults.length).toBe(1);
+      expect(displayResults[0].file).toBe('france-departement-2024');
+    });
   });
 
   describe('getAvailableYears', () => {

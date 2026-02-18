@@ -61,12 +61,15 @@
     return results;
   });
 
+  const suggestionIds = $derived(
+    new Set(suggestedBasemaps.map((s) => s.basemap.file))
+  );
+
   const displayedBasemaps = $derived(() => {
     if (searchQuery.trim() || selectedYear !== 'all') {
-      return filteredBasemaps();
+      return filteredBasemaps().filter((b) => !suggestionIds.has(b.file));
     }
 
-    const suggestionIds = new Set(suggestedBasemaps.map((s) => s.basemap.file));
     return allBasemaps.filter((b) => !suggestionIds.has(b.file));
   });
 
