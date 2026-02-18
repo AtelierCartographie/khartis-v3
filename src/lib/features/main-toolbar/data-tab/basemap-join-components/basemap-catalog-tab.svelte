@@ -43,8 +43,9 @@
   const filteredBasemaps = $derived(() => {
     let results: BasemapMetadata[] = [...allBasemaps];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery) {
+      const query = trimmedQuery.toLowerCase();
       results = results.filter(
         (b) =>
           b.title.toLowerCase().includes(query) ||
