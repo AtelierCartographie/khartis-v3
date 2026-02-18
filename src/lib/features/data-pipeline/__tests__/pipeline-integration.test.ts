@@ -16,7 +16,7 @@ import {
 
 const ROOT = join(process.cwd(), 'tests-datasets');
 
-const NULL_VALUES = `['', ':', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'none', 'NONE']`;
+const NULL_VALUES = `['', ':', '-', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`;
 
 function csvReadSql(tableName: string, filePath: string): string {
   return `CREATE OR REPLACE TABLE "${tableName}" AS FROM read_csv('${filePath}', header=true, decimal_separator='.', normalize_names=true, nullstr=${NULL_VALUES})`;
@@ -482,14 +482,14 @@ describe(
         );
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        // CSV has: null, NULL, NA, N/A, #N/A, NaN, none, NONE, empty string
-        // With nullstr config, these should all become SQL NULL
+        // CSV has 12 rows and only one concrete value in the "value" column ("1000")
+        // so normalized NULL variants should yield 11 NULL rows.
         // DuckDB normalize_names=true prefixes reserved words with _
         const nullCount = await query(
           db,
           `SELECT count(*) - count("_value") AS nulls FROM "${tableName}"`
         );
-        expect(Number(nullCount[0].nulls)).toBeGreaterThan(0);
+        expect(Number(nullCount[0].nulls)).toBe(11);
 
         await dropTable(db, tableName);
       });
