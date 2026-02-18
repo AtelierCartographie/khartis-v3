@@ -111,8 +111,13 @@
 
   $effect(() => {
     if (visualization?.style) {
+      const labelOpacity = visualization.style.labelOpacity;
       opacity =
-        visualization.style.labelOpacity ?? VISUALIZATION_DEFAULTS.labelOpacity;
+        labelOpacity !== undefined
+          ? labelOpacity <= 1
+            ? Math.round(labelOpacity * 100)
+            : labelOpacity
+          : VISUALIZATION_DEFAULTS.labelOpacity;
       color =
         (visualization.style.labelColor as string) ?? DEFAULT_COLORS.label;
       size = visualization.style.labelSize ?? VISUALIZATION_DEFAULTS.labelSize;
@@ -172,7 +177,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ labelOpacity: value });
+    onStyleChange?.({ labelOpacity: value / 100 });
   }
 
   function handleSizeChange(value: number) {

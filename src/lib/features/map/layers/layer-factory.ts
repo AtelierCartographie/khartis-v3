@@ -14,8 +14,13 @@ import {
 } from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
-import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
+import {
+  PrimitiveFilterType,
+  ScaleType,
+  VisualizationType
+} from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, GeometryInfo, LayerContext } from '../types';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,
@@ -249,18 +254,34 @@ export function createLineLayers(
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   const {
+    viz,
     fillColor,
     fillOpacity: rawLineFillOpacity,
     strokeWidth,
+    statistics,
+    categoryColorMap,
     highlightedRowIds: lineHighlightedRowIds,
     modelMatrix,
     beforeId
   } = ctx;
+
+  const styleLineColor = viz?.style.lineColor;
+  const resolvedLineColor =
+    typeof styleLineColor === 'string' ? hexToRgb(styleLineColor) : fillColor;
+  const styleLineOpacity = viz?.style.lineOpacity;
+  const normalizedLineOpacity =
+    typeof styleLineOpacity === 'number'
+      ? styleLineOpacity > 1
+        ? styleLineOpacity / 100
+        : styleLineOpacity
+      : rawLineFillOpacity;
+  const resolvedLineWidth = viz?.style.lineWidth ?? strokeWidth;
+
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
   const fillOpacity = hasLineHighlights
-    ? rawLineFillOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : rawLineFillOpacity;
+    ? normalizedLineOpacity * HIGHLIGHT_DIMMING_FACTOR
+    : normalizedLineOpacity;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -268,6 +289,13 @@ export function createLineLayers(
     isWkbEncoded,
     isGeoJsonEncoded
   } = geometryInfo;
+  const useChoropleth = viz && shouldApplyChoropleth(viz);
+  const useCategoricalColor = viz && shouldApplyCategorical(viz);
+  const useProportionalWidth =
+    viz?.type === VisualizationType.PROPORTIONAL && !!viz.mapping.sizeColumn;
+  const { min: minValue, max: maxValue } = statistics;
+  const resolvedSizeScale = viz?.symbols?.sizeScale ?? ScaleType.LINEAR;
+  const maxLineWidth = viz?.style.lineMaxWidth ?? resolvedLineWidth;
 
   const layerId = createThematicLayerId(DeckLayerId.LINE_LAYER, ctx);
 
@@ -282,22 +310,74 @@ export function createLineLayers(
       rows: jsTable.numRows
     });
 
+    const lineColorAccessor =
+      useChoropleth && viz
+        ? (row: DeckDataRow) =>
+            withOpacity(
+              createChoroplethColorAccessor(
+                viz.mapping.valueColumn!,
+                viz.classification!.breaks!,
+                viz.classification!.colors!
+              )(row),
+              fillOpacity
+            )
+        : useCategoricalColor && viz
+          ? (row: DeckDataRow) =>
+              withOpacity(
+                createCategoricalColorAccessor(
+                  viz.mapping.categoryColumn!,
+                  categoryColorMap
+                )(row),
+                fillOpacity
+              )
+          : withOpacity(resolvedLineColor, fillOpacity);
+
+    const lineWidthAccessor =
+      useProportionalWidth && viz
+        ? createProportionalSizeAccessor(
+            viz.mapping.sizeColumn!,
+            minValue,
+            maxValue,
+            1,
+            maxLineWidth,
+            resolvedSizeScale
+          )
+        : resolvedLineWidth;
+
     const pathProps: ConstructorParameters<
       typeof geodecklayers.GeoArrowPathLayer
     >[0] = {
       id: layerId,
       data: jsTable,
-      getColor: withOpacity(fillColor, fillOpacity),
+      getColor: lineColorAccessor,
       widthUnits: 'pixels',
-      getWidth: strokeWidth,
+      getWidth: lineWidthAccessor,
       widthMinPixels: 1,
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
-        getColor: [fillColor, fillOpacity],
-        getWidth: [strokeWidth]
+        getColor: [
+          useChoropleth,
+          useCategoricalColor,
+          viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          categoryColorMap,
+          resolvedLineColor,
+          fillOpacity
+        ],
+        getWidth: [
+          useProportionalWidth,
+          viz?.mapping.sizeColumn,
+          minValue,
+          maxValue,
+          maxLineWidth,
+          resolvedSizeScale,
+          resolvedLineWidth
+        ]
       }
     };
 
@@ -340,23 +420,78 @@ export function createLineLayers(
     featureCount: lineGeojsonData.features.length
   });
 
+  const geoJsonLineColor =
+    useChoropleth && viz
+      ? (feature: { properties?: Record<string, unknown> }) =>
+          withOpacity(
+            createGeoJsonChoroplethColorAccessor(
+              viz.mapping.valueColumn!,
+              viz.classification!.breaks!,
+              viz.classification!.colors!,
+              resolvedLineColor
+            )(feature),
+            fillOpacity
+          )
+      : useCategoricalColor && viz
+        ? (feature: { properties?: Record<string, unknown> }) =>
+            withOpacity(
+              createGeoJsonCategoricalColorAccessor(
+                viz.mapping.categoryColumn!,
+                categoryColorMap,
+                resolvedLineColor
+              )(feature),
+              fillOpacity
+            )
+        : withOpacity(resolvedLineColor, fillOpacity);
+
+  const geoJsonLineWidth =
+    useProportionalWidth && viz
+      ? createGeoJsonProportionalSizeAccessor(
+          viz.mapping.sizeColumn!,
+          minValue,
+          maxValue,
+          1,
+          maxLineWidth,
+          resolvedSizeScale,
+          resolvedLineWidth
+        )
+      : resolvedLineWidth;
+
   return [
     new GeoJsonLayer({
       id: layerId,
       data: lineGeojsonData,
       stroked: true,
       filled: false,
-      getLineColor: withOpacity(fillColor, fillOpacity),
+      getLineColor: geoJsonLineColor,
       lineWidthUnits: 'pixels',
-      getLineWidth: strokeWidth,
+      getLineWidth: geoJsonLineWidth,
       lineWidthMinPixels: 1,
       pickable: true,
       autoHighlight: false,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
-        getLineColor: [fillColor, fillOpacity],
-        getLineWidth: [strokeWidth]
+        getLineColor: [
+          useChoropleth,
+          useCategoricalColor,
+          viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          categoryColorMap,
+          resolvedLineColor,
+          fillOpacity
+        ],
+        getLineWidth: [
+          useProportionalWidth,
+          viz?.mapping.sizeColumn,
+          minValue,
+          maxValue,
+          maxLineWidth,
+          resolvedSizeScale,
+          resolvedLineWidth
+        ]
       }
     })
   ];
