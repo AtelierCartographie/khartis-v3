@@ -189,11 +189,6 @@
             ...SUPPORTED_FILE_TYPES.gpx.extensions,
             ...SUPPORTED_FILE_TYPES.zip.extensions
           ]}
-          validateFiles={(files) => {
-            const validationResult =
-              CreateProjectValidationService.validateFiles(Array.from(files));
-            return validationResult.isValid ? files : [];
-          }}
           on:change={handleFileDrop}
         />
       {/key}

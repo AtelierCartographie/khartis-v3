@@ -6,14 +6,18 @@ export interface DecimalDetectionResult {
   confidence: number;
   sampleSize: number;
   delimiter: string;
+  thousandsSeparator?: ',' | '.' | ' ';
 }
 
 interface DetectionOptions {
   sampleLines?: number;
 }
 
-const EUROPEAN_DECIMAL_PATTERN = /^-?\d{1,3}(?:\s?\d{3})*,\d+$/;
+const EUROPEAN_DECIMAL_PATTERN = /^-?\d{1,3}(?:[ .]\d{3})*,\d+$/;
 const STANDARD_DECIMAL_PATTERN = /^-?\d{1,3}(?:,?\d{3})*\.\d+$/;
+const EUROPEAN_THOUSANDS_DOT_PATTERN = /^-?\d{1,3}(?:\.\d{3})+,\d+$/;
+const EUROPEAN_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+,\d+$/;
+const STANDARD_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+\.\d+$/;
 const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 
 export async function detectDecimalSeparator(
@@ -35,6 +39,9 @@ export async function detectDecimalSeparator(
     let europeanMatches = 0;
     let standardMatches = 0;
     let totalNumericValues = 0;
+    let europeanThousandsDotMatches = 0;
+    let europeanThousandsSpaceMatches = 0;
+    let standardThousandsCommaMatches = 0;
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i], delimiter);
@@ -45,9 +52,17 @@ export async function detectDecimalSeparator(
         if (EUROPEAN_DECIMAL_PATTERN.test(trimmed)) {
           europeanMatches++;
           totalNumericValues++;
+          if (EUROPEAN_THOUSANDS_DOT_PATTERN.test(trimmed)) {
+            europeanThousandsDotMatches++;
+          } else if (EUROPEAN_THOUSANDS_SPACE_PATTERN.test(trimmed)) {
+            europeanThousandsSpaceMatches++;
+          }
         } else if (STANDARD_DECIMAL_PATTERN.test(trimmed)) {
           standardMatches++;
           totalNumericValues++;
+          if (STANDARD_THOUSANDS_COMMA_PATTERN.test(trimmed)) {
+            standardThousandsCommaMatches++;
+          }
         }
       }
     }
@@ -70,19 +85,38 @@ export async function detectDecimalSeparator(
         standardMatches,
         confidence: europeanRatio
       });
+      let thousandsSeparator: ',' | '.' | ' ' | undefined;
+      const hasMixedDecimalFormats = standardMatches > 0;
+
+      if (!hasMixedDecimalFormats) {
+        if (europeanThousandsDotMatches >= europeanThousandsSpaceMatches) {
+          thousandsSeparator =
+            europeanThousandsDotMatches > 0 ? '.' : undefined;
+        } else {
+          thousandsSeparator =
+            europeanThousandsSpaceMatches > 0 ? ' ' : undefined;
+        }
+      }
       return {
         separator: ',',
         confidence: europeanRatio,
         sampleSize: lines.length - 1,
-        delimiter
+        delimiter,
+        thousandsSeparator
       };
     }
+
+    const hasMixedDecimalFormats = europeanMatches > 0;
 
     return {
       separator: '.',
       confidence: standardRatio || 1,
       sampleSize: lines.length - 1,
-      delimiter
+      delimiter,
+      thousandsSeparator:
+        !hasMixedDecimalFormats && standardThousandsCommaMatches > 0
+          ? ','
+          : undefined
     };
   } catch (error) {
     logger.warn('Failed to detect decimal separator', LogCategory.DATA, error);

@@ -308,6 +308,8 @@ export const createProjectActions = {
           this.addUploadedFile(incompleteFile);
           toProcess.delete(baseName);
         } else if (hasOtherErrors) {
+          const validationErrors = fileValidation?.errors ?? [];
+          const validationWarnings = fileValidation?.warnings ?? [];
           const errorFile: UploadedFile = {
             id: crypto.randomUUID(),
             name: mainFileName,
@@ -319,13 +321,14 @@ export const createProjectActions = {
               ? FileType.SHAPEFILE
               : FileType.UNKNOWN,
             sourceType,
+            errorMessage: validationErrors[0] ?? m.create_project_error_label(),
             relatedFiles: groupFiles
               .filter((f) => f !== mainFile)
               .map((f) => f.name),
             validation: {
               isValid: false,
-              errors: fileValidation.errors,
-              warnings: fileValidation.warnings
+              errors: validationErrors,
+              warnings: validationWarnings
             }
           };
           this.addUploadedFile(errorFile);

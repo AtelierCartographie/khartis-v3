@@ -12,6 +12,7 @@ import {
   SIMPLE_GEOMETRY_TYPES
 } from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+import * as m from '$lib/paraglide/messages';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
 const SHAPEFILE_AUX_EXTENSIONS = ['sbn', 'sbx'] as const;
@@ -196,11 +197,9 @@ export const FileValidator = {
 
   validateBasicProperties(file: File, result: DetailedValidationResult): void {
     if (file.size === 0) {
-      result.errors.push('File is empty');
+      result.errors.push(m.validation_file_empty());
     } else if (file.size > config.maxFileSize) {
-      result.errors.push(
-        `File exceeds the limit of ${config.maxFileSize / (1024 * 1024)} MB`
-      );
+      result.errors.push(m.validation_file_too_large());
     } else if (file.size > config.maxFileSize * 0.8) {
       result.warnings.push('Large file, processing may be slow');
     }

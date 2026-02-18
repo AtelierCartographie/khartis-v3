@@ -16,6 +16,7 @@ import type {
   RawDataset,
   UploadedFilePayload
 } from '../types';
+import { detectCsvHeader } from '../utils/csv-header-detector';
 import { detectDecimalSeparator } from '../utils/decimal-detector';
 
 export interface ProcessFileOptions {
@@ -201,17 +202,32 @@ async function readTabularFile(
   if (detection.separator === ',') {
     logger.info('European decimal format detected', LogCategory.DATA, {
       confidence: detection.confidence,
-      sampleSize: detection.sampleSize
+      sampleSize: detection.sampleSize,
+      delimiter: detection.delimiter,
+      thousandsSeparator: detection.thousandsSeparator
     });
   }
+  const headerDetection = await detectCsvHeader(file, detection.delimiter);
+  logger.debug('CSV header detection completed', LogCategory.DATA, {
+    hasHeader: headerDetection.hasHeader,
+    confidence: headerDetection.confidence,
+    comparedColumns: headerDetection.comparedColumns,
+    delimiter: detection.delimiter,
+    fileName
+  });
+
   await Duck.read_tabular(file, {
     tablename: tableName,
-    decimal_separator: detection.separator
+    header: headerDetection.hasHeader,
+    decimal_separator: detection.separator,
+    delimiter: detection.delimiter,
+    thousands_separator: detection.thousandsSeparator
   });
 
   return {
-    header: true,
+    header: headerDetection.hasHeader,
     decimalSeparator: detection.separator,
+    thousandsSeparator: detection.thousandsSeparator,
     delimiter: detection.delimiter
   };
 }
