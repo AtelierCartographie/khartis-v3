@@ -220,6 +220,8 @@ const DEFAULT_SYMBOL_SIZE = 12;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
 const DEFAULT_SYMBOL_MAX_SIZE = 50;
 const DEFAULT_SYMBOL_OPACITY = 0.8;
+const DEFAULT_LABEL_OPACITY = 0;
+const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = '#c6c6c6';
 const DEFAULT_QUANTILES_CLASS_COUNT = 5;
@@ -250,9 +252,15 @@ function incrementVersion(state: VisualizationState): void {
 function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
+  const textOverlayDefaults: VisualizationConfig['style'] = {
+    labelOpacity: DEFAULT_LABEL_OPACITY,
+    textOpacity: DEFAULT_TEXT_OPACITY
+  };
+
   switch (type) {
     case VisualizationType.CHOROPLETH:
       return {
+        ...textOverlayDefaults,
         fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
         strokeColor: DEFAULT_STROKE_COLOR,
         strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
@@ -261,6 +269,7 @@ function getDefaultStyle(
 
     case VisualizationType.PROPORTIONAL:
       return {
+        ...textOverlayDefaults,
         fillColor: DEFAULT_FILL_COLOR,
         fillOpacity: DEFAULT_STYLE_OPACITY.FILL_LOW,
         strokeColor: DEFAULT_STROKE_COLOR,
@@ -270,6 +279,7 @@ function getDefaultStyle(
 
     case VisualizationType.CATEGORICAL:
       return {
+        ...textOverlayDefaults,
         fillOpacity: DEFAULT_STYLE_OPACITY.FILL_HIGH,
         strokeColor: DEFAULT_STROKE_COLOR,
         strokeWidth: DEFAULT_STROKE_WIDTH.THIN,
@@ -278,6 +288,7 @@ function getDefaultStyle(
 
     default:
       return {
+        ...textOverlayDefaults,
         fillColor: DEFAULT_FILL_COLOR,
         fillOpacity: DEFAULT_STYLE_OPACITY.FILL,
         strokeColor: DEFAULT_STROKE_COLOR,
@@ -395,6 +406,30 @@ function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
   };
 }
 
+function getDefaultPrimitiveFilters(
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  const geometryType =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
+  const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
+
+  if (normalizedGeometryType.includes('polygon')) {
+    return [PrimitiveFilterType.POLYGON];
+  }
+
+  if (normalizedGeometryType.includes('line')) {
+    return [PrimitiveFilterType.LINE];
+  }
+
+  if (normalizedGeometryType.includes('point')) {
+    return [PrimitiveFilterType.POINT];
+  }
+
+  return [...ALL_PRIMITIVE_FILTERS];
+}
+
 function getDefaultMissingData(): MissingDataConfig {
   return {
     show: true,
@@ -461,6 +496,7 @@ function createVisualizationStore(): VisualizationStore {
       datasetId,
       enabled: true,
       modes: getDefaultModes(type),
+      primitiveFilters: getDefaultPrimitiveFilters(dataset),
       style: getDefaultStyle(type),
       mapping: getDefaultMapping(type, dataset),
       classification: getDefaultClassification(type),

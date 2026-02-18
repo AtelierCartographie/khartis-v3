@@ -92,6 +92,9 @@
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
       }
+    } else if (dataFields.length > 0) {
+      selectedFieldId = 0;
+      onMappingChange?.({ labelColumn: dataFields[0].text });
     }
     if (visualization?.mapping.secondaryLabelColumn && dataFields.length > 0) {
       const secondaryIndex = secondaryFieldItems.findIndex(
@@ -262,6 +265,9 @@
   }
 
   function handleToggleChange(checked: boolean) {
+    if (checked && opacity <= 0) {
+      opacity = VISUALIZATION_DEFAULTS.textOpacity;
+    }
     onToggleVisibility?.(checked);
   }
 

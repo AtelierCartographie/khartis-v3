@@ -65,6 +65,7 @@ export interface DeckOrthographicViewStateMap {
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   geoJSONs: Map<string, FeatureCollection>;
+  dataVersion?: number;
   width: number;
   height: number;
   onReady?: () => void;
