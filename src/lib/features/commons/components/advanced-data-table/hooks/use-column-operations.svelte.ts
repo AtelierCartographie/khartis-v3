@@ -7,6 +7,13 @@ import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
 
+const DUCKDB_COLUMN_TYPE: Record<ColumnType, string> = {
+  text: 'VARCHAR',
+  number: 'DOUBLE',
+  date: 'DATE',
+  boolean: 'BOOLEAN'
+};
+
 export interface UseColumnOperationsProps {
   tableName?: string | (() => string | undefined);
   datasetId?: string | (() => string | undefined);
@@ -45,9 +52,8 @@ export function useColumnOperations(
 
     if (!datasetId) return columns;
 
-    return columns.filter(
-      (col) => !datasetsStore.isColumnHidden(datasetId, col.name)
-    );
+    const hiddenColumns = new Set(datasetsStore.getHiddenColumns(datasetId));
+    return columns.filter((col) => !hiddenColumns.has(col.name));
   });
 
   function isColumnHidden(columnName: string): boolean {
@@ -157,16 +163,5 @@ export function useColumnOperations(
 }
 
 function mapColumnTypeToDuckDB(type: ColumnType): string {
-  switch (type) {
-    case 'text':
-      return 'VARCHAR';
-    case 'number':
-      return 'DOUBLE';
-    case 'date':
-      return 'DATE';
-    case 'boolean':
-      return 'BOOLEAN';
-    default:
-      return 'VARCHAR';
-  }
+  return DUCKDB_COLUMN_TYPE[type] ?? DUCKDB_COLUMN_TYPE.text;
 }

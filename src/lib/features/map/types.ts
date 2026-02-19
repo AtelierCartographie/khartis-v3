@@ -30,6 +30,8 @@ export type {
 
 export type DeckDataRow = Record<string, unknown>;
 
+export type ThematicLayer = import('@deck.gl/core').Layer<DeckDataRow>;
+
 export interface MapPosition {
   center: { lng: number; lat: number };
   zoom: number;
@@ -65,6 +67,7 @@ export interface DeckOrthographicViewStateMap {
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   geoJSONs: Map<string, FeatureCollection>;
+  dataVersion?: number;
   width: number;
   height: number;
   onReady?: () => void;

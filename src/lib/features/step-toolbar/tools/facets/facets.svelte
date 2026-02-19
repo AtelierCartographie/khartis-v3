@@ -11,8 +11,11 @@
     RadioButton
   } from 'carbon-components-svelte';
   import { Launch } from 'carbon-icons-svelte';
-  import { facetsStore } from './facets.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { SCALE_MODE, facetsStore } from './facets.store.svelte';
+  import {
+    VisualizationType,
+    visualizationStore
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 
   const selectedViz = $derived(visualizationStore.selectedVisualization);
@@ -42,7 +45,8 @@
   const canGenerate = $derived(
     selectedViz &&
       selectedVarIds.length >= 2 &&
-      (selectedViz.type === 'choropleth' || selectedViz.type === 'proportional')
+      (selectedViz.type === VisualizationType.CHOROPLETH ||
+        selectedViz.type === VisualizationType.PROPORTIONAL)
   );
 
   const showWarning = $derived(selectedVarIds.length > 9);
@@ -70,7 +74,7 @@
   }
 
   function handleScaleModeChange(checked: boolean): void {
-    const isShared = scaleMode === 'shared';
+    const isShared = scaleMode === SCALE_MODE.SHARED;
     if (checked !== isShared) {
       void handleToggleScale();
     }
@@ -125,7 +129,7 @@
       <Row padding>
         <Column>
           <Switch
-            toggled={scaleMode === 'shared'}
+            toggled={scaleMode === SCALE_MODE.SHARED}
             labelText={m.facets_shared_scale()}
             labelA={m.no()}
             labelB={m.yes()}
@@ -147,7 +151,7 @@
             <p class="hint">{m.facets_select_viz_first()}</p>
           </Column>
         </Row>
-      {:else if selectedViz.type !== 'choropleth' && selectedViz.type !== 'proportional'}
+      {:else if selectedViz.type !== VisualizationType.CHOROPLETH && selectedViz.type !== VisualizationType.PROPORTIONAL}
         <Row padding>
           <Column>
             <p class="hint">{m.facets_unsupported_type()}</p>
@@ -202,7 +206,7 @@
         <Row padding>
           <Column>
             <Switch
-              toggled={scaleMode === 'shared'}
+              toggled={scaleMode === SCALE_MODE.SHARED}
               labelText={m.facets_shared_scale()}
               labelA={m.no()}
               labelB={m.yes()}

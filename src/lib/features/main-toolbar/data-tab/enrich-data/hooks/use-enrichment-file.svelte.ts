@@ -1,5 +1,6 @@
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
@@ -29,6 +30,40 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   let uploadError = $state<string | null>(null);
   let pastedDataValue = $state('');
   let onlineUrlValue = $state('');
+
+  function validateOnlineUrl(url: string): string | null {
+    const trimmedUrl = url.trim();
+
+    if (!trimmedUrl) {
+      return m.error_url_required();
+    }
+
+    const validation = FileValidator.validateURL(trimmedUrl);
+    if (!validation.isValid) {
+      return m.error_url_invalid({ urls: trimmedUrl });
+    }
+
+    return null;
+  }
+
+  function toUserFriendlyOnlineLoadError(error: unknown): string {
+    if (!(error instanceof Error)) {
+      return m.error_loading_default();
+    }
+
+    const normalizedMessage = error.message.toLowerCase();
+    const isNetworkError =
+      normalizedMessage.includes('networkerror') ||
+      normalizedMessage.includes("failed to execute 'send'") ||
+      normalizedMessage.includes('failed to load') ||
+      normalizedMessage.includes('cors');
+
+    if (isNetworkError) {
+      return m.error_loading_default();
+    }
+
+    return error.message;
+  }
 
   async function cleanupEnrichmentTable(
     dataset: DatasetResult | null
@@ -118,7 +153,11 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
   }
 
   async function handleLoadOnlineFile(): Promise<void> {
-    if (!onlineUrlValue.trim()) return;
+    const validationError = validateOnlineUrl(onlineUrlValue);
+    if (validationError) {
+      uploadError = validationError;
+      return;
+    }
 
     isUploading = true;
     uploadError = null;
@@ -131,8 +170,12 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       await replaceEnrichmentDataset(dataset, null);
       onlineUrlValue = '';
     } catch (error) {
-      uploadError =
-        error instanceof Error ? error.message : m.error_loading_default();
+      logger.error(
+        'Failed to load online enrichment file',
+        LogCategory.DATA,
+        error
+      );
+      uploadError = toUserFriendlyOnlineLoadError(error);
     } finally {
       isUploading = false;
     }
@@ -190,6 +233,9 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
 
   function setOnlineUrlValue(value: string): void {
     onlineUrlValue = value;
+    if (uploadError) {
+      uploadError = null;
+    }
   }
 
   return {

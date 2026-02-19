@@ -18,14 +18,14 @@ const OSM_TILE_SERVERS: Record<OSMTileServer, OSMTileConfig> = {
     tileSize: 256
   },
   [OSMTileServer.CARTO]: {
-    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors',
+    urlTemplate: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors, © CARTO',
     minZoom: 0,
     maxZoom: 19,
     tileSize: 256
   },
   [OSMTileServer.HUMANITARIAN]: {
-    urlTemplate: 'https://tile-{s}.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+    urlTemplate: 'https://tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
     attribution:
       '© OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
     minZoom: 0,
@@ -33,10 +33,10 @@ const OSM_TILE_SERVERS: Record<OSMTileServer, OSMTileConfig> = {
     tileSize: 256
   },
   [OSMTileServer.TRANSPORT]: {
-    urlTemplate: 'https://tile.thunderforest.com/transport/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors, Tiles by Thunderforest',
+    urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors',
     minZoom: 0,
-    maxZoom: 18,
+    maxZoom: 19,
     tileSize: 256
   }
 };

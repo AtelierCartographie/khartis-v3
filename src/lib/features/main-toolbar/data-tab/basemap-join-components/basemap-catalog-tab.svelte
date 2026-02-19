@@ -43,8 +43,9 @@
   const filteredBasemaps = $derived(() => {
     let results: BasemapMetadata[] = [...allBasemaps];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery) {
+      const query = trimmedQuery.toLowerCase();
       results = results.filter(
         (b) =>
           b.title.toLowerCase().includes(query) ||
@@ -60,12 +61,15 @@
     return results;
   });
 
+  const suggestionIds = $derived(
+    new Set(suggestedBasemaps.map((s) => s.basemap.file))
+  );
+
   const displayedBasemaps = $derived(() => {
     if (searchQuery.trim() || selectedYear !== 'all') {
-      return filteredBasemaps();
+      return filteredBasemaps().filter((b) => !suggestionIds.has(b.file));
     }
 
-    const suggestionIds = new Set(suggestedBasemaps.map((s) => s.basemap.file));
     return allBasemaps.filter((b) => !suggestionIds.has(b.file));
   });
 
@@ -90,6 +94,8 @@
   ) {
     if (e.detail.selectedItem) {
       searchQuery = e.detail.selectedItem.basemap.title;
+      // Selecting from the ComboBox must trigger the same flow as clicking a card.
+      onSelectBasemap(e.detail.selectedItem.basemap);
     } else {
       searchQuery = '';
     }
@@ -143,6 +149,7 @@
       <ComboBox
         items={searchComboBoxItems()}
         selectedId={searchSelectedId}
+        bind:value={searchQuery}
         placeholder={m.basemap_search_placeholder()}
         shouldFilterItem={(item, value) => {
           if (!value) return true;

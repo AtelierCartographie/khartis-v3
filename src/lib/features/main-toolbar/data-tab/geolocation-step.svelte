@@ -32,6 +32,7 @@
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
@@ -57,7 +58,7 @@
     const tableName = selectedDataset.tableName;
 
     try {
-      const result = await duckDBOrchestrator.getFullAnalysis(tableName);
+      const result = await duckDBOrchestrator.getFullAnalysis(tableName, true);
       if (controller.signal.aborted) return;
       columnAnalysis = result;
       columnAnalysisLoaded = true;
@@ -71,31 +72,38 @@
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
 
-    return selectedDataset.columns
+    const datasetColumnNames = selectedDataset.columns
       .filter(
         (col) =>
-          col.name !== INTERNAL_COLUMN.GEOMETRY && col.name !== INTERNAL_COLUMN.ID
+          col.name !== INTERNAL_COLUMN.GEOMETRY &&
+          col.name !== INTERNAL_COLUMN.ID
       )
-      .map((col, index) => {
-        const geoCol = geoDetection?.geoColumns.find(
-          (gc) => gc.columnName === col.name
-        );
+      .map((col) => col.name);
 
-        let displayText = col.name;
-        if (geoCol) {
-          const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-          displayText = `${col.name} – ${description}`;
-        }
+    return datasetColumnNames.map((columnName, index) => {
+      const geoCol = geoDetection?.geoColumns.find(
+        (gc) => gc.columnName === columnName
+      );
 
-        return {
-          id: index,
-          text: displayText,
-          columnName: col.name,
-          isGeo: !!geoCol,
-          confidence: geoCol?.confidence || 0
-        };
-      });
+      let displayText = columnName;
+      if (geoCol) {
+        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        displayText = `${columnName} – ${description}`;
+      }
+
+      return {
+        id: index,
+        text: displayText,
+        columnName,
+        isGeo: !!geoCol,
+        confidence: geoCol?.confidence || 0
+      };
+    });
   });
+
+  const availableColumnNames = $derived(
+    new Set(dataFieldItems().map((item) => item.columnName))
+  );
 
   const bestGeoidColumn = $derived(() => {
     const geoidColumns = columnAnalysis
@@ -266,50 +274,97 @@
 
   $effect(() => {
     const tableName = selectedDataset?.tableName;
+    void duckDBDatasetsVersion;
     if (tableName) {
       loadColumnAnalysis();
     }
   });
 
   $effect(() => {
-    if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {
-      const col = latitudeColumns()[0];
-      latitudeFieldId = col.id;
+    if (!geoDetection?.hasGeoColumns) {
+      hasAutoGeoreferenceInitialization = false;
+      return;
+    }
+
+    const hasLatLon =
+      geoDetection.geoColumns.some((gc) => gc.type === 'latitude') &&
+      geoDetection.geoColumns.some((gc) => gc.type === 'longitude');
+
+    if (
+      !hasAutoGeoreferenceInitialization &&
+      hasLatLon &&
+      activeTabIndex === 0
+    ) {
+      activeTabIndex = 1;
       dataTabActions.setGeolocationState({
-        latitudeColumn: col.columnName
+        geoReference: GeoreferenceType.COORDINATES
       });
     }
-  });
 
-  $effect(() => {
-    if (longitudeColumns().length > 0 && longitudeFieldId === undefined) {
-      const col = longitudeColumns()[0];
-      longitudeFieldId = col.id;
-      dataTabActions.setGeolocationState({
-        longitudeColumn: col.columnName
-      });
-    }
-  });
+    hasAutoGeoreferenceInitialization = true;
 
-  $effect(() => {
-    if (geoDetection?.hasGeoColumns) {
-      const hasLatLon =
-        geoDetection.geoColumns.some((gc) => gc.type === 'latitude') &&
-        geoDetection.geoColumns.some((gc) => gc.type === 'longitude');
-
-      if (
-        !hasAutoGeoreferenceInitialization &&
-        hasLatLon &&
-        activeTabIndex === 0
-      ) {
-        activeTabIndex = 1;
+    if (hasLatLon) {
+      if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {
+        const col = latitudeColumns()[0];
+        latitudeFieldId = col.id;
         dataTabActions.setGeolocationState({
-          geoReference: GeoreferenceType.COORDINATES
+          latitudeColumn: col.columnName
         });
       }
 
-      hasAutoGeoreferenceInitialization = true;
+      if (longitudeColumns().length > 0 && longitudeFieldId === undefined) {
+        const col = longitudeColumns()[0];
+        longitudeFieldId = col.id;
+        dataTabActions.setGeolocationState({
+          longitudeColumn: col.columnName
+        });
+      }
     }
+  });
+
+  $effect(() => {
+    const availableColumns = availableColumnNames;
+    const geolocation = dataTabState.geolocation;
+
+    if (availableColumns.size === 0) return;
+
+    const geolocationUpdates: Partial<typeof geolocation> = {};
+    let hasUpdates = false;
+
+    if (
+      geolocation.linkedVariableName &&
+      !availableColumns.has(geolocation.linkedVariableName)
+    ) {
+      geolocationUpdates.linkedVariable = null;
+      geolocationUpdates.linkedVariableName = '';
+      previousAutoSelectedColumn = null;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.latitudeColumn &&
+      !availableColumns.has(geolocation.latitudeColumn)
+    ) {
+      geolocationUpdates.latitudeColumn = undefined;
+      latitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.longitudeColumn &&
+      !availableColumns.has(geolocation.longitudeColumn)
+    ) {
+      geolocationUpdates.longitudeColumn = undefined;
+      longitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (!hasUpdates) return;
+
+    dataTabActions.setGeolocationState(geolocationUpdates);
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(1);
+    dataTabStore.resetStepCompletion(2);
   });
 
   async function autoSelectBasemap() {
@@ -332,9 +387,6 @@
     const geoid = bestGeoidColumn();
 
     if (linkedVar === null && !linkedName && suggested) {
-      // Only auto-select from geoDetection if column analysis is not yet loaded,
-      // or if there's no geoid that would override it. This prevents flicker
-      // where a suggestion is shown then immediately replaced by a geoid.
       if (
         !columnAnalysisLoaded ||
         !geoid ||
@@ -345,6 +397,7 @@
           linkedVariable: suggested.id,
           linkedVariableName: suggested.columnName
         });
+        autoSelectBasemap();
       }
     }
 
@@ -360,17 +413,11 @@
         linkedVariable: geoid.id,
         linkedVariableName: geoid.columnName
       });
-    }
-  });
-
-  $effect(() => {
-    const linkedVar = dataTabState.geolocation.linkedVariable;
-    if (linkedVar !== undefined && linkedVar !== null && selectedDataset) {
       autoSelectBasemap();
     }
   });
 
-  $effect(() => {
+  const isGeolocationConfigured = $derived.by(() => {
     const geo = dataTabState.geolocation;
     const isEntityConfigured =
       geo.linkedVariable !== null && geo.linkedVariable !== undefined;
@@ -378,8 +425,11 @@
       geo.geoReference === 'coordinates' &&
       geo.latitudeColumn &&
       geo.longitudeColumn;
+    return isEntityConfigured || isCoordinatesConfigured;
+  });
 
-    if (isEntityConfigured || isCoordinatesConfigured) {
+  $effect(() => {
+    if (isGeolocationConfigured) {
       dataTabStore.markStepComplete(1);
     }
   });

@@ -3,7 +3,21 @@ import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
 import type { GeometryInfo } from '../types';
 import { computeCentroid } from '../types';
-import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import {
+  GEOJSON_TYPE,
+  GEOMETRY_COLUMN_TYPE,
+  GEOMETRY_WKT_TYPES
+} from '$lib/features/commons/constants';
+
+const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
+  {
+    [GEOMETRY_WKT_TYPES.POINT]: GEOJSON_TYPE.POINT,
+    [GEOMETRY_WKT_TYPES.MULTI_POINT]: GEOJSON_TYPE.MULTI_POINT,
+    [GEOMETRY_WKT_TYPES.LINE_STRING]: GEOJSON_TYPE.LINE_STRING,
+    [GEOMETRY_WKT_TYPES.MULTI_LINE_STRING]: GEOJSON_TYPE.MULTI_LINE_STRING,
+    [GEOMETRY_WKT_TYPES.POLYGON]: GEOJSON_TYPE.POLYGON,
+    [GEOMETRY_WKT_TYPES.MULTI_POLYGON]: GEOJSON_TYPE.MULTI_POLYGON
+  };
 
 export async function extractGeometryInfo(
   tableName: string,
@@ -15,14 +29,18 @@ export async function extractGeometryInfo(
     let geometryColumn: { name: string; type: string } | undefined;
 
     if (knownColumns) {
-      geometryColumn = knownColumns.find((col) => col.type === 'GEOMETRY');
+      geometryColumn = knownColumns.find(
+        (col) => col.type === GEOMETRY_COLUMN_TYPE
+      );
     } else {
       const describe = await Duck.describe_table(tableName);
       const columns = describe.name.map((name, index) => ({
         name,
         type: describe.type[index]
       }));
-      geometryColumn = columns.find((column) => column.type === 'GEOMETRY');
+      geometryColumn = columns.find(
+        (column) => column.type === GEOMETRY_COLUMN_TYPE
+      );
     }
 
     if (!geometryColumn) {
@@ -58,7 +76,7 @@ export async function extractGeometryInfo(
       maxY: number | null;
     }>;
 
-    const geometryType = result?.geom_type ?? 'GEOMETRY';
+    const geometryType = result?.geom_type ?? GEOMETRY_COLUMN_TYPE;
     const extent = result;
 
     if (
@@ -102,24 +120,6 @@ export async function extractGeometryInfo(
 
 function normalizeGeometryType(type?: string | null): GeometryInfo['type'] {
   if (!type) return GEOJSON_TYPE.POLYGON;
-  const normalized = type.replace(/^ST_/i, '').toLowerCase();
-  switch (normalized) {
-    case 'point':
-      return GEOJSON_TYPE.POINT;
-
-    case 'multipoint':
-      return GEOJSON_TYPE.MULTI_POINT;
-
-    case 'linestring':
-      return GEOJSON_TYPE.LINE_STRING;
-
-    case 'multilinestring':
-      return GEOJSON_TYPE.MULTI_LINE_STRING;
-
-    case 'multipolygon':
-      return GEOJSON_TYPE.MULTI_POLYGON;
-
-    default:
-      return GEOJSON_TYPE.POLYGON;
-  }
+  const normalized = type.replace(/^ST_/i, '').toUpperCase();
+  return GEOMETRY_TYPE_TO_GEOJSON[normalized] ?? GEOJSON_TYPE.POLYGON;
 }

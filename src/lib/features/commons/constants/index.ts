@@ -5,8 +5,8 @@
  * for convenient imports.
  */
 
-export * from './annotation.constants';
 export * from './basemap.constants';
+export * from './annotation.constants';
 export * from './colors.constants';
 export * from './data.constants';
 export * from './detection.constants';

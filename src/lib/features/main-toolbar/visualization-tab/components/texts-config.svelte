@@ -92,6 +92,9 @@
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
       }
+    } else if (dataFields.length > 0) {
+      selectedFieldId = 0;
+      onMappingChange?.({ labelColumn: dataFields[0].text });
     }
     if (visualization?.mapping.secondaryLabelColumn && dataFields.length > 0) {
       const secondaryIndex = secondaryFieldItems.findIndex(
@@ -154,8 +157,13 @@
 
   $effect(() => {
     if (visualization?.style) {
+      const textOpacity = visualization.style.textOpacity;
       opacity =
-        visualization.style.textOpacity ?? VISUALIZATION_DEFAULTS.textOpacity;
+        textOpacity !== undefined
+          ? textOpacity <= 1
+            ? Math.round(textOpacity * 100)
+            : textOpacity
+          : VISUALIZATION_DEFAULTS.textOpacity;
       color = (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
       bold = visualization.style.textBold ?? false;
       italic = visualization.style.textItalic ?? false;
@@ -208,7 +216,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ textOpacity: value });
+    onStyleChange?.({ textOpacity: value / 100 });
   }
 
   function handleBoldChange(value: boolean) {
@@ -257,6 +265,9 @@
   }
 
   function handleToggleChange(checked: boolean) {
+    if (checked && opacity <= 0) {
+      opacity = VISUALIZATION_DEFAULTS.textOpacity;
+    }
     onToggleVisibility?.(checked);
   }
 

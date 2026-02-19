@@ -87,7 +87,7 @@
     height: 32px;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     transition: background-color 0.15s;
-    background-color: #ffffff;
+    background-color: var(--cds-ui-01, #ffffff);
   }
 
   tr:hover {
@@ -138,7 +138,7 @@
     padding: 0;
     position: sticky;
     left: 0;
-    background-color: #ffffff;
+    background-color: var(--cds-ui-01, #ffffff);
     z-index: var(--z-base);
     display: flex;
     align-items: center;
@@ -156,7 +156,7 @@
     font-weight: 400;
     line-height: 16px;
     letter-spacing: 0.32px;
-    color: #c6c6c6;
+    color: var(--cds-text-03, #a8a8a8);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -165,7 +165,7 @@
 
   td {
     padding: 7px 8px;
-    color: #161616;
+    color: var(--cds-text-01, #161616);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -185,8 +185,8 @@
   }
 
   td.geoid {
-    color: #005d5d;
-    border-bottom: 2px solid #08bdba;
+    color: var(--tag-teal-tag-color, #005d5d);
+    border-bottom: 2px solid var(--tag-teal-tag-border-operational, #08bdba);
   }
 
   .null-value {

@@ -9,6 +9,7 @@
   } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
+    PrimitiveFilterType,
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
@@ -34,7 +35,10 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { mapSuggestionToType } from './suggestion.utils';
+  import {
+    mapSuggestionToType,
+    resolveDatasetGeometryType
+  } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -86,7 +90,15 @@
       }
     }));
 
-    const geometryType = (dataset.geometry?.type as GeometryType) || null;
+    const geometryType =
+      resolveDatasetGeometryType(
+        dataset as {
+          geometry?: { type?: string | null };
+          sourceFileId?: string;
+        }
+      ) ||
+      (dataset.geometry?.type as GeometryType) ||
+      null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
       maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
@@ -124,11 +136,11 @@
 
   function getGeometryIcon(geometry: string) {
     switch (geometry) {
-      case 'point':
+      case PrimitiveFilterType.POINT:
         return CircleFilled;
-      case 'polygon':
+      case PrimitiveFilterType.POLYGON:
         return Shapes;
-      case 'line':
+      case PrimitiveFilterType.LINE:
         return EdgeNode;
       default:
         return CircleFilled;

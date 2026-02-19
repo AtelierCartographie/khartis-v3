@@ -112,10 +112,7 @@ function resolveGeometryEncoding(
     if (extensionName === ArrowExtension.OGC_WKB) {
       return {
         arrowExtension: ArrowExtension.OGC_WKB,
-        geometryTypes: [
-          GEOJSON_TYPE.POLYGON,
-          GEOJSON_TYPE.MULTI_POLYGON
-        ]
+        geometryTypes: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON]
       };
     }
   }
@@ -133,10 +130,7 @@ function resolveGeometryEncoding(
 
   return {
     arrowExtension: ArrowExtension.OGC_WKB,
-    geometryTypes: [
-      GEOJSON_TYPE.POLYGON,
-      GEOJSON_TYPE.MULTI_POLYGON
-    ]
+    geometryTypes: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON]
   };
 }
 
@@ -145,7 +139,8 @@ export function addGeoArrowMetadata(
   geoParquetEncoding?: string
 ): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
+    (f) =>
+      f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -239,7 +234,8 @@ export async function readGeoJSONAsArrow(
 
 function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
+    (f) =>
+      f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -254,10 +250,7 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
     columns: {
       [geoColumnName]: {
         encoding: GeometryEncoding.GEOJSON,
-        geometry_types: [
-          GEOJSON_TYPE.POLYGON,
-          GEOJSON_TYPE.MULTI_POLYGON
-        ],
+        geometry_types: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON],
         crs: {
           type: 'name',
           properties: {

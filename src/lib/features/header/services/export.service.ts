@@ -17,9 +17,10 @@ import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.s
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
-import type { DataExportFormat } from '../types';
+import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck } from '$lib/features/duckdb';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
+import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
 
 export interface ExportError extends Error {
   title: string;
@@ -174,16 +175,16 @@ function validateMapExportPrerequisites(): void {
 }
 
 function getDataFormatConfig(format: DataExportFormat): {
-  format: 'csv' | 'geojson' | 'json' | 'csv-geo';
+  format: DataExportFormat;
   extension: string;
 } {
   switch (format) {
-    case 'csv':
-      return { format: 'csv', extension: 'csv' };
-    case 'geojson':
-      return { format: 'geojson', extension: 'geojson' };
-    case 'csv-geo':
-      return { format: 'csv-geo', extension: 'csv' };
+    case DATA_FORMAT.CSV:
+      return { format: DATA_FORMAT.CSV, extension: DATA_FORMAT.CSV };
+    case DATA_FORMAT.GEOJSON:
+      return { format: DATA_FORMAT.GEOJSON, extension: DATA_FORMAT.GEOJSON };
+    case DATA_FORMAT.CSV_GEO:
+      return { format: DATA_FORMAT.CSV_GEO, extension: DATA_FORMAT.CSV };
   }
 }
 
@@ -207,7 +208,9 @@ async function fetchDatasetsWithGeometry(
       continue;
     }
 
-    const geomColumn = dataset.columns.find((col) => col.type === 'geometry');
+    const geomColumn = dataset.columns.find(
+      (col) => col.type === COLUMN_TYPE_GEOMETRY
+    );
     if (!geomColumn) {
       logger.warn(
         'Skipping geometry hydration for dataset without geometry column',

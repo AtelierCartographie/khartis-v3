@@ -40,6 +40,8 @@ export async function readTabular(
   const thousands_separator = options.thousands_separator;
   const delimiter = options.delimiter;
   const header = options.header ?? true;
+  const ignoreErrors = options.ignore_errors ?? false;
+  const allVarchar = options.all_varchar ?? false;
   const format = options.format ?? DUCK_CONST.DEFAULT.FORMAT_TABULAR;
   let filename: string;
   let fileid: string;
@@ -77,50 +79,127 @@ export async function readTabular(
     }
 
     const finalTablename = tablename;
-    await runInTransaction(
-      ctx.connection,
-      async () => {
-        if (!finalTablename) {
-          throw new DuckDBError('Unable to determine target table name');
-        }
-        if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
-          const escapedFileId = escapeSqlString(fileid);
+    const shouldRetryWithIgnoreErrors =
+      !ignoreErrors &&
+      !allVarchar &&
+      input instanceof File &&
+      input.size > 0 &&
+      header &&
+      format === DUCK_CONST.DEFAULT.FORMAT_TABULAR;
 
-          const csvOptions: string[] = [
-            `header=${header}`,
-            `decimal_separator="${decimal_separator}"`,
-            'normalize_names=true',
-            `nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES}`
-          ];
-
-          if (thousands_separator) {
-            csvOptions.push(`thousands="${thousands_separator}"`);
+    const runImportInTransaction = async (recoveryMode = false) => {
+      await runInTransaction(
+        ctx.connection,
+        async () => {
+          if (!finalTablename) {
+            throw new DuckDBError('Unable to determine target table name');
           }
 
-          if (delimiter) {
-            csvOptions.push(`delim='${delimiter}'`);
+          if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
+            const escapedFileId = escapeSqlString(fileid);
+
+            const buildCsvOptions = (
+              retryOptions: {
+                ignoreErrors?: boolean;
+                allVarchar?: boolean;
+              } = {}
+            ): string[] => {
+              const csvOptions: string[] = [
+                `header=${header}`,
+                `decimal_separator="${decimal_separator}"`,
+                'normalize_names=true',
+                `nullstr=${DUCK_CONST.DEFAULT.NULL_VALUES}`
+              ];
+
+              if (thousands_separator) {
+                csvOptions.push(`thousands="${thousands_separator}"`);
+              }
+
+              if (delimiter) {
+                csvOptions.push(`delim='${delimiter}'`);
+              }
+
+              if (ignoreErrors || retryOptions.ignoreErrors) {
+                csvOptions.push('ignore_errors=true');
+              }
+
+              if (allVarchar || retryOptions.allVarchar) {
+                csvOptions.push('all_varchar=true');
+              }
+
+              return csvOptions;
+            };
+
+            const runCsvImport = async (
+              retryOptions: {
+                ignoreErrors?: boolean;
+                allVarchar?: boolean;
+              } = {}
+            ): Promise<void> => {
+              const csvOptions = buildCsvOptions(retryOptions);
+              const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
+              await executeQuery(ctx.connection, query, {
+                format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+              });
+            };
+
+            if (recoveryMode) {
+              await runCsvImport({ ignoreErrors: true, allVarchar: true });
+            } else {
+              await runCsvImport();
+            }
+
+            if (shouldRetryWithIgnoreErrors && !recoveryMode) {
+              const rowCountResult = (await executeQuery(
+                ctx.connection,
+                `SELECT COUNT(*) AS cnt FROM "${finalTablename}"`,
+                { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+              )) as Array<{ cnt: number | string }>;
+              const parsedRowCount = Number(rowCountResult?.[0]?.cnt ?? 0);
+
+              if (parsedRowCount === 0) {
+                logger.warn(
+                  'CSV import yielded 0 rows, retrying with ignore_errors + all_varchar',
+                  LogCategory.DUCKDB,
+                  { tablename: finalTablename, filename }
+                );
+                await runCsvImport({ ignoreErrors: true, allVarchar: true });
+              }
+            }
           }
 
-          const query = `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_csv('${escapedFileId}', ${csvOptions.join(', ')});`;
-          await executeQuery(ctx.connection, query, {
-            format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-          });
-        }
-        if (
-          format === DUCK_CONST.TYPE.PARQUET ||
-          format === DUCK_CONST.TYPE.ARROW
-        ) {
-          const escapedFileIdBinary = escapeSqlString(fileid);
-          await executeQuery(
-            ctx.connection,
-            `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFileIdBinary}');`,
-            { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-          );
-        }
-        await addRowId(ctx.connection, finalTablename);
-      },
-      'read_tabular'
-    );
+          if (
+            format === DUCK_CONST.TYPE.PARQUET ||
+            format === DUCK_CONST.TYPE.ARROW
+          ) {
+            const escapedFileIdBinary = escapeSqlString(fileid);
+            await executeQuery(
+              ctx.connection,
+              `CREATE OR REPLACE TABLE "${finalTablename}" AS FROM read_parquet('${escapedFileIdBinary}');`,
+              { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+            );
+          }
+
+          await addRowId(ctx.connection, finalTablename);
+        },
+        'read_tabular'
+      );
+    };
+
+    try {
+      await runImportInTransaction(false);
+    } catch (error) {
+      if (!shouldRetryWithIgnoreErrors) {
+        throw error;
+      }
+
+      logger.warn(
+        'CSV import failed, retrying with ignore_errors + all_varchar in a new transaction',
+        LogCategory.DUCKDB,
+        { tablename: finalTablename, filename, error }
+      );
+      await runImportInTransaction(true);
+    }
 
     if (!tablename) {
       throw new DuckDBError('Unable to determine target table name');

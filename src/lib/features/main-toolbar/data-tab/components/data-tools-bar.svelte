@@ -9,6 +9,7 @@
     Maximize,
     Settings,
     ChartHistogram,
+    View,
     ViewOff
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
@@ -19,11 +20,13 @@
     onReset?: () => void;
     onExpand?: () => void;
     onCsvOptions?: () => void;
+    onShowHiddenColumns?: () => void;
     onToggleSummaryPlots?: () => void;
     deleteDisabled?: boolean;
     resetDisabled?: boolean;
     selectionCount?: number;
     showCsvOptions?: boolean;
+    showHiddenColumns?: boolean;
     showSummaryPlots?: boolean;
   }
 
@@ -32,11 +35,13 @@
     onReset,
     onExpand,
     onCsvOptions,
+    onShowHiddenColumns,
     onToggleSummaryPlots,
     deleteDisabled = true,
     resetDisabled = false,
     selectionCount = 0,
     showCsvOptions = false,
+    showHiddenColumns = false,
     showSummaryPlots = true
   }: Props = $props();
 
@@ -114,6 +119,16 @@
         iconDescription={m.csv_options_button()}
         tooltipPosition="bottom"
         on:click={() => onCsvOptions?.()}
+      />
+    {/if}
+    {#if showHiddenColumns}
+      <Button
+        kind="ghost"
+        size="small"
+        icon={View}
+        iconDescription={m.column_show()}
+        tooltipPosition="bottom"
+        on:click={() => onShowHiddenColumns?.()}
       />
     {/if}
     <Button

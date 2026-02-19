@@ -416,6 +416,8 @@ function createDataOrchestratorService() {
       return columnRenames.get(originalName) ?? originalName;
     }
 
+    const batch = { skipAnalysis: true };
+
     for (const transformation of file.columnTransformations) {
       try {
         const currentColumnName = resolveColumnName(transformation.column);
@@ -426,7 +428,8 @@ function createDataOrchestratorService() {
               await duckDBOrchestrator.renameColumn(
                 dataset.tableName,
                 currentColumnName,
-                transformation.newValue
+                transformation.newValue,
+                batch
               );
               datasetsStore.renameDatasetColumn(
                 dataset.id,
@@ -440,7 +443,8 @@ function createDataOrchestratorService() {
           case COLUMN_TRANSFORMATION_TYPES.DROP:
             await duckDBOrchestrator.dropColumn(
               dataset.tableName,
-              currentColumnName
+              currentColumnName,
+              batch
             );
             break;
 
@@ -449,7 +453,8 @@ function createDataOrchestratorService() {
               await duckDBOrchestrator.changeColumnType(
                 dataset.tableName,
                 currentColumnName,
-                transformation.newValue
+                transformation.newValue,
+                batch
               );
             }
             break;
@@ -468,7 +473,8 @@ function createDataOrchestratorService() {
                 await duckDBOrchestrator.refineColumn(
                   dataset.tableName,
                   currentColumnName,
-                  refineOp
+                  refineOp,
+                  batch
                 );
               }
             }
@@ -485,7 +491,8 @@ function createDataOrchestratorService() {
                 dataset.tableName,
                 currentColumnName,
                 transformation.searchValue,
-                transformation.newValue
+                transformation.newValue,
+                batch
               );
             }
             break;
@@ -499,7 +506,7 @@ function createDataOrchestratorService() {
       }
     }
 
-    duckDBOrchestrator.bumpDatasetsVersion();
+    await duckDBOrchestrator.invalidateAndReanalyse(dataset.tableName);
   }
 
   async function applyRowDeletions(file: UploadedFile): Promise<void> {
