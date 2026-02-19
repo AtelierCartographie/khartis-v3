@@ -23,11 +23,14 @@ export function formatTooltipValue(value: unknown): string {
   return formatValue(value);
 }
 
+const JOIN_INTERNAL_COLUMNS = ['basemap_id', 'typo_match'] as const;
+
 function isReservedColumn(columnName: string): boolean {
   return (
     columnName === INTERNAL_COLUMN.GEOM ||
     columnName === INTERNAL_COLUMN.GEOMETRY ||
-    columnName === INTERNAL_COLUMN.ID
+    columnName === INTERNAL_COLUMN.ID ||
+    (JOIN_INTERNAL_COLUMNS as readonly string[]).includes(columnName)
   );
 }
 
