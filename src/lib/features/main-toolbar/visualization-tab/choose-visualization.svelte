@@ -269,7 +269,7 @@
     <div class="suggestions-section">
       <ExpandableSection
         title={m.section_suggestions()}
-        defaultOpen={suggestionsExpanded}
+        open={suggestionsExpanded}
         onToggle={(expanded) => (suggestionsExpanded = expanded)}
         titleClass="suggestions-title"
       >

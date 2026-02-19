@@ -11,6 +11,7 @@
     title: string;
     description?: string;
     defaultOpen?: boolean;
+    open?: boolean;
     count?: number;
     children?: Snippet;
     icon?: Snippet;
@@ -28,6 +29,7 @@
     title,
     description,
     defaultOpen = false,
+    open = undefined,
     count,
     children,
     icon,
@@ -55,6 +57,12 @@
       return;
     }
     expanded = checked;
+  });
+
+  $effect(() => {
+    if (open !== undefined) {
+      expanded = open;
+    }
   });
 
   function toggle(): void {
