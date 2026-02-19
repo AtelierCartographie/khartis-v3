@@ -345,6 +345,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckInstance = orthographicDeck;
     currentViewMode = ViewMode.ORTHOGRAPHIC;
     mapInstanceStore.setDeckInstance(orthographicDeck);
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__deck = orthographicDeck;
+    }
   }
 
   let _initialStyleKey: string | null = null;
@@ -402,6 +405,10 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
       logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
+      if (import.meta.env.DEV) {
+        (window as unknown as Record<string, unknown>).__maplibreMap = map;
+        (window as unknown as Record<string, unknown>).__deck = deckOverlay;
+      }
 
       onMapLoaded();
 
