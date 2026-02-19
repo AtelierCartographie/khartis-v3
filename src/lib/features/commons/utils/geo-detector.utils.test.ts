@@ -20,15 +20,15 @@ vi.mock('$lib/paraglide/messages', () => ({
 import { GeoColumnDetector } from './geo-detector.utils';
 import type { GeoColumnResult } from './geo-detector.utils';
 
-/**
- * Parse a CSV string into headers + data rows for GeoColumnDetector.
- */
-function parseCsvForDetector(csv: string): {
+function parseCsvForDetector(
+  csv: string,
+  delimiter = ','
+): {
   headers: string[];
   data: unknown[][];
 } {
   const lines = csv.trim().split('\n');
-  const headers = lines[0].split(',');
+  const headers = lines[0].split(delimiter).map((h) => h.trim());
   const data = lines.slice(1).map((line) => {
     const values: unknown[] = [];
     let current = '';
@@ -37,7 +37,7 @@ function parseCsvForDetector(csv: string): {
     for (const char of line) {
       if (char === '"') {
         inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
+      } else if (char === delimiter && !inQuotes) {
         values.push(current.trim());
         current = '';
       } else {
@@ -310,5 +310,72 @@ describe('GeoColumnDetector - Entity column detection', () => {
     expect(geoCol).toBeDefined();
     expect(geoCol!.type).toBe('country_name');
     expect(geoCol!.confidence).toBeGreaterThan(0.3);
+  });
+});
+
+describe('GeoColumnDetector - Seveso CSV (GPS coordinate detection)', () => {
+  const csvPath = join(
+    process.cwd(),
+    'tests-datasets/csv/sites-seveso-idf.csv'
+  );
+  const csvContent = readFileSync(csvPath, 'utf-8');
+  const { headers, data } = parseCsvForDetector(csvContent, ';');
+
+  it('should parse the semicolon-delimited CSV with correct headers', () => {
+    expect(headers).toContain('Lat');
+    expect(headers).toContain('Long');
+    expect(data.length).toBeGreaterThanOrEqual(90);
+  });
+
+  it('should detect Lat column as latitude', async () => {
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    const latColumn = result.geoColumns.find((col) => col.columnName === 'Lat');
+    expect(latColumn).toBeDefined();
+    expect(latColumn!.type).toBe('latitude');
+    expect(latColumn!.confidence).toBeGreaterThan(0.8);
+  });
+
+  it('should detect Long column as longitude', async () => {
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+
+    const lonColumn = result.geoColumns.find(
+      (col) => col.columnName === 'Long'
+    );
+    expect(lonColumn).toBeDefined();
+    expect(lonColumn!.type).toBe('longitude');
+    expect(lonColumn!.confidence).toBeGreaterThan(0.8);
+  });
+
+  it('should report hasGeoColumns as true', async () => {
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+    expect(result.hasGeoColumns).toBe(true);
+  });
+
+  it('should not produce warnings (both lat and lon present)', async () => {
+    const result = await GeoColumnDetector.detectGeoColumns(headers, data);
+    expect(result.warnings).toHaveLength(0);
+  });
+
+  it('should have valid latitude values within -90 to 90 range', () => {
+    const latIndex = headers.indexOf('Lat');
+    for (const row of data) {
+      const lat = parseFloat(String(row[latIndex]));
+      if (!isNaN(lat)) {
+        expect(lat).toBeGreaterThanOrEqual(-90);
+        expect(lat).toBeLessThanOrEqual(90);
+      }
+    }
+  });
+
+  it('should have valid longitude values within -180 to 180 range', () => {
+    const lonIndex = headers.indexOf('Long');
+    for (const row of data) {
+      const lon = parseFloat(String(row[lonIndex]));
+      if (!isNaN(lon)) {
+        expect(lon).toBeGreaterThanOrEqual(-180);
+        expect(lon).toBeLessThanOrEqual(180);
+      }
+    }
   });
 });
