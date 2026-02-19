@@ -243,38 +243,56 @@ test.describe.serial('TC-JOIN-010: Import fond custom GeoJSON', () => {
     );
 
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
     const fileInput = page.locator('input[type="file"]').first();
     await fileInput.setInputFiles(fossilCsvPath);
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    const joinTab = page.getByText(/Joindre|Join/i).first();
+    const projectNameInput = page.getByTestId('project-name-input');
+    if (await projectNameInput.isVisible()) {
+      await projectNameInput.fill('Test Join Import');
+    }
+
+    const createButton = page.getByRole('button', {
+      name: /^Créer$|^Create$/i
+    });
+    if (await createButton.isEnabled()) {
+      await createButton.click();
+      await page.waitForTimeout(3000);
+    }
+
+    await expect(page.getByTestId('create-project-modal')).not.toBeVisible({
+      timeout: 5000
+    });
+
+    const joinTab = page
+      .locator('.bx--progress-step-button')
+      .filter({ hasText: /Joindre|Join/i })
+      .first();
     await joinTab.click();
 
     await page.waitForTimeout(1000);
 
-    const importTab = page.getByText(/Importer|Import/i).first();
-    if (await importTab.isVisible()) {
-      await importTab.click();
-    }
+    const importTab = page
+      .locator('button.toggle-tab')
+      .filter({ hasText: /Importer|Import/i })
+      .first();
+    await expect(importTab).toBeVisible({ timeout: 5000 });
+    await importTab.click();
 
     await page.waitForTimeout(500);
 
-    const basemapDropzone = page
-      .locator(
-        '[data-testid="basemap-import-dropzone"], .basemap-import-dropzone, input[type="file"]'
-      )
-      .nth(1);
-    if (await basemapDropzone.isVisible()) {
-      await basemapDropzone.setInputFiles(nuts2GeojsonPath);
-    }
+    const basemapFileInput = page
+      .locator('.dropzone input[type="file"][accept*="geojson"]')
+      .first();
+    await basemapFileInput.setInputFiles(nuts2GeojsonPath);
 
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
-    const customBasemap = page.getByText(/nuts2|custom/i).first();
-    await expect(
-      customBasemap.or(page.locator('[data-testid="custom-basemap"]'))
-    ).toBeVisible({ timeout: 15000 });
+    const importedFile = page.getByText(/Fichier importé|File imported/i);
+    await expect(importedFile).toBeVisible({ timeout: 15000 });
   });
 });
 
