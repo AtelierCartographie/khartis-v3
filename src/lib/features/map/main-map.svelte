@@ -35,8 +35,8 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let isResizing = $state(false);
-  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let isToolbarTransitioning = $state(false);
+  let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let containerResizeObserver: ResizeObserver | null = null;
 
   const TOOLBAR_TRANSITION_MS = 600;
@@ -416,15 +416,18 @@
     untrack(() => {
       if (!isMapReady) return;
 
-      isResizing = true;
+      // Mark toolbar as transitioning to suppress intermediate fitToContainer calls
+      isToolbarTransitioning = true;
 
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
+      if (toolbarTransitionTimeoutId) {
+        clearTimeout(toolbarTransitionTimeoutId);
       }
 
-      resizeTimeoutId = setTimeout(() => {
-        isResizing = false;
-        resizeTimeoutId = null;
+      toolbarTransitionTimeoutId = setTimeout(() => {
+        isToolbarTransitioning = false;
+        toolbarTransitionTimeoutId = null;
+        // Trigger a single fitToContainer with final dimensions after transition
+        handleContainerResize();
       }, TOOLBAR_TRANSITION_MS);
     });
   });
@@ -440,6 +443,10 @@
   }
 
   function handleContainerResizeDebounced() {
+    // Skip intermediate resizes during toolbar animation.
+    // The toolbar transition effect will trigger a final resize after animation ends.
+    if (isToolbarTransitioning) return;
+
     if (containerResizeTimeoutId) {
       clearTimeout(containerResizeTimeoutId);
     }
@@ -480,8 +487,8 @@
     initializeMap();
 
     return () => {
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
+      if (toolbarTransitionTimeoutId) {
+        clearTimeout(toolbarTransitionTimeoutId);
       }
       if (containerResizeTimeoutId) {
         clearTimeout(containerResizeTimeoutId);
@@ -558,7 +565,6 @@
           onReady={handleMapReady}
         />
       {/if}
-      <div class="resize-overlay" class:active={isResizing}></div>
     </div>
   {/if}
 </div>
@@ -582,20 +588,6 @@
 
   .thematic-map-wrapper.visible {
     opacity: 1;
-  }
-
-  .resize-overlay {
-    position: absolute;
-    inset: 0;
-    background: var(--cds-ui-background, #f4f4f4);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-out;
-  }
-
-  .resize-overlay.active {
-    opacity: 1;
-    transition: none;
   }
 
   .skeleton-loader {
