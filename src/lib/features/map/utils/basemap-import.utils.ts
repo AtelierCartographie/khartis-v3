@@ -64,7 +64,11 @@ export async function processBasemapImport(
   await duck.register_files([file]);
 
   const tableName = `custom_basemap_${Date.now()}`;
-  const isParquet = file.name.toLowerCase().endsWith('.parquet');
+  const lowerFileName = file.name.toLowerCase();
+  const isParquet =
+    lowerFileName.endsWith('.parquet') ||
+    lowerFileName.endsWith('.geoparquet') ||
+    lowerFileName.endsWith('.gpq');
 
   if (isParquet) {
     return processParquetBasemapImport(duck, file, tableName);

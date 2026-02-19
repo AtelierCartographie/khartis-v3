@@ -187,8 +187,12 @@ async function readTabularFile(
   tableName: string,
   fileName: string
 ): Promise<CsvImportOptions | undefined> {
-  const isParquet = fileName.toLowerCase().endsWith('.parquet');
-  const isArrow = fileName.toLowerCase().endsWith('.arrow');
+  const lowerFileName = fileName.toLowerCase();
+  const isParquet =
+    lowerFileName.endsWith('.parquet') ||
+    lowerFileName.endsWith('.geoparquet') ||
+    lowerFileName.endsWith('.gpq');
+  const isArrow = lowerFileName.endsWith('.arrow');
 
   if (isParquet || isArrow) {
     await Duck.read_tabular(file, {

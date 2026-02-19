@@ -33,7 +33,7 @@ export const DUCK_CONST = {
   REGEX: {
     TABULAR: /\.(csv|tsv|text|txt)/i,
     GEO: /\.(geojson|json|gpkg|kml|kmz|gpx)/i,
-    PARQUET: /\.(parquet|geoparquet)/i,
+    PARQUET: /\.(parquet|geoparquet|gpq)/i,
     ARROW: /\.arrow$/i,
     COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
     COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
