@@ -65,4 +65,34 @@ describe('join-validation', () => {
       expect(canFinalizeJoin(stats)).toBe(true);
     });
   });
+
+  describe('duplicate detection (TC-JOIN-008)', () => {
+    it('duplicateCount > 0 does not block finalization without unresolved entities', () => {
+      const stats = { joinedCount: 80, toVerifyCount: 0, duplicateCount: 81 };
+      expect(canFinalizeJoin(stats)).toBe(true);
+      expect(hasBlockingJoinIssues(stats)).toBe(false);
+    });
+
+    it('duplicateCount > 0 with unresolved entities blocks finalization', () => {
+      const stats = { joinedCount: 0, toVerifyCount: 82, duplicateCount: 81 };
+      expect(canFinalizeJoin(stats)).toBe(false);
+      expect(hasBlockingJoinIssues(stats)).toBe(true);
+    });
+
+    it('Year column scenario: all rows have same value creates duplicates but match count determines finalization', () => {
+      const statsWithMatches = {
+        joinedCount: 1,
+        toVerifyCount: 0,
+        duplicateCount: 81
+      };
+      expect(canFinalizeJoin(statsWithMatches)).toBe(true);
+
+      const statsWithoutMatches = {
+        joinedCount: 0,
+        toVerifyCount: 82,
+        duplicateCount: 81
+      };
+      expect(canFinalizeJoin(statsWithoutMatches)).toBe(false);
+    });
+  });
 });
