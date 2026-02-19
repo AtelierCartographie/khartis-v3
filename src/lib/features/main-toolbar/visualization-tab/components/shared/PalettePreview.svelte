@@ -3,7 +3,7 @@
   import * as m from '$lib/paraglide/messages';
   import PaletteModal from '../palette-modal.svelte';
 
-  type PaletteType = 'sequential' | 'diverging' | 'qualitative';
+  type PaletteType = 'sequential' | 'diverging' | 'qualitative' | 'pattern';
 
   interface Palette {
     id: string;

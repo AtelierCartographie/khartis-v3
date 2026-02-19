@@ -32,6 +32,7 @@
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const processedDataset = $derived.by(() =>
     selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
   );
@@ -57,7 +58,7 @@
     const tableName = selectedDataset.tableName;
 
     try {
-      const result = await duckDBOrchestrator.getFullAnalysis(tableName);
+      const result = await duckDBOrchestrator.getFullAnalysis(tableName, true);
       if (controller.signal.aborted) return;
       columnAnalysis = result;
       columnAnalysisLoaded = true;
@@ -71,31 +72,38 @@
   const dataFieldItems = $derived(() => {
     if (!selectedDataset) return [];
 
-    return selectedDataset.columns
+    const datasetColumnNames = selectedDataset.columns
       .filter(
         (col) =>
-          col.name !== INTERNAL_COLUMN.GEOMETRY && col.name !== INTERNAL_COLUMN.ID
+          col.name !== INTERNAL_COLUMN.GEOMETRY &&
+          col.name !== INTERNAL_COLUMN.ID
       )
-      .map((col, index) => {
-        const geoCol = geoDetection?.geoColumns.find(
-          (gc) => gc.columnName === col.name
-        );
+      .map((col) => col.name);
 
-        let displayText = col.name;
-        if (geoCol) {
-          const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-          displayText = `${col.name} – ${description}`;
-        }
+    return datasetColumnNames.map((columnName, index) => {
+      const geoCol = geoDetection?.geoColumns.find(
+        (gc) => gc.columnName === columnName
+      );
 
-        return {
-          id: index,
-          text: displayText,
-          columnName: col.name,
-          isGeo: !!geoCol,
-          confidence: geoCol?.confidence || 0
-        };
-      });
+      let displayText = columnName;
+      if (geoCol) {
+        const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
+        displayText = `${columnName} – ${description}`;
+      }
+
+      return {
+        id: index,
+        text: displayText,
+        columnName,
+        isGeo: !!geoCol,
+        confidence: geoCol?.confidence || 0
+      };
+    });
   });
+
+  const availableColumnNames = $derived(
+    new Set(dataFieldItems().map((item) => item.columnName))
+  );
 
   const bestGeoidColumn = $derived(() => {
     const geoidColumns = columnAnalysis
@@ -266,6 +274,7 @@
 
   $effect(() => {
     const tableName = selectedDataset?.tableName;
+    void duckDBDatasetsVersion;
     if (tableName) {
       loadColumnAnalysis();
     }
@@ -310,6 +319,51 @@
 
       hasAutoGeoreferenceInitialization = true;
     }
+  });
+
+  $effect(() => {
+    const availableColumns = availableColumnNames;
+    const geolocation = dataTabState.geolocation;
+
+    if (availableColumns.size === 0) return;
+
+    const geolocationUpdates: Partial<typeof geolocation> = {};
+    let hasUpdates = false;
+
+    if (
+      geolocation.linkedVariableName &&
+      !availableColumns.has(geolocation.linkedVariableName)
+    ) {
+      geolocationUpdates.linkedVariable = null;
+      geolocationUpdates.linkedVariableName = '';
+      previousAutoSelectedColumn = null;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.latitudeColumn &&
+      !availableColumns.has(geolocation.latitudeColumn)
+    ) {
+      geolocationUpdates.latitudeColumn = undefined;
+      latitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (
+      geolocation.longitudeColumn &&
+      !availableColumns.has(geolocation.longitudeColumn)
+    ) {
+      geolocationUpdates.longitudeColumn = undefined;
+      longitudeFieldId = undefined;
+      hasUpdates = true;
+    }
+
+    if (!hasUpdates) return;
+
+    dataTabActions.setGeolocationState(geolocationUpdates);
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(1);
+    dataTabStore.resetStepCompletion(2);
   });
 
   async function autoSelectBasemap() {

@@ -28,13 +28,13 @@
     flex-direction: column;
     gap: 32px;
     padding: 16px;
-    background-color: var(--cds-layer-01, #f4f4f4);
+    background-color: var(--cds-ui-01, #f4f4f4);
     min-height: 100%;
   }
 
   .toolbar-tab > :global(section),
   .toolbar-tab > :global(div) > :global(section) {
-    background-color: var(--cds-background, #ffffff);
+    background-color: var(--cds-ui-02, #ffffff);
     padding: 16px;
   }
 

@@ -6,8 +6,9 @@
     InlineNotification,
     TextInput
   } from 'carbon-components-svelte';
-  import { CheckmarkFilled, CloudUpload, Launch } from 'carbon-icons-svelte';
+  import { CloudUpload, Launch } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
 
   interface Props {
     importedBasemap: BasemapMetadata | null;
@@ -35,6 +36,7 @@
     '.geojson',
     '.json',
     '.shp',
+    '.zip',
     '.gpkg',
     '.kml',
     '.parquet'
@@ -104,12 +106,14 @@
   </div>
 
   {#if importedBasemap}
-    <div class="imported-file">
-      <span class="file-label">{m.basemap_import_file_imported()}</span>
-      <div class="file-row">
-        <span class="file-name">{importedBasemap.title}</span>
-        <CheckmarkFilled size={20} class="icon-success" />
-      </div>
+    <div class="imported-basemap-section">
+      <span class="section-label">{m.basemap_import_file_imported()}</span>
+      <BasemapCardVertical
+        basemap={importedBasemap}
+        selected={true}
+        showMatchScore={false}
+        variant="blue"
+      />
     </div>
   {/if}
 
@@ -205,31 +209,10 @@
     flex: 1;
   }
 
-  .imported-file {
-    background-color: var(--cds-ui-01);
-    padding: var(--cds-spacing-04);
-    border-radius: var(--cds-spacing-02);
-    border: 1px solid var(--cds-border-subtle);
-  }
-
-  .file-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-text-02);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .file-row {
+  .imported-basemap-section {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: var(--cds-spacing-02);
-  }
-
-  .file-name {
-    font-weight: 500;
-    color: var(--cds-text-01);
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
   }
 
   .learn-more-link {
@@ -247,9 +230,5 @@
 
   .learn-more-link :global(.bx--btn--ghost svg) {
     fill: var(--cds-text-helper, #6f6f6f);
-  }
-
-  :global(.icon-success) {
-    color: var(--cds-support-success);
   }
 </style>

@@ -2,7 +2,7 @@ import { MIME } from '$lib/features/commons/constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { PIPELINE_CONST, isGeospatialFile } from '../constants';
+import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
@@ -78,11 +78,15 @@ export async function processRemoteZipFile(
       for (const dataset of result.datasets) {
         dataset.sourceFileId = url;
       }
-      logger.success('Remote MIME.ZIP archive processed (multi)', LogCategory.DATA, {
-        url,
-        datasetCount: result.datasets.length,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
+      logger.success(
+        'Remote MIME.ZIP archive processed (multi)',
+        LogCategory.DATA,
+        {
+          url,
+          datasetCount: result.datasets.length,
+          durationMs: (performance.now() - start).toFixed(2)
+        }
+      );
       return result;
     }
 
@@ -94,10 +98,14 @@ export async function processRemoteZipFile(
     });
     return result;
   } catch (error) {
-    logger.error('Failed to process remote MIME.ZIP archive', LogCategory.DATA, {
-      url,
-      error
-    });
+    logger.error(
+      'Failed to process remote MIME.ZIP archive',
+      LogCategory.DATA,
+      {
+        url,
+        error
+      }
+    );
     throw error;
   }
 }

@@ -1,6 +1,11 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import {
+    SHAPE_TYPE,
+    SHAPE_TYPES,
+    type ShapeTypeValue
+  } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import {
     createColorValue,
@@ -52,15 +57,15 @@
     );
   }
 
-  const shapes = [
-    { value: 'arrow', text: m.annotations_shape_arrow() },
-    { value: 'line', text: m.annotations_shape_line() },
-    { value: 'rectangle', text: m.annotations_shape_rectangle() },
-    { value: 'circle', text: m.annotations_shape_circle() },
-    { value: 'triangle', text: m.triangle() }
+  const shapes: { value: ShapeTypeValue; text: string }[] = [
+    { value: SHAPE_TYPE.ARROW, text: m.annotations_shape_arrow() },
+    { value: SHAPE_TYPE.LINE, text: m.annotations_shape_line() },
+    { value: SHAPE_TYPE.RECTANGLE, text: m.annotations_shape_rectangle() },
+    { value: SHAPE_TYPE.CIRCLE, text: m.annotations_shape_circle() },
+    { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
   ];
 
-  let selectedShape = $state('arrow');
+  let selectedShape = $state<ShapeTypeValue>(SHAPE_TYPE.ARROW);
   let strokeColor = $state('#ffffff');
   let hue = $state(0);
   let saturation = $state(0);
@@ -84,6 +89,13 @@
       }
     }
   });
+
+  function handleShapeChange(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value;
+    if (SHAPE_TYPES.includes(value as ShapeTypeValue)) {
+      selectedShape = value as ShapeTypeValue;
+    }
+  }
 
   function handleAddShape() {
     annotationsActions.addAnnotation(AnnotationKind.SHAPE, selectedShape);
@@ -117,8 +129,7 @@
       <Select
         labelText={m.shape()}
         selected={selectedShape}
-        on:change={(e) =>
-          (selectedShape = (e.currentTarget as HTMLSelectElement).value)}
+        on:change={handleShapeChange}
       >
         {#each shapes as s (s.value)}
           <SelectItem value={s.value} text={s.text} />

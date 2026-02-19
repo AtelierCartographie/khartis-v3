@@ -203,7 +203,11 @@
     }
   }
 
-  function handleSourceChange() {
+  function handleSourceChange(event: Event) {
+    const target = event.target as HTMLSelectElement | null;
+    if (target?.value) {
+      searchSource = target.value;
+    }
     dataToolsStore.setSearchSource(searchSource);
     if (searchQuery.trim().length >= UI_CONSTANTS.MIN_SEARCH_LENGTH) {
       isSearching = true;
@@ -261,7 +265,9 @@
   const isSampled = $derived(searchStats.isSampled === true);
 
   const resultCountText = $derived(() => {
-    if (!searchQuery.trim()) return '';
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery || trimmedQuery.length < UI_CONSTANTS.MIN_SEARCH_LENGTH)
+      return '';
     if (!hasResults) return m.search_no_results();
 
     const parts: string[] = [];

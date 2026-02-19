@@ -13,11 +13,24 @@ export function getSelectedDataset(
 export function selectDataset(state: DatasetsState, datasetId: string): void {
   const dataset = findById(state.datasets, datasetId);
 
-  if (dataset && state.selectedDatasetId !== datasetId) {
+  if (!dataset) return;
+
+  if (state.selectedDatasetId === datasetId) {
     state.selectedDatasetId = datasetId;
+    return;
+  }
+
+  const previousDataset = state.selectedDatasetId
+    ? findById(state.datasets, state.selectedDatasetId)
+    : undefined;
+  const isSameSourceFile =
+    previousDataset?.sourceFileId === dataset.sourceFileId;
+
+  state.selectedDatasetId = datasetId;
+
+  // Keep data-tab state when a dataset gets replaced but still points to the same source file.
+  if (!isSameSourceFile) {
     dataTabActions.reset();
-  } else if (dataset) {
-    state.selectedDatasetId = datasetId;
   }
 }
 

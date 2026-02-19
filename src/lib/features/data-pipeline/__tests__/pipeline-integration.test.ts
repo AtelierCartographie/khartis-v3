@@ -1,5 +1,5 @@
-import { mkdtempSync, readFileSync, rmSync } from 'fs';
-import { join } from 'path';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { join, relative } from 'path';
 import { tmpdir } from 'os';
 import { unzipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -16,7 +16,7 @@ import {
 
 const ROOT = join(process.cwd(), 'tests-datasets');
 
-const NULL_VALUES = `['', ':', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'none', 'NONE']`;
+const NULL_VALUES = `['', ':', '-', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`;
 
 function csvReadSql(tableName: string, filePath: string): string {
   return `CREATE OR REPLACE TABLE "${tableName}" AS FROM read_csv('${filePath}', header=true, decimal_separator='.', normalize_names=true, nullstr=${NULL_VALUES})`;
@@ -30,6 +30,50 @@ let tableCounter = 0;
 
 function uniqueTableName(prefix: string): string {
   return `test_${prefix}_${++tableCounter}`;
+}
+
+const IMPORTABLE_FIXTURE_RULES = [
+  { prefix: 'csv/', extension: '.csv' },
+  { prefix: 'geojson/', extension: '.geojson' },
+  { prefix: 'gpkg/', extension: '.gpkg' },
+  { prefix: 'gpx/', extension: '.gpx' },
+  { prefix: 'kml-kmz/', extension: '.kml' },
+  { prefix: 'shp/', extension: '.shp' },
+  { prefix: 'zip/', extension: '.zip' }
+] as const;
+
+function isImportableFixture(relativePath: string): boolean {
+  return IMPORTABLE_FIXTURE_RULES.some(
+    (rule) =>
+      relativePath.startsWith(rule.prefix) &&
+      relativePath.endsWith(rule.extension)
+  );
+}
+
+function listImportableFixtures(
+  rootDir: string,
+  currentDir: string = rootDir
+): string[] {
+  const entries = readdirSync(currentDir, { withFileTypes: true });
+  const fixtures: string[] = [];
+
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue;
+
+    const absolutePath = join(currentDir, entry.name);
+
+    if (entry.isDirectory()) {
+      fixtures.push(...listImportableFixtures(rootDir, absolutePath));
+      continue;
+    }
+
+    const relativePath = relative(rootDir, absolutePath).split('\\').join('/');
+    if (isImportableFixture(relativePath)) {
+      fixtures.push(relativePath);
+    }
+  }
+
+  return fixtures.sort();
 }
 
 // ---------------------------------------------------------------------------
@@ -47,6 +91,7 @@ interface GeoTestCase {
   id: string;
   relativePath: string;
   format: string;
+  expectedGeometryTypes: string[];
 }
 
 // CDC 2.A.1 — CSV files that should import with data
@@ -55,6 +100,12 @@ const CSV_VALID: CsvTestCase[] = [
     id: 'fossil-fuel',
     relativePath: 'csv/fossil-fuel-subsidies-gdp-2021.csv',
     minRows: 80,
+    minCols: 4
+  },
+  {
+    id: 'fossil-fuel-bis',
+    relativePath: 'csv/fossil-fuel-subsidies-gdp-2021-bis.csv',
+    minRows: 10,
     minCols: 4
   },
   {
@@ -68,6 +119,18 @@ const CSV_VALID: CsvTestCase[] = [
     relativePath: 'csv/sites-seveso-idf.csv',
     minRows: 90,
     minCols: 3
+  },
+  {
+    id: 'seveso-invalid-gps',
+    relativePath: 'csv/sites-seveso-idf-invalid-gps.csv',
+    minRows: 4,
+    minCols: 3
+  },
+  {
+    id: 'fuzzy-countries',
+    relativePath: 'csv/fuzzy-countries.csv',
+    minRows: 4,
+    minCols: 2
   },
   {
     id: 'world-bank',
@@ -152,63 +215,95 @@ const GEO_FILES: GeoTestCase[] = [
   {
     id: 'geojson-star-lines',
     relativePath: 'geojson/lignes-du-reseau-star-de-rennes-metropole.geojson',
-    format: 'geojson'
+    format: 'geojson',
+    expectedGeometryTypes: ['MULTILINESTRING']
   },
   {
     id: 'geojson-nuts2',
     relativePath: 'geojson/nuts2_data.geojson',
-    format: 'geojson'
+    format: 'geojson',
+    expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
     id: 'gpkg-compagnies-herault',
     relativePath: 'gpkg/compagnies-herault-l93.gpkg',
-    format: 'gpkg'
+    format: 'gpkg',
+    expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
     id: 'gpkg-admin-express-glp',
     relativePath:
       'gpkg/ADMIN-EXPRESS_4-0__GPKG_RGAF09UTM20_GLP_2025-12-05/ADE_4-0_GPKG_RGAF09UTM20_GLP-ED2025-12-05.gpkg',
-    format: 'gpkg'
+    format: 'gpkg',
+    expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
     id: 'gpkg-ade-spaces',
     relativePath: 'gpkg/ADE 4.0 GPKG GLP ED Dec 5 2025.gpkg',
-    format: 'gpkg'
+    format: 'gpkg',
+    expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
     id: 'gpx-star-arrets',
     relativePath:
       'gpx/star_arrets_physiques_actifs/star_arrets_physiques_actifs.gpx',
-    format: 'gpx'
+    format: 'gpx',
+    expectedGeometryTypes: ['POINT']
   },
   {
     id: 'kml-aires-covoiturage',
     relativePath: 'kml-kmz/aires-covoiturage/aires-covoiturage.kml',
-    format: 'kml'
+    format: 'kml',
+    expectedGeometryTypes: ['POINT']
   },
   {
     id: 'shp-ne-50m',
     relativePath: 'shp/ne_50m/ne_50m_admin_0_countries_lakes.shp',
-    format: 'shp'
+    format: 'shp',
+    expectedGeometryTypes: ['POLYGON', 'MULTIPOLYGON']
   },
   {
     id: 'shp-star-lines',
     relativePath:
       'shp/lignes-du-reseau-star-de-rennes-metropole/lignes-du-reseau-star-de-rennes-metropole.shp',
-    format: 'shp'
+    format: 'shp',
+    expectedGeometryTypes: ['LINESTRING']
   },
   {
     id: 'shp-eez',
     relativePath:
       'shp/Marines-regionsEEZ_land_union_v3_202003/EEZ_Land_v3_202030.shp',
-    format: 'shp'
+    format: 'shp',
+    expectedGeometryTypes: ['POLYGON', 'MULTIPOLYGON']
   },
   {
     id: 'shp-mos-foncier',
     relativePath: 'shp/mos_foncier_agrege_com/mos_foncier_agrege_com.shp',
-    format: 'shp'
+    format: 'shp',
+    expectedGeometryTypes: ['POLYGON', 'MULTIPOLYGON']
   }
 ];
+
+const EXTRA_CSV_EDGE_FILES = [
+  'csv/csv-malformed--with-nothing.csv',
+  'csv/csv-malformed--with-header-only.csv',
+  'csv/csv-malformed--with-numeric-all-edge-cases.csv',
+  'csv/csv-malformed--with-numeric-formats-mixed.csv'
+] as const;
+
+const ZIP_FIXTURES = [
+  'zip/single-csv.zip',
+  'zip/multiple-csv.zip',
+  'zip/shapefile-complete.zip'
+] as const;
+
+const DECLARED_FIXTURE_PATHS = [
+  ...CSV_VALID.map(({ relativePath }) => relativePath),
+  ...CSV_MALFORMED.map(({ relativePath }) => relativePath),
+  ...EXTRA_CSV_EDGE_FILES,
+  ...GEO_FILES.map(({ relativePath }) => relativePath),
+  ...ZIP_FIXTURES
+].sort();
 
 // ---------------------------------------------------------------------------
 
@@ -224,6 +319,10 @@ describe(
 
     afterAll(async () => {
       await destroyTestInstance(db);
+    });
+
+    it('should cover every importable fixture from tests-datasets', () => {
+      expect(listImportableFixtures(ROOT)).toEqual(DECLARED_FIXTURE_PATHS);
     });
 
     // -----------------------------------------------------------------------
@@ -383,14 +482,14 @@ describe(
         );
         await db.connection.run(csvReadSql(tableName, filePath));
 
-        // CSV has: null, NULL, NA, N/A, #N/A, NaN, none, NONE, empty string
-        // With nullstr config, these should all become SQL NULL
+        // CSV has 12 rows and only one concrete value in the "value" column ("1000")
+        // so normalized NULL variants should yield 11 NULL rows.
         // DuckDB normalize_names=true prefixes reserved words with _
         const nullCount = await query(
           db,
           `SELECT count(*) - count("_value") AS nulls FROM "${tableName}"`
         );
-        expect(Number(nullCount[0].nulls)).toBeGreaterThan(0);
+        expect(Number(nullCount[0].nulls)).toBe(11);
 
         await dropTable(db, tableName);
       });
@@ -532,7 +631,7 @@ describe(
     describe('CDC 2.A.2 — geospatial import', () => {
       it.each(GEO_FILES)(
         'should ingest $id ($format) with geometry + data columns',
-        async ({ relativePath }) => {
+        async ({ relativePath, expectedGeometryTypes }) => {
           const tableName = uniqueTableName('geo');
           const filePath = join(ROOT, relativePath);
 
@@ -562,6 +661,7 @@ describe(
           expect(geoInfo.ymax).toEqual(expect.any(Number));
           expect(geoInfo.xmax).toBeGreaterThanOrEqual(geoInfo.xmin!);
           expect(geoInfo.ymax).toBeGreaterThanOrEqual(geoInfo.ymin!);
+          expect(expectedGeometryTypes).toContain(geoInfo.geometryType);
 
           await dropTable(db, tableName);
         }

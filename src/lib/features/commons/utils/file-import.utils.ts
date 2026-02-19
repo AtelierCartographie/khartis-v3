@@ -200,7 +200,10 @@ export function validateGeospatialFile(
         errors.push('Invalid GeoJSON: missing type property');
       }
 
-      if (geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION && !geojson.features) {
+      if (
+        geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
+        !geojson.features
+      ) {
         errors.push('Invalid GeoJSON: FeatureCollection missing features');
       }
 

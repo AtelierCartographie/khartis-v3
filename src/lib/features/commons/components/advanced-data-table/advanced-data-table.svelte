@@ -17,7 +17,7 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onMount, untrack } from 'svelte';
+  import { onMount, untrack, type Component } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
@@ -40,6 +40,19 @@
 
   const LOCAL_UPDATE_DELAY_MS = 100;
   const SCROLL_TO_CELL_DEBOUNCE_MS = 150;
+
+  interface DataTableSkeletonRuntimeProps {
+    columns?: number;
+    rows?: number;
+    size?: 'compact' | 'short' | 'tall';
+    zebra?: boolean;
+    showHeader?: boolean;
+    headers?: ReadonlyArray<string | { value?: unknown; empty?: boolean }>;
+    showToolbar?: boolean;
+  }
+
+  const TypedDataTableSkeleton =
+    DataTableSkeleton as unknown as Component<DataTableSkeletonRuntimeProps>;
 
   export type HighlightType =
     | 'exact'
@@ -67,6 +80,7 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
+    onColumnDeleted?: (columnName: string) => void;
   }
 
   let {
@@ -81,7 +95,8 @@
     isSelectable = false,
     isReadOnly = false,
     datasetVersion,
-    onSelectionChange
+    onSelectionChange,
+    onColumnDeleted
   }: Props = $props();
 
   let histogramVisible = $state(true);
@@ -187,6 +202,7 @@
       await tableData.loadRowsData();
     },
     onRecordTransformation: recordTransformation,
+    onColumnDeleted: (columnName: string) => onColumnDeleted?.(columnName),
     onColumnRenamed: (oldName: string) => {
       columnToRename = oldName;
       newColumnName = oldName;
@@ -213,6 +229,15 @@
       hasDataSource &&
       filters.numRows === 0 &&
       filters.filterStats.total > 0
+  );
+
+  // Defensive guard: during rapid dataset/table switches, transient invalid
+  // column entries can appear and break keyed reconciliation in Svelte.
+  const safeVisibleColumns = $derived.by(() =>
+    columnOps.visibleColumns.filter(
+      (column): column is { name: string; type: string } =>
+        typeof column?.name === 'string' && column.name.length > 0
+    )
   );
 
   async function handleSort(column: string, order: 'ASC' | 'DESC') {
@@ -510,15 +535,6 @@
   const skeletonRows = $derived(
     Math.floor((effectiveMaxRows * rowHeight) / skeletonRowHeight)
   );
-
-  const getSkeletonProps = () =>
-    ({
-      columns: 5,
-      rows: skeletonRows,
-      size: 'compact',
-      showHeader: false,
-      showToolbar: false
-    }) as any;
 </script>
 
 <div class="advanced-data-table">
@@ -582,7 +598,7 @@
                   {/if}
                 </div>
               </th>
-              {#each columnOps.visibleColumns as column (column.name)}
+              {#each safeVisibleColumns as column, columnIndex (`${column.name}-${columnIndex}`)}
                 <TableColumnHeader
                   column={column}
                   analysis={tableData.columnAnalysis.get(column.name)}
@@ -609,7 +625,7 @@
               <TableRow
                 row={row}
                 rowIndex={rowIndex}
-                visibleColumns={columnOps.visibleColumns}
+                visibleColumns={safeVisibleColumns}
                 highlightType={getRowHighlightType(rowIndex, row)}
                 getCellHighlight={(colName) =>
                   getCellHighlightType(rowId, colName)}
@@ -626,7 +642,13 @@
 
       {#if !tableData.isFullyLoaded}
         <div class="skeleton-overlay" style="max-height: {maxHeight}px;">
-          <DataTableSkeleton {...getSkeletonProps()} />
+          <TypedDataTableSkeleton
+            columns={5}
+            rows={skeletonRows}
+            size="compact"
+            showHeader={false}
+            showToolbar={false}
+          />
         </div>
       {/if}
     </div>
@@ -724,7 +746,7 @@
   .table-container {
     overflow-y: auto;
     overflow-x: auto;
-    background-color: #ffffff;
+    background-color: var(--cds-ui-01, #ffffff);
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -756,7 +778,7 @@
     position: sticky;
     top: 0;
     z-index: var(--z-content);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
   }
 
   thead .selection-header-spacer {
@@ -765,7 +787,7 @@
     max-width: 32px;
     padding: 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
     position: sticky;
     left: 0;
     z-index: var(--z-base);
@@ -775,8 +797,8 @@
   tr.histograms-open .selection-header-spacer {
     background: linear-gradient(
       to bottom,
-      #e0e0e0 calc(100% - 63px),
-      #f4f4f4 calc(100% - 63px)
+      var(--cds-ui-03, #e0e0e0) calc(100% - 63px),
+      var(--cds-ui-01, #f4f4f4) calc(100% - 63px)
     );
   }
 
@@ -786,7 +808,7 @@
     max-width: 52px;
     padding: 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: #e0e0e0;
+    background-color: var(--cds-ui-03, #e0e0e0);
     vertical-align: top;
     overflow: visible;
     position: relative;
@@ -814,7 +836,7 @@
     justify-content: center;
     height: 63px;
     flex-shrink: 0;
-    background-color: #f4f4f4;
+    background-color: var(--cds-ui-01, #f4f4f4);
     line-height: 1.2;
   }
 
@@ -822,7 +844,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
     font-weight: 600;
-    color: #161616;
+    color: var(--cds-text-01, #161616);
     line-height: 1;
   }
 
@@ -830,7 +852,7 @@
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 10px;
     font-weight: 400;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     line-height: 1;
   }
 
@@ -843,13 +865,13 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: #525252;
+    color: var(--cds-text-02, #525252);
     cursor: pointer;
     transition: color 0.15s;
   }
 
   .histogram-toggle:hover {
-    color: #161616;
+    color: var(--cds-text-01, #161616);
   }
 
   .skeleton-overlay {

@@ -147,6 +147,7 @@
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
         onSymbolsChange={onSymbolsChange}
+        onMappingChange={onMappingChange}
         onMissingDataChange={onMissingDataChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
@@ -161,6 +162,7 @@
         onModesChange={onModesChange}
         onStyleChange={onStyleChange}
         onMissingDataChange={onMissingDataChange}
+        onClassificationChange={onClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -168,6 +170,7 @@
       <SymbolModeCategories
         dataFields={dataFields}
         visualization={visualization}
+        onSymbolsChange={onSymbolsChange}
         onMappingChange={onMappingChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}

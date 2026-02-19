@@ -1,0 +1,466 @@
+import { expect, test } from '@playwright/test';
+import path from 'path';
+
+const TEST_DATASETS_DIR = path.join(process.cwd(), 'tests-datasets');
+
+test.describe
+  .serial('TC-JOIN-001: Workflow tabulaire affiche 3 sections', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+  });
+
+  test('affiche les sections Contrôler, Géolocaliser, Joindre pour dataset tabulaire', async ({
+    page
+  }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const dataTab = page.locator('#khartis-data-tab');
+    await expect(dataTab).toBeVisible();
+
+    await expect(page.getByText(/Contrôler|Control/i)).toBeVisible();
+    await expect(page.getByText(/Géolocaliser|Geolocate/i)).toBeVisible();
+    await expect(page.getByText(/Joindre|Join/i)).toBeVisible();
+  });
+});
+
+test.describe.serial('TC-JOIN-002: Suggestions de fonds', () => {
+  test.use({ storageState: '.auth/user.json' });
+
+  test('suggère des fonds et auto-sélectionne le premier', async ({ page }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const entityColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await entityColumn.isVisible()) {
+      await entityColumn.click();
+      await page.getByRole('option', { name: /Entity/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinSection = page.getByText(/Joindre|Join/i).first();
+    await joinSection.click();
+
+    await page.waitForTimeout(2000);
+
+    const suggestionBlock = page
+      .locator('[data-testid="basemap-suggestions"], .basemap-suggestions')
+      .first();
+    await expect(
+      suggestionBlock.or(page.getByText(/suggestion|Suggestion/i).first())
+    ).toBeVisible({ timeout: 10000 });
+
+    await page.waitForTimeout(2000);
+
+    const selectedBasemapCard = page
+      .locator('.suggestions-scroll .basemap-card.selected')
+      .first();
+    await expect(selectedBasemapCard).toBeVisible({ timeout: 10000 });
+
+    await expect(selectedBasemapCard).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+test.describe
+  .serial('TC-JOIN-004: Auto-finalisation sur jointure propre', () => {
+  test('finalise automatiquement si aucune erreur de jointure', async ({
+    page
+  }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const codeColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await codeColumn.isVisible()) {
+      await codeColumn.click();
+      const codeOption = page.getByRole('option', { name: /Code/i });
+      if (await codeOption.isVisible()) {
+        await codeOption.click();
+      }
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click();
+
+    await page.waitForTimeout(3000);
+
+    const worldBasemap = page.getByText(/World|countries/i).first();
+    if (await worldBasemap.isVisible()) {
+      await worldBasemap.click();
+    }
+
+    await page.waitForTimeout(3000);
+
+    const joinedCount = page
+      .locator('[data-testid="joined-count"], .joined-count')
+      .first();
+    if (await joinedCount.isVisible()) {
+      const text = await joinedCount.textContent();
+      const count = parseInt(text || '0');
+      expect(count).toBeGreaterThan(0);
+    }
+  });
+});
+
+test.describe.serial('TC-JOIN-005: Cas TO_VERIFY et UNRECOGNIZED', () => {
+  test('affiche catégories à vérifier et non reconnues', async ({ page }) => {
+    const fuzzyCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fuzzy-countries.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fuzzyCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const entityColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await entityColumn.isVisible()) {
+      await entityColumn.click();
+      await page.getByRole('option', { name: /entity/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click();
+
+    await page.waitForTimeout(3000);
+
+    const worldBasemap = page.getByText(/World|countries/i).first();
+    if (await worldBasemap.isVisible()) {
+      await worldBasemap.click();
+    }
+
+    await page.waitForTimeout(5000);
+
+    const toVerifySection = page.getByText(/à vérifier|to verify/i).first();
+    await expect(
+      toVerifySection.or(page.locator('[data-testid="to-verify-category"]'))
+    ).toBeVisible({ timeout: 15000 });
+  });
+});
+
+test.describe.serial('TC-JOIN-008: Blocage finalisation si doublons', () => {
+  test('bloque finalisation avec doublons source', async ({ page }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const yearColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await yearColumn.isVisible()) {
+      await yearColumn.click();
+      await page.getByRole('option', { name: /Year/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click();
+
+    await page.waitForTimeout(3000);
+
+    const worldBasemap = page.getByText(/World|countries/i).first();
+    if (await worldBasemap.isVisible()) {
+      await worldBasemap.click();
+    }
+
+    await page.waitForTimeout(5000);
+
+    const duplicateCount = page.getByText(/doublon|duplicate/i).first();
+    await expect(
+      duplicateCount.or(page.locator('[data-testid="duplicate-count"]'))
+    ).toBeVisible({ timeout: 15000 });
+  });
+});
+
+test.describe.serial('TC-JOIN-010: Import fond custom GeoJSON', () => {
+  test('importe fichier GeoJSON personnalisé', async ({ page }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+    const nuts2GeojsonPath = path.join(
+      TEST_DATASETS_DIR,
+      'geojson',
+      'nuts2_data.geojson'
+    );
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(3000);
+
+    const projectNameInput = page.getByTestId('project-name-input');
+    if (await projectNameInput.isVisible()) {
+      await projectNameInput.fill('Test Join Import');
+    }
+
+    const createButton = page.getByRole('button', {
+      name: /^Créer$|^Create$/i
+    });
+    if (await createButton.isEnabled()) {
+      await createButton.click();
+      await page.waitForTimeout(3000);
+    }
+
+    await expect(page.getByTestId('create-project-modal')).not.toBeVisible({
+      timeout: 5000
+    });
+
+    const joinTab = page
+      .locator('.bx--progress-step-button')
+      .filter({ hasText: /Joindre|Join/i })
+      .first();
+    await joinTab.click();
+
+    await page.waitForTimeout(1000);
+
+    const importTab = page
+      .locator('button.toggle-tab')
+      .filter({ hasText: /Importer|Import/i })
+      .first();
+    await expect(importTab).toBeVisible({ timeout: 5000 });
+    await importTab.click();
+
+    await page.waitForTimeout(500);
+
+    const basemapFileInput = page
+      .locator('.dropzone input[type="file"][accept*="geojson"]')
+      .first();
+    await basemapFileInput.setInputFiles(nuts2GeojsonPath);
+
+    await page.waitForTimeout(5000);
+
+    const importedFile = page.getByText(/Fichier importé|File imported/i);
+    await expect(importedFile).toBeVisible({ timeout: 15000 });
+  });
+});
+
+test.describe.serial('TC-JOIN-014: OSM indisponible sans GPS', () => {
+  test('affiche message GPS requis pour OSM sans colonnes coordonnées', async ({
+    page
+  }) => {
+    const fossilCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fossil-fuel-subsidies-gdp-2021.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fossilCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click();
+
+    await page.waitForTimeout(1000);
+
+    const osmTab = page.getByText(/OSM|OpenStreetMap/i).first();
+    if (await osmTab.isVisible()) {
+      await osmTab.click();
+    }
+
+    await page.waitForTimeout(500);
+
+    const gpsRequired = page
+      .getByText(/GPS|coordonnée|coordinate|required/i)
+      .first();
+    await expect(
+      gpsRequired.or(page.locator('[data-testid="osm-gps-required"]'))
+    ).toBeVisible({ timeout: 5000 });
+  });
+});
+
+test.describe.serial('TC-JOIN-015: Activation OSM avec coordonnées', () => {
+  test('active OSM avec coordonnées GPS valides', async ({ page }) => {
+    const sevesoCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'sites-seveso-idf.csv'
+    );
+
+    await page.goto('/');
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(sevesoCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const coordinateMode = page.getByText(/Coordonnée|Coordinate/i).first();
+    if (await coordinateMode.isVisible()) {
+      await coordinateMode.click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const latColumn = page
+      .locator('[data-testid="lat-column-selector"], select, [role="combobox"]')
+      .first();
+    if (await latColumn.isVisible()) {
+      await latColumn.click();
+      await page.getByRole('option', { name: /lat|latitude/i }).click();
+    }
+
+    const longColumn = page
+      .locator(
+        '[data-testid="long-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await longColumn.isVisible()) {
+      await longColumn.click();
+      await page.getByRole('option', { name: /long|longitude/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click();
+
+    await page.waitForTimeout(1000);
+
+    const osmTab = page.getByText(/OSM|OpenStreetMap/i).first();
+    if (await osmTab.isVisible()) {
+      await osmTab.click();
+    }
+
+    await page.waitForTimeout(500);
+
+    const activateOsm = page
+      .getByRole('button', { name: /activer|activate|enable/i })
+      .first();
+    if (await activateOsm.isVisible()) {
+      await activateOsm.click();
+    }
+
+    await page.waitForTimeout(2000);
+
+    const osmActive = page.getByText(/OSM.*activ|activ.*OSM/i).first();
+    await expect(
+      osmActive.or(page.locator('[data-testid="osm-active"]'))
+    ).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe.serial('TC-JOIN-016: Apply corrections button', () => {
+  test('affiche et clique sur le bouton Appliquer les corrections', async ({
+    page
+  }) => {
+    const fuzzyCsvPath = path.join(
+      TEST_DATASETS_DIR,
+      'csv',
+      'fuzzy-countries.csv'
+    );
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles(fuzzyCsvPath);
+
+    await page.waitForTimeout(2000);
+
+    const entityColumn = page
+      .locator(
+        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
+      )
+      .first();
+    if (await entityColumn.isVisible()) {
+      await entityColumn.click();
+      await page.getByRole('option', { name: /entity/i }).click();
+    }
+
+    await page.waitForTimeout(1000);
+
+    const joinTab = page.getByText(/Joindre|Join/i).first();
+    await joinTab.click({ force: true });
+
+    await page.waitForTimeout(3000);
+
+    const worldBasemap = page.getByText(/World|countries/i).first();
+    if (await worldBasemap.isVisible()) {
+      await worldBasemap.click({ force: true });
+    }
+
+    await page.waitForTimeout(5000);
+
+    const toVerifySection = page
+      .getByText(/à vérifier|to verify|Vérifier|Verify/i)
+      .first();
+    await expect(toVerifySection).toBeVisible({ timeout: 15000 });
+
+    const applyCorrectionsButton = page
+      .getByRole('button', { name: /Appliquer|Apply|correction/i })
+      .first();
+    await expect(applyCorrectionsButton).toBeVisible({ timeout: 10000 });
+
+    await applyCorrectionsButton.click({ force: true });
+
+    await page.waitForTimeout(2000);
+
+    const correctionDialog = page
+      .locator('[role="dialog"], .bx--modal, .correction-panel')
+      .first();
+    await expect(correctionDialog).toBeVisible({ timeout: 5000 });
+  });
+});

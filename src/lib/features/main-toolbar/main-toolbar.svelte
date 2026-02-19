@@ -72,15 +72,11 @@
 
 <nav
   id="khartis-main-toolbar"
-  class={clsx(
-    'app-shadow bg-white scrollbar-hidden',
-    globalState.toolbarState,
-    {
-      'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
-    }
-  )}
+  class={clsx('app-shadow scrollbar-hidden', globalState.toolbarState, {
+    'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
+  })}
 >
-  <header class="flex sticky z-1000 bg-white border-b main-toolbar-header">
+  <header class="flex sticky z-1000 border-b main-toolbar-header">
     {#if globalState.toolbarState === ToolbarState.Compact}
       <Button
         kind="ghost"
@@ -145,7 +141,7 @@
 
     <footer
       class={clsx(
-        'toolbar-footer bg-white p-5 border-t z-50',
+        'toolbar-footer p-5 border-t z-50',
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
@@ -271,6 +267,8 @@
 
   .main-toolbar-header {
     top: 1px !important;
+    background-color: var(--cds-ui-01);
+    border-color: var(--cds-border-subtle-00);
   }
 
   .toolbar-content {
@@ -282,5 +280,7 @@
 
   .toolbar-footer {
     flex-shrink: 0;
+    background-color: var(--cds-ui-01);
+    border-color: var(--cds-border-subtle-00);
   }
 </style>

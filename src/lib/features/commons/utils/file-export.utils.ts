@@ -123,7 +123,10 @@ export function exportToGeoJson(data: unknown): Blob {
 
   let geojson: unknown;
 
-  if (dataObj.type === GEOJSON_TYPE.FEATURE_COLLECTION || dataObj.type === GEOJSON_TYPE.FEATURE) {
+  if (
+    dataObj.type === GEOJSON_TYPE.FEATURE_COLLECTION ||
+    dataObj.type === GEOJSON_TYPE.FEATURE
+  ) {
     geojson = dataObj;
   } else if (Array.isArray(data)) {
     geojson = {
@@ -131,7 +134,8 @@ export function exportToGeoJson(data: unknown): Blob {
       features: data
         .filter(
           (item: Record<string, unknown>) =>
-            item.type === GEOJSON_TYPE.FEATURE || (item.geometry && item.properties)
+            item.type === GEOJSON_TYPE.FEATURE ||
+            (item.geometry && item.properties)
         )
         .map((item: Record<string, unknown>) => {
           if (item.type === GEOJSON_TYPE.FEATURE) return item;

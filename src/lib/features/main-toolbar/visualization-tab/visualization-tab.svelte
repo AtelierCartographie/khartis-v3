@@ -16,7 +16,10 @@
   import CustomizeBasemap from './customize-basemap.svelte';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
   import { onMount } from 'svelte';
-  import { mapSuggestionToType } from './suggestion.utils';
+  import {
+    mapSuggestionToType,
+    resolveDatasetGeometryType
+  } from './suggestion.utils';
 
   let configureSection: HTMLElement | undefined = $state();
   let initializedDatasetIds = $state<string[]>([]);
@@ -73,7 +76,7 @@
     }>;
     geometry?: { type?: string | null };
   }): VizSuggestion | undefined {
-    const geometryType = dataset.geometry?.type;
+    const geometryType = resolveDatasetGeometryType(dataset);
     if (!geometryType) return undefined;
 
     const suggestions = vizSuggester.suggestVisualizations(

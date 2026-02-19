@@ -2,15 +2,16 @@ import {
   AnnotationKind,
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
+import {
+  ANNOTATION_ROLE,
+  type AnnotationRoleValue
+} from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 
-export type PageElementRole =
-  | 'title'
-  | 'subtitle'
-  | 'source'
-  | 'basemap_source'
-  | 'signature'
-  | 'credit';
+export type PageElementRole = Exclude<
+  AnnotationRoleValue,
+  typeof ANNOTATION_ROLE.NOTE
+>;
 
 export interface Annotation {
   id: string;
