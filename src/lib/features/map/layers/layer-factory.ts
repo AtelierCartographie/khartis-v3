@@ -23,7 +23,8 @@ import type {
   DeckDataRow,
   GeometryInfo,
   LayerContext,
-  RGBColor
+  RGBColor,
+  ThematicLayer
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
@@ -200,7 +201,7 @@ function createTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
   ctx: LayerContext
-): Layer<DeckDataRow>[] {
+): ThematicLayer[] {
   const viz = ctx.viz;
   if (!viz?.mapping.labelColumn) {
     return [];
@@ -234,7 +235,7 @@ function createTextOverlayLayers(
     return [];
   }
 
-  const layers: Layer<DeckDataRow>[] = [];
+  const layers: ThematicLayer[] = [];
 
   if (shouldRenderLabelLayer) {
     const labelData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
@@ -275,7 +276,7 @@ function createTextOverlayLayers(
             outlineColor: [viz.style.labelHaloColor],
             outlineWidth: [viz.style.labelHalo, viz.style.labelHaloWidth]
           }
-        }) as unknown as Layer<DeckDataRow>
+        }) as ThematicLayer
       );
     }
   }
@@ -326,7 +327,7 @@ function createTextOverlayLayers(
             outlineColor: [viz.style.textHaloColor],
             outlineWidth: [viz.style.textHalo, viz.style.textHaloWidth]
           }
-        }) as unknown as Layer<DeckDataRow>
+        }) as ThematicLayer
       );
     }
   }
@@ -453,7 +454,8 @@ export function createPointLayers(
             useCategoricalColor,
             viz?.mapping.categoryColumn,
             categoryColorMap,
-            fillColor
+            fillColor,
+            hasHighlights
           ],
           getPointRadius: [
             useProportionalSymbols,
@@ -464,7 +466,7 @@ export function createPointLayers(
             viz?.symbols?.maxSize,
             viz?.symbols?.sizeScale
           ],
-          getLineColor: [strokeColor, strokeOpacity]
+          getLineColor: [strokeColor, strokeOpacity, hasHighlights]
         }
       })
     ];
@@ -509,7 +511,8 @@ export function createPointLayers(
         useCategoricalColor,
         viz?.mapping.categoryColumn,
         categoryColorMap,
-        fillColor
+        fillColor,
+        hasHighlights
       ],
       getRadius: [
         useProportionalSymbols,
@@ -520,8 +523,9 @@ export function createPointLayers(
         viz?.symbols?.maxSize,
         viz?.symbols?.sizeScale
       ],
-      getLineColor: [strokeColor, strokeOpacity]
-    }
+      getLineColor: [strokeColor, strokeOpacity, hasHighlights]
+    },
+    dataComparator: (newData, oldData) => newData === oldData
   };
 
   return [new geodecklayers.GeoArrowScatterplotLayer(scatterplotProps)];
@@ -646,7 +650,8 @@ export function createLineLayers(
           viz?.classification?.colors,
           categoryColorMap,
           resolvedLineColor,
-          fillOpacity
+          fillOpacity,
+          hasLineHighlights
         ],
         getWidth: [
           useProportionalWidth,
@@ -657,7 +662,8 @@ export function createLineLayers(
           resolvedSizeScale,
           resolvedLineWidth
         ]
-      }
+      },
+      dataComparator: (newData, oldData) => newData === oldData
     };
 
     return [new geodecklayers.GeoArrowPathLayer(pathProps)];
@@ -760,7 +766,8 @@ export function createLineLayers(
           viz?.classification?.colors,
           categoryColorMap,
           resolvedLineColor,
-          fillOpacity
+          fillOpacity,
+          hasLineHighlights
         ],
         getLineWidth: [
           useProportionalWidth,
@@ -872,10 +879,12 @@ export function createPolygonLayers(
           viz?.mapping.valueColumn,
           viz?.classification?.breaks,
           viz?.classification?.colors,
-          fillColor
+          fillColor,
+          hasPolyHighlights
         ],
-        getLineColor: [strokeColor, strokeOpacity]
-      }
+        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights]
+      },
+      dataComparator: (newData, oldData) => newData === oldData
     };
 
     return [new geodecklayers.GeoArrowPolygonLayer(polygonProps)];
@@ -948,9 +957,10 @@ export function createPolygonLayers(
           viz?.mapping.valueColumn,
           viz?.classification?.breaks,
           viz?.classification?.colors,
-          fillColor
+          fillColor,
+          hasPolyHighlights
         ],
-        getLineColor: [strokeColor, strokeOpacity]
+        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights]
       }
     })
   ];

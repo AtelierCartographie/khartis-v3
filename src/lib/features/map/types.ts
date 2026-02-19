@@ -30,6 +30,8 @@ export type {
 
 export type DeckDataRow = Record<string, unknown>;
 
+export type ThematicLayer = import('@deck.gl/core').Layer<DeckDataRow>;
+
 export interface MapPosition {
   center: { lng: number; lat: number };
   zoom: number;
