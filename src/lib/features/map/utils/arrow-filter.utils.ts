@@ -3,6 +3,14 @@ import { Table } from 'apache-arrow/Arrow';
 import type { YearFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
+interface YearFilterCacheEntry {
+  column: string;
+  value: number | string;
+  result: ArrowTable;
+}
+
+const yearFilterCache = new WeakMap<ArrowTable, YearFilterCacheEntry>();
+
 export function filterArrowTableByYear(
   table: ArrowTable,
   yearFilter: YearFilter | undefined
@@ -10,6 +18,13 @@ export function filterArrowTableByYear(
   if (!yearFilter) return table;
 
   const { column, value } = yearFilter;
+
+  // Check cache: same table reference + same filter params → return cached result
+  const cached = yearFilterCache.get(table);
+  if (cached && cached.column === column && cached.value === value) {
+    return cached.result;
+  }
+
   const columnIndex = table.schema.fields.findIndex(
     (field) => field.name === column
   );
@@ -60,6 +75,7 @@ export function filterArrowTableByYear(
   }
 
   if (matchingIndices.length === table.numRows) {
+    yearFilterCache.set(table, { column, value, result: table });
     return table;
   }
 
@@ -81,8 +97,11 @@ export function filterArrowTableByYear(
     .filter((b): b is NonNullable<typeof b> => b !== null);
 
   if (filteredBatches.length === 0) {
+    yearFilterCache.set(table, { column, value, result: table });
     return table;
   }
 
-  return new Table(table.schema, filteredBatches) as ArrowTable;
+  const result = new Table(table.schema, filteredBatches) as ArrowTable;
+  yearFilterCache.set(table, { column, value, result });
+  return result;
 }
