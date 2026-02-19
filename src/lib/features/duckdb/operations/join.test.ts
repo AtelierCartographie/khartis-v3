@@ -111,4 +111,80 @@ describe('join operation guard rails', () => {
     expect(ctx.cacheState.size).toBe(0);
     expect(ctx.cacheState.accessOrder).toEqual([]);
   });
+
+  it('builds and records join metadata for a specific basemap table', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([
+        {
+          basemap: 'world',
+          share_basemap: 0.7,
+          share_candidate: 0.9
+        }
+      ]);
+    const ctx = createBaseContext();
+
+    const result = await joinById(ctx, 'dataset_table', 'country', {
+      basemap_table: 'world_basemap',
+      basemap_id: 'iso_a3'
+    });
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(3);
+    expect(executeQueryMock.mock.calls[0][1]).toContain(
+      "get_join_table_from_basemap('world_basemap', 'iso_a3')"
+    );
+    expect(executeQueryMock.mock.calls[1][1]).toContain(
+      'CREATE OR REPLACE TABLE "dataset_table_join_results"'
+    );
+    expect(executeQueryMock.mock.calls[2][1]).toContain(
+      "FROM join_synthesis('dataset_table_join_results')"
+    );
+
+    expect(result).toEqual([
+      {
+        basemap: 'world',
+        share_basemap: 0.7,
+        share_candidate: 0.9
+      }
+    ]);
+    expect(ctx.table_metadata.get('dataset_table')?.join).toEqual({
+      id: 'country',
+      join_results_name: 'dataset_table_join_results',
+      basemap_join_ref: 'world_basemap_join_ref'
+    });
+  });
+
+  it('uses unified basemap attributes when custom attributes table has entries', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([{ cnt: 1 }])
+      .mockResolvedValueOnce([{ count: 2 }])
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([
+        {
+          basemap: 'world',
+          share_basemap: 0.5,
+          share_candidate: 0.5
+        }
+      ]);
+    const ctx = createBaseContext();
+
+    await joinById(ctx, 'dataset_table', 'country', {
+      basemaps_table: 'basemap_attributes'
+    });
+
+    expect(executeQueryMock).toHaveBeenCalledTimes(5);
+    expect(executeQueryMock.mock.calls[2][1]).toContain(
+      'CREATE OR REPLACE TABLE "unified_basemap_attributes"'
+    );
+    expect(executeQueryMock.mock.calls[3][1]).toContain(
+      "get_similarity(geoname, 'unified_basemap_attributes')"
+    );
+    expect(ctx.table_metadata.get('dataset_table')?.join).toEqual({
+      id: 'country',
+      join_results_name: 'dataset_table_join_results',
+      basemap_join_ref: null
+    });
+  });
 });

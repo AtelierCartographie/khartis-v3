@@ -35,7 +35,7 @@
   let variableName = $state(dataToolsStore.calculatorName || '');
   let formula = $state(dataToolsStore.calculatorFormula || '');
   let selectedVariable = $state('');
-  let selectedFunction = $state('moyenne');
+  let selectedFunction = $state('list_avg');
   let testResult = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
   let isTesting = $state(false);
@@ -193,7 +193,8 @@
   }
 
   function insertFunction() {
-    const fn = FUNCTIONS.find((f) => f.value === selectedFunction);
+    const fn =
+      FUNCTIONS.find((f) => f.value === selectedFunction) ?? FUNCTIONS[0];
     if (!fn) return;
 
     const col = selectedVariable || m.calc_column_default();

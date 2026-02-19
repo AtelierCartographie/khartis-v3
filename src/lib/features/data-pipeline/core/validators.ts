@@ -61,26 +61,3 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 
   return validationSuccess(warnings);
 }
-
-export function validateFileExtension(
-  file: File,
-  allowedExtensions: string[]
-): ValidationResult {
-  const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
-  if (!allowedExtensions.includes(ext)) {
-    return validationFailure([m.pipeline_error_unsupported_extension({ ext })]);
-  }
-  return validationSuccess();
-}
-
-export function validateMimeType(
-  file: File,
-  allowedMimeTypes: string[]
-): ValidationResult {
-  if (!allowedMimeTypes.some((mime) => file.type.includes(mime))) {
-    return validationFailure([
-      m.pipeline_error_unsupported_mime({ type: file.type })
-    ]);
-  }
-  return validationSuccess();
-}

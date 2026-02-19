@@ -47,6 +47,7 @@
   let displayGeoJSONs = $state<SvelteMap<string, FeatureCollection>>(
     new SvelteMap<string, FeatureCollection>()
   );
+  let displayDataVersion = $state(0);
 
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -60,6 +61,45 @@
 
   function isStaleLoad(generation: number): boolean {
     return loadGeneration !== generation;
+  }
+
+  function bumpDisplayDataVersion(): void {
+    displayDataVersion += 1;
+  }
+
+  function setDisplayArrowTable(datasetId: string, table: ArrowTable): void {
+    const previousTable = displayTables.get(datasetId);
+    const hadGeoJSON = displayGeoJSONs.has(datasetId);
+
+    displayTables.set(datasetId, table);
+    displayGeoJSONs.delete(datasetId);
+
+    if (previousTable !== table || hadGeoJSON) {
+      displayTables = new SvelteMap(displayTables);
+      if (hadGeoJSON) {
+        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      }
+      bumpDisplayDataVersion();
+    }
+  }
+
+  function setDisplayGeoJSON(
+    datasetId: string,
+    geoJSON: FeatureCollection
+  ): void {
+    const previousGeoJSON = displayGeoJSONs.get(datasetId);
+    const hadTable = displayTables.has(datasetId);
+
+    displayGeoJSONs.set(datasetId, geoJSON);
+    displayTables.delete(datasetId);
+
+    if (previousGeoJSON !== geoJSON || hadTable) {
+      displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      if (hadTable) {
+        displayTables = new SvelteMap(displayTables);
+      }
+      bumpDisplayDataVersion();
+    }
   }
 
   async function loadGeoDatasetTable(
@@ -118,8 +158,18 @@
   }
 
   function removeDatasetFromDisplay(datasetId: string): void {
-    displayTables.delete(datasetId);
-    displayGeoJSONs.delete(datasetId);
+    const removedTable = displayTables.delete(datasetId);
+    const removedGeoJSON = displayGeoJSONs.delete(datasetId);
+
+    if (removedTable || removedGeoJSON) {
+      if (removedTable) {
+        displayTables = new SvelteMap(displayTables);
+      }
+      if (removedGeoJSON) {
+        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      }
+      bumpDisplayDataVersion();
+    }
   }
 
   async function loadJoinedBasemap(
@@ -155,8 +205,7 @@
       }
 
       if (joinedTable) {
-        displayTables.set(datasetId, joinedTable);
-        displayGeoJSONs.delete(datasetId);
+        setDisplayArrowTable(datasetId, joinedTable);
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
           datasetId,
           rows: joinedTable.numRows,
@@ -202,8 +251,7 @@
       }
 
       if (table) {
-        displayTables.set(datasetId, table);
-        displayGeoJSONs.delete(datasetId);
+        setDisplayArrowTable(datasetId, table);
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
           datasetId,
           rows: table.numRows,
@@ -243,8 +291,7 @@
 
       if (result) {
         if ('numRows' in result) {
-          displayTables.set(datasetId, result);
-          displayGeoJSONs.delete(datasetId);
+          setDisplayArrowTable(datasetId, result);
           logger.info(
             'Dataset added to display as Arrow table',
             LogCategory.MAP,
@@ -254,8 +301,7 @@
             }
           );
         } else if ('features' in result) {
-          displayGeoJSONs.set(datasetId, result);
-          displayTables.delete(datasetId);
+          setDisplayGeoJSON(datasetId, result);
           logger.info('Dataset added to display as GeoJSON', LogCategory.MAP, {
             datasetId,
             features: result.features.length
@@ -293,21 +339,22 @@
 
     const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-    // Remove display entries for datasets that are no longer enabled
-    const tableIdsToRemove = [...displayTables.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    // displayTables/displayGeoJSONs are outputs of this effect.
+    // Read them untracked to avoid a self-triggering reload loop.
+    const tableIdsToRemove = untrack(() =>
+      [...displayTables.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
-    for (const tableId of tableIdsToRemove) {
-      displayTables.delete(tableId);
-    }
-
-    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    const geojsonIdsToRemove = untrack(() =>
+      [...displayGeoJSONs.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
-    for (const geojsonId of geojsonIdsToRemove) {
-      displayGeoJSONs.delete(geojsonId);
+    const datasetIdsToRemove = new Set([
+      ...tableIdsToRemove,
+      ...geojsonIdsToRemove
+    ]);
+    for (const datasetId of datasetIdsToRemove) {
+      removeDatasetFromDisplay(datasetId);
     }
 
     // Bump load generation so any in-flight loads from a previous version are discarded
@@ -505,6 +552,7 @@
         <ThematicMap
           tables={displayTables}
           geoJSONs={displayGeoJSONs}
+          dataVersion={displayDataVersion}
           width={formatState.width}
           height={formatState.height}
           onReady={handleMapReady}

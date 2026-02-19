@@ -1,5 +1,6 @@
 <script lang="ts">
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
   import * as m from '$lib/paraglide/messages';
@@ -39,9 +40,9 @@
   const effectiveStyle = $derived(selectedText?.style ?? defaultStyle);
 
   const predefinedStyles = [
-    { value: 'note', text: m.annotations_note() },
-    { value: 'title', text: m.annotations_style_title() },
-    { value: 'subtitle', text: m.annotations_style_subtitle() },
+    { value: ANNOTATION_ROLE.NOTE, text: m.annotations_note() },
+    { value: ANNOTATION_ROLE.TITLE, text: m.annotations_style_title() },
+    { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
   ];
 

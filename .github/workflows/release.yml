@@ -1,19 +1,32 @@
-name: Production Deployment Workflow
+name: Release Automation
 
 on:
   push:
     branches:
+      - staging
       - main
 
 env:
   NODE_VERSION: '22'
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  dependency-setup:
-    name: Dependencies Installation
+  semantic-release:
+    name: Semantic Release (${{ github.ref_name }})
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -27,282 +40,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache dependencies
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-
-  unit-tests:
-    name: Unit Tests (Vitest)
-    needs: dependency-setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
-      - name: Run unit tests
-        run: |
-          set -o pipefail
-          pnpm run test:unit -- --run --reporter=verbose 2>&1 | tee test-output.txt
-
-      - name: Generate unit test summary
-        if: always()
-        run: |
-          echo "## 🧪 Unit Tests Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f test-output.txt ]; then
-            CLEAN=$(cat test-output.txt | sed 's/\x1b\[[0-9;]*m//g')
-            PASSED=$(echo "$CLEAN" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            FAILED=$(echo "$CLEAN" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            SKIPPED=$(echo "$CLEAN" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Passed | ${PASSED:-0} |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failed | ${FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
-            echo "| ⏭️ Skipped | ${SKIPPED:-0} |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  svelte-check:
-    name: Svelte Type Check
-    needs: dependency-setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Run Svelte Check
-        run: pnpm check
-
-  build:
-    name: Build Application
-    needs: [unit-tests, svelte-check]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Build application
-        run: pnpm build
-
-      - name: Cache build output
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            build
-            .svelte-kit/output
-          key: ${{ runner.os }}-build-${{ github.sha }}
-
-  e2e-tests:
-    name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Restore build output
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            build
-            .svelte-kit/output
-          key: ${{ runner.os }}-build-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium --with-deps
-
-      - name: Run Playwright tests
-        run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-        env:
-          CI: true
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Upload blob report
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: blob-report-production-${{ matrix.shardIndex }}
-          path: blob-report
-          retention-days: 1
-
-  merge-reports:
-    name: Merge E2E Reports
-    if: ${{ !cancelled() }}
-    needs: e2e-tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Download blob reports
-        uses: actions/download-artifact@v4
-        with:
-          path: all-blob-reports
-          pattern: blob-report-production-*
-          merge-multiple: true
-
-      - name: Merge into HTML Report
-        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
-
-      - name: Generate E2E test summary
-        if: always()
-        run: |
-          echo "## 🎭 E2E Tests Results (Production)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -f report.md ]; then
-            cat report.md >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-production
-          path: playwright-report
-          retention-days: 14
-
-  version-generation:
-    name: Semantic Version Generation
-    needs: [build, e2e-tests]
-    runs-on: ubuntu-latest
-    permissions: write-all
-    outputs:
-      version: ${{ steps.get-version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
+      - name: Run pipeline tests
+        run: pnpm run test:pipeline
 
       - name: Run semantic-release
-        id: semantic-release
-        run: npx semantic-release
+        run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Retrieve latest release via GitHub API
-        id: get-version
-        run: |
-          LATEST_TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/latest | jq -r .tag_name || echo "0.0.0")
-          echo "version=$LATEST_TAG" >> "$GITHUB_OUTPUT"
-          echo "Latest version: $LATEST_TAG"

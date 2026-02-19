@@ -17,6 +17,7 @@
   let isDeleting = $state(false);
 
   async function handleConfirm() {
+    if (isDeleting) return;
     isDeleting = true;
     try {
       await onConfirm();
@@ -40,6 +41,7 @@
   secondaryButtonText={m.cancel()}
   danger
   on:click:button--secondary={handleCancel}
+  on:click:button--primary={handleConfirm}
   on:submit={handleConfirm}
   size="sm"
 >

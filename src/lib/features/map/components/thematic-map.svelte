@@ -50,6 +50,7 @@
   let {
     tables,
     geoJSONs,
+    dataVersion = 0,
     width,
     height,
     onReady,
@@ -65,7 +66,6 @@
   const pageBackgroundColor = $derived(
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
-  const seaLayer = $derived(basemapLayersStore.getLayer('mers'));
   const pageMargins = $derived(formatState.margins);
   const showPageGrid = $derived(
     formatState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
@@ -83,39 +83,9 @@
     `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
   );
   const mapCanvasStyle = $derived.by(() => {
-    const color = seaLayer?.color ?? pageBackgroundColor;
-    const opacity = Math.max(0, Math.min(100, seaLayer?.opacity ?? 100)) / 100;
-
-    if (!seaLayer?.visible) {
-      return `background-color: ${pageBackgroundColor};`;
-    }
-
-    if (!color.startsWith('#')) {
-      return `background-color: ${color};`;
-    }
-
-    const hex = color.slice(1);
-    const normalizedHex =
-      hex.length === 3
-        ? hex
-            .split('')
-            .map((char) => `${char}${char}`)
-            .join('')
-        : hex;
-
-    if (normalizedHex.length !== 6) {
-      return `background-color: ${color};`;
-    }
-
-    const r = Number.parseInt(normalizedHex.slice(0, 2), 16);
-    const g = Number.parseInt(normalizedHex.slice(2, 4), 16);
-    const b = Number.parseInt(normalizedHex.slice(4, 6), 16);
-
-    if (![r, g, b].every(Number.isFinite)) {
-      return `background-color: ${color};`;
-    }
-
-    return `background-color: rgba(${r}, ${g}, ${b}, ${opacity});`;
+    // Keep a neutral canvas background. Sea color must come only from map
+    // layers, otherwise out-of-projection areas look like editable ocean.
+    return `background-color: ${pageBackgroundColor};`;
   });
   const pageGridStyle = $derived(
     `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
@@ -142,6 +112,7 @@
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let isSwitchingViewMode = $state(false);
   let pendingLayerUpdate = $state(false);
+  let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const RESIZE_DEBOUNCE_MS = 150;
@@ -157,12 +128,32 @@
 
   let scheduleCount = 0;
   let effectTriggerLog: string[] = [];
+  let referenceBasemapRequestId = 0;
+  let pendingWorldBasemapRequestId: number | null = null;
 
   function logEffect(name: string): void {
     effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
     if (effectTriggerLog.length > 50) {
       effectTriggerLog.shift();
     }
+  }
+
+  function queueStyleIdleRetry(source?: string): void {
+    const map = mapInit.map;
+    if (!map || waitingForStyleIdle) return;
+
+    waitingForStyleIdle = true;
+    map.once('idle', () => {
+      waitingForStyleIdle = false;
+      logger.debug(
+        `Map idle after style reload (from: ${source || 'unknown'})`,
+        LogCategory.MAP
+      );
+      if (pendingLayerUpdate) {
+        pendingLayerUpdate = false;
+        scheduleLayerUpdate('mapIdleAfterStyle');
+      }
+    });
   }
 
   function scheduleLayerUpdate(source?: string): void {
@@ -196,6 +187,7 @@
         LogCategory.MAP
       );
       pendingLayerUpdate = true;
+      queueStyleIdleRetry(source);
       return;
     }
     if (layerUpdateTimeoutId) {
@@ -208,22 +200,38 @@
     layerUpdateTimeoutId = setTimeout(() => {
       layerUpdateTimeoutId = null;
       if (
-        mapInit.isMapLoaded &&
-        !isSwitchingViewMode &&
-        !mapBasemap.isStyleLoading
+        !mapInit.isMapLoaded ||
+        isSwitchingViewMode ||
+        mapBasemap.isStyleLoading
       ) {
-        logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
-        mapLoadingStore.setUpdatingLayers(true);
-        const start = performance.now();
-        mapLayers.updateLayers(tables, geoJSONs);
+        return;
+      }
+
+      if (
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        mapInit.map &&
+        !mapInit.map.isStyleLoaded()
+      ) {
         logger.debug(
-          `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
+          `Deferred at execution (style not loaded, pending=true) from: ${source}`,
           LogCategory.MAP
         );
-        requestAnimationFrame(() => {
-          mapLoadingStore.setUpdatingLayers(false);
-        });
+        pendingLayerUpdate = true;
+        queueStyleIdleRetry(source);
+        return;
       }
+
+      logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
+      mapLoadingStore.setUpdatingLayers(true);
+      const start = performance.now();
+      mapLayers.updateLayers(tables, geoJSONs);
+      logger.debug(
+        `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
+        LogCategory.MAP
+      );
+      requestAnimationFrame(() => {
+        mapLoadingStore.setUpdatingLayers(false);
+      });
     }, LAYER_UPDATE_DEBOUNCE_MS);
   }
 
@@ -341,6 +349,51 @@
     });
   }
 
+  function fitOrthographicViewport(): void {
+    if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
+      return;
+    }
+
+    if (mapInit.isMapLoaded) {
+      mapInstanceStore.fitToOrthographicBounds();
+    } else {
+      pendingOrthographicFit = true;
+    }
+  }
+
+  function fitMapLibreViewport(): void {
+    if (
+      mapInit.viewMode !== ViewMode.MAPLIBRE ||
+      !mapInit.isMapLoaded ||
+      !mapInit.map
+    ) {
+      return;
+    }
+
+    if (firstTable) {
+      const bounds = calculateBoundsFromGeoArrow(firstTable);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+      }
+      return;
+    }
+
+    if (firstGeoJSON) {
+      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+      }
+      return;
+    }
+
+    if (worldBaseTable) {
+      const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+      }
+    }
+  }
+
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -353,6 +406,7 @@
     onStyleLoaded: () => {
       logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
+      waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
         scheduleLayerUpdate('onStyleLoaded-pending');
@@ -517,6 +571,7 @@
           untrack(() => {
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
             scheduleLayerUpdate('effect:firstTable-bounds');
+            fitOrthographicViewport();
           });
           triggerOnReady();
         } else {
@@ -525,6 +580,7 @@
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
               scheduleLayerUpdate('effect:firstTable-metadata');
+              fitOrthographicViewport();
             });
             triggerOnReady();
           }
@@ -552,6 +608,7 @@
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
             scheduleLayerUpdate('effect:firstGeoJSON');
+            fitOrthographicViewport();
           }
         });
         triggerOnReady();
@@ -737,6 +794,7 @@
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
     highlightVersion: mapHighlightStore.version,
+    dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`
   });
 
@@ -753,6 +811,7 @@
 
   $effect(() => {
     const refId = basemapStyleStore.referenceBasemapId;
+    const requestId = ++referenceBasemapRequestId;
     logEffect('referenceBasemapId');
     logger.debug('Reference basemap changed', LogCategory.MAP, { refId });
 
@@ -766,11 +825,28 @@
         return;
       }
 
+      if (requestId !== referenceBasemapRequestId) {
+        return;
+      }
+
       if (refId) {
         logger.info('Loading reference basemap', LogCategory.MAP, {
           basemapId: refId
         });
         const loaded = await basemapService.loadBasemap(refId);
+        if (requestId !== referenceBasemapRequestId) {
+          logger.debug(
+            'Ignoring stale reference basemap load',
+            LogCategory.MAP,
+            {
+              basemapId: refId,
+              requestId,
+              currentRequestId: referenceBasemapRequestId
+            }
+          );
+          return;
+        }
+
         if (loaded) {
           logger.debug(
             'Reference basemap loaded, updating worldBaseTable',
@@ -817,18 +893,34 @@
           );
         }
       } else {
-        await loadWorldBasemap();
+        await loadWorldBasemap(requestId);
       }
     });
   });
 
-  async function loadWorldBasemap(): Promise<void> {
-    if (isLoadingBasemap) return;
+  async function loadWorldBasemap(
+    requestId = referenceBasemapRequestId
+  ): Promise<void> {
+    if (isLoadingBasemap) {
+      pendingWorldBasemapRequestId = requestId;
+      return;
+    }
+
     isLoadingBasemap = true;
+    pendingWorldBasemapRequestId = null;
     logger.debug('loadWorldBasemap started', LogCategory.MAP);
     const start = performance.now();
     try {
       const loaded = await basemapService.loadDefaultBasemap();
+
+      if (requestId !== referenceBasemapRequestId) {
+        logger.debug('Ignoring stale world basemap load', LogCategory.MAP, {
+          requestId,
+          currentRequestId: referenceBasemapRequestId
+        });
+        return;
+      }
+
       logger.debug(
         `loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`,
         LogCategory.MAP
@@ -875,6 +967,15 @@
       logger.error('loadWorldBasemap failed', LogCategory.MAP, error);
     } finally {
       isLoadingBasemap = false;
+
+      if (
+        pendingWorldBasemapRequestId !== null &&
+        pendingWorldBasemapRequestId !== requestId
+      ) {
+        const queuedRequestId = pendingWorldBasemapRequestId;
+        pendingWorldBasemapRequestId = null;
+        void loadWorldBasemap(queuedRequestId);
+      }
     }
   }
 
@@ -900,8 +1001,14 @@
         if (canUpdate) {
           if (mapInit.viewMode === ViewMode.MAPLIBRE) {
             mapInit.map?.resize();
+            if (hasData || worldBaseTable) {
+              fitMapLibreViewport();
+            }
           } else {
             syncOrthographicDeckSize();
+            if (hasData || worldBaseTable) {
+              fitOrthographicViewport();
+            }
           }
           scheduleLayerUpdate('resizeObserver');
         }
@@ -913,6 +1020,7 @@
     return () => {
       resizeObserver.disconnect();
       mapInit.destroy();
+      waitingForStyleIdle = false;
       if (maxWaitTimeoutId) {
         clearTimeout(maxWaitTimeoutId);
       }

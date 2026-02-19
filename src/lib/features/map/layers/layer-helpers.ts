@@ -4,8 +4,6 @@ import { getSizeForValue, getColorForValue } from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
 
-export const BASE_FILL_COLOR: RGBColor = [220, 220, 220];
-export const BASE_STROKE_COLOR: RGBColor = [80, 80, 80];
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
 export function withOpacity(color: number[], opacity = 1): Color {

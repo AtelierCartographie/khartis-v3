@@ -1,6 +1,4 @@
 export {
-  BASE_FILL_COLOR,
-  BASE_STROKE_COLOR,
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,

@@ -49,6 +49,55 @@ interface SerializeOptions {
   preserveBinary?: boolean;
 }
 
+function toSafeString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function toSafeInteger(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<BasemapMetadata>;
+  return (
+    typeof candidate.file === 'string' &&
+    candidate.file.length > 0 &&
+    typeof candidate.title === 'string' &&
+    typeof candidate.description === 'string' &&
+    typeof candidate.source === 'string' &&
+    typeof candidate.date === 'string' &&
+    typeof candidate.projection === 'string' &&
+    Array.isArray(candidate.layers) &&
+    Array.isArray(candidate.bbox) &&
+    candidate.bbox.length === 4
+  );
+}
+
+async function ensureDuckDbReady(operation: string): Promise<boolean> {
+  try {
+    await duckDBOrchestrator.waitForInitialization();
+  } catch (error) {
+    logger.warn(
+      `DuckDB initialization failed while ${operation}`,
+      LogCategory.PROJECT,
+      error
+    );
+    return false;
+  }
+
+  if (!Duck) {
+    logger.warn(`DuckDB unavailable while ${operation}`, LogCategory.PROJECT);
+    return false;
+  }
+
+  return true;
+}
+
 export async function serialize(
   project: KhartisProject,
   options?: SerializeOptions
@@ -137,7 +186,10 @@ export async function serializeProjectData(
     (b: BasemapMetadata) => b.isCustom
   );
 
-  if (customBasemaps.length > 0 && Duck) {
+  if (
+    customBasemaps.length > 0 &&
+    (await ensureDuckDbReady('serializing custom basemap attributes'))
+  ) {
     try {
       const tableExists = await Duck.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = 'custom_basemap_attributes'`,
@@ -233,9 +285,43 @@ export async function deserializeProjectData(
     ) as SerializedUploadedFile[];
   }
 
-  if (data.customBasemaps && Duck) {
+  if (
+    data.customBasemaps &&
+    (await ensureDuckDbReady('restoring custom basemaps'))
+  ) {
     try {
       const { metadata, attributes } = data.customBasemaps;
+      const validMetadata = Array.isArray(metadata)
+        ? metadata.filter(isValidBasemapMetadata)
+        : [];
+      const validAttributes = Array.isArray(attributes)
+        ? attributes
+            .filter((attribute) => attribute && typeof attribute === 'object')
+            .map((attribute) => {
+              const candidate =
+                attribute as Partial<SerializedBasemapAttribute>;
+              return {
+                raw: toSafeString(candidate.raw),
+                id: toSafeString(candidate.id),
+                variant: toSafeString(candidate.variant),
+                normalized: toSafeString(candidate.normalized),
+                basemap: toSafeString(candidate.basemap),
+                basemap_count: toSafeInteger(candidate.basemap_count)
+              };
+            })
+            .filter((attribute) => attribute.basemap.length > 0)
+        : [];
+
+      if (Array.isArray(metadata) && validMetadata.length !== metadata.length) {
+        logger.warn(
+          'Skipping invalid custom basemap metadata entries during restore',
+          LogCategory.PROJECT,
+          {
+            total: metadata.length,
+            restored: validMetadata.length
+          }
+        );
+      }
 
       await Duck.query(`
         CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
@@ -250,8 +336,8 @@ export async function deserializeProjectData(
 
       await Duck.query('DELETE FROM custom_basemap_attributes');
 
-      if (attributes && attributes.length > 0) {
-        const insertValues = attributes
+      if (validAttributes.length > 0) {
+        const insertValues = validAttributes
           .map(
             (attr) =>
               `('${escapeSqlString(attr.raw)}', '${escapeSqlString(attr.id)}', '${escapeSqlString(attr.variant)}', '${escapeSqlString(attr.normalized)}', '${escapeSqlString(attr.basemap)}', ${attr.basemap_count})`
@@ -264,13 +350,13 @@ export async function deserializeProjectData(
         `);
       }
 
-      metadata.forEach((basemap: BasemapMetadata) => {
+      validMetadata.forEach((basemap: BasemapMetadata) => {
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      logger.error(
+      logger.warn(
         'Failed to restore custom basemaps',
-        LogCategory.DATA,
+        LogCategory.PROJECT,
         error
       );
     }

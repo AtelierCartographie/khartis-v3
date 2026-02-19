@@ -59,7 +59,9 @@
 
   const filledSegments = $derived(
     matchPercentage !== undefined
-      ? Math.round((matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS)
+      ? Math.round(
+          (matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS
+        )
       : 0
   );
 
@@ -231,7 +233,7 @@
     padding: 1px;
     min-height: 100px;
     gap: 8px;
-    background-color: #ffffff;
+    background-color: var(--cds-ui-01, #ffffff);
     position: relative;
   }
 

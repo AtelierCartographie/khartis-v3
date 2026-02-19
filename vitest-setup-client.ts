@@ -19,6 +19,11 @@ vi.mock('$lib/features/duckdb', () => ({
     initialize: vi.fn().mockResolvedValue(undefined),
     executeQuery: vi.fn().mockResolvedValue([]),
     getConnection: vi.fn().mockResolvedValue(null)
+  },
+  Duck: {},
+  validateGPSColumns: vi.fn().mockResolvedValue({ isValid: true }),
+  GEO_CONSTANTS: {
+    WGS84_CRS: 'EPSG:4326'
   }
 }));
 

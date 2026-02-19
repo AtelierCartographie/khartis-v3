@@ -35,10 +35,3 @@ export const STORAGE_KEYS = {
   FACETS_TOOL_OPENED: 'khartis_facets_tool_opened',
   STORAGE_VALUE_OPENED: '1'
 } as const;
-
-export const NOTIFICATION_BADGE_SIZE = {
-  TOP: 2,
-  RIGHT: 2,
-  WIDTH: 8,
-  HEIGHT: 8
-} as const;

@@ -31,7 +31,7 @@ const COLUMN_NAME_PATTERNS = {
   latitude: /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i,
   longitude:
     /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i,
-  country: /^(country[\s_]?(name|code)?|pays|nation|state|etat)$/i,
+  country: /^(country[\s_]?(name|code)?|pays|nation|state|etat|entity|area)$/i,
   iso2: /^(iso[\s_]?2|iso[\s_]?alpha[\s_]?2|country[\s_]?iso[\s_]?2|code[\s_]?iso[\s_]?2|alpha[\s_]?2)$/i,
   iso3: /^(iso[\s_]?3|iso[\s_]?alpha[\s_]?3|country[\s_]?iso[\s_]?3|code[\s_]?iso[\s_]?3|alpha[\s_]?3|country[\s_]?code)$/i,
   nuts: /^(nuts[\s_]?(code|id|2|3)?|code[\s_]?nuts|nuts[\s_]?level[\s_]?\d?)$/i,
@@ -82,7 +82,38 @@ const COUNTRY_SAMPLES = [
   'DEUTSCHLAND',
   'SPANIEN',
   'ITALIEN',
-  'POLEN'
+  'POLEN',
+  'ALGERIA',
+  'ANGOLA',
+  'ARGENTINA',
+  'AUSTRALIA',
+  'AUSTRIA',
+  'BELGIUM',
+  'BRAZIL',
+  'CANADA',
+  'CHILE',
+  'CHINA',
+  'COLOMBIA',
+  'DENMARK',
+  'EGYPT',
+  'FINLAND',
+  'INDIA',
+  'INDONESIA',
+  'JAPAN',
+  'MEXICO',
+  'MOROCCO',
+  'NETHERLANDS',
+  'NIGERIA',
+  'NORWAY',
+  'PORTUGAL',
+  'RUSSIA',
+  'SOUTH AFRICA',
+  'SWEDEN',
+  'SWITZERLAND',
+  'TURKEY',
+  'UKRAINE',
+  'USA',
+  'VIETNAM'
 ] as const;
 
 const REGION_SAMPLES = [
@@ -151,6 +182,15 @@ const NUTS_SAMPLES = [
   'NL22',
   'NL31'
 ] as const;
+
+function hasSufficientDistinctCodeValues(values: string[]): boolean {
+  const uniqueCount = new Set(values.map((v) => v.toUpperCase())).size;
+  const requiredDistinctCount = Math.min(
+    10,
+    Math.max(3, Math.ceil(values.length * 0.05))
+  );
+  return uniqueCount >= requiredDistinctCount;
+}
 
 export const GPS_COLUMN_PATTERNS = {
   latitude: COLUMN_NAME_PATTERNS.latitude,
@@ -303,7 +343,10 @@ export const GeoColumnDetector = {
     const iso2Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso2(v)).length /
       stringValues.length;
-    if (iso2Match > GEO_DETECTION.MATCH_THRESHOLD) {
+    if (
+      iso2Match > GEO_DETECTION.MATCH_THRESHOLD &&
+      hasSufficientDistinctCodeValues(stringValues)
+    ) {
       return {
         type: 'iso2',
         confidence: iso2Match,
@@ -314,7 +357,10 @@ export const GeoColumnDetector = {
     const iso3Match =
       stringValues.filter((v) => VALUE_PATTERNS.iso3(v)).length /
       stringValues.length;
-    if (iso3Match > GEO_DETECTION.MATCH_THRESHOLD) {
+    if (
+      iso3Match > GEO_DETECTION.MATCH_THRESHOLD &&
+      hasSufficientDistinctCodeValues(stringValues)
+    ) {
       return {
         type: 'iso3',
         confidence: iso3Match,
@@ -345,28 +391,6 @@ export const GeoColumnDetector = {
           GEO_DETECTION.NEAR_CERTAIN
         ),
         matchedPatterns: ['Value pattern: Known NUTS codes']
-      };
-    }
-
-    const latMatch =
-      stringValues.filter((v) => VALUE_PATTERNS.latitude(v)).length /
-      stringValues.length;
-    if (latMatch > GEO_DETECTION.MATCH_THRESHOLD) {
-      return {
-        type: 'latitude',
-        confidence: latMatch,
-        matchedPatterns: ['Value pattern: Latitude range']
-      };
-    }
-
-    const lonMatch =
-      stringValues.filter((v) => VALUE_PATTERNS.longitude(v)).length /
-      stringValues.length;
-    if (lonMatch > GEO_DETECTION.MATCH_THRESHOLD) {
-      return {
-        type: 'longitude',
-        confidence: lonMatch,
-        matchedPatterns: ['Value pattern: Longitude range']
       };
     }
 

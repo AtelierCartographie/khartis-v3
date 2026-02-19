@@ -100,7 +100,7 @@
   .color-preview {
     flex: 1;
     height: 20px;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
 
     &.small {
       height: 16px;

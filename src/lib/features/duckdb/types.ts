@@ -98,6 +98,8 @@ export interface ReadTabularOptions {
   thousands_separator?: string;
   delimiter?: string;
   header?: boolean;
+  ignore_errors?: boolean;
+  all_varchar?: boolean;
   format?: string;
 }
 

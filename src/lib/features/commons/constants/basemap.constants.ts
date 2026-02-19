@@ -19,16 +19,3 @@ export const BASEMAP_LAYER_ID = {
 
 export type BasemapLayerId =
   (typeof BASEMAP_LAYER_ID)[keyof typeof BASEMAP_LAYER_ID];
-
-export const BASEMAP_LAYER_IDS = Object.values(
-  BASEMAP_LAYER_ID
-) as readonly BasemapLayerId[];
-
-export const BASEMAP_SOURCE_TYPE = {
-  CATALOG: 'catalog',
-  CUSTOM: 'custom',
-  OSM: 'osm'
-} as const;
-
-export type BasemapSourceTypeValue =
-  (typeof BASEMAP_SOURCE_TYPE)[keyof typeof BASEMAP_SOURCE_TYPE];

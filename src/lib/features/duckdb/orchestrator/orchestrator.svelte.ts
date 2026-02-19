@@ -483,17 +483,20 @@ export const duckDBOrchestrator = {
     state.bumpDatasetsVersion();
   },
 
-  async deleteFilteredRows(tableName: string): Promise<number> {
+  async deleteFilteredRows(tableName: string): Promise<{
+    count: number;
+    rowIds: number[];
+  }> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const rowIds = await tableDataOps.getExcludedRowIds(tableName, Duck);
-    if (rowIds.length === 0) return 0;
+    if (rowIds.length === 0) return { count: 0, rowIds: [] };
 
     await columnOps.dropRows(tableName, rowIds, Duck);
     invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
-    return rowIds.length;
+    return { count: rowIds.length, rowIds };
   },
 
   async refineColumn(
@@ -617,9 +620,16 @@ export const duckDBOrchestrator = {
     return arrowOps.exportTableToGeoParquet(tableName, Duck);
   },
 
-  async getArrowTableDirect(tableName: string): Promise<Table> {
+  async getArrowTableDirect(
+    tableName: string,
+    yearFilter?: { column: string; value: number | string }
+  ): Promise<Table> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const whereClause = yearFilter
+      ? arrowOps.buildYearFilterWhereClause(yearFilter)
+      : null;
 
     return arrowOps.getArrowTableDirect(
       tableName,
@@ -635,7 +645,8 @@ export const duckDBOrchestrator = {
         }
         return undefined;
       },
-      (table) => state.setDatasetArrowTable(tableName, table)
+      (table) => state.setDatasetArrowTable(tableName, table),
+      whereClause
     );
   },
 

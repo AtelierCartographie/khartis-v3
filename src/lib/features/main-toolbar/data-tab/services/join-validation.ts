@@ -5,7 +5,7 @@ interface JoinStatsLike {
 }
 
 export function hasBlockingJoinIssues(stats: JoinStatsLike): boolean {
-  return stats.toVerifyCount > 0 || stats.duplicateCount > 0;
+  return stats.toVerifyCount > 0;
 }
 
 export function canFinalizeJoin(stats: JoinStatsLike): boolean {

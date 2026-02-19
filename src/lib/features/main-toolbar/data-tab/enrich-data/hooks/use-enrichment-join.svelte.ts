@@ -315,16 +315,40 @@ export function useEnrichmentJoin(
       const enrichColsSelect = enrichmentColumns
         .map((col) => `e."${escapeIdentifier(col)}"`)
         .join(', ');
+      const enrichColsDedupSelect = enrichmentColumns
+        .map(
+          (col) =>
+            `any_value(e."${escapeIdentifier(col)}") AS "${escapeIdentifier(col)}"`
+        )
+        .join(',\n            ');
 
       const enrichedTableName = `${geoTableName}_enriched_${Date.now()}`;
       const escapedEnrichedTableName = escapeIdentifier(enrichedTableName);
 
+      if (joinStats.duplicateCount > 0) {
+        logger.warn(
+          'Finalizing enrichment with duplicate source keys, keeping one value per normalized key',
+          LogCategory.DATA,
+          {
+            duplicateCount: joinStats.duplicateCount,
+            enrichColumn: enrichCol.columnName
+          }
+        );
+      }
+
       await Duck.query(
         `CREATE TABLE "${escapedEnrichedTableName}" AS
+         WITH enrichment_unique AS (
+           SELECT
+             normalize_text_join(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR)) AS join_key,
+             ${enrichColsDedupSelect}
+           FROM "${escapedEnrichmentTableName}" e
+           GROUP BY 1
+         )
          SELECT g.*, ${enrichColsSelect}
          FROM "${escapedGeoTableName}" g
-         LEFT JOIN "${escapedEnrichmentTableName}" e
-         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = normalize_text_join(CAST(e."${escapedEnrichmentColumn}" AS VARCHAR))`,
+         LEFT JOIN enrichment_unique e
+         ON normalize_text_join(CAST(g."${escapedGeoColumn}" AS VARCHAR)) = e.join_key`,
         { format: 'array' }
       );
 

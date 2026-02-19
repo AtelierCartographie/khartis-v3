@@ -7,8 +7,7 @@
     InlineNotification,
     NotificationActionButton,
     Select,
-    SelectItem,
-    SkeletonText
+    SelectItem
   } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -64,11 +63,67 @@
   );
 
   let joinedExpanded = $state(false);
-  let toVerifyExpanded = $state(true);
+  let toVerifyExpanded = $state(false);
   let duplicatesExpanded = $state(false);
   let unrecognizedExpanded = $state(false);
 
-  const hasBlockingErrors = $derived(toVerifyCount > 0 || duplicateCount > 0);
+  const hasBlockingErrors = $derived(toVerifyCount > 0);
+  const showCorrectionNotification = $derived(
+    hasBlockingErrors && toVerifyCount > 0
+  );
+  const showSuccessNotification = $derived(
+    !hasBlockingErrors && joinedCount > 0 && joinFinalized
+  );
+  const showValidationNotification = $derived(
+    !hasBlockingErrors && joinedCount > 0 && !joinFinalized
+  );
+
+  interface NotificationSnapshot {
+    hasBlockingErrors: boolean;
+    showCorrectionNotification: boolean;
+    showSuccessNotification: boolean;
+    showValidationNotification: boolean;
+  }
+
+  const currentNotificationState = $derived<NotificationSnapshot>({
+    hasBlockingErrors,
+    showCorrectionNotification,
+    showSuccessNotification,
+    showValidationNotification
+  });
+
+  function collapseAllSections(): void {
+    joinedExpanded = false;
+    toVerifyExpanded = false;
+    duplicatesExpanded = false;
+    unrecognizedExpanded = false;
+  }
+
+  let wasLoading = $state(false);
+  let notificationSnapshot = $state<NotificationSnapshot>({
+    hasBlockingErrors: false,
+    showCorrectionNotification: false,
+    showSuccessNotification: false,
+    showValidationNotification: false
+  });
+
+  const displayedNotificationState = $derived(
+    loading ? notificationSnapshot : currentNotificationState
+  );
+
+  $effect(() => {
+    if (loading && !wasLoading) {
+      collapseAllSections();
+    }
+
+    wasLoading = loading;
+  });
+
+  $effect(() => {
+    if (!loading) {
+      notificationSnapshot = currentNotificationState;
+    }
+  });
 </script>
 
 <div class="join-assisted-section">
@@ -80,233 +135,224 @@
     <InfoPopover text={m.join_assisted_info()} />
   </div>
 
-  {#if loading}
-    <div class="loading-skeleton">
-      <SkeletonText paragraph lines={3} />
-    </div>
-  {:else}
+  <div class="join-assisted-content" class:is-loading={loading}>
     <div class="category-rows">
-      {#if joinedCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (joinedExpanded = !joinedExpanded)}
-            aria-expanded={joinedExpanded}
+      <div class="category-row category-row-joined">
+        <button
+          class="category-row-header"
+          onclick={() => (joinedExpanded = !joinedExpanded)}
+          aria-expanded={joinedExpanded}
+        >
+          <span class="category-icon icon-success">
+            <CheckmarkFilled size={20} />
+          </span>
+          <div class="category-count count-success">{joinedCount}</div>
+          <span class="category-label label-success"
+            >{m.join_entities_joined({ count: joinedCount })}</span
           >
-            <span class="category-icon icon-success">
-              <CheckmarkFilled size={20} />
-            </span>
-            <div class="category-count count-success">{joinedCount}</div>
-            <span class="category-label label-success"
-              >{m.join_entities_joined({ count: joinedCount })}</span
-            >
-            <span class="category-chevron">
-              {#if joinedExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if joinedExpanded}
-            <div class="category-body">
-              <p class="category-body-text">
-                {m.join_entities_joined_desc()}
-              </p>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if toVerifyCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
-            aria-expanded={toVerifyExpanded}
-          >
-            <span class="category-icon icon-warning">
-              <WarningFilled size={20} />
-            </span>
-            <div class="category-count count-warning">{toVerifyCount}</div>
-            <span class="category-label label-warning"
-              >{m.join_entities_to_verify({ count: toVerifyCount })}</span
-            >
-            <span class="category-chevron">
-              {#if toVerifyExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if toVerifyExpanded && joinRows.length > 0}
-            <div class="category-body">
-              <div class="join-table">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
-                    {/if}
-                  </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_basemap_column()}</span
-                    >
-                  </div>
-                </div>
-                {#each deduplicatedJoinRows as row, i (i)}
-                  <div class="table-row">
-                    <div class="table-cell cell-data">{row.dataValue}</div>
-                    <div class="table-cell cell-equals">=</div>
-                    <div class="table-cell cell-select">
-                      <Select
-                        id={`join-${i}`}
-                        labelText=""
-                        selected={row.selectedMapping}
-                        on:change={(e) => {
-                          const target = e.target as HTMLSelectElement;
-                          const selectedValue =
-                            target?.value || row.selectedMapping;
-                          dataTabActions.updateJoinMapping(i, selectedValue);
-                        }}
-                        size="sm"
-                      >
-                        {#each row.basemapOptions as opt (opt)}
-                          <SelectItem value={opt} text={opt} />
-                        {/each}
-                      </Select>
-                    </div>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if duplicateCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-            aria-expanded={duplicatesExpanded}
-          >
-            <span class="category-icon icon-warning-alt">
-              <WarningAltFilled size={20} />
-            </span>
-            <div class="category-count count-warning-alt">{duplicateCount}</div>
-            <span class="category-label label-warning-alt"
-              >{m.join_entities_duplicate({ count: duplicateCount })}</span
-            >
-            <span class="category-chevron">
-              {#if duplicatesExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if duplicatesExpanded}
-            <div class="category-body">
-              <ul class="entity-list">
-                {#each duplicates as entity (entity)}
-                  <li class="entity-item">{entity}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      {#if unrecognizedCount > 0}
-        <div class="category-row">
-          <button
-            class="category-row-header"
-            onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
-            aria-expanded={unrecognizedExpanded}
-          >
-            <span class="category-icon icon-error">
-              <ErrorFilled size={20} />
-            </span>
-            <div class="category-count count-error">{unrecognizedCount}</div>
-            <span class="category-label label-error"
-              >{m.join_entities_unrecognized({
-                count: unrecognizedCount
-              })}</span
-            >
-            <span class="category-chevron">
-              {#if unrecognizedExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if unrecognizedExpanded}
-            <div class="category-body">
-              <ul class="entity-list">
-                {#each unknowns as entity (entity)}
-                  <li class="entity-item">{entity}</li>
-                {/each}
-              </ul>
-            </div>
-          {/if}
-        </div>
-      {/if}
-    </div>
-
-    {#if hasBlockingErrors}
-      <div class="notifications-row">
-        <InlineNotification
-          title={m.join_error_detected_title()}
-          subtitle={m.join_error_detected_subtitle()}
-          kind="warning"
-          lowContrast
-        />
-
-        {#if toVerifyCount > 0}
-          <InlineNotification
-            title={m.join_correction_title()}
-            subtitle={m.join_correction_desc()}
-            kind="info"
-            lowContrast
-          >
-            <svelte:fragment slot="actions">
-              <NotificationActionButton on:click={onApplyCorrections}>
-                {m.join_correction_button()}
-              </NotificationActionButton>
-            </svelte:fragment>
-          </InlineNotification>
+          <span class="category-chevron">
+            {#if joinedExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if joinedExpanded}
+          <div class="category-body">
+            <p class="category-body-text">
+              {m.join_entities_joined_desc()}
+            </p>
+          </div>
         {/if}
       </div>
-    {:else if joinedCount > 0 && joinFinalized}
-      <div class="notification-success">
-        <span class="notification-success-icon">
-          <CheckmarkFilled size={20} />
-        </span>
-        <span class="notification-success-text"
-          >{m.join_finalized_message()}</span
+
+      <div class="category-row category-row-verify">
+        <button
+          class="category-row-header"
+          onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
+          aria-expanded={toVerifyExpanded}
         >
+          <span class="category-icon icon-warning">
+            <WarningFilled size={20} />
+          </span>
+          <div class="category-count count-warning">{toVerifyCount}</div>
+          <span class="category-label label-warning"
+            >{m.join_entities_to_verify({ count: toVerifyCount })}</span
+          >
+          <span class="category-chevron">
+            {#if toVerifyExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if toVerifyExpanded}
+          <div class="category-body">
+            <div class="join-table">
+              <div class="table-header">
+                <div class="table-header-left">
+                  <span class="table-header-label">{m.join_data_column()}</span>
+                  {#if linkedVariableName}
+                    <VariableBadge label={linkedVariableName} type="geo-ref" />
+                  {/if}
+                </div>
+                <div class="table-header-right">
+                  <span class="table-header-label"
+                    >{m.join_basemap_column()}</span
+                  >
+                </div>
+              </div>
+              {#each deduplicatedJoinRows as row, i (i)}
+                <div class="table-row">
+                  <div class="table-cell cell-data">{row.dataValue}</div>
+                  <div class="table-cell cell-equals">=</div>
+                  <div class="table-cell cell-select">
+                    <Select
+                      id={`join-${i}`}
+                      labelText=""
+                      selected={row.selectedMapping}
+                      on:change={(e) => {
+                        const target = e.target as HTMLSelectElement;
+                        const selectedValue =
+                          target?.value || row.selectedMapping;
+                        dataTabActions.updateJoinMapping(i, selectedValue);
+                      }}
+                      size="sm"
+                    >
+                      {#each row.basemapOptions as opt (opt)}
+                        <SelectItem value={opt} text={opt} />
+                      {/each}
+                    </Select>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
-    {:else if joinedCount > 0}
-      <div class="notification-validation">
-        <div class="notification-title">{m.join_validation_title()}</div>
-        <p class="notification-message">
-          {m.join_validation_desc()}
-        </p>
-        <Button kind="primary" size="small" on:click={onFinalizeJoin}
-          >{m.join_validation_button()}</Button
+
+      <div class="category-row category-row-duplicates">
+        <button
+          class="category-row-header"
+          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+          aria-expanded={duplicatesExpanded}
         >
+          <span class="category-icon icon-warning-alt">
+            <WarningAltFilled size={20} />
+          </span>
+          <div class="category-count count-warning-alt">{duplicateCount}</div>
+          <span class="category-label label-warning-alt"
+            >{m.join_entities_duplicate({ count: duplicateCount })}</span
+          >
+          <span class="category-chevron">
+            {#if duplicatesExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if duplicatesExpanded && duplicateCount > 0}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each duplicates as entity (entity)}
+                <li class="entity-item">{entity}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
       </div>
-    {/if}
-  {/if}
+
+      <div class="category-row category-row-unrecognized">
+        <button
+          class="category-row-header"
+          onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
+          aria-expanded={unrecognizedExpanded}
+        >
+          <span class="category-icon icon-error">
+            <ErrorFilled size={20} />
+          </span>
+          <div class="category-count count-error">{unrecognizedCount}</div>
+          <span class="category-label label-error"
+            >{m.join_entities_unrecognized({
+              count: unrecognizedCount
+            })}</span
+          >
+          <span class="category-chevron">
+            {#if unrecognizedExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if unrecognizedExpanded && unrecognizedCount > 0}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each unknowns as entity (entity)}
+                <li class="entity-item">{entity}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+    </div>
+
+    <div class="join-status-zone">
+      {#if displayedNotificationState.hasBlockingErrors}
+        <div class="notifications-row">
+          <div class="notification-slot">
+            <InlineNotification
+              title={m.join_error_detected_title()}
+              subtitle={m.join_error_detected_subtitle()}
+              kind="warning"
+              lowContrast
+            />
+          </div>
+
+          <div class="notification-slot">
+            {#if displayedNotificationState.showCorrectionNotification}
+              <InlineNotification
+                title={m.join_correction_title()}
+                subtitle={m.join_correction_desc()}
+                kind="info"
+                lowContrast
+              >
+                <svelte:fragment slot="actions">
+                  <NotificationActionButton on:click={onApplyCorrections}>
+                    {m.join_correction_button()}
+                  </NotificationActionButton>
+                </svelte:fragment>
+              </InlineNotification>
+            {:else}
+              <div class="notification-placeholder" aria-hidden="true"></div>
+            {/if}
+          </div>
+        </div>
+      {:else if displayedNotificationState.showSuccessNotification}
+        <div class="notification-success">
+          <span class="notification-success-icon">
+            <CheckmarkFilled size={20} />
+          </span>
+          <span class="notification-success-text"
+            >{m.join_finalized_message()}</span
+          >
+        </div>
+      {:else if displayedNotificationState.showValidationNotification}
+        <div class="notification-validation">
+          <div class="notification-title">{m.join_validation_title()}</div>
+          <p class="notification-message">
+            {m.join_validation_desc()}
+          </p>
+          <Button kind="primary" size="small" on:click={onFinalizeJoin}
+            >{m.join_validation_button()}</Button
+          >
+        </div>
+      {/if}
+    </div>
+  </div>
 </div>
 
 <style>
@@ -316,6 +362,19 @@
     flex-direction: column;
     gap: 0;
     padding-top: 20px;
+  }
+
+  .join-assisted-content {
+    min-height: clamp(320px, 40vh, 500px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: opacity 120ms ease-out;
+  }
+
+  .join-assisted-content.is-loading {
+    opacity: 0.75;
+    pointer-events: none;
   }
 
   /* Header */
@@ -397,14 +456,16 @@
   .category-count {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-width: 26px;
+    justify-content: flex-end;
+    min-width: 4.5ch;
+    width: 4.5ch;
     padding: 2px 6px;
     font-weight: 700;
     font-size: 0.875rem;
     line-height: 1.25rem;
     border-bottom: 2.5px solid;
     flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
   }
 
   .count-success {
@@ -585,8 +646,8 @@
     height: 32px;
     padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
-    background-color: #ffffff;
-    border-bottom: 1px solid #8d8d8d;
+    background-color: var(--cds-field-01, #ffffff);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
   .cell-select :global(.bx--select__arrow) {
@@ -601,15 +662,33 @@
   .notifications-row {
     display: flex;
     gap: 12px;
-    margin-top: 16px;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+
+  .notification-slot {
+    flex: 1;
+    min-width: 0;
+    min-height: 108px;
+    display: flex;
+  }
+
+  .join-status-zone {
+    flex-shrink: 0;
+    min-height: 128px;
+    padding-top: 12px;
   }
 
   .notifications-row :global(.bx--inline-notification) {
-    flex: 1;
-    min-width: 0;
+    flex: 1 1 auto;
     max-width: none;
     margin: 0;
+    min-height: 108px;
+  }
+
+  .notification-placeholder {
+    width: 100%;
+    min-height: 108px;
+    background: transparent;
   }
 
   .notification-success {
@@ -619,7 +698,6 @@
     padding: 16px;
     background-color: #defbe6;
     border-left: 3px solid #24a148;
-    margin-top: 16px;
   }
 
   .notification-success-icon :global(svg) {
@@ -637,7 +715,6 @@
     padding: 16px;
     background-color: #defbe6;
     border-left: 3px solid #24a148;
-    margin-top: 16px;
   }
 
   .notification-title {
@@ -654,10 +731,5 @@
     line-height: 1.25rem;
     color: #525252;
     margin-bottom: 8px;
-  }
-
-  /* Loading skeleton */
-  .loading-skeleton {
-    padding: 16px;
   }
 </style>
