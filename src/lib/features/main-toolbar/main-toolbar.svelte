@@ -252,12 +252,12 @@
     width: 50px;
     min-width: 50px;
     padding: 0;
-    height: calc(100dvh - 47px);
+    height: calc(100dvh - var(--cds-header-height));
     overflow: hidden;
   }
 
   .collapsed-toolbar {
-    height: calc(100dvh - 47px) !important;
+    height: calc(100dvh - var(--cds-header-height)) !important;
     overflow: hidden;
   }
 
