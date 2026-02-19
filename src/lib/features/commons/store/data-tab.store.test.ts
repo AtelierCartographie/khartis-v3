@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { dataTabActions, dataTabState } from './data-tab.store.svelte';
-import { GeoreferenceType } from '../constants/ui.constants';
+import { GeoreferenceType, JoinStatus } from '../constants/ui.constants';
 
 describe('data-tab store - geolocation state', () => {
   beforeEach(() => {
@@ -187,6 +187,174 @@ describe('data-tab store - geolocation state', () => {
 
     it('should have autoDetected true by default', () => {
       expect(dataTabState.geolocation.autoDetected).toBe(true);
+    });
+  });
+});
+
+describe('data-tab store - join state', () => {
+  beforeEach(() => {
+    dataTabActions.reset();
+  });
+
+  afterEach(() => {
+    dataTabActions.reset();
+  });
+
+  describe('setJoinStats', () => {
+    it('should set join statistics', () => {
+      dataTabActions.setJoinStats({
+        joinedCount: 10,
+        toVerifyCount: 2,
+        duplicateCount: 1,
+        unrecognizedCount: 1,
+        totalEntities: 14,
+        entities: [
+          { dataValue: 'France', status: JoinStatus.JOINED, matches: [] },
+          {
+            dataValue: 'Germany',
+            status: JoinStatus.DUPLICATE,
+            matches: ['Germany', 'GER']
+          },
+          {
+            dataValue: 'Unknown',
+            status: JoinStatus.UNRECOGNIZED,
+            matches: []
+          },
+          {
+            dataValue: 'Spain',
+            status: JoinStatus.TO_VERIFY,
+            matches: ['Spain', 'ESP']
+          }
+        ]
+      });
+
+      expect(dataTabState.basemapJoin.joinedEntities).toBe(10);
+      expect(dataTabState.basemapJoin.entitiesToVerify).toBe(2);
+      expect(dataTabState.basemapJoin.duplicateEntities).toEqual(['Germany']);
+      expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual([
+        'Unknown'
+      ]);
+      expect(dataTabState.basemapJoin.joinMappings).toHaveLength(1);
+      expect(dataTabState.basemapJoin.joinMappings[0].dataValue).toBe('Spain');
+    });
+  });
+
+  describe('clearJoinStats', () => {
+    it('should clear join statistics but keep selectedBasemap and basemapSource', () => {
+      dataTabActions.selectBasemap('world-countries');
+      dataTabActions.setJoinStats({
+        joinedCount: 10,
+        toVerifyCount: 2,
+        duplicateCount: 0,
+        unrecognizedCount: 1,
+        totalEntities: 13,
+        entities: [
+          {
+            dataValue: 'Unknown',
+            status: JoinStatus.UNRECOGNIZED,
+            matches: []
+          }
+        ]
+      });
+
+      dataTabActions.clearJoinStats();
+
+      expect(dataTabState.basemapJoin.joinedEntities).toBe(0);
+      expect(dataTabState.basemapJoin.entitiesToVerify).toBe(0);
+      expect(dataTabState.basemapJoin.duplicateEntities).toEqual([]);
+      expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual([]);
+      expect(dataTabState.basemapJoin.joinMappings).toEqual([]);
+      expect(dataTabState.basemapJoin.selectedBasemap).toBe('world-countries');
+    });
+  });
+
+  describe('reset', () => {
+    it('should reset basemapJoin to default state', () => {
+      dataTabActions.selectBasemap('world-countries');
+      dataTabActions.setJoinStats({
+        joinedCount: 50,
+        toVerifyCount: 5,
+        duplicateCount: 1,
+        unrecognizedCount: 0,
+        totalEntities: 56,
+        entities: [
+          {
+            dataValue: 'Duplicate1',
+            status: JoinStatus.DUPLICATE,
+            matches: ['A', 'B']
+          }
+        ]
+      });
+
+      dataTabActions.reset();
+
+      expect(dataTabState.basemapJoin.selectedBasemap).toBe('');
+      expect(dataTabState.basemapJoin.basemapSource).toBe('catalog');
+      expect(dataTabState.basemapJoin.joinedEntities).toBe(0);
+      expect(dataTabState.basemapJoin.entitiesToVerify).toBe(0);
+      expect(dataTabState.basemapJoin.duplicateEntities).toEqual([]);
+      expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual([]);
+      expect(dataTabState.basemapJoin.joinMappings).toEqual([]);
+    });
+
+    it('should reset enrichData state', () => {
+      dataTabActions.setEnrichDataState({
+        enrichmentDatasetId: 'enrich-1',
+        enrichmentColumn: 'country',
+        targetColumn: 'name',
+        isEnrichmentActive: true
+      });
+
+      dataTabActions.reset();
+
+      expect(dataTabState.enrichData.enrichmentDatasetId).toBeUndefined();
+      expect(dataTabState.enrichData.enrichmentColumn).toBeUndefined();
+      expect(dataTabState.enrichData.targetColumn).toBeUndefined();
+      expect(dataTabState.enrichData.isEnrichmentActive).toBe(false);
+    });
+  });
+
+  describe('updateJoinMapping', () => {
+    it('should update selected mapping at index', () => {
+      dataTabActions.setJoinStats({
+        joinedCount: 0,
+        toVerifyCount: 1,
+        duplicateCount: 0,
+        unrecognizedCount: 0,
+        totalEntities: 1,
+        entities: [
+          {
+            dataValue: 'Spain',
+            status: JoinStatus.TO_VERIFY,
+            matches: ['Spain', 'ESP', 'Espana']
+          }
+        ]
+      });
+
+      dataTabActions.updateJoinMapping(0, 'ESP');
+
+      expect(dataTabState.basemapJoin.joinMappings[0].selectedMapping).toBe(
+        'ESP'
+      );
+    });
+
+    it('should do nothing for invalid index', () => {
+      dataTabActions.setJoinStats({
+        joinedCount: 0,
+        toVerifyCount: 1,
+        duplicateCount: 0,
+        unrecognizedCount: 0,
+        totalEntities: 1,
+        entities: [
+          {
+            dataValue: 'Spain',
+            status: JoinStatus.TO_VERIFY,
+            matches: ['Spain']
+          }
+        ]
+      });
+
+      expect(() => dataTabActions.updateJoinMapping(99, 'test')).not.toThrow();
     });
   });
 });
