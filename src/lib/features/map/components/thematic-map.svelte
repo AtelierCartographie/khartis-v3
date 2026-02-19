@@ -361,39 +361,6 @@
     }
   }
 
-  function fitMapLibreViewport(): void {
-    if (
-      mapInit.viewMode !== ViewMode.MAPLIBRE ||
-      !mapInit.isMapLoaded ||
-      !mapInit.map
-    ) {
-      return;
-    }
-
-    if (firstTable) {
-      const bounds = calculateBoundsFromGeoArrow(firstTable);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds);
-      }
-      return;
-    }
-
-    if (firstGeoJSON) {
-      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds);
-      }
-      return;
-    }
-
-    if (worldBaseTable) {
-      const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
-      if (bounds) {
-        mapBounds.fitToBounds(bounds);
-      }
-    }
-  }
-
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -546,11 +513,8 @@
           } else {
             worldBaseTable = loaded.geometryTable;
           }
-
-          const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-          if (canUpdate) {
-            scheduleLayerUpdate('effect:simplificationApplied');
-          }
+          // Note: worldBaseTable assignment triggers the worldBaseTable $effect
+          // which calls scheduleLayerUpdate — no need to call it here.
         }
       });
     }
@@ -989,26 +953,24 @@
     loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
-      updateCanvasSize();
-
       if (resizeTimeoutId) {
         clearTimeout(resizeTimeoutId);
       }
 
       resizeTimeoutId = setTimeout(() => {
+        // Debounce updateCanvasSize together with resize handling to avoid
+        // triggering projectionStore reactive effects on every intermediate frame.
+        updateCanvasSize();
+
         // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+            // Only resize the canvas — do NOT re-fit viewport bounds.
+            // Preserves the user's current zoom and pan position.
             mapInit.map?.resize();
-            if (hasData || worldBaseTable) {
-              fitMapLibreViewport();
-            }
           } else {
             syncOrthographicDeckSize();
-            if (hasData || worldBaseTable) {
-              fitOrthographicViewport();
-            }
           }
           scheduleLayerUpdate('resizeObserver');
         }
