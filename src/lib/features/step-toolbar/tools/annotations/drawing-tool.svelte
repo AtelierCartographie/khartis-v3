@@ -315,7 +315,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.DRAWING}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.DRAWING &&
               annotationsActions.removeAnnotation(selected.id)}

@@ -3,7 +3,7 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
-  import { Crop, Image, Pen } from 'carbon-icons-svelte';
+  import { Crop, Image, Pen, TextCreation } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -45,49 +45,62 @@
     <Row>
       <Column>
         <div class="tool-picker">
-          <Button
-            kind={annotationsState.activeType === AnnotationKind.TEXT
-              ? 'primary'
-              : 'tertiary'}
-            size="field"
-            onclick={() =>
-              annotationsActions.setActiveType(AnnotationKind.TEXT)}
+          <div
+            class:type-btn-active={annotationsState.activeType ===
+              AnnotationKind.TEXT}
           >
-            {m.annotations_text()}
-          </Button>
-          <Button
-            kind={annotationsState.activeType === AnnotationKind.SHAPE
-              ? 'primary'
-              : 'tertiary'}
-            size="field"
-            icon={Crop}
-            onclick={() =>
-              annotationsActions.setActiveType(AnnotationKind.SHAPE)}
+            <Button
+              kind="tertiary"
+              size="field"
+              icon={TextCreation}
+              onclick={() =>
+                annotationsActions.setActiveType(AnnotationKind.TEXT)}
+            >
+              {m.annotations_text()}
+            </Button>
+          </div>
+          <div
+            class:type-btn-active={annotationsState.activeType ===
+              AnnotationKind.SHAPE}
           >
-            {m.annotations_shape()}
-          </Button>
-          <Button
-            kind={annotationsState.activeType === AnnotationKind.DRAWING
-              ? 'primary'
-              : 'tertiary'}
-            size="field"
-            icon={Pen}
-            onclick={() =>
-              annotationsActions.setActiveType(AnnotationKind.DRAWING)}
+            <Button
+              kind="tertiary"
+              size="field"
+              icon={Crop}
+              onclick={() =>
+                annotationsActions.setActiveType(AnnotationKind.SHAPE)}
+            >
+              {m.annotations_shape()}
+            </Button>
+          </div>
+          <div
+            class:type-btn-active={annotationsState.activeType ===
+              AnnotationKind.DRAWING}
           >
-            {m.annotations_drawing()}
-          </Button>
-          <Button
-            kind={annotationsState.activeType === AnnotationKind.IMAGE
-              ? 'primary'
-              : 'tertiary'}
-            size="field"
-            icon={Image}
-            onclick={() =>
-              annotationsActions.setActiveType(AnnotationKind.IMAGE)}
+            <Button
+              kind="tertiary"
+              size="field"
+              icon={Pen}
+              onclick={() =>
+                annotationsActions.setActiveType(AnnotationKind.DRAWING)}
+            >
+              {m.annotations_drawing()}
+            </Button>
+          </div>
+          <div
+            class:type-btn-active={annotationsState.activeType ===
+              AnnotationKind.IMAGE}
           >
-            {m.annotations_image()}
-          </Button>
+            <Button
+              kind="tertiary"
+              size="field"
+              icon={Image}
+              onclick={() =>
+                annotationsActions.setActiveType(AnnotationKind.IMAGE)}
+            >
+              {m.annotations_image()}
+            </Button>
+          </div>
         </div>
       </Column>
     </Row>
@@ -118,6 +131,26 @@
     grid-template-columns: 1fr 1fr;
     gap: var(--cds-spacing-03);
     margin-bottom: var(--cds-spacing-06);
+  }
+
+  .tool-picker > div {
+    min-width: 0;
+  }
+
+  .tool-picker > div :global(.bx--btn) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .type-btn-active :global(.bx--btn--tertiary) {
+    background-color: #3c3838;
+    color: white;
+    border-color: #3c3838;
+  }
+
+  .type-btn-active :global(.bx--btn--tertiary:hover) {
+    background-color: #2e2c2c;
+    border-color: #2e2c2c;
   }
 
   .switch-row {

@@ -142,7 +142,7 @@
     <Column>
       <div class="section">
         <p class="helper">{m.annotations_shape_helper()}</p>
-        <Button kind="primary" icon={Add} on:click={handleAddShape}>
+        <Button kind="primary" icon={Add} onclick={handleAddShape}>
           {m.annotations_add_shape()}
         </Button>
       </div>
@@ -260,7 +260,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.SHAPE}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.SHAPE &&
               annotationsActions.removeAnnotation(selected.id)}

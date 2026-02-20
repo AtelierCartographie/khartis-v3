@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
@@ -8,7 +7,6 @@
     Button,
     Column,
     Grid,
-    NumberInput,
     Row,
     Select,
     SelectItem,
@@ -20,6 +18,9 @@
     TextAlignCenter,
     TextAlignLeft,
     TextAlignRight,
+    TextBold,
+    TextItalic,
+    TextUnderline,
     TrashCan
   } from 'carbon-icons-svelte';
   import {
@@ -45,15 +46,6 @@
     { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
   ];
-
-  function handleFontSizeChange(e: CustomEvent<number | string | null>) {
-    const detail = e.detail;
-    const value =
-      typeof detail === 'string' ? parseInt(detail, 10) : (detail ?? 0);
-    if (!isNaN(value)) {
-      annotationsActions.applyStyle({ fontSize: value });
-    }
-  }
 
   function handleAlignChange(align: TextAlign) {
     annotationsActions.applyStyle({ textAlign: align });
@@ -116,22 +108,6 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_add_text_description()}</p>
-        <TextArea
-          id="text-content"
-          labelText={m.annotations_content()}
-          value={textEditorValue}
-          on:input={handleContentInput}
-          placeholder={selectedText ? '' : m.annotations_no_content()}
-          rows={4}
-        />
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
         <Button
           kind="primary"
           icon={Add}
@@ -147,14 +123,97 @@
   <Row>
     <Column>
       <div class="section">
-        <NumberInput
-          labelText={m.annotations_size()}
-          value={effectiveStyle.fontSize || 16}
-          min={8}
-          max={72}
-          step={1}
-          on:change={handleFontSizeChange}
-        />
+        <p class="helper">{m.annotations_add_text_description()}</p>
+        <div class="textarea-wrapper">
+          <TextArea
+            id="text-content"
+            labelText={m.annotations_content()}
+            value={textEditorValue}
+            on:input={handleContentInput}
+            placeholder={selectedText ? '' : m.annotations_no_content()}
+            rows={5}
+          />
+        </div>
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section text-format-controls">
+        <div class="format-buttons">
+          <div class:format-btn-active={effectiveStyle.bold}>
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_bold()}
+              icon={TextBold}
+              onclick={() =>
+                annotationsActions.applyStyle({ bold: !effectiveStyle.bold })}
+            />
+          </div>
+          <div class:format-btn-active={effectiveStyle.italic}>
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_italic()}
+              icon={TextItalic}
+              onclick={() =>
+                annotationsActions.applyStyle({
+                  italic: !effectiveStyle.italic
+                })}
+            />
+          </div>
+          <div class:format-btn-active={effectiveStyle.underlined}>
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_underline()}
+              icon={TextUnderline}
+              onclick={() =>
+                annotationsActions.applyStyle({
+                  underlined: !effectiveStyle.underlined
+                })}
+            />
+          </div>
+          <div class="separator"></div>
+          <div
+            class:format-btn-active={effectiveStyle.textAlign ===
+              TextAlign.Left}
+          >
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_align_left()}
+              icon={TextAlignLeft}
+              onclick={() => handleAlignChange(TextAlign.Left)}
+            />
+          </div>
+          <div
+            class:format-btn-active={effectiveStyle.textAlign ===
+              TextAlign.Center}
+          >
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_align_center()}
+              icon={TextAlignCenter}
+              onclick={() => handleAlignChange(TextAlign.Center)}
+            />
+          </div>
+          <div
+            class:format-btn-active={effectiveStyle.textAlign ===
+              TextAlign.Right}
+          >
+            <Button
+              kind="ghost"
+              size="field"
+              iconDescription={m.annotations_align_right()}
+              icon={TextAlignRight}
+              onclick={() => handleAlignChange(TextAlign.Right)}
+            />
+          </div>
+        </div>
       </div>
     </Column>
   </Row>
@@ -177,84 +236,12 @@
 
   <Row>
     <Column>
-      <div class="section text-style-controls">
-        <div class="style-toggles">
-          <Switch
-            labelText={m.annotations_bold()}
-            toggled={effectiveStyle.bold || false}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={(checked) =>
-              annotationsActions.applyStyle({ bold: checked })}
-          />
-
-          <Switch
-            labelText={m.annotations_italic()}
-            toggled={effectiveStyle.italic || false}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={(checked) =>
-              annotationsActions.applyStyle({ italic: checked })}
-          />
-
-          <Switch
-            labelText={m.annotations_underline()}
-            toggled={effectiveStyle.underlined || false}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={(checked) =>
-              annotationsActions.applyStyle({ underlined: checked })}
-          />
-        </div>
-
-        <div class="alignment-controls">
-          <p class="alignment-label">{m.annotations_alignment_label()}</p>
-          <div class="alignment-buttons">
-            <button
-              class="alignment-btn {effectiveStyle.textAlign === TextAlign.Left
-                ? 'active'
-                : ''}"
-              onclick={() => handleAlignChange(TextAlign.Left)}
-              aria-label={m.annotations_align_left()}
-            >
-              <TextAlignLeft />
-            </button>
-            <button
-              class="alignment-btn {effectiveStyle.textAlign ===
-              TextAlign.Center
-                ? 'active'
-                : ''}"
-              onclick={() => handleAlignChange(TextAlign.Center)}
-              aria-label={m.annotations_align_center()}
-            >
-              <TextAlignCenter />
-            </button>
-            <button
-              class="alignment-btn {effectiveStyle.textAlign === TextAlign.Right
-                ? 'active'
-                : ''}"
-              onclick={() => handleAlignChange(TextAlign.Right)}
-              aria-label={m.annotations_align_right()}
-            >
-              <TextAlignRight />
-            </button>
-          </div>
-        </div>
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
       <div class="section delete-section">
         <Button
           kind="danger-tertiary"
           icon={TrashCan}
           disabled={!selectedText}
-          on:click={() =>
+          onclick={() =>
             selectedText &&
             annotationsActions.removeAnnotation(selectedText.id)}
         >
@@ -270,71 +257,41 @@
     margin-top: var(--cds-spacing-05);
   }
 
-  .text-style-controls {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-05);
-  }
-
   .helper {
     margin: 0 0 var(--cds-spacing-03) 0;
     color: var(--cds-text-secondary);
     font-size: 0.875rem;
   }
 
-  .style-toggles {
-    display: flex;
-    gap: var(--cds-spacing-05);
-    flex-wrap: wrap;
+  .textarea-wrapper :global(.bx--text-area) {
+    min-height: 128px;
+    height: 128px;
+    resize: vertical;
   }
 
-  .alignment-controls {
+  .text-format-controls {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
   }
 
-  .alignment-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    margin: 0;
-  }
-
-  .alignment-buttons {
-    display: flex;
-    gap: 2px;
-    background: var(--cds-layer-01);
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    padding: 2px;
-    width: fit-content;
-  }
-
-  .alignment-btn {
+  .format-buttons {
     display: flex;
     align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    background: transparent;
-    border: none;
-    border-radius: 2px;
-    cursor: pointer;
-    color: var(--cds-text-secondary);
-    transition: all 0.15s ease;
+    gap: 0;
   }
 
-  .alignment-btn:hover {
-    background: var(--cds-layer-hover);
-    color: var(--cds-text-primary);
+  .format-btn-active :global(.bx--btn--ghost) {
+    background-color: var(--cds-layer-selected, #e0e0e0);
+    color: var(--cds-text-primary, #161616);
   }
 
-  .alignment-btn.active {
-    background: var(--cds-button-primary);
-    color: var(--cds-text-on-color);
-  }
-
-  .alignment-btn.active:hover {
-    background: var(--cds-button-primary-hover);
+  .separator {
+    width: 1px;
+    height: 24px;
+    background-color: var(--cds-border-subtle, #e0e0e0);
+    margin: 0 var(--cds-spacing-02);
+    flex-shrink: 0;
   }
 
   .delete-section :global(.bx--btn) {

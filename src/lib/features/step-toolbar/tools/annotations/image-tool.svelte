@@ -9,7 +9,7 @@
     Row,
     Slider
   } from 'carbon-components-svelte';
-  import { Add, TrashCan } from 'carbon-icons-svelte';
+  import { TrashCan, Upload } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -71,7 +71,7 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <Button kind="primary" icon={Add} on:click={triggerFileDialog}>
+      <Button kind="primary" icon={Upload} onclick={triggerFileDialog}>
         {m.annotations_import_image()}
       </Button>
       <div class="visually-hidden" bind:this={hiddenUploader}>
@@ -130,7 +130,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.IMAGE}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.IMAGE &&
               annotationsActions.removeAnnotation(selected.id)}
