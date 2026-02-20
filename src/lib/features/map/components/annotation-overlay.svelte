@@ -14,6 +14,10 @@
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import {
+    computeDrawingBounds,
+    smoothDrawingPath
+  } from '../utils/annotation-drawing.utils';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
@@ -357,17 +361,22 @@
           {@const drawingStyle = getShapeStyle(item)}
           {@const points = Array.isArray(item.content) ? item.content : []}
           {#if points.length > 0}
+            {@const isClosed = item.style?.drawingType === DrawingType.ZONE}
+            {@const smoothness = item.style?.smoothness ?? 0}
+            {@const drawingBounds = computeDrawingBounds(
+              points,
+              drawingStyle.strokeWidth
+            )}
             <svg
+              width={drawingBounds.width}
+              height={drawingBounds.height}
+              viewBox={drawingBounds.viewBox}
               class="annotation-drawing"
-              style="overflow: visible; opacity: {drawingStyle.opacity};"
+              style="opacity: {drawingStyle.opacity};"
             >
               <path
-                d={points
-                  .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-                  .join(' ')}
-                fill={item.style?.drawingType === DrawingType.ZONE
-                  ? drawingStyle.fill
-                  : 'none'}
+                d={smoothDrawingPath(points, smoothness, isClosed)}
+                fill={isClosed ? drawingStyle.fill : 'none'}
                 stroke={drawingStyle.stroke}
                 stroke-width={drawingStyle.strokeWidth}
                 stroke-dasharray={drawingStyle.strokeDasharray}
