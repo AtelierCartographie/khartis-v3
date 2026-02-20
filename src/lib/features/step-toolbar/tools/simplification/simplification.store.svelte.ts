@@ -15,7 +15,7 @@ import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svel
 import {
   simplifyGeometryTable,
   calculateToleranceFromRate,
-  SIMPLIFICATION_TOLERANCE
+  SIMPLIFICATION_FACTOR
 } from '$lib/features/duckdb/operations/simplification';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -69,7 +69,7 @@ const { actions, getState } = createToolStore<
       }
 
       const basemapId = currentBasemap.metadata.file;
-      const tolerance = SIMPLIFICATION_TOLERANCE[s.level];
+      const tolerance = SIMPLIFICATION_FACTOR[s.level];
 
       logger.info('Starting basemap simplification', LogCategory.DUCKDB, {
         basemapId,

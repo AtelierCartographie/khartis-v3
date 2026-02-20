@@ -27,7 +27,7 @@ import { SimplificationLevel } from '../../commons/types/enums';
 import {
   simplifyGeometryTable,
   getSimplifiedArrowTable,
-  SIMPLIFICATION_TOLERANCE
+  SIMPLIFICATION_FACTOR
 } from '../../duckdb/operations/simplification';
 
 interface AdditionalBasemapData {
@@ -570,7 +570,7 @@ function createBasemapService() {
 
     try {
       const tableName = await loadGeometryIntoDuckDB(basemapId);
-      const tolerance = SIMPLIFICATION_TOLERANCE[level];
+      const tolerance = SIMPLIFICATION_FACTOR[level];
 
       const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
 
