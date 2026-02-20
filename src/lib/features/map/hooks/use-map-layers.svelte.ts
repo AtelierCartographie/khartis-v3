@@ -214,6 +214,26 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         `Processing ${activeVisualizations.length} visualizations`,
         LogCategory.MAP
       );
+
+      // Pre-filter Arrow tables by (datasetId, yearFilter) to avoid
+      // redundant filtering when multiple visualizations share the same table + filter.
+      const yearFilteredTableCache = new Map<string, ArrowTable>();
+
+      function getFilteredTable(
+        table: ArrowTable,
+        datasetId: string,
+        yearFilter: (typeof activeVisualizations)[0]['yearFilter']
+      ): ArrowTable {
+        const cacheKey = yearFilter
+          ? `${datasetId}:${yearFilter.column}:${yearFilter.value}`
+          : datasetId;
+        const cached = yearFilteredTableCache.get(cacheKey);
+        if (cached) return cached;
+        const result = filterArrowTableByYear(table, yearFilter);
+        yearFilteredTableCache.set(cacheKey, result);
+        return result;
+      }
+
       const renderedDatasetIds = new Set<string>();
       for (const viz of activeVisualizations) {
         const vizStart = performance.now();
@@ -249,7 +269,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               continue;
             }
             const arrowStart = performance.now();
-            const filteredTable = filterArrowTableByYear(table, viz.yearFilter);
+            const filteredTable = getFilteredTable(
+              table,
+              datasetId,
+              viz.yearFilter
+            );
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);
             if (arrowLayers.length > 0) {

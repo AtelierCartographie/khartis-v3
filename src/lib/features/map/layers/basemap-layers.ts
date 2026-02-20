@@ -46,6 +46,22 @@ import {
 import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 
+// Shared extension instance — avoids re-allocation per layer per frame
+const DASH_EXTENSION = new PathStyleExtension({ dash: true });
+
+// --- Graticule cache (Opt #2) ---
+let cachedGraticuleKey: string | null = null;
+let cachedGraticuleData: FeatureCollection<
+  LineString | MultiLineString
+> | null = null;
+
+// --- Cities cache (Opt #3) ---
+let cachedCitiesKey: string | null = null;
+let cachedCitiesSource: FeatureCollection<Point> | null = null;
+let cachedFilteredCities: FeatureCollection<Point> | null = null;
+let cachedPolygonCitiesKey: string | null = null;
+let cachedPolygonCities: FeatureCollection<Polygon> | null = null;
+
 interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
@@ -169,9 +185,7 @@ export function createTerreLayers(
         lineWidthScale: effectiveStrokeThickness,
         lineWidthMinPixels: 0,
         lineWidthMaxPixels: 0.5,
-        extensions: config.strokeDotted
-          ? [new PathStyleExtension({ dash: true })]
-          : [],
+        extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
@@ -219,9 +233,7 @@ export function createTerreLayers(
           getLineWidth: effectiveStrokeThickness,
           lineWidthMinPixels: 0,
           lineWidthMaxPixels: 0.5,
-          extensions: config.strokeDotted
-            ? [new PathStyleExtension({ dash: true })]
-            : [],
+          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           ...baseProps,
           updateTriggers: {
@@ -334,7 +346,7 @@ export function createFrontieresLayer(
       lineWidthScale: effectiveThickness,
       lineWidthMinPixels: 0,
       lineWidthMaxPixels: 0.5,
-      extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+      extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
@@ -357,9 +369,7 @@ export function createFrontieresLayer(
         getLineWidth: effectiveThickness,
         lineWidthMinPixels: 0,
         lineWidthMaxPixels: 0.5,
-        extensions: config.dotted
-          ? [new PathStyleExtension({ dash: true })]
-          : [],
+        extensions: config.dotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
@@ -421,7 +431,7 @@ export function createEquateurLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -446,32 +456,38 @@ export function createMeridiensLayer(
     ctx.projectionSuffix
   );
 
-  const stepMap: Record<string, [number, number]> = {
-    'equator-tropics': [30, 23.5],
-    major: [15, 15],
-    minor: [5, 5],
-    all: [10, 10]
-  };
-  const step = stepMap[config.remarquables] ?? [10, 10];
+  const graticuleKey = config.remarquables;
+  if (cachedGraticuleKey !== graticuleKey || !cachedGraticuleData) {
+    const stepMap: Record<string, [number, number]> = {
+      'equator-tropics': [30, 23.5],
+      major: [15, 15],
+      minor: [5, 5],
+      all: [10, 10]
+    };
+    const step = stepMap[config.remarquables] ?? [10, 10];
 
-  const graticule = d3
-    .geoGraticule()
-    .step(step)
-    .extent([
-      [-180, -90],
-      [180, 90]
-    ]);
+    const graticule = d3
+      .geoGraticule()
+      .step(step)
+      .extent([
+        [-180, -90],
+        [180, 90]
+      ]);
 
-  const graticuleGeoJSON: Feature<MultiLineString> = {
-    type: GEOJSON_TYPE.FEATURE,
-    properties: {},
-    geometry: graticule()
-  };
+    const graticuleGeoJSON: Feature<MultiLineString> = {
+      type: GEOJSON_TYPE.FEATURE,
+      properties: {},
+      geometry: graticule()
+    };
 
-  const featuresCollection: FeatureCollection<LineString | MultiLineString> = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: [graticuleGeoJSON]
-  };
+    cachedGraticuleData = {
+      type: GEOJSON_TYPE.FEATURE_COLLECTION,
+      features: [graticuleGeoJSON]
+    };
+    cachedGraticuleKey = graticuleKey;
+  }
+
+  const featuresCollection = cachedGraticuleData;
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -486,7 +502,7 @@ export function createMeridiensLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 0.5,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -556,7 +572,7 @@ export function createRivieresLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 0.5,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -794,8 +810,20 @@ export function createVillesLayer(
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
-  const filteredCities = filterCitiesByCategory(citiesData, config.category);
-  if (filteredCities.features.length === 0) return null;
+  // Cache filtered cities by category and input source reference.
+  // This avoids stale data reuse if the caller provides a new cities dataset.
+  const filterKey = config.category;
+  const isNewSource = cachedCitiesSource !== citiesData;
+  if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
+    cachedFilteredCities = filterCitiesByCategory(citiesData, config.category);
+    cachedCitiesKey = filterKey;
+    cachedCitiesSource = citiesData;
+    // Invalidate polygon cache when filter changes
+    cachedPolygonCitiesKey = null;
+    cachedPolygonCities = null;
+  }
+
+  if (cachedFilteredCities.features.length === 0) return null;
 
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
@@ -810,7 +838,7 @@ export function createVillesLayer(
   if (isCircle) {
     return new GeoJsonLayer({
       id: layerId,
-      data: filteredCities,
+      data: cachedFilteredCities,
       filled: true,
       stroked: true,
       pointType: 'circle',
@@ -830,15 +858,20 @@ export function createVillesLayer(
     });
   }
 
-  const polygonCities = convertCitiesToPolygons(
-    filteredCities,
-    config.symbol,
-    config.size
-  );
+  // Cache polygon conversion by (category, symbol, size)
+  const polygonKey = `${config.category}:${config.symbol}:${config.size}`;
+  if (cachedPolygonCitiesKey !== polygonKey || !cachedPolygonCities) {
+    cachedPolygonCities = convertCitiesToPolygons(
+      cachedFilteredCities,
+      config.symbol,
+      config.size
+    );
+    cachedPolygonCitiesKey = polygonKey;
+  }
 
   return new GeoJsonLayer({
     id: layerId,
-    data: polygonCities,
+    data: cachedPolygonCities,
     filled: true,
     stroked: true,
     getFillColor: withOpacity(fillColor, opacity),
