@@ -1,18 +1,13 @@
 <script lang="ts">
   import { Button } from 'carbon-components-svelte';
-  import { ArrowsHorizontal } from 'carbon-icons-svelte';
+  import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import PaletteModal from '../palette-modal.svelte';
-
-  type PaletteType = 'sequential' | 'diverging' | 'qualitative' | 'pattern';
-
-  interface Palette {
-    id: string;
-    name: string;
-    colors: string[];
-    type: PaletteType;
-    colorBlindSafe?: boolean;
-  }
+  import { PalettePopover, PaletteDropdown } from '../palette-popover';
+  import type {
+    Palette,
+    PaletteType
+  } from '../palette-popover/palette.constants';
+  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
     label?: string;
@@ -24,6 +19,7 @@
     onexpand?: () => void;
     oninvert?: () => void;
     onselect?: (palette: Palette) => void;
+    onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
   }
 
   let {
@@ -35,13 +31,16 @@
     showInvertButton = true,
     onexpand,
     oninvert,
-    onselect
+    onselect,
+    onClassificationChange
   }: Props = $props();
 
-  let paletteModalOpen = $state(false);
+  let dropdownOpen = $state(false);
+  let popoverOpen = $state(false);
+  let triggerRef = $state<HTMLDivElement>();
 
   function handleClick() {
-    paletteModalOpen = true;
+    dropdownOpen = !dropdownOpen;
     onexpand?.();
   }
 
@@ -50,12 +49,35 @@
     oninvert?.();
   }
 
-  function handlePaletteSelect(palette: Palette) {
+  function handleDropdownSelect(palette: Palette, newColors: string[]) {
     onselect?.(palette);
+    onClassificationChange?.({ colors: newColors });
+    dropdownOpen = false;
   }
 
-  function handleClose() {
-    paletteModalOpen = false;
+  function handleCustomize() {
+    dropdownOpen = false;
+    popoverOpen = true;
+  }
+
+  function handleDropdownClose() {
+    dropdownOpen = false;
+  }
+
+  function handlePopoverValidate(
+    palette: Palette | undefined,
+    newColors: string[],
+    _inverted: boolean
+  ) {
+    if (palette) {
+      onselect?.(palette);
+    }
+    onClassificationChange?.({ colors: newColors });
+    popoverOpen = false;
+  }
+
+  function handlePopoverClose() {
+    popoverOpen = false;
   }
 </script>
 
@@ -63,18 +85,20 @@
   {#if label}
     <span class="field-label">{label}</span>
   {/if}
-  <div class="palette-selector">
+  <div class="palette-trigger" bind:this={triggerRef}>
     <button
       type="button"
       class="palette-main"
       onclick={handleClick}
       aria-label={m.color_palette()}
+      aria-expanded={dropdownOpen}
     >
       <div class="palette-preview">
         {#each colors as color, i (i)}
           <div class="palette-color" style="background-color: {color}"></div>
         {/each}
       </div>
+      <ChevronDown size={16} />
     </button>
     {#if showInvertButton}
       <Button
@@ -88,14 +112,28 @@
   </div>
 </div>
 
-<PaletteModal
-  bind:open={paletteModalOpen}
+<PaletteDropdown
+  bind:open={dropdownOpen}
+  triggerElement={triggerRef}
+  selectedPaletteId={selectedPaletteId}
+  paletteType={paletteType}
+  colorBlindFilter={colorBlindFilter}
+  numClasses={colors.length || 5}
+  onclose={handleDropdownClose}
+  onselect={handleDropdownSelect}
+  oncustomize={handleCustomize}
+/>
+
+<PalettePopover
+  bind:open={popoverOpen}
+  triggerElement={triggerRef}
+  currentColors={colors}
   selectedPaletteId={selectedPaletteId}
   bind:paletteType={paletteType}
   bind:colorBlindFilter={colorBlindFilter}
-  onclose={handleClose}
-  onselect={handlePaletteSelect}
-  oninvert={oninvert}
+  numClasses={colors.length || 5}
+  onclose={handlePopoverClose}
+  onvalidate={handlePopoverValidate}
 />
 
 <style lang="scss">
@@ -111,7 +149,7 @@
     font-weight: 400;
   }
 
-  .palette-selector {
+  .palette-trigger {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
@@ -123,6 +161,8 @@
   .palette-main {
     flex: 1;
     display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
     background: transparent;
     border: none;
     cursor: pointer;
