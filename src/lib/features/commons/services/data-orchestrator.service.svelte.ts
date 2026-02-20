@@ -356,6 +356,13 @@ function createDataOrchestratorService() {
         visualizationStore.removeVisualization(viz.id);
       });
 
+      // Remove dataset from store BEFORE dropping DuckDB table.
+      // dropTable() bumps datasetsVersion which triggers UI effects —
+      // if the dataset still exists, AdvancedDataTable will try to query
+      // the already-dropped table and crash.
+      datasetsStore.removeDataset(dataset.id);
+      layersActions.syncWithVisualizations();
+
       const duckDataset = duckDBOrchestrator
         .getAllDatasets()
         .find((d) => d.sourceFileId === fileId);
@@ -364,9 +371,6 @@ function createDataOrchestratorService() {
         await cleanupDuckDBResources(duckDataset.tableName);
         geometryDatasetsVersion++;
       }
-
-      datasetsStore.removeDataset(dataset.id);
-      layersActions.syncWithVisualizations();
     }
 
     processedFileIds.delete(fileId);
@@ -715,8 +719,9 @@ function createDataOrchestratorService() {
     // This must happen after processProjectFiles() so that the auto-create
     // $effect in visualization-tab.svelte has already run (adding the dataset
     // to initializedDatasetIds), preventing it from overriding the restored settings.
-    const vizSettings = (currentProject?.data as unknown as SerializedProjectData)
-      ?.visualizationSettings;
+    const vizSettings = (
+      currentProject?.data as unknown as SerializedProjectData
+    )?.visualizationSettings;
     if (vizSettings) {
       visualizationStore.restoreFromSerialized(vizSettings);
       logger.debug(

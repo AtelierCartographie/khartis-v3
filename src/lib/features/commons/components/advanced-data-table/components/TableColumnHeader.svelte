@@ -187,10 +187,7 @@
     const warnings: ColumnWarning[] = [];
 
     const shareNulls = analysis.share_nulls as number | undefined;
-    const shareDuplicates = analysis.share_duplicates as number | undefined;
-    const shareUniques = analysis.share_uniques as number | undefined;
     const nulls = analysis.nulls as number | undefined;
-    const duplicates = analysis.duplicates as number | undefined;
 
     if (shareNulls !== undefined && shareNulls > 0.5) {
       warnings.push({

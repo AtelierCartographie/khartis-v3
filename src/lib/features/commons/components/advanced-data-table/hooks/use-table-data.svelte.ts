@@ -54,6 +54,14 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       initialLoadComplete = false;
       error = null;
 
+      // Clear stale columns synchronously before the async fetch.
+      // This prevents Svelte from reconciling old → new column headers
+      // in a single keyed-each pass, which can crash when Portal-based
+      // components (TableColumnHeader) are destroyed mid-reconciliation.
+      columns = [];
+      tableData = [];
+      columnAnalysis = new SvelteMap();
+
       if (tableName) {
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
 
