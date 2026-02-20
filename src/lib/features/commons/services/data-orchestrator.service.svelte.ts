@@ -5,6 +5,7 @@ import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
+import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
@@ -708,6 +709,20 @@ function createDataOrchestratorService() {
     const currentProject = projectStore.currentProject;
     if (currentProject?.data?.sourceFiles) {
       await processProjectFiles(currentProject.data.sourceFiles);
+    }
+
+    // Restore visualization settings after datasets are loaded.
+    // This must happen after processProjectFiles() so that the auto-create
+    // $effect in visualization-tab.svelte has already run (adding the dataset
+    // to initializedDatasetIds), preventing it from overriding the restored settings.
+    const vizSettings = (currentProject?.data as unknown as SerializedProjectData)
+      ?.visualizationSettings;
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+      logger.debug(
+        'Visualization settings restored after dataset loading',
+        LogCategory.PROJECT
+      );
     }
 
     const { globalActions } = await import('../store/global.svelte');
