@@ -535,7 +535,7 @@ function createVisualizationStore(): VisualizationStore {
         : [...currentFilters, primitive];
 
       return {
-        primitiveFilters: nextFilters.length > 0 ? nextFilters : currentFilters
+        primitiveFilters: nextFilters
       };
     });
   }
