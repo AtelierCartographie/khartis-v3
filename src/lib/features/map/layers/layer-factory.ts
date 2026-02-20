@@ -961,7 +961,8 @@ export function createPolygonLayers(
           hasPolyHighlights
         ],
         getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights]
-      }
+      },
+      dataComparator: (newData, oldData) => newData === oldData
     })
   ];
 }
@@ -1039,33 +1040,39 @@ export function createDeckLayers(
     !ctx.viz.primitiveFilters.includes(primitive);
 
   let thematicLayers: Layer<DeckDataRow>[] = [];
-  if (!isPrimitiveFilteredOut) {
-    switch (resolvedGeometryType) {
-      case GeometryType.POINT:
-      case GeometryType.MULTIPOINT:
-        thematicLayers = createPointLayers(jsTable, geometryInfo, ctx);
-        break;
+  switch (resolvedGeometryType) {
+    case GeometryType.POINT:
+    case GeometryType.MULTIPOINT:
+      thematicLayers = createPointLayers(jsTable, geometryInfo, ctx);
+      break;
 
-      case GeometryType.LINESTRING:
-      case GeometryType.MULTILINESTRING:
-        thematicLayers = createLineLayers(jsTable, geometryInfo, ctx);
-        break;
+    case GeometryType.LINESTRING:
+    case GeometryType.MULTILINESTRING:
+      thematicLayers = createLineLayers(jsTable, geometryInfo, ctx);
+      break;
 
-      case GeometryType.POLYGON:
-      case GeometryType.MULTIPOLYGON:
-        thematicLayers = createPolygonLayers(jsTable, geometryInfo, ctx);
-        break;
+    case GeometryType.POLYGON:
+    case GeometryType.MULTIPOLYGON:
+      thematicLayers = createPolygonLayers(jsTable, geometryInfo, ctx);
+      break;
 
-      default:
-        logger.error(
-          'Unsupported geometry type for Deck layer',
-          LogCategory.MAP,
-          {
-            geometryType: resolvedGeometryType,
-            datasetId: ctx.datasetId
-          }
-        );
-    }
+    default:
+      logger.error(
+        'Unsupported geometry type for Deck layer',
+        LogCategory.MAP,
+        {
+          geometryType: resolvedGeometryType,
+          datasetId: ctx.datasetId
+        }
+      );
+  }
+
+  // Use visible: false instead of skipping creation — preserves GPU buffers
+  // for instant re-display when the user re-enables the primitive filter.
+  if (isPrimitiveFilteredOut) {
+    thematicLayers = thematicLayers.map(
+      (layer) => layer.clone({ visible: false }) as Layer<DeckDataRow>
+    );
   }
 
   const textLayers = createTextOverlayLayers(jsTable, geometryInfo, ctx);

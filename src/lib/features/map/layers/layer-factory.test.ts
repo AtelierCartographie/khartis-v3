@@ -169,6 +169,14 @@ describe('layer-factory text overlays', () => {
       })
     );
 
-    expect(layers).toHaveLength(0);
+    // No text/label layers should be created (opacity 0).
+    // The polygon layer IS created with visible: false (primitiveFilters: [])
+    // because we preserve GPU buffers for instant re-display.
+    const textLayers = layers.filter(
+      (l) =>
+        l.id.includes(DeckLayerId.LABEL_LAYER) ||
+        l.id.includes(DeckLayerId.TEXT_LAYER)
+    );
+    expect(textLayers).toHaveLength(0);
   });
 });
