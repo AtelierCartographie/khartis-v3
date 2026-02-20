@@ -9,7 +9,6 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import {
-    Button,
     Column,
     Grid,
     Row,
@@ -18,7 +17,7 @@
     Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { Document, TextFont, ViewFilled, ViewOff } from 'carbon-icons-svelte';
+  import { TableOfContents, TextFont } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import {
     LEGEND_DEFAULTS,
@@ -61,8 +60,8 @@
   );
 
   const tabItems = $derived([
-    { icon: Document, label: m.legend_content(), iconSize: 20 },
-    { icon: TextFont, label: m.legend_style(), iconSize: 20 }
+    { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },
+    { icon: TextFont, label: m.legend_style(), iconSize: 16 }
   ]);
 
   $effect(() => {
@@ -74,13 +73,6 @@
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
   );
   const legendVisible = $derived(legendState.visible);
-
-  function toggleVisibility(id: string): void {
-    const item = items.find((i) => i.id === id);
-    if (item) {
-      legendActions.updateLegendItem(id, { visible: !item.visible });
-    }
-  }
 
   function updateItemField(
     id: string,
@@ -188,17 +180,14 @@
   {#if activeTabIndex === 0}
     <div class="expandable-stack">
       {#each items as item, index (item.id)}
-        <ExpandableSection title={item.name} defaultOpen={index === 0}>
-          {#snippet icon()}
-            <Button
-              kind="ghost"
-              size="small"
-              icon={item.visible ? ViewFilled : ViewOff}
-              iconDescription={item.visible ? m.layers_hide() : m.layers_show()}
-              onclick={() => toggleVisibility(item.id)}
-            />
-          {/snippet}
-
+        <ExpandableSection
+          title={item.name}
+          defaultOpen={index === 0}
+          showToggle={true}
+          toggleChecked={item.visible}
+          onToggleChange={(visible) =>
+            legendActions.updateLegendItem(item.id, { visible })}
+        >
           <Grid padding noGutter>
             <Row>
               <Column>
@@ -218,7 +207,7 @@
               <Column>
                 <TextInput
                   labelText={m.legend_subtitle()}
-                  size="xl"
+                  size="sm"
                   placeholder={m.legend_no_subtitle()}
                   id={`${item.id}-subtitle`}
                   bind:value={item.subtitle}
@@ -232,7 +221,7 @@
               <Column>
                 <TextInput
                   labelText={m.legend_note()}
-                  size="xl"
+                  size="sm"
                   placeholder={m.legend_no_note()}
                   id={`${item.id}-note`}
                   bind:value={item.note}
@@ -255,51 +244,50 @@
       </Row>
 
       <Row>
-        <Column sm={2} md={4} lg={8}>
-          <Select
-            id={DOM_IDS.FONT_SELECT}
-            labelText={m.legend_font()}
-            bind:selected={localFontFamily}
-            on:change={handleFontFamilyChange}
-            size="xl"
-          >
-            {#each AVAILABLE_FONTS as f (f)}
-              <SelectItem value={f} text={f} />
-            {/each}
-          </Select>
-        </Column>
-
-        <Column sm={2} md={4} lg={8}>
-          <Select
-            id={DOM_IDS.FONT_SIZE}
-            labelText={m.legend_font_size()}
-            bind:selected={localFontSize}
-            on:change={handleFontSizeChange}
-            size="xl"
-          >
-            {#each LEGEND_FONT_SIZES as s (s)}
-              <SelectItem value={s} text={String(s)} />
-            {/each}
-          </Select>
-        </Column>
-      </Row>
-
-      <Row>
         <Column>
-          <ColorPicker
-            triggerLabel={m.legend_text_color()}
-            hex={textColorHex}
-            hue={textColor.hue}
-            saturation={textColor.saturation}
-            lightness={textColor.lightness}
-            onValidate={({
-              hue,
-              saturation,
-              lightness
-            }: ColorPickerValidateEvent) => {
-              handleTextColorChange({ hue, saturation, lightness });
-            }}
-          />
+          <div class="text-style-row">
+            <div class="text-style-font">
+              <Select
+                id={DOM_IDS.FONT_SELECT}
+                labelText={m.legend_font()}
+                bind:selected={localFontFamily}
+                on:change={handleFontFamilyChange}
+                size="sm"
+              >
+                {#each AVAILABLE_FONTS as f (f)}
+                  <SelectItem value={f} text={f} />
+                {/each}
+              </Select>
+            </div>
+            <div class="text-style-size">
+              <Select
+                id={DOM_IDS.FONT_SIZE}
+                labelText={m.legend_font_size()}
+                bind:selected={localFontSize}
+                on:change={handleFontSizeChange}
+                size="sm"
+              >
+                {#each LEGEND_FONT_SIZES as s (s)}
+                  <SelectItem value={s} text={String(s)} />
+                {/each}
+              </Select>
+            </div>
+            <div class="text-style-color">
+              <ColorPicker
+                hex={textColorHex}
+                hue={textColor.hue}
+                saturation={textColor.saturation}
+                lightness={textColor.lightness}
+                onValidate={({
+                  hue,
+                  saturation,
+                  lightness
+                }: ColorPickerValidateEvent) => {
+                  handleTextColorChange({ hue, saturation, lightness });
+                }}
+              />
+            </div>
+          </div>
         </Column>
       </Row>
 
@@ -336,34 +324,15 @@
       </Row>
 
       <Row>
-        <Column sm={3} md={6} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText={m.legend_opacity()}
-              min={0}
-              max={100}
-              step={1}
-              bind:value={localOpacity}
-              on:change={handleOpacityChange}
-              hideTextInput
-            />
-          </div>
-        </Column>
-
-        <Column sm={1} md={2} lg={3}>
-          <div class="input-wrapper">
-            <input
-              id={DOM_IDS.OPACITY}
-              class="number"
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              bind:value={localOpacity}
-              onchange={handleOpacityChange}
-              inputmode="numeric"
-            />
-          </div>
+        <Column>
+          <Slider
+            labelText={m.legend_opacity()}
+            min={0}
+            max={100}
+            step={1}
+            bind:value={localOpacity}
+            on:change={handleOpacityChange}
+          />
         </Column>
       </Row>
     </Grid>
@@ -409,8 +378,25 @@
     background: var(--cds-border-subtle);
   }
 
-  .slider {
-    width: 100%;
+  .text-style-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--cds-spacing-02);
+  }
+
+  .text-style-font {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .text-style-size {
+    width: 80px;
+    flex-shrink: 0;
+  }
+
+  .text-style-color {
+    flex-shrink: 0;
+    padding-bottom: 1px;
   }
 
   :global(#khartis-legend-tool .slider .bx--slider) {
@@ -423,51 +409,5 @@
 
   :global(#khartis-legend-tool .slider .bx--slider__filled-track) {
     background: var(--cds-text-01);
-  }
-
-  .input-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-  }
-
-  .input-wrapper .number {
-    width: 100%;
-    height: 32px;
-    min-width: unset;
-    padding: 0 var(--cds-spacing-03);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-02);
-    color: var(--cds-text-01);
-    font-weight: normal;
-    font-family: var(--cds-code-01-font-family);
-    line-height: var(--cds-body-short-01-line-height);
-    border-radius: 0;
-    box-sizing: border-box;
-    font-weight: 600;
-  }
-
-  .input-wrapper .number:focus {
-    outline: none;
-    border-bottom-color: var(--cds-border-strong);
-  }
-
-  .input-wrapper .number:disabled {
-    background: var(--cds-ui-03);
-    color: var(--cds-text-02);
-    cursor: not-allowed;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type='number'] {
-    appearance: textfield;
-    -moz-appearance: textfield;
   }
 </style>
