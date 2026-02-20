@@ -1,19 +1,12 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages.js';
-  import {
-    Column,
-    Grid,
-    Row,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
+  import { Select, SelectItem } from 'carbon-components-svelte';
   import {
     colorBlindnessActions,
     getColorBlindnessState
   } from './color-blindness.store.svelte';
   import type { ColorBlindnessState } from './color-blindness.types';
 
-  const store = colorBlindnessActions;
   const colorBlindnessState = $derived(getColorBlindnessState());
 
   const simulationOptions = [
@@ -30,36 +23,22 @@
 
   function handleSimulationChange(event: Event) {
     const selectElement = event.target as HTMLSelectElement;
-    store.setSimulationType(
+    colorBlindnessActions.setSimulationType(
       selectElement.value as ColorBlindnessState['simulationType']
     );
   }
 </script>
 
 <div id="khartis-color-blindness-tool">
-  <Grid noGutter fullWidth>
-    <Row>
-      <Column>
-        <div class="simulation-section">
-          <Select
-            id="simulation-select"
-            labelText={m.colorblind_simulation()}
-            selected={colorBlindnessState.simulationType}
-            on:change={handleSimulationChange}
-            size="xl"
-          >
-            {#each simulationOptions as option (option.value)}
-              <SelectItem value={option.value} text={option.text} />
-            {/each}
-          </Select>
-        </div>
-      </Column>
-    </Row>
-  </Grid>
+  <Select
+    id="simulation-select"
+    labelText={m.colorblind_simulation()}
+    selected={colorBlindnessState.simulationType}
+    on:change={handleSimulationChange}
+    size="xl"
+  >
+    {#each simulationOptions as option (option.value)}
+      <SelectItem value={option.value} text={option.text} />
+    {/each}
+  </Select>
 </div>
-
-<style>
-  .simulation-section {
-    margin-bottom: var(--cds-spacing-04);
-  }
-</style>
