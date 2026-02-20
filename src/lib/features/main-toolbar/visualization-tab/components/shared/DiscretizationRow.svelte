@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from 'carbon-components-svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
 
@@ -15,14 +16,13 @@
   <span class="field-label">{label}</span>
   <div class="discretization-value">
     <span>{value}</span>
-    <button
-      type="button"
-      class="settings-btn"
-      aria-label={m.more_info()}
-      onclick={() => onsettings?.()}
-    >
-      <Settings size={16} />
-    </button>
+    <Button
+      kind="ghost"
+      size="small"
+      icon={Settings}
+      iconDescription={m.more_info()}
+      on:click={() => onsettings?.()}
+    />
   </div>
 </div>
 
@@ -51,21 +51,6 @@
     span {
       font-size: 0.875rem;
       color: var(--cds-text-primary);
-    }
-  }
-
-  .settings-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
     }
   }
 </style>

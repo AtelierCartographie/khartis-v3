@@ -314,7 +314,7 @@
 
               <div class="card-content">
                 <div class="card-header">
-                  <h6 class="card-title">{suggestion.label}</h6>
+                  <p class="card-title">{suggestion.label}</p>
                   <span class="radio-indicator">
                     <RadioButton checked={isSelected} />
                   </span>

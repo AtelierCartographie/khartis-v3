@@ -7,9 +7,9 @@
     Grid,
     RadioButton,
     RadioButtonGroup,
-    Row,
-    Tile
+    Row
   } from 'carbon-components-svelte';
+  import ColorSelector from './shared/ColorSelector.svelte';
   import { ArrowsHorizontal, Checkmark } from 'carbon-icons-svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
@@ -275,6 +275,19 @@
     return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
   }
 
+  let customStartColor = $state('#f7fbff');
+  let customEndColor = $state('#08519c');
+
+  function handleCustomColorChange(color: string, which: 'start' | 'end') {
+    if (which === 'start') customStartColor = color;
+    else customEndColor = color;
+    const interpolatedColors = interpolateColors(
+      [customStartColor, customEndColor],
+      numClasses
+    );
+    onClassificationChange?.({ colors: interpolatedColors });
+  }
+
   function selectPalette(palette: Palette) {
     selectedPaletteId = palette.id;
     onselect?.(palette);
@@ -359,11 +372,12 @@
   <div class="section">
     <div class="palette-grid">
       {#each currentPalettes as palette (palette.id)}
-        <button
-          type="button"
-          class="palette-item"
-          class:selected={selectedPaletteId === palette.id}
-          onclick={() => selectPalette(palette)}
+        <Button
+          kind="ghost"
+          class="palette-item {selectedPaletteId === palette.id
+            ? 'selected'
+            : ''}"
+          on:click={() => selectPalette(palette)}
           aria-label={palette.name}
         >
           <div
@@ -380,7 +394,7 @@
           {#if palette.colorBlindSafe}
             <span class="colorblind-badge" title="Daltonisme safe">✓</span>
           {/if}
-        </button>
+        </Button>
       {/each}
     </div>
   </div>
@@ -397,30 +411,22 @@
   </div>
 
   <div class="section custom-section">
-    <h6 class="label">Couleur personnalisée</h6>
+    <p class="label">Couleur personnalisée</p>
     <Grid padding noGutter>
       <Row>
         <Column sm={2} md={4} lg={8}>
-          <Tile class="color-input-tile">
-            <label for="start-color" class="color-label">Début</label>
-            <input
-              type="color"
-              id="start-color"
-              class="color-input"
-              value="#f7fbff"
-            />
-          </Tile>
+          <ColorSelector
+            label="Début"
+            value={customStartColor}
+            onchange={(color) => handleCustomColorChange(color, 'start')}
+          />
         </Column>
         <Column sm={2} md={4} lg={8}>
-          <Tile class="color-input-tile">
-            <label for="end-color" class="color-label">Fin</label>
-            <input
-              type="color"
-              id="end-color"
-              class="color-input"
-              value="#08519c"
-            />
-          </Tile>
+          <ColorSelector
+            label="Fin"
+            value={customEndColor}
+            onchange={(color) => handleCustomColorChange(color, 'end')}
+          />
         </Column>
       </Row>
     </Grid>
@@ -456,7 +462,7 @@
     gap: var(--cds-spacing-03);
   }
 
-  .palette-item {
+  :global(.palette-item) {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
@@ -466,16 +472,16 @@
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
+  }
 
-    &:hover {
-      background-color: var(--cds-layer-hover);
-      border-color: var(--cds-border-strong);
-    }
+  :global(.palette-item:hover) {
+    background-color: var(--cds-layer-hover);
+    border-color: var(--cds-border-strong);
+  }
 
-    &.selected {
-      border-color: var(--cds-interactive);
-      background-color: var(--cds-layer-selected);
-    }
+  :global(.palette-item.selected) {
+    border-color: var(--cds-interactive);
+    background-color: var(--cds-layer-selected);
   }
 
   .palette-preview {
@@ -526,36 +532,5 @@
   .custom-section {
     padding-top: var(--cds-spacing-04);
     border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  :global(.color-input-tile) {
-    padding: var(--cds-spacing-03) !important;
-    min-height: auto !important;
-  }
-
-  .color-label {
-    display: block;
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-02);
-  }
-
-  .color-input {
-    width: 100%;
-    height: 32px;
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    cursor: pointer;
-    padding: 2px;
-    background: transparent;
-
-    &::-webkit-color-swatch-wrapper {
-      padding: 0;
-    }
-
-    &::-webkit-color-swatch {
-      border: none;
-      border-radius: 2px;
-    }
   }
 </style>

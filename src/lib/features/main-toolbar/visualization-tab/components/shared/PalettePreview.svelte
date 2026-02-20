@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Button } from 'carbon-components-svelte';
   import { ArrowsHorizontal } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import PaletteModal from '../palette-modal.svelte';
@@ -76,14 +77,13 @@
       </div>
     </button>
     {#if showInvertButton}
-      <button
-        type="button"
-        class="palette-action"
-        onclick={handleInvert}
-        aria-label={m.invert_palette_tooltip()}
-      >
-        <ArrowsHorizontal size={16} />
-      </button>
+      <Button
+        kind="ghost"
+        size="small"
+        icon={ArrowsHorizontal}
+        iconDescription={m.invert_palette_tooltip()}
+        on:click={handleInvert}
+      />
     {/if}
   </div>
 </div>
@@ -144,20 +144,5 @@
   .palette-color {
     flex: 1;
     height: 100%;
-  }
-
-  .palette-action {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--cds-spacing-02);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-
-    &:hover {
-      background: var(--cds-hover-ui);
-    }
   }
 </style>

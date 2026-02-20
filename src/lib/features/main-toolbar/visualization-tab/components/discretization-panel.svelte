@@ -3,6 +3,7 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import {
+    Button,
     Column,
     Grid,
     Row,
@@ -169,9 +170,7 @@
         </Column>
         <Column sm={4} md={4} lg={8}>
           <div class="labeled-input">
-            <label for="num-classes" class="input-label"
-              >{m.discretization_num_classes()}</label
-            >
+            <p class="input-label">{m.discretization_num_classes()}</p>
             <CompactNumberInput
               bind:value={numClasses}
               min={2}
@@ -209,9 +208,7 @@
     {#if useDivergent}
       <div class="breakpoint-input">
         <div class="labeled-input">
-          <label for="breakpoint-value" class="input-label"
-            >{m.discretization_breakpoint_value()}</label
-          >
+          <p class="input-label">{m.discretization_breakpoint_value()}</p>
           <CompactNumberInput
             value={breakpointValue ?? 0}
             onchange={(v) => {
@@ -227,7 +224,7 @@
 
   {#if showHistogram}
     <div class="section histogram-section">
-      <h6 class="label">{m.discretization_histogram()}</h6>
+      <p class="label">{m.discretization_histogram()}</p>
       <div class="histogram-container">
         <div class="histogram">
           {#each breaks as breakItem, index (index)}
@@ -254,12 +251,12 @@
   {/if}
 
   <div class="section breaks-section">
-    <h6 class="label">
+    <p class="label">
       {m.discretization_class_bounds()}
       {#if method !== 'manual'}
         <span class="label-hint">{m.discretization_click_to_edit()}</span>
       {/if}
-    </h6>
+    </p>
     <div class="breaks-list">
       {#each breaks as breakItem, index (index)}
         <div class="break-row" class:editing={editingBreakIndex === index}>
@@ -294,17 +291,17 @@
               />
             </div>
           {:else}
-            <button
-              type="button"
+            <Button
+              kind="ghost"
               class="break-values"
-              onclick={() => startEditingBreak(index)}
+              on:click={() => startEditingBreak(index)}
               aria-label={m.discretization_edit_bounds()}
             >
               <span>{breakItem.min}</span>
               <span class="break-separator">—</span>
               <span>{breakItem.max}</span>
               <Edit size={16} class="edit-icon" />
-            </button>
+            </Button>
           {/if}
 
           <span class="break-count">{breakItem.count}</span>
@@ -495,7 +492,7 @@
     flex-shrink: 0;
   }
 
-  .break-values {
+  :global(.break-values) {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
@@ -508,20 +505,20 @@
     font-size: 0.875rem;
     color: var(--cds-text-primary);
     transition: background-color 0.15s ease;
+  }
 
-    &:hover {
-      background-color: var(--cds-layer-hover);
+  :global(.break-values:hover) {
+    background-color: var(--cds-layer-hover);
+  }
 
-      :global(.edit-icon) {
-        opacity: 1;
-      }
-    }
+  :global(.break-values:hover .edit-icon) {
+    opacity: 1;
+  }
 
-    :global(.edit-icon) {
-      opacity: 0;
-      color: var(--cds-text-02);
-      transition: opacity 0.15s ease;
-    }
+  :global(.break-values .edit-icon) {
+    opacity: 0;
+    color: var(--cds-text-02);
+    transition: opacity 0.15s ease;
   }
 
   .break-inputs {

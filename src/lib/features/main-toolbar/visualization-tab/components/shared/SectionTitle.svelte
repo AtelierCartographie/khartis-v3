@@ -6,7 +6,7 @@
   let { title }: Props = $props();
 </script>
 
-<h6 class="section-title">{title}</h6>
+<p class="section-title">{title}</p>
 
 <style lang="scss">
   .section-title {
