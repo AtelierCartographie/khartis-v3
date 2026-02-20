@@ -38,6 +38,12 @@
       .map((col, id) => ({ id, text: col.name }));
   });
 
+  const hasGeometry = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset?.columns) return false;
+    return dataset.columns.some((col) => col.type === COLUMN_TYPE_GEOMETRY);
+  });
+
   const discretizationMethods = [
     { id: 0, text: m.discretization_method_jenks() },
     { id: 1, text: m.discretization_method_quantile() },
@@ -352,6 +358,7 @@
     <LabelsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
+      disabled={!hasGeometry}
       onStyleChange={handleStyleChange}
       onMappingChange={handleMappingChange}
       onToggleVisibility={handleLabelVisibilityChange}
@@ -360,6 +367,7 @@
     <TextsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
+      disabled={!hasGeometry}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}

@@ -1331,6 +1331,8 @@
   "lines_section_info": "Les lignes représentent des entités linéaires sur la carte (routes, frontières, flux, etc.). Configurez leur épaisseur, couleur et style.",
   "labels_section_info": "Les étiquettes affichent un texte associé à chaque entité de la carte, comme un nom ou une valeur.",
   "texts_section_info": "Les textes permettent d'ajouter des annotations libres sur la carte, indépendamment des entités géographiques.",
+  "labels_disabled_no_geometry": "Les étiquettes nécessitent des données géographiques (points, lignes ou polygones)",
+  "texts_disabled_no_geometry": "Les textes nécessitent des données géographiques (points, lignes ou polygones)",
   "data_visualized_info": "Sélectionnez la colonne de données à représenter sur la carte. Les suggestions s'adaptent au type de variable choisie.",
   "basemap_style_info": "Le style du fond de carte tuilé\u202F: désaturé pour ne pas interférer avec les données, simple pour un rendu neutre, ou aérien pour une vue satellite.",
   "map_projection_info": "Mercator\u202F: projection plane classique. Globe\u202F: représentation sphérique 3D, utile pour les données mondiales.",

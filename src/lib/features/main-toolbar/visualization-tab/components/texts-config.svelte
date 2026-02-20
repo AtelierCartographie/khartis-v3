@@ -51,6 +51,7 @@
     dataFields?: Array<{ id: number; text: string }>;
     discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
@@ -66,6 +67,7 @@
     dataFields = [],
     discretizationMethods: __discretizationMethods = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onMissingDataChange,
@@ -343,6 +345,8 @@
   defaultOpen={false}
   showToggle
   toggleChecked={enabled}
+  disabled={disabled}
+  disabledReason={disabled ? m.texts_disabled_no_geometry() : undefined}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}

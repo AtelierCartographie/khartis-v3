@@ -1331,6 +1331,8 @@
   "lines_section_info": "Lines represent linear features on the map (roads, borders, flows, etc.). Configure their thickness, color, and style.",
   "labels_section_info": "Labels display text associated with each map feature, such as a name or value.",
   "texts_section_info": "Texts allow adding free annotations on the map, independently of geographic features.",
+  "labels_disabled_no_geometry": "Labels require geographic data (points, lines or polygons)",
+  "texts_disabled_no_geometry": "Texts require geographic data (points, lines or polygons)",
   "data_visualized_info": "Select the data column to display on the map. Suggestions adapt to the type of variable chosen.",
   "basemap_style_info": "Tiled basemap style: desaturated to avoid interfering with data, simple for a neutral look, or aerial for a satellite view.",
   "map_projection_info": "Mercator: classic flat projection. Globe: 3D spherical representation, useful for worldwide data.",
