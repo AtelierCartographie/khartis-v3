@@ -15,8 +15,9 @@
     Row,
     Slider
   } from 'carbon-components-svelte';
-  import { DocumentAdd, Earth } from 'carbon-icons-svelte';
+  import { Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     simplificationActions,
     getSimplificationState
@@ -35,14 +36,16 @@
     state.source === SimplificationSource.Basemap ? 0 : 1
   );
 
-  const sources = [
-    { icon: Earth, label: m.simplification_source_basemap(), iconSize: 20 },
+  const sources = $derived([
+    { icon: Earth, label: m.simplification_source_basemap(), iconSize: 16 },
     {
-      icon: DocumentAdd,
-      label: m.simplification_source_geodata(),
-      iconSize: 20
+      icon: LicenseGlobal,
+      label:
+        datasetsStore.selectedDataset?.name ??
+        m.simplification_source_geodata(),
+      iconSize: 16
     }
-  ];
+  ]);
 
   function onSourceChange(index: number) {
     const newSource =
@@ -223,9 +226,16 @@
     font-size: 1rem;
     margin-bottom: 1.5rem;
   }
+
   #khartis-simplification-tool :global(.source-tabs) {
     width: 100%;
     margin-bottom: 1.5rem;
+    border-color: #cac5c4;
+    border-radius: 4px;
+  }
+
+  #khartis-simplification-tool :global(.source-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
   }
 
   .slider-row {
@@ -233,9 +243,11 @@
     align-items: center;
     gap: 1rem;
   }
+
   #khartis-simplification-tool :global(.bx--number) {
     width: 96px;
   }
+
   .form-label {
     font-size: 0.875rem;
     font-weight: 500;
@@ -243,6 +255,7 @@
     margin-bottom: var(--cds-spacing-03);
     display: block;
   }
+
   #khartis-simplification-tool :global(.bx--radio-button-group--horizontal) {
     gap: 2rem;
   }
