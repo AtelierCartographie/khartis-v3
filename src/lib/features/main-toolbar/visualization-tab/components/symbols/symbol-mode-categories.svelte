@@ -23,6 +23,7 @@
     onMappingChange,
     onSymbolsChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -121,6 +122,7 @@
   label={m.color_palette()}
   colors={qualitativePalette}
   oninvert={onInvertPalette}
+  onClassificationChange={onClassificationChange}
 />
 <SliderWithInput
   label={m.opacity()}

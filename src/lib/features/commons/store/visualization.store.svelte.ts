@@ -578,12 +578,13 @@ function createVisualizationStore(): VisualizationStore {
     classification: Partial<ClassificationConfig>
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
-      if (!visualization.classification) {
-        return null;
-      }
+      const existing = visualization.classification ?? {
+        method: ClassificationMethod.QUANTILES,
+        classes: DEFAULT_QUANTILES_CLASS_COUNT
+      };
 
       return {
-        classification: { ...visualization.classification, ...classification }
+        classification: { ...existing, ...classification }
       };
     });
   }

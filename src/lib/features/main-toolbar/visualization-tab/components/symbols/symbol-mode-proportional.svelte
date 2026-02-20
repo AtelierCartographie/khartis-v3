@@ -397,6 +397,7 @@
     label={m.color_palette()}
     colors={sequentialPalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -435,6 +436,7 @@
     label={m.color_palette()}
     colors={qualitativePalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}

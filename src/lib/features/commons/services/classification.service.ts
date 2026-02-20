@@ -78,9 +78,18 @@ export async function calculateBreaks(
       return null;
     }
 
-    const { min_val: min, max_val: max } = minMaxRows[0];
+    const rawMin = minMaxRows[0].min_val;
+    const rawMax = minMaxRows[0].max_val;
+    const min = rawMin != null ? Number(rawMin) : null;
+    const max = rawMax != null ? Number(rawMax) : null;
 
-    if (min === max || min === null || max === null) {
+    if (
+      min === max ||
+      min === null ||
+      max === null ||
+      isNaN(min) ||
+      isNaN(max)
+    ) {
       logger.warn(
         'Insufficient data range for classification',
         LogCategory.DATA,
@@ -116,9 +125,10 @@ export async function calculateBreaks(
     const rows = result.toArray() as BreaksRow[];
 
     if (rows.length > 0 && rows[0].breaks) {
-      breaks = rows[0].breaks.filter(
-        (b): b is number => b !== null && !isNaN(b)
-      );
+      breaks = rows[0].breaks
+        .filter((b) => b !== null && b !== undefined)
+        .map((b) => Number(b))
+        .filter((b) => !isNaN(b));
     }
 
     if (breaks.length === 0) {

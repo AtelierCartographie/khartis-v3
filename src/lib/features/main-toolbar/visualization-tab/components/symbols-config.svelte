@@ -115,7 +115,7 @@
 
 <ExpandableSection
   title={m.symbols_title()}
-  defaultOpen
+  defaultOpen={false}
   showToggle
   toggleChecked={enabled}
   onToggleChange={handleToggleChange}
@@ -149,6 +149,7 @@
         onSymbolsChange={onSymbolsChange}
         onMappingChange={onMappingChange}
         onMissingDataChange={onMissingDataChange}
+        onClassificationChange={onClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -172,6 +173,8 @@
         visualization={visualization}
         onSymbolsChange={onSymbolsChange}
         onMappingChange={onMappingChange}
+        onMissingDataChange={onMissingDataChange}
+        onClassificationChange={onClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />

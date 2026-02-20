@@ -16,7 +16,8 @@
   } from '../../../constants';
   import type {
     VisualizationConfig,
-    VisualizationModes
+    VisualizationModes,
+    ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import ColorSelector from './ColorSelector.svelte';
   import DiscretizationRow from './DiscretizationRow.svelte';
@@ -37,6 +38,7 @@
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onInvertPalette?: () => void;
     onOpenDiscretization?: () => void;
+    onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
   }
 
   const DEFAULT_SEQUENTIAL_PALETTE = [
@@ -63,7 +65,8 @@
     onStyleChange,
     onModesChange,
     onInvertPalette,
-    onOpenDiscretization
+    onOpenDiscretization,
+    onClassificationChange
   }: Props = $props();
 
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
@@ -175,6 +178,7 @@
       label={m.color_palette()}
       colors={classesPalette}
       oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
     />
   {:else if strokeMode === StrokeMode.CATEGORIES}
     <div class="field-group">
@@ -194,6 +198,7 @@
       label={m.color_palette()}
       colors={categoriesPalette}
       oninvert={onInvertPalette}
+      onClassificationChange={onClassificationChange}
     />
   {/if}
 

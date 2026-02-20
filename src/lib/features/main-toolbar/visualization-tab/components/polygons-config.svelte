@@ -261,6 +261,7 @@
         label={m.color_palette()}
         colors={currentPalette}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {:else if fillMode === FillMode.CATEGORIES}
       <div class="field-group">
@@ -281,6 +282,7 @@
         label={m.color_palette()}
         colors={qualitativePalette}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {/if}
 
@@ -303,6 +305,7 @@
       onModesChange={onModesChange}
       onInvertPalette={onInvertPalette}
       onOpenDiscretization={handleOpenDiscretization}
+      onClassificationChange={handleClassificationChange}
     />
   </div>
 </ExpandableSection>

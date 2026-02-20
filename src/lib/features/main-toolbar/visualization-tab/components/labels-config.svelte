@@ -338,6 +338,7 @@
         label={m.color_palette()}
         colors={currentPalette}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {:else if colorMode === ColorMode.CATEGORIES}
       <div class="field-group">
@@ -357,6 +358,7 @@
         label={m.color_palette()}
         colors={qualitativePalette}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {/if}
 

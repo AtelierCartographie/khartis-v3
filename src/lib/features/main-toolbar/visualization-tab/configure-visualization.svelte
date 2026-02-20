@@ -16,6 +16,7 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
@@ -236,7 +237,11 @@
       });
 
       if (result && selectedViz?.id) {
-        const colors = generateColorsForBreaks(numClasses);
+        const existingColors = selectedViz.classification?.colors;
+        const colors =
+          existingColors && existingColors.length === numClasses
+            ? existingColors
+            : generateColorsForBreaks(numClasses);
         visualizationStore.updateClassification(selectedViz.id, {
           breaks: result.breaks,
           counts: result.counts,
@@ -252,8 +257,10 @@
           }
         );
       } else {
+        // Reset compute key so a re-trigger (e.g., after DuckDB table registration) can retry
+        lastComputedKey = '';
         logger.warn(
-          '[configure-visualization] breaks computation returned empty result',
+          '[configure-visualization] breaks computation returned empty result, will retry',
           LogCategory.UI,
           {
             requestId,
@@ -275,6 +282,8 @@
   }
 
   $effect(() => {
+    // Track DuckDB version so this re-fires after table registration
+    const _duckVersion = duckDBOrchestrator.datasetsVersion;
     if (
       selectedViz?.mapping.valueColumn &&
       selectedViz?.classification?.method &&

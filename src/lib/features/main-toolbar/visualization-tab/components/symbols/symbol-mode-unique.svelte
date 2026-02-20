@@ -38,6 +38,7 @@
     onSymbolsChange,
     onMappingChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -267,6 +268,7 @@
     label={m.color_palette()}
     colors={sequentialPalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -305,6 +307,7 @@
     label={m.color_palette()}
     colors={qualitativePalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -335,6 +338,7 @@
   onModesChange={onModesChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
+  onClassificationChange={onClassificationChange}
 />
 
 <style lang="scss">
