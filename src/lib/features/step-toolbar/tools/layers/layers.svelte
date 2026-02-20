@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { m } from '$lib/paraglide/messages';
+  import * as m from '$lib/paraglide/messages';
+  import {
+    Accordion,
+    AccordionItem,
+    Modal,
+    TextInput
+  } from 'carbon-components-svelte';
   import { ColorPalette, Earth } from 'carbon-icons-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
@@ -50,6 +56,15 @@
     return children;
   });
 
+  // Rename modal state
+  let renameModalOpen = $state(false);
+  let renameLayerId = $state<string | null>(null);
+  let renameValue = $state('');
+
+  // Delete modal state
+  let deleteModalOpen = $state(false);
+  let deleteLayerId = $state<string | null>(null);
+
   function handleToggleVisibility(layerId: string): void {
     store.toggleLayerVisibility(layerId);
   }
@@ -80,11 +95,24 @@
   function handleRenameLayer(layerId: string): void {
     const layer = layers.find((l) => l.id === layerId);
     if (!layer || layer.isSubLayer) return;
+    renameLayerId = layerId;
+    renameValue = layer.name;
+    renameModalOpen = true;
+  }
 
-    const newName = prompt(m.layers_rename_prompt(), layer.name);
-    if (newName && newName.trim() !== '') {
-      store.updateLayer(layerId, { name: newName.trim() });
+  function handleRenameConfirm(): void {
+    if (renameLayerId && renameValue.trim()) {
+      store.updateLayer(renameLayerId, { name: renameValue.trim() });
     }
+    renameModalOpen = false;
+    renameLayerId = null;
+    renameValue = '';
+  }
+
+  function handleRenameCancel(): void {
+    renameModalOpen = false;
+    renameLayerId = null;
+    renameValue = '';
   }
 
   function handleDuplicateLayer(layerId: string): void {
@@ -96,9 +124,21 @@
   function handleDeleteLayer(layerId: string): void {
     const layer = layers.find((l) => l.id === layerId);
     if (!layer || layer.isSubLayer) return;
-    if (confirm(m.layers_delete_confirm())) {
-      store.removeLayer(layerId);
+    deleteLayerId = layerId;
+    deleteModalOpen = true;
+  }
+
+  function handleDeleteConfirm(): void {
+    if (deleteLayerId) {
+      store.removeLayer(deleteLayerId);
     }
+    deleteModalOpen = false;
+    deleteLayerId = null;
+  }
+
+  function handleDeleteCancel(): void {
+    deleteModalOpen = false;
+    deleteLayerId = null;
   }
 
   function handleReorderLayers(dragIndex: number, hoverIndex: number): void {
@@ -109,17 +149,66 @@
 <div id="khartis-layers-tool">
   <p class="description">{m.layers_description()}</p>
 
-  <LayersList
-    layers={parentLayers}
-    childLayersByParent={childLayersByParent}
-    onToggleVisibility={handleToggleVisibility}
-    onOpenSettings={handleOpenSettings}
-    onRenameLayer={handleRenameLayer}
-    onDuplicateLayer={handleDuplicateLayer}
-    onDeleteLayer={handleDeleteLayer}
-    onReorderLayer={handleReorderLayers}
-  />
+  {#if parentLayers.length > 1}
+    <Accordion>
+      {#each parentLayers as parentLayer (parentLayer.id)}
+        <AccordionItem open title={parentLayer.name}>
+          <LayersList
+            layers={[parentLayer]}
+            childLayersByParent={childLayersByParent}
+            onToggleVisibility={handleToggleVisibility}
+            onOpenSettings={handleOpenSettings}
+            onRenameLayer={handleRenameLayer}
+            onDuplicateLayer={handleDuplicateLayer}
+            onDeleteLayer={handleDeleteLayer}
+          />
+        </AccordionItem>
+      {/each}
+    </Accordion>
+  {:else}
+    <LayersList
+      layers={parentLayers}
+      childLayersByParent={childLayersByParent}
+      onToggleVisibility={handleToggleVisibility}
+      onOpenSettings={handleOpenSettings}
+      onRenameLayer={handleRenameLayer}
+      onDuplicateLayer={handleDuplicateLayer}
+      onDeleteLayer={handleDeleteLayer}
+      onReorderLayer={handleReorderLayers}
+    />
+  {/if}
 </div>
+
+<!-- Rename modal -->
+<Modal
+  bind:open={renameModalOpen}
+  modalHeading={m.layers_rename()}
+  primaryButtonText={m.layers_rename()}
+  secondaryButtonText={m.cancel()}
+  primaryButtonDisabled={!renameValue.trim()}
+  on:click:button--primary={handleRenameConfirm}
+  on:click:button--secondary={handleRenameCancel}
+  on:close={handleRenameCancel}
+  on:submit={handleRenameConfirm}
+  size="sm"
+>
+  <TextInput labelText={m.layers_rename_prompt()} bind:value={renameValue} />
+</Modal>
+
+<!-- Delete confirmation modal -->
+<Modal
+  danger
+  bind:open={deleteModalOpen}
+  modalHeading={m.layers_delete()}
+  primaryButtonText={m.layers_delete()}
+  secondaryButtonText={m.cancel()}
+  on:click:button--primary={handleDeleteConfirm}
+  on:click:button--secondary={handleDeleteCancel}
+  on:close={handleDeleteCancel}
+  size="sm"
+>
+  <p>{m.layers_delete_confirm()}</p>
+</Modal>
 
 <style>
   .description {
@@ -128,5 +217,21 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-helper);
     margin-bottom: var(--cds-spacing-05);
+  }
+
+  #khartis-layers-tool :global(.bx--accordion) {
+    border: 1px solid var(--cds-border-subtle);
+  }
+
+  #khartis-layers-tool :global(.bx--accordion__item) {
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  #khartis-layers-tool :global(.bx--accordion__item:first-child) {
+    border-top: none;
+  }
+
+  #khartis-layers-tool :global(.bx--accordion__content) {
+    padding: var(--cds-spacing-03) 0;
   }
 </style>
