@@ -14,7 +14,7 @@
   "projection_preview_label": "Aperçu de projection",
   "projection_catalog_label": "Catalogue",
   "projection_other_search_placeholder": "Rechercher ou parcourir la liste…",
-  "projection_view_code": "Voir le code",
+  "projection_view_code": "Code",
   "projection_code_intro": "Appliquer une projection grâce à un code de système de coordonnées de référence (CRS).",
   "projection_code_label": "Code CRS",
   "projection_code_placeholder": "Copier-coller le code",

@@ -1,7 +1,11 @@
 <script lang="ts">
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { Button, InlineNotification, Slider } from 'carbon-components-svelte';
+  import {
+    Button,
+    InlineNotification,
+    Slider,
+    Toggle
+  } from 'carbon-components-svelte';
   import { Renew } from 'carbon-icons-svelte';
   import {
     getProjectionState,
@@ -10,8 +14,9 @@
 
   const projectionState = $derived(getProjectionState());
 
-  let simplifiedPreview = $state<boolean>(true);
   let showInfo = $state<boolean>(true);
+
+  const simplifiedPreview = $derived(projectionState.simplifiedPreview ?? true);
 
   const isDirty = $derived(
     projectionState.longitude !== 0 ||
@@ -30,6 +35,11 @@
 
   function handleRotationChange(event: CustomEvent<number>): void {
     projectionActions.setRotation(event.detail);
+  }
+
+  function handleSimplifiedPreviewChange(event: Event): void {
+    const e = event as CustomEvent<{ toggled: boolean }>;
+    projectionActions.setSimplifiedPreview(e.detail.toggled);
   }
 
   function resetAll() {
@@ -81,12 +91,13 @@
       />
 
       <div class="toggle-row">
-        <Switch
+        <Toggle
+          size="sm"
           labelText={m.projection_settings_simplified_preview()}
           labelA={m.projection_settings_no()}
           labelB={m.projection_settings_yes()}
-          bind:toggled={simplifiedPreview}
-          showStateLabel
+          toggled={simplifiedPreview}
+          on:change={handleSimplifiedPreviewChange}
         />
       </div>
 
@@ -151,8 +162,7 @@
 
   .toggle-row {
     display: flex;
-    align-items: center;
-    margin-top: var(--cds-spacing-03);
+    align-items: flex-start;
   }
 
   .footer {

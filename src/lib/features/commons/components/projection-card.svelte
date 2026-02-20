@@ -58,11 +58,11 @@
     clsx('projection-card', {
       'full-width': fullWidth,
       'border-2 border-dark-gray': selected && (disabled || isGrayVariant),
-      'border-2 border-blue':
+      'border-selected-blue':
         selected && !disabled && (isBlueVariant || isDefaultVariant),
       'border border-medium-gray': !selected && (disabled || isGrayVariant),
       'border border-medium-blue': !selected && !disabled && isBlueVariant,
-      'border border-pale-blue': !selected && !disabled && isDefaultVariant,
+      'border-unselected-blue': !selected && !disabled && isDefaultVariant,
       'opacity-50': disabled,
       'cursor-pointer': !disabled,
       vertical: layout === 'vertical'
@@ -81,7 +81,7 @@
     clsx('card-right', {
       'variant-gray': isGrayVariant,
       'bg-light-gray color-text-01': disabled || isGrayVariant,
-      'bg-pale-blue color-blue':
+      'bg-layer-01-suggestions':
         !disabled && (isBlueVariant || isDefaultVariant)
     })
   );
@@ -157,17 +157,32 @@
     border-radius: 0;
   }
 
+  /* Selected: 4px solid #0072c3 (focus-suggestions) */
+  .border-selected-blue {
+    border: 4px solid var(--khartis-additions-focus-suggestions, #0072c3);
+  }
+
+  /* Unselected default: 1px solid #82cfff (border-tile-01-suggestions) */
+  .border-unselected-blue {
+    border: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+  }
+
   .card-left {
-    min-width: 112px;
+    /* Fixed 120px width per Figma design */
+    width: 120px;
+    min-width: 120px;
+    flex-shrink: 0;
     padding: 1rem 0.75rem;
     border-right: 1px solid var(--cds-layer-accent);
     gap: 0.25rem;
-    background-color: var(--cds-ui-02);
+    /* layer-02-suggestions = white for preview area */
+    background-color: var(--khartis-additions-layer-02-suggestions, #ffffff);
   }
 
   #kh-projection-card.vertical .card-left {
-    min-width: auto;
     width: 100%;
+    min-width: auto;
     border-right: none;
     border-bottom: 1px solid var(--cds-layer-accent);
   }
@@ -191,11 +206,12 @@
     width: 100%;
   }
 
-  #kh-projection-card:hover:not(.opacity-50) .card-right {
-    background-color: var(--cds-medium-blue);
+  #kh-projection-card:hover:not(.opacity-50)
+    .card-right.bg-layer-01-suggestions {
+    background-color: var(--cds-medium-blue, #a8e2ff);
   }
   #kh-projection-card:hover:not(.opacity-50) .card-right.variant-gray {
-    background-color: var(--cds-medium-gray);
+    background-color: var(--cds-medium-gray, #e0e0e0);
   }
 
   .card-header {
@@ -208,6 +224,8 @@
     margin: 0;
     font-size: 0.75rem;
     font-weight: 700;
+    /* text-primary-suggestions: #003a6d */
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
   .card-body .subtitle {
@@ -215,7 +233,8 @@
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: var(--cds-blue);
+    /* text-secondary-suggestions: #00539a */
+    color: var(--khartis-additions-text-secondary-suggestions, #00539a);
   }
 
   .card-footer {

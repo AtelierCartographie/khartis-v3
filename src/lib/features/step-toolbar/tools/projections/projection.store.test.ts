@@ -75,6 +75,7 @@ describe('projection.store', () => {
       expect(state.rotation).toBe(0);
       expect(state.scale).toBe(1);
       expect(state.autoFit).toBe(true);
+      expect(state.simplifiedPreview).toBe(true);
     });
   });
 
@@ -281,6 +282,21 @@ describe('projection.store', () => {
       expect(suggestProjection).toHaveBeenCalled();
       const state = getProjectionState();
       expect(state.selected).toBe('robinson');
+    });
+  });
+
+  describe('setSimplifiedPreview', () => {
+    it('updates simplifiedPreview value', async () => {
+      const { projectionActions, getProjectionState } =
+        await import('./projection.store.svelte');
+
+      projectionActions.setSimplifiedPreview(false);
+
+      const state = getProjectionState();
+      expect(state.simplifiedPreview).toBe(false);
+
+      // Restore default
+      projectionActions.setSimplifiedPreview(true);
     });
   });
 
