@@ -109,7 +109,10 @@
 </script>
 
 <div class="tab-content">
-  <ExpandableSection title={m.section_suggestions()} defaultOpen={true}>
+  <ExpandableSection
+    title={m.section_suggestions()}
+    open={suggestedBasemaps.length > 0}
+  >
     {#snippet icon()}
       <MagicWand size={16} />
     {/snippet}
@@ -140,7 +143,10 @@
     {/if}
   </ExpandableSection>
 
-  <ExpandableSection title={m.basemap_other()} defaultOpen={false}>
+  <ExpandableSection
+    title={m.basemap_other()}
+    open={suggestedBasemaps.length === 0}
+  >
     {#snippet icon()}
       <List size={16} />
     {/snippet}

@@ -99,7 +99,6 @@
       disabled={areDeckLayersDisabled}
       disabledReason={deckLayersDisabledReason}
       onToggleChange={(checked) => handleLayerToggle('terre', checked)}
-      defaultOpen={true}
     >
       <LayerConfigTerre
         fillColor={getConfig('terre')?.fillColor}
@@ -273,7 +272,6 @@
       showToggle={true}
       toggleChecked={isTiledBasemapEnabled}
       onToggleChange={handleTiledBasemapToggle}
-      defaultOpen={isTiledBasemapEnabled}
     >
       {#snippet icon()}
         <InfoPopover text={m.basemap_tiled_info()} />
