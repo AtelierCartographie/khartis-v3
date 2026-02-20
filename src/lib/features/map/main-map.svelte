@@ -17,7 +17,10 @@
   import { globalState } from '../commons/store/global.svelte';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
-  import { ColorBlindnessType } from '../commons/constants/ui.constants';
+  import {
+    ColorBlindnessType,
+    FormatMode
+  } from '../commons/constants/ui.constants';
   import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
@@ -429,6 +432,16 @@
         // Trigger a single fitToContainer with final dimensions after transition
         handleContainerResize();
       }, TOOLBAR_TRANSITION_MS);
+    });
+  });
+
+  $effect(() => {
+    void formatState.model;
+    const mode = formatState.mode;
+
+    untrack(() => {
+      if (!containerRef || mode !== FormatMode.PRESET) return;
+      handleContainerResize();
     });
   });
 
