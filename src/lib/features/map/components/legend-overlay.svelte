@@ -7,11 +7,13 @@
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
 
   const legendState = $derived(getLegendState());
@@ -34,8 +36,15 @@
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
   const isInDataStep = $derived(globalState.selectedStep === ToolbarStep.Data);
+  const isLegendActive = $derived(
+    globalState.selectedStep === ToolbarStep.Styling &&
+      globalState.selectedTool === StylingTools.Legend
+  );
 
   const positionClass = $derived.by(() => {
+    if (legendState.dragPosition) {
+      return '';
+    }
     switch (legendState.position) {
       case LegendPosition.TOP_LEFT:
         return 'top-left';
@@ -67,35 +76,119 @@
       styles.push('box-shadow: none');
     }
 
+    if (legendState.dragPosition) {
+      styles.push(`left: ${legendState.dragPosition.x}px`);
+      styles.push(`top: ${legendState.dragPosition.y}px`);
+    }
+
     return styles.join('; ');
   });
 
-  function handleLegendActivate(event: MouseEvent | KeyboardEvent): void {
+  let overlayElement = $state<HTMLDivElement | null>(null);
+  let legendElement = $state<HTMLDivElement | null>(null);
+  let isDragging = $state(false);
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function stopDragging(): void {
+    isDragging = false;
+    window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handlePointerUp);
+  }
+
+  function handlePointerUp(): void {
+    stopDragging();
+  }
+
+  function handlePointerMove(event: PointerEvent): void {
+    if (!isDragging || !overlayElement) {
+      return;
+    }
+
+    const rect = overlayElement.getBoundingClientRect();
+    const maxX = Math.max(0, rect.width - 10);
+    const maxY = Math.max(0, rect.height - 10);
+
+    const x = clamp(event.clientX - rect.left - dragOffsetX, 0, maxX);
+    const y = clamp(event.clientY - rect.top - dragOffsetY, 0, maxY);
+
+    legendActions.setDragPosition({ x, y });
+  }
+
+  function handleLegendPointerDown(event: PointerEvent): void {
+    if (!isLegendActive) {
+      return;
+    }
+
+    if (!overlayElement || !legendElement) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const overlayRect = overlayElement.getBoundingClientRect();
+    const legendRect = legendElement.getBoundingClientRect();
+
+    const currentX = legendRect.left - overlayRect.left;
+    const currentY = legendRect.top - overlayRect.top;
+
+    if (!legendState.dragPosition) {
+      legendActions.setDragPosition({ x: currentX, y: currentY });
+    }
+
+    dragOffsetX =
+      event.clientX -
+      overlayRect.left -
+      (legendState.dragPosition?.x ?? currentX);
+    dragOffsetY =
+      event.clientY -
+      overlayRect.top -
+      (legendState.dragPosition?.y ?? currentY);
+
+    isDragging = true;
+    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
+  }
+
+  function handleLegendClick(event: MouseEvent | KeyboardEvent): void {
     event.stopPropagation();
     legendActions.markAsOpened();
     activateStylingToolFromMap(StylingTools.Legend);
   }
 
   function handleLegendKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Enter' && event.key !== ' ') {
+    if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
 
     event.preventDefault();
-    handleLegendActivate(event);
+    handleLegendClick(event);
   }
+
+  onDestroy(() => {
+    stopDragging();
+  });
 </script>
 
 {#if legendState.visible && visibleItems.length > 0 && !isInDataStep}
-  <div class="legend-overlay">
+  <div class="legend-overlay" bind:this={overlayElement}>
     <div
+      bind:this={legendElement}
       class="legend-container {positionClass}"
+      class:draggable={isLegendActive}
+      class:dragging={isDragging}
       style={containerStyle}
       role="button"
       tabindex="0"
       aria-label={m.tool_legend()}
-      onclick={handleLegendActivate}
+      onclick={handleLegendClick}
       onkeydown={handleLegendKeyDown}
+      onpointerdown={handleLegendPointerDown}
     >
       {#each visibleItems as item (item.id)}
         <div class="legend-item">
@@ -134,6 +227,18 @@
     max-width: 280px;
     overflow-wrap: anywhere;
     pointer-events: auto;
+    cursor: pointer;
+    touch-action: none;
+    outline: none;
+  }
+
+  .legend-container.draggable {
+    cursor: grab;
+  }
+
+  .legend-container.dragging {
+    cursor: grabbing;
+    user-select: none;
   }
 
   .legend-container.top-left {

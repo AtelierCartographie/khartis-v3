@@ -250,6 +250,7 @@ export async function serializeProjectData(
     legend: {
       items: legendState.items,
       position: legendState.position,
+      dragPosition: legendState.dragPosition,
       visible: legendState.visible,
       style: legendState.style,
       hasBeenOpened: legendState.hasBeenOpened

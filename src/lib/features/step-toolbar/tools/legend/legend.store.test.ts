@@ -59,3 +59,41 @@ describe('legend.store default style', () => {
     expect(getLegendState().style.background.opacity).toBe(42);
   });
 });
+
+describe('legend.store drag position', () => {
+  beforeEach(() => {
+    legendActions.reset();
+  });
+
+  it('has no drag position by default', () => {
+    expect(getLegendState().dragPosition).toBeNull();
+  });
+
+  it('stores a drag position when set', () => {
+    legendActions.setDragPosition({ x: 100, y: 200 });
+
+    expect(getLegendState().dragPosition).toEqual({ x: 100, y: 200 });
+  });
+
+  it('clears drag position when set to null', () => {
+    legendActions.setDragPosition({ x: 50, y: 75 });
+    legendActions.setDragPosition(null);
+
+    expect(getLegendState().dragPosition).toBeNull();
+  });
+
+  it('clears drag position when preset position is changed', () => {
+    legendActions.setDragPosition({ x: 100, y: 200 });
+    legendActions.setPosition(LegendPosition.TOP_LEFT);
+
+    expect(getLegendState().dragPosition).toBeNull();
+    expect(getLegendState().position).toBe(LegendPosition.TOP_LEFT);
+  });
+
+  it('updates drag position with new coordinates', () => {
+    legendActions.setDragPosition({ x: 10, y: 20 });
+    legendActions.setDragPosition({ x: 300, y: 400 });
+
+    expect(getLegendState().dragPosition).toEqual({ x: 300, y: 400 });
+  });
+});
