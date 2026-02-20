@@ -823,9 +823,15 @@
 
             // Fit map view to new basemap bounds
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              if (!bounds && loaded.metadata.bbox) {
+                const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
+                bounds = [
+                  [minLng, minLat],
+                  [maxLng, maxLat]
+                ];
+              }
               if (bounds) {
-                mapBounds.resetFitState();
                 mapBounds.fitToBounds(bounds, true);
               }
             } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
