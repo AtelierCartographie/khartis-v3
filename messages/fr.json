@@ -421,6 +421,7 @@
   "search_sources": "Sources",
   "search_previous": "Précédent",
   "search_next": "Suivant",
+  "search_helper_text": "Rechercher une entité ou une valeur pour l'identifier sur la carte.",
   "search_no_results": "Aucun résultat",
   "search_results_count": "{current} de {total} résultats",
   "search_no_value": "Aucune valeur",

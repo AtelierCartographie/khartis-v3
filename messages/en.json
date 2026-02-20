@@ -421,6 +421,7 @@
   "search_sources": "Sources",
   "search_previous": "Previous",
   "search_next": "Next",
+  "search_helper_text": "Search for an entity or a value to identify it on the map.",
   "search_no_results": "No results",
   "search_results_count": "{current} of {total} results",
   "search_no_value": "No value",
