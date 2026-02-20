@@ -43,6 +43,8 @@
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -98,6 +100,10 @@
   );
   const firstDatasetId = $derived(
     tables.size > 0 ? tables.keys().next().value : undefined
+  );
+
+  const colorBlindnessMatrix = $derived(
+    getColorBlindnessMatrix(getColorBlindnessState().simulationType)
   );
 
   const MIN_SKELETON_DURATION_MS = 500;
@@ -1005,10 +1011,24 @@
   });
 </script>
 
+<svg aria-hidden="true" class="color-blindness-svg-defs">
+  <defs>
+    <filter id="color-blindness-filter" color-interpolation-filters="sRGB">
+      <feColorMatrix
+        type="matrix"
+        values={colorBlindnessMatrix ??
+          '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0'}
+      />
+    </filter>
+  </defs>
+</svg>
+
 <div class="page-container" style={pageStyle}>
   <div
     class="map-stage"
-    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
+    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+      ? ' filter: url(#color-blindness-filter);'
+      : ''}"
   >
     <div
       bind:this={mapContainer}
@@ -1035,6 +1055,14 @@
 </div>
 
 <style>
+  .color-blindness-svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
   .page-container {
     position: relative;
     flex-shrink: 0;
