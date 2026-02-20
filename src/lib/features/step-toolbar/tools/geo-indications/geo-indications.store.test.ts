@@ -96,6 +96,60 @@ describe('geo-indications defaults', () => {
     expect(geoIndicationsState.insetMap.useBasemapColors).toBe(true);
   });
 
+  it('starts with null drag positions for all elements', () => {
+    expect(geoIndicationsState.scale.dragPosition).toBeNull();
+    expect(geoIndicationsState.orientation.dragPosition).toBeNull();
+    expect(geoIndicationsState.insetMap.dragPosition).toBeNull();
+  });
+
+  it('sets and clears scale drag position', () => {
+    geoIndicationsActions.setScaleDragPosition({ x: 100, y: 200 });
+    expect(geoIndicationsState.scale.dragPosition).toEqual({ x: 100, y: 200 });
+
+    geoIndicationsActions.setScaleDragPosition(null);
+    expect(geoIndicationsState.scale.dragPosition).toBeNull();
+  });
+
+  it('sets and clears orientation drag position', () => {
+    geoIndicationsActions.setOrientationDragPosition({ x: 50, y: 75 });
+    expect(geoIndicationsState.orientation.dragPosition).toEqual({
+      x: 50,
+      y: 75
+    });
+
+    geoIndicationsActions.setOrientationDragPosition(null);
+    expect(geoIndicationsState.orientation.dragPosition).toBeNull();
+  });
+
+  it('sets and clears inset map drag position', () => {
+    geoIndicationsActions.setInsetMapDragPosition({ x: 300, y: 150 });
+    expect(geoIndicationsState.insetMap.dragPosition).toEqual({
+      x: 300,
+      y: 150
+    });
+
+    geoIndicationsActions.setInsetMapDragPosition(null);
+    expect(geoIndicationsState.insetMap.dragPosition).toBeNull();
+  });
+
+  it('clears all drag positions on reset', () => {
+    geoIndicationsActions.setScaleDragPosition({ x: 10, y: 20 });
+    geoIndicationsActions.setOrientationDragPosition({ x: 30, y: 40 });
+    geoIndicationsActions.setInsetMapDragPosition({ x: 50, y: 60 });
+
+    geoIndicationsActions.reset();
+
+    expect(geoIndicationsState.scale.dragPosition).toBeNull();
+    expect(geoIndicationsState.orientation.dragPosition).toBeNull();
+    expect(geoIndicationsState.insetMap.dragPosition).toBeNull();
+  });
+
+  it('preserves drag positions through setState when not specified', () => {
+    geoIndicationsActions.setScaleDragPosition({ x: 42, y: 84 });
+    geoIndicationsActions.setState({ visible: false });
+    expect(geoIndicationsState.scale.dragPosition).toEqual({ x: 42, y: 84 });
+  });
+
   it('supports color updates from hex values', () => {
     geoIndicationsActions.setScaleColorFromHex('#ff0000');
     geoIndicationsActions.setOrientationColorFromHex('#00ff00');
@@ -130,7 +184,8 @@ describe('geo-indications defaults', () => {
           hue: 999,
           saturation: -10,
           lightness: 999
-        }
+        },
+        dragPosition: null
       },
       insetMap: {
         enabled: true,
@@ -154,7 +209,8 @@ describe('geo-indications defaults', () => {
         useBasemapColors: false,
         zoom: 500,
         centerLongitude: -500,
-        centerLatitude: 500
+        centerLatitude: 500,
+        dragPosition: null
       }
     });
 

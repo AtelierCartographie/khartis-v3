@@ -6,7 +6,11 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import type { ColorState, GeoIndicationsState } from './geo-indications.types';
+import type {
+  ColorState,
+  DragPosition,
+  GeoIndicationsState
+} from './geo-indications.types';
 
 const DEFAULT_STATE: GeoIndicationsState = {
   visible: true,
@@ -16,13 +20,15 @@ const DEFAULT_STATE: GeoIndicationsState = {
     distance: 0,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
-    expanded: true
+    expanded: true,
+    dragPosition: null
   },
   orientation: {
     enabled: false,
     style: OrientationIndicatorStyle.ARROW,
     size: 10,
-    color: { hue: 0, saturation: 0, lightness: 0 }
+    color: { hue: 0, saturation: 0, lightness: 0 },
+    dragPosition: null
   },
   insetMap: {
     enabled: false,
@@ -34,7 +40,8 @@ const DEFAULT_STATE: GeoIndicationsState = {
     useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
-    centerLatitude: 0
+    centerLatitude: 0,
+    dragPosition: null
   }
 };
 
@@ -73,6 +80,22 @@ function normalizeColorState(
   };
 }
 
+function normalizeDragPosition(
+  input: DragPosition | null | undefined,
+  current: DragPosition | null
+): DragPosition | null {
+  if (input === undefined) {
+    return current;
+  }
+  if (input === null) {
+    return null;
+  }
+  return {
+    x: toFiniteNumber(input.x, 0),
+    y: toFiniteNumber(input.y, 0)
+  };
+}
+
 function normalizeState(
   partial: Partial<GeoIndicationsState>,
   current: GeoIndicationsState
@@ -108,7 +131,11 @@ function normalizeState(
       expanded:
         typeof nextScale?.expanded === 'boolean'
           ? nextScale.expanded
-          : current.scale.expanded
+          : current.scale.expanded,
+      dragPosition: normalizeDragPosition(
+        nextScale?.dragPosition,
+        current.scale.dragPosition
+      )
     },
     orientation: {
       enabled:
@@ -124,6 +151,10 @@ function normalizeState(
       color: normalizeColorState(
         nextOrientation?.color,
         current.orientation.color
+      ),
+      dragPosition: normalizeDragPosition(
+        nextOrientation?.dragPosition,
+        current.orientation.dragPosition
       )
     },
     insetMap: {
@@ -165,6 +196,10 @@ function normalizeState(
         -90,
         90,
         current.insetMap.centerLatitude
+      ),
+      dragPosition: normalizeDragPosition(
+        nextInsetMap?.dragPosition,
+        current.insetMap.dragPosition
       )
     }
   };
@@ -200,6 +235,9 @@ type GeoIndicationsActions = {
   setInsetMapZoom: (zoom: number) => void;
   setInsetMapCenterLongitude: (longitude: number) => void;
   setInsetMapCenterLatitude: (latitude: number) => void;
+  setScaleDragPosition: (pos: DragPosition | null) => void;
+  setOrientationDragPosition: (pos: DragPosition | null) => void;
+  setInsetMapDragPosition: (pos: DragPosition | null) => void;
 };
 
 const { state, actions } = createToolStore<
@@ -309,6 +347,15 @@ const { state, actions } = createToolStore<
       90,
       s.insetMap.centerLatitude
     );
+  },
+  setScaleDragPosition: (pos: DragPosition | null) => {
+    s.scale.dragPosition = pos;
+  },
+  setOrientationDragPosition: (pos: DragPosition | null) => {
+    s.orientation.dragPosition = pos;
+  },
+  setInsetMapDragPosition: (pos: DragPosition | null) => {
+    s.insetMap.dragPosition = pos;
   }
 }));
 

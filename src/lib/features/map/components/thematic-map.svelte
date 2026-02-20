@@ -1026,12 +1026,6 @@
       </div>
     {/if}
 
-    {#if mapLoadingStore.isUpdatingLayers}
-      <div class="layer-update-indicator" transition:fade={{ duration: 150 }}>
-        <div class="spinner"></div>
-      </div>
-    {/if}
-
     {#if isStylingMode}
       <GeoIndicationsOverlay />
       <LegendOverlay />
@@ -1082,33 +1076,6 @@
   .view-mode-loader :global(.bx--skeleton__placeholder) {
     width: 100%;
     height: 100%;
-  }
-
-  .layer-update-indicator {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: var(--z-map-overlay);
-    background: var(--cds-ui-01);
-    border-radius: 50%;
-    padding: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    pointer-events: none;
-  }
-
-  .spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--cds-ui-03);
-    border-top-color: var(--cds-interactive-01);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   :global(.maplibregl-ctrl-attrib) {

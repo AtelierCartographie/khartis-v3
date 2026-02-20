@@ -11,6 +11,11 @@ export interface ColorState {
   lightness: number;
 }
 
+export interface DragPosition {
+  x: number;
+  y: number;
+}
+
 export interface GeoIndicationsState {
   visible: boolean;
   scale: {
@@ -20,12 +25,14 @@ export interface GeoIndicationsState {
     units: DistanceUnit;
     color: ColorState;
     expanded: boolean;
+    dragPosition: DragPosition | null;
   };
   orientation: {
     enabled: boolean;
     style: OrientationIndicatorStyle;
     size: number;
     color: ColorState;
+    dragPosition: DragPosition | null;
   };
   insetMap: {
     enabled: boolean;
@@ -38,5 +45,6 @@ export interface GeoIndicationsState {
     zoom: number;
     centerLongitude: number;
     centerLatitude: number;
+    dragPosition: DragPosition | null;
   };
 }
