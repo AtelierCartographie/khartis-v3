@@ -334,6 +334,7 @@
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
