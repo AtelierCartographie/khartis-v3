@@ -18,21 +18,34 @@
   let modeIndex = $derived(formatState.mode === FormatMode.PRESET ? 0 : 1);
 </script>
 
-<Grid padding noGutter>
-  <Row>
-    <Column>
-      <ToggleTabs
-        items={modeItems}
-        activeIndex={modeIndex}
-        className="format-mode-tabs"
-        activeClass="active"
-        fullWidthClass="full-width"
-        onChange={(index) => {
-          formatActions.setMode(
-            index === 0 ? FormatMode.PRESET : FormatMode.CUSTOM
-          );
-        }}
-      />
-    </Column>
-  </Row>
-</Grid>
+<div class="format-mode-tabs-container">
+  <Grid padding noGutter>
+    <Row>
+      <Column>
+        <ToggleTabs
+          items={modeItems}
+          activeIndex={modeIndex}
+          className="format-mode-tabs"
+          activeClass="active"
+          fullWidthClass="full-width"
+          onChange={(index) => {
+            formatActions.setMode(
+              index === 0 ? FormatMode.PRESET : FormatMode.CUSTOM
+            );
+          }}
+        />
+      </Column>
+    </Row>
+  </Grid>
+</div>
+
+<style>
+  .format-mode-tabs-container :global(.format-mode-tabs) {
+    border-color: #cac5c4;
+    border-radius: 4px;
+  }
+
+  .format-mode-tabs-container :global(.format-mode-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
+  }
+</style>

@@ -34,7 +34,7 @@
         selected={selectedModel}
         id="model-select"
         labelText={m.format_model()}
-        size="xl"
+        size="sm"
         on:change={handleModelChange}
       >
         {#each modelOptions as option (option.value)}
