@@ -61,7 +61,7 @@
 
 <aside class="tool-container">
   <header class="tool-header">
-    <h5>{title}</h5>
+    <p class="tool-title">{title}</p>
 
     <Button
       kind="ghost"
@@ -69,7 +69,6 @@
       iconDescription={m.close()}
       icon={Close}
       on:click={() => selectTool(undefined)}
-      class="float-right"
     />
   </header>
 
@@ -80,8 +79,26 @@
   .tool-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--cds-spacing-03);
+    gap: var(--cds-spacing-02);
+    padding-bottom: var(--cds-spacing-03);
+    padding-left: var(--cds-spacing-05);
+    padding-right: var(--cds-spacing-02);
+    position: sticky;
+    top: 0;
+    background-color: var(--cds-background, white);
+    z-index: 2;
+  }
+
+  .tool-title {
+    flex: 1 0 0;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5rem;
+    color: var(--cds-text-01, #161616);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   aside {
