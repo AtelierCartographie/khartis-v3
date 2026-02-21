@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button, Slider } from 'carbon-components-svelte';
+  import { Button, Slider, Toggle } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
   import { facetsStore } from './facets.store.svelte';
   import {
@@ -14,17 +14,14 @@
   const layout = $derived(facetsStore.layout);
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
+  const syncPanZoom = $derived(facetsStore.syncPanZoom);
 
   const isProportional = $derived(
     selectedViz?.type === VisualizationType.PROPORTIONAL
   );
 
   let selectedMapIndex = $state(0);
-  let columnsValue = $state<number>(3);
-
-  $effect(() => {
-    columnsValue = layout.columns;
-  });
+  const columnsValue = $derived(layout.columns);
 
   $effect(() => {
     if (selectedMapIndex >= facetVisualizations.length) {
@@ -89,6 +86,15 @@
             on:change={(e) => handleColumnsChange(e.detail)}
           />
         </div>
+        <div class="toggle-wrapper">
+          <Toggle
+            size="sm"
+            labelText={m.facets_sync_pan_zoom()}
+            hideLabel={false}
+            toggled={syncPanZoom}
+            on:toggle={() => facetsStore.toggleSyncPanZoom()}
+          />
+        </div>
       </div>
 
       <!-- Distribution section -->
@@ -104,9 +110,9 @@
           <div class="maps-switcher">
             <p class="maps-label">{m.facets_maps_label()}</p>
             <div class="maps-grid">
-              {#each mapRows() as row}
+              {#each mapRows() as row, rowIdx (rowIdx)}
                 <div class="maps-row">
-                  {#each row as pos}
+                  {#each row as pos (pos)}
                     <button
                       class="map-btn"
                       class:selected={selectedMapIndex === pos - 1}
@@ -133,7 +139,7 @@
                 </div>
                 <p class="variables-label">{m.facets_variables_label()}</p>
                 <div class="radio-group">
-                  {#each variables as variable, i}
+                  {#each variables as variable, i (variable)}
                     <div class="radio-row">
                       <input
                         type="radio"
@@ -158,7 +164,7 @@
               </div>
               <p class="variables-label">{m.facets_variables_label()}</p>
               <div class="radio-group">
-                {#each variables as variable, i}
+                {#each variables as variable, i (variable)}
                   <div class="radio-row">
                     <input
                       type="radio"
@@ -288,6 +294,16 @@
 
   .slider-wrapper :global(.bx--slider-container) {
     width: 100%;
+  }
+
+  .toggle-wrapper {
+    display: flex;
+    align-items: center;
+  }
+
+  .toggle-wrapper :global(.bx--toggle-input__label) {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
   }
 
   /* Maps ContentSwitcher */

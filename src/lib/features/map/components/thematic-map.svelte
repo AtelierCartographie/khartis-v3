@@ -33,7 +33,7 @@
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import type { DeckMapProps } from '../types';
+  import type { DeckMapProps, DeckOrthographicViewStateMap } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
     formatState,
@@ -56,7 +56,9 @@
     width,
     height,
     onReady,
-    forcedVisualizationIds
+    forcedVisualizationIds,
+    onMoveSync,
+    syncViewState
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
@@ -136,6 +138,7 @@
   let effectTriggerLog: string[] = [];
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
+  let isApplyingMapLibreSync = false;
 
   function logEffect(name: string): void {
     effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
@@ -306,8 +309,27 @@
       }
     },
     onZoom: () => mapInstanceStore.updateZoomFromMap(),
-    onMoveEnd: () => mapPosition.savePosition(),
-    getActiveVisualizations: () => mapState.activeVisualizations
+    onMoveEnd: () => {
+      mapPosition.savePosition();
+      if (
+        onMoveSync &&
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        mapInit.map &&
+        !isApplyingMapLibreSync
+      ) {
+        const center = mapInit.map.getCenter();
+        onMoveSync({
+          type: 'maplibre',
+          center: [center.lng, center.lat],
+          zoom: mapInit.map.getZoom()
+        });
+      }
+      isApplyingMapLibreSync = false;
+    },
+    getActiveVisualizations: () => mapState.activeVisualizations,
+    onOrthographicViewStateChanged: (target, zoom) => {
+      onMoveSync?.({ type: 'orthographic', target, zoom });
+    }
   });
 
   const mapPosition = useMapPosition({
@@ -954,6 +976,27 @@
       }
     }
   }
+
+  $effect(() => {
+    const sv = syncViewState;
+    const deck = mapInit.deckInstance;
+    const map = mapInit.map;
+    if (!sv) return;
+
+    if (sv.type === 'orthographic' && sv.target && deck) {
+      const orthographicViewState: DeckOrthographicViewStateMap = {
+        main: { target: sv.target, zoom: sv.zoom, minZoom: -10, maxZoom: 10 }
+      };
+      deck.setProps({
+        viewState: orthographicViewState as Parameters<
+          typeof deck.setProps
+        >[0]['viewState']
+      });
+    } else if (sv.type === 'maplibre' && sv.center && map) {
+      isApplyingMapLibreSync = true;
+      map.jumpTo({ center: sv.center, zoom: sv.zoom });
+    }
+  });
 
   onMount(() => {
     const initialViewMode = basemapStyleStore.requiresMapLibre

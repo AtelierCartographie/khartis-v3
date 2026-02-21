@@ -58,6 +58,7 @@
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
+  const facetsSyncPanZoom = $derived(facetsStore.syncPanZoom);
 
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
@@ -565,6 +566,7 @@
           tables={displayTables}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
+          syncPanZoom={facetsSyncPanZoom}
           containerWidth={formatState.width}
           containerHeight={formatState.height}
         />

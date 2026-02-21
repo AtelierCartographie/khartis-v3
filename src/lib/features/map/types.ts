@@ -64,6 +64,13 @@ export interface DeckOrthographicViewStateMap {
   main: OrthographicMainViewState;
 }
 
+export interface FacetSyncViewState {
+  type: 'orthographic' | 'maplibre';
+  target?: [number, number, number];
+  center?: [number, number];
+  zoom: number;
+}
+
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   geoJSONs: Map<string, FeatureCollection>;
@@ -72,6 +79,8 @@ export interface DeckMapProps {
   height: number;
   onReady?: () => void;
   forcedVisualizationIds?: string[];
+  onMoveSync?: (state: FacetSyncViewState) => void;
+  syncViewState?: FacetSyncViewState | null;
 }
 
 export interface LayerContext {

@@ -47,6 +47,10 @@ export interface UseMapInitProps {
   onZoom: () => void;
   onMoveEnd: () => void;
   getActiveVisualizations?: () => import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig[];
+  onOrthographicViewStateChanged?: (
+    target: [number, number, number],
+    zoom: number
+  ) => void;
 }
 
 export interface UseMapInitReturn {
@@ -188,7 +192,13 @@ function createDeckWithDeferredResizeObserver(
 }
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
-  const { onMapLoaded, onZoom, onMoveEnd, getActiveVisualizations } = props;
+  const {
+    onMapLoaded,
+    onZoom,
+    onMoveEnd,
+    getActiveVisualizations,
+    onOrthographicViewStateChanged
+  } = props;
   patchLumaCanvasContextResizeGuard();
 
   let map = $state<maplibregl.Map | null>(null);
@@ -279,13 +289,26 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
 
     const handleViewStateChange = ({
-      viewState
+      viewState,
+      interactionState
     }: OrthographicViewStateChangeParams): DeckOrthographicViewStateMap => {
       if (viewState.main) {
         mapInstanceStore.updateDeckViewState({
           target: viewState.main.target,
           zoom: viewState.main.zoom
         });
+
+        if (
+          onOrthographicViewStateChanged &&
+          (interactionState.isDragging ||
+            interactionState.isPanning ||
+            interactionState.isZooming)
+        ) {
+          onOrthographicViewStateChanged(
+            viewState.main.target,
+            viewState.main.zoom
+          );
+        }
       }
       onZoom();
       return viewState;

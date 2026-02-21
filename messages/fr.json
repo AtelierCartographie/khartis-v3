@@ -1521,6 +1521,7 @@
   "facets_size_shape": "Taille et forme",
   "facets_fill": "Fond",
   "facets_variables_label": "Variables",
+  "facets_sync_pan_zoom": "Synchroniser la navigation",
   "label_content": "Contenu de l'étiquette",
   "text_content": "Contenu du texte",
   "appearance": "Apparence",
