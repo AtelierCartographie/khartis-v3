@@ -42,6 +42,19 @@
       globalState.selectedTool = undefined;
     }
   }
+
+  $effect(() => {
+    if (!open) return;
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        globalState.selectedTool = undefined;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
 </script>
 
 <div
