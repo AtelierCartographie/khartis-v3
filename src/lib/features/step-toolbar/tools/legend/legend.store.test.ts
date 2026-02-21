@@ -60,6 +60,36 @@ describe('legend.store default style', () => {
   });
 });
 
+describe('legend.store hasBeenOpened', () => {
+  beforeEach(() => {
+    legendActions.reset();
+  });
+
+  it('is false by default', () => {
+    expect(getLegendState().hasBeenOpened).toBe(false);
+  });
+
+  it('becomes true after markAsOpened is called', () => {
+    legendActions.markAsOpened();
+
+    expect(getLegendState().hasBeenOpened).toBe(true);
+  });
+
+  it('stays true after multiple markAsOpened calls', () => {
+    legendActions.markAsOpened();
+    legendActions.markAsOpened();
+
+    expect(getLegendState().hasBeenOpened).toBe(true);
+  });
+
+  it('resets to false after reset', () => {
+    legendActions.markAsOpened();
+    legendActions.reset();
+
+    expect(getLegendState().hasBeenOpened).toBe(false);
+  });
+});
+
 describe('legend.store drag position', () => {
   beforeEach(() => {
     legendActions.reset();
