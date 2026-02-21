@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  FormatMode,
   PAGE_PRESETS,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
@@ -163,5 +164,81 @@ describe('format.store page color defaults', () => {
     formatActions.reset();
 
     expect(formatState.color).toEqual(DEFAULT_PAGE_COLOR);
+  });
+});
+
+describe('format.store setMode', () => {
+  beforeEach(() => {
+    formatActions.reset();
+  });
+
+  it('starts in preset mode by default', () => {
+    expect(formatState.mode).toBe(FormatMode.PRESET);
+  });
+
+  it('switches to custom mode', () => {
+    formatActions.setMode(FormatMode.CUSTOM);
+
+    expect(formatState.mode).toBe(FormatMode.CUSTOM);
+  });
+
+  it('returns to preset mode after switching to custom', () => {
+    formatActions.setMode(FormatMode.CUSTOM);
+    formatActions.setMode(FormatMode.PRESET);
+
+    expect(formatState.mode).toBe(FormatMode.PRESET);
+  });
+});
+
+describe('format.store setSize', () => {
+  beforeEach(() => {
+    formatActions.reset();
+  });
+
+  it('sets custom page dimensions', () => {
+    formatActions.setSize(1200, 800);
+
+    expect(formatState.width).toBe(1200);
+    expect(formatState.height).toBe(800);
+  });
+
+  it('clamps width and height to minimum 1', () => {
+    formatActions.setSize(0, -50);
+
+    expect(formatState.width).toBe(1);
+    expect(formatState.height).toBe(1);
+  });
+
+  it('accepts very large dimensions without clamping', () => {
+    formatActions.setSize(9999, 7000);
+
+    expect(formatState.width).toBe(9999);
+    expect(formatState.height).toBe(7000);
+  });
+});
+
+describe('format.store toggleGrid', () => {
+  beforeEach(() => {
+    formatActions.reset();
+  });
+
+  it('disables the grid after one toggle', () => {
+    formatActions.toggleGrid();
+
+    expect(formatState.gridEnabled).toBe(false);
+  });
+
+  it('re-enables the grid after two toggles', () => {
+    formatActions.toggleGrid();
+    formatActions.toggleGrid();
+
+    expect(formatState.gridEnabled).toBe(true);
+  });
+
+  it('resets grid to enabled on reset', () => {
+    formatActions.toggleGrid();
+    formatActions.reset();
+
+    expect(formatState.gridEnabled).toBe(true);
   });
 });

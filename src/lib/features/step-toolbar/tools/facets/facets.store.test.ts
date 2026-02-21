@@ -145,5 +145,98 @@ describe('facetsStore', () => {
       await facetsStore.enable('non-existent', ['var1', 'var2']);
       expect(logger.error).toHaveBeenCalled();
     });
+
+    it('sets enabled state and stores generated visualization ids on success', async () => {
+      const { facetsStore } = await import('./facets.store.svelte');
+      const { visualizationStore } =
+        await import('$lib/features/commons/store/visualization.store.svelte');
+
+      (
+        visualizationStore as { visualizations: { id: string; name: string }[] }
+      ).visualizations = [{ id: 'viz-base', name: 'Base' }];
+
+      await facetsStore.enable('viz-base', ['alpha', 'beta']);
+
+      expect(facetsStore.enabled).toBe(true);
+      expect(facetsStore.baseVisualizationId).toBe('viz-base');
+      expect(facetsStore.generatedVisualizationIds).toEqual([
+        'facet-1',
+        'facet-2'
+      ]);
+    });
+  });
+
+  describe('disable when enabled', () => {
+    it('calls removeBulkVisualizations and resets state', async () => {
+      const { facetsStore } = await import('./facets.store.svelte');
+      const { visualizationStore } =
+        await import('$lib/features/commons/store/visualization.store.svelte');
+
+      (
+        visualizationStore as { visualizations: { id: string; name: string }[] }
+      ).visualizations = [{ id: 'viz-dis', name: 'Disable Test' }];
+
+      await facetsStore.enable('viz-dis', ['x', 'y']);
+      expect(facetsStore.enabled).toBe(true);
+
+      vi.clearAllMocks();
+
+      facetsStore.disable();
+
+      expect(facetsStore.enabled).toBe(false);
+      expect(facetsStore.baseVisualizationId).toBeNull();
+      expect(facetsStore.variables).toEqual([]);
+      expect(facetsStore.generatedVisualizationIds).toEqual([]);
+      expect(visualizationStore.removeBulkVisualizations).toHaveBeenCalledWith([
+        'facet-1',
+        'facet-2'
+      ]);
+    });
+  });
+
+  describe('toggleScaleMode', () => {
+    it('switches from INDEPENDENT to SHARED when not enabled', async () => {
+      const { facetsStore, SCALE_MODE } = await import('./facets.store.svelte');
+      const { visualizationStore } =
+        await import('$lib/features/commons/store/visualization.store.svelte');
+
+      // ensure disabled state
+      facetsStore.disable();
+
+      // ensure known scaleMode by toggling to a known state
+      // scaleMode might be SHARED from previous tests, force to INDEPENDENT
+      if (facetsStore.scaleMode === SCALE_MODE.SHARED) {
+        await facetsStore.toggleScaleMode();
+      }
+      expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
+
+      await facetsStore.toggleScaleMode();
+
+      expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
+      // no regeneration when disabled
+      expect(
+        visualizationStore.createBulkVisualizations
+      ).not.toHaveBeenCalled();
+    });
+
+    it('regenerates facets when toggleScaleMode is called while enabled', async () => {
+      const { facetsStore } = await import('./facets.store.svelte');
+      const { visualizationStore } =
+        await import('$lib/features/commons/store/visualization.store.svelte');
+
+      (
+        visualizationStore as { visualizations: { id: string; name: string }[] }
+      ).visualizations = [{ id: 'viz-scale', name: 'Scale Test' }];
+
+      await facetsStore.enable('viz-scale', ['a', 'b']);
+      expect(facetsStore.enabled).toBe(true);
+
+      vi.clearAllMocks();
+
+      await facetsStore.toggleScaleMode();
+
+      expect(visualizationStore.removeBulkVisualizations).toHaveBeenCalled();
+      expect(visualizationStore.createBulkVisualizations).toHaveBeenCalled();
+    });
   });
 });
