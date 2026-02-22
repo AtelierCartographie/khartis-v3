@@ -26,6 +26,7 @@ export interface GlobalState {
   zoom: ZoomState;
   isMobileView: boolean;
   isMobileToolbarOpen: boolean;
+  isToolbarTransitioning: boolean;
 }
 
 export const enum ToolbarStep {
