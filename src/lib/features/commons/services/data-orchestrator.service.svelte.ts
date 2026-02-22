@@ -247,6 +247,24 @@ function createDataOrchestratorService() {
           }
         );
 
+        if (registered !== null && (file.joinedBasemap || file.gpsMode)) {
+          duckDBOrchestrator.updateDatasetJoinInfo(registered.id, {
+            joinedBasemap: file.joinedBasemap,
+            geoColumn: file.geoColumn,
+            gpsMode: file.gpsMode,
+            gpsColumns: file.gpsColumns
+          });
+          logger.info(
+            'Restoring join state from persisted data',
+            LogCategory.DUCKDB,
+            {
+              fileId: file.id,
+              joinedBasemap: file.joinedBasemap,
+              gpsMode: file.gpsMode
+            }
+          );
+        }
+
         if (registered === null) {
           logger.info(
             'DuckDB table missing, re-processing file from scratch',

@@ -263,6 +263,8 @@ export const duckDBOrchestrator = {
 
   getBasemapAttributesId: joinOps.getBasemapAttributesId,
 
+  updateDatasetJoinInfo: datasetOps.updateDatasetJoinInfo,
+
   async computeJoinStats(
     datasetId: string,
     basemap: BasemapMetadata,
