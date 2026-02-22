@@ -102,6 +102,7 @@
           <div class="tab-wrapper" bind:this={tabRefs[1]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 2}
+              selectable={false}
               onclick={() => selectTile(2)}
               onkeydown={(e) => handleTabKeydown(e, 2)}
               tabIndex={createProjectState.selectedTab === 2 ? 0 : -1}
@@ -117,6 +118,7 @@
           <div class="tab-wrapper" bind:this={tabRefs[2]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 3}
+              selectable={false}
               onclick={() => selectTile(3)}
               onkeydown={(e) => handleTabKeydown(e, 3)}
               tabIndex={createProjectState.selectedTab === 3 ? 0 : -1}
