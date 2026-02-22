@@ -124,6 +124,7 @@
   :global(#khartis-step-toolbar) {
     position: relative;
     z-index: var(--z-toolbar);
+    align-self: center;
   }
 
   header span {
@@ -161,7 +162,8 @@
   }
 
   .nav-item.selected {
-    background-color: var(--cds-ui-03);
+    background-color: #cac5c4;
+    border-left: 3px solid #cac5c4;
   }
 
   .nav-item span {

@@ -67,8 +67,6 @@
       }
     }
 
-    globalActions.initializeFromUrl();
-
     handleResize();
     window.addEventListener(EVENT.RESIZE, handleResize);
 
@@ -188,11 +186,16 @@
   <KeyboardShortcuts />
 
   <main class:mobile-view={globalState.isMobileView}>
-    <article class="main-content">
-      {#if !globalState.isMobileView}
-        <StepToolbar />
-      {/if}
+    <CreateProject
+      open={!isLoading && globalState.isCreateProjectModalOpen}
+      onClose={handleCloseModal}
+    />
 
+    {#if !globalState.isMobileView}
+      <StepToolbar />
+    {/if}
+
+    <article class="main-content">
       <div class="page-content-wrapper" style={pageTransformStyle}>
         {@render children()}
       </div>
@@ -210,16 +213,12 @@
       {/if}
     </article>
 
-    <CreateProject
-      open={!isLoading && globalState.isCreateProjectModalOpen}
-      onClose={handleCloseModal}
-    />
-
     {#if globalState.isMobileView}
       <MobileToolbar />
     {:else}
       <MainToolbar />
     {/if}
+
     <NotificationContainer />
     <PwaUpdatePrompt />
   </main>
@@ -246,8 +245,7 @@
     height: 100%;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
+    justify-content: center;
     overflow: visible;
   }
 
