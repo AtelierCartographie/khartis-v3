@@ -5,6 +5,7 @@ import type {
 import {
   FillMode,
   MissingDataShape,
+  ProportionalType,
   ShapeType,
   StrokeMode,
   SymbolMode
@@ -58,6 +59,7 @@ export interface VisualizationModes {
   thickness?: import('$lib/features/main-toolbar/constants').ThicknessMode;
   color?: import('$lib/features/main-toolbar/constants').ColorMode;
   size?: import('$lib/features/main-toolbar/constants').SizeMode;
+  proportionalType?: ProportionalType;
 }
 
 export interface ClassificationConfig {
@@ -415,11 +417,27 @@ function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
 }
 
 function getDefaultPrimitiveFilters(
-  _dataset: ProcessedDataset | DatasetResult
+  dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
-  // All primitive toggles start OFF for performance —
-  // the user explicitly enables what they need.
-  return [];
+  const geometryType =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
+  const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
+
+  if (normalizedGeometryType.includes('polygon')) {
+    return [PrimitiveFilterType.POLYGON];
+  }
+
+  if (normalizedGeometryType.includes('line')) {
+    return [PrimitiveFilterType.LINE];
+  }
+
+  if (normalizedGeometryType.includes('point')) {
+    return [PrimitiveFilterType.POINT];
+  }
+
+  return [...ALL_PRIMITIVE_FILTERS];
 }
 
 function getDefaultMissingData(): MissingDataConfig {

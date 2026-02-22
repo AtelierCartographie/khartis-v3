@@ -31,7 +31,9 @@
     Pin,
     CircleFilled,
     Shapes,
-    EdgeNode
+    EdgeNode,
+    TrashCan,
+    Copy
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
@@ -51,6 +53,8 @@
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
+  let renamingVizId = $state<string | undefined>(undefined);
+  let renameValue = $state<string>('');
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -205,6 +209,45 @@
     onCreateVisualization?.();
   }
 
+  const datasetVisualizations = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset) return [];
+    return visualizationStore.getVisualizationsByDataset(dataset.id);
+  });
+
+  function handleSelectViz(id: string) {
+    visualizationStore.selectVisualization(id);
+  }
+
+  function handleDuplicateViz(id: string) {
+    visualizationStore.duplicateVisualization(id);
+  }
+
+  function handleDeleteViz(id: string) {
+    visualizationStore.removeVisualization(id);
+  }
+
+  function handleStartRename(viz: { id: string; name: string }) {
+    renamingVizId = viz.id;
+    renameValue = viz.name;
+  }
+
+  function handleConfirmRename(id: string) {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      visualizationStore.updateVisualization(id, { name: trimmed });
+    }
+    renamingVizId = undefined;
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent, id: string) {
+    if (e.key === 'Enter') {
+      handleConfirmRename(id);
+    } else if (e.key === 'Escape') {
+      renamingVizId = undefined;
+    }
+  }
+
   export function collapseSuggestions() {
     suggestionsExpanded = false;
   }
@@ -265,6 +308,67 @@
         size="xl"
       />
     </div>
+
+    {#if datasetVisualizations.length > 0}
+      <div class="viz-list" role="list">
+        {#each datasetVisualizations as viz (viz.id)}
+          {@const isSelected =
+            visualizationStore.selectedVisualization?.id === viz.id}
+          {@const isRenaming = renamingVizId === viz.id}
+          <div class="viz-item" class:selected={isSelected} role="listitem">
+            <button
+              type="button"
+              class="viz-item-select"
+              onclick={() => handleSelectViz(viz.id)}
+              aria-pressed={isSelected}
+            >
+              {#if isRenaming}
+                <input
+                  class="viz-rename-input"
+                  type="text"
+                  bind:value={renameValue}
+                  onkeydown={(e: KeyboardEvent) =>
+                    handleRenameKeydown(e, viz.id)}
+                  onblur={() => handleConfirmRename(viz.id)}
+                  onclick={(e: MouseEvent) => e.stopPropagation()}
+                />
+              {:else}
+                <span class="viz-item-name">{viz.name}</span>
+              {/if}
+            </button>
+            <div class="viz-item-actions">
+              <Button
+                kind="ghost"
+                size="small"
+                hasIconOnly
+                icon={Edit}
+                iconDescription={m.viz_list_rename()}
+                tooltipPosition="top"
+                on:click={() => handleStartRename(viz)}
+              />
+              <Button
+                kind="ghost"
+                size="small"
+                hasIconOnly
+                icon={Copy}
+                iconDescription={m.viz_list_duplicate()}
+                tooltipPosition="top"
+                on:click={() => handleDuplicateViz(viz.id)}
+              />
+              <Button
+                kind="ghost"
+                size="small"
+                hasIconOnly
+                icon={TrashCan}
+                iconDescription={m.viz_list_delete()}
+                tooltipPosition="top"
+                on:click={() => handleDeleteViz(viz.id)}
+              />
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
 
     <div class="suggestions-section">
       <ExpandableSection
@@ -678,5 +782,74 @@
 
   .learn-more :global(svg) {
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
+  }
+
+  .viz-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-05);
+  }
+
+  .viz-item {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    background: var(--cds-layer-01, #f4f4f4);
+    min-height: 40px;
+    transition: border-color 0.15s ease;
+
+    &:hover {
+      border-color: var(--cds-border-strong-01, #8d8d8d);
+
+      .viz-item-actions {
+        opacity: 1;
+      }
+    }
+
+    &.selected {
+      border-color: var(--cds-border-interactive, #726e6e);
+      background: var(--cds-layer-selected-01, #e8e8e8);
+    }
+  }
+
+  .viz-item-select {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--cds-spacing-04);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    min-height: 40px;
+    overflow: hidden;
+  }
+
+  .viz-item-name {
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .viz-rename-input {
+    width: 100%;
+    border: none;
+    border-bottom: 2px solid var(--cds-border-interactive, #726e6e);
+    background: transparent;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    outline: none;
+    padding: 0;
+  }
+
+  .viz-item-actions {
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
   }
 </style>

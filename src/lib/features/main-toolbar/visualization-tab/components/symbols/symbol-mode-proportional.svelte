@@ -59,6 +59,7 @@
   let discretizationModalOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   let selectedFieldId = $state<number>(0);
+  let selectedFieldBId = $state<number>(0);
   let fillClassFieldId = $state<number>(0);
   let fillCategoryFieldId = $state<number>(0);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
@@ -71,6 +72,7 @@
   // Fill mode states
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
+  let fillColorB = $state<string>('#ff832b');
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let fillPattern = $state<boolean>(false);
 
@@ -128,6 +130,8 @@
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      proportionalType =
+        visualization.modes.proportionalType ?? ProportionalType.SINGLE;
     }
     if (visualization?.style) {
       fillColor =
@@ -163,6 +167,19 @@
       FillMode.CATEGORIES
     ].indexOf(fillMode)
   );
+
+  function handleProportionalTypeChange(type: ProportionalType) {
+    proportionalType = type;
+    onModesChange?.({ proportionalType: type });
+  }
+
+  function handleFieldBSelect(fieldId: number) {
+    selectedFieldBId = fieldId;
+  }
+
+  function handleFillColorBChange(value: string) {
+    fillColorB = value;
+  }
 
   function handleShapeTypeChange(value: ShapeType) {
     shapeType = value;
@@ -266,7 +283,11 @@
       {m.proportional_symbols_label()}
       <InfoPopover text={m.proportional_type_info()} />
     </span>
-    <RadioButtonGroup bind:selected={proportionalType}>
+    <RadioButtonGroup
+      selected={proportionalType}
+      on:change={(e) =>
+        handleProportionalTypeChange(e.detail as ProportionalType)}
+    >
       <RadioButton
         id="prop-single"
         value={ProportionalType.SINGLE}
@@ -282,7 +303,9 @@
 
   <div class="field-group">
     <span class="field-label">
-      {m.size_according()}
+      {proportionalType === ProportionalType.DOUBLE
+        ? m.symbol_variable_a()
+        : m.size_according()}
       <InfoPopover text={m.size_according_info()} />
     </span>
     <Dropdown
@@ -292,6 +315,20 @@
       type="default"
     />
   </div>
+
+  {#if proportionalType === ProportionalType.DOUBLE}
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_variable_b()}
+      </span>
+      <Dropdown
+        items={dataFields}
+        selectedId={selectedFieldBId}
+        on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
+        type="default"
+      />
+    </div>
+  {/if}
 {/if}
 
 <SliderWithInput
@@ -366,11 +403,30 @@
 </div>
 
 {#if fillMode === FillMode.UNIQUE}
-  <ColorSelector
-    label={m.color()}
-    value={fillColor}
-    onchange={handleFillColorChange}
-  />
+  {#if proportionalType === ProportionalType.DOUBLE}
+    <div class="double-color-row">
+      <div class="double-color-item double-color-a">
+        <ColorSelector
+          label={m.symbol_color_a()}
+          value={fillColor}
+          onchange={handleFillColorChange}
+        />
+      </div>
+      <div class="double-color-item double-color-b">
+        <ColorSelector
+          label={m.symbol_color_b()}
+          value={fillColorB}
+          onchange={handleFillColorBChange}
+        />
+      </div>
+    </div>
+  {:else}
+    <ColorSelector
+      label={m.color()}
+      value={fillColor}
+      onchange={handleFillColorChange}
+    />
+  {/if}
   <SliderWithInput
     label={m.opacity()}
     bind:value={fillOpacity}
@@ -480,6 +536,24 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .double-color-row {
+    display: flex;
+    gap: var(--cds-spacing-03);
+  }
+
+  .double-color-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .double-color-a :global(.color-selector-label) {
+    color: var(--cds-interactive);
+  }
+
+  .double-color-b :global(.color-selector-label) {
+    color: #ff832b;
   }
 
   .field-label {
