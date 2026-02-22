@@ -427,7 +427,12 @@
     cursor: move;
   }
 
+  .annotation-item.editable:hover {
+    outline: 1px dashed #726e6e;
+  }
+
   .annotation-item.selected {
+    outline: 1px dashed #726e6e;
     box-shadow: 0 0 0 2px var(--cds-interactive-01);
     border-radius: 4px;
   }

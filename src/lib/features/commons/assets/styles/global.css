@@ -26,10 +26,9 @@
   --cds-hover-primary-text: #515151;
   --cds-inverse-focus-ui: #ffffff;
   --cds-focus: black;
-  --cds-interactive-01: #000000;
+  --cds-interactive-01: #3c3838;
   --cds-interactive-02: #393939;
-  --cds-interactive-03: #000000;
-  --cds-interactive-04: #000000;
+  --cds-interactive-03: #726e6e;
   --cds-blue: #0072c3;
   --cds-pale-blue: #cceeff;
   --cds-medium-blue: #a8e2ff;
@@ -40,7 +39,7 @@
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #525252;
   --cds-hover-tertiary: #1a1a1a;
-  --cds-button-primary: black;
+  --cds-button-primary: #3c3838;
 
   /* Khartis additions - Suggestions theming */
   --khartis-additions-text-primary-suggestions: #003a6d;

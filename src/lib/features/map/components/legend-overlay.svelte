@@ -236,9 +236,14 @@
     cursor: grab;
   }
 
+  .legend-container.draggable:hover {
+    outline: 1px dashed #726e6e;
+  }
+
   .legend-container.dragging {
     cursor: grabbing;
     user-select: none;
+    background-color: #f4f4f4 !important;
   }
 
   .legend-container.top-left {

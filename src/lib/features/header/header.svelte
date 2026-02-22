@@ -50,7 +50,7 @@
         tooltipPosition="bottom"
         tooltipAlignment="end"
         iconDescription={m.help_tooltip()}
-        kind="ghost"
+        kind="tertiary"
         icon={Help}
       >
         {m.header_help()}
