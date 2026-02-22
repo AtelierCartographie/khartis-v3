@@ -26,6 +26,7 @@
     formatActions,
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
+  import { EVENT } from '../commons/constants/dom.constants';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
@@ -38,11 +39,11 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let isToolbarTransitioning = $state(false);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let transitionEndCleanup: (() => void) | null = null;
   let containerResizeObserver: ResizeObserver | null = null;
 
-  const TOOLBAR_TRANSITION_MS = 600;
+  const TOOLBAR_TRANSITION_SAFETY_MS = 400;
   const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
@@ -414,25 +415,55 @@
     }
   });
 
+  function cleanupTransitionListener(): void {
+    if (transitionEndCleanup) {
+      transitionEndCleanup();
+      transitionEndCleanup = null;
+    }
+  }
+
+  function finishToolbarTransition(): void {
+    cleanupTransitionListener();
+    if (toolbarTransitionTimeoutId) {
+      clearTimeout(toolbarTransitionTimeoutId);
+      toolbarTransitionTimeoutId = null;
+    }
+    globalState.isToolbarTransitioning = false;
+    handleContainerResize();
+  }
+
   $effect(() => {
     void globalState.toolbarState;
 
     untrack(() => {
       if (!isMapReady) return;
 
-      // Mark toolbar as transitioning to suppress intermediate fitToContainer calls
-      isToolbarTransitioning = true;
+      globalState.isToolbarTransitioning = true;
 
+      // Clean up previous transition tracking
+      cleanupTransitionListener();
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
       }
 
-      toolbarTransitionTimeoutId = setTimeout(() => {
-        isToolbarTransitioning = false;
-        toolbarTransitionTimeoutId = null;
-        // Trigger a single fitToContainer with final dimensions after transition
-        handleContainerResize();
-      }, TOOLBAR_TRANSITION_MS);
+      // Safety timeout in case transitionend never fires
+      toolbarTransitionTimeoutId = setTimeout(
+        finishToolbarTransition,
+        TOOLBAR_TRANSITION_SAFETY_MS
+      );
+
+      // Listen for CSS transition end on the toolbar element
+      const toolbar = document.getElementById('khartis-main-toolbar');
+      if (toolbar) {
+        const handler = (event: TransitionEvent) => {
+          if (event.propertyName === 'width') {
+            finishToolbarTransition();
+          }
+        };
+        toolbar.addEventListener(EVENT.TRANSITIONEND, handler, { once: true });
+        transitionEndCleanup = () =>
+          toolbar.removeEventListener(EVENT.TRANSITIONEND, handler);
+      }
     });
   });
 
@@ -459,7 +490,7 @@
   function handleContainerResizeDebounced() {
     // Skip intermediate resizes during toolbar animation.
     // The toolbar transition effect will trigger a final resize after animation ends.
-    if (isToolbarTransitioning) return;
+    if (globalState.isToolbarTransitioning) return;
 
     if (containerResizeTimeoutId) {
       clearTimeout(containerResizeTimeoutId);
@@ -504,6 +535,7 @@
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
       }
+      cleanupTransitionListener();
       if (containerResizeTimeoutId) {
         clearTimeout(containerResizeTimeoutId);
       }

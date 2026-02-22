@@ -362,6 +362,9 @@
   }
 
   function syncOrthographicDeckSize(): void {
+    if (globalState.isToolbarTransitioning) {
+      return;
+    }
     if (!mapContainer || mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
@@ -452,7 +455,9 @@
     void mapCanvasHeight;
 
     untrack(() => {
-      syncOrthographicDeckSize();
+      if (!globalState.isToolbarTransitioning) {
+        syncOrthographicDeckSize();
+      }
     });
   });
 
@@ -1008,6 +1013,10 @@
     loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
+      if (globalState.isToolbarTransitioning) {
+        return;
+      }
+
       if (resizeTimeoutId) {
         clearTimeout(resizeTimeoutId);
       }

@@ -220,6 +220,7 @@
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
     z-index: var(--z-main-toolbar);
+    will-change: width;
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);
