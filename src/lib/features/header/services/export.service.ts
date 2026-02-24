@@ -158,8 +158,14 @@ export async function exportData(
 
   const formatConfig = getDataFormatConfig(format);
   const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
+
+  const datasetsToExport =
+    format === DATA_FORMAT.CSV_GEO || format === DATA_FORMAT.GEOJSON
+      ? await fetchDatasetsWithGeometry(normalizedDatasets)
+      : normalizedDatasets;
+
   const blob = await exportProcessedDatasets(
-    normalizedDatasets,
+    datasetsToExport,
     formatConfig.format
   );
   const filename = generateExportFilename(fileName, formatConfig.extension);
