@@ -54,8 +54,12 @@
   function updatePosition() {
     if (!triggerElement) return;
     const rect = triggerElement.getBoundingClientRect();
+    const estimatedDropdownHeight = 300;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const shouldFlip = spaceBelow < estimatedDropdownHeight && rect.top > spaceBelow;
+
     dropdownPos = {
-      top: rect.bottom,
+      top: shouldFlip ? rect.top - estimatedDropdownHeight : rect.bottom,
       left: rect.left,
       width: rect.width
     };
@@ -80,6 +84,21 @@
   $effect(() => {
     if (open) {
       updatePosition();
+      // Refine position after render using actual dropdown height
+      requestAnimationFrame(() => {
+        if (dropdownRef) {
+          const actualHeight = dropdownRef.getBoundingClientRect().height;
+          if (!triggerElement) return;
+          const rect = triggerElement.getBoundingClientRect();
+          const spaceBelow = window.innerHeight - rect.bottom;
+          const shouldFlip = spaceBelow < actualHeight && rect.top > spaceBelow;
+          dropdownPos = {
+            top: shouldFlip ? rect.top - actualHeight : rect.bottom,
+            left: rect.left,
+            width: rect.width
+          };
+        }
+      });
     }
   });
 
@@ -227,6 +246,8 @@
     flex-direction: column;
     padding: var(--cds-spacing-03);
     gap: var(--cds-spacing-02);
+    max-height: 60vh;
+    overflow-y: auto;
   }
 
   .dropdown-row {
