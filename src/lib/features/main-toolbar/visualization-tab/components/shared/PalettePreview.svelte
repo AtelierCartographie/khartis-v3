@@ -38,6 +38,19 @@
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
+  let colorInputRefs = $state<HTMLInputElement[]>([]);
+
+  function handleSwatchClick(index: number, event: MouseEvent) {
+    event.stopPropagation();
+    colorInputRefs[index]?.click();
+  }
+
+  function handleSwatchColorChange(index: number, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const newColors = [...colors];
+    newColors[index] = input.value;
+    onClassificationChange?.({ colors: newColors });
+  }
 
   function handleClick() {
     dropdownOpen = !dropdownOpen;
@@ -95,11 +108,27 @@
     >
       <div class="palette-preview">
         {#each colors as color, i (i)}
-          <div class="palette-color" style="background-color: {color}"></div>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="palette-color"
+            style="background-color: {color}"
+            title={color}
+            onclick={(e: MouseEvent) => handleSwatchClick(i, e)}
+          ></div>
         {/each}
       </div>
       <ChevronDown size={16} />
     </button>
+    {#each colors as color, i (i)}
+      <input
+        type="color"
+        class="color-input-hidden"
+        value={color}
+        bind:this={colorInputRefs[i]}
+        onchange={(e: Event) => handleSwatchColorChange(i, e)}
+      />
+    {/each}
     {#if showInvertButton}
       <Button
         kind="ghost"
@@ -184,5 +213,20 @@
   .palette-color {
     flex: 1;
     height: 100%;
+    cursor: pointer;
+
+    &:hover {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: -2px;
+      z-index: 1;
+    }
+  }
+
+  .color-input-hidden {
+    position: absolute;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 </style>
