@@ -579,7 +579,8 @@ export const FileValidator = {
       }
 
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
-      if (blockedDomains.includes(parsed.hostname)) {
+      const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+      if (!isDev && blockedDomains.includes(parsed.hostname)) {
         result.errors.push('Domain not allowed');
       }
 
