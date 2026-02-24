@@ -27,6 +27,7 @@
     ColorSelector,
     DiscretizationRow,
     InfoPopover,
+    MissingDataSection,
     PalettePreview,
     SectionHeading,
     SliderWithInput,
@@ -60,7 +61,7 @@
     visualization,
     onStyleChange,
     onModesChange,
-    onMissingDataChange: _onMissingDataChange,
+    onMissingDataChange,
     onClassificationChange,
     onMappingChange,
     onInvertPalette,
@@ -120,6 +121,9 @@
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
+  let showMissingData = $state<boolean>(true);
+  let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let fillPattern = $state<boolean>(false);
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -138,6 +142,12 @@
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+    }
+    if (visualization?.missingData) {
+      showMissingData = visualization.missingData.show ?? true;
+      missingDataColor =
+        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+      fillPattern = visualization.missingData.pattern ?? false;
     }
   });
 
@@ -180,6 +190,21 @@
 
   function handleToggleChange(checked: boolean) {
     onToggleVisibility?.(checked);
+  }
+
+  function handleMissingDataShowChange(value: boolean) {
+    showMissingData = value;
+    onMissingDataChange?.({ show: value });
+  }
+
+  function handleMissingDataColorChange(value: string) {
+    missingDataColor = value;
+    onMissingDataChange?.({ color: value });
+  }
+
+  function handleFillPatternChange(value: boolean) {
+    fillPattern = value;
+    onMissingDataChange?.({ pattern: value });
   }
 
   function handleOpenDiscretization() {
@@ -293,6 +318,20 @@
         max={SLIDER_LIMITS.opacity.max}
         value={fillOpacity}
         onchange={handleFillOpacityChange}
+      />
+    {/if}
+
+    {#if fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES}
+      <MissingDataSection
+        bind:show={showMissingData}
+        color={missingDataColor}
+        showShapeSelector={false}
+        showSizeSlider={false}
+        showPattern={true}
+        pattern={fillPattern}
+        onshowchange={handleMissingDataShowChange}
+        oncolorchange={handleMissingDataColorChange}
+        onpatternchange={handleFillPatternChange}
       />
     {/if}
 
