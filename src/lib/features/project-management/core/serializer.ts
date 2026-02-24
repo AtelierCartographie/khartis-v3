@@ -1,5 +1,6 @@
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -176,6 +177,14 @@ export async function serializeProjectData(
         if (duckDBDataset.gpsColumns) {
           serializedFile.gpsColumns = duckDBDataset.gpsColumns;
         }
+      }
+
+      // Persist the DatasetResult ID so visualization.datasetId references survive restore
+      const storeDataset = datasetsStore.datasets.find(
+        (d) => d.sourceFileId === file.id
+      );
+      if (storeDataset) {
+        serializedFile.datasetId = storeDataset.id;
       }
 
       return serializedFile;
