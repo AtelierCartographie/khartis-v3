@@ -1,13 +1,15 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button, Slider, Toggle } from 'carbon-components-svelte';
+  import { Button, MultiSelect, Slider, Toggle } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
   import { facetsStore } from './facets.store.svelte';
   import {
     VisualizationType,
     visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
 
   const selectedViz = $derived(visualizationStore.selectedVisualization);
   const enabled = $derived(facetsStore.enabled);
@@ -28,6 +30,25 @@
       selectedMapIndex = 0;
     }
   });
+
+  const dataFieldItems = $derived.by(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset?.columns) return [];
+    return dataset.columns
+      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+      .map((col) => ({ id: col.name, text: col.name }));
+  });
+
+  let selectedVariableIds = $state<string[]>([]);
+
+  const canEnable = $derived(
+    selectedViz !== undefined && selectedVariableIds.length >= 2
+  );
+
+  async function handleEnableFacets() {
+    if (!selectedViz?.id || selectedVariableIds.length < 2) return;
+    await facetsStore.enable(selectedViz.id, selectedVariableIds);
+  }
 
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
@@ -198,23 +219,46 @@
     <!-- Inactive state -->
     <div class="facets-content">
       <p class="helper-text">{m.facets_collection_description()}</p>
-      <p class="helper-text">{m.facets_create_instruction()}</p>
+
+      {#if selectedViz}
+        <div class="field-group">
+          <MultiSelect
+            labelText={m.facets_select_variables()}
+            label={m.facets_variables_placeholder()}
+            items={dataFieldItems}
+            selectedIds={selectedVariableIds}
+            on:select={(e) => { selectedVariableIds = e.detail.selectedIds; }}
+          />
+        </div>
+        {#if selectedVariableIds.length > 0 && selectedVariableIds.length < 2}
+          <p class="warning-text">{m.facets_min_variables_warning()}</p>
+        {/if}
+        <Button
+          kind="primary"
+          style="width: 100%;"
+          disabled={!canEnable}
+          onclick={handleEnableFacets}
+        >
+          {m.facets_generate()}
+        </Button>
+      {:else}
+        <p class="helper-text">{m.facets_select_viz_first()}</p>
+        <div class="configure-btn-wrapper">
+          <Button
+            kind="secondary"
+            icon={SettingsAdjust}
+            style="width: 100%;"
+            onclick={handleConfigureVisualization}
+          >
+            {m.facets_configure_visualization()}
+          </Button>
+        </div>
+      {/if}
 
       <button class="link-btn" onclick={handleLearnMore}>
         <span>{m.facets_learn_more()}</span>
         <Launch size={16} />
       </button>
-
-      <div class="configure-btn-wrapper">
-        <Button
-          kind="secondary"
-          icon={SettingsAdjust}
-          style="width: 100%;"
-          onclick={handleConfigureVisualization}
-        >
-          {m.facets_configure_visualization()}
-        </Button>
-      </div>
     </div>
   {/if}
 </div>
@@ -261,6 +305,19 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02, 4px);
+  }
+
+  .warning-text {
+    font-size: 0.75rem;
+    color: var(--cds-support-warning, #f1c21b);
+    line-height: 1rem;
+    margin: 0;
   }
 
   .section {
