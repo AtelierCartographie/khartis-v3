@@ -12,6 +12,7 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { untrack } from 'svelte';
 
   type PanelMethod =
     | 'jenks'
@@ -89,7 +90,7 @@
       visualization?.datasetId &&
       visualization?.mapping.valueColumn
     ) {
-      computeBreaks();
+      untrack(() => computeBreaks());
     }
   });
 
