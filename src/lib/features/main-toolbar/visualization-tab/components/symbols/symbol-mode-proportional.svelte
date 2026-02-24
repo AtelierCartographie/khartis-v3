@@ -17,6 +17,7 @@
     DEFAULT_COLORS,
     FillMode
   } from '../../../constants';
+  import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -64,6 +65,7 @@
   let fillCategoryFieldId = $state<number>(0);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.POINT);
+  let sizeScale = $state<ScaleType>(ScaleType.SQRT);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
@@ -118,6 +120,7 @@
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
       shapeType = visualization.symbols.type ?? ShapeType.POINT;
+      sizeScale = visualization.symbols.sizeScale ?? ScaleType.SQRT;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -275,6 +278,12 @@
     const target = e.target as HTMLSelectElement;
     handleShapeTypeChange(target.value as ShapeType);
   }
+
+  function handleScaleTypeChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    sizeScale = target.value as ScaleType;
+    onSymbolsChange?.({ sizeScale });
+  }
 </script>
 
 {#if symbolMode === SymbolMode.PROPORTIONAL}
@@ -339,6 +348,26 @@
   max={SLIDER_LIMITS.symbolMaxSize.max}
   onchange={handleSymbolMaxSizeChange}
 />
+
+{#if symbolMode === SymbolMode.PROPORTIONAL}
+  <div class="field-group">
+    <span class="field-label">
+      {m.scale_type()}
+      <InfoPopover text={m.scale_type_info()} />
+    </span>
+    <Select
+      id="scale-type"
+      hideLabel
+      selected={sizeScale}
+      size="sm"
+      on:change={handleScaleTypeChange}
+    >
+      <SelectItem value={ScaleType.LINEAR} text={m.scale_linear()} />
+      <SelectItem value={ScaleType.SQRT} text={m.scale_sqrt()} />
+      <SelectItem value={ScaleType.LOG} text={m.scale_log()} />
+    </Select>
+  </div>
+{/if}
 
 {#if symbolMode === SymbolMode.CLASSES}
   <div class="field-group">
