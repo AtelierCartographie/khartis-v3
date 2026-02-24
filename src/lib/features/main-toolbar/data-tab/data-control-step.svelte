@@ -277,6 +277,12 @@
 
       datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+      datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
+        header: options.header,
+        decimalSeparator: options.decimalSeparator,
+        thousandsSeparator: options.thousandsSeparator,
+        delimiter: options.delimiter
+      });
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();

@@ -1,4 +1,7 @@
-import type { DatasetResult } from '$lib/features/data-pipeline';
+import type {
+  CsvImportOptions,
+  DatasetResult
+} from '$lib/features/data-pipeline';
 import type { UploadedFile } from './create-project.types';
 import {
   datasetsState,
@@ -32,6 +35,7 @@ import {
   updateDataset as updateDatasetFn,
   updateDatasetRowCount as updateDatasetRowCountFn,
   updateDatasetTableName as updateDatasetTableNameFn,
+  updateDatasetCsvOptions as updateDatasetCsvOptionsFn,
   renameDataset as renameDatasetFn,
   renameDatasetOnly as renameDatasetOnlyFn,
   hasModifications as hasModificationsFn,
@@ -191,6 +195,13 @@ function createDatasetsStore() {
     updateDatasetTableNameFn(datasetsState, datasetId, tableName);
   }
 
+  function updateDatasetCsvOptions(
+    datasetId: string,
+    csvOptions: CsvImportOptions
+  ): void {
+    updateDatasetCsvOptionsFn(datasetsState, datasetId, csvOptions);
+  }
+
   function hideColumn(datasetId: string, columnName: string): void {
     hideColumnFn(datasetsState, datasetId, columnName);
   }
@@ -278,6 +289,7 @@ function createDatasetsStore() {
     renameDataset,
     renameDatasetOnly,
     updateDatasetTableName,
+    updateDatasetCsvOptions,
     hideColumn,
     showColumn,
     toggleColumnHidden,

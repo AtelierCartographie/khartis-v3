@@ -1,4 +1,7 @@
-import type { DatasetResult } from '$lib/features/data-pipeline';
+import type {
+  CsvImportOptions,
+  DatasetResult
+} from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
@@ -119,6 +122,23 @@ export function updateDatasetTableName(
   state.datasets = state.datasets.map((dataset) =>
     dataset.id === datasetId ? { ...dataset, tableName } : dataset
   );
+}
+
+export function updateDatasetCsvOptions(
+  state: DatasetsState,
+  datasetId: string,
+  csvOptions: CsvImportOptions
+): void {
+  const dataset = findById(state.datasets, datasetId);
+  if (!dataset) {
+    logger.warn('Dataset not found for CSV options update', LogCategory.STORE, {
+      datasetId
+    });
+    return;
+  }
+  state.datasets = updateById(state.datasets, datasetId, {
+    metadata: { ...dataset.metadata, csvOptions }
+  });
 }
 
 export async function renameDataset(

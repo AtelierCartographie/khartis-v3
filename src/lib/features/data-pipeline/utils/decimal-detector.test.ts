@@ -52,6 +52,26 @@ describe('detectDecimalSeparator', () => {
     expect(detection.separator).toBe('.');
   });
 
+  it('does not auto-detect thousands separator for integers with space (requires manual config)', async () => {
+    // Values like "2 161 000" (integers with space thousands, no decimal part)
+    // do not match decimal patterns, so auto-detection returns no thousands separator.
+    // The user must configure thousands=" " manually via the CSV options modal.
+    const file = asFile(
+      [
+        'ville,population,superficie_km2',
+        'Paris,2 161 000,105',
+        'Lyon,513 000,48',
+        'Marseille,861 000,241'
+      ].join('\n'),
+      'test-csv-options-thousands.csv'
+    );
+
+    const detection = await detectDecimalSeparator(file);
+
+    expect(detection.separator).toBe('.');
+    expect(detection.thousandsSeparator).toBeUndefined();
+  });
+
   it('returns defaults when no data rows exist', async () => {
     const file = asFile('id,city,value\n', 'header-only.csv');
 
