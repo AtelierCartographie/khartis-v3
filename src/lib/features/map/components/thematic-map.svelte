@@ -117,13 +117,13 @@
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let worldBaseTable = $state<ArrowTable | null>(null);
   let isLoadingBasemap = false;
+  const RESIZE_DEBOUNCE_MS = 150;
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let isSwitchingViewMode = $state(false);
   let pendingLayerUpdate = $state(false);
   let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  const RESIZE_DEBOUNCE_MS = 150;
   const LAYER_UPDATE_DEBOUNCE_MS = 16;
   const PROJECT_EMPTY_RESET_DEBOUNCE_MS = 250;
 
@@ -361,25 +361,6 @@
     }
   }
 
-  function syncOrthographicDeckSize(): void {
-    if (globalState.isToolbarTransitioning) {
-      return;
-    }
-    if (!mapContainer || mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
-      return;
-    }
-
-    const deckInstance = mapInit.deckInstance;
-    if (!deckInstance) {
-      return;
-    }
-
-    deckInstance.setProps({
-      width: mapContainer.offsetWidth || 800,
-      height: mapContainer.offsetHeight || 600
-    });
-  }
-
   function fitOrthographicViewport(): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
@@ -455,8 +436,13 @@
     void mapCanvasHeight;
 
     untrack(() => {
-      if (!globalState.isToolbarTransitioning) {
-        syncOrthographicDeckSize();
+      updateCanvasSize();
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.MAPLIBRE
+      ) {
+        mapInit.map?.resize();
       }
     });
   });
@@ -1013,33 +999,22 @@
     loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
-      if (globalState.isToolbarTransitioning) {
-        return;
+      updateCanvasSize();
+
+      const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
+      if (canUpdate && mapInit.viewMode === ViewMode.MAPLIBRE) {
+        mapInit.map?.resize();
       }
 
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
-      }
-
-      resizeTimeoutId = setTimeout(() => {
-        // Debounce updateCanvasSize together with resize handling to avoid
-        // triggering projectionStore reactive effects on every intermediate frame.
-        updateCanvasSize();
-
-        // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
-        const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-        if (canUpdate) {
-          if (mapInit.viewMode === ViewMode.MAPLIBRE) {
-            // Only resize the canvas — do NOT re-fit viewport bounds.
-            // Preserves the user's current zoom and pan position.
-            mapInit.map?.resize();
-          } else {
-            syncOrthographicDeckSize();
-          }
-          scheduleLayerUpdate('resizeObserver');
+      if (canUpdate && !globalState.isToolbarTransitioning) {
+        if (resizeTimeoutId) {
+          clearTimeout(resizeTimeoutId);
         }
-        resizeTimeoutId = null;
-      }, RESIZE_DEBOUNCE_MS);
+        resizeTimeoutId = setTimeout(() => {
+          scheduleLayerUpdate('resizeObserver');
+          resizeTimeoutId = null;
+        }, RESIZE_DEBOUNCE_MS);
+      }
     });
     resizeObserver.observe(mapContainer);
 

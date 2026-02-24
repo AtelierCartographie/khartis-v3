@@ -488,10 +488,6 @@
   }
 
   function handleContainerResizeDebounced() {
-    // Skip intermediate resizes during toolbar animation.
-    // The toolbar transition effect will trigger a final resize after animation ends.
-    if (globalState.isToolbarTransitioning) return;
-
     if (containerResizeTimeoutId) {
       clearTimeout(containerResizeTimeoutId);
     }
