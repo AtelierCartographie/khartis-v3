@@ -52,6 +52,9 @@
         iconDescription={m.help_tooltip()}
         kind="tertiary"
         icon={Help}
+        href="https://www.sciencespo.fr/cartographie/khartis/docs/"
+        target="_blank"
+        rel="noopener noreferrer"
       >
         {m.header_help()}
       </Button>

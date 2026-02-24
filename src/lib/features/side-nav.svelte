@@ -151,19 +151,28 @@
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_documentation()}</Button
+              class="menu-bar-item"
+              href="https://www.sciencespo.fr/cartographie/khartis/docs/"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_documentation()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_report_bug()}</Button
+              class="menu-bar-item"
+              href="https://github.com/sciencespo/khartis/issues/new?template=bug_report.md"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_report_bug()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_suggest_feature()}</Button
+              class="menu-bar-item"
+              href="https://github.com/sciencespo/khartis/issues/new?template=feature_request.md"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_suggest_feature()}</Button
             >
           </Column>
         </Row>
@@ -184,25 +193,37 @@
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_presentation_page()}</Button
+              class="menu-bar-item"
+              href="https://www.sciencespo.fr/cartographie/khartis/"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_presentation_page()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_github()}</Button
+              class="menu-bar-item"
+              href="https://github.com/sciencespo/khartis"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_github()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_data_privacy()}</Button
+              class="menu-bar-item"
+              href="https://www.sciencespo.fr/cartographie/khartis/privacy/"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_data_privacy()}</Button
             >
             <Button
               size="small"
               kind="ghost"
               icon={Launch}
-              class="menu-bar-item">{m.sidenav_khartis_v2()}</Button
+              class="menu-bar-item"
+              href="https://www.sciencespo.fr/cartographie/khartis/v2/"
+              target="_blank"
+              rel="noopener noreferrer">{m.sidenav_khartis_v2()}</Button
             >
           </Column>
         </Row>
