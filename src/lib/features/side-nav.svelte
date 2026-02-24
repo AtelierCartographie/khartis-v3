@@ -2,7 +2,6 @@
   import { onMount } from 'svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import {
     detectApplePlatform,
     getSideNavShortcutLabels
@@ -58,11 +57,7 @@
   }
 </script>
 
-<div
-  id="khartis-side-nav"
-  use:clickOutside={{ enabled: globalState.isSideNavOpen }}
-  onoutsideclick={sideNav.closeSideNav}
->
+<div id="khartis-side-nav">
   <SideNav class="app-shadow bg-white" bind:isOpen={globalState.isSideNavOpen}>
     <SideNavItems>
       <Grid fullWidth noGutter>
