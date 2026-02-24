@@ -17,7 +17,10 @@ import {
 } from '../layers';
 import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
-import { filterArrowTableByYear } from '../utils/arrow-filter.utils';
+import {
+  filterArrowTableByYear,
+  filterArrowTableByDataFilters
+} from '../utils/arrow-filter.utils';
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -269,10 +272,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               continue;
             }
             const arrowStart = performance.now();
-            const filteredTable = getFilteredTable(
+            const yearFiltered = getFilteredTable(
               table,
               datasetId,
               viz.yearFilter
+            );
+            const filteredTable = filterArrowTableByDataFilters(
+              yearFiltered,
+              viz.dataFilters
             );
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);

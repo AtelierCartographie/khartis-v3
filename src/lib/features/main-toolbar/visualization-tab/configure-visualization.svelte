@@ -15,16 +15,22 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import {
+    ClassificationMethod
+  } from '$lib/features/commons/store/visualization.store.svelte';
+  import { FillMode } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
+  import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LabelsConfig from './components/labels-config.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
+  import { VizFilterSection } from './components/shared';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = $state<string>('');
@@ -68,6 +74,19 @@
   function handleModesChange(updates: Partial<VisualizationModes>) {
     if (selectedViz?.id) {
       visualizationStore.updateModes(selectedViz.id, updates);
+
+      // Initialize classification when switching to CLASSES mode if not already set
+      if (
+        updates.fill === FillMode.CLASSES &&
+        !selectedViz.classification?.method
+      ) {
+        visualizationStore.updateClassification(selectedViz.id, {
+          method: ClassificationMethod.QUANTILES,
+          classes: 5,
+          numClasses: 5
+        });
+        computeBreaksForVisualization('modesChange:fillClasses');
+      }
     }
   }
 
@@ -140,6 +159,26 @@
       }
     });
   }
+
+  function handleAddDataFilter(filter: Omit<VizDataFilter, 'id'>) {
+    if (selectedViz?.id) {
+      visualizationStore.addDataFilter(selectedViz.id, filter);
+    }
+  }
+
+  function handleRemoveDataFilter(filterId: string) {
+    if (selectedViz?.id) {
+      visualizationStore.removeDataFilter(selectedViz.id, filterId);
+    }
+  }
+
+  function handleClearDataFilters() {
+    if (selectedViz?.id) {
+      visualizationStore.clearDataFilters(selectedViz.id);
+    }
+  }
+
+  const activeDataFilters = $derived(selectedViz?.dataFilters ?? []);
 
   function handleTextVisibilityChange(visible: boolean) {
     if (!selectedViz?.id) {
@@ -377,6 +416,18 @@
       onToggleVisibility={handleTextVisibilityChange}
     />
   </div>
+
+  {#if selectedViz}
+    <div class="filter-area">
+      <VizFilterSection
+        dataFields={dataFieldItems}
+        filters={activeDataFilters}
+        onAddFilter={handleAddDataFilter}
+        onRemoveFilter={handleRemoveDataFilter}
+        onClearFilters={handleClearDataFilters}
+      />
+    </div>
+  {/if}
 </section>
 
 <style lang="scss">
@@ -401,5 +452,9 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .filter-area {
+    padding: 0 16px 16px 16px;
   }
 </style>

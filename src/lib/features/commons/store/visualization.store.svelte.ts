@@ -100,6 +100,16 @@ export interface YearFilter {
   value: number | string;
 }
 
+export type VizFilterOperator = 'gte' | 'lte' | 'equals' | 'not_equals' | 'between';
+
+export interface VizDataFilter {
+  id: string;
+  column: string;
+  operator: VizFilterOperator;
+  value: string;
+  secondaryValue?: string;
+}
+
 export interface VisualizationConfig {
   id: string;
   name: string;
@@ -160,6 +170,7 @@ export interface VisualizationConfig {
   };
   missingData?: MissingDataConfig;
   yearFilter?: YearFilter;
+  dataFilters?: VizDataFilter[];
 }
 
 interface VisualizationState {
@@ -216,6 +227,9 @@ export interface VisualizationStore {
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
   getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
   setYearFilter: (id: string, filter: YearFilter | null) => void;
+  addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
+  removeDataFilter: (id: string, filterId: string) => void;
+  clearDataFilters: (id: string) => void;
   clear: () => void;
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
@@ -763,6 +777,31 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => ({ yearFilter: filter ?? undefined }));
   }
 
+  function addDataFilter(
+    id: string,
+    filter: Omit<VizDataFilter, 'id'>
+  ): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      const newFilter: VizDataFilter = {
+        ...filter,
+        id: crypto.randomUUID()
+      };
+      return { dataFilters: [...existing, newFilter] };
+    });
+  }
+
+  function removeDataFilter(id: string, filterId: string): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      return { dataFilters: existing.filter((f) => f.id !== filterId) };
+    });
+  }
+
+  function clearDataFilters(id: string): void {
+    applyVisualizationUpdate(id, () => ({ dataFilters: [] }));
+  }
+
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
@@ -817,6 +856,9 @@ function createVisualizationStore(): VisualizationStore {
     getVisualizationsByDataset,
     getVisualizationsUsingColumn,
     setYearFilter,
+    addDataFilter,
+    removeDataFilter,
+    clearDataFilters,
     clear,
     restoreFromSerialized
   };

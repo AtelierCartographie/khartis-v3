@@ -8,3 +8,4 @@ export { default as DiscretizationRow } from './DiscretizationRow.svelte';
 export { default as MissingDataSection } from './MissingDataSection.svelte';
 export { default as InfoPopover } from './InfoPopover.svelte';
 export { default as StrokeSection } from './StrokeSection.svelte';
+export { default as VizFilterSection } from './VizFilterSection.svelte';
