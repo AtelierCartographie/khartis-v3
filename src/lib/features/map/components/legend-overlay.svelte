@@ -5,19 +5,62 @@
     ToolbarStep
   } from '$lib/features/commons/types/global';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    visualizationStore,
+    type VisualizationConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import type { LegendItem } from '$lib/features/step-toolbar/tools/legend/legend.types';
+  import { FillMode } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
 
+  function getVisualizationForItem(
+    item: LegendItem
+  ): VisualizationConfig | undefined {
+    if (!item.variableId) return undefined;
+    return visualizationStore.visualizations.find(
+      (v) => v.id === item.variableId
+    );
+  }
+
+  function hasColorScale(viz: VisualizationConfig | undefined): boolean {
+    if (!viz?.classification?.colors?.length || !viz?.classification?.breaks?.length) {
+      return false;
+    }
+    const fillMode = viz.modes?.fill;
+    return fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES;
+  }
+
+  function formatBreakValue(value: number): string {
+    if (Number.isInteger(value)) return String(value);
+    if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString();
+    return value.toFixed(1);
+  }
+
   const legendState = $derived(getLegendState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
+
+  // Build a reactive map from variableId → visualization for color scale rendering
+  const vizByItemId = $derived.by(() => {
+    void visualizationStore.version;
+    const map = new Map<string, VisualizationConfig>();
+    for (const item of legendState.items) {
+      if (item.variableId) {
+        const viz = visualizationStore.visualizations.find(
+          (v) => v.id === item.variableId
+        );
+        if (viz) map.set(item.id, viz);
+      }
+    }
+    return map;
+  });
 
   $effect(() => {
     void visualizationStore.version;
@@ -191,12 +234,34 @@
       onpointerdown={handleLegendPointerDown}
     >
       {#each visibleItems as item (item.id)}
+        {@const viz = vizByItemId.get(item.id)}
         <div class="legend-item">
           {#if item.title}
             <h4 class="legend-title">{item.title}</h4>
           {/if}
           {#if item.subtitle}
             <p class="legend-subtitle">{item.subtitle}</p>
+          {/if}
+          {#if hasColorScale(viz)}
+            {@const colors = viz!.classification!.colors!}
+            {@const breaks = viz!.classification!.breaks!}
+            <div class="legend-color-scale">
+              {#each colors as color, i}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {color};"
+                  ></span>
+                  <span class="legend-scale-label">
+                    {#if i < breaks.length - 1}
+                      {formatBreakValue(breaks[i])} – {formatBreakValue(breaks[i + 1])}
+                    {:else if breaks.length > 0}
+                      ≥ {formatBreakValue(breaks[breaks.length - 1])}
+                    {/if}
+                  </span>
+                </div>
+              {/each}
+            </div>
           {/if}
           {#if item.note}
             <p class="legend-note">{item.note}</p>
@@ -306,5 +371,32 @@
     line-height: 1.3;
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  .legend-color-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 6px 0;
+  }
+
+  .legend-scale-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-color-swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+  }
+
+  .legend-scale-label {
+    font-size: 0.8em;
+    line-height: 1.2;
+    white-space: nowrap;
   }
 </style>

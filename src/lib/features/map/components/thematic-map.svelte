@@ -1073,9 +1073,10 @@
       </div>
     {/if}
 
+    <LegendOverlay />
+
     {#if isStylingMode}
       <GeoIndicationsOverlay />
-      <LegendOverlay />
       <AnnotationOverlay />
     {/if}
   </div>
