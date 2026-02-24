@@ -54,7 +54,7 @@ function parseCsvForDetector(
 describe('GeoColumnDetector - fossil-fuel CSV (ISO3 detection)', () => {
   const csvPath = join(
     process.cwd(),
-    'tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
+    'static/tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
   );
   const csvContent = readFileSync(csvPath, 'utf-8');
   const { headers, data } = parseCsvForDetector(csvContent);
@@ -275,7 +275,7 @@ describe('GeoColumnDetector - Entity column detection', () => {
   it('should prefer country_name (Entity) over iso3 for primary selection', async () => {
     const csvPath = join(
       process.cwd(),
-      'tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
+      'static/tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
     );
     const csvContent = readFileSync(csvPath, 'utf-8');
     const { headers, data } = parseCsvForDetector(csvContent);
@@ -316,7 +316,7 @@ describe('GeoColumnDetector - Entity column detection', () => {
 describe('GeoColumnDetector - Seveso CSV (GPS coordinate detection)', () => {
   const csvPath = join(
     process.cwd(),
-    'tests-datasets/csv/sites-seveso-idf.csv'
+    'static/tests-datasets/csv/sites-seveso-idf.csv'
   );
   const csvContent = readFileSync(csvPath, 'utf-8');
   const { headers, data } = parseCsvForDetector(csvContent, ';');

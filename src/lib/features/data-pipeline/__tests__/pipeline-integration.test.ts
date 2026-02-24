@@ -14,7 +14,7 @@ import {
   type TestDuckDB
 } from './duckdb-node-helper';
 
-const ROOT = join(process.cwd(), 'tests-datasets');
+const ROOT = join(process.cwd(), 'static/tests-datasets');
 
 const NULL_VALUES = `['', ':', '-', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`;
 

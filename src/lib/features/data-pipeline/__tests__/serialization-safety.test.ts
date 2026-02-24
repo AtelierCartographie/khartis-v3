@@ -13,7 +13,7 @@ import {
 } from '../../commons/store/create-project.types';
 import type { SerializedUploadedFile } from '$lib/types/serialization.types';
 
-const ROOT = join(process.cwd(), 'tests-datasets');
+const ROOT = join(process.cwd(), 'static/tests-datasets');
 const LARGE_SHP = join(
   ROOT,
   'shp/mos_foncier_agrege_com/mos_foncier_agrege_com.shp'

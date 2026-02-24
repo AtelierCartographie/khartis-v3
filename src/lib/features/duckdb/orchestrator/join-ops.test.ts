@@ -27,7 +27,7 @@ import {
 
 const FOSSIL_CSV_PATH = join(
   process.cwd(),
-  'tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
+  'static/tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv'
 );
 
 const TEST_BASEMAP: BasemapMetadata = {

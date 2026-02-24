@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'fs';
 import { basename, extname, join } from 'path';
 
-const TEST_DATASETS_ROOT = join(process.cwd(), 'tests-datasets');
+const TEST_DATASETS_ROOT = join(process.cwd(), 'static/tests-datasets');
 
 export const TEST_PATHS = {
   CSV: join(TEST_DATASETS_ROOT, 'csv'),
