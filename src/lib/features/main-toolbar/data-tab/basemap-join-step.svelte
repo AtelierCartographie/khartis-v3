@@ -611,6 +611,7 @@
 
       if (
         suggestions.length > 0 &&
+        !osmBasemapStore.isActive &&
         (isDatasetChanged ||
           !dataTabState.basemapJoin.selectedBasemap ||
           !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
@@ -752,6 +753,7 @@
 
     if (
       basemapSuggestions.length > 0 &&
+      !osmBasemapStore.isActive &&
       (!basemapSelected || !hasAvailableBasemap(basemapSelected))
     ) {
       void autoSelectFirstSuggestedBasemap();
@@ -815,6 +817,19 @@
     dataTabStore.resetStepCompletion(2);
 
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
+  });
+
+  // Restore step completion after project reload when GPS join was already finalized
+  $effect(() => {
+    if (dataTabStore.hasCompletedStep[2]) return;
+    const id = datasetIdForOrchestrator;
+    if (!id) return;
+    // Use getDatasetBySourceFile since datasetIdForOrchestrator returns sourceFileId
+    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(id);
+    if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
+      dataTabStore.markStepComplete(2);
+      logger.info('Join step restored from persisted GPS mode', LogCategory.MAP, { id });
+    }
   });
 
   let previousDatasetIdentity: string | null = null;
