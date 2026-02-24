@@ -674,7 +674,12 @@ export const createProjectActions = {
         'application/zip',
         'application/x-zip-compressed',
         'application/geoparquet',
-        'application/parquet'
+        'application/parquet',
+        'application/gpx+xml',
+        'application/vnd.google-earth.kml+xml',
+        'application/vnd.google-earth.kmz',
+        'text/xml',
+        'application/xml'
       ];
 
       const isAllowed =
