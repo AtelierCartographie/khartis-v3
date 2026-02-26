@@ -233,6 +233,32 @@
       }
 
       if (
+        hasShortcutModifier &&
+        !event.altKey &&
+        isShortcutCode(event.code, SHORTCUT_CODE.undo)
+      ) {
+        if (event.shiftKey) {
+          event.preventDefault();
+          projectStore.redo();
+          return;
+        }
+        event.preventDefault();
+        projectStore.undo();
+        return;
+      }
+
+      if (
+        hasShortcutModifier &&
+        !event.altKey &&
+        !event.shiftKey &&
+        isShortcutCode(event.code, SHORTCUT_CODE.redo)
+      ) {
+        event.preventDefault();
+        projectStore.redo();
+        return;
+      }
+
+      if (
         !event.ctrlKey &&
         !event.metaKey &&
         !event.shiftKey &&
