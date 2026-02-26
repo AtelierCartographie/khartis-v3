@@ -385,6 +385,7 @@
     onStyleLoaded: () => {
       logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
+      mapBasemap.syncLabelsVisibility();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -765,6 +766,12 @@
       );
       mapBasemap.syncBasemapStyle();
     });
+  });
+
+  $effect(() => {
+    void basemapStyleStore.showLabels;
+    logEffect('basemapStyleStore.showLabels');
+    untrack(() => mapBasemap.syncLabelsVisibility());
   });
 
   $effect(() => {

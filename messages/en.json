@@ -1391,6 +1391,7 @@
   "basemap_tiled_enabled_desc": "MapLibre tiled basemap with IGN styles is active. Select a style below.",
   "basemap_tiled_disabled_desc": "Orthographic view (Deck.gl only). All layers are superimposed without tiled basemap.",
   "basemap_style_label": "Basemap style",
+  "basemap_show_labels": "Show labels",
   "basemap_layers_disabled_by_maplibre": "Disabled when tiled basemap is active",
   "basemap_layer_not_implemented": "This layer is not yet implemented",
   "basemap_layer_terre": "Land",

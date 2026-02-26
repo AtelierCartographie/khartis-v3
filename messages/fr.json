@@ -1391,6 +1391,7 @@
   "basemap_tiled_enabled_desc": "Le fond tuilé MapLibre avec les styles IGN est actif. Choisissez un style ci-dessous.",
   "basemap_tiled_disabled_desc": "Vue orthographique (Deck.gl uniquement). Toutes les couches sont superposées sans fond de carte tuilé.",
   "basemap_style_label": "Style du fond de carte",
+  "basemap_show_labels": "Afficher les étiquettes",
   "basemap_layers_disabled_by_maplibre": "Désactivé quand le fond tuilé est actif",
   "basemap_layer_not_implemented": "Cette couche n'est pas encore disponible",
   "basemap_layer_terre": "Terre",
