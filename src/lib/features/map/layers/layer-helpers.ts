@@ -9,11 +9,7 @@ export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 export function withOpacity(color: number[], opacity = 1): Color {
   const normalized = Math.min(Math.max(opacity, 0), 1);
   const alpha = Math.round(normalized * 255);
-  const base = color.slice(0, 3);
-  if (color.length === 4) {
-    return [...base, alpha] as Color;
-  }
-  return [...base, alpha] as Color;
+  return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
 }
 
 export function createCategoricalColorAccessor(

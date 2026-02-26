@@ -11,7 +11,7 @@
     VizDataFilter,
     VizFilterOperator
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import SectionHeading from './SectionHeading.svelte';
+  import SectionHeading from './section-heading.svelte';
 
   interface Props {
     dataFields: Array<{ id: number; text: string }>;

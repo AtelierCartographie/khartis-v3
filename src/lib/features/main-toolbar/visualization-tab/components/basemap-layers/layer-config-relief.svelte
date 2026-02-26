@@ -2,7 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
   import { Mountain } from 'carbon-icons-svelte';
-  import ColorDropdown from './ColorDropdown.svelte';
+  import ColorDropdown from './color-dropdown.svelte';
   import { SliderWithInput } from '../shared';
   import {
     BASEMAP_LAYER_CONFIG,

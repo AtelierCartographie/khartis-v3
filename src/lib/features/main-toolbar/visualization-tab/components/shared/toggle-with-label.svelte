@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import InfoPopover from './InfoPopover.svelte';
+  import InfoPopover from './info-popover.svelte';
 
   interface Props {
     label: string;

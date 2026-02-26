@@ -12,9 +12,9 @@
     MissingDataShape,
     SLIDER_LIMITS
   } from '../../../constants';
-  import ColorSelector from './ColorSelector.svelte';
-  import SliderWithInput from './SliderWithInput.svelte';
-  import ToggleWithLabel from './ToggleWithLabel.svelte';
+  import ColorSelector from './color-selector.svelte';
+  import SliderWithInput from './slider-with-input.svelte';
+  import ToggleWithLabel from './toggle-with-label.svelte';
 
   interface Props {
     show: boolean;

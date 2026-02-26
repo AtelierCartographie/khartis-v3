@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Slider } from 'carbon-components-svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import InfoPopover from './InfoPopover.svelte';
+  import InfoPopover from './info-popover.svelte';
 
   import { onDestroy } from 'svelte';
 

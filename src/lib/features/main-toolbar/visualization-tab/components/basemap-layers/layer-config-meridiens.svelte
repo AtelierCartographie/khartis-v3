@@ -2,9 +2,9 @@
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
   import { Globe } from 'carbon-icons-svelte';
-  import ColorDropdown from './ColorDropdown.svelte';
+  import ColorDropdown from './color-dropdown.svelte';
   import { SliderWithInput } from '../shared';
-  import DottedToggle from './DottedToggle.svelte';
+  import DottedToggle from './dotted-toggle.svelte';
   import {
     BASEMAP_LAYER_CONFIG,
     BasemapRemarquables,
