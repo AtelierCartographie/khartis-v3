@@ -12,6 +12,7 @@
   import LayerConfigVilles from './components/basemap-layers/LayerConfigVilles.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import MapProjectionSelector from './map-projection-selector.svelte';
+  import BasemapImportDropzone from '$lib/features/main-toolbar/data-tab/components/basemap-import-dropzone.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -21,6 +22,15 @@
     type BasemapLayerConfig,
     type BasemapLayerId
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
+  import {
+    processBasemapImport,
+    loadBasemapFromUrl
+  } from '$lib/features/map/utils/basemap-import.utils';
+  import {
+    basemapCatalogService,
+    basemapService
+  } from '$lib/features/map/services';
+  import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
   // Single $derived: one array iteration instead of 9 separate .find() calls
   const layerConfigs = $derived(
@@ -82,6 +92,41 @@
     basemapLayersStore.updateLayer(id, updates);
     projectStore.markAsDirty();
   }
+
+  // Custom basemap import state and handlers
+  let isImporting = $state(false);
+  let importError = $state<string | null>(null);
+  let importedCustomBasemap = $state<BasemapMetadata | null>(null);
+
+  async function importCustomBasemap(file: File): Promise<void> {
+    isImporting = true;
+    importError = null;
+    try {
+      const { basemap, geometryTable } = await processBasemapImport(file);
+      basemapCatalogService.addCustomBasemap(basemap);
+      basemapService.registerCustomBasemap(basemap, geometryTable);
+      basemapStyleStore.setReferenceBasemap(basemap.file);
+      importedCustomBasemap = basemap;
+      projectStore.markAsDirty();
+      logger.info('[customize-basemap] custom basemap imported', LogCategory.UI, {
+        file: basemap.file
+      });
+    } catch (err) {
+      importError = err instanceof Error ? err.message : m.basemap_custom_error();
+      logger.error('[customize-basemap] custom basemap import failed', LogCategory.MAP, err);
+    } finally {
+      isImporting = false;
+    }
+  }
+
+  async function handleCustomBasemapUrlLoad(url: string): Promise<void> {
+    try {
+      const file = await loadBasemapFromUrl(url);
+      await importCustomBasemap(file);
+    } catch (err) {
+      importError = err instanceof Error ? err.message : m.basemap_custom_error();
+    }
+  }
 </script>
 
 <section id="customize-basemap">
@@ -92,6 +137,21 @@
   </div>
 
   <div class="layers-list">
+    <ExpandableSection title={m.basemap_import_button()}>
+      <div class="custom-basemap-import">
+        <BasemapImportDropzone
+          isUploading={isImporting}
+          error={importError}
+          importedBasemap={importedCustomBasemap}
+          onFileSelect={importCustomBasemap}
+          onUrlLoad={handleCustomBasemapUrlLoad}
+          onClearError={() => {
+            importError = null;
+          }}
+        />
+      </div>
+    </ExpandableSection>
+
     <ExpandableSection
       title={m.basemap_layer_terre()}
       showToggle={true}
@@ -312,6 +372,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
+    padding: var(--cds-spacing-04);
+    background-color: var(--cds-layer-01);
+  }
+
+  .custom-basemap-import {
     padding: var(--cds-spacing-04);
     background-color: var(--cds-layer-01);
   }
