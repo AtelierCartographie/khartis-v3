@@ -906,6 +906,7 @@
   "pipeline_error_geoparquet_init_failed": "Échec de l'initialisation GeoParquet WASM",
   "pipeline_error_geoparquet_read_failed": "Échec de lecture GeoParquet : {error}",
   "pipeline_error_shp_missing": "Fichier .shp manquant pour « {baseName} »",
+  "pipeline_error_shp_standalone": "Un fichier Shapefile (.shp) nécessite ses fichiers compagnons (.dbf, .shx, .prj). Veuillez importer un fichier ZIP contenant tous les fichiers associés.",
   "pipeline_warning_large_file": "Fichier volumineux ({size} Mo). Le traitement peut prendre plus de temps.",
   "pipeline_error_header_only": "Le fichier ne contient qu'une ligne d'en-tête sans données. Veuillez ajouter des lignes de données.",
   "pipeline_error_geopackage_multiple_layers": "Le fichier GeoPackage contient plusieurs couches. Veuillez exporter une seule couche.",

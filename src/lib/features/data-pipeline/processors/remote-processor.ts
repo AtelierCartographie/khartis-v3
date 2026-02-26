@@ -29,6 +29,10 @@ export async function processRemoteFile(
     return processRemoteZipFile(ctx, url);
   }
 
+  if (filename.toLowerCase().endsWith('.shp')) {
+    throw new Error(m.pipeline_error_shp_standalone());
+  }
+
   const tableName = providedTableName ?? generateTableName(filename);
   await Duck.read_link(url, {
     tablename: tableName,
