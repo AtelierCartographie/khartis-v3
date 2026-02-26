@@ -1,6 +1,7 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
-import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
+import { Duck, RefineOperation } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
@@ -19,6 +20,7 @@ import {
   COLUMN_TRANSFORMATION_TYPES
 } from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
+import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
@@ -32,7 +34,6 @@ function createDataOrchestratorService() {
 
   async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
-      const { Duck } = await import('$lib/features/duckdb');
       Duck?.cleanupTableResources(tableName);
     } catch (error) {
       logger.warn(
@@ -135,7 +136,6 @@ function createDataOrchestratorService() {
     dataset: DatasetResult
   ): Promise<void> {
     try {
-      const { Duck } = await import('$lib/features/duckdb');
       if (!Duck) {
         throw new Error('DuckDB not initialized');
       }
@@ -547,7 +547,6 @@ function createDataOrchestratorService() {
     try {
       await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
 
-      const { Duck } = await import('$lib/features/duckdb');
       const newRowCount = Duck
         ? await Duck.get_row_count(dataset.tableName)
         : 0;
@@ -581,7 +580,6 @@ function createDataOrchestratorService() {
       return;
     }
 
-    const { globalState } = await import('../store/global.svelte');
     const selectedSourceFileId =
       globalState.selectedDataButtonId ?? unprocessedFiles[0]?.id;
 
@@ -748,7 +746,6 @@ function createDataOrchestratorService() {
       );
     }
 
-    const { globalActions } = await import('../store/global.svelte');
     globalActions.ensureTabSelected();
   }
 

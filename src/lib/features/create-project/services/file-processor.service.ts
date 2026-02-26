@@ -14,6 +14,7 @@ import { FileValidator } from '$lib/features/commons/utils/file-validator.utils'
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
+import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
@@ -172,10 +173,10 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   async function computeDuplicatesAsync(
     fileId: string,
     tableName: string,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     try {
-      const duplicateResult = (await Duck.query(
+      const duplicateResult = (await duck.query(
         `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
         { format: 'array' }
       )) as Array<{ duplicate_count: bigint | number }>;
@@ -244,7 +245,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     });
 
     const { dataPipeline } = await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
@@ -261,7 +261,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await Duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -285,7 +285,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     }
 
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    computeDuplicatesAsync(uploadedFile.id, tableName, Duck!);
+    computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
   }
 
   return { process };
@@ -370,12 +370,11 @@ function createGeoPackageProcessor(
     });
 
     const { dataPipeline } = await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName } = dataset;
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await Duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -416,7 +415,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       }>;
     },
     fileContent: ArrayBuffer,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     const { tableName, columns, rowCount } = dataset as {
       tableName: string;
@@ -440,7 +439,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -476,7 +475,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       >
     >,
     fileContent: ArrayBuffer,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     void fileContent;
     const result = zipResult as {
@@ -503,7 +502,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
       let fullData: Array<Record<string, unknown>> = [];
       try {
-        fullData = (await Duck!.query(`SELECT * FROM "${tableName}"`, {
+        fullData = (await duck.query(`SELECT * FROM "${tableName}"`, {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
@@ -582,7 +581,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const { dataPipeline, isZipDatasetResult } =
       await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const result = await dataPipeline.processFile(file);
 

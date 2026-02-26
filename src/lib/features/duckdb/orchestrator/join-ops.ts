@@ -5,6 +5,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type {
   BasemapMetadata,
@@ -42,8 +43,6 @@ async function ensureBasemapAttributesLoaded(
   )) as Array<{ table_name: string }>;
 
   if (!tableCheck || tableCheck.length === 0) {
-    const { basemapService } =
-      await import('$lib/features/map/services/basemap.service.svelte');
     await basemapService.initialize();
 
     const recheck = (await Duck.query(
@@ -77,8 +76,6 @@ async function generateAttributesForBasemap(
   Duck: DuckDBClientForJoin
 ): Promise<boolean> {
   try {
-    const { basemapService } =
-      await import('$lib/features/map/services/basemap.service.svelte');
     const geometryTable =
       await basemapService.loadGeometryIntoDuckDB(basemapId);
 

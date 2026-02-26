@@ -44,4 +44,17 @@
     z-index: var(--z-overlay);
     max-width: 400px;
   }
+
+  :global(.consent-banner-container .bx--inline-notification) {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  :global(.consent-banner-container .bx--inline-notification__details) {
+    flex: 1 1 100%;
+  }
+
+  :global(.consent-banner-container .bx--inline-notification__action-button) {
+    margin-inline-start: 2.5rem;
+  }
 </style>

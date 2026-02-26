@@ -5,7 +5,8 @@ import { visualizationStore } from '$lib/features/commons/store/visualization.st
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services';
 import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';

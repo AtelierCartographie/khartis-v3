@@ -1,5 +1,6 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
 import { EXCLUDED_COLUMNS } from '../../../constants/data.constants';

@@ -14,11 +14,11 @@
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { ColumnType } from '$lib/features/data-pipeline';
   import {
-    duckDBOrchestrator,
     type DataTableFilter,
     type FilterOperator,
     type FilterStats
   } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
 
   interface Props {

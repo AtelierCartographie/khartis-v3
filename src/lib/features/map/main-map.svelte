@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {

@@ -1,6 +1,7 @@
 import type { GeometryType } from '$lib/features/commons/services/viz-suggester.service';
 import { VisualizationType } from '$lib/features/commons/store/visualization.store.svelte';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 
 interface DatasetGeometrySource {
   geometry?: { type?: string | null };
