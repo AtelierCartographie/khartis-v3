@@ -107,6 +107,8 @@
   "viz_list_rename": "Rename",
   "viz_list_duplicate": "Duplicate",
   "viz_list_delete": "Delete",
+  "viz_list_delete_title": "Delete visualization",
+  "viz_list_delete_message": "Are you sure you want to delete visualization \"{name}\"? This action cannot be undone.",
   "viz_list_rename_placeholder": "Visualization name",
   "create_visualization_title": "Create a visualization",
   "create_visualization_description": "Create a visualization from scratch by choosing the representation type.",

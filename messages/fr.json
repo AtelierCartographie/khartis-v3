@@ -107,6 +107,8 @@
   "viz_list_rename": "Renommer",
   "viz_list_duplicate": "Dupliquer",
   "viz_list_delete": "Supprimer",
+  "viz_list_delete_title": "Supprimer la visualisation",
+  "viz_list_delete_message": "Êtes-vous sûr de vouloir supprimer la visualisation « {name} » ? Cette action est irréversible.",
   "viz_list_rename_placeholder": "Nom de la visualisation",
   "create_visualization_title": "Créer une visualisation",
   "create_visualization_description": "Créer une visualisation à partir de zéro en choisissant le type de représentation.",

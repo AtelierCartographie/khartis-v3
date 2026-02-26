@@ -21,6 +21,7 @@
     Button,
     ComboBox,
     Link,
+    Modal,
     RadioButton
   } from 'carbon-components-svelte';
   import {
@@ -55,6 +56,8 @@
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
   let renamingVizId = $state<string | undefined>(undefined);
   let renameValue = $state<string>('');
+  let deletingViz = $state<{ id: string; name: string } | null>(null);
+  let isDeleteConfirmOpen = $state(false);
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -223,8 +226,22 @@
     visualizationStore.duplicateVisualization(id);
   }
 
-  function handleDeleteViz(id: string) {
-    visualizationStore.removeVisualization(id);
+  function handleDeleteViz(viz: { id: string; name: string }) {
+    deletingViz = viz;
+    isDeleteConfirmOpen = true;
+  }
+
+  function confirmDeleteViz() {
+    if (deletingViz) {
+      visualizationStore.removeVisualization(deletingViz.id);
+    }
+    isDeleteConfirmOpen = false;
+    deletingViz = null;
+  }
+
+  function cancelDeleteViz() {
+    isDeleteConfirmOpen = false;
+    deletingViz = null;
   }
 
   function handleStartRename(viz: { id: string; name: string }) {
@@ -362,7 +379,7 @@
                 icon={TrashCan}
                 iconDescription={m.viz_list_delete()}
                 tooltipPosition="top"
-                on:click={() => handleDeleteViz(viz.id)}
+                on:click={() => handleDeleteViz(viz)}
               />
             </div>
           </div>
@@ -541,6 +558,22 @@
     </div>
   </div>
 </section>
+
+<Modal
+  danger
+  open={isDeleteConfirmOpen}
+  modalHeading={m.viz_list_delete_title()}
+  primaryButtonText={m.delete_confirm_button()}
+  secondaryButtonText={m.cancel()}
+  size="sm"
+  on:click:button--secondary={cancelDeleteViz}
+  on:click:button--primary={confirmDeleteViz}
+  on:close={cancelDeleteViz}
+>
+  <p>
+    {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
+  </p>
+</Modal>
 
 <style lang="scss">
   #choose-visualization {
