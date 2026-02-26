@@ -820,6 +820,7 @@
   "basemap_missing_question": "Un fond de carte est manquant ?",
   "basemap_suggest_button": "Suggérer un fond",
   "basemap_import_button": "Importer un fond",
+  "basemap_custom_style_hint": "Pour personnaliser la couleur, l'épaisseur et l'opacité de ce fond, modifiez les paramètres de la couche Terre ci-dessous.",
   "basemap_suggestion_title": "Suggérer un fond de carte",
   "basemap_suggestion_description": "Aidez-nous à améliorer Khartis en suggérant un nouveau fond de carte. Votre suggestion créera une issue GitHub.",
   "basemap_suggestion_name": "Nom du fond de carte",

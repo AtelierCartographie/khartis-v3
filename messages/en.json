@@ -820,6 +820,7 @@
   "basemap_missing_question": "Missing a basemap?",
   "basemap_suggest_button": "Suggest a basemap",
   "basemap_import_button": "Import a basemap",
+  "basemap_custom_style_hint": "To customize the color, stroke thickness and opacity of this basemap, adjust the Land layer settings below.",
   "basemap_suggestion_title": "Suggest a basemap",
   "basemap_suggestion_description": "Help us improve Khartis by suggesting a new basemap. Your suggestion will create a GitHub issue.",
   "basemap_suggestion_name": "Basemap name",

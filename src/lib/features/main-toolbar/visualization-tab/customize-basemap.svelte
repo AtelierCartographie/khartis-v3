@@ -108,12 +108,21 @@
       basemapStyleStore.setReferenceBasemap(basemap.file);
       importedCustomBasemap = basemap;
       projectStore.markAsDirty();
-      logger.info('[customize-basemap] custom basemap imported', LogCategory.UI, {
-        file: basemap.file
-      });
+      logger.info(
+        '[customize-basemap] custom basemap imported',
+        LogCategory.UI,
+        {
+          file: basemap.file
+        }
+      );
     } catch (err) {
-      importError = err instanceof Error ? err.message : m.basemap_custom_error();
-      logger.error('[customize-basemap] custom basemap import failed', LogCategory.MAP, err);
+      importError =
+        err instanceof Error ? err.message : m.basemap_custom_error();
+      logger.error(
+        '[customize-basemap] custom basemap import failed',
+        LogCategory.MAP,
+        err
+      );
     } finally {
       isImporting = false;
     }
@@ -124,7 +133,8 @@
       const file = await loadBasemapFromUrl(url);
       await importCustomBasemap(file);
     } catch (err) {
-      importError = err instanceof Error ? err.message : m.basemap_custom_error();
+      importError =
+        err instanceof Error ? err.message : m.basemap_custom_error();
     }
   }
 </script>
@@ -149,6 +159,9 @@
             importError = null;
           }}
         />
+        {#if importedCustomBasemap}
+          <p class="custom-basemap-hint">{m.basemap_custom_style_hint()}</p>
+        {/if}
       </div>
     </ExpandableSection>
 
@@ -379,5 +392,13 @@
   .custom-basemap-import {
     padding: var(--cds-spacing-04);
     background-color: var(--cds-layer-01);
+  }
+
+  .custom-basemap-hint {
+    margin: var(--cds-spacing-03) 0 0;
+    font-size: 0.75rem;
+    color: var(--cds-text-helper, #6f6f6f);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 </style>
