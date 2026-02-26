@@ -261,6 +261,15 @@
                   </span>
                 </div>
               {/each}
+              {#if viz?.missingData?.show}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {viz.missingData.color};"
+                  ></span>
+                  <span class="legend-scale-label">{m.missing_data_text()}</span>
+                </div>
+              {/if}
             </div>
           {/if}
           {#if item.note}
