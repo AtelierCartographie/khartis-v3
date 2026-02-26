@@ -62,6 +62,7 @@ src/lib/paraglide
 
 # Coverage
 coverage/
+coverage-duckdb/
 .nyc_output
 
 # Playwright
