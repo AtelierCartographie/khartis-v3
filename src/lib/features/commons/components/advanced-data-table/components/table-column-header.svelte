@@ -13,7 +13,7 @@
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import type { ColumnInfo, ColumnType } from '../types';
-  import Portal from './Portal.svelte';
+  import Portal from './portal.svelte';
 
   interface Props {
     column: ColumnInfo;

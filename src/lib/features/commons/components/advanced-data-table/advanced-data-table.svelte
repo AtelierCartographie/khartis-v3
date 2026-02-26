@@ -34,9 +34,9 @@
     type ColumnType
   } from './types';
 
-  import TableColumnHeader from './components/TableColumnHeader.svelte';
-  import TableHeaderInfo from './components/TableHeaderInfo.svelte';
-  import TableRow from './components/TableRow.svelte';
+  import TableColumnHeader from './components/table-column-header.svelte';
+  import TableHeaderInfo from './components/table-header-info.svelte';
+  import TableRow from './components/table-row.svelte';
 
   const LOCAL_UPDATE_DELAY_MS = 100;
   const SCROLL_TO_CELL_DEBOUNCE_MS = 150;

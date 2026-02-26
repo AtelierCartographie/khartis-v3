@@ -1,5 +1,5 @@
 <script lang="ts">
-  import InfoPopover from './InfoPopover.svelte';
+  import InfoPopover from './info-popover.svelte';
 
   interface Props {
     title: string;

@@ -5,11 +5,11 @@
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { InfoPopover } from './components/shared';
-  import LayerConfigTerre from './components/basemap-layers/LayerConfigTerre.svelte';
-  import LayerConfigSimple from './components/basemap-layers/LayerConfigSimple.svelte';
-  import LayerConfigRelief from './components/basemap-layers/LayerConfigRelief.svelte';
-  import LayerConfigMeridiens from './components/basemap-layers/LayerConfigMeridiens.svelte';
-  import LayerConfigVilles from './components/basemap-layers/LayerConfigVilles.svelte';
+  import LayerConfigTerre from './components/basemap-layers/layer-config-terre.svelte';
+  import LayerConfigSimple from './components/basemap-layers/layer-config-simple.svelte';
+  import LayerConfigRelief from './components/basemap-layers/layer-config-relief.svelte';
+  import LayerConfigMeridiens from './components/basemap-layers/layer-config-meridiens.svelte';
+  import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import MapProjectionSelector from './map-projection-selector.svelte';
   import BasemapImportDropzone from '$lib/features/main-toolbar/data-tab/components/basemap-import-dropzone.svelte';

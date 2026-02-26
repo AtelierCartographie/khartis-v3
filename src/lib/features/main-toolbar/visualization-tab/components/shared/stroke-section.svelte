@@ -19,12 +19,12 @@
     VisualizationModes,
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import ColorSelector from './ColorSelector.svelte';
-  import DiscretizationRow from './DiscretizationRow.svelte';
-  import PalettePreview from './PalettePreview.svelte';
-  import SectionHeading from './SectionHeading.svelte';
-  import SliderWithInput from './SliderWithInput.svelte';
-  import ToggleWithLabel from './ToggleWithLabel.svelte';
+  import ColorSelector from './color-selector.svelte';
+  import DiscretizationRow from './discretization-row.svelte';
+  import PalettePreview from './palette-preview.svelte';
+  import SectionHeading from './section-heading.svelte';
+  import SliderWithInput from './slider-with-input.svelte';
+  import ToggleWithLabel from './toggle-with-label.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;

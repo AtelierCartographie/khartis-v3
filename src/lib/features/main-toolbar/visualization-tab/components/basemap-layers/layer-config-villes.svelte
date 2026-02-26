@@ -5,7 +5,7 @@
     RadioButton,
     Dropdown
   } from 'carbon-components-svelte';
-  import ColorDropdown from './ColorDropdown.svelte';
+  import ColorDropdown from './color-dropdown.svelte';
   import { SliderWithInput } from '../shared';
   import {
     BASEMAP_LAYER_CONFIG,
