@@ -1,6 +1,11 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button, MultiSelect, Slider, Toggle } from 'carbon-components-svelte';
+  import {
+    Button,
+    MultiSelect,
+    Slider,
+    Toggle
+  } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import {
@@ -237,7 +242,9 @@
             label={m.facets_variables_placeholder()}
             items={dataFieldItems}
             selectedIds={selectedVariableIds}
-            on:select={(e) => { selectedVariableIds = e.detail.selectedIds; }}
+            on:select={(e) => {
+              selectedVariableIds = e.detail.selectedIds;
+            }}
           />
         </div>
         {#if selectedVariableIds.length > 0 && selectedVariableIds.length < 2}
