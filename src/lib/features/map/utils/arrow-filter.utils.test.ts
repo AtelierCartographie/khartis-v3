@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildYearFilterWhereClause } from '../../duckdb/orchestrator/arrow-ops';
 import { filterArrowTableByDataFilters } from './arrow-filter.utils';
-import { tableFromArrays, tableFromIPC, Table } from 'apache-arrow/Arrow';
+import { tableFromArrays } from 'apache-arrow/Arrow';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
 

@@ -94,7 +94,10 @@ export async function processFileInternal(
     hasCompanionFiles: Boolean(options.companionFiles?.length)
   });
 
-  if (isShapefile && (!options.companionFiles || options.companionFiles.length === 0)) {
+  if (
+    isShapefile &&
+    (!options.companionFiles || options.companionFiles.length === 0)
+  ) {
     throw new Error(m.pipeline_error_shp_standalone());
   }
 

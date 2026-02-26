@@ -19,10 +19,7 @@ const yearFilterCache = new WeakMap<ArrowTable, YearFilterCacheEntry>();
  * Build a new Arrow table containing only the rows at the given indices.
  * Uses table.slice() to preserve the original schema (including GeoArrow metadata).
  */
-function selectRowsByIndices(
-  table: ArrowTable,
-  indices: number[]
-): ArrowTable {
+function selectRowsByIndices(table: ArrowTable, indices: number[]): ArrowTable {
   if (indices.length === 0) {
     return table.slice(0, 0) as ArrowTable;
   }
@@ -149,9 +146,7 @@ function matchesOperator(
   }
 
   const numCell =
-    typeof cellValue === 'number'
-      ? cellValue
-      : parseFloat(String(cellValue));
+    typeof cellValue === 'number' ? cellValue : parseFloat(String(cellValue));
   const numFilter = parseFloat(filterValue);
 
   if (isNaN(numCell) || isNaN(numFilter)) {
@@ -190,11 +185,9 @@ export function filterArrowTableByDataFilters(
       (f) => f.name === filter.column
     );
     if (colIndex === -1) {
-      logger.warn(
-        'Data filter column not found in table',
-        LogCategory.MAP,
-        { column: filter.column }
-      );
+      logger.warn('Data filter column not found in table', LogCategory.MAP, {
+        column: filter.column
+      });
       continue;
     }
     const vector = table.getChildAt(colIndex);
@@ -240,11 +233,9 @@ export function filterArrowTableByDataFilters(
   });
 
   if (matchingIndices.length === 0) {
-    logger.warn(
-      'Data filters returned no matching rows',
-      LogCategory.MAP,
-      { filters: validFilters.map((f) => `${f.column} ${f.operator} ${f.value}`) }
-    );
+    logger.warn('Data filters returned no matching rows', LogCategory.MAP, {
+      filters: validFilters.map((f) => `${f.column} ${f.operator} ${f.value}`)
+    });
   }
 
   return selectRowsByIndices(table, matchingIndices);
