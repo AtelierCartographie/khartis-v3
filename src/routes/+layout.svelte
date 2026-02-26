@@ -2,6 +2,7 @@
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
+  import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
   import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import {
@@ -221,6 +222,7 @@
 
     <NotificationContainer />
     <PwaUpdatePrompt />
+    <ConsentBanner />
   </main>
 {/if}
 

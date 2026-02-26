@@ -1,5 +1,6 @@
 import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
+import { FillStyleExtension } from '@deck.gl/extensions';
 import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -41,11 +42,57 @@ import {
   createProportionalSizeAccessor,
   withOpacity
 } from './layer-helpers';
+import { getPatternAtlas, isValidPatternId } from './pattern-texture';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
+
+/** Cached FillStyleExtension instance (reused across renders) */
+let fillStyleExtensionInstance: FillStyleExtension | null = null;
+
+function getFillStyleExtension(): FillStyleExtension {
+  if (!fillStyleExtensionInstance) {
+    fillStyleExtensionInstance = new FillStyleExtension({ pattern: true });
+  }
+  return fillStyleExtensionInstance;
+}
+
+/**
+ * Builds fill pattern props for polygon layers when a valid patternId is configured.
+ * Returns null if no pattern should be applied.
+ */
+function buildPatternProps(ctx: LayerContext): {
+  extensions: FillStyleExtension[];
+  fillPatternAtlas: HTMLCanvasElement;
+  fillPatternMapping: Record<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >;
+  fillPatternMask: boolean;
+  getFillPattern: () => string;
+  getFillPatternScale: number;
+} | null {
+  const patternId = ctx.viz?.classification?.patternId;
+  if (!isValidPatternId(patternId)) {
+    return null;
+  }
+
+  const { atlas, mapping } = getPatternAtlas();
+  if (Object.keys(mapping).length === 0) {
+    return null;
+  }
+
+  return {
+    extensions: [getFillStyleExtension()],
+    fillPatternAtlas: atlas,
+    fillPatternMapping: mapping,
+    fillPatternMask: true,
+    getFillPattern: () => patternId,
+    getFillPatternScale: 200
+  };
+}
 
 export type { LayerContext };
 
@@ -817,6 +864,7 @@ export function createPolygonLayers(
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
+  const patternProps = buildPatternProps(ctx);
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     logger.info(
@@ -836,7 +884,14 @@ export function createPolygonLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
 
-  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
+  // When a fill pattern is active, force GeoJSON path for reliable FillStyleExtension support.
+  // GeoArrow composite layers don't expose the attribute manager that FillStyleExtension requires.
+  const forceGeoJsonForPattern = Boolean(patternProps);
+
+  if (
+    !forceGeoJsonForPattern &&
+    (isNativeGeoArrowPolygon || isNativeGeoArrow)
+  ) {
     logger.info('Using GeoArrowPolygonLayer for polygons', LogCategory.MAP, {
       encoding: arrowExtension,
       rows: jsTable.numRows,
@@ -919,7 +974,8 @@ export function createPolygonLayers(
   logger.info('Using GeoJsonLayer fallback for polygons', LogCategory.MAP, {
     encoding: arrowExtension,
     featureCount: geojsonData.features.length,
-    hasVisualization: Boolean(viz)
+    hasVisualization: Boolean(viz),
+    hasPattern: Boolean(patternProps)
   });
 
   const defaultFillWithAlpha = [
@@ -949,6 +1005,14 @@ export function createPolygonLayers(
       lineWidthScale: strokeWidth / 4,
       pickable: true,
       autoHighlight: false,
+      ...(patternProps && {
+        extensions: patternProps.extensions,
+        fillPatternAtlas: patternProps.fillPatternAtlas,
+        fillPatternMapping: patternProps.fillPatternMapping,
+        fillPatternMask: patternProps.fillPatternMask,
+        getFillPattern: patternProps.getFillPattern,
+        getFillPatternScale: patternProps.getFillPatternScale
+      }),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -960,7 +1024,11 @@ export function createPolygonLayers(
           fillColor,
           hasPolyHighlights
         ],
-        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights]
+        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights],
+        ...(patternProps && {
+          getFillPattern: [viz?.classification?.patternId],
+          getFillPatternScale: [viz?.classification?.patternId]
+        })
       },
       dataComparator: (newData, oldData) => newData === oldData
     })

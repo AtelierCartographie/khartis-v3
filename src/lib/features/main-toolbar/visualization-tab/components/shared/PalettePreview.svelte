@@ -65,7 +65,10 @@
 
   function handleDropdownSelect(palette: Palette, newColors: string[]) {
     onselect?.(palette);
-    onClassificationChange?.({ colors: newColors });
+    onClassificationChange?.({
+      colors: newColors,
+      patternId: palette.patternId ?? undefined
+    });
     dropdownOpen = false;
   }
 

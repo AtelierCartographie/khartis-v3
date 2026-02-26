@@ -1574,5 +1574,9 @@
   "collision_detection": "Collision detection",
   "collision_detection_info": "Automatically hides overlapping labels",
   "dxp_masking": "DXP masking",
-  "dxp_masking_info": "Enable masking for DXP export"
+  "dxp_masking_info": "Enable masking for DXP export",
+  "consent_title": "Cookies & Privacy",
+  "consent_message": "Khartis uses cookies for audience analytics. Your map data stays on your device.",
+  "consent_accept": "Accept",
+  "consent_decline": "Decline"
 }

@@ -1574,5 +1574,9 @@
   "collision_detection": "Détection des collisions",
   "collision_detection_info": "Masque automatiquement les étiquettes qui se chevauchent",
   "dxp_masking": "Masquage DXP",
-  "dxp_masking_info": "Activer le masquage pour l'export DXP"
+  "dxp_masking_info": "Activer le masquage pour l'export DXP",
+  "consent_title": "Cookies et confidentialité",
+  "consent_message": "Khartis utilise des cookies à des fins d'analyse d'audience. Vos données cartographiques restent sur votre appareil.",
+  "consent_accept": "Accepter",
+  "consent_decline": "Refuser"
 }
