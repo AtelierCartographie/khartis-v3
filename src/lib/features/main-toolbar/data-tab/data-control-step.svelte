@@ -19,7 +19,8 @@
   import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
   import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+  import { Duck } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,

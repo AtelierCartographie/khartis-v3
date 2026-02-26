@@ -1,7 +1,8 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { UploadedFile } from '../create-project.types';
 import { DataSourceType, FileType } from '../create-project.types';
 import { FileStatus } from '../../constants/ui.constants';

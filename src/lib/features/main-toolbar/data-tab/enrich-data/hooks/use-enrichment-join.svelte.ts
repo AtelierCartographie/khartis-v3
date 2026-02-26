@@ -7,7 +7,8 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { JoinStats } from '../../components';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';

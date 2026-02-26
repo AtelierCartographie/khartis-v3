@@ -10,7 +10,8 @@
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';

@@ -18,7 +18,9 @@ import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-d
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
 import { DATA_FORMAT, type DataExportFormat } from '../types';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 import {
   COLUMN_TYPE_GEOMETRY,
@@ -205,8 +207,6 @@ async function fetchJoinedDatasetWithGeometry(
   dataset: ProcessedDataset,
   joinedBasemapId: string
 ): Promise<ProcessedDataset> {
-  const { basemapService } =
-    await import('$lib/features/map/services/basemap.service.svelte');
   const geometryTable =
     await basemapService.loadGeometryIntoDuckDB(joinedBasemapId);
 

@@ -1,5 +1,5 @@
 import { Duck } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';

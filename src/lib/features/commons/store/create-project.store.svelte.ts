@@ -3,7 +3,8 @@ import {
   ExampleCategory,
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
 import {

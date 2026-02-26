@@ -12,7 +12,8 @@
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
+  import { type SearchStats } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import { SearchSource, UI_CONSTANTS } from '../../constants';
 

@@ -15,7 +15,8 @@
   import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
 

@@ -18,7 +18,8 @@
   import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
   import { FillMode } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';

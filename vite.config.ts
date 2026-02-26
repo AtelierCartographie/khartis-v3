@@ -1,14 +1,34 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
-import { defineConfig, loadEnv } from 'vite';
+import { createLogger, defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const basePath = env.BASE_PATH || '';
+  const baseLogger = createLogger();
+  const ignoredWarningPatterns = [
+    /Unknown output options: codeSplitting/,
+    /"spawn" is not exported by "__vite-browser-external"/
+  ];
 
   return {
+    customLogger: {
+      ...baseLogger,
+      warn(message, options) {
+        if (ignoredWarningPatterns.some((pattern) => pattern.test(message))) {
+          return;
+        }
+        baseLogger.warn(message, options);
+      },
+      warnOnce(message, options) {
+        if (ignoredWarningPatterns.some((pattern) => pattern.test(message))) {
+          return;
+        }
+        baseLogger.warnOnce(message, options);
+      }
+    },
     server: {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
@@ -16,7 +36,8 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      target: 'esnext'
+      target: 'esnext',
+      chunkSizeWarningLimit: 3000
     },
     optimizeDeps: {
       include: [

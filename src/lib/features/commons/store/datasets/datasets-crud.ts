@@ -2,7 +2,7 @@ import type {
   CsvImportOptions,
   DatasetResult
 } from '$lib/features/data-pipeline';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';

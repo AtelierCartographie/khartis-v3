@@ -2,11 +2,8 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import {
-    Duck,
-    RefineOperation,
-    duckDBOrchestrator
-  } from '$lib/features/duckdb';
+  import { Duck, RefineOperation } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
   import {
