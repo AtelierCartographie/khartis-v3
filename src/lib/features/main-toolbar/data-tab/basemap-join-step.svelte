@@ -897,6 +897,7 @@
       allBasemaps={allBasemaps}
       basemapSelected={basemapSelected}
       onSelectBasemap={handleSelectBasemap}
+      onSuggestBasemap={() => (showSuggestionModal = true)}
     />
   {:else if activeTabIndex === 1}
     <BasemapImportTab

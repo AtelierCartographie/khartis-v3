@@ -2,8 +2,8 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, InlineNotification, Tag } from 'carbon-components-svelte';
-  import { List, MagicWand } from 'carbon-icons-svelte';
+  import { Button, ComboBox, InlineNotification, Tag } from 'carbon-components-svelte';
+  import { Add, List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
 
   interface SuggestedBasemap {
@@ -22,13 +22,15 @@
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
+    onSuggestBasemap?: () => void;
   }
 
   let {
     suggestedBasemaps,
     allBasemaps,
     basemapSelected,
-    onSelectBasemap
+    onSelectBasemap,
+    onSuggestBasemap
   }: Props = $props();
 
   let searchQuery = $state('');
@@ -207,6 +209,13 @@
         {/each}
       </div>
     {/if}
+    {#if onSuggestBasemap}
+      <div class="suggest-action">
+        <Button kind="ghost" size="small" icon={Add} on:click={onSuggestBasemap}>
+          {m.basemap_suggest_button()}
+        </Button>
+      </div>
+    {/if}
   </ExpandableSection>
 </div>
 
@@ -285,5 +294,13 @@
     text-align: center;
     color: var(--cds-text-02);
     font-size: 0.875rem;
+  }
+
+  .suggest-action {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-03);
+    border-top: 1px solid var(--cds-border-subtle-01);
   }
 </style>
