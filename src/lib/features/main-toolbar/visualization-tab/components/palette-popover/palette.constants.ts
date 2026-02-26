@@ -10,6 +10,7 @@ export const PALETTE_TYPE = {
 export type PaletteType = (typeof PALETTE_TYPE)[keyof typeof PALETTE_TYPE];
 export type PatternId =
   | 'diagonal'
+  | 'diagonal-reverse'
   | 'horizontal'
   | 'vertical'
   | 'dots'
@@ -149,6 +150,14 @@ export function getPatternPalettes(): Palette[] {
       patternId: 'diagonal'
     },
     {
+      id: 'pattern-diagonal-reverse',
+      name: m.pattern_diagonal_reverse(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'diagonal-reverse'
+    },
+    {
       id: 'pattern-horizontal',
       name: m.pattern_horizontal(),
       colors: ['#3d3d3d', '#f4f4f4'],
@@ -236,6 +245,8 @@ export function buildPatternBackground(palette: Palette): string {
       return `radial-gradient(${accent} 16%, transparent 17%), linear-gradient(${base}, ${base})`;
     case 'cross':
       return `repeating-linear-gradient(0deg, transparent 0 5px, ${accent} 5px 7px), repeating-linear-gradient(90deg, transparent 0 5px, ${accent} 5px 7px), linear-gradient(${base}, ${base})`;
+    case 'diagonal-reverse':
+      return `repeating-linear-gradient(315deg, ${accent} 0 4px, ${base} 4px 8px)`;
     case 'diagonal':
     default:
       return `repeating-linear-gradient(45deg, ${accent} 0 4px, ${base} 4px 8px)`;

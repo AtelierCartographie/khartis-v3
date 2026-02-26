@@ -1477,6 +1477,7 @@
   "confirm": "Confirm",
   "pattern_none": "None",
   "pattern_diagonal": "Diagonal",
+  "pattern_diagonal_reverse": "Reverse diagonal",
   "pattern_horizontal": "Horizontal",
   "pattern_vertical": "Vertical",
   "pattern_dots": "Dots",
