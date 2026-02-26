@@ -1,9 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { ColorSelector } from '../shared';
+  import { ColorSelector, SliderWithInput } from '../shared';
   import {
     type Palette,
+    type PatternParams,
     getPatternPalettes,
     interpolateColors,
     buildPatternBackground
@@ -12,7 +13,7 @@
   interface Props {
     numClasses: number;
     onColorsChange?: (colors: string[]) => void;
-    onPatternSelect?: (palette: Palette) => void;
+    onPatternSelect?: (palette: Palette, params: PatternParams) => void;
   }
 
   let { numClasses, onColorsChange, onPatternSelect }: Props = $props();
@@ -22,6 +23,11 @@
   let startColor = $state('#f7fbff');
   let endColor = $state('#08519c');
 
+  // Pattern state
+  let selectedPatternId = $state<string | null>(null);
+  let patternSize = $state(4);
+  let patternScale = $state(8);
+
   const tabItems = $derived([
     { label: m.palette_custom_1_color() },
     { label: m.palette_custom_2_colors() },
@@ -29,6 +35,53 @@
   ]);
 
   const patternPalettes = $derived(getPatternPalettes());
+
+  // Line patterns support angle selection (CDC §2.B.2.c)
+  const LINE_PATTERN_IDS = [
+    'diagonal',
+    'diagonal-reverse',
+    'horizontal',
+    'vertical'
+  ] as const;
+  type LinePatternId = (typeof LINE_PATTERN_IDS)[number];
+  const ANGLE_OPTIONS: {
+    label: string;
+    angle: 0 | 45 | 315;
+    patternId: LinePatternId;
+  }[] = [
+    { label: '0°', angle: 0, patternId: 'horizontal' },
+    { label: '45°', angle: 45, patternId: 'diagonal' },
+    { label: '315°', angle: 315, patternId: 'diagonal-reverse' }
+  ];
+
+  const selectedPalette = $derived(
+    patternPalettes.find((p) => p.id === selectedPatternId) ?? null
+  );
+
+  const isLinePattern = $derived(
+    selectedPalette !== null &&
+      LINE_PATTERN_IDS.includes(selectedPalette.patternId as LinePatternId)
+  );
+
+  const currentAngle = $derived.by((): 0 | 45 | 315 | undefined => {
+    if (!selectedPalette) return undefined;
+    if (selectedPalette.patternId === 'horizontal') return 0;
+    if (selectedPalette.patternId === 'diagonal') return 45;
+    if (selectedPalette.patternId === 'diagonal-reverse') return 315;
+    return undefined;
+  });
+
+  const currentPatternParams = $derived<PatternParams>({
+    angle: currentAngle,
+    size: patternSize,
+    scale: patternScale
+  });
+
+  const livePreviewBg = $derived(
+    selectedPalette
+      ? buildPatternBackground(selectedPalette, currentPatternParams)
+      : ''
+  );
 
   function handleTabChange(index: number) {
     activeTab = index;
@@ -53,7 +106,45 @@
   }
 
   function handlePatternClick(palette: Palette) {
-    onPatternSelect?.(palette);
+    selectedPatternId = palette.id;
+    emitPatternSelect(palette, currentPatternParams);
+  }
+
+  function handleAngleSelect(option: (typeof ANGLE_OPTIONS)[number]) {
+    const targetPalette = patternPalettes.find(
+      (p) => p.patternId === option.patternId
+    );
+    if (targetPalette) {
+      selectedPatternId = targetPalette.id;
+      emitPatternSelect(targetPalette, {
+        ...currentPatternParams,
+        angle: option.angle
+      });
+    }
+  }
+
+  function handleSizeChange(value: number) {
+    patternSize = value;
+    if (selectedPalette) {
+      emitPatternSelect(selectedPalette, {
+        ...currentPatternParams,
+        size: value
+      });
+    }
+  }
+
+  function handleScaleChange(value: number) {
+    patternScale = value;
+    if (selectedPalette) {
+      emitPatternSelect(selectedPalette, {
+        ...currentPatternParams,
+        scale: value
+      });
+    }
+  }
+
+  function emitPatternSelect(palette: Palette, params: PatternParams) {
+    onPatternSelect?.(palette, params);
   }
 </script>
 
@@ -95,8 +186,10 @@
           <button
             type="button"
             class="pattern-item"
+            class:selected={selectedPatternId === palette.id}
             onclick={() => handlePatternClick(palette)}
             aria-label={palette.name}
+            aria-pressed={selectedPatternId === palette.id}
           >
             <div
               class="pattern-preview"
@@ -106,6 +199,53 @@
           </button>
         {/each}
       </div>
+
+      {#if selectedPalette}
+        <div class="pattern-params">
+          {#if isLinePattern}
+            <div class="param-row">
+              <span class="param-label">{m.pattern_angle()}</span>
+              <div class="angle-buttons">
+                {#each ANGLE_OPTIONS as opt (opt.angle)}
+                  <button
+                    type="button"
+                    class="angle-btn"
+                    class:active={currentAngle === opt.angle}
+                    onclick={() => handleAngleSelect(opt)}
+                    aria-pressed={currentAngle === opt.angle}
+                  >
+                    {opt.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          <SliderWithInput
+            label={m.pattern_size()}
+            min={1}
+            max={10}
+            value={patternSize}
+            onchange={handleSizeChange}
+          />
+
+          <SliderWithInput
+            label={m.pattern_scale()}
+            min={4}
+            max={24}
+            value={patternScale}
+            onchange={handleScaleChange}
+          />
+
+          <div class="live-preview">
+            <span class="param-label">{m.pattern_preview()}</span>
+            <div
+              class="live-preview-swatch"
+              style="background: {livePreviewBg}"
+            ></div>
+          </div>
+        </div>
+      {/if}
     {/if}
   </div>
 </div>
@@ -170,6 +310,11 @@
       background-color: var(--cds-layer-hover);
       border-color: var(--cds-border-strong);
     }
+
+    &.selected {
+      background-color: var(--cds-layer-selected);
+      border-color: var(--cds-border-interactive);
+    }
   }
 
   .pattern-preview {
@@ -186,5 +331,70 @@
   .pattern-name {
     font-size: 0.875rem;
     color: var(--cds-text-primary);
+  }
+
+  .pattern-params {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-03);
+    background: var(--cds-layer-01);
+    border: 1px solid var(--cds-border-subtle);
+    border-radius: 4px;
+    margin-top: var(--cds-spacing-02);
+  }
+
+  .param-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .param-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary);
+    white-space: nowrap;
+    min-width: 48px;
+  }
+
+  .angle-buttons {
+    display: flex;
+    gap: var(--cds-spacing-02);
+  }
+
+  .angle-btn {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    background: var(--cds-field);
+    border: 1px solid var(--cds-border-strong);
+    border-radius: 2px;
+    cursor: pointer;
+    color: var(--cds-text-primary);
+
+    &:hover {
+      background: var(--cds-layer-hover);
+    }
+
+    &.active {
+      background: var(--cds-interactive);
+      color: var(--cds-text-on-color);
+      border-color: var(--cds-interactive);
+    }
+  }
+
+  .live-preview {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .live-preview-swatch {
+    flex: 1;
+    height: 24px;
+    border-radius: 2px;
+    background-size:
+      auto,
+      8px 8px,
+      auto;
   }
 </style>

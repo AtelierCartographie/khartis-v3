@@ -5,7 +5,8 @@
   import { PalettePopover, PaletteDropdown } from '../palette-popover';
   import type {
     Palette,
-    PaletteType
+    PaletteType,
+    PatternParams
   } from '../palette-popover/palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
@@ -80,12 +81,22 @@
   function handlePopoverValidate(
     palette: Palette | undefined,
     newColors: string[],
-    _inverted: boolean
+    _inverted: boolean,
+    patternParams?: PatternParams
   ) {
     if (palette) {
       onselect?.(palette);
     }
-    onClassificationChange?.({ colors: newColors });
+    const changes: Parameters<NonNullable<typeof onClassificationChange>>[0] = {
+      colors: newColors
+    };
+    if (palette?.patternId) {
+      changes.patternId = palette.patternId;
+      if (patternParams) {
+        changes.patternParams = patternParams;
+      }
+    }
+    onClassificationChange?.(changes);
     popoverOpen = false;
   }
 

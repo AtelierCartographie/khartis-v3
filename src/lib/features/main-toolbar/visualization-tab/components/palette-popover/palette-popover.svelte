@@ -14,6 +14,7 @@
     PALETTE_TYPE,
     type PaletteType,
     type Palette,
+    type PatternParams,
     interpolateColors,
     findPaletteById
   } from './palette.constants';
@@ -30,7 +31,8 @@
     onvalidate?: (
       palette: Palette | undefined,
       colors: string[],
-      inverted: boolean
+      inverted: boolean,
+      patternParams?: PatternParams
     ) => void;
   }
 
@@ -54,6 +56,7 @@
   let draftInverted = $state(false);
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
   let draftColorBlindFilter = $state(false);
+  let draftPatternParams = $state<PatternParams | undefined>(undefined);
 
   const popoverTitle = $derived.by(() => {
     switch (draftType) {
@@ -98,6 +101,7 @@
     draftInverted = false;
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
+    draftPatternParams = undefined;
   }
 
   function handleClose() {
@@ -111,7 +115,7 @@
 
   function handleValidate() {
     const palette = findPaletteById(draftPaletteId);
-    onvalidate?.(palette, draftColors, draftInverted);
+    onvalidate?.(palette, draftColors, draftInverted, draftPatternParams);
     open = false;
   }
 
@@ -133,9 +137,10 @@
     draftColors = colors;
   }
 
-  function handlePatternSelect(palette: Palette) {
+  function handlePatternSelect(palette: Palette, params: PatternParams) {
     draftPaletteId = palette.id;
     draftColors = palette.colors;
+    draftPatternParams = params;
   }
 
   function handleInvertToggle(value: boolean) {

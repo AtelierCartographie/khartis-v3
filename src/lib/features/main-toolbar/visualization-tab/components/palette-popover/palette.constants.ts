@@ -1,4 +1,7 @@
 import * as m from '$lib/paraglide/messages';
+import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+
+export type { PatternParams };
 
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
@@ -233,23 +236,37 @@ export function interpolateColors(colors: string[], count: number): string[] {
   return result;
 }
 
-export function buildPatternBackground(palette: Palette): string {
+export function buildPatternBackground(
+  palette: Palette,
+  params?: PatternParams
+): string {
   const accent = palette.colors[0] ?? '#3d3d3d';
   const base = palette.colors[1] ?? '#f4f4f4';
-  switch (palette.patternId) {
+  const size = params?.size ?? 4;
+  const total = params?.scale ?? 8;
+
+  // Angle param overrides patternId for line-type patterns
+  let effectivePatternId = palette.patternId;
+  if (params?.angle !== undefined) {
+    if (params.angle === 0) effectivePatternId = 'horizontal';
+    else if (params.angle === 45) effectivePatternId = 'diagonal';
+    else if (params.angle === 315) effectivePatternId = 'diagonal-reverse';
+  }
+
+  switch (effectivePatternId) {
     case 'horizontal':
-      return `repeating-linear-gradient(0deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      return `repeating-linear-gradient(0deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
     case 'vertical':
-      return `repeating-linear-gradient(90deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      return `repeating-linear-gradient(90deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
     case 'dots':
       return `radial-gradient(${accent} 16%, transparent 17%), linear-gradient(${base}, ${base})`;
     case 'cross':
-      return `repeating-linear-gradient(0deg, transparent 0 5px, ${accent} 5px 7px), repeating-linear-gradient(90deg, transparent 0 5px, ${accent} 5px 7px), linear-gradient(${base}, ${base})`;
+      return `repeating-linear-gradient(0deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), repeating-linear-gradient(90deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), linear-gradient(${base}, ${base})`;
     case 'diagonal-reverse':
-      return `repeating-linear-gradient(315deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      return `repeating-linear-gradient(315deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
     case 'diagonal':
     default:
-      return `repeating-linear-gradient(45deg, ${accent} 0 4px, ${base} 4px 8px)`;
+      return `repeating-linear-gradient(45deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
   }
 }
 

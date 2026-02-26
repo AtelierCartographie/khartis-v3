@@ -62,6 +62,12 @@ export interface VisualizationModes {
   proportionalType?: ProportionalType;
 }
 
+export interface PatternParams {
+  angle?: 0 | 45 | 315;
+  size?: number;
+  scale?: number;
+}
+
 export interface ClassificationConfig {
   method: ClassificationMethod;
   classes: number;
@@ -71,6 +77,8 @@ export interface ClassificationConfig {
   colors?: string[];
   labels?: string[];
   breakpointValue?: number | null;
+  patternId?: string;
+  patternParams?: PatternParams;
 }
 
 export interface MissingDataConfig {
@@ -100,7 +108,12 @@ export interface YearFilter {
   value: number | string;
 }
 
-export type VizFilterOperator = 'gte' | 'lte' | 'equals' | 'not_equals' | 'between';
+export type VizFilterOperator =
+  | 'gte'
+  | 'lte'
+  | 'equals'
+  | 'not_equals'
+  | 'between';
 
 export interface VizDataFilter {
   id: string;
@@ -777,10 +790,7 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => ({ yearFilter: filter ?? undefined }));
   }
 
-  function addDataFilter(
-    id: string,
-    filter: Omit<VizDataFilter, 'id'>
-  ): void {
+  function addDataFilter(id: string, filter: Omit<VizDataFilter, 'id'>): void {
     applyVisualizationUpdate(id, (viz) => {
       const existing = viz.dataFilters ?? [];
       const newFilter: VizDataFilter = {
