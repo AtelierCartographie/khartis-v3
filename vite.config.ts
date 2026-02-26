@@ -276,8 +276,11 @@ export default defineConfig(({ mode }) => {
           test: {
             name: 'server',
             environment: 'node',
-            include: ['src/**/*.{test,spec}.{js,ts}'],
-            exclude: ['src/**/*.svelte.{test,spec}.{js,ts}'],
+            include: [
+              'tests/pipeline/**/*.{test,spec}.{js,ts}',
+              'tests/duckdb/**/*.{test,spec}.{js,ts}'
+            ],
+            exclude: ['tests/e2e/**'],
             pool: 'threads',
             fileParallelism: false
           }
