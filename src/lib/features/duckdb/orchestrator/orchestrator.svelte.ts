@@ -706,7 +706,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      return arrowOps.getArrowTableWithCache(
+      return await arrowOps.getArrowTableWithCache(
         tableName,
         Duck,
         (table) => geoParquetReader.extractMetadata(table),

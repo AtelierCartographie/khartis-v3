@@ -56,6 +56,14 @@ export function createChoroplethColorAccessor(
 ) {
   return (object: DeckDataRow): [number, number, number, number] => {
     const rawValue = object[valueColumn];
+    if (rawValue === null || rawValue === undefined) {
+      return [
+        HIGHLIGHT_FILL_COLOR[0],
+        HIGHLIGHT_FILL_COLOR[1],
+        HIGHLIGHT_FILL_COLOR[2],
+        255
+      ];
+    }
     const numericValue =
       typeof rawValue === 'number' ? rawValue : Number(rawValue);
     if (!Number.isFinite(numericValue)) {
