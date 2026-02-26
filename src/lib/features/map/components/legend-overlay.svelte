@@ -15,23 +15,17 @@
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import type { LegendItem } from '$lib/features/step-toolbar/tools/legend/legend.types';
   import { FillMode } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
+  import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
 
-  function getVisualizationForItem(
-    item: LegendItem
-  ): VisualizationConfig | undefined {
-    if (!item.variableId) return undefined;
-    return visualizationStore.visualizations.find(
-      (v) => v.id === item.variableId
-    );
-  }
-
   function hasColorScale(viz: VisualizationConfig | undefined): boolean {
-    if (!viz?.classification?.colors?.length || !viz?.classification?.breaks?.length) {
+    if (
+      !viz?.classification?.colors?.length ||
+      !viz?.classification?.breaks?.length
+    ) {
       return false;
     }
     const fillMode = viz.modes?.fill;
@@ -50,7 +44,7 @@
   // Build a reactive map from variableId → visualization for color scale rendering
   const vizByItemId = $derived.by(() => {
     void visualizationStore.version;
-    const map = new Map<string, VisualizationConfig>();
+    const map = new SvelteMap<string, VisualizationConfig>();
     for (const item of legendState.items) {
       if (item.variableId) {
         const viz = visualizationStore.visualizations.find(
@@ -246,7 +240,7 @@
             {@const colors = viz!.classification!.colors!}
             {@const breaks = viz!.classification!.breaks!}
             <div class="legend-color-scale">
-              {#each colors as color, i}
+              {#each colors as color, i (i)}
                 <div class="legend-scale-row">
                   <span
                     class="legend-color-swatch"
@@ -254,7 +248,9 @@
                   ></span>
                   <span class="legend-scale-label">
                     {#if i < breaks.length - 1}
-                      {formatBreakValue(breaks[i])} – {formatBreakValue(breaks[i + 1])}
+                      {formatBreakValue(breaks[i])} – {formatBreakValue(
+                        breaks[i + 1]
+                      )}
                     {:else if breaks.length > 0}
                       ≥ {formatBreakValue(breaks[breaks.length - 1])}
                     {/if}
@@ -267,7 +263,8 @@
                     class="legend-color-swatch"
                     style="background-color: {viz.missingData.color};"
                   ></span>
-                  <span class="legend-scale-label">{m.missing_data_text()}</span>
+                  <span class="legend-scale-label">{m.missing_data_text()}</span
+                  >
                 </div>
               {/if}
             </div>

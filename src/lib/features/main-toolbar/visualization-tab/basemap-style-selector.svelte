@@ -1,6 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { RadioButtonGroup, RadioButton, Toggle } from 'carbon-components-svelte';
+  import {
+    RadioButtonGroup,
+    RadioButton,
+    Toggle
+  } from 'carbon-components-svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';

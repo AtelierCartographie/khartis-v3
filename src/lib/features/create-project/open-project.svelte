@@ -232,25 +232,22 @@
                   onclick={(e: MouseEvent) => e.stopPropagation()}
                   onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
                 >
-                <OverflowMenu
-                  size="sm"
-                  flipped
-                >
-                  <OverflowMenuItem
-                    text={m.open_project_duplicate()}
-                    disabled={isDuplicating}
-                    on:click={() => handleDuplicateProject(project.id)}
-                  >
-                    <Copy size={16} />
-                  </OverflowMenuItem>
-                  <OverflowMenuItem
-                    danger
-                    text={m.open_project_delete()}
-                    on:click={() => confirmDeleteProject(project.id)}
-                  >
-                    <TrashCan size={16} />
-                  </OverflowMenuItem>
-                </OverflowMenu>
+                  <OverflowMenu size="sm" flipped>
+                    <OverflowMenuItem
+                      text={m.open_project_duplicate()}
+                      disabled={isDuplicating}
+                      on:click={() => handleDuplicateProject(project.id)}
+                    >
+                      <Copy size={16} />
+                    </OverflowMenuItem>
+                    <OverflowMenuItem
+                      danger
+                      text={m.open_project_delete()}
+                      on:click={() => confirmDeleteProject(project.id)}
+                    >
+                      <TrashCan size={16} />
+                    </OverflowMenuItem>
+                  </OverflowMenu>
                 </div>
               </div>
             {/snippet}

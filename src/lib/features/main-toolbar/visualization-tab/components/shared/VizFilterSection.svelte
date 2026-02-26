@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { Button, Select, SelectItem, TextInput, Tag } from 'carbon-components-svelte';
+  import {
+    Button,
+    Select,
+    SelectItem,
+    TextInput,
+    Tag
+  } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
   import type {
     VizDataFilter,
@@ -53,14 +59,18 @@
       column: newColumn,
       operator: newOperator,
       value: newValue,
-      secondaryValue: currentOperator.requiresRange ? newSecondaryValue : undefined
+      secondaryValue: currentOperator.requiresRange
+        ? newSecondaryValue
+        : undefined
     });
     newValue = '';
     newSecondaryValue = '';
   }
 
   function formatFilterLabel(filter: VizDataFilter): string {
-    const opLabel = operators.find((op) => op.value === filter.operator)?.label ?? filter.operator;
+    const opLabel =
+      operators.find((op) => op.value === filter.operator)?.label ??
+      filter.operator;
     if (filter.operator === 'between' && filter.secondaryValue) {
       return `${filter.column} ${opLabel} ${filter.value} – ${filter.secondaryValue}`;
     }
@@ -73,11 +83,7 @@
 
   <form class="filter-form" onsubmit={handleAdd}>
     <div class="field-group">
-      <Select
-        size="sm"
-        labelText={m.filter_column()}
-        bind:selected={newColumn}
-      >
+      <Select size="sm" labelText={m.filter_column()} bind:selected={newColumn}>
         <SelectItem value="" text={m.filter_select_column()} />
         {#each dataFields as field (field.id)}
           <SelectItem value={field.text} text={field.text} />
@@ -136,7 +142,8 @@
   {#if filters.length > 0}
     <div class="active-filters">
       <div class="filters-header">
-        <span class="filters-title">{m.filter_active()} ({filters.length})</span>
+        <span class="filters-title">{m.filter_active()} ({filters.length})</span
+        >
         <Button kind="ghost" size="small" on:click={onClearFilters}>
           {m.filter_clear_all()}
         </Button>

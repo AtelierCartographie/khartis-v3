@@ -15,9 +15,7 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
-  import {
-    ClassificationMethod
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
   import { FillMode } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb';

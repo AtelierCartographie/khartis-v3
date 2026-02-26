@@ -2,7 +2,12 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import { Button, ComboBox, InlineNotification, Tag } from 'carbon-components-svelte';
+  import {
+    Button,
+    ComboBox,
+    InlineNotification,
+    Tag
+  } from 'carbon-components-svelte';
   import { Add, List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
 
@@ -211,7 +216,12 @@
     {/if}
     {#if onSuggestBasemap}
       <div class="suggest-action">
-        <Button kind="ghost" size="small" icon={Add} on:click={onSuggestBasemap}>
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Add}
+          on:click={onSuggestBasemap}
+        >
           {m.basemap_suggest_button()}
         </Button>
       </div>

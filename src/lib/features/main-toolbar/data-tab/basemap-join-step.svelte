@@ -828,7 +828,11 @@
     const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(id);
     if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
       dataTabStore.markStepComplete(2);
-      logger.info('Join step restored from persisted GPS mode', LogCategory.MAP, { id });
+      logger.info(
+        'Join step restored from persisted GPS mode',
+        LogCategory.MAP,
+        { id }
+      );
     }
   });
 

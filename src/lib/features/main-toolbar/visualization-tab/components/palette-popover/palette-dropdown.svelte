@@ -56,7 +56,8 @@
     const rect = triggerElement.getBoundingClientRect();
     const estimatedDropdownHeight = 300;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const shouldFlip = spaceBelow < estimatedDropdownHeight && rect.top > spaceBelow;
+    const shouldFlip =
+      spaceBelow < estimatedDropdownHeight && rect.top > spaceBelow;
 
     dropdownPos = {
       top: shouldFlip ? rect.top - estimatedDropdownHeight : rect.bottom,

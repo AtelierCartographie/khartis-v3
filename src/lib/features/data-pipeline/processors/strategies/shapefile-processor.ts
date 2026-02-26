@@ -50,11 +50,9 @@ export const shapefileProcessor: FileProcessor = {
     });
 
     if (companionFiles.length === 0) {
-      throw new ParseError(
-        m.pipeline_error_shp_standalone(),
-        file.fileType,
-        { fileName: shpFile.name }
-      );
+      throw new ParseError(m.pipeline_error_shp_standalone(), file.fileType, {
+        fileName: shpFile.name
+      });
     }
 
     const shapefileComponents = [shpFile, ...companionFiles];
