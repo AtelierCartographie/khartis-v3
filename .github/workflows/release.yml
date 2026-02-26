@@ -43,7 +43,7 @@ jobs:
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
-      - name: Run pipeline tests
+      - name: Run server tests (pipeline + duckdb)
         run: pnpm run test:pipeline
 
       - name: Run semantic-release
