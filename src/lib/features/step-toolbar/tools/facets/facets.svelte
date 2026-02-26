@@ -2,7 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import { Button, MultiSelect, Slider, Toggle } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
-  import { facetsStore } from './facets.store.svelte';
+  import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import {
     VisualizationType,
     visualizationStore
@@ -17,6 +17,7 @@
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
   const syncPanZoom = $derived(facetsStore.syncPanZoom);
+  const scaleMode = $derived(facetsStore.scaleMode);
 
   const isProportional = $derived(
     selectedViz?.type === VisualizationType.PROPORTIONAL
@@ -114,6 +115,15 @@
             hideLabel={false}
             toggled={syncPanZoom}
             on:toggle={() => facetsStore.toggleSyncPanZoom()}
+          />
+        </div>
+        <div class="toggle-wrapper">
+          <Toggle
+            size="sm"
+            labelText={m.facets_shared_scale()}
+            hideLabel={false}
+            toggled={scaleMode === SCALE_MODE.SHARED}
+            on:toggle={() => facetsStore.toggleScaleMode()}
           />
         </div>
       </div>
