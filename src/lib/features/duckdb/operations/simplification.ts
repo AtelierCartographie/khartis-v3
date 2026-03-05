@@ -98,11 +98,8 @@ export async function simplifyGeometryTable(
     FROM simplify_and_clean('${escapedSource}', '${geometryColumn}', ${tolerance})
   `);
 
-  const simplifiedVertices = await countVertices(
-    Duck,
-    targetTable,
-    geometryColumn
-  );
+  // The simplify_and_clean macro always normalizes the geometry column to 'geom'
+  const simplifiedVertices = await countVertices(Duck, targetTable, 'geom');
 
   const reductionPercentage =
     originalVertices > 0

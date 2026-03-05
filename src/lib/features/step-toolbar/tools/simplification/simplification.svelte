@@ -36,18 +36,29 @@
     state.source === SimplificationSource.Basemap ? 0 : 1
   );
 
+  const geoDatasets = $derived(
+    datasetsStore.getDatasetsByType(true).filter((d) => !d.joinedBasemap)
+  );
+  const hasGeoDatasets = $derived(geoDatasets.length > 0);
+
+  const geoDatasetLabel = $derived.by(() => {
+    const selected = datasetsStore.selectedDataset;
+    if (selected?.geometry && !selected.joinedBasemap) return selected.name;
+    return geoDatasets[0]?.name ?? m.simplification_source_geodata();
+  });
+
   const sources = $derived([
     { icon: Earth, label: m.simplification_source_basemap(), iconSize: 16 },
     {
       icon: LicenseGlobal,
-      label:
-        datasetsStore.selectedDataset?.name ??
-        m.simplification_source_geodata(),
+      label: geoDatasetLabel,
       iconSize: 16
     }
   ]);
 
   function onSourceChange(index: number) {
+    if (index === 1 && !hasGeoDatasets) return;
+
     const newSource =
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
     store.setSource(newSource);

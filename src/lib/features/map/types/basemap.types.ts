@@ -15,6 +15,12 @@ export interface BasemapLayer {
   count?: number;
 }
 
+export interface BasemapVariants {
+  low?: string;
+  medium?: string;
+  high?: string;
+}
+
 export interface BasemapMetadata {
   file: string;
   title: string;
@@ -26,6 +32,7 @@ export interface BasemapMetadata {
   projection: string;
   layers: BasemapLayer[];
   isCustom?: boolean;
+  variants?: BasemapVariants;
 }
 
 export interface BasemapSuggestion extends BasemapMetadata {
