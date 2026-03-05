@@ -36,10 +36,12 @@
   import type { DeckMapProps, DeckOrthographicViewStateMap } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
-    formatState,
+    getFormatState,
     PAGE_GRID_SIZE_PX
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
@@ -62,17 +64,18 @@
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
+  const fmtState = $derived(getFormatState());
   const formatColor = $derived(
-    typeof formatState.color === 'object' && formatState.color
-      ? formatState.color
+    typeof fmtState.color === 'object' && fmtState.color
+      ? fmtState.color
       : DEFAULT_PAGE_COLOR
   );
   const pageBackgroundColor = $derived(
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
-  const pageMargins = $derived(formatState.margins);
+  const pageMargins = $derived(fmtState.margins);
   const showPageGrid = $derived(
-    formatState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
+    fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
   );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
@@ -340,6 +343,16 @@
     }
   });
 
+  function getTableFiltersForDataset(datasetId: string) {
+    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
+    if (!dataset?.sourceFileId) return undefined;
+    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+      dataset.sourceFileId
+    );
+    if (!duckDBDataset?.tableName) return undefined;
+    return getFiltersMap().get(duckDBDataset.tableName);
+  }
+
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
@@ -349,7 +362,8 @@
     getActiveVisualizations: () => mapState.activeVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
     getShouldRenderDatasetFallbacks: () =>
-      globalState.selectedStep === ToolbarStep.Data
+      globalState.selectedStep === ToolbarStep.Data,
+    getTableFilters: getTableFiltersForDataset
   });
 
   function updateCanvasSize() {
@@ -409,7 +423,7 @@
 
   $effect(() => {
     const margins = pageMargins;
-    const layoutSnapshot = `${formatState.width}x${formatState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
+    const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
 
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
@@ -424,8 +438,8 @@
 
     untrack(() => {
       annotationsActions.redistributePageElements({
-        width: formatState.width,
-        height: formatState.height,
+        width: fmtState.width,
+        height: fmtState.height,
         margins
       });
       legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
@@ -516,14 +530,13 @@
     if (lastApplied) {
       logEffect('simplification:lastApplied');
       logger.debug(
-        'Simplification applied, reloading basemap',
+        'Simplification applied, updating basemap table',
         LogCategory.MAP
       );
 
-      untrack(async () => {
-        const loaded = await basemapService.loadDefaultBasemap();
+      untrack(() => {
+        const loaded = basemapService.currentBasemap;
         if (loaded) {
-          // Use simplified version if active
           if (loaded.activeSimplificationLevel) {
             const simplifiedTable = basemapService.getSimplifiedBasemapTable(
               loaded.metadata.file,
@@ -533,8 +546,6 @@
           } else {
             worldBaseTable = loaded.geometryTable;
           }
-          // Note: worldBaseTable assignment triggers the worldBaseTable $effect
-          // which calls scheduleLayerUpdate — no need to call it here.
         }
       });
     }
@@ -780,12 +791,19 @@
     untrack(() => mapBasemap.syncProjection());
   });
 
+  const filtersVersion = $derived(
+    Array.from(getFiltersMap().entries())
+      .map(([k, v]) => `${k}:${v.length}:${v.map((f) => f.id).join(',')}`)
+      .join('|')
+  );
+
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
-    dataSize: `${tables.size}-${geoJSONs.size}`
+    dataSize: `${tables.size}-${geoJSONs.size}`,
+    filtersVersion
   });
 
   $effect(() => {
@@ -1114,9 +1132,11 @@
     inset: 0;
     z-index: var(--z-map-layer);
     pointer-events: none;
-    background-image:
-      linear-gradient(to right, rgba(22, 22, 22, 0.12) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(22, 22, 22, 0.12) 1px, transparent 1px);
+    background-image: radial-gradient(
+      circle,
+      rgba(22, 22, 22, 0.2) 1px,
+      transparent 1px
+    );
   }
 
   .map-canvas {
@@ -1143,10 +1163,5 @@
 
   :global(.maplibregl-ctrl-attrib) {
     display: none;
-  }
-
-  :global(.deck-tooltip) {
-    z-index: var(--z-notification) !important;
-    pointer-events: none !important;
   }
 </style>

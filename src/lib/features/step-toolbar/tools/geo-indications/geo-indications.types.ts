@@ -24,6 +24,8 @@ export interface GeoIndicationsState {
     distance: number;
     units: DistanceUnit;
     color: ColorState;
+    fontFamily: string;
+    fontSize: number;
     expanded: boolean;
     dragPosition: DragPosition | null;
   };

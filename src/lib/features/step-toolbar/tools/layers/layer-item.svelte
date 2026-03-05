@@ -78,6 +78,13 @@
       class:dragging={isDragging}
       class:drag-over={isDragOver}
       role="listitem"
+      draggable={true}
+      ondragstart={handleDragStart}
+      ondragover={handleDragOver}
+      ondragenter={handleDragEnter}
+      ondrop={handleDrop}
+      ondragleave={onDragLeave}
+      ondragend={onDragEnd}
     >
       <div class="color-bar" style:background-color={layer.color}></div>
 
@@ -138,10 +145,12 @@
           flipped
           iconDescription={m.layers_more_options()}
         >
-          <OverflowMenuItem
-            text={m.layers_rename()}
-            on:click={() => onRenameLayer?.(layer.id)}
-          />
+          {#if layer.type !== 'visualization'}
+            <OverflowMenuItem
+              text={m.layers_rename()}
+              on:click={() => onRenameLayer?.(layer.id)}
+            />
+          {/if}
           <OverflowMenuItem
             text={m.layers_duplicate()}
             on:click={() => onDuplicateLayer?.(layer.id)}
@@ -217,6 +226,7 @@
     gap: 7px;
     background-color: var(--cds-layer-01);
     border: 1px solid var(--cds-border-tile-01);
+    cursor: grab;
     transition: background-color 0.15s ease;
   }
 
@@ -226,6 +236,7 @@
 
   .sublayer-card.dragging {
     opacity: 0.5;
+    cursor: grabbing;
   }
 
   .sublayer-card.drag-over {

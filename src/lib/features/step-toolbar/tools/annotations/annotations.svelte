@@ -1,9 +1,8 @@
 <script lang="ts">
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row } from 'carbon-components-svelte';
-  import { Crop, Image, Pen, TextCreation } from 'carbon-icons-svelte';
+  import { AreaCustom, Image, Pen, TextCreation } from 'carbon-icons-svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -14,34 +13,10 @@
   import TextTool from './text-tool.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
-  const annotationsVisible = $derived(annotationsState.visible);
-
-  function handleVisibilityChange(visible: boolean): void {
-    if (visible !== annotationsState.visible) {
-      annotationsActions.setVisibility(visible);
-    }
-  }
 </script>
 
 <div id="khartis-annotations-tool">
   <Grid noGutter fullWidth>
-    <Row>
-      <Column>
-        <div class="switch-row">
-          <span class="switch-label">{m.tool_annotations()}</span>
-          <Switch
-            toggled={annotationsVisible}
-            labelText={m.tool_annotations()}
-            hideLabel
-            labelA={m.layers_hide()}
-            labelB={m.layers_show()}
-            showStateLabel
-            onchange={handleVisibilityChange}
-          />
-        </div>
-      </Column>
-    </Row>
-
     <Row>
       <Column>
         <div class="tool-picker">
@@ -66,7 +41,7 @@
             <Button
               kind="tertiary"
               size="field"
-              icon={Crop}
+              icon={AreaCustom}
               onclick={() =>
                 annotationsActions.setActiveType(AnnotationKind.SHAPE)}
             >
@@ -151,19 +126,5 @@
   .type-btn-active :global(.bx--btn--tertiary:hover) {
     background-color: #2e2c2c;
     border-color: #2e2c2c;
-  }
-
-  .switch-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-02) 0 var(--cds-spacing-04) 0;
-  }
-
-  .switch-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
   }
 </style>

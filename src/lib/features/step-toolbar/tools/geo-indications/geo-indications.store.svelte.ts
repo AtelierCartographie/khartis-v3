@@ -4,6 +4,10 @@ import {
   OrientationIndicatorStyle,
   ScaleForm
 } from '$lib/features/commons/constants/ui.constants';
+import {
+  AVAILABLE_FONTS,
+  LEGEND_FONT_SIZES
+} from '$lib/features/step-toolbar/tools/legend/legend.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type {
@@ -20,6 +24,8 @@ const DEFAULT_STATE: GeoIndicationsState = {
     distance: 0,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
+    fontFamily: AVAILABLE_FONTS[0],
+    fontSize: LEGEND_FONT_SIZES[2],
     expanded: true,
     dragPosition: null
   },
@@ -128,6 +134,20 @@ function normalizeState(
           ? nextScale.units
           : current.scale.units,
       color: normalizeColorState(nextScale?.color, current.scale.color),
+      fontFamily:
+        typeof nextScale?.fontFamily === 'string' &&
+        AVAILABLE_FONTS.includes(
+          nextScale.fontFamily as (typeof AVAILABLE_FONTS)[number]
+        )
+          ? nextScale.fontFamily
+          : current.scale.fontFamily,
+      fontSize:
+        typeof nextScale?.fontSize === 'number' &&
+        LEGEND_FONT_SIZES.includes(
+          nextScale.fontSize as (typeof LEGEND_FONT_SIZES)[number]
+        )
+          ? nextScale.fontSize
+          : current.scale.fontSize,
       expanded:
         typeof nextScale?.expanded === 'boolean'
           ? nextScale.expanded
@@ -167,7 +187,7 @@ function normalizeState(
         nextInsetMap?.type === InsetMapType.PLANISPHERE
           ? nextInsetMap.type
           : current.insetMap.type,
-      size: clampNumber(nextInsetMap?.size, 20, 210, current.insetMap.size),
+      size: clampNumber(nextInsetMap?.size, 20, 800, current.insetMap.size),
       windowColor: normalizeColorState(
         nextInsetMap?.windowColor,
         current.insetMap.windowColor
@@ -214,11 +234,11 @@ type GeoIndicationsActions = {
   toggleInsetMap: () => void;
   toggleScaleExpanded: () => void;
   setScaleForm: (form: ScaleForm) => void;
-  incrementScaleDistance: (step?: number) => void;
-  decrementScaleDistance: (step?: number) => void;
   setScaleUnits: (units: DistanceUnit) => void;
   setScaleColor: (colorState: ColorState) => void;
   setScaleColorFromHex: (hex: string) => void;
+  setScaleFontFamily: (fontFamily: string) => void;
+  setScaleFontSize: (fontSize: number) => void;
   setOrientationStyle: (style: OrientationIndicatorStyle) => void;
   setOrientationSize: (size: number) => void;
   setOrientationColor: (colorState: ColorState) => void;
@@ -273,14 +293,6 @@ const { state, actions } = createToolStore<
   setScaleForm: (form: ScaleForm) => {
     s.scale.form = form;
   },
-  incrementScaleDistance: (step: number = 500) => {
-    const increment = clampNumber(step, 1, Number.MAX_SAFE_INTEGER, 500);
-    s.scale.distance = Math.max(0, s.scale.distance + increment);
-  },
-  decrementScaleDistance: (step: number = 500) => {
-    const decrement = clampNumber(step, 1, Number.MAX_SAFE_INTEGER, 500);
-    s.scale.distance = Math.max(0, s.scale.distance - decrement);
-  },
   setScaleUnits: (units: DistanceUnit) => {
     s.scale.units = units;
   },
@@ -289,6 +301,20 @@ const { state, actions } = createToolStore<
   },
   setScaleColorFromHex: (hex: string) => {
     s.scale.color = hexToHsl(hex);
+  },
+  setScaleFontFamily: (fontFamily: string) => {
+    if (
+      AVAILABLE_FONTS.includes(fontFamily as (typeof AVAILABLE_FONTS)[number])
+    ) {
+      s.scale.fontFamily = fontFamily;
+    }
+  },
+  setScaleFontSize: (fontSize: number) => {
+    if (
+      LEGEND_FONT_SIZES.includes(fontSize as (typeof LEGEND_FONT_SIZES)[number])
+    ) {
+      s.scale.fontSize = fontSize;
+    }
   },
   setOrientationStyle: (style: OrientationIndicatorStyle) => {
     s.orientation.style = style;
@@ -306,7 +332,7 @@ const { state, actions } = createToolStore<
     s.insetMap.type = type;
   },
   setInsetMapSize: (size: number) => {
-    s.insetMap.size = clampNumber(size, 20, 210, s.insetMap.size);
+    s.insetMap.size = clampNumber(size, 20, 600, s.insetMap.size);
   },
   setInsetMapWindowColor: (colorState: ColorState) => {
     s.insetMap.windowColor = colorState;

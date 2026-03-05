@@ -41,6 +41,11 @@ export interface AnnotationStyle {
   cornerRadius?: number;
   curvature?: number;
 
+  backgroundColor?:
+    | string
+    | { hue: number; saturation: number; lightness: number };
+  backgroundOpacity?: number;
+
   smoothness?: number;
   drawingType?: DrawingType;
 

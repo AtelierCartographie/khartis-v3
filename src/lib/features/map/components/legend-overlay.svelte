@@ -146,12 +146,13 @@
       return;
     }
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width - 10);
-    const maxY = Math.max(0, rect.height - 10);
+    const maxX = Math.max(0, rect.width / scale - 10);
+    const maxY = Math.max(0, rect.height / scale - 10);
 
-    const x = clamp(event.clientX - rect.left - dragOffsetX, 0, maxX);
-    const y = clamp(event.clientY - rect.top - dragOffsetY, 0, maxY);
+    const x = clamp((event.clientX - rect.left) / scale - dragOffsetX, 0, maxX);
+    const y = clamp((event.clientY - rect.top) / scale - dragOffsetY, 0, maxY);
 
     legendActions.setDragPosition({ x, y });
   }
@@ -168,23 +169,22 @@
     event.preventDefault();
     event.stopPropagation();
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const overlayRect = overlayElement.getBoundingClientRect();
     const legendRect = legendElement.getBoundingClientRect();
 
-    const currentX = legendRect.left - overlayRect.left;
-    const currentY = legendRect.top - overlayRect.top;
+    const currentX = (legendRect.left - overlayRect.left) / scale;
+    const currentY = (legendRect.top - overlayRect.top) / scale;
 
     if (!legendState.dragPosition) {
       legendActions.setDragPosition({ x: currentX, y: currentY });
     }
 
     dragOffsetX =
-      event.clientX -
-      overlayRect.left -
+      (event.clientX - overlayRect.left) / scale -
       (legendState.dragPosition?.x ?? currentX);
     dragOffsetY =
-      event.clientY -
-      overlayRect.top -
+      (event.clientY - overlayRect.top) / scale -
       (legendState.dragPosition?.y ?? currentY);
 
     isDragging = true;

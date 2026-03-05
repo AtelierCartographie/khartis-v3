@@ -92,12 +92,14 @@
       <div class="section">
         <Slider
           labelText={m.annotations_size()}
-          value={effectiveStyle.size || 100}
-          min={1}
-          max={100}
+          value={effectiveStyle.size || 200}
+          min={10}
+          max={1000}
           step={1}
           stepMultiplier={5}
           on:change={handleSizeChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -114,6 +116,8 @@
           step={5}
           stepMultiplier={5}
           on:change={handleOpacityChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>

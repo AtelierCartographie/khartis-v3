@@ -16,7 +16,7 @@ import {
   DECK_DEVICE_TYPE
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
-import { createTooltipHandler } from '../interactions';
+import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -334,7 +334,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           height: '100%',
           controller: { scrollZoom: false, doubleClickZoom: false },
           layers: [],
-          getTooltip: createTooltipHandler(getActiveVisualizations),
+          onHover: createHoverHandler(getActiveVisualizations),
+          onClick: createClickHandler(getActiveVisualizations),
           onViewStateChange: handleViewStateChange as DeckProps<
             [OrthographicView]
           >['onViewStateChange'],
@@ -412,7 +413,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       deckOverlay = new MapboxOverlay({
         interleaved: true,
         layers: [],
-        getTooltip: createTooltipHandler(getActiveVisualizations)
+        onHover: createHoverHandler(getActiveVisualizations),
+        onClick: createClickHandler(getActiveVisualizations)
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);

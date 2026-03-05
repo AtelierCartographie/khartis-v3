@@ -72,8 +72,6 @@
   const activeTabIndex = $derived(
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
   );
-  const legendVisible = $derived(legendState.visible);
-
   function updateItemField(
     id: string,
     field: keyof LegendItem,
@@ -87,12 +85,6 @@
     legendActions.setActiveTab(
       newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
     );
-  }
-
-  function handleLegendVisibilityChange(visible: boolean): void {
-    if (visible !== legendState.visible) {
-      legendActions.setVisibility(visible);
-    }
   }
 
   function handleFontFamilyChange(): void {
@@ -158,36 +150,12 @@
         />
       </Column>
     </Row>
-
-    <Row>
-      <Column>
-        <div class="switch-row">
-          <span class="switch-label">{m.tool_legend()}</span>
-          <Switch
-            toggled={legendVisible}
-            labelText={m.tool_legend()}
-            hideLabel
-            labelA={m.layers_hide()}
-            labelB={m.layers_show()}
-            showStateLabel
-            onchange={handleLegendVisibilityChange}
-          />
-        </div>
-      </Column>
-    </Row>
   </Grid>
 
   {#if activeTabIndex === 0}
     <div class="expandable-stack">
       {#each items as item, index (item.id)}
-        <ExpandableSection
-          title={item.name}
-          defaultOpen={index === 0}
-          showToggle={true}
-          toggleChecked={item.visible}
-          onToggleChange={(visible) =>
-            legendActions.updateLegendItem(item.id, { visible })}
-        >
+        <ExpandableSection title={item.name} defaultOpen={index === 0}>
           <Grid padding noGutter>
             <Row>
               <Column>
@@ -274,6 +242,7 @@
             </div>
             <div class="text-style-color">
               <ColorPicker
+                triggerLabel={m.legend_text_color()}
                 hex={textColorHex}
                 hue={textColor.hue}
                 saturation={textColor.saturation}
@@ -295,14 +264,18 @@
 
       <Row>
         <Column>
-          <Switch
-            labelText={m.legend_background()}
-            toggled={backgroundEnabled}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={handleBackgroundEnabledChange}
-          />
+          <div class="switch-row">
+            <span class="switch-label">{m.legend_background()}</span>
+            <Switch
+              labelText={m.legend_background()}
+              hideLabel
+              toggled={backgroundEnabled}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={handleBackgroundEnabledChange}
+            />
+          </div>
         </Column>
 
         <Column>
@@ -332,6 +305,8 @@
             step={1}
             bind:value={localOpacity}
             on:change={handleOpacityChange}
+            minLabel=""
+            maxLabel=""
           />
         </Column>
       </Row>

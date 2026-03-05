@@ -141,10 +141,10 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_shape_helper()}</p>
         <Button kind="primary" icon={Add} onclick={handleAddShape}>
           {m.annotations_add_shape()}
         </Button>
+        <p class="helper">{m.annotations_shape_helper()}</p>
       </div>
     </Column>
   </Row>
@@ -160,6 +160,8 @@
           step={1}
           stepMultiplier={1}
           on:change={handleThicknessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -176,6 +178,8 @@
           step={1}
           stepMultiplier={5}
           on:change={handleCurvatureChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -244,6 +248,8 @@
           stepMultiplier={5}
           on:change={(e) =>
             annotationsActions.applyStyle({ opacity: e.detail })}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -283,9 +289,10 @@
   }
 
   .helper {
-    margin: 0 0 var(--cds-spacing-03) 0;
+    margin: var(--cds-spacing-03) 0 0 0;
     color: var(--cds-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .toggle-row {

@@ -6,7 +6,6 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
-    Button,
     Column,
     Grid,
     NumberInput,
@@ -18,13 +17,24 @@
     Slider
   } from 'carbon-components-svelte';
   import {
+    AVAILABLE_FONTS,
+    LEGEND_FONT_SIZES
+  } from '$lib/features/step-toolbar/tools/legend/legend.constants';
+  import {
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
 
   const store = geoIndicationsActions;
-  const state = $derived(geoIndicationsState);
-  const geoIndicationsVisible = $derived(state.visible);
+  const geoState = $derived(geoIndicationsState);
+
+  let localScaleFontFamily = $state('Cabin');
+  let localScaleFontSize = $state(12);
+
+  $effect(() => {
+    localScaleFontFamily = geoState.scale.fontFamily;
+    localScaleFontSize = geoState.scale.fontSize;
+  });
 
   const formOptions = [
     { value: ScaleForm.LINE, text: m.geo_scale_form_line() },
@@ -33,37 +43,37 @@
 
   const scaleHex = $derived(
     hslToHex(
-      state.scale.color.hue,
-      state.scale.color.saturation,
-      state.scale.color.lightness
+      geoState.scale.color.hue,
+      geoState.scale.color.saturation,
+      geoState.scale.color.lightness
     )
   );
   const orientationHex = $derived(
     hslToHex(
-      state.orientation.color.hue,
-      state.orientation.color.saturation,
-      state.orientation.color.lightness
+      geoState.orientation.color.hue,
+      geoState.orientation.color.saturation,
+      geoState.orientation.color.lightness
     )
   );
   const insetMapWindowHex = $derived(
     hslToHex(
-      state.insetMap.windowColor.hue,
-      state.insetMap.windowColor.saturation,
-      state.insetMap.windowColor.lightness
+      geoState.insetMap.windowColor.hue,
+      geoState.insetMap.windowColor.saturation,
+      geoState.insetMap.windowColor.lightness
     )
   );
   const insetMapContinentHex = $derived(
     hslToHex(
-      state.insetMap.continentColor.hue,
-      state.insetMap.continentColor.saturation,
-      state.insetMap.continentColor.lightness
+      geoState.insetMap.continentColor.hue,
+      geoState.insetMap.continentColor.saturation,
+      geoState.insetMap.continentColor.lightness
     )
   );
   const insetMapSeaHex = $derived(
     hslToHex(
-      state.insetMap.seaColor.hue,
-      state.insetMap.seaColor.saturation,
-      state.insetMap.seaColor.lightness
+      geoState.insetMap.seaColor.hue,
+      geoState.insetMap.seaColor.saturation,
+      geoState.insetMap.seaColor.lightness
     )
   );
 
@@ -74,15 +84,9 @@
     lightness: number;
   };
 
-  function handleVisibilityChange(visible: boolean): void {
-    if (visible !== state.visible) {
-      store.setVisibility(visible);
-    }
-  }
-
   function handleScaleFormChange(event: Event): void {
     const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
-    if (form !== state.scale.form) {
+    if (form !== geoState.scale.form) {
       store.setScaleForm(form);
     }
   }
@@ -122,32 +126,10 @@
 </script>
 
 <div id="khartis-geo-indications-tool">
-  <Grid padding noGutter fullWidth>
-    <Row>
-      <Column>
-        <div class="switch-row">
-          <span class="switch-label">{m.tool_geo_indications()}</span>
-          <Switch
-            toggled={geoIndicationsVisible}
-            labelText={m.tool_geo_indications()}
-            hideLabel
-            labelA={m.layers_hide()}
-            labelB={m.layers_show()}
-            showStateLabel
-            onchange={handleVisibilityChange}
-          />
-        </div>
-      </Column>
-    </Row>
-  </Grid>
-
   <div class="expandable-stack">
     <ExpandableSection
       title={m.geo_scale()}
-      defaultOpen={state.scale.expanded}
-      showToggle={true}
-      toggleChecked={state.scale.enabled}
-      onToggleChange={() => store.toggleScale()}
+      defaultOpen={geoState.scale.expanded}
     >
       <Grid padding noGutter>
         <Row>
@@ -155,7 +137,7 @@
             <Select
               id="form-select"
               labelText={m.geo_style()}
-              selected={state.scale.form}
+              selected={geoState.scale.form}
               on:change={handleScaleFormChange}
               size="xl"
             >
@@ -167,40 +149,19 @@
         </Row>
 
         <Row>
-          <Column sm={3} md={6} lg={13}>
+          <Column>
             <NumberInput
               id="distance-input"
               labelText={m.geo_distance()}
-              value={state.scale.distance}
+              value={geoState.scale.distance}
               on:change={(e) =>
                 store.setScaleDistance(
-                  getNumericEventValue(e, state.scale.distance)
+                  getNumericEventValue(e, geoState.scale.distance)
                 )}
               min={0}
-              hideSteppers
+              step={500}
               size="xl"
             />
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="distance-buttons">
-              <Button
-                kind="ghost"
-                size="small"
-                on:click={() => store.decrementScaleDistance()}
-                class="distance-button"
-              >
-                −
-              </Button>
-              <Button
-                kind="ghost"
-                size="small"
-                on:click={() => store.incrementScaleDistance()}
-                class="distance-button"
-              >
-                +
-              </Button>
-            </div>
           </Column>
         </Row>
 
@@ -208,7 +169,7 @@
           <Column>
             <RadioButtonGroup
               legendText={m.geo_units()}
-              selected={state.scale.units}
+              selected={geoState.scale.units}
               on:change={(e) => store.setScaleUnits((e as CustomEvent).detail)}
             >
               <RadioButton
@@ -223,38 +184,62 @@
 
         <Row>
           <Column>
-            <ColorPicker
-              triggerLabel={m.geo_color()}
-              hex={scaleHex}
-              hue={state.scale.color.hue}
-              saturation={state.scale.color.saturation}
-              lightness={state.scale.color.lightness}
-              onValidate={({
-                hue,
-                saturation,
-                lightness
-              }: ColorPickerValidateEvent) => {
-                store.setScaleColor({ hue, saturation, lightness });
-              }}
-            />
+            <div class="text-style-row">
+              <div class="text-style-font">
+                <Select
+                  id="scale-font-select"
+                  labelText={m.legend_font()}
+                  bind:selected={localScaleFontFamily}
+                  on:change={() =>
+                    store.setScaleFontFamily(localScaleFontFamily)}
+                  size="sm"
+                >
+                  {#each AVAILABLE_FONTS as f (f)}
+                    <SelectItem value={f} text={f} />
+                  {/each}
+                </Select>
+              </div>
+              <div class="text-style-size">
+                <Select
+                  id="scale-font-size"
+                  labelText={m.legend_font_size()}
+                  bind:selected={localScaleFontSize}
+                  on:change={() => store.setScaleFontSize(localScaleFontSize)}
+                  size="sm"
+                >
+                  {#each LEGEND_FONT_SIZES as s (s)}
+                    <SelectItem value={s} text={String(s)} />
+                  {/each}
+                </Select>
+              </div>
+              <div class="text-style-color">
+                <ColorPicker
+                  hex={scaleHex}
+                  hue={geoState.scale.color.hue}
+                  saturation={geoState.scale.color.saturation}
+                  lightness={geoState.scale.color.lightness}
+                  onValidate={({
+                    hue,
+                    saturation,
+                    lightness
+                  }: ColorPickerValidateEvent) => {
+                    store.setScaleColor({ hue, saturation, lightness });
+                  }}
+                />
+              </div>
+            </div>
           </Column>
         </Row>
       </Grid>
     </ExpandableSection>
 
-    <ExpandableSection
-      title={m.geo_orientation()}
-      defaultOpen={false}
-      showToggle={true}
-      toggleChecked={state.orientation.enabled}
-      onToggleChange={() => store.toggleOrientation()}
-    >
+    <ExpandableSection title={m.geo_orientation()} defaultOpen={false}>
       <Grid padding noGutter>
         <Row>
           <Column>
             <RadioButtonGroup
               legendText={m.geo_orientation_style()}
-              selected={state.orientation.style}
+              selected={geoState.orientation.style}
               on:change={(e) =>
                 store.setOrientationStyle((e as CustomEvent).detail)}
             >
@@ -279,11 +264,13 @@
               min={5}
               max={30}
               step={1}
-              value={state.orientation.size}
+              value={geoState.orientation.size}
               on:change={(e) =>
                 store.setOrientationSize(
-                  getNumericEventValue(e, state.orientation.size)
+                  getNumericEventValue(e, geoState.orientation.size)
                 )}
+              minLabel=""
+              maxLabel=""
               hideTextInput={false}
               fullWidth
             />
@@ -295,9 +282,9 @@
             <ColorPicker
               triggerLabel={m.geo_orientation_color()}
               hex={orientationHex}
-              hue={state.orientation.color.hue}
-              saturation={state.orientation.color.saturation}
-              lightness={state.orientation.color.lightness}
+              hue={geoState.orientation.color.hue}
+              saturation={geoState.orientation.color.saturation}
+              lightness={geoState.orientation.color.lightness}
               onValidate={({
                 hue,
                 saturation,
@@ -311,19 +298,13 @@
       </Grid>
     </ExpandableSection>
 
-    <ExpandableSection
-      title={m.geo_inset_map()}
-      defaultOpen={false}
-      showToggle={true}
-      toggleChecked={state.insetMap.enabled}
-      onToggleChange={() => store.toggleInsetMap()}
-    >
+    <ExpandableSection title={m.geo_inset_map()} defaultOpen={false}>
       <Grid padding noGutter>
         <Row>
           <Column>
             <RadioButtonGroup
               legendText={m.geo_inset_map_type()}
-              selected={state.insetMap.type}
+              selected={geoState.insetMap.type}
               on:change={(e) =>
                 store.setInsetMapType((e as CustomEvent).detail)}
             >
@@ -346,13 +327,15 @@
             <Slider
               labelText={m.geo_inset_map_size()}
               min={20}
-              max={210}
+              max={800}
               step={1}
-              value={state.insetMap.size}
+              value={geoState.insetMap.size}
               on:change={(e) =>
                 store.setInsetMapSize(
-                  getNumericEventValue(e, state.insetMap.size)
+                  getNumericEventValue(e, geoState.insetMap.size)
                 )}
+              minLabel=""
+              maxLabel=""
               hideTextInput={false}
               fullWidth
             />
@@ -364,9 +347,9 @@
             <ColorPicker
               triggerLabel={m.geo_inset_map_window_color()}
               hex={insetMapWindowHex}
-              hue={state.insetMap.windowColor.hue}
-              saturation={state.insetMap.windowColor.saturation}
-              lightness={state.insetMap.windowColor.lightness}
+              hue={geoState.insetMap.windowColor.hue}
+              saturation={geoState.insetMap.windowColor.saturation}
+              lightness={geoState.insetMap.windowColor.lightness}
               onValidate={({
                 hue,
                 saturation,
@@ -385,11 +368,13 @@
               min={0}
               max={100}
               step={1}
-              value={state.insetMap.zoom}
+              value={geoState.insetMap.zoom}
               on:change={(e) =>
                 store.setInsetMapZoom(
-                  getNumericEventValue(e, state.insetMap.zoom)
+                  getNumericEventValue(e, geoState.insetMap.zoom)
                 )}
+              minLabel=""
+              maxLabel=""
               hideTextInput={false}
               fullWidth
             />
@@ -403,10 +388,10 @@
               min={-180}
               max={180}
               step={1}
-              value={state.insetMap.centerLongitude}
+              value={geoState.insetMap.centerLongitude}
               on:change={(e) =>
                 store.setInsetMapCenterLongitude(
-                  getNumericEventValue(e, state.insetMap.centerLongitude)
+                  getNumericEventValue(e, geoState.insetMap.centerLongitude)
                 )}
               minLabel="-180°"
               maxLabel="180°"
@@ -420,7 +405,7 @@
           <Column>
             <Switch
               labelText={m.geo_inset_map_use_basemap_colors()}
-              toggled={state.insetMap.useBasemapColors}
+              toggled={geoState.insetMap.useBasemapColors}
               labelA={m.no()}
               labelB={m.yes()}
               showStateLabel
@@ -436,10 +421,10 @@
                 <ColorPicker
                   triggerLabel={m.geo_inset_map_continent_color()}
                   hex={insetMapContinentHex}
-                  hue={state.insetMap.continentColor.hue}
-                  saturation={state.insetMap.continentColor.saturation}
-                  lightness={state.insetMap.continentColor.lightness}
-                  disabled={state.insetMap.useBasemapColors}
+                  hue={geoState.insetMap.continentColor.hue}
+                  saturation={geoState.insetMap.continentColor.saturation}
+                  lightness={geoState.insetMap.continentColor.lightness}
+                  disabled={geoState.insetMap.useBasemapColors}
                   onValidate={({
                     hue,
                     saturation,
@@ -457,10 +442,10 @@
                 <ColorPicker
                   triggerLabel={m.geo_inset_map_sea_color()}
                   hex={insetMapSeaHex}
-                  hue={state.insetMap.seaColor.hue}
-                  saturation={state.insetMap.seaColor.saturation}
-                  lightness={state.insetMap.seaColor.lightness}
-                  disabled={state.insetMap.useBasemapColors}
+                  hue={geoState.insetMap.seaColor.hue}
+                  saturation={geoState.insetMap.seaColor.saturation}
+                  lightness={geoState.insetMap.seaColor.lightness}
+                  disabled={geoState.insetMap.useBasemapColors}
                   onValidate={({
                     hue,
                     saturation,
@@ -489,39 +474,25 @@
     border-top: 0;
   }
 
-  .switch-row {
+  .text-style-row {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-02) 0;
+    align-items: flex-end;
+    gap: var(--cds-spacing-02);
   }
 
-  .switch-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
+  .text-style-font {
+    flex: 1;
+    min-width: 0;
   }
 
-  .distance-buttons {
-    display: flex;
-    flex-direction: column;
-    margin-left: var(--cds-spacing-02);
-    height: 100%;
-    align-items: center;
-    justify-content: flex-end;
+  .text-style-size {
+    width: 80px;
+    flex-shrink: 0;
   }
 
-  #khartis-geo-indications-tool :global(.distance-button) {
-    height: 1.25rem;
-    padding: 0 var(--cds-spacing-02);
-    font-size: 0.875rem;
-    min-height: unset;
-    margin-bottom: 1px;
-  }
-
-  #khartis-geo-indications-tool :global(.distance-button:first-child) {
-    margin-bottom: 2px;
+  .text-style-color {
+    flex-shrink: 0;
+    padding-bottom: 1px;
   }
 
   #khartis-geo-indications-tool :global(.bx--slider-container) {

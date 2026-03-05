@@ -684,16 +684,17 @@
       return;
     }
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
     const x = clamp(
-      event.clientX - rect.left - dragOffsetX,
+      (event.clientX - rect.left) / scale - dragOffsetX,
       0,
-      Math.max(0, rect.width - 10)
+      Math.max(0, rect.width / scale - 10)
     );
     const y = clamp(
-      event.clientY - rect.top - dragOffsetY,
+      (event.clientY - rect.top) / scale - dragOffsetY,
       0,
-      Math.max(0, rect.height - 10)
+      Math.max(0, rect.height / scale - 10)
     );
 
     if (currentDrag === 'scale') {
@@ -717,11 +718,12 @@
     event.preventDefault();
     event.stopPropagation();
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const overlayRect = overlayElement.getBoundingClientRect();
     const elementRect = element.getBoundingClientRect();
 
-    const currentX = elementRect.left - overlayRect.left;
-    const currentY = elementRect.top - overlayRect.top;
+    const currentX = (elementRect.left - overlayRect.left) / scale;
+    const currentY = (elementRect.top - overlayRect.top) / scale;
 
     let dragPos: { x: number; y: number } | null = null;
     if (target === 'scale') {
@@ -744,8 +746,8 @@
       dragPos = initialPos;
     }
 
-    dragOffsetX = event.clientX - overlayRect.left - dragPos.x;
-    dragOffsetY = event.clientY - overlayRect.top - dragPos.y;
+    dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPos.x;
+    dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPos.y;
     currentDrag = target;
 
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -835,22 +837,6 @@
             y1="22"
             x2={scaleBarWidth + SCALE_PADDING}
             y2="22"
-            stroke={scaleColor}
-            stroke-width="2"
-          />
-          <line
-            x1={SCALE_PADDING}
-            y1="17"
-            x2={SCALE_PADDING}
-            y2="27"
-            stroke={scaleColor}
-            stroke-width="2"
-          />
-          <line
-            x1={scaleBarWidth + SCALE_PADDING}
-            y1="17"
-            x2={scaleBarWidth + SCALE_PADDING}
-            y2="27"
             stroke={scaleColor}
             stroke-width="2"
           />
