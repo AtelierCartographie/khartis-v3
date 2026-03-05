@@ -19,7 +19,10 @@
     | 'quantile'
     | 'equal-interval'
     | 'stddev'
-    | 'manual';
+    | 'manual'
+    | 'q6'
+    | 'nested-means'
+    | 'head-tail';
 
   interface ClassBreak {
     min: number;
@@ -50,7 +53,10 @@
       [ClassificationMethod.QUANTILES]: 'quantile',
       [ClassificationMethod.EQUAL_INTERVAL]: 'equal-interval',
       [ClassificationMethod.STANDARD_DEVIATION]: 'stddev',
-      [ClassificationMethod.MANUAL]: 'manual'
+      [ClassificationMethod.MANUAL]: 'manual',
+      [ClassificationMethod.Q6]: 'q6',
+      [ClassificationMethod.NESTED_MEANS]: 'nested-means',
+      [ClassificationMethod.HEAD_TAIL]: 'head-tail'
     };
     return mapping[method] ?? 'quantile';
   }
@@ -61,7 +67,10 @@
       quantile: ClassificationMethod.QUANTILES,
       'equal-interval': ClassificationMethod.EQUAL_INTERVAL,
       stddev: ClassificationMethod.STANDARD_DEVIATION,
-      manual: ClassificationMethod.MANUAL
+      manual: ClassificationMethod.MANUAL,
+      q6: ClassificationMethod.Q6,
+      'nested-means': ClassificationMethod.NESTED_MEANS,
+      'head-tail': ClassificationMethod.HEAD_TAIL
     };
     return mapping[method] ?? ClassificationMethod.QUANTILES;
   }
