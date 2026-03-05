@@ -9,6 +9,7 @@ export interface ZoomState {
   minPageZoom: number;
   maxPageZoom: number;
   pageZoomStep: number;
+  pagePanOffset: { x: number; y: number };
 }
 
 export interface GlobalState {

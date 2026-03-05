@@ -79,7 +79,7 @@
     )
   );
   const canCreateProject = $derived(
-    hasValidName &&
+    (hasValidName || !projectName.trim()) &&
       canSubmitImport(
         uploadedFiles,
         createProjectState.newProject.isProcessingFiles
@@ -167,7 +167,6 @@
       <span class="text-grey whitespace-nowrap">
         {m.project_name_label()}
       </span>
-      <span class="text-red-600">*</span>
     </div>
 
     <div class="flex-1 relative">
@@ -212,10 +211,6 @@
     width: 100%;
     margin-top: var(--cds-spacing-05);
     border-radius: 0 0 var(--cds-border-radius) var(--cds-border-radius);
-  }
-
-  .text-red-600 {
-    color: var(--cds-text-error);
   }
 
   .character-count {

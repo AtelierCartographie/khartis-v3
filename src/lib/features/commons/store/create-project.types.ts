@@ -138,6 +138,7 @@ export interface CreateProjectState {
     isProcessingFiles: boolean;
     processingFileCount: number;
     error?: string;
+    warning?: string;
     validationErrors: string[];
   };
 

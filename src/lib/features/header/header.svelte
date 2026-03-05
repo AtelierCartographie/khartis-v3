@@ -1,13 +1,12 @@
 <script lang="ts">
   import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Button,
     Header as CbsHeader,
     HeaderUtilities
   } from 'carbon-components-svelte';
-  import { Help, Undo, Redo } from 'carbon-icons-svelte';
+  import { Help } from 'carbon-icons-svelte';
   import DownloadButton from './download-button.svelte';
   import Logo from './logo.svelte';
   import ProjectTitle from './project-title.svelte';
@@ -25,26 +24,6 @@
     <ProjectTitle />
 
     <HeaderUtilities>
-      <Button
-        size="small"
-        tooltipPosition="bottom"
-        tooltipAlignment="center"
-        iconDescription={m.undo_tooltip()}
-        kind="ghost"
-        icon={Undo}
-        disabled={!projectStore.canUndo}
-        on:click={() => projectStore.undo()}
-      />
-      <Button
-        size="small"
-        tooltipPosition="bottom"
-        tooltipAlignment="center"
-        iconDescription={m.redo_tooltip()}
-        kind="ghost"
-        icon={Redo}
-        disabled={!projectStore.canRedo}
-        on:click={() => projectStore.redo()}
-      />
       <Button
         size="small"
         tooltipPosition="bottom"

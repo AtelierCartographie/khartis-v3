@@ -27,7 +27,7 @@
       | 'right'
       | 'right-bottom'
       | 'right-top',
-    listWidth = 340,
+    listWidth = 320,
     gridWidth = '50vw',
     content
   } = $props();

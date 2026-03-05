@@ -25,7 +25,7 @@ import {
 } from '../utils/file-import.utils';
 import { formatFileSize } from '../utils/format.utils';
 import { LogCategory, logger } from '../utils/logger';
-import { showError, showWarning } from '../utils/notification.utils.svelte';
+import { showError } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
   ExampleProject,
@@ -338,8 +338,7 @@ export const createProjectActions = {
       }
 
       if (duplicates.length > 0) {
-        showWarning(
-          m.warning_files_duplicate_title(),
+        this.setNewProjectWarning(
           m.warning_files_duplicate_message({ files: duplicates.join(', ') })
         );
       }
@@ -364,8 +363,7 @@ export const createProjectActions = {
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
-      showWarning(
-        m.warning_files_duplicate_title(),
+      this.setNewProjectWarning(
         m.warning_files_duplicate_message({ files: file.name })
       );
       return;
@@ -399,8 +397,7 @@ export const createProjectActions = {
   ): Promise<void> {
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
     if (totalSize > STORAGE_LIMITS.maxFileSize) {
-      showError(
-        m.error_shapefile_too_large_title(),
+      this.setNewProjectError(
         m.error_shapefile_too_large_message({
           size: formatFileSize(totalSize),
           max: formatFileSize(STORAGE_LIMITS.maxFileSize)
@@ -461,10 +458,7 @@ export const createProjectActions = {
       }
     } catch (error) {
       logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      showError(
-        m.error_shapefile_read_failed_title(),
-        m.error_shapefile_read_failed_message()
-      );
+      this.setNewProjectError(m.error_shapefile_read_failed_message());
       return;
     }
 
@@ -490,10 +484,7 @@ export const createProjectActions = {
     const result = extractDataFromPaste(pastedText);
 
     if (!result) {
-      showError(
-        m.error_pasted_data_invalid_title(),
-        m.error_pasted_data_invalid_message()
-      );
+      this.setNewProjectError(m.error_pasted_data_invalid_message());
       this.setPastedData('');
       return;
     }
@@ -594,6 +585,10 @@ export const createProjectActions = {
     if (error) {
       logger.error('New project error', LogCategory.PROJECT, error);
     }
+  },
+
+  setNewProjectWarning(warning?: string): void {
+    createProjectState.newProject.warning = warning;
   },
 
   async loadOnlineFile(): Promise<void> {

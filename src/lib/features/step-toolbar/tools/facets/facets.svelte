@@ -111,6 +111,8 @@
             labelText={m.facets_columns_label()}
             value={columnsValue}
             on:change={(e) => handleColumnsChange(e.detail)}
+            minLabel=""
+            maxLabel=""
           />
         </div>
         <div class="toggle-wrapper">
