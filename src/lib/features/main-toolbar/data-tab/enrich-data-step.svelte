@@ -23,9 +23,24 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
   let joinTabularEnabled = $state(false);
-  let overlayBasemapEnabled = $state(false);
 
   import { dataTabStore } from './data-tab.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+
+  let overlayBasemapEnabled = $state(
+    osmBasemapStore.isActive || basemapStyleStore.referenceBasemapId !== null
+  );
+
+  // Sync toggle ON when a basemap becomes active externally (e.g., restored from project)
+  $effect(() => {
+    if (
+      osmBasemapStore.isActive ||
+      basemapStyleStore.referenceBasemapId !== null
+    ) {
+      overlayBasemapEnabled = true;
+    }
+  });
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
@@ -73,6 +88,9 @@
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
       joinTabularEnabled = false;
+      overlayBasemapEnabled =
+        osmBasemapStore.isActive ||
+        basemapStyleStore.referenceBasemapId !== null;
       fileHook.handleRemoveFile();
       joinHook.resetJoinState();
     }
@@ -212,6 +230,10 @@
       toggleChecked={overlayBasemapEnabled}
       onToggleChange={(checked) => {
         overlayBasemapEnabled = checked;
+        if (!checked) {
+          osmBasemapStore.clear();
+          basemapStyleStore.setReferenceBasemap(null);
+        }
       }}
     >
       <EnrichmentBasemapSelector

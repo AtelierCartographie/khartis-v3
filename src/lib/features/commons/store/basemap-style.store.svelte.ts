@@ -30,12 +30,18 @@ function createBasemapStyleStore() {
     state.showLabels = true;
   }
 
-  function restoreFromSerialized(style: BasemapStyle): void {
+  function restoreFromSerialized(
+    style: BasemapStyle,
+    referenceBasemapId?: string | null
+  ): void {
     if (!style || !Object.values(BasemapStyle).includes(style)) {
       reset();
       return;
     }
     state.selectedStyle = style;
+    if (referenceBasemapId !== undefined) {
+      state.referenceBasemapId = referenceBasemapId;
+    }
   }
 
   return {

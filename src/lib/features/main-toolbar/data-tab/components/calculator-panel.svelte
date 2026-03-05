@@ -13,7 +13,10 @@
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    INTERNAL_COLUMN,
+    COLUMN_TYPE_GEOMETRY
+  } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
   import AutocompleteTextarea, {
     type Suggestion
@@ -29,7 +32,10 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
     selectedDataset?.columns.filter(
-      (c) => c.name !== INTERNAL_COLUMN.GEOM && c.name !== INTERNAL_COLUMN.ID
+      (c) =>
+        c.name !== INTERNAL_COLUMN.GEOM &&
+        c.name !== INTERNAL_COLUMN.ID &&
+        c.type !== COLUMN_TYPE_GEOMETRY
     ) ?? []
   );
 

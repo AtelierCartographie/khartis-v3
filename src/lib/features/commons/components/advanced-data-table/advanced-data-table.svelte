@@ -76,6 +76,7 @@
     isSelectable?: boolean;
     isReadOnly?: boolean;
     datasetVersion?: number;
+    activeJoinColumn?: string;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
     onColumnDeleted?: (columnName: string) => void;
   }
@@ -92,6 +93,7 @@
     isSelectable = false,
     isReadOnly = false,
     datasetVersion,
+    activeJoinColumn,
     onSelectionChange,
     onColumnDeleted
   }: Props = $props();
@@ -380,6 +382,10 @@
 
   const geoidColumns = $derived.by(() => {
     const set = new SvelteSet<string>();
+    if (activeJoinColumn) {
+      set.add(activeJoinColumn);
+      return set;
+    }
     for (const [name, a] of tableData.columnAnalysis) {
       if (
         a?.semioType === 'geoid' &&
@@ -574,9 +580,7 @@
                     <button
                       class="histogram-toggle"
                       onclick={toggleHistograms}
-                      title={histogramVisible
-                        ? m.column_hide()
-                        : m.column_show()}
+                      title={m.data_toggle_summary_plots()}
                     >
                       {#if histogramVisible}
                         <ChevronUp size={16} />

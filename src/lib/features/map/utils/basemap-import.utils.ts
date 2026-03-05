@@ -300,7 +300,7 @@ export function createOSMBasemap(
 ): BasemapMetadata {
   return {
     file: `osm_${style.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
-    title: m.osm_basemap_title({ style }),
+    title: m.basemap_osm(),
     description: m.osm_basemap_description(),
     source: m.osm_basemap_source(),
     date: new Date().getFullYear().toString(),

@@ -41,6 +41,7 @@ export interface SerializedBasemapSettings {
   layers: BasemapLayerConfig[];
   style: BasemapStyle;
   mapProjection: MapProjectionType;
+  referenceBasemapId?: string | null;
 }
 
 export interface SerializedVisualizationSettings {

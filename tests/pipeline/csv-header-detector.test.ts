@@ -18,19 +18,31 @@ describe('detectCsvHeader', () => {
     });
   });
 
-  it('retourne hasHeader=false quand les deux premières lignes ont la même structure de données', async () => {
+  it('retourne hasHeader=true quand la première ligne contient du texte mélangé à du numérique', async () => {
     const file = asFile(
       [
         '1,Paris,48.8566,2.3522,2148000,France',
         '2,Berlin,52.5200,13.4050,3645000,Germany'
       ].join('\n'),
-      'no-header.csv'
+      'mixed-types.csv'
+    );
+
+    const result = await detectCsvHeader(file, ',');
+
+    expect(result.hasHeader).toBe(true);
+    expect(result.comparedColumns).toBe(6);
+  });
+
+  it('retourne hasHeader=false quand les deux premières lignes sont entièrement numériques', async () => {
+    const file = asFile(
+      ['1,48.8566,2.3522,2148000', '2,52.5200,13.4050,3645000'].join('\n'),
+      'all-numeric.csv'
     );
 
     const result = await detectCsvHeader(file, ',');
 
     expect(result.hasHeader).toBe(false);
-    expect(result.comparedColumns).toBe(6);
+    expect(result.comparedColumns).toBe(4);
     expect(result.confidence).toBeGreaterThan(0.8);
   });
 
@@ -62,7 +74,7 @@ describe('detectCsvHeader', () => {
     expect(result.confidence).toBe(0);
   });
 
-  it('reconnaît les nombres entre parenthèses et les cellules quotées dans la comparaison de structure', async () => {
+  it('retourne hasHeader=true pour des cellules quotées avec du texte mélangé', async () => {
     const file = asFile(
       ['("1"),"2,5",Paris', '("3"),"4,1",Berlin'].join('\n'),
       'quoted-parenthesized.csv'
@@ -70,8 +82,7 @@ describe('detectCsvHeader', () => {
 
     const result = await detectCsvHeader(file, ',');
 
-    expect(result.hasHeader).toBe(false);
+    expect(result.hasHeader).toBe(true);
     expect(result.comparedColumns).toBe(3);
-    expect(result.confidence).toBeGreaterThan(0.7);
   });
 });

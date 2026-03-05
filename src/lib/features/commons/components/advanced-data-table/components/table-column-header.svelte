@@ -369,6 +369,35 @@
                 style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
                 role="menu"
               >
+                {#if onChangeType}
+                  <div
+                    class="menu-item menu-item-with-icon submenu-trigger"
+                    role="menuitem"
+                    tabindex="0"
+                    bind:this={submenuTriggerRef}
+                    onmouseenter={() => {
+                      if (submenuTriggerRef) {
+                        const rect = submenuTriggerRef.getBoundingClientRect();
+                        submenuPosition = { top: rect.top, left: rect.right };
+                      }
+                      showTypeSubmenu = true;
+                    }}
+                    onmouseleave={() => (showTypeSubmenu = false)}
+                    onfocus={() => {
+                      if (submenuTriggerRef) {
+                        const rect = submenuTriggerRef.getBoundingClientRect();
+                        submenuPosition = { top: rect.top, left: rect.right };
+                      }
+                      showTypeSubmenu = true;
+                    }}
+                    onblur={() => (showTypeSubmenu = false)}
+                  >
+                    <ChartMultitype size={16} />
+                    {m.column_type_change()}
+                    <span class="submenu-arrow">&#9654;</span>
+                  </div>
+                {/if}
+
                 <span class="menu-label">{m.column_refine_label()}</span>
                 <button
                   class="menu-item"
@@ -420,37 +449,6 @@
                   </button>
                 {/if}
 
-                {#if onChangeType}
-                  <div
-                    class="menu-item menu-item-with-icon submenu-trigger"
-                    role="menuitem"
-                    tabindex="0"
-                    bind:this={submenuTriggerRef}
-                    onmouseenter={() => {
-                      if (submenuTriggerRef) {
-                        const rect = submenuTriggerRef.getBoundingClientRect();
-                        submenuPosition = { top: rect.top, left: rect.right };
-                      }
-                      showTypeSubmenu = true;
-                    }}
-                    onmouseleave={() => (showTypeSubmenu = false)}
-                    onfocus={() => {
-                      if (submenuTriggerRef) {
-                        const rect = submenuTriggerRef.getBoundingClientRect();
-                        submenuPosition = { top: rect.top, left: rect.right };
-                      }
-                      showTypeSubmenu = true;
-                    }}
-                    onblur={() => (showTypeSubmenu = false)}
-                  >
-                    <ChartMultitype size={16} />
-                    {m.column_type_change()}
-                    <span class="submenu-arrow">&#9654;</span>
-                  </div>
-                {/if}
-
-                <div class="menu-divider"></div>
-
                 {#if onHide}
                   <button
                     class="menu-item menu-item-with-icon"
@@ -460,6 +458,8 @@
                     {isHidden ? m.column_show() : m.column_hide()}
                   </button>
                 {/if}
+
+                <div class="menu-divider"></div>
 
                 {#if onDelete}
                   <button
@@ -532,13 +532,6 @@
                 <span class="hist-geo-pill hist-geo-nulls">
                   {m.column_warning_nulls({
                     count: histogramData.nulls.toLocaleString()
-                  })}
-                </span>
-              {/if}
-              {#if histogramData.duplicates > 0}
-                <span class="hist-geo-pill hist-geo-duplicates">
-                  {m.column_warning_duplicates({
-                    count: histogramData.duplicates.toLocaleString()
                   })}
                 </span>
               {/if}
@@ -1026,10 +1019,6 @@
 
   .hist-geo-nulls {
     background-color: #ff832b;
-  }
-
-  .hist-geo-duplicates {
-    background-color: #a2191f;
   }
 
   .hist-empty {

@@ -2,7 +2,6 @@
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
-  import { Launch } from 'carbon-icons-svelte';
 
   interface Props {
     hasGPSCoordinates: boolean;
@@ -29,7 +28,7 @@
   {:else if osmBasemapStore.isActive}
     <InlineNotification
       kind="success"
-      title={m.osm_basemap_title({ style: 'OpenStreetMap' })}
+      title={m.osm_basemap_title()}
       subtitle={m.osm_basemap_description()}
       hideCloseButton={true}
       lowContrast
@@ -46,19 +45,6 @@
       >{m.step_visualize()}</button
     >.
   </p>
-
-  <div class="learn-more-link">
-    <Button
-      kind="ghost"
-      icon={Launch}
-      iconDescription={m.learn_more()}
-      href="https://www.sciencespo.fr/cartographie/khartis/docs/data"
-      target="_blank"
-      size="small"
-    >
-      {m.osm_learn_more()}
-    </Button>
-  </div>
 </div>
 
 <style>
@@ -94,18 +80,5 @@
 
   .link-text:hover {
     color: var(--cds-link-primary-hover);
-  }
-
-  .learn-more-link :global(.bx--btn--ghost) {
-    color: var(--cds-text-helper, #6f6f6f);
-    font-size: 0.75rem;
-  }
-
-  .learn-more-link :global(.bx--btn--ghost:hover) {
-    color: var(--cds-text-02, #525252);
-  }
-
-  .learn-more-link :global(.bx--btn--ghost svg) {
-    fill: var(--cds-text-helper, #6f6f6f);
   }
 </style>
