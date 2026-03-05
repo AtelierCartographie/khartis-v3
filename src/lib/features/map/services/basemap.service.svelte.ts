@@ -571,13 +571,19 @@ function createBasemapService() {
     try {
       const tableName = await loadGeometryIntoDuckDB(basemapId);
       const tolerance = SIMPLIFICATION_FACTOR[level];
+      const geometryColumn = loadedBasemap.metadata.isCustom
+        ? (loadedBasemap.metadata.layers[0]?.name ?? 'geom')
+        : 'geom';
 
-      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
+      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance, {
+        geometryColumn
+      });
 
       const simplifiedTable = await getSimplifiedArrowTable(
         Duck,
         tableName,
-        tolerance
+        tolerance,
+        { geometryColumn }
       );
 
       loadedBasemap.simplifiedVariants.set(level, simplifiedTable);
@@ -601,6 +607,59 @@ function createBasemapService() {
       });
       throw error;
     }
+  }
+
+  async function loadVariant(
+    basemapId: string,
+    variantFile: string,
+    level: SimplificationLevel
+  ): Promise<ArrowTable> {
+    const loadedBasemap = basemapCache.get(basemapId);
+    if (!loadedBasemap) {
+      throw new Error(`Basemap not loaded: ${basemapId}`);
+    }
+
+    if (!loadedBasemap.simplifiedVariants) {
+      loadedBasemap.simplifiedVariants = new SvelteMap<
+        SimplificationLevel,
+        ArrowTable
+      >();
+    }
+
+    if (loadedBasemap.simplifiedVariants.has(level)) {
+      loadedBasemap.activeSimplificationLevel = level;
+      return loadedBasemap.simplifiedVariants.get(level)!;
+    }
+
+    const start = performance.now();
+    logger.info('Loading basemap variant file', LogCategory.MAP, {
+      basemapId,
+      variantFile,
+      level
+    });
+
+    const variantTableName = `basemap_variant_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}_${level}`;
+
+    await Duck.query(
+      `CREATE OR REPLACE TABLE "${variantTableName}" AS SELECT * FROM '${variantFile}'`
+    );
+
+    const variantTable = (await Duck.query(
+      `SELECT * FROM "${variantTableName}"`,
+      { format: 'arrow-table' }
+    )) as ArrowTable;
+
+    loadedBasemap.simplifiedVariants.set(level, variantTable);
+    loadedBasemap.activeSimplificationLevel = level;
+
+    logger.success('Basemap variant loaded', LogCategory.MAP, {
+      basemapId,
+      variantFile,
+      level,
+      durationMs: (performance.now() - start).toFixed(2)
+    });
+
+    return variantTable;
   }
 
   function getSimplifiedBasemapTable(
@@ -723,6 +782,7 @@ function createBasemapService() {
     },
     loadAdditionalLayers,
     simplifyBasemap,
+    loadVariant,
     getSimplifiedBasemapTable,
     clearSimplificationCache,
     reset,
