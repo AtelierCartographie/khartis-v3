@@ -31,8 +31,10 @@
     PalettePreview,
     SectionHeading,
     SliderWithInput,
-    StrokeSection
+    StrokeSection,
+    VizFilterSection
   } from './shared';
+  import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
     ClassificationMethod,
@@ -53,6 +55,10 @@
     ) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
+    filters?: VizDataFilter[];
+    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onRemoveFilter?: (filterId: string) => void;
+    onClearFilters?: () => void;
   }
 
   let {
@@ -65,7 +71,11 @@
     onClassificationChange,
     onMappingChange,
     onInvertPalette,
-    onToggleVisibility
+    onToggleVisibility,
+    filters = [],
+    onAddFilter = () => {},
+    onRemoveFilter = () => {},
+    onClearFilters = () => {}
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -225,7 +235,10 @@
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
       [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual
+      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
+      [ClassificationMethod.Q6]: m.discretization_method_q6,
+      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
+      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
     };
     const method =
       visualization.classification.method ?? ClassificationMethod.QUANTILES;
@@ -345,6 +358,14 @@
       onInvertPalette={onInvertPalette}
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
+    />
+
+    <VizFilterSection
+      dataFields={dataFields}
+      filters={filters}
+      onAddFilter={onAddFilter}
+      onRemoveFilter={onRemoveFilter}
+      onClearFilters={onClearFilters}
     />
   </div>
 </ExpandableSection>

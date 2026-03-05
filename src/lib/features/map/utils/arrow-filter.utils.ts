@@ -3,8 +3,11 @@ import { Table } from 'apache-arrow/Arrow';
 import type {
   YearFilter,
   VizDataFilter,
-  VizFilterOperator
+  VizFilterOperator,
+  PrimitiveFilter
 } from '$lib/features/commons/store/visualization.store.svelte';
+import type { DataTableFilter } from '$lib/features/duckdb/types';
+import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 interface YearFilterCacheEntry {
@@ -130,24 +133,46 @@ export function filterArrowTableByYear(
   return result;
 }
 
+type FilterOperator = VizFilterOperator | string;
+
 function matchesOperator(
   cellValue: unknown,
-  operator: VizFilterOperator,
-  filterValue: string,
+  operator: FilterOperator,
+  filterValue: string | undefined,
   secondaryValue?: string
 ): boolean {
+  if (operator === 'empty' || operator === FilterOperatorEnum.EMPTY) {
+    return (
+      cellValue === null ||
+      cellValue === undefined ||
+      String(cellValue).trim() === ''
+    );
+  }
+  if (operator === 'not_empty' || operator === FilterOperatorEnum.NOT_EMPTY) {
+    return (
+      cellValue !== null &&
+      cellValue !== undefined &&
+      String(cellValue).trim() !== ''
+    );
+  }
+
   if (cellValue === null || cellValue === undefined) return false;
 
+  if (operator === 'contains' || operator === FilterOperatorEnum.CONTAINS) {
+    return String(cellValue)
+      .toLowerCase()
+      .includes(String(filterValue ?? '').toLowerCase());
+  }
   if (operator === 'equals') {
-    return String(cellValue) === filterValue;
+    return String(cellValue) === (filterValue ?? '');
   }
   if (operator === 'not_equals') {
-    return String(cellValue) !== filterValue;
+    return String(cellValue) !== (filterValue ?? '');
   }
 
   const numCell =
     typeof cellValue === 'number' ? cellValue : parseFloat(String(cellValue));
-  const numFilter = parseFloat(filterValue);
+  const numFilter = parseFloat(filterValue ?? '');
 
   if (isNaN(numCell) || isNaN(numFilter)) {
     return false;
@@ -170,16 +195,25 @@ function matchesOperator(
 
 export function filterArrowTableByDataFilters(
   table: ArrowTable,
-  filters: VizDataFilter[] | undefined
+  filters: VizDataFilter[] | undefined,
+  primitiveType?: PrimitiveFilter
 ): ArrowTable {
   if (!filters?.length) return table;
+
+  // Apply only filters matching the given primitiveType (or global filters with no type)
+  const applicableFilters = primitiveType
+    ? filters.filter(
+        (f) => !f.primitiveType || f.primitiveType === primitiveType
+      )
+    : filters;
+  if (!applicableFilters.length) return table;
 
   const columnVectors = new Map<
     string,
     { index: number; vector: ReturnType<ArrowTable['getChildAt']> }
   >();
 
-  for (const filter of filters) {
+  for (const filter of applicableFilters) {
     if (columnVectors.has(filter.column)) continue;
     const colIndex = table.schema.fields.findIndex(
       (f) => f.name === filter.column
@@ -196,7 +230,9 @@ export function filterArrowTableByDataFilters(
     }
   }
 
-  const validFilters = filters.filter((f) => columnVectors.has(f.column));
+  const validFilters = applicableFilters.filter((f) =>
+    columnVectors.has(f.column)
+  );
   if (validFilters.length === 0) return table;
 
   const matchingIndices: number[] = [];
@@ -237,6 +273,84 @@ export function filterArrowTableByDataFilters(
       filters: validFilters.map((f) => `${f.column} ${f.operator} ${f.value}`)
     });
   }
+
+  return selectRowsByIndices(table, matchingIndices);
+}
+
+const ARROW_COMPATIBLE_OPERATORS = new Set<string>([
+  FilterOperatorEnum.GTE,
+  FilterOperatorEnum.LTE,
+  FilterOperatorEnum.CONTAINS,
+  FilterOperatorEnum.EQUALS,
+  FilterOperatorEnum.NOT_EQUALS,
+  FilterOperatorEnum.BETWEEN,
+  FilterOperatorEnum.EMPTY,
+  FilterOperatorEnum.NOT_EMPTY
+]);
+
+export function filterArrowTableByTableFilters(
+  table: ArrowTable,
+  filters: DataTableFilter[] | undefined
+): ArrowTable {
+  if (!filters?.length) return table;
+
+  const compatible = filters.filter((f) =>
+    ARROW_COMPATIBLE_OPERATORS.has(f.operator)
+  );
+  if (compatible.length === 0) return table;
+
+  const columnVectors = new Map<
+    string,
+    { index: number; vector: ReturnType<ArrowTable['getChildAt']> }
+  >();
+
+  for (const filter of compatible) {
+    if (columnVectors.has(filter.column)) continue;
+    const colIndex = table.schema.fields.findIndex(
+      (f) => f.name === filter.column
+    );
+    if (colIndex === -1) continue;
+    const vector = table.getChildAt(colIndex);
+    if (vector) {
+      columnVectors.set(filter.column, { index: colIndex, vector });
+    }
+  }
+
+  const validFilters = compatible.filter((f) => columnVectors.has(f.column));
+  if (validFilters.length === 0) return table;
+
+  const matchingIndices: number[] = [];
+  for (let i = 0; i < table.numRows; i++) {
+    let matches = true;
+    for (const filter of validFilters) {
+      const col = columnVectors.get(filter.column)!;
+      const cellValue = col.vector!.get(i);
+      if (
+        !matchesOperator(
+          cellValue,
+          filter.operator,
+          filter.value !== undefined ? String(filter.value) : undefined,
+          filter.secondaryValue !== undefined
+            ? String(filter.secondaryValue)
+            : undefined
+        )
+      ) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      matchingIndices.push(i);
+    }
+  }
+
+  if (matchingIndices.length === table.numRows) return table;
+
+  logger.debug('Filtering Arrow table by table filters', LogCategory.MAP, {
+    filterCount: validFilters.length,
+    totalRows: table.numRows,
+    matchingRows: matchingIndices.length
+  });
 
   return selectRowsByIndices(table, matchingIndices);
 }

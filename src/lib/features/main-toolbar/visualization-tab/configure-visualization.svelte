@@ -4,32 +4,32 @@
   import {
     visualizationStore,
     ALL_PRIMITIVE_FILTERS,
+    ClassificationMethod,
     PrimitiveFilterType,
     type VisualizationConfig,
     type VisualizationModes,
     type PrimitiveFilter,
     type MissingDataConfig,
-    type ClassificationConfig
+    type ClassificationConfig,
+    type VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
-  import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
   import { FillMode } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
-  import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LabelsConfig from './components/labels-config.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
-  import { VizFilterSection } from './components/shared';
+  import YearFilter from './components/year-filter.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = $state<string>('');
@@ -159,9 +159,15 @@
     });
   }
 
-  function handleAddDataFilter(filter: Omit<VizDataFilter, 'id'>) {
+  function handleAddDataFilter(
+    filter: Omit<VizDataFilter, 'id'>,
+    primitiveType?: PrimitiveFilter
+  ) {
     if (selectedViz?.id) {
-      visualizationStore.addDataFilter(selectedViz.id, filter);
+      visualizationStore.addDataFilter(selectedViz.id, {
+        ...filter,
+        primitiveType
+      });
     }
   }
 
@@ -171,13 +177,22 @@
     }
   }
 
-  function handleClearDataFilters() {
+  function handleClearDataFiltersForPrimitive(primitiveType: PrimitiveFilter) {
     if (selectedViz?.id) {
-      visualizationStore.clearDataFilters(selectedViz.id);
+      visualizationStore.clearDataFiltersForPrimitive(
+        selectedViz.id,
+        primitiveType
+      );
     }
   }
 
-  const activeDataFilters = $derived(selectedViz?.dataFilters ?? []);
+  function getFiltersForPrimitive(
+    primitiveType: PrimitiveFilter
+  ): VizDataFilter[] {
+    return (selectedViz?.dataFilters ?? []).filter(
+      (f) => f.primitiveType === primitiveType
+    );
+  }
 
   function handleTextVisibilityChange(visible: boolean) {
     if (!selectedViz?.id) {
@@ -281,16 +296,31 @@
       });
 
       if (result && selectedViz?.id) {
+        // For head-tail, the algorithm auto-determines the number of classes
+        // which may be less than the requested numClasses. Sync to actual result.
+        const actualNumClasses = result.breaks.length - 1;
         const existingColors = selectedViz.classification?.colors;
         const colors =
-          existingColors && existingColors.length === numClasses
+          existingColors && existingColors.length === actualNumClasses
             ? existingColors
-            : generateColorsForBreaks(numClasses);
-        visualizationStore.updateClassification(selectedViz.id, {
+            : generateColorsForBreaks(actualNumClasses);
+        const classificationUpdate: Parameters<
+          typeof visualizationStore.updateClassification
+        >[1] = {
           breaks: result.breaks,
           counts: result.counts,
           colors
-        });
+        };
+        if (
+          method === ClassificationMethod.HEAD_TAIL &&
+          actualNumClasses !== numClasses
+        ) {
+          classificationUpdate.numClasses = actualNumClasses;
+        }
+        visualizationStore.updateClassification(
+          selectedViz.id,
+          classificationUpdate
+        );
         logger.success(
           '[configure-visualization] breaks computed and applied',
           LogCategory.UI,
@@ -336,6 +366,16 @@
       computeBreaksForVisualization('$effect:missingBreaks');
     }
   });
+
+  $effect(() => {
+    // Recompute breaks when method or numClasses changes
+    const method = selectedViz?.classification?.method;
+    const numClasses = selectedViz?.classification?.numClasses;
+    const valueColumn = selectedViz?.mapping.valueColumn;
+    if (method && numClasses && valueColumn) {
+      computeBreaksForVisualization('$effect:classificationParamsChanged');
+    }
+  });
 </script>
 
 <section id="configure-visualization">
@@ -355,6 +395,7 @@
     <SymbolsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onSymbolsChange={handleSymbolsChange}
@@ -364,12 +405,17 @@
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() =>
+        handleClearDataFiltersForPrimitive(PrimitiveFilterType.POINT)}
     />
 
     <PolygonsConfig
       dataFields={dataFieldItems}
       discretizationMethods={discretizationMethods}
       visualization={selectedViz}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}
@@ -378,11 +424,16 @@
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() =>
+        handleClearDataFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
     />
 
     <LinesConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}
@@ -391,6 +442,10 @@
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() =>
+        handleClearDataFiltersForPrimitive(PrimitiveFilterType.LINE)}
     />
 
     <LabelsConfig
@@ -418,13 +473,7 @@
 
   {#if selectedViz}
     <div class="filter-area">
-      <VizFilterSection
-        dataFields={dataFieldItems}
-        filters={activeDataFilters}
-        onAddFilter={handleAddDataFilter}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={handleClearDataFilters}
-      />
+      <YearFilter visualization={selectedViz} />
     </div>
   {/if}
 </section>
