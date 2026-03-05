@@ -23,7 +23,7 @@ type BreaksRow = { breaks: number[] };
 
 function mapMethodToMacro(
   method: ClassificationMethod
-): 'quantile' | 'equi_width' | 'kmeans' | 'nested_means' {
+): 'quantile' | 'equi_width' | 'kmeans' | 'nested_means' | 'q6' | 'headtail2' {
   switch (method) {
     case ClassificationMethod.QUANTILES:
       return 'quantile';
@@ -33,6 +33,12 @@ function mapMethodToMacro(
       return 'kmeans';
     case ClassificationMethod.STANDARD_DEVIATION:
       return 'nested_means';
+    case ClassificationMethod.Q6:
+      return 'q6';
+    case ClassificationMethod.NESTED_MEANS:
+      return 'nested_means';
+    case ClassificationMethod.HEAD_TAIL:
+      return 'headtail2';
     case ClassificationMethod.MANUAL:
       return 'quantile';
     default:
@@ -140,6 +146,32 @@ export async function calculateBreaks(
       const step = (max - min) / numClasses;
       for (let i = 1; i < numClasses; i++) {
         breaks.push(min + step * i);
+      }
+    }
+
+    if (breaks.length > 0 && method !== ClassificationMethod.MANUAL) {
+      try {
+        const breaksListLiteral = `[${breaks.join(', ')}]`;
+        const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}') as rounded`;
+        const roundResult = (await Duck.query(roundQuery)) as Table;
+        const roundRows = roundResult.toArray() as Array<{
+          rounded: number[];
+        }>;
+        if (roundRows.length > 0 && roundRows[0].rounded) {
+          const rounded = roundRows[0].rounded
+            .filter((b) => b !== null && b !== undefined)
+            .map((b) => Number(b))
+            .filter((b) => !isNaN(b));
+          if (rounded.length === breaks.length) {
+            breaks = rounded;
+          }
+        }
+      } catch (roundError) {
+        logger.warn(
+          'round_thresholds failed, using unrounded breaks',
+          LogCategory.DATA,
+          { roundError }
+        );
       }
     }
 

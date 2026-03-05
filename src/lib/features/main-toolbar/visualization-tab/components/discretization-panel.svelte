@@ -18,7 +18,10 @@
     | 'quantile'
     | 'equal-interval'
     | 'stddev'
-    | 'manual';
+    | 'manual'
+    | 'q6'
+    | 'nested-means'
+    | 'head-tail';
 
   interface ClassBreak {
     min: number;
@@ -66,7 +69,10 @@
       quantile: m.discretization_desc_quantile,
       'equal-interval': m.discretization_desc_equal_interval,
       stddev: m.discretization_desc_stddev,
-      manual: m.discretization_desc_manual
+      manual: m.discretization_desc_manual,
+      q6: m.discretization_desc_q6,
+      'nested-means': m.discretization_desc_nested_means,
+      'head-tail': m.discretization_desc_head_tail
     };
     return descriptions[method]();
   }
@@ -76,15 +82,37 @@
     return maxCount;
   });
 
+  const isClassCountLocked = $derived(method === 'q6');
+  const isNestedMeans = $derived(method === 'nested-means');
+
+  const NESTED_MEANS_VALUES = [2, 4, 8, 16] as const;
+
   function handleMethodChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
     method = newMethod;
+    if (newMethod === 'q6') {
+      numClasses = 6;
+      onclasseschange?.(6);
+    } else if (newMethod === 'nested-means') {
+      const closest = NESTED_MEANS_VALUES.reduce((prev, curr) =>
+        Math.abs(curr - numClasses) < Math.abs(prev - numClasses) ? curr : prev
+      );
+      numClasses = closest;
+      onclasseschange?.(closest);
+    }
     onmethodchange?.(newMethod);
   }
 
   function handleClassesChange() {
     onclasseschange?.(numClasses);
+  }
+
+  function handleNestedMeansChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    const value = Number(target.value);
+    numClasses = value;
+    onclasseschange?.(value);
   }
 
   function handleDivergentToggle(checked: boolean): void {
@@ -154,9 +182,18 @@
               value="quantile"
               text={m.discretization_method_quantile()}
             />
+            <SelectItem value="q6" text={m.discretization_method_q6()} />
             <SelectItem
               value="equal-interval"
               text={m.discretization_method_equal_interval()}
+            />
+            <SelectItem
+              value="nested-means"
+              text={m.discretization_method_nested_means()}
+            />
+            <SelectItem
+              value="head-tail"
+              text={m.discretization_method_head_tail()}
             />
             <SelectItem
               value="stddev"
@@ -171,13 +208,28 @@
         <Column sm={4} md={4} lg={8}>
           <div class="labeled-input">
             <p class="input-label">{m.discretization_num_classes()}</p>
-            <CompactNumberInput
-              bind:value={numClasses}
-              min={2}
-              max={12}
-              onchange={handleClassesChange}
-              width="100%"
-            />
+            {#if isNestedMeans}
+              <Select
+                id="nested-means-classes"
+                labelText=""
+                hideLabel
+                value={String(numClasses)}
+                on:change={handleNestedMeansChange}
+              >
+                {#each NESTED_MEANS_VALUES as val (val)}
+                  <SelectItem value={String(val)} text={String(val)} />
+                {/each}
+              </Select>
+            {:else}
+              <CompactNumberInput
+                bind:value={numClasses}
+                min={2}
+                max={12}
+                disabled={isClassCountLocked}
+                onchange={handleClassesChange}
+                width="100%"
+              />
+            {/if}
           </div>
         </Column>
       </Row>
