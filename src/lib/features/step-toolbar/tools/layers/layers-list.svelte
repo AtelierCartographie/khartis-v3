@@ -9,6 +9,11 @@
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     onReorderLayer?: (dragIndex: number, hoverIndex: number) => void;
+    onReorderSubLayer?: (
+      parentId: string,
+      dragIndex: number,
+      hoverIndex: number
+    ) => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
@@ -20,6 +25,7 @@
     onToggleVisibility,
     onOpenSettings,
     onReorderLayer,
+    onReorderSubLayer,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer
@@ -28,6 +34,12 @@
   let dragState = $state<DragState>({
     dragIndex: null,
     dragOverIndex: null
+  });
+
+  let subDragState = $state<DragState & { parentId: string | null }>({
+    dragIndex: null,
+    dragOverIndex: null,
+    parentId: null
   });
 
   function handleDragStart(index: number): void {
@@ -54,6 +66,34 @@
 
   function handleDragLeave(): void {
     dragState.dragOverIndex = null;
+  }
+
+  function handleSubDragStart(parentId: string, index: number): void {
+    subDragState.parentId = parentId;
+    subDragState.dragIndex = index;
+  }
+
+  function handleSubDragOver(index: number): void {
+    subDragState.dragOverIndex = index;
+  }
+
+  function handleSubDragEnd(): void {
+    const { parentId, dragIndex, dragOverIndex } = subDragState;
+
+    if (
+      parentId !== null &&
+      dragIndex !== null &&
+      dragOverIndex !== null &&
+      dragIndex !== dragOverIndex
+    ) {
+      onReorderSubLayer?.(parentId, dragIndex, dragOverIndex);
+    }
+
+    subDragState = { dragIndex: null, dragOverIndex: null, parentId: null };
+  }
+
+  function handleSubDragLeave(): void {
+    subDragState.dragOverIndex = null;
   }
 
   function getChildLayers(parentId: string): Layer[] {
@@ -89,12 +129,14 @@
               index={childIndex}
               onToggleVisibility={onToggleVisibility}
               onOpenSettings={onOpenSettings}
-              onDragStart={() => {}}
-              onDragOver={() => {}}
-              onDragEnd={() => {}}
-              onDragLeave={() => {}}
-              isDragging={false}
-              isDragOver={false}
+              onDragStart={(idx) => handleSubDragStart(layer.id, idx)}
+              onDragOver={handleSubDragOver}
+              onDragEnd={handleSubDragEnd}
+              onDragLeave={handleSubDragLeave}
+              isDragging={subDragState.parentId === layer.id &&
+                subDragState.dragIndex === childIndex}
+              isDragOver={subDragState.parentId === layer.id &&
+                subDragState.dragOverIndex === childIndex}
             />
           {/each}
         </div>

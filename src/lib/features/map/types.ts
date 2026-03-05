@@ -8,17 +8,6 @@ export type {
   OrthographicViewState
 } from '@deck.gl/core';
 
-// TooltipContent type (matches @deck.gl/core internal type, not publicly exported)
-export type TooltipContent =
-  | null
-  | string
-  | {
-      text?: string;
-      html?: string;
-      className?: string;
-      style?: Partial<CSSStyleDeclaration>;
-    };
-
 export type {
   BasemapCatalog,
   BasemapLayer,

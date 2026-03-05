@@ -12,7 +12,10 @@
   import type { Layer } from './layers.types.js';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
-  import { globalActions } from '$lib/features/commons/store/global.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
 
   const store = layersActions;
@@ -73,22 +76,27 @@
     const layer = layers.find((l) => l.id === layerId);
     if (!layer) return;
 
-    if (layer.type === 'geographic') return;
+    globalState.selectedTool = undefined;
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+
+    if (layer.type === 'geographic') {
+      setTimeout(() => {
+        document
+          .querySelector('#customize-basemap')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+      return;
+    }
 
     const targetVisualizationId = layer.isSubLayer ? layer.parentId : layer.id;
     if (!targetVisualizationId) return;
 
     visualizationStore.selectVisualization(targetVisualizationId);
-    globalActions.setNavigationState(ToolbarStep.Visualizations);
 
     setTimeout(() => {
-      const configureSection = document.querySelector(
-        '#khartis-viz-tab > div:nth-child(2)'
-      );
-      configureSection?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start'
-      });
+      document
+        .querySelector('#configure-visualization')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
   }
 
@@ -144,6 +152,14 @@
   function handleReorderLayers(dragIndex: number, hoverIndex: number): void {
     store.reorderLayers('visualization', dragIndex, hoverIndex);
   }
+
+  function handleReorderSubLayers(
+    parentId: string,
+    dragIndex: number,
+    hoverIndex: number
+  ): void {
+    store.reorderSubLayers(parentId, dragIndex, hoverIndex);
+  }
 </script>
 
 <div id="khartis-layers-tool">
@@ -158,6 +174,7 @@
             childLayersByParent={childLayersByParent}
             onToggleVisibility={handleToggleVisibility}
             onOpenSettings={handleOpenSettings}
+            onReorderSubLayer={handleReorderSubLayers}
             onRenameLayer={handleRenameLayer}
             onDuplicateLayer={handleDuplicateLayer}
             onDeleteLayer={handleDeleteLayer}
@@ -171,10 +188,11 @@
       childLayersByParent={childLayersByParent}
       onToggleVisibility={handleToggleVisibility}
       onOpenSettings={handleOpenSettings}
+      onReorderLayer={handleReorderLayers}
+      onReorderSubLayer={handleReorderSubLayers}
       onRenameLayer={handleRenameLayer}
       onDuplicateLayer={handleDuplicateLayer}
       onDeleteLayer={handleDeleteLayer}
-      onReorderLayer={handleReorderLayers}
     />
   {/if}
 </div>

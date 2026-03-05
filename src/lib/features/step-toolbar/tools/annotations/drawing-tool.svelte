@@ -136,8 +136,8 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <p class="field-label">{m.annotations_type()}</p>
       <RadioButtonGroup
+        legendText={m.annotations_type()}
         selected={drawingType}
         on:change={handleDrawingTypeChange}
       >
@@ -156,10 +156,10 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_drawing_helper()}</p>
         <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
           {m.annotations_add_drawing()}
         </Button>
+        <p class="helper">{m.annotations_drawing_helper()}</p>
       </div>
     </Column>
   </Row>
@@ -175,6 +175,8 @@
           step={1}
           stepMultiplier={1}
           on:change={handleThicknessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -191,6 +193,8 @@
           step={1}
           stepMultiplier={5}
           on:change={handleSmoothnessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -299,6 +303,8 @@
           stepMultiplier={5}
           on:change={(e) =>
             annotationsActions.applyStyle({ opacity: e.detail })}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -337,17 +343,11 @@
     margin-top: var(--cds-spacing-05);
   }
 
-  .field-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-01);
-    margin-bottom: var(--cds-spacing-03);
-  }
-
   .helper {
-    margin: 0 0 var(--cds-spacing-03) 0;
+    margin: var(--cds-spacing-03) 0 0 0;
     color: var(--cds-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
   .toggle-row {
     display: flex;

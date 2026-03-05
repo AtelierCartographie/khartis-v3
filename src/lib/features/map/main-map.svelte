@@ -15,6 +15,7 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { globalState } from '../commons/store/global.svelte';
+  import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
   import {
@@ -536,6 +537,7 @@
         clearTimeout(containerResizeTimeoutId);
       }
       containerResizeObserver?.disconnect();
+      handleResizeUp();
     };
   });
 
@@ -554,6 +556,77 @@
       applyColorBlindnessFilter(thematicMapRef, simulationType);
     }
   });
+
+  // --- Resize handles for styling step ---
+  type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+  const RESIZE_EDGES: ResizeEdge[] = [
+    'n',
+    's',
+    'e',
+    'w',
+    'ne',
+    'nw',
+    'se',
+    'sw'
+  ];
+  const MIN_MAP_SIZE = 100;
+
+  const showResizeHandles = $derived(
+    globalState.selectedStep === ToolbarStep.Styling && isMapReady
+  );
+
+  let resizeState = $state<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
+
+  function handleResizePointerDown(
+    event: PointerEvent,
+    edge: ResizeEdge
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeState = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startW: formatState.width,
+      startH: formatState.height
+    };
+    formatActions.setMode(FormatMode.CUSTOM);
+    window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
+
+  function handleResizeMove(event: PointerEvent): void {
+    if (!resizeState) return;
+    const { edge, startX, startY, startW, startH } = resizeState;
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    const dx = (event.clientX - startX) / scale;
+    const dy = (event.clientY - startY) / scale;
+
+    let newW = startW;
+    let newH = startH;
+
+    if (edge.includes('e')) newW = startW + dx;
+    if (edge.includes('w')) newW = startW - dx;
+    if (edge.includes('s')) newH = startH + dy;
+    if (edge.includes('n')) newH = startH - dy;
+
+    formatActions.setSize(
+      Math.max(MIN_MAP_SIZE, Math.round(newW)),
+      Math.max(MIN_MAP_SIZE, Math.round(newH))
+    );
+  }
+
+  function handleResizeUp(): void {
+    resizeState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -608,6 +681,24 @@
           onReady={handleMapReady}
         />
       {/if}
+    </div>
+  {/if}
+
+  {#if showResizeHandles}
+    <div
+      class="resize-handles-frame"
+      style="width: {formatState.width}px; height: {formatState.height}px;"
+    >
+      {#each RESIZE_EDGES as edge (edge)}
+        <div
+          class="resize-handle resize-{edge}"
+          role="separator"
+          aria-orientation={edge === 'n' || edge === 's'
+            ? 'horizontal'
+            : 'vertical'}
+          onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
+        ></div>
+      {/each}
     </div>
   {/if}
 </div>
@@ -668,5 +759,90 @@
 
   .error-state :global(.bx--inline-notification) {
     max-width: 400px;
+  }
+
+  /* --- Resize handles --- */
+  .resize-handles-frame {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .resize-handle {
+    position: absolute;
+    pointer-events: auto;
+    z-index: var(--z-content-raised, 2);
+  }
+
+  /* Edge handles — thin bars along each side */
+  .resize-n {
+    top: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: n-resize;
+  }
+
+  .resize-s {
+    bottom: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: s-resize;
+  }
+
+  .resize-e {
+    right: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: e-resize;
+  }
+
+  .resize-w {
+    left: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: w-resize;
+  }
+
+  /* Corner handles — small squares */
+  .resize-ne {
+    top: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: ne-resize;
+  }
+
+  .resize-nw {
+    top: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: nw-resize;
+  }
+
+  .resize-se {
+    bottom: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: se-resize;
+  }
+
+  .resize-sw {
+    bottom: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: sw-resize;
+  }
+
+  /* Visual indicator on hover */
+  .resize-handle:hover {
+    background: var(--cds-interactive-01, #0f62fe);
+    opacity: 0.4;
+    border-radius: 1px;
   }
 </style>

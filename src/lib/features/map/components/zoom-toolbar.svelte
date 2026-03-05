@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
+  import { NumberInput } from 'carbon-components-svelte';
   import Separator from '../../commons/components/separator.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
   import {
@@ -9,7 +10,6 @@
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
-  import { KEY } from '../../commons/constants/dom.constants';
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
 
@@ -46,26 +46,22 @@
     }
   }
 
-  function handleResetZoom(): void {
-    if (activeTabIndex === 0) {
-      mapInstanceStore.resetZoom();
-    } else {
-      globalActions.resetPageZoom();
-    }
-  }
-
-  function handleKeyDown(event: KeyboardEvent): void {
-    if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
-      event.preventDefault();
-      handleResetZoom();
-    }
-  }
-
-  const displayValue = $derived(
+  const currentZoomValue = $derived(
     activeTabIndex === 0
-      ? `${mapInstanceStore.zoomLevel} %`
-      : `${globalState.zoom.pageZoomLevel} %`
+      ? mapInstanceStore.zoomLevel
+      : globalState.zoom.pageZoomLevel
   );
+
+  function handleZoomValueChange(value: number): void {
+    const clamped = Math.max(10, Math.min(500, value));
+    if (activeTabIndex === 0) {
+      const mapZoom =
+        mapInstanceStore.baseZoomLevel + 2 * Math.log2(clamped / 100);
+      mapInstanceStore.setZoom(mapZoom);
+    } else {
+      globalActions.setPageZoom(clamped);
+    }
+  }
 </script>
 
 <nav id="khartis-zoom-toolbar" class="zoom-toolbar app-shadow">
@@ -77,15 +73,20 @@
   />
 
   <div class="zoom-section">
-    <div
-      class="zoom-display"
-      title={m.zoom_reset_title()}
-      onclick={handleResetZoom}
-      onkeydown={handleKeyDown}
-      role="button"
-      tabindex="0"
-    >
-      <span>{displayValue}</span>
+    <div class="zoom-input-wrapper">
+      <NumberInput
+        size="sm"
+        hideLabel
+        labelText={m.zoom_reset_title()}
+        min={10}
+        max={500}
+        step={10}
+        value={currentZoomValue}
+        on:change={(e) => {
+          const val = (e as CustomEvent).detail;
+          if (typeof val === 'number') handleZoomValueChange(val);
+        }}
+      />
     </div>
 
     <div class="zoom-controls">
@@ -145,25 +146,25 @@
     background: var(--cds-ui-01);
   }
 
-  .zoom-display {
-    font-size: 0.9em;
-    font-weight: 500;
-    color: var(--cds-text-primary);
-    min-width: 60px;
-    text-align: center;
-    margin-left: 12px;
-    cursor: pointer;
-    padding: 4px 8px;
-    transition: background 0.15s;
+  .zoom-input-wrapper {
+    min-width: 70px;
+    max-width: 80px;
+    margin-left: 4px;
   }
 
-  .zoom-display:hover {
-    background: var(--cds-hover-ui);
+  .zoom-input-wrapper :global(.bx--number) {
+    width: 100%;
   }
 
-  .zoom-display:focus {
-    outline: 2px solid var(--cds-focus);
-    outline-offset: 1px;
+  .zoom-input-wrapper :global(.bx--number input[type='number']) {
+    padding: 0 4px;
+    font-size: 0.8em;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .zoom-input-wrapper :global(.bx--number__controls) {
+    display: none;
   }
 
   .zoom-controls {

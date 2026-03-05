@@ -405,15 +405,15 @@ function getPageElementDefaultContent(
 ): string {
   switch (role) {
     case ANNOTATION_ROLE.TITLE:
-      return withPlaceholders ? m.annotations_style_title() : '';
+      return withPlaceholders ? m.annotations_placeholder_title() : '';
     case ANNOTATION_ROLE.SUBTITLE:
-      return withPlaceholders ? m.annotations_style_subtitle() : '';
+      return withPlaceholders ? m.annotations_placeholder_subtitle() : '';
     case ANNOTATION_ROLE.SOURCE:
-      return withPlaceholders ? m.source() : '';
+      return withPlaceholders ? m.annotations_placeholder_source() : '';
     case ANNOTATION_ROLE.BASEMAP_SOURCE:
       return basemapSource || (withPlaceholders ? m.basemap_source() : '');
     case ANNOTATION_ROLE.SIGNATURE:
-      return withPlaceholders ? m.annotations_note() : '';
+      return withPlaceholders ? m.annotations_placeholder_note() : '';
     case ANNOTATION_ROLE.CREDIT:
       return m.map_export_signature();
     default:
@@ -487,6 +487,15 @@ const { actions, getState } = createToolStore<
   },
   selectAnnotation: (id: string | null) => {
     s.selectedId = id;
+    if (id) {
+      const item = s.items.find((i) => i.id === id);
+      if (item) {
+        s.activeType = item.type;
+        if (item.style) {
+          s.defaultStyle = { ...s.defaultStyle, ...item.style };
+        }
+      }
+    }
   },
   updateAnnotation: (id: string, updates: Partial<Annotation>) => {
     s.items = s.items.map((item) =>
