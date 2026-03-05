@@ -12,12 +12,14 @@ const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(s
 /**
  * SQL macro that calculates the Jaro-Winkler similarity score between a candidate string
  * and a table of strings, categorizes the similarity into 'exact', 'partial', or 'toofar',
- * and returns matches excluding 'toofar'.
+ * and returns all matches including 'toofar'.
  * Uses score_cutoff=0.85 for early pruning of low-similarity pairs.
+ *
+ * Callers are responsible for filtering out 'toofar' entries when needed.
  *
  * @param candidate - The candidate string to find similar matches for.
  * @param join_table - The name of the table to search for similar strings.
- * @returns A table with similarity matches, excluding those categorized as 'toofar'.
+ * @returns A table with all similarity matches ordered by score descending.
  */
 const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, join_table) AS TABLE (
   WITH t0 AS (
@@ -35,10 +37,8 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
       END as typo_match,
       * EXCLUDE (search_term, normalized)
   )
-    -- Filter out 'toofar' results
     FROM t1
     SELECT *
-    WHERE typo_match <> 'toofar'
     ORDER BY score DESC
 );`;
 
