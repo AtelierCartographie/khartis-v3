@@ -3,6 +3,7 @@ import type { DeckDataRow, RGBColor } from '../types';
 import { getSizeForValue, getColorForValue } from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
@@ -161,4 +162,106 @@ export function dottedPatternToDashArray(
     default:
       return [2, 4];
   }
+}
+
+/**
+ * Wraps a static color with per-row highlight dimming for GeoArrow layers.
+ * Highlighted rows keep full opacity; non-highlighted rows are dimmed.
+ */
+export function withRowHighlight(
+  color: RGBColor | Color,
+  opacity: number,
+  dimmingFactor: number,
+  highlightedRowIds: Set<number>
+): (row: DeckDataRow) => [number, number, number, number] {
+  const fullAlpha = Math.round(Math.min(Math.max(opacity, 0), 1) * 255);
+  const dimAlpha = Math.round(
+    Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
+  );
+  const r = (color as number[])[0] ?? 0;
+  const g = (color as number[])[1] ?? 0;
+  const b = (color as number[])[2] ?? 0;
+  return (row: DeckDataRow): [number, number, number, number] => {
+    const rowId = row[INTERNAL_COLUMN.ID] as number;
+    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    return [r, g, b, alpha];
+  };
+}
+
+/**
+ * Wraps a per-row color accessor with highlight dimming for GeoArrow layers.
+ * Highlighted rows keep full opacity; non-highlighted rows are dimmed.
+ */
+export function withRowHighlightAccessor(
+  accessor: (row: DeckDataRow) => [number, number, number, number],
+  opacity: number,
+  dimmingFactor: number,
+  highlightedRowIds: Set<number>
+): (row: DeckDataRow) => [number, number, number, number] {
+  const fullAlpha = Math.round(Math.min(Math.max(opacity, 0), 1) * 255);
+  const dimAlpha = Math.round(
+    Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
+  );
+  return (row: DeckDataRow): [number, number, number, number] => {
+    const [r, g, b] = accessor(row);
+    const rowId = row[INTERNAL_COLUMN.ID] as number;
+    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    return [r, g, b, alpha];
+  };
+}
+
+/**
+ * Wraps a static color with per-feature highlight dimming for GeoJSON layers.
+ * Highlighted features keep full opacity; non-highlighted features are dimmed.
+ */
+export function withGeoJsonRowHighlight(
+  color: RGBColor | Color,
+  opacity: number,
+  dimmingFactor: number,
+  highlightedRowIds: Set<number>
+): (feature: {
+  properties?: Record<string, unknown>;
+}) => [number, number, number, number] {
+  const fullAlpha = Math.round(Math.min(Math.max(opacity, 0), 1) * 255);
+  const dimAlpha = Math.round(
+    Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
+  );
+  const r = (color as number[])[0] ?? 0;
+  const g = (color as number[])[1] ?? 0;
+  const b = (color as number[])[2] ?? 0;
+  return (feature: {
+    properties?: Record<string, unknown>;
+  }): [number, number, number, number] => {
+    const rowId = feature.properties?.[INTERNAL_COLUMN.ID] as number;
+    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    return [r, g, b, alpha];
+  };
+}
+
+/**
+ * Wraps a per-feature color accessor with highlight dimming for GeoJSON layers.
+ * Highlighted features keep full opacity; non-highlighted features are dimmed.
+ */
+export function withGeoJsonRowHighlightAccessor(
+  accessor: (feature: {
+    properties?: Record<string, unknown>;
+  }) => [number, number, number, number],
+  opacity: number,
+  dimmingFactor: number,
+  highlightedRowIds: Set<number>
+): (feature: {
+  properties?: Record<string, unknown>;
+}) => [number, number, number, number] {
+  const fullAlpha = Math.round(Math.min(Math.max(opacity, 0), 1) * 255);
+  const dimAlpha = Math.round(
+    Math.min(Math.max(opacity * dimmingFactor, 0), 1) * 255
+  );
+  return (feature: {
+    properties?: Record<string, unknown>;
+  }): [number, number, number, number] => {
+    const [r, g, b] = accessor(feature);
+    const rowId = feature.properties?.[INTERNAL_COLUMN.ID] as number;
+    const alpha = highlightedRowIds.has(rowId) ? fullAlpha : dimAlpha;
+    return [r, g, b, alpha];
+  };
 }

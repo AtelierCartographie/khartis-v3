@@ -26,7 +26,7 @@
     min = 0,
     max = 100,
     step = 1,
-    showMinMax = true,
+    showMinMax = false,
     inputWidth = '64px',
     onchange
   }: Props = $props();
@@ -149,6 +149,10 @@
     :global(.bx--slider__thumb:focus) {
       outline: 2px solid var(--cds-focus);
       outline-offset: 2px;
+    }
+
+    :global(.bx--slider__range-label) {
+      display: none;
     }
   }
 </style>

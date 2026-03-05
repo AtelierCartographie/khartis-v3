@@ -14,8 +14,6 @@
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
-  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
-  import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
@@ -38,10 +36,7 @@
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import {
-    mapSuggestionToType,
-    resolveDatasetGeometryType
-  } from './suggestion.utils';
+  import { resolveDatasetGeometryType } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -50,7 +45,7 @@
 
   const { onCreateVisualization }: Props = $props();
 
-  let selectedFieldId = $state<number>(0);
+  let selectedDatasetId = $state<string>(datasetsStore.selectedDatasetId ?? '');
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
@@ -59,28 +54,30 @@
   let deletingViz = $state<{ id: string; name: string } | null>(null);
   let isDeleteConfirmOpen = $state(false);
 
-  const dataFieldItems = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    if (!dataset?.columns) return [];
-    return dataset.columns
-      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col, id) => ({ id, text: col.name }));
-  });
-
-  const selectedFieldName = $derived.by(
-    () => dataFieldItems.find((item) => item.id === selectedFieldId)?.text
+  const datasetItems = $derived.by(() =>
+    datasetsStore.datasets.map((ds, id) => ({
+      id,
+      text: ds.name,
+      datasetId: ds.id
+    }))
   );
 
-  const datasetColumns = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    return dataset?.columns || [];
+  const selectedDataset = $derived.by(() => {
+    if (selectedDatasetId) {
+      return (
+        datasetsStore.datasets.find((ds) => ds.id === selectedDatasetId) ?? null
+      );
+    }
+    return datasetsStore.selectedDataset ?? null;
   });
 
+  const datasetColumns = $derived(selectedDataset?.columns ?? []);
+
   const suggestions = $derived.by((): VizSuggestion[] => {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = selectedDataset;
     if (!dataset?.columns) return [];
 
-    const columnAnalysis: ColumnAnalysis[] = dataset.columns.map((col) => ({
+    const columnAnalysis = dataset.columns.map((col) => ({
       name: col.name,
       type: col.type,
       stats: {
@@ -112,18 +109,7 @@
     });
   });
 
-  const filteredSuggestions = $derived.by(() => {
-    const suggestionsList = suggestions;
-    if (!selectedFieldName) {
-      return suggestionsList;
-    }
-
-    const withSelectedField = suggestionsList.filter((suggestion) =>
-      suggestion.columns?.includes(selectedFieldName)
-    );
-
-    return withSelectedField.length > 0 ? withSelectedField : suggestionsList;
-  });
+  const filteredSuggestions = $derived(suggestions);
 
   const visibleSuggestions = $derived(
     filteredSuggestions.slice(0, visibleCount)
@@ -170,42 +156,28 @@
   }
 
   function handleCreateVisualization() {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = selectedDataset;
     if (!dataset) return;
 
-    const suggestion = filteredSuggestions.find(
-      (s) => s.id === selectedSuggestion
-    );
-    if (!suggestion) return;
-
-    const vizType = mapSuggestionToType(suggestion.id);
-    const viz = visualizationStore.createVisualization(vizType, dataset.id);
-
-    if (suggestion.columns && suggestion.columns.length > 0) {
-      const column = suggestion.columns[0];
-      const mappingUpdate: Record<string, string> = {};
-
-      switch (vizType) {
-        case VisualizationType.CHOROPLETH:
-          mappingUpdate.valueColumn = column;
-          break;
-        case VisualizationType.PROPORTIONAL:
-          mappingUpdate.sizeColumn = column;
-          break;
-        case VisualizationType.CATEGORICAL:
-          mappingUpdate.categoryColumn = column;
-          break;
-        case VisualizationType.BIVARIATE:
-          mappingUpdate.valueColumn = column;
-          if (suggestion.columns.length > 1) {
-            mappingUpdate.colorColumn = suggestion.columns[1];
-          }
-          break;
+    if (datasetVisualizations.length === 0) {
+      const geometryType = resolveDatasetGeometryType(
+        dataset as {
+          geometry?: { type?: string | null };
+          sourceFileId?: string;
+        }
+      );
+      const defaultType = geometryType?.toLowerCase().includes('point')
+        ? VisualizationType.PROPORTIONAL
+        : VisualizationType.CHOROPLETH;
+      visualizationStore.createVisualization(defaultType, dataset.id);
+    } else {
+      // Reset suggestion presets: clear column mappings so the user configures from scratch
+      const selectedViz = visualizationStore.selectedVisualization;
+      if (selectedViz) {
+        visualizationStore.updateVisualization(selectedViz.id, {
+          mapping: { geometryColumn: selectedViz.mapping?.geometryColumn }
+        });
       }
-
-      visualizationStore.updateVisualization(viz.id, {
-        mapping: { ...viz.mapping, ...mappingUpdate }
-      });
     }
 
     suggestionsExpanded = false;
@@ -213,9 +185,8 @@
   }
 
   const datasetVisualizations = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    if (!dataset) return [];
-    return visualizationStore.getVisualizationsByDataset(dataset.id);
+    if (!selectedDataset) return [];
+    return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
   });
 
   function handleSelectViz(id: string) {
@@ -270,21 +241,18 @@
   }
 
   $effect(() => {
-    const fields = dataFieldItems;
-    if (!fields.length) {
+    const datasets = datasetsStore.datasets;
+    if (!datasets.length) {
       return;
     }
-
-    const hasSelectedField = fields.some(
-      (field) => field.id === selectedFieldId
-    );
-    if (!hasSelectedField) {
-      selectedFieldId = fields[0].id;
+    const exists = datasets.some((ds) => ds.id === selectedDatasetId);
+    if (!exists) {
+      selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
     }
   });
 
   $effect(() => {
-    void selectedFieldName;
+    void selectedDatasetId;
     visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
@@ -317,9 +285,14 @@
         <InfoPopover text={m.data_visualized_info()} />
       </div>
       <ComboBox
-        items={dataFieldItems}
-        selectedId={selectedFieldId}
-        on:select={(e) => (selectedFieldId = e.detail.selectedId)}
+        items={datasetItems}
+        selectedId={datasetItems.find(
+          (item) => item.datasetId === selectedDatasetId
+        )?.id ?? 0}
+        on:select={(e) => {
+          const item = datasetItems.find((d) => d.id === e.detail.selectedId);
+          if (item) selectedDatasetId = item.datasetId;
+        }}
         placeholder={m.choose_data_field_placeholder()}
         labelText=""
         size="xl"

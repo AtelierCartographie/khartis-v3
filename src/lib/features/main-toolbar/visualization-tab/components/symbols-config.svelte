@@ -20,7 +20,8 @@
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import { SectionHeading, InfoPopover } from './shared';
+  import { SectionHeading, InfoPopover, VizFilterSection } from './shared';
+  import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     SymbolModeUnique,
     SymbolModeProportional,
@@ -42,6 +43,10 @@
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
+    filters?: VizDataFilter[];
+    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onRemoveFilter?: (filterId: string) => void;
+    onClearFilters?: () => void;
   }
 
   let {
@@ -54,7 +59,11 @@
     onMissingDataChange,
     onClassificationChange,
     onInvertPalette,
-    onToggleVisibility
+    onToggleVisibility,
+    filters = [],
+    onAddFilter = () => {},
+    onRemoveFilter = () => {},
+    onClearFilters = () => {}
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -179,6 +188,14 @@
         onOpenDiscretization={handleOpenDiscretization}
       />
     {/if}
+
+    <VizFilterSection
+      dataFields={dataFields}
+      filters={filters}
+      onAddFilter={onAddFilter}
+      onRemoveFilter={onRemoveFilter}
+      onClearFilters={onClearFilters}
+    />
   </div>
 </ExpandableSection>
 

@@ -37,7 +37,10 @@ export enum ClassificationMethod {
   QUANTILES = 'quantiles',
   JENKS = 'jenks',
   MANUAL = 'manual',
-  STANDARD_DEVIATION = 'standard_deviation'
+  STANDARD_DEVIATION = 'standard_deviation',
+  Q6 = 'q6',
+  NESTED_MEANS = 'nested_means',
+  HEAD_TAIL = 'head_tail'
 }
 
 export enum ScaleType {
@@ -121,6 +124,7 @@ export interface VizDataFilter {
   operator: VizFilterOperator;
   value: string;
   secondaryValue?: string;
+  primitiveType?: PrimitiveFilter;
 }
 
 export interface VisualizationConfig {
@@ -243,6 +247,10 @@ export interface VisualizationStore {
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
   clearDataFilters: (id: string) => void;
+  clearDataFiltersForPrimitive: (
+    id: string,
+    primitiveType: PrimitiveFilter
+  ) => void;
   clear: () => void;
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
@@ -812,6 +820,17 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => ({ dataFilters: [] }));
   }
 
+  function clearDataFiltersForPrimitive(
+    id: string,
+    primitiveType: PrimitiveFilter
+  ): void {
+    applyVisualizationUpdate(id, (viz) => ({
+      dataFilters: (viz.dataFilters ?? []).filter(
+        (f) => f.primitiveType !== primitiveType
+      )
+    }));
+  }
+
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
@@ -869,6 +888,7 @@ function createVisualizationStore(): VisualizationStore {
     addDataFilter,
     removeDataFilter,
     clearDataFilters,
+    clearDataFiltersForPrimitive,
     clear,
     restoreFromSerialized
   };

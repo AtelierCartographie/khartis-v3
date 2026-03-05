@@ -15,12 +15,27 @@ import {
   createDeckLayers,
   createGeoJsonLayers
 } from '../layers';
+import { extractGeometryInfo } from '../io';
+import { GeometryType } from '../constants';
+import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
+import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import {
   filterArrowTableByYear,
-  filterArrowTableByDataFilters
+  filterArrowTableByDataFilters,
+  filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
+import type { DataTableFilter } from '$lib/features/duckdb/types';
+
+const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
+  [GeometryType.POINT]: PrimitiveFilterType.POINT,
+  [GeometryType.MULTIPOINT]: PrimitiveFilterType.POINT,
+  [GeometryType.LINESTRING]: PrimitiveFilterType.LINE,
+  [GeometryType.MULTILINESTRING]: PrimitiveFilterType.LINE,
+  [GeometryType.POLYGON]: PrimitiveFilterType.POLYGON,
+  [GeometryType.MULTIPOLYGON]: PrimitiveFilterType.POLYGON
+};
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -31,6 +46,7 @@ export interface UseMapLayersProps {
   getActiveVisualizations: () => VisualizationConfig[];
   buildLayerContextForViz: (viz: VisualizationConfig) => LayerContext;
   getShouldRenderDatasetFallbacks?: () => boolean;
+  getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
 }
 
 export interface UseMapLayersReturn {
@@ -49,7 +65,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getWorldBaseTable,
     getActiveVisualizations,
     buildLayerContextForViz,
-    getShouldRenderDatasetFallbacks
+    getShouldRenderDatasetFallbacks,
+    getTableFilters
   } = props;
 
   const DATA_PREVIEW_FILL_COLOR: [number, number, number] = [96, 96, 96];
@@ -272,14 +289,24 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               continue;
             }
             const arrowStart = performance.now();
+            const geoInfo = extractGeometryInfo(table);
+            const tablePrimitiveType = geoInfo?.type
+              ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
+              : undefined;
             const yearFiltered = getFilteredTable(
               table,
               datasetId,
               viz.yearFilter
             );
-            const filteredTable = filterArrowTableByDataFilters(
+            const vizFiltered = filterArrowTableByDataFilters(
               yearFiltered,
-              viz.dataFilters
+              viz.dataFilters,
+              tablePrimitiveType
+            );
+            const tableFilters = getTableFilters?.(datasetId);
+            const filteredTable = filterArrowTableByTableFilters(
+              vizFiltered,
+              tableFilters
             );
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);

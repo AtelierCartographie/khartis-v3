@@ -40,7 +40,11 @@ import {
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
-  withOpacity
+  withGeoJsonRowHighlight,
+  withGeoJsonRowHighlightAccessor,
+  withOpacity,
+  withRowHighlight,
+  withRowHighlightAccessor
 } from './layer-helpers';
 import { getPatternAtlas, isValidPatternId } from './pattern-texture';
 
@@ -48,6 +52,7 @@ const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
+const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 50];
 
 /** Cached FillStyleExtension instance (reused across renders) */
 let fillStyleExtensionInstance: FillStyleExtension | null = null;
@@ -401,12 +406,6 @@ export function createPointLayers(
     beforeId
   } = ctx;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
-  const fillOpacity = hasHighlights
-    ? rawFillOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : rawFillOpacity;
-  const strokeOpacity = hasHighlights
-    ? rawStrokeOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : rawStrokeOpacity;
   const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
@@ -457,7 +456,7 @@ export function createPointLayers(
       return [];
     }
 
-    const geoJsonFillColor =
+    const baseFillColor =
       useCategoricalColor && viz
         ? createGeoJsonCategoricalColorAccessor(
             viz.mapping.categoryColumn!,
@@ -465,6 +464,32 @@ export function createPointLayers(
             fillColor
           )
         : fillColor;
+
+    const geoJsonFillColor =
+      hasHighlights && highlightedRowIds
+        ? typeof baseFillColor === 'function'
+          ? withGeoJsonRowHighlightAccessor(
+              baseFillColor,
+              rawFillOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+          : withGeoJsonRowHighlight(
+              baseFillColor,
+              rawFillOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+        : baseFillColor;
+
+    const geoJsonLineColor = hasHighlights
+      ? withGeoJsonRowHighlight(
+          strokeColor,
+          rawStrokeOpacity,
+          HIGHLIGHT_DIMMING_FACTOR,
+          highlightedRowIds!
+        )
+      : withOpacity(strokeColor, rawStrokeOpacity);
 
     const geoJsonRadius =
       useProportionalSymbols && viz
@@ -486,14 +511,15 @@ export function createPointLayers(
         filled: true,
         stroked: true,
         getFillColor: geoJsonFillColor,
-        getLineColor: withOpacity(strokeColor, strokeOpacity),
+        getLineColor: geoJsonLineColor,
         getPointRadius: geoJsonRadius,
         pointRadiusUnits: 'pixels',
         lineWidthUnits: 'pixels',
         getLineWidth: strokeWidth / 3,
-        opacity: fillOpacity,
+        opacity: hasHighlights ? 1 : rawFillOpacity,
         pickable: true,
-        autoHighlight: false,
+        autoHighlight: true,
+        highlightColor: HOVER_HIGHLIGHT_COLOR,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
         updateTriggers: {
@@ -502,7 +528,8 @@ export function createPointLayers(
             viz?.mapping.categoryColumn,
             categoryColorMap,
             fillColor,
-            hasHighlights
+            hasHighlights,
+            highlightedRowIds
           ],
           getPointRadius: [
             useProportionalSymbols,
@@ -513,11 +540,50 @@ export function createPointLayers(
             viz?.symbols?.maxSize,
             viz?.symbols?.sizeScale
           ],
-          getLineColor: [strokeColor, strokeOpacity, hasHighlights]
+          getLineColor: [
+            strokeColor,
+            rawStrokeOpacity,
+            hasHighlights,
+            highlightedRowIds
+          ]
         }
       })
     ];
   }
+
+  const baseFillColor =
+    useCategoricalColor && viz
+      ? createCategoricalColorAccessor(
+          viz.mapping.categoryColumn!,
+          categoryColorMap
+        )
+      : fillColor;
+
+  const arrowFillColor =
+    hasHighlights && highlightedRowIds
+      ? typeof baseFillColor === 'function'
+        ? withRowHighlightAccessor(
+            baseFillColor,
+            rawFillOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            highlightedRowIds
+          )
+        : withRowHighlight(
+            baseFillColor,
+            rawFillOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            highlightedRowIds
+          )
+      : baseFillColor;
+
+  const arrowLineColor = hasHighlights
+    ? withRowHighlight(
+        strokeColor,
+        rawStrokeOpacity,
+        HIGHLIGHT_DIMMING_FACTOR,
+        highlightedRowIds!
+      )
+    : withOpacity(strokeColor, rawStrokeOpacity);
 
   const scatterplotProps: ConstructorParameters<
     typeof geodecklayers.GeoArrowScatterplotLayer
@@ -525,15 +591,9 @@ export function createPointLayers(
     id: layerId,
     data: jsTable,
     stroked: true,
-    getFillColor:
-      useCategoricalColor && viz
-        ? createCategoricalColorAccessor(
-            viz.mapping.categoryColumn!,
-            categoryColorMap
-          )
-        : fillColor,
-    getLineColor: withOpacity(strokeColor, strokeOpacity),
-    opacity: fillOpacity,
+    getFillColor: arrowFillColor,
+    getLineColor: arrowLineColor,
+    opacity: hasHighlights ? 1 : rawFillOpacity,
     getRadius:
       useProportionalSymbols && viz
         ? createProportionalSizeAccessor(
@@ -550,7 +610,8 @@ export function createPointLayers(
     lineWidthUnits: 'pixels',
     lineWidthScale: strokeWidth / 3,
     pickable: true,
-    autoHighlight: false,
+    autoHighlight: true,
+    highlightColor: HOVER_HIGHLIGHT_COLOR,
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
     updateTriggers: {
@@ -559,7 +620,8 @@ export function createPointLayers(
         viz?.mapping.categoryColumn,
         categoryColorMap,
         fillColor,
-        hasHighlights
+        hasHighlights,
+        highlightedRowIds
       ],
       getRadius: [
         useProportionalSymbols,
@@ -570,7 +632,12 @@ export function createPointLayers(
         viz?.symbols?.maxSize,
         viz?.symbols?.sizeScale
       ],
-      getLineColor: [strokeColor, strokeOpacity, hasHighlights]
+      getLineColor: [
+        strokeColor,
+        rawStrokeOpacity,
+        hasHighlights,
+        highlightedRowIds
+      ]
     },
     dataComparator: (newData, oldData) => newData === oldData
   };
@@ -609,9 +676,6 @@ export function createLineLayers(
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
-  const fillOpacity = hasLineHighlights
-    ? normalizedLineOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : normalizedLineOpacity;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -640,7 +704,7 @@ export function createLineLayers(
       rows: jsTable.numRows
     });
 
-    const lineColorAccessor =
+    const baseLineColorAccessor =
       useChoropleth && viz
         ? (row: DeckDataRow) =>
             withOpacity(
@@ -649,8 +713,8 @@ export function createLineLayers(
                 viz.classification!.breaks!,
                 viz.classification!.colors!
               )(row),
-              fillOpacity
-            )
+              normalizedLineOpacity
+            ) as [number, number, number, number]
         : useCategoricalColor && viz
           ? (row: DeckDataRow) =>
               withOpacity(
@@ -658,9 +722,27 @@ export function createLineLayers(
                   viz.mapping.categoryColumn!,
                   categoryColorMap
                 )(row),
-                fillOpacity
-              )
-          : withOpacity(resolvedLineColor, fillOpacity);
+                normalizedLineOpacity
+              ) as [number, number, number, number]
+          : null;
+
+    const lineColorAccessor =
+      hasLineHighlights && lineHighlightedRowIds
+        ? baseLineColorAccessor
+          ? withRowHighlightAccessor(
+              baseLineColorAccessor,
+              normalizedLineOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              lineHighlightedRowIds
+            )
+          : withRowHighlight(
+              resolvedLineColor,
+              normalizedLineOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              lineHighlightedRowIds
+            )
+        : (baseLineColorAccessor ??
+          withOpacity(resolvedLineColor, normalizedLineOpacity));
 
     const lineWidthAccessor =
       useProportionalWidth && viz
@@ -684,7 +766,8 @@ export function createLineLayers(
       getWidth: lineWidthAccessor,
       widthMinPixels: 1,
       pickable: true,
-      autoHighlight: false,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -697,8 +780,9 @@ export function createLineLayers(
           viz?.classification?.colors,
           categoryColorMap,
           resolvedLineColor,
-          fillOpacity,
-          hasLineHighlights
+          normalizedLineOpacity,
+          hasLineHighlights,
+          lineHighlightedRowIds
         ],
         getWidth: [
           useProportionalWidth,
@@ -752,7 +836,7 @@ export function createLineLayers(
     featureCount: lineGeojsonData.features.length
   });
 
-  const geoJsonLineColor =
+  const baseGeoJsonLineColor =
     useChoropleth && viz
       ? (feature: { properties?: Record<string, unknown> }) =>
           withOpacity(
@@ -762,8 +846,8 @@ export function createLineLayers(
               viz.classification!.colors!,
               resolvedLineColor
             )(feature),
-            fillOpacity
-          )
+            normalizedLineOpacity
+          ) as [number, number, number, number]
       : useCategoricalColor && viz
         ? (feature: { properties?: Record<string, unknown> }) =>
             withOpacity(
@@ -772,9 +856,27 @@ export function createLineLayers(
                 categoryColorMap,
                 resolvedLineColor
               )(feature),
-              fillOpacity
-            )
-        : withOpacity(resolvedLineColor, fillOpacity);
+              normalizedLineOpacity
+            ) as [number, number, number, number]
+        : null;
+
+  const geoJsonLineColor =
+    hasLineHighlights && lineHighlightedRowIds
+      ? baseGeoJsonLineColor
+        ? withGeoJsonRowHighlightAccessor(
+            baseGeoJsonLineColor,
+            normalizedLineOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            lineHighlightedRowIds
+          )
+        : withGeoJsonRowHighlight(
+            resolvedLineColor,
+            normalizedLineOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            lineHighlightedRowIds
+          )
+      : (baseGeoJsonLineColor ??
+        withOpacity(resolvedLineColor, normalizedLineOpacity));
 
   const geoJsonLineWidth =
     useProportionalWidth && viz
@@ -800,7 +902,8 @@ export function createLineLayers(
       getLineWidth: geoJsonLineWidth,
       lineWidthMinPixels: 1,
       pickable: true,
-      autoHighlight: false,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -813,8 +916,9 @@ export function createLineLayers(
           viz?.classification?.colors,
           categoryColorMap,
           resolvedLineColor,
-          fillOpacity,
-          hasLineHighlights
+          normalizedLineOpacity,
+          hasLineHighlights,
+          lineHighlightedRowIds
         ],
         getLineWidth: [
           useProportionalWidth,
@@ -848,12 +952,6 @@ export function createPolygonLayers(
   } = ctx;
   const hasPolyHighlights =
     polyHighlightedRowIds && polyHighlightedRowIds.size > 0;
-  const fillOpacity = hasPolyHighlights
-    ? rawPolyFillOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : rawPolyFillOpacity;
-  const strokeOpacity = hasPolyHighlights
-    ? rawPolyStrokeOpacity * HIGHLIGHT_DIMMING_FACTOR
-    : rawPolyStrokeOpacity;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -898,19 +996,46 @@ export function createPolygonLayers(
       hasVisualization: Boolean(viz)
     });
 
-    const arrowFillColor =
+    const baseArrowFillColor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
             viz.mapping.valueColumn!,
             viz.classification!.breaks!,
             viz.classification!.colors!
           )
-        : ([fillColor[0], fillColor[1], fillColor[2], 255] as [
+        : null;
+
+    const arrowFillColor =
+      hasPolyHighlights && polyHighlightedRowIds
+        ? baseArrowFillColor
+          ? withRowHighlightAccessor(
+              baseArrowFillColor,
+              rawPolyFillOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              polyHighlightedRowIds
+            )
+          : withRowHighlight(
+              fillColor,
+              rawPolyFillOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              polyHighlightedRowIds
+            )
+        : (baseArrowFillColor ??
+          ([fillColor[0], fillColor[1], fillColor[2], 255] as [
             number,
             number,
             number,
             number
-          ]);
+          ]));
+
+    const arrowStrokeColor = hasPolyHighlights
+      ? withRowHighlight(
+          strokeColor,
+          rawPolyStrokeOpacity,
+          HIGHLIGHT_DIMMING_FACTOR,
+          polyHighlightedRowIds!
+        )
+      : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
     const polygonProps: ConstructorParameters<
       typeof geodecklayers.GeoArrowPolygonLayer
@@ -920,12 +1045,13 @@ export function createPolygonLayers(
       filled: true,
       stroked: true,
       getFillColor: arrowFillColor,
-      getLineColor: withOpacity(strokeColor, strokeOpacity),
-      opacity: fillOpacity,
+      getLineColor: arrowStrokeColor,
+      opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
       pickable: true,
-      autoHighlight: false,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -935,9 +1061,15 @@ export function createPolygonLayers(
           viz?.classification?.breaks,
           viz?.classification?.colors,
           fillColor,
-          hasPolyHighlights
+          hasPolyHighlights,
+          polyHighlightedRowIds
         ],
-        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights]
+        getLineColor: [
+          strokeColor,
+          rawPolyStrokeOpacity,
+          hasPolyHighlights,
+          polyHighlightedRowIds
+        ]
       },
       dataComparator: (newData, oldData) => newData === oldData
     };
@@ -978,13 +1110,7 @@ export function createPolygonLayers(
     hasPattern: Boolean(patternProps)
   });
 
-  const defaultFillWithAlpha = [
-    fillColor[0],
-    fillColor[1],
-    fillColor[2],
-    255
-  ] as [number, number, number, number];
-  const geoJsonFillColor =
+  const baseGeoJsonFillColor =
     useChoropleth && viz
       ? createGeoJsonChoroplethColorAccessor(
           viz.mapping.valueColumn!,
@@ -992,19 +1118,52 @@ export function createPolygonLayers(
           viz.classification!.colors!,
           fillColor
         )
-      : defaultFillWithAlpha;
+      : null;
+
+  const geoJsonFillColor =
+    hasPolyHighlights && polyHighlightedRowIds
+      ? baseGeoJsonFillColor
+        ? withGeoJsonRowHighlightAccessor(
+            baseGeoJsonFillColor,
+            rawPolyFillOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+        : withGeoJsonRowHighlight(
+            fillColor,
+            rawPolyFillOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+      : (baseGeoJsonFillColor ??
+        ([fillColor[0], fillColor[1], fillColor[2], 255] as [
+          number,
+          number,
+          number,
+          number
+        ]));
+
+  const geoJsonStrokeColor = hasPolyHighlights
+    ? withGeoJsonRowHighlight(
+        strokeColor,
+        rawPolyStrokeOpacity,
+        HIGHLIGHT_DIMMING_FACTOR,
+        polyHighlightedRowIds!
+      )
+    : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
   return [
     new GeoJsonLayer({
       id: layerId,
       data: geojsonData,
       getFillColor: geoJsonFillColor,
-      getLineColor: withOpacity(strokeColor, strokeOpacity),
-      opacity: fillOpacity,
+      getLineColor: geoJsonStrokeColor,
+      opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
       pickable: true,
-      autoHighlight: false,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(patternProps && {
         extensions: patternProps.extensions,
         fillPatternAtlas: patternProps.fillPatternAtlas,
@@ -1022,9 +1181,15 @@ export function createPolygonLayers(
           viz?.classification?.breaks,
           viz?.classification?.colors,
           fillColor,
-          hasPolyHighlights
+          hasPolyHighlights,
+          polyHighlightedRowIds
         ],
-        getLineColor: [strokeColor, strokeOpacity, hasPolyHighlights],
+        getLineColor: [
+          strokeColor,
+          rawPolyStrokeOpacity,
+          hasPolyHighlights,
+          polyHighlightedRowIds
+        ],
         ...(patternProps && {
           getFillPattern: [viz?.classification?.patternId],
           getFillPatternScale: [viz?.classification?.patternId]
@@ -1062,7 +1227,8 @@ export function createGeoJsonLayers(
       getLineWidth: strokeWidth,
       lineWidthMinPixels: Math.max(1, strokeWidth),
       pickable: true,
-      autoHighlight: false,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {

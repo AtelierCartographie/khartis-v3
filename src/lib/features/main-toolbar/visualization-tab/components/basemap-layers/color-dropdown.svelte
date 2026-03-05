@@ -80,7 +80,10 @@
   }
 </script>
 
-<div class="color-dropdown-wrapper">
+<div
+  class="color-dropdown-wrapper"
+  style:--selected-color={selectedColor.color}
+>
   <Dropdown
     titleText={label}
     selectedId={selectedColor.id}
@@ -103,6 +106,22 @@
 
     :global(.bx--list-box__menu) {
       max-height: 200px;
+    }
+
+    :global(.bx--list-box__label) {
+      display: flex;
+      align-items: center;
+      gap: var(--cds-spacing-03);
+
+      &::before {
+        content: '';
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        flex-shrink: 0;
+        background-color: var(--selected-color);
+        border: 1px solid var(--cds-border-subtle);
+      }
     }
   }
 
