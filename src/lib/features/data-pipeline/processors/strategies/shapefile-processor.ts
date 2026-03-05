@@ -49,7 +49,16 @@ export const shapefileProcessor: FileProcessor = {
       }))
     });
 
-    if (companionFiles.length === 0) {
+    const baseName = shpFile.name.replace(/\.shp$/i, '');
+    const companionExtensions = new Set(
+      companionFiles.map((f) =>
+        f.name.toLowerCase().replace(baseName.toLowerCase(), '')
+      )
+    );
+    const hasDbf = companionExtensions.has('.dbf');
+    const hasShx = companionExtensions.has('.shx');
+
+    if (!hasDbf || !hasShx) {
       throw new ParseError(m.pipeline_error_shp_standalone(), file.fileType, {
         fileName: shpFile.name
       });

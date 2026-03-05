@@ -276,7 +276,18 @@ function createDataOrchestratorService() {
             }
           );
 
-          const fileForDuckDB = await prepareFileForDuckDB(file, dataset);
+          // For geo files (GeoJSON, SHP, etc.), prepareFileForDuckDB returns null
+          // when tableName/geoDuckTableReady are already set — bypass those guards
+          // by passing a stripped dataset so re-processing is forced.
+          const strippedDataset: DatasetResult = {
+            ...dataset,
+            tableName: undefined as unknown as string,
+            metadata: { ...dataset.metadata, geoDuckTableReady: false }
+          };
+          const fileForDuckDB = await prepareFileForDuckDB(
+            file,
+            strippedDataset
+          );
           if (fileForDuckDB) {
             const duckResult =
               await duckDBOrchestrator.processFile(fileForDuckDB);

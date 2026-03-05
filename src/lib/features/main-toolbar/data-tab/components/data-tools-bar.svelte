@@ -9,8 +9,7 @@
     Maximize,
     Settings,
     ChartHistogram,
-    View,
-    ViewOff
+    View
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
@@ -61,6 +60,15 @@
 
 <div class="data-tools-bar">
   <div class="tools-left">
+    <Button
+      kind="ghost"
+      size="small"
+      icon={ChartHistogram}
+      iconDescription={m.data_toggle_summary_plots()}
+      tooltipPosition="bottom"
+      class={showSummaryPlots ? 'active' : ''}
+      on:click={() => onToggleSummaryPlots?.()}
+    />
     <Button
       kind="ghost"
       size="small"
@@ -131,15 +139,6 @@
         on:click={() => onShowHiddenColumns?.()}
       />
     {/if}
-    <Button
-      kind="ghost"
-      size="small"
-      icon={showSummaryPlots ? ChartHistogram : ViewOff}
-      iconDescription={m.data_toggle_summary_plots()}
-      tooltipPosition="bottom"
-      class={showSummaryPlots ? 'active' : ''}
-      on:click={() => onToggleSummaryPlots?.()}
-    />
   </div>
   <div class="tools-right">
     <span class="expand-label">{m.data_tool_expand_label()}</span>

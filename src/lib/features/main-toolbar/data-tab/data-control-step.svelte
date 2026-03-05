@@ -619,6 +619,8 @@
           cellHighlights={searchHighlight.cellHighlights}
           currentCell={searchHighlight.currentCell}
           highlightedRowIds={searchHighlight.highlightedRowIds}
+          activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
+            undefined}
           isExpanded={false}
           isSelectable={true}
           onColumnDeleted={handleColumnDeleted}

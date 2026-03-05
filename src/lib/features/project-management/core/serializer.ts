@@ -229,7 +229,8 @@ export async function serializeProjectData(
   serialized.basemapSettings = {
     layers: basemapLayersStore.layers,
     style: basemapStyleStore.selectedStyle,
-    mapProjection: mapProjectionStore.projection
+    mapProjection: mapProjectionStore.projection,
+    referenceBasemapId: basemapStyleStore.referenceBasemapId
   };
 
   const visualizations = visualizationStore.visualizations;
@@ -375,12 +376,13 @@ export async function deserializeProjectData(
 
   if (data.basemapSettings) {
     try {
-      const { layers, style, mapProjection } = data.basemapSettings;
+      const { layers, style, mapProjection, referenceBasemapId } =
+        data.basemapSettings;
       if (layers) {
         basemapLayersStore.restoreFromSerialized(layers);
       }
       if (style) {
-        basemapStyleStore.restoreFromSerialized(style);
+        basemapStyleStore.restoreFromSerialized(style, referenceBasemapId);
       }
       if (mapProjection) {
         mapProjectionStore.restoreFromSerialized(mapProjection);

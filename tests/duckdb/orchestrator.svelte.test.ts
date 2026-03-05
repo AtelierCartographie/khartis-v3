@@ -223,6 +223,7 @@ vi.mock('$lib/features/duckdb/orchestrator/dataset-ops', () => ({
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/filter-ops', () => ({
+  buildFilterWhereClause: vi.fn(() => null),
   createFilterRecord: mocks.createFilterRecordMock
 }));
 
@@ -274,6 +275,7 @@ vi.mock('$lib/features/duckdb/orchestrator/state.svelte', () => ({
   getAllDatasets: mocks.getAllDatasetsMock,
   setDatasetArrowTable: mocks.setDatasetArrowTableMock,
   getFilters: mocks.getFiltersMock,
+  getFiltersMap: vi.fn(() => mocks.stateData.filtersByTable),
   setFilters: mocks.setFiltersMock,
   clearFiltersForTable: mocks.clearFiltersForTableMock,
   getNextFilterId: mocks.getNextFilterIdMock,
