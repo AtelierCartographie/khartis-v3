@@ -163,3 +163,7 @@ label {
   display: block;
   line-height: 1.4;
 }
+
+.bx--radio-button-group-wrapper .bx--label {
+  font-size: 0.875rem;
+}

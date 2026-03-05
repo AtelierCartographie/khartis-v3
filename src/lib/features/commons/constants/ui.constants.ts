@@ -2,7 +2,9 @@ export enum PageModel {
   A4_LANDSCAPE = 'page-a4-landscape',
   A4_PORTRAIT = 'page-a4-portrait',
   A3_LANDSCAPE = 'page-a3-landscape',
-  A3_PORTRAIT = 'page-a3-portrait'
+  A3_PORTRAIT = 'page-a3-portrait',
+  SCREEN_LANDSCAPE = 'page-screen-landscape',
+  SCREEN_PORTRAIT = 'page-screen-portrait'
 }
 
 export enum Orientation {
@@ -37,7 +39,9 @@ export const PAGE_PRESETS = {
   [PageModel.A4_LANDSCAPE]: { width: 842, height: 595 },
   [PageModel.A4_PORTRAIT]: { width: 595, height: 842 },
   [PageModel.A3_LANDSCAPE]: { width: 1191, height: 842 },
-  [PageModel.A3_PORTRAIT]: { width: 842, height: 1191 }
+  [PageModel.A3_PORTRAIT]: { width: 842, height: 1191 },
+  [PageModel.SCREEN_LANDSCAPE]: { width: 1920, height: 1080 },
+  [PageModel.SCREEN_PORTRAIT]: { width: 1080, height: 1920 }
 } as const;
 
 export const DEFAULT_MARGINS = {

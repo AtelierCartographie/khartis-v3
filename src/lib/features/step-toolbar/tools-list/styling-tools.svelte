@@ -9,9 +9,16 @@
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
   import { CSS_CLASSES } from '../step-toolbar.constants';
+
+  const colorBlindnessState = $derived(getColorBlindnessState());
+  const showColorBlindnessBadge = $derived(
+    colorBlindnessState.simulationType !== ColorBlindnessType.NONE
+  );
 
   const legendState = $derived(getLegendState());
   const showLegendBadge = $derived(!legendState.hasBeenOpened);
@@ -100,15 +107,21 @@
 
     <Row>
       <Column>
-        <Button
-          tooltipPosition="right"
-          kind="ghost"
-          iconDescription={m.tool_color_blindness()}
-          icon={View}
-          size="small"
-          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
-          onclick={() => selectTool(StylingTools.ColorBlindness)}
-        />
+        <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
+          <Button
+            tooltipPosition="right"
+            kind="ghost"
+            iconDescription={m.tool_color_blindness()}
+            icon={View}
+            size="small"
+            isSelected={globalState.selectedTool ===
+              StylingTools.ColorBlindness}
+            onclick={() => selectTool(StylingTools.ColorBlindness)}
+          />
+          {#if showColorBlindnessBadge}
+            <span class={CSS_CLASSES.NOTIFICATION_BADGE}></span>
+          {/if}
+        </div>
       </Column>
     </Row>
   </Grid>

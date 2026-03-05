@@ -49,7 +49,8 @@ function createGlobalStore() {
           : 100,
       minPageZoom: 10,
       maxPageZoom: 500,
-      pageZoomStep: 10
+      pageZoomStep: 10,
+      pagePanOffset: { x: 0, y: 0 }
     },
     isMobileView:
       typeof window !== 'undefined'
@@ -202,6 +203,8 @@ function createGlobalStore() {
 
     if (selectedStep === ToolbarStep.Styling) {
       state.toolbarState = ToolbarState.Collapsed;
+    } else if (selectedStep === ToolbarStep.Visualizations) {
+      state.toolbarState = ToolbarState.Compact;
     } else if (state.toolbarState === ToolbarState.Collapsed) {
       const preferred = readToolbarStateFromStorage();
       state.toolbarState =
@@ -309,9 +312,21 @@ function createGlobalStore() {
 
   function resetPageZoom(): void {
     state.zoom.pageZoomLevel = 100;
+    state.zoom.pagePanOffset = { x: 0, y: 0 };
     if (typeof window !== 'undefined') {
       localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
     }
+  }
+
+  function panPageBy(deltaX: number, deltaY: number): void {
+    state.zoom.pagePanOffset = {
+      x: state.zoom.pagePanOffset.x + deltaX,
+      y: state.zoom.pagePanOffset.y + deltaY
+    };
+  }
+
+  function resetPagePan(): void {
+    state.zoom.pagePanOffset = { x: 0, y: 0 };
   }
 
   function setToolbarTransitioning(value: boolean): void {
@@ -442,6 +457,8 @@ function createGlobalStore() {
     zoomOutPage,
     resetPageZoom,
     setPageZoom,
+    panPageBy,
+    resetPagePan,
     setToolbarTransitioning
   };
 }
@@ -459,6 +476,8 @@ export const globalActions = {
   zoomOutPage: globalState.zoomOutPage,
   resetPageZoom: globalState.resetPageZoom,
   setPageZoom: globalState.setPageZoom,
+  panPageBy: globalState.panPageBy,
+  resetPagePan: globalState.resetPagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,
   closeMobileToolbar: globalState.closeMobileToolbar,

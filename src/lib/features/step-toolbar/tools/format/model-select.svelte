@@ -16,7 +16,12 @@
     { value: PageModel.A4_LANDSCAPE, text: m.format_model_a4_landscape() },
     { value: PageModel.A4_PORTRAIT, text: m.format_model_a4_portrait() },
     { value: PageModel.A3_LANDSCAPE, text: m.format_model_a3_landscape() },
-    { value: PageModel.A3_PORTRAIT, text: m.format_model_a3_portrait() }
+    { value: PageModel.A3_PORTRAIT, text: m.format_model_a3_portrait() },
+    {
+      value: PageModel.SCREEN_LANDSCAPE,
+      text: m.format_model_screen_landscape()
+    },
+    { value: PageModel.SCREEN_PORTRAIT, text: m.format_model_screen_portrait() }
   ];
 
   function handleModelChange(event: Event): void {
