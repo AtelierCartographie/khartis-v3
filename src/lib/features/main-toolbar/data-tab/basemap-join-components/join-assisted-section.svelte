@@ -4,6 +4,7 @@
   import * as m from '$lib/paraglide/messages';
   import {
     Button,
+    ComboBox,
     InlineNotification,
     NotificationActionButton,
     Select,
@@ -26,6 +27,11 @@
     basemapOptions: string[];
   }
 
+  interface ComboBoxItem {
+    id: string;
+    text: string;
+  }
+
   interface Props {
     joinRows: JoinRow[];
     duplicates: string[];
@@ -33,10 +39,12 @@
     joinedCount: number;
     toVerifyCount: number;
     linkedVariableName: string | undefined;
+    basemapValues?: string[];
     loading?: boolean;
     joinFinalized?: boolean;
     onApplyCorrections: () => void;
     onFinalizeJoin: () => void;
+    onManualCorrection?: (dataValue: string, basemapValue: string) => void;
   }
 
   let {
@@ -46,11 +54,17 @@
     joinedCount,
     toVerifyCount,
     linkedVariableName,
+    basemapValues = [],
     loading = false,
     joinFinalized = false,
     onApplyCorrections,
-    onFinalizeJoin
+    onFinalizeJoin,
+    onManualCorrection
   }: Props = $props();
+
+  const basemapComboBoxItems = $derived<ComboBoxItem[]>(
+    basemapValues.map((value) => ({ id: value, text: value }))
+  );
 
   const duplicateCount = $derived(duplicates.length);
   const unrecognizedCount = $derived(unknowns.length);
@@ -290,11 +304,37 @@
         </button>
         {#if unrecognizedExpanded && unrecognizedCount > 0}
           <div class="category-body">
-            <ul class="entity-list">
-              {#each unknowns as entity (entity)}
-                <li class="entity-item">{entity}</li>
-              {/each}
-            </ul>
+            {#if basemapComboBoxItems.length > 0 && onManualCorrection}
+              <div class="unrecognized-correction-table">
+                {#each unknowns as entity (entity)}
+                  <div class="unrecognized-row">
+                    <div class="unrecognized-cell cell-data">{entity}</div>
+                    <div class="unrecognized-cell cell-arrow">&rarr;</div>
+                    <div class="unrecognized-cell cell-combobox">
+                      <ComboBox
+                        items={basemapComboBoxItems}
+                        placeholder={m.join_unrecognized_correction_placeholder()}
+                        size="sm"
+                        on:select={(e) => {
+                          const item = e.detail.selectedItem as
+                            | ComboBoxItem
+                            | undefined;
+                          if (item) {
+                            onManualCorrection?.(entity, item.text);
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <ul class="entity-list">
+                {#each unknowns as entity (entity)}
+                  <li class="entity-item">{entity}</li>
+                {/each}
+              </ul>
+            {/if}
           </div>
         {/if}
       </div>
@@ -533,6 +573,64 @@
     line-height: 1.25rem;
     color: #525252;
     margin: 0;
+  }
+
+  /* Unrecognized correction table */
+  .unrecognized-correction-table {
+    display: flex;
+    flex-direction: column;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #fff1f1;
+  }
+
+  .unrecognized-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    border-top: 1px solid #e0e0e0;
+    min-height: 48px;
+  }
+
+  .unrecognized-row:first-child {
+    border-top: none;
+  }
+
+  .unrecognized-cell.cell-data {
+    flex: 1;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #161616;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .unrecognized-cell.cell-arrow {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    color: #8d8d8d;
+  }
+
+  .unrecognized-cell.cell-combobox {
+    flex: 1;
+    overflow: visible;
+  }
+
+  .unrecognized-cell.cell-combobox :global(.bx--list-box) {
+    height: 32px;
+    background-color: var(--cds-field-01, #ffffff);
+  }
+
+  .unrecognized-cell.cell-combobox :global(.bx--text-input) {
+    height: 32px;
+    padding: 0 2rem 0 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .unrecognized-cell.cell-combobox :global(.bx--label) {
+    display: none;
   }
 
   /* Entity list for duplicates/unrecognized */
