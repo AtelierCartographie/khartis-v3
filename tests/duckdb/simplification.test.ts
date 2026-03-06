@@ -70,6 +70,9 @@ describe('simplification operations', () => {
     expect(simplification_macros).toContain(
       'CREATE OR REPLACE MACRO extract_innerlines'
     );
+    expect(simplification_macros).toContain(
+      'SELECT row_number() OVER () as _gid, geom'
+    );
     expect(simplification_macros).toContain('FROM snap_topology_normalized');
     expect(simplification_macros).toContain(
       'FROM simplify_topology_normalized'

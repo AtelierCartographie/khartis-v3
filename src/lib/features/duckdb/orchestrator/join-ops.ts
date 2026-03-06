@@ -303,7 +303,7 @@ export async function computeJoinSynthesis(
         match_basemap_count
       FROM "${escapedCache}"
       WHERE match_id IS NOT NULL
-        AND match_score = 1
+        AND typo_match != 'toofar'
     ),
     total_candidates AS (
       SELECT COUNT(DISTINCT original_name) as cnt
@@ -354,17 +354,27 @@ async function ensureBasemapAttributesLoaded(
   }
 }
 
-async function checkJoinResultsExist(
+async function getJoinColumnExcludeClause(
   tableName: string,
   Duck: DuckDBClientForJoin
-): Promise<boolean> {
-  const joinResultsTable = `${tableName}_join_results`;
-  const escapedTableName = escapeSqlString(joinResultsTable);
-  const check = (await Duck.query(
-    `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableName}'`,
+): Promise<string> {
+  const columnsToExclude = ['basemap_id', 'typo_match'];
+  const existingColumns = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(tableName)}'
+     AND column_name IN (${columnsToExclude.map((column) => `'${column}'`).join(', ')})`,
     { format: 'array' }
-  )) as Array<{ table_name: string }>;
-  return check && check.length > 0;
+  )) as Array<{ column_name: string }>;
+
+  if (existingColumns.length === 0) {
+    return '';
+  }
+
+  const excludeList = existingColumns
+    .map((row) => `"${escapeIdentifier(row.column_name)}"`)
+    .join(', ');
+
+  return `EXCLUDE (${excludeList})`;
 }
 
 async function generateAttributesForBasemap(
@@ -593,19 +603,61 @@ export interface FinalizeJoinOptions {
   skipJoinComputation?: boolean;
 }
 
+async function applyCachedJoinAssociation(
+  datasetTableName: string,
+  geoColumn: string,
+  basemapId: string,
+  cacheTableName: string,
+  Duck: DuckDBClientForJoin
+): Promise<void> {
+  const escapedDatasetTable = escapeIdentifier(datasetTableName);
+  const escapedGeoColumn = escapeIdentifier(geoColumn);
+  const escapedBasemapId = escapeSqlString(basemapId);
+  const escapedCacheTable = escapeIdentifier(cacheTableName);
+  const excludeClause = await getJoinColumnExcludeClause(
+    datasetTableName,
+    Duck
+  );
+
+  await Duck.query(`
+    CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
+    WITH ranked_join AS (
+      SELECT
+        original_name AS geoname,
+        match_id AS id,
+        match_score AS score,
+        typo_match
+      FROM "${escapedCacheTable}"
+      WHERE match_basemap = '${escapedBasemapId}'
+        AND match_id IS NOT NULL
+        AND typo_match != 'toofar'
+      QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY original_name
+        ORDER BY match_score DESC, match_id
+      ) = 1
+    )
+    SELECT
+      t.* ${excludeClause},
+      j.id AS basemap_id,
+      j.typo_match
+    FROM "${escapedDatasetTable}" t
+    LEFT JOIN ranked_join j
+      ON t."${escapedGeoColumn}" = j.geoname
+  `);
+}
+
 export async function finalizeJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata,
   geoColumn: string,
   Duck: DuckDBClientForJoin,
-  options?: FinalizeJoinOptions
+  _options?: FinalizeJoinOptions
 ): Promise<FinalizeJoinResult> {
   const start = performance.now();
   logger.info('Finalizing join for dataset', LogCategory.DATA, {
     datasetId: dataset.id,
     basemap: basemap.file,
-    geoColumn,
-    skipJoinComputation: options?.skipJoinComputation
+    geoColumn
   });
 
   if (isOSMBasemap(basemap)) {
@@ -621,30 +673,18 @@ export async function finalizeJoin(
     }
   }
 
-  const joinTableExists = await checkJoinResultsExist(dataset.tableName, Duck);
-
-  const shouldComputeJoin = !options?.skipJoinComputation || !joinTableExists;
-
-  if (shouldComputeJoin) {
-    if (options?.skipJoinComputation && !joinTableExists) {
-      logger.warn(
-        'Join table missing while skipJoinComputation=true, forcing recomputation',
-        LogCategory.DATA,
-        {
-          datasetId: dataset.id,
-          tableName: dataset.tableName
-        }
-      );
-    }
-
-    await ensureBasemapAttributesLoaded(Duck);
-    await Duck.join_by_id(dataset.tableName, geoColumn, {
-      basemaps_table: 'basemap_attributes'
-    });
-  }
-
   const basemapId = getBasemapAttributesId(basemap);
-  await Duck.apply_join_association(dataset.tableName, basemapId);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const cacheTableName = await ensureSimilarityCached(dataset, geoColumn, Duck);
+
+  await applyCachedJoinAssociation(
+    dataset.tableName,
+    geoColumn,
+    basemapId,
+    cacheTableName,
+    Duck
+  );
 
   const joinedCountResult = (await Duck.query(
     `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE basemap_id IS NOT NULL`,
