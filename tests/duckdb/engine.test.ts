@@ -7,7 +7,7 @@ const openMock = vi.hoisted(() => vi.fn());
 const connectMock = vi.hoisted(() => vi.fn());
 
 vi.mock('$app/paths', () => ({
-  base: '/cartographie/khartisnewpprd'
+  asset: (path: string) => `/cartographie/khartisnewpprd${path}`
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
