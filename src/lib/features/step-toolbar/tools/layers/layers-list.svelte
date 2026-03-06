@@ -1,18 +1,18 @@
 <script lang="ts">
+  import { dndzone } from 'svelte-dnd-action';
   import LayerItem from './layer-item.svelte';
-  import type { DragState, Layer } from './layers.types.js';
-  import { resetDragState } from './layers.utils.js';
+  import type { Layer } from './layers.types.js';
 
   interface Props {
-    layers: readonly Layer[];
-    childLayersByParent?: Record<string, Layer[]>;
+    parentLayers: Layer[];
+    childLayersByParent: Record<string, Layer[]>;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
-    onReorderLayer?: (dragIndex: number, hoverIndex: number) => void;
-    onReorderSubLayer?: (
+    onReorderLayers: (fromIndex: number, toIndex: number) => void;
+    onReorderSubLayers: (
       parentId: string,
-      dragIndex: number,
-      hoverIndex: number
+      fromIndex: number,
+      toIndex: number
     ) => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
@@ -20,128 +20,141 @@
   }
 
   const {
-    layers,
-    childLayersByParent = {},
+    parentLayers,
+    childLayersByParent,
     onToggleVisibility,
     onOpenSettings,
-    onReorderLayer,
-    onReorderSubLayer,
+    onReorderLayers,
+    onReorderSubLayers,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer
   }: Props = $props();
 
-  let dragState = $state<DragState>({
-    dragIndex: null,
-    dragOverIndex: null
+  const FLIP_DURATION_MS = 200;
+  const PARENT_DND_TYPE = 'parent-layers';
+
+  let parentItems = $state<Layer[]>([]);
+  let childItems = $state<Record<string, Layer[]>>({});
+  let draggingParent = $state(false);
+  let draggingChildOf = $state<string | null>(null);
+
+  $effect(() => {
+    if (!draggingParent) {
+      parentItems = parentLayers.map((l) => ({ ...l }));
+    }
   });
 
-  let subDragState = $state<DragState & { parentId: string | null }>({
-    dragIndex: null,
-    dragOverIndex: null,
-    parentId: null
+  $effect(() => {
+    if (!draggingChildOf) {
+      const next: Record<string, Layer[]> = {};
+      for (const [pid, children] of Object.entries(childLayersByParent)) {
+        next[pid] = children.map((l) => ({ ...l }));
+      }
+      childItems = next;
+    }
   });
 
-  function handleDragStart(index: number): void {
-    dragState.dragIndex = index;
+  function getChildren(parentId: string): Layer[] {
+    return childItems[parentId] ?? [];
   }
 
-  function handleDragOver(index: number): void {
-    dragState.dragOverIndex = index;
+  function handleParentConsider(e: Event): void {
+    draggingParent = true;
+    parentItems = (e as CustomEvent).detail.items;
   }
 
-  function handleDragEnd(): void {
-    const { dragIndex, dragOverIndex } = dragState;
+  function handleParentFinalize(e: Event): void {
+    const newItems: Layer[] = (e as CustomEvent).detail.items;
+    parentItems = newItems;
+    draggingParent = false;
 
-    if (
-      dragIndex !== null &&
-      dragOverIndex !== null &&
-      dragIndex !== dragOverIndex
-    ) {
-      onReorderLayer?.(dragIndex, dragOverIndex);
+    const oldIds = parentLayers.map((l) => l.id);
+    const newIds = newItems.map((l) => l.id);
+
+    for (let i = 0; i < newIds.length; i++) {
+      if (oldIds[i] !== newIds[i]) {
+        const fromIndex = oldIds.indexOf(newIds[i]);
+        onReorderLayers(fromIndex, i);
+        break;
+      }
     }
-
-    resetDragState((state: DragState) => (dragState = state));
   }
 
-  function handleDragLeave(): void {
-    dragState.dragOverIndex = null;
+  function handleChildConsider(parentId: string, e: Event): void {
+    draggingChildOf = parentId;
+    childItems = {
+      ...childItems,
+      [parentId]: (e as CustomEvent).detail.items
+    };
   }
 
-  function handleSubDragStart(parentId: string, index: number): void {
-    subDragState.parentId = parentId;
-    subDragState.dragIndex = index;
-  }
+  function handleChildFinalize(parentId: string, e: Event): void {
+    const newItems: Layer[] = (e as CustomEvent).detail.items;
+    childItems = { ...childItems, [parentId]: newItems };
+    draggingChildOf = null;
 
-  function handleSubDragOver(index: number): void {
-    subDragState.dragOverIndex = index;
-  }
+    const oldIds = (childLayersByParent[parentId] ?? []).map((l) => l.id);
+    const newIds = newItems.map((l) => l.id);
 
-  function handleSubDragEnd(): void {
-    const { parentId, dragIndex, dragOverIndex } = subDragState;
-
-    if (
-      parentId !== null &&
-      dragIndex !== null &&
-      dragOverIndex !== null &&
-      dragIndex !== dragOverIndex
-    ) {
-      onReorderSubLayer?.(parentId, dragIndex, dragOverIndex);
+    for (let i = 0; i < newIds.length; i++) {
+      if (oldIds[i] !== newIds[i]) {
+        const fromIndex = oldIds.indexOf(newIds[i]);
+        onReorderSubLayers(parentId, fromIndex, i);
+        break;
+      }
     }
-
-    subDragState = { dragIndex: null, dragOverIndex: null, parentId: null };
-  }
-
-  function handleSubDragLeave(): void {
-    subDragState.dragOverIndex = null;
-  }
-
-  function getChildLayers(parentId: string): Layer[] {
-    return childLayersByParent[parentId] ?? [];
   }
 </script>
 
-<div class="layers-container" role="list">
-  {#each layers as layer, index (layer.id)}
-    <LayerItem
-      layer={layer}
-      index={index}
-      onToggleVisibility={onToggleVisibility}
-      onOpenSettings={onOpenSettings}
-      onRenameLayer={onRenameLayer}
-      onDuplicateLayer={onDuplicateLayer}
-      onDeleteLayer={onDeleteLayer}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragLeave={handleDragLeave}
-      isDragging={dragState.dragIndex === index}
-      isDragOver={dragState.dragOverIndex === index}
-    />
+<div
+  class="layers-container"
+  role="list"
+  use:dndzone={{
+    items: parentItems,
+    flipDurationMs: FLIP_DURATION_MS,
+    type: PARENT_DND_TYPE,
+    dropTargetStyle: {}
+  }}
+  onconsider={handleParentConsider}
+  onfinalize={handleParentFinalize}
+>
+  {#each parentItems as parentLayer (parentLayer.id)}
+    <div class="layer-group">
+      <LayerItem
+        layer={parentLayer}
+        onToggleVisibility={onToggleVisibility}
+        onOpenSettings={onOpenSettings}
+        onRenameLayer={onRenameLayer}
+        onDuplicateLayer={onDuplicateLayer}
+        onDeleteLayer={onDeleteLayer}
+      />
 
-    {#if getChildLayers(layer.id).length > 0}
-      <div class="sublayers-container">
-        <div class="sublayers-line"></div>
-        <div class="sublayers-list">
-          {#each getChildLayers(layer.id) as childLayer, childIndex (childLayer.id)}
-            <LayerItem
-              layer={childLayer}
-              index={childIndex}
-              onToggleVisibility={onToggleVisibility}
-              onOpenSettings={onOpenSettings}
-              onDragStart={(idx) => handleSubDragStart(layer.id, idx)}
-              onDragOver={handleSubDragOver}
-              onDragEnd={handleSubDragEnd}
-              onDragLeave={handleSubDragLeave}
-              isDragging={subDragState.parentId === layer.id &&
-                subDragState.dragIndex === childIndex}
-              isDragOver={subDragState.parentId === layer.id &&
-                subDragState.dragOverIndex === childIndex}
-            />
-          {/each}
+      {#if getChildren(parentLayer.id).length > 0}
+        <div class="sublayers-container">
+          <div class="sublayers-line"></div>
+          <div
+            class="sublayers-list"
+            use:dndzone={{
+              items: getChildren(parentLayer.id),
+              flipDurationMs: FLIP_DURATION_MS,
+              type: `sublayers-${parentLayer.id}`,
+              dropTargetStyle: {}
+            }}
+            onconsider={(e: Event) => handleChildConsider(parentLayer.id, e)}
+            onfinalize={(e: Event) => handleChildFinalize(parentLayer.id, e)}
+          >
+            {#each getChildren(parentLayer.id) as childLayer (childLayer.id)}
+              <LayerItem
+                layer={childLayer}
+                onToggleVisibility={onToggleVisibility}
+                onOpenSettings={onOpenSettings}
+              />
+            {/each}
+          </div>
         </div>
-      </div>
-    {/if}
+      {/if}
+    </div>
   {/each}
 </div>
 
@@ -150,6 +163,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    outline: none;
   }
 
   .sublayers-container {
@@ -170,5 +184,10 @@
     flex: 1;
     gap: var(--cds-spacing-03);
     padding-top: var(--cds-spacing-03);
+    outline: none;
+  }
+
+  .layers-container :global([aria-grabbed='true']) {
+    opacity: 0.4;
   }
 </style>
