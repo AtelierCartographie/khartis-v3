@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from 'carbon-components-svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { PalettePopover, PaletteDropdown } from '../palette-popover';
@@ -144,7 +144,7 @@
       />
     {/each}
     {#if showInvertButton}
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={ArrowsHorizontal}

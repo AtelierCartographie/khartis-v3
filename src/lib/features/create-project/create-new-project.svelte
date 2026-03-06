@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import {
     createProjectActions,
@@ -10,7 +11,6 @@
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
   import {
-    Button,
     FileUploaderDropContainer,
     FileUploaderItem,
     InlineLoading,

@@ -45,8 +45,14 @@
 </div>
 
 <style>
+  #khartis-color-blindness-tool {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
   .helper-text {
-    margin-top: var(--cds-spacing-03);
+    margin: 0;
     font-size: var(--cds-helper-text-01-font-size, 0.75rem);
     line-height: var(--cds-helper-text-01-line-height, 1rem);
     color: var(--cds-text-helper, #6f6f6f);

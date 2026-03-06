@@ -229,12 +229,18 @@
 </Modal>
 
 <style>
+  #khartis-layers-tool {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
   .description {
     font-size: 12px;
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-helper);
-    margin-bottom: var(--cds-spacing-05);
+    margin: 0;
   }
 
   #khartis-layers-tool :global(.bx--accordion) {

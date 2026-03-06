@@ -1,11 +1,11 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import {
     StylingTools,
     VisualizationTools
   } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { selectTool } from '../tools-list/tool-list.utils.svelte';
@@ -63,7 +63,7 @@
   <header class="tool-header">
     <p class="tool-title">{title}</p>
 
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       iconDescription={m.close()}
@@ -72,7 +72,9 @@
     />
   </header>
 
-  {@render selectedComponent?.()}
+  <div class="tool-body">
+    {@render selectedComponent?.()}
+  </div>
 </aside>
 
 <style>
@@ -103,5 +105,13 @@
 
   aside {
     position: relative;
+  }
+
+  .tool-body {
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+  }
+
+  .tool-body :global(.expandable-stack) {
+    margin: 0 calc(-1 * var(--cds-spacing-05));
   }
 </style>

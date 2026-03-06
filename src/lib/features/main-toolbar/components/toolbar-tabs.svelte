@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
@@ -15,7 +17,7 @@
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
+  import { Modal, Tag, TextInput } from 'carbon-components-svelte';
   import {
     Add,
     Checkmark,
@@ -555,7 +557,7 @@
                         <span class="dataset-name">{dataset.name}</span>
                       </button>
                     {/if}
-                    <Button
+                    <IconButton
                       kind="ghost"
                       size="small"
                       iconDescription={m.dataset_rename_action()}
@@ -563,7 +565,7 @@
                       on:click={(e) =>
                         startEditingDataset(dataset.id, dataset.name, e)}
                     />
-                    <Button
+                    <IconButton
                       kind="danger-ghost"
                       size="small"
                       iconDescription={m.dataset_delete_action()}
@@ -664,7 +666,6 @@
 <style>
   .tabs-scroller {
     display: flex;
-    gap: var(--cds-spacing-03);
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;

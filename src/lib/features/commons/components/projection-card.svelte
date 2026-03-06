@@ -96,9 +96,9 @@
   onkeydown={handleKeyDown}
 >
   <div class={leftClasses}>
-    <Earth size={32} />
+    <Earth size={20} />
 
-    <h4 class="mt-2">{ratio}</h4>
+    <h4 class="ratio">{ratio}</h4>
 
     <span class="text-sm">{previewLabel}</span>
   </div>
@@ -169,14 +169,12 @@
   }
 
   .card-left {
-    /* Fixed 120px width per Figma design */
-    width: 120px;
-    min-width: 120px;
+    width: 96px;
+    min-width: 96px;
     flex-shrink: 0;
-    padding: 1rem 0.75rem;
+    padding: 0.5rem;
     border-right: 1px solid var(--cds-layer-accent);
-    gap: 0.25rem;
-    /* layer-02-suggestions = white for preview area */
+    gap: 0.125rem;
     background-color: var(--khartis-additions-layer-02-suggestions, #ffffff);
   }
 
@@ -187,19 +185,20 @@
     border-bottom: 1px solid var(--cds-layer-accent);
   }
 
-  .card-left h4 {
-    font-size: 0.9rem;
-    line-height: 1.2;
-    margin: 0.25rem 0 0;
+  .card-left .ratio {
+    font-size: 0.75rem;
+    line-height: 1;
+    margin: 0.125rem 0 0;
   }
 
   .card-right {
     flex: 1 1 auto;
-    padding: 0.75rem;
+    min-width: 0;
+    padding: 0.5rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.25rem;
   }
 
   #kh-projection-card.vertical .card-right {
@@ -241,12 +240,21 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  #kh-projection-card .card-footer :global(.bx--tag) {
+    max-width: calc(100% - 32px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .info-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
     background: transparent;
     display: inline-flex;
     align-items: center;
@@ -261,8 +269,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 9999px;
     background: var(--cds-blue);
     color: var(--cds-inverse-01);
@@ -272,10 +280,7 @@
     outline: none;
   }
   .text-sm {
-    font-size: 0.7rem;
-  }
-  .mt-2 {
-    margin-top: 0.5rem;
+    font-size: 0.625rem;
   }
   .ml-1 {
     margin-left: 0.25rem;

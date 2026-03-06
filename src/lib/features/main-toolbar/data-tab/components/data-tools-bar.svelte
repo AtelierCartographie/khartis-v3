@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from 'carbon-components-svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     Search,
     Filter,
@@ -60,7 +60,7 @@
 
 <div class="data-tools-bar">
   <div class="tools-left">
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={ChartHistogram}
@@ -69,7 +69,7 @@
       class={showSummaryPlots ? 'active' : ''}
       on:click={() => onToggleSummaryPlots?.()}
     />
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Search}
@@ -78,7 +78,7 @@
       class={isSearchActive ? 'active' : ''}
       on:click={() => dataToolsStore.toggleTool(DataToolType.Search)}
     />
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Filter}
@@ -87,7 +87,7 @@
       class={isFiltersActive ? 'active' : ''}
       on:click={() => dataToolsStore.toggleTool(DataToolType.Filters)}
     />
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Calculator}
@@ -101,7 +101,7 @@
         {m.selection_count({ count: selectionCount })}
       </span>
     {/if}
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={TrashCan}
@@ -110,7 +110,7 @@
       disabled={effectiveDeleteDisabled}
       on:click={() => onDelete?.()}
     />
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Reset}
@@ -120,7 +120,7 @@
       on:click={() => onReset?.()}
     />
     {#if showCsvOptions}
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={Settings}
@@ -130,7 +130,7 @@
       />
     {/if}
     {#if showHiddenColumns}
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={View}
@@ -142,7 +142,7 @@
   </div>
   <div class="tools-right">
     <span class="expand-label">{m.data_tool_expand_label()}</span>
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Maximize}
@@ -158,7 +158,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--cds-spacing-02) 0;
+    padding-top: var(--cds-spacing-02);
     margin-bottom: 0;
   }
 

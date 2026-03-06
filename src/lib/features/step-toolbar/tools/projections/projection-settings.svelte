@@ -125,7 +125,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-06);
-    padding: var(--cds-spacing-05);
     width: 100%;
     box-sizing: border-box;
   }

@@ -137,7 +137,7 @@
 </script>
 
 <div id={DOM_IDS.LEGEND_TOOL}>
-  <Grid padding noGutter fullWidth>
+  <Grid noGutter fullWidth>
     <Row>
       <Column>
         <ToggleTabs
@@ -156,7 +156,7 @@
     <div class="expandable-stack">
       {#each items as item, index (item.id)}
         <ExpandableSection title={item.name} defaultOpen={index === 0}>
-          <Grid padding noGutter>
+          <Grid noGutter>
             <Row>
               <Column>
                 <TextInput
@@ -202,7 +202,7 @@
       {/each}
     </div>
   {:else}
-    <Grid padding noGutter fullWidth>
+    <Grid noGutter fullWidth>
       <Row>
         <Column>
           <p class="description">

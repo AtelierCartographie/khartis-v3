@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
@@ -15,13 +17,7 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ComboBox,
-    Link,
-    Modal,
-    RadioButton
-  } from 'carbon-components-svelte';
+  import { ComboBox, Link, Modal, RadioButton } from 'carbon-components-svelte';
   import {
     ColorPalette,
     Edit,
@@ -327,28 +323,25 @@
               {/if}
             </button>
             <div class="viz-item-actions">
-              <Button
+              <IconButton
                 kind="ghost"
                 size="small"
-                hasIconOnly
                 icon={Edit}
                 iconDescription={m.viz_list_rename()}
                 tooltipPosition="top"
                 on:click={() => handleStartRename(viz)}
               />
-              <Button
+              <IconButton
                 kind="ghost"
                 size="small"
-                hasIconOnly
                 icon={Copy}
                 iconDescription={m.viz_list_duplicate()}
                 tooltipPosition="top"
                 on:click={() => handleDuplicateViz(viz.id)}
               />
-              <Button
+              <IconButton
                 kind="ghost"
                 size="small"
-                hasIconOnly
                 icon={TrashCan}
                 iconDescription={m.viz_list_delete()}
                 tooltipPosition="top"

@@ -1,8 +1,9 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages.js';
-  import { Button, Column, Grid, Row } from 'carbon-components-svelte';
+  import { Column, Grid, Row } from 'carbon-components-svelte';
   import { Edit, Legend, Location, TextFont, View } from 'carbon-icons-svelte';
   import {
     getLegendState,
@@ -46,7 +47,7 @@
   <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
     <Row>
       <Column>
-        <Button
+        <IconButton
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_format()}
@@ -61,7 +62,7 @@
     <Row>
       <Column>
         <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <Button
+          <IconButton
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_legend()}
@@ -79,7 +80,7 @@
 
     <Row>
       <Column>
-        <Button
+        <IconButton
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_geo_indications()}
@@ -93,7 +94,7 @@
 
     <Row>
       <Column>
-        <Button
+        <IconButton
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_annotations()}
@@ -108,7 +109,7 @@
     <Row>
       <Column>
         <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <Button
+          <IconButton
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_color_blindness()}

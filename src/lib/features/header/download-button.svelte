@@ -1,7 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
-    Button,
     Column,
     FormGroup,
     Grid,

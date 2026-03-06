@@ -36,7 +36,7 @@
 </script>
 
 <div id="khartis-margins-editor-tool">
-  <Grid padding noGutter>
+  <Grid noGutter>
     <Row>
       <Column>
         <div class="margins-grid">

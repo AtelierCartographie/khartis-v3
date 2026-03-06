@@ -1,6 +1,7 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { Button, Search } from 'carbon-components-svelte';
+  import { Search } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
@@ -55,7 +56,7 @@
       {/if}
 
       <div class="results-buttons">
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           iconDescription={m.search_previous()}
@@ -63,7 +64,7 @@
           disabled={noResults}
           onclick={() => navigateResults('prev')}
         />
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           iconDescription={m.search_next()}

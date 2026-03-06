@@ -7,12 +7,9 @@
   } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import {
-    Column,
-    Grid,
     InlineNotification,
     RadioButton,
     RadioButtonGroup,
-    Row,
     Slider
   } from 'carbon-components-svelte';
   import { Earth, LicenseGlobal } from 'carbon-icons-svelte';
@@ -126,121 +123,103 @@
   });
 </script>
 
-<div id="khartis-simplification-tool">
-  <Grid noGutter fullWidth class="simplification-grid">
-    <Row>
-      <Column>
-        <p class="description">{m.simplification_description()}</p>
-      </Column>
-    </Row>
+<div id="khartis-simplification-tool" class="simplification-sections">
+  <p class="description">{m.simplification_description()}</p>
 
-    <Row>
-      <Column>
-        <ToggleTabs
-          items={sources}
-          activeIndex={sourceIndex}
-          onChange={onSourceChange}
-          className="source-tabs"
-          activeClass="active"
-          fullWidthClass="full-width"
-          hideInactiveLabel
+  <ToggleTabs
+    items={sources}
+    activeIndex={sourceIndex}
+    onChange={onSourceChange}
+    className="source-tabs"
+    activeClass="active"
+    fullWidthClass="full-width"
+    hideInactiveLabel
+  />
+
+  {#if state.source === SimplificationSource.Basemap}
+    {#if isOsmBasemapActive}
+      <InlineNotification
+        kind="warning"
+        lowContrast
+        title={m.simplification_osm_not_available()}
+        subtitle={m.simplification_osm_explanation()}
+      />
+    {/if}
+
+    <div>
+      <div class="form-label">{m.simplification_level_label()}</div>
+      <RadioButtonGroup
+        orientation="horizontal"
+        selected={state.level}
+        on:change={(e) => {
+          if (isOsmBasemapActive) return;
+          store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+          scheduleSimplificationApply('level-change');
+        }}
+      >
+        <RadioButton
+          value={SimplificationLevel.Low}
+          labelText={m.simplification_level_low()}
+          disabled={isOsmBasemapActive}
         />
-      </Column>
-    </Row>
+        <RadioButton
+          value={SimplificationLevel.Medium}
+          labelText={m.simplification_level_medium()}
+          disabled={isOsmBasemapActive}
+        />
+        <RadioButton
+          value={SimplificationLevel.High}
+          labelText={m.simplification_level_high()}
+          disabled={isOsmBasemapActive}
+        />
+      </RadioButtonGroup>
+    </div>
+  {/if}
 
-    {#if state.source === SimplificationSource.Basemap}
-      {#if isOsmBasemapActive}
-        <Row>
-          <Column>
-            <InlineNotification
-              kind="warning"
-              lowContrast
-              title={m.simplification_osm_not_available()}
-              subtitle={m.simplification_osm_explanation()}
-            />
-          </Column>
-        </Row>
-      {/if}
+  {#if state.source === SimplificationSource.Geo}
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      title={m.simplification_warning_title()}
+      subtitle={m.simplification_warning_subtitle()}
+    />
 
-      <Row>
-        <Column>
-          <div class="form-label">{m.simplification_level_label()}</div>
-          <RadioButtonGroup
-            orientation="horizontal"
-            selected={state.level}
-            on:change={(e) => {
-              if (isOsmBasemapActive) return;
-              store.setLevel((e as CustomEvent).detail as SimplificationLevel);
-              scheduleSimplificationApply('level-change');
-            }}
-          >
-            <RadioButton
-              value={SimplificationLevel.Low}
-              labelText={m.simplification_level_low()}
-              disabled={isOsmBasemapActive}
-            />
-            <RadioButton
-              value={SimplificationLevel.Medium}
-              labelText={m.simplification_level_medium()}
-              disabled={isOsmBasemapActive}
-            />
-            <RadioButton
-              value={SimplificationLevel.High}
-              labelText={m.simplification_level_high()}
-              disabled={isOsmBasemapActive}
-            />
-          </RadioButtonGroup>
-        </Column>
-      </Row>
-    {/if}
-
-    {#if state.source === SimplificationSource.Geo}
-      <Row>
-        <Column>
-          <InlineNotification
-            kind="warning"
-            lowContrast
-            title={m.simplification_warning_title()}
-            subtitle={m.simplification_warning_subtitle()}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <div class="form-label">{m.simplification_rate_label()}</div>
-          <div class="slider-row">
-            <Slider
-              min={0}
-              max={100}
-              step={1}
-              value={state.rate}
-              on:change={(e) => {
-                store.setRate((e as CustomEvent).detail || 50);
-                scheduleSimplificationApply('rate-change', 250);
-              }}
-              labelText=""
-              minLabel="0"
-              maxLabel="100"
-              fullWidth
-            />
-          </div>
-        </Column>
-      </Row>
-    {/if}
-  </Grid>
+    <div>
+      <div class="form-label">{m.simplification_rate_label()}</div>
+      <div class="slider-row">
+        <Slider
+          min={0}
+          max={100}
+          step={1}
+          value={state.rate}
+          on:change={(e) => {
+            store.setRate((e as CustomEvent).detail || 50);
+            scheduleSimplificationApply('rate-change', 250);
+          }}
+          labelText=""
+          minLabel="0"
+          maxLabel="100"
+          fullWidth
+        />
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
+  .simplification-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
   .description {
     color: var(--cds-text-secondary);
     font-size: 1rem;
-    margin-bottom: 1.5rem;
   }
 
   #khartis-simplification-tool :global(.source-tabs) {
     width: 100%;
-    margin-bottom: 1.5rem;
     border-color: #cac5c4;
     border-radius: 4px;
   }
@@ -253,10 +232,6 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-  }
-
-  #khartis-simplification-tool :global(.bx--number) {
-    width: 96px;
   }
 
   .form-label {

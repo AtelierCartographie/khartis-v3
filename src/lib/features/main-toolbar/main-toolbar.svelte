@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     globalActions,
     globalState
@@ -10,11 +12,7 @@
   } from '$lib/features/commons/types/global';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ProgressIndicator,
-    ProgressStep
-  } from 'carbon-components-svelte';
+  import { ProgressIndicator, ProgressStep } from 'carbon-components-svelte';
   import { ArrowRight, OpenPanelFilledRight } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { tick } from 'svelte';
@@ -104,7 +102,7 @@
   })}
 >
   <header class="flex sticky z-1000 border-b main-toolbar-header">
-    <Button
+    <IconButton
       kind="ghost"
       iconDescription={globalState.toolbarState === ToolbarState.Full
         ? m.toolbar_compact()

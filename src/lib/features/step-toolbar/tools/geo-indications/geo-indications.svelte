@@ -131,7 +131,7 @@
       title={m.geo_scale()}
       defaultOpen={geoState.scale.expanded}
     >
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <Select
@@ -234,7 +234,7 @@
     </ExpandableSection>
 
     <ExpandableSection title={m.geo_orientation()} defaultOpen={false}>
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <RadioButtonGroup
@@ -299,7 +299,7 @@
     </ExpandableSection>
 
     <ExpandableSection title={m.geo_inset_map()} defaultOpen={false}>
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <RadioButtonGroup

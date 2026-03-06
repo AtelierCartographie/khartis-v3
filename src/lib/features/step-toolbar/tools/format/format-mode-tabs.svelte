@@ -19,7 +19,7 @@
 </script>
 
 <div class="format-mode-tabs-container">
-  <Grid padding noGutter>
+  <Grid noGutter>
     <Row>
       <Column>
         <ToggleTabs

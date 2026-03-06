@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Button } from 'carbon-components-svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
 
@@ -16,7 +16,7 @@
   <span class="field-label">{label}</span>
   <div class="discretization-value">
     <span>{value}</span>
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Settings}
