@@ -45,6 +45,7 @@
 </script>
 
 <tr
+  data-row-id={rowId}
   class:highlight-current={highlightType === 'current'}
   class:highlight-exact={highlightType === 'exact'}
   class:highlight-partial={highlightType === 'partial'}
