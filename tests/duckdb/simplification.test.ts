@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DUCK_CONST } from '$lib/features/duckdb/constants';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
+import { simplification_macros } from '$lib/features/duckdb/macros/simplification';
 
 const mocks = vi.hoisted(() => ({
   queryMock: vi.fn(),
@@ -60,6 +61,20 @@ describe('simplification operations', () => {
     expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.Low]).toBe(0.0001);
     expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.Medium]).toBe(0.001);
     expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.High]).toBe(0.01);
+  });
+
+  it('registers the full polygon cleanup macro chain', () => {
+    expect(simplification_macros).toContain(
+      'CREATE OR REPLACE MACRO snap_topology_normalized'
+    );
+    expect(simplification_macros).toContain(
+      'CREATE OR REPLACE MACRO extract_innerlines'
+    );
+    expect(simplification_macros).toContain('FROM snap_topology_normalized');
+    expect(simplification_macros).toContain(
+      'FROM simplify_topology_normalized'
+    );
+    expect(simplification_macros).toContain('FROM prune_triangles');
   });
 
   it('clamps simplification rate between 0 and 1', () => {

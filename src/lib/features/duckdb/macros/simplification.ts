@@ -1,14 +1,37 @@
 /**
  * DuckDB macros for topology-aware geometry simplification.
  *
- * Three macros:
- * 1. `simplify_topology_normalized` – coverage-based simplification preserving topology,
+ * Five macros:
+ * 1. `snap_topology_normalized` – aligns vertices on a dynamic grid to clean
+ *    micro gaps/overlaps before simplification.
+ * 2. `simplify_topology_normalized` – coverage-based simplification preserving topology,
  *    with a normalized factor (0.0 = original, 1.0 = max simplification).
- * 2. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
- * 3. `simplify_and_clean` – convenience wrapper that chains both steps.
+ * 3. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
+ * 4. `extract_innerlines` – derives shared internal borders from polygon coverage.
+ * 5. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
  *
  * @see https://github.com/AtelierCartographie/khartis-v3/issues/53
  */
+
+const snap_topology_normalized_macro = `CREATE OR REPLACE MACRO snap_topology_normalized(
+    input_table,
+    precision_factor := 0.00001
+) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT _gid, geom
+        WHERE geom IS NOT NULL
+    ),
+    calc_grid AS (
+        FROM source_data
+        SELECT NULLIF(COALESCE(AVG(ST_Perimeter(geom)), 0.0) * precision_factor, 0.0) AS dynamic_grid_size
+    )
+    SELECT
+        s._gid,
+        COALESCE(ST_ReducePrecision(s.geom, c.dynamic_grid_size), s.geom) AS geom
+    FROM source_data s, calc_grid c
+);`;
 
 const simplify_topology_normalized_macro = `CREATE OR REPLACE MACRO simplify_topology_normalized(
     input_table,
@@ -84,6 +107,33 @@ const prune_triangles_macro = `CREATE OR REPLACE MACRO prune_triangles(input_tab
     ORDER BY _gid
 );`;
 
+const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(input_table) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT _gid, geom
+        WHERE geom IS NOT NULL
+    ),
+    touching_pairs AS (
+        SELECT
+            a._gid AS left_gid,
+            b._gid AS right_gid,
+            ST_Intersection(a.geom, b.geom) AS raw_intersection
+        FROM source_data a
+        JOIN source_data b
+          ON a._gid < b._gid
+         AND ST_Intersects(a.geom, b.geom)
+    ),
+    extracted_lines AS (
+        SELECT
+            ST_CollectionExtract(raw_intersection, 2) AS geom
+        FROM touching_pairs
+    )
+    FROM extracted_lines
+    SELECT ST_LineMerge(ST_Collect(list(geom))) AS geom
+    WHERE NOT ST_IsEmpty(geom)
+);`;
+
 const simplify_and_clean_macro = `CREATE OR REPLACE MACRO simplify_and_clean(
     input_table,
     geom_col,
@@ -96,8 +146,11 @@ const simplify_and_clean_macro = `CREATE OR REPLACE MACRO simplify_and_clean(
             row_number() OVER () as _gid,
             * RENAME ("geom_col" as geom)
     ),
+    snapped AS (
+        FROM snap_topology_normalized(prep_layer)
+    ),
     simplified AS (
-        FROM simplify_topology_normalized(prep_layer, simplify_factor)
+        FROM simplify_topology_normalized(snapped, simplify_factor)
     ),
     pruned AS (
         FROM prune_triangles(simplified)
@@ -110,6 +163,8 @@ const simplify_and_clean_macro = `CREATE OR REPLACE MACRO simplify_and_clean(
 );`;
 
 export const simplification_macros =
+  snap_topology_normalized_macro +
   simplify_topology_normalized_macro +
   prune_triangles_macro +
+  extract_innerlines_macro +
   simplify_and_clean_macro;

@@ -21,6 +21,7 @@ import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.s
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
   filterArrowTableByYear,
   filterArrowTableByDataFilters,
@@ -209,7 +210,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const additionalData = {
             lakesData: basemapService.lakesData ?? undefined,
             riversData: basemapService.riversData ?? undefined,
-            citiesData: basemapService.citiesData ?? undefined
+            citiesData: basemapService.citiesData ?? undefined,
+            frontieresTable:
+              basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
+              undefined
           };
           const basemapLayers = createBasemapLayers(
             worldBaseTable,

@@ -100,6 +100,18 @@ function isGeoArrowPolygonEncoding(geometryInfo: GeometryInfo): boolean {
   );
 }
 
+function isGeoArrowLineEncoding(geometryInfo: GeometryInfo): boolean {
+  return Boolean(
+    geometryInfo.encoding &&
+    (geometryInfo.encoding === ArrowExtension.GEOARROW_LINESTRING ||
+      geometryInfo.encoding === ArrowExtension.GEOARROW_MULTILINESTRING)
+  );
+}
+
+function isLineGeometry(geometryInfo: GeometryInfo): boolean {
+  return geometryInfo.type.includes('LINE');
+}
+
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
@@ -301,13 +313,13 @@ export function createMersLayer(
 }
 
 export function createFrontieresLayer(
-  worldBaseTable: ArrowTable,
+  frontieresTable: ArrowTable,
   config: FrontieresLayerConfig,
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
-  const geometryInfo = extractGeometryInfo(worldBaseTable);
+  const geometryInfo = extractGeometryInfo(frontieresTable);
   if (!geometryInfo) return null;
 
   const strokeColor = toRgbColor(config.color);
@@ -333,12 +345,63 @@ export function createFrontieresLayer(
   };
 
   if (
+    isLineGeometry(geometryInfo) &&
+    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+  ) {
+    return new geodecklayers.GeoArrowPathLayer({
+      id: layerId,
+      data: frontieresTable,
+      getColor: withOpacity(strokeColor, effectiveOpacity),
+      widthUnits: 'pixels',
+      getWidth: effectiveThickness,
+      widthMinPixels: 0,
+      extensions: config.dotted ? [DASH_EXTENSION] : [],
+      getDashArray: dashArray,
+      ...baseProps,
+      updateTriggers: {
+        ...updateTriggers,
+        getWidth: [effectiveThickness]
+      }
+    });
+  }
+
+  if (
+    isLineGeometry(geometryInfo) &&
+    (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded)
+  ) {
+    const geojson = arrowTableToGeoJSON(
+      frontieresTable,
+      geometryInfo.geoColumn
+    );
+    if (geojson) {
+      return new GeoJsonLayer({
+        id: layerId,
+        data: geojson,
+        filled: false,
+        stroked: true,
+        getLineColor: withOpacity(strokeColor, effectiveOpacity),
+        lineWidthUnits: 'pixels',
+        getLineWidth: effectiveThickness,
+        lineWidthMinPixels: 0,
+        lineWidthMaxPixels: 0.5,
+        extensions: config.dotted ? [DASH_EXTENSION] : [],
+        getDashArray: dashArray,
+        ...baseProps,
+        updateTriggers: {
+          ...updateTriggers,
+          getLineWidth: [effectiveThickness]
+        }
+      });
+    }
+  }
+
+  if (
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
     return new geodecklayers.GeoArrowPolygonLayer({
       id: layerId,
-      data: worldBaseTable,
+      data: frontieresTable,
       filled: false,
       stroked: true,
       getLineColor: withOpacity(strokeColor, effectiveOpacity),
@@ -357,7 +420,10 @@ export function createFrontieresLayer(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    const geojson = arrowTableToGeoJSON(
+      frontieresTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
       return new GeoJsonLayer({
         id: layerId,
@@ -379,7 +445,7 @@ export function createFrontieresLayer(
       });
     }
     logger.warn(
-      'Failed to convert world base table to GeoJSON for frontieres layer',
+      'Failed to convert frontieres table to GeoJSON for frontieres layer',
       LogCategory.MAP
     );
   }
@@ -890,6 +956,7 @@ interface BasemapAdditionalData {
   lakesData?: FeatureCollection<Polygon | MultiPolygon>;
   riversData?: FeatureCollection<LineString | MultiLineString>;
   citiesData?: FeatureCollection<Point>;
+  frontieresTable?: ArrowTable;
 }
 
 export function createBasemapLayers(
@@ -946,7 +1013,7 @@ export function createBasemapLayers(
         case BASEMAP_LAYER_ID.FRONTIERES:
           if (worldBaseTable) {
             const layer = createFrontieresLayer(
-              worldBaseTable,
+              additionalData?.frontieresTable ?? worldBaseTable,
               config as FrontieresLayerConfig,
               ctx
             );
