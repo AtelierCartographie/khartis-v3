@@ -116,6 +116,7 @@
     "localforage": "^1.10.0",
     "maplibre-gl": "^5.18.0",
     "proj4": "^2.20.2",
+    "svelte-dnd-action": "^0.9.69",
     "vite-plugin-pwa": "^1.2.0"
   },
   "pnpm": {
