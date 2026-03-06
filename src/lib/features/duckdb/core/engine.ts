@@ -120,15 +120,6 @@ async function configureRuntimeSettings(): Promise<void> {
 async function configureLocalExtensionRepository(): Promise<void> {
   if (!connection) return;
   const startTime = performance.now();
-
-  if (bundleVariant !== 'eh') {
-    logger.debug(
-      'Skipping local extension repository (wasm_mvp uses CDN)',
-      LogCategory.DUCKDB
-    );
-    return;
-  }
-
   const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const repositoryUrl = `${originUrl}${base}/duckdb-extensions`;
 
@@ -142,6 +133,7 @@ async function configureLocalExtensionRepository(): Promise<void> {
     );
     localExtensionRepositoryConfigured = true;
     logger.debug('Local extension repository configured', LogCategory.DUCKDB, {
+      bundleVariant,
       repositoryUrl,
       durationMs: (performance.now() - startTime).toFixed(2)
     });
@@ -228,7 +220,10 @@ export async function initEngine(): Promise<void> {
         eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      bundleVariant = bundle === MANUAL_BUNDLES.eh ? 'eh' : 'mvp';
+      bundleVariant =
+        bundle.mainModule === duckdb_wasm_eh || bundle.mainWorker === eh_worker
+          ? 'eh'
+          : 'mvp';
       threadsSupported = Boolean(bundle.pthreadWorker);
       logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
         bundleVariant,
