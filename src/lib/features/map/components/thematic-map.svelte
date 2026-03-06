@@ -47,6 +47,10 @@
   import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
+  import {
+    resolveOrthographicReferenceTable,
+    shouldUseBasemapReferenceInOrthographicView
+  } from '../utils/orthographic-reference';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -353,6 +357,21 @@
     return getFiltersMap().get(duckDBDataset.tableName);
   }
 
+  function getRenderedDataset(datasetId: string | undefined) {
+    if (!datasetId) return null;
+    return (
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId) ?? null
+    );
+  }
+
+  function getRenderedDuckDBDataset(datasetId: string | undefined) {
+    const dataset = getRenderedDataset(datasetId);
+    if (!dataset?.sourceFileId) return null;
+    return (
+      duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId) ?? null
+    );
+  }
+
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
@@ -557,7 +576,20 @@
     if (firstTable && canUpdate) {
       logEffect('firstTable');
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-        const bounds = calculateBoundsFromGeoArrow(firstTable);
+        const dataset = getRenderedDataset(firstDatasetId);
+        const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+        const shouldUseBasemapReference =
+          shouldUseBasemapReferenceInOrthographicView(dataset, duckDataset);
+        const referenceTable = resolveOrthographicReferenceTable({
+          dataset,
+          duckDataset,
+          datasetTable: firstTable,
+          basemapTable: worldBaseTable
+        });
+        const bounds = referenceTable
+          ? calculateBoundsFromGeoArrow(referenceTable)
+          : null;
+
         if (bounds) {
           const [[minX, minY], [maxX, maxY]] = bounds as [
             [number, number],
@@ -569,7 +601,12 @@
             fitOrthographicViewport();
           });
           triggerOnReady();
-        } else {
+        } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
+          untrack(() => {
+            fitOrthographicViewport();
+          });
+          triggerOnReady();
+        } else if (!shouldUseBasemapReference) {
           const geoMetadata = firstTable.schema.metadata?.get('geo');
           if (geoMetadata) {
             untrack(() => {
