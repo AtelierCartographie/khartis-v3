@@ -9,11 +9,11 @@ export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
-  BASEMAP_STYLES,
   BasemapStyle,
   DECK_VIEW_ID,
   DECK_CANVAS_ID,
-  DECK_DEVICE_TYPE
+  DECK_DEVICE_TYPE,
+  getBasemapStyle
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
 import { createHoverHandler, createClickHandler } from '../interactions';
@@ -450,9 +450,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       );
       if (!isMapLoaded && map) {
         map.setStyle(
-          BASEMAP_STYLES[
+          getBasemapStyle(
             BasemapStyle.BLANK_WHITE
-          ] as maplibregl.StyleSpecification
+          ) as maplibregl.StyleSpecification
         );
       }
     });

@@ -1,9 +1,9 @@
-import { base } from '$app/paths';
 import { Duck } from '$lib/features/duckdb';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../commons/utils/logger';
+import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -43,13 +43,30 @@ interface AdditionalBasemapData {
   citiesData: FeatureCollection<Point> | null;
 }
 
-const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
-const BASEMAP_ATTRIBUTES_URL = `${base}/basemaps/all-basemaps-attributes.parquet`;
-const GEOMETRY_BASE_PATH = `${base}/basemaps/geometry/`;
+const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
+const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
+const GEOMETRY_BASE_PATH = '/basemaps/geometry';
 const DEFAULT_BASEMAP_ID = 'world-countries-50m';
 const LAKES_FILE = 'ne_110m_lakes';
 const RIVERS_FILE = 'ne_110m_rivers_lake_centerlines';
 const CITIES_FILE = 'ne_110m_populated_places_simple';
+
+function getBasemapMetadataUrl(): string {
+  return resolveStaticAssetUrl(BASEMAP_METADATA_PATH);
+}
+
+function getBasemapAttributesUrl(): string {
+  return resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH);
+}
+
+function getGeometryUrl(
+  filename: string,
+  extension: 'geojson' | 'parquet'
+): string {
+  return resolveStaticAssetUrl(
+    `${GEOMETRY_BASE_PATH}/${filename}.${extension}`
+  );
+}
 
 interface LoadedBasemap {
   metadata: BasemapMetadata;
@@ -79,7 +96,7 @@ function createBasemapService() {
   async function loadMetadata(): Promise<void> {
     try {
       logger.info('Loading basemap metadata catalog', LogCategory.MAP);
-      const response = await fetch(BASEMAP_METADATA_URL);
+      const response = await fetch(getBasemapMetadataUrl());
 
       if (!response.ok) {
         throw new Error(`Failed to fetch metadata: ${response.statusText}`);
@@ -99,7 +116,7 @@ function createBasemapService() {
     if (!Duck || attributesLoaded) return;
 
     try {
-      const response = await fetch(BASEMAP_ATTRIBUTES_URL);
+      const response = await fetch(getBasemapAttributesUrl());
 
       if (!response.ok) {
         throw new Error(`Failed to fetch attributes: ${response.statusText}`);
@@ -148,14 +165,14 @@ function createBasemapService() {
   async function fetchGeometryFile(
     filename: string
   ): Promise<{ response: Response; isGeoJSON: boolean }> {
-    let url = `${GEOMETRY_BASE_PATH}${filename}.geojson`;
+    let url = getGeometryUrl(filename, 'geojson');
     let response = await fetch(url);
 
     if (response.ok) {
       return { response, isGeoJSON: true };
     }
 
-    url = `${GEOMETRY_BASE_PATH}${filename}.parquet`;
+    url = getGeometryUrl(filename, 'parquet');
     response = await fetch(url);
 
     if (!response.ok) {
@@ -495,7 +512,7 @@ function createBasemapService() {
     if (additionalData.lakesData) return;
 
     try {
-      const url = `${GEOMETRY_BASE_PATH}${LAKES_FILE}.geojson`;
+      const url = getGeometryUrl(LAKES_FILE, 'geojson');
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -519,7 +536,7 @@ function createBasemapService() {
     if (additionalData.riversData) return;
 
     try {
-      const url = `${GEOMETRY_BASE_PATH}${RIVERS_FILE}.geojson`;
+      const url = getGeometryUrl(RIVERS_FILE, 'geojson');
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -543,7 +560,7 @@ function createBasemapService() {
     if (additionalData.citiesData) return;
 
     try {
-      const url = `${GEOMETRY_BASE_PATH}${CITIES_FILE}.geojson`;
+      const url = getGeometryUrl(CITIES_FILE, 'geojson');
       const response = await fetch(url);
 
       if (!response.ok) {
