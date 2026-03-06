@@ -1169,11 +1169,9 @@
     inset: 0;
     z-index: var(--z-map-layer);
     pointer-events: none;
-    background-image: radial-gradient(
-      circle,
-      rgba(22, 22, 22, 0.2) 1px,
-      transparent 1px
-    );
+    background-image:
+      linear-gradient(to right, rgba(22, 22, 22, 0.14) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(22, 22, 22, 0.14) 1px, transparent 1px);
   }
 
   .map-canvas {
