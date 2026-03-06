@@ -27,6 +27,7 @@
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
+  const geoIndicationsVisible = $derived(geoState.visible);
 
   let localScaleFontFamily = $state('Cabin');
   let localScaleFontSize = $state(12);
@@ -84,6 +85,12 @@
     lightness: number;
   };
 
+  function handleVisibilityChange(visible: boolean): void {
+    if (visible !== geoState.visible) {
+      store.setVisibility(visible);
+    }
+  }
+
   function handleScaleFormChange(event: Event): void {
     const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
     if (form !== geoState.scale.form) {
@@ -126,10 +133,32 @@
 </script>
 
 <div id="khartis-geo-indications-tool">
+  <Grid padding noGutter fullWidth>
+    <Row>
+      <Column>
+        <div class="switch-row">
+          <span class="switch-label">{m.tool_geo_indications()}</span>
+          <Switch
+            toggled={geoIndicationsVisible}
+            labelText={m.tool_geo_indications()}
+            hideLabel
+            labelA={m.layers_hide()}
+            labelB={m.layers_show()}
+            showStateLabel
+            onchange={handleVisibilityChange}
+          />
+        </div>
+      </Column>
+    </Row>
+  </Grid>
+
   <div class="expandable-stack">
     <ExpandableSection
       title={m.geo_scale()}
       defaultOpen={geoState.scale.expanded}
+      showToggle={true}
+      toggleChecked={geoState.scale.enabled}
+      onToggleChange={() => store.toggleScale()}
     >
       <Grid noGutter>
         <Row>
@@ -233,7 +262,13 @@
       </Grid>
     </ExpandableSection>
 
-    <ExpandableSection title={m.geo_orientation()} defaultOpen={false}>
+    <ExpandableSection
+      title={m.geo_orientation()}
+      defaultOpen={false}
+      showToggle={true}
+      toggleChecked={geoState.orientation.enabled}
+      onToggleChange={() => store.toggleOrientation()}
+    >
       <Grid noGutter>
         <Row>
           <Column>
@@ -298,7 +333,13 @@
       </Grid>
     </ExpandableSection>
 
-    <ExpandableSection title={m.geo_inset_map()} defaultOpen={false}>
+    <ExpandableSection
+      title={m.geo_inset_map()}
+      defaultOpen={false}
+      showToggle={true}
+      toggleChecked={geoState.insetMap.enabled}
+      onToggleChange={() => store.toggleInsetMap()}
+    >
       <Grid noGutter>
         <Row>
           <Column>
@@ -472,6 +513,20 @@
     .expandable-stack
     :global(.section-container + .section-container) {
     border-top: 0;
+  }
+
+  .switch-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-02) 0;
+  }
+
+  .switch-label {
+    font-size: 0.875rem;
+    color: var(--cds-text-secondary);
+    font-weight: 400;
   }
 
   .text-style-row {
