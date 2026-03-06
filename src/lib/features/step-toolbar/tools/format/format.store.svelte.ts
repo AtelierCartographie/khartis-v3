@@ -10,7 +10,7 @@ import type { FormatState } from './format.types';
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
 
-export const PAGE_GRID_SIZE_PX = 3;
+export const PAGE_GRID_SIZE_PX = 24;
 
 export const DEFAULT_PAGE_COLOR: FormatState['color'] = {
   hue: 0,
