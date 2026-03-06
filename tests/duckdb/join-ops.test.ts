@@ -31,6 +31,7 @@ import {
 } from '$lib/features/duckdb/types';
 import {
   applyJoinCorrections,
+  computeJoinSynthesis,
   computeJoinStats,
   finalizeJoin,
   type DuckDBClientForJoin
@@ -213,6 +214,64 @@ describe('join-ops integration with test datasets', () => {
     expect(stats.duplicateCount).toBe(1);
     expect(stats.unrecognizedCount).toBe(1);
   });
+
+  it('includes partial matches in join synthesis scores', async () => {
+    const synthesis = await computeJoinSynthesis(
+      createDataset('source_join_cases'),
+      'country',
+      duckClient
+    );
+
+    expect(synthesis).toEqual([
+      {
+        basemap: 'test-basemap',
+        shareBasemap: 0.8,
+        shareCandidate: 0.8
+      }
+    ]);
+  });
+
+  it('finalizes joins from cached similarity without associating toofar matches', async () => {
+    await db.connection.run('DROP TABLE IF EXISTS finalize_source_cases');
+    await db.connection.run(`
+      CREATE TABLE finalize_source_cases AS
+      SELECT * FROM (
+        VALUES
+          ('Angola'),
+          ('Armenia'),
+          ('Australia')
+      ) AS rows(country)
+    `);
+
+    const result = await finalizeJoin(
+      {
+        ...createDataset('finalize_source_cases'),
+        rowCount: 3
+      },
+      TEST_BASEMAP,
+      'country',
+      duckClient
+    );
+
+    const rows = await query(
+      db,
+      `SELECT country, basemap_id, typo_match
+       FROM finalize_source_cases
+       ORDER BY country`
+    );
+
+    expect(result).toEqual({
+      joinedBasemap: 'test-basemap.parquet',
+      geoColumn: 'country',
+      gpsMode: false,
+      gpsColumns: undefined
+    });
+    expect(rows).toEqual([
+      { country: 'Angola', basemap_id: 'AGO', typo_match: 'exact' },
+      { country: 'Armenia', basemap_id: 'ARM', typo_match: 'partial' },
+      { country: 'Australia', basemap_id: null, typo_match: null }
+    ]);
+  });
 });
 
 describe('finalizeJoin behavior', () => {
@@ -235,13 +294,26 @@ describe('finalizeJoin behavior', () => {
     gpsColumns: { lat: 'lat', lon: 'lon' }
   };
 
-  it('recomputes join results even when a previous join table exists', async () => {
+  it('uses cached similarity finalization and does not call legacy join operations', async () => {
     const queryMock = vi.fn(async (sql: string) => {
-      if (sql.includes('information_schema.tables')) {
-        return [{ table_name: 'dataset_table_join_results' }];
+      if (
+        sql.includes('information_schema.tables') &&
+        sql.includes("table_name = 'basemap_attributes'")
+      ) {
+        return [{ table_name: 'basemap_attributes' }];
       }
       if (sql.includes('COUNT(*) as cnt')) {
         return [{ cnt: 4 }];
+      }
+      if (sql.includes('information_schema.columns')) {
+        return [];
+      }
+      if (
+        sql.includes(
+          'CREATE OR REPLACE TEMP TABLE "__similarity_cache__dataset_table"'
+        )
+      ) {
+        return [];
       }
       return [];
     });
@@ -261,83 +333,26 @@ describe('finalizeJoin behavior', () => {
       duckClient
     );
 
-    expect(joinByIdMock).toHaveBeenCalledTimes(1);
-    expect(applyJoinAssociationMock).toHaveBeenCalledWith(
-      'dataset_table',
-      'test-basemap'
-    );
+    expect(
+      queryMock.mock.calls.some(([sql]) =>
+        String(sql).includes(
+          'CREATE OR REPLACE TEMP TABLE "__similarity_cache__dataset_table"'
+        )
+      )
+    ).toBe(true);
+    expect(
+      queryMock.mock.calls.some(([sql]) =>
+        String(sql).includes('CREATE OR REPLACE TABLE "dataset_table" AS')
+      )
+    ).toBe(true);
+    expect(joinByIdMock).not.toHaveBeenCalled();
+    expect(applyJoinAssociationMock).not.toHaveBeenCalled();
     expect(result).toEqual({
       joinedBasemap: 'test-basemap.parquet',
       geoColumn: 'country',
       gpsMode: false,
       gpsColumns: undefined
     });
-  });
-
-  it('forces join recomputation when skipJoinComputation is set but join table is missing', async () => {
-    const queryMock = vi.fn(async (sql: string) => {
-      if (
-        sql.includes('information_schema.tables') &&
-        sql.includes('dataset_table_join_results')
-      ) {
-        return [];
-      }
-      if (
-        sql.includes('information_schema.tables') &&
-        sql.includes("table_name = 'basemap_attributes'")
-      ) {
-        return [{ table_name: 'basemap_attributes' }];
-      }
-      if (sql.includes('COUNT(*) as cnt')) {
-        return [{ cnt: 2 }];
-      }
-      return [];
-    });
-    const joinByIdMock = vi.fn(async () => []);
-    const applyJoinAssociationMock = vi.fn(async () => []);
-
-    const duckClient: DuckDBClientForJoin = {
-      query: queryMock,
-      join_by_id: joinByIdMock,
-      apply_join_association: applyJoinAssociationMock
-    };
-
-    await finalizeJoin(dataset, TEST_BASEMAP, 'country', duckClient, {
-      skipJoinComputation: true
-    });
-
-    expect(joinByIdMock).toHaveBeenCalledTimes(1);
-    expect(applyJoinAssociationMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('skips join recomputation when skipJoinComputation is set and join table exists', async () => {
-    const queryMock = vi.fn(async (sql: string) => {
-      if (
-        sql.includes('information_schema.tables') &&
-        sql.includes('dataset_table_join_results')
-      ) {
-        return [{ table_name: 'dataset_table_join_results' }];
-      }
-      if (sql.includes('COUNT(*) as cnt')) {
-        return [{ cnt: 3 }];
-      }
-      return [];
-    });
-    const joinByIdMock = vi.fn(async () => []);
-    const applyJoinAssociationMock = vi.fn(async () => []);
-
-    const duckClient: DuckDBClientForJoin = {
-      query: queryMock,
-      join_by_id: joinByIdMock,
-      apply_join_association: applyJoinAssociationMock
-    };
-
-    await finalizeJoin(dataset, TEST_BASEMAP, 'country', duckClient, {
-      skipJoinComputation: true
-    });
-
-    expect(joinByIdMock).not.toHaveBeenCalled();
-    expect(applyJoinAssociationMock).toHaveBeenCalledTimes(1);
   });
 
   it('fails when requested geo column does not exist in dataset', async () => {

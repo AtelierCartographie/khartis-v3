@@ -111,7 +111,7 @@ const extract_innerlines_macro = `CREATE OR REPLACE MACRO extract_innerlines(inp
     WITH
     source_data AS (
         FROM query_table(input_table)
-        SELECT _gid, geom
+        SELECT row_number() OVER () as _gid, geom
         WHERE geom IS NOT NULL
     ),
     touching_pairs AS (

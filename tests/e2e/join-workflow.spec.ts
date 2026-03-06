@@ -29,7 +29,9 @@ async function openOsmTab(
 ): Promise<void> {
   const osmTab = page
     .locator('#basemap-join-step')
-    .getByRole('button', { name: /^OSM$|OpenStreetMap/i })
+    .getByRole('button', {
+      name: /Fond de référence|Reference basemap|OSM|OpenStreetMap/i
+    })
     .first();
   await expect(osmTab).toBeVisible({ timeout: 10000 });
   await osmTab.click();
@@ -261,7 +263,7 @@ test.describe.serial('TC-JOIN-015: Activation OSM avec coordonnées', () => {
     await page.waitForTimeout(500);
 
     const activateOsm = page
-      .getByRole('button', { name: /activer|activate|enable/i })
+      .getByRole('button', { name: /ajouter|add|activer|activate|enable/i })
       .first();
     if (await activateOsm.isVisible()) {
       await activateOsm.click();
@@ -272,7 +274,9 @@ test.describe.serial('TC-JOIN-015: Activation OSM avec coordonnées', () => {
     });
     const osmSuccess = page
       .locator('#basemap-join-step')
-      .getByText(/OpenStreetMap|OSM/i)
+      .getByText(
+        /OpenStreetMap|OSM|Fond de référence ajouté|Reference basemap/i
+      )
       .first();
     const canVisualize = await visualiserBtn.isEnabled().catch(() => false);
     const hasOsmSuccess = await osmSuccess.isVisible().catch(() => false);

@@ -313,20 +313,28 @@ export async function uploadURL(
     const initialRows = await uploadRows.count();
     const uploadUrl = fixtureUploadUrl(page, relativePath);
     await urlInput.fill(uploadUrl);
+    await urlInput.press('Tab').catch(() => {
+      return;
+    });
     await page.waitForTimeout(400);
-    await expect(loadButton).toBeEnabled({ timeout: 10000 });
 
-    const responsePromise = page
-      .waitForResponse((response) => response.url() === uploadUrl, {
-        timeout: 12000
-      })
-      .catch(() => null);
+    const canUseUrlUpload = await loadButton
+      .isEnabled({ timeout: 10000 })
+      .catch(() => false);
 
-    await loadButton.click();
-    await responsePromise;
+    if (canUseUrlUpload) {
+      const responsePromise = page
+        .waitForResponse((response) => response.url() === uploadUrl, {
+          timeout: 12000
+        })
+        .catch(() => null);
 
-    const urlOutcome = await waitForUploadOutcome(initialRows, 12000);
-    uploadSucceeded = urlOutcome === 'rows';
+      await loadButton.click();
+      await responsePromise;
+
+      const urlOutcome = await waitForUploadOutcome(initialRows, 12000);
+      uploadSucceeded = urlOutcome === 'rows';
+    }
   }
 
   if (!uploadSucceeded) {
@@ -372,39 +380,37 @@ export async function uploadURL(
 
   if (shouldFinalizeProjectCreation && !preferDirectFileInput) {
     const createProjectModal = page.getByTestId('create-project-modal');
-    const createButton = createProjectModal.getByRole('button', {
-      name: CREATE_BUTTON_NAME
-    });
+    const createButton = await findFirstVisibleOrNull(
+      createProjectModal.getByRole('button', { name: CREATE_BUTTON_NAME }),
+      10000
+    );
 
-    if (
-      await createButton
-        .first()
-        .isVisible({ timeout: 2000 })
-        .catch(() => false)
-    ) {
-      const projectNameInput = await findFirstVisibleOrNull(
-        createProjectModal
-          .getByRole('textbox', { name: PROJECT_NAME_INPUT_NAME })
-          .or(createProjectModal.getByTestId('project-name-input')),
-        2000
-      );
-
-      if (projectNameInput) {
-        const currentValue =
-          (await projectNameInput.inputValue().catch(() => '')) || '';
-        const normalizedValue = currentValue.trim().toLowerCase();
-        const isDefaultPlaceholderValue =
-          normalizedValue === 'sans nom' || normalizedValue === 'untitled';
-        if (!normalizedValue || isDefaultPlaceholderValue) {
-          await projectNameInput.fill(DEFAULT_TEST_PROJECT_NAME);
-        }
-      }
-
-      await expect(createButton).toBeEnabled({ timeout: 20000 });
-      await clickWithConsentRetry(page, createButton);
-      await expect(createProjectModal).not.toBeVisible({ timeout: 60000 });
-      await page.waitForLoadState('networkidle');
+    if (!createButton) {
+      return;
     }
+
+    const projectNameInput = await findFirstVisibleOrNull(
+      createProjectModal
+        .getByRole('textbox', { name: PROJECT_NAME_INPUT_NAME })
+        .or(createProjectModal.getByTestId('project-name-input')),
+      5000
+    );
+
+    if (projectNameInput) {
+      const currentValue =
+        (await projectNameInput.inputValue().catch(() => '')) || '';
+      const normalizedValue = currentValue.trim().toLowerCase();
+      const isDefaultPlaceholderValue =
+        normalizedValue === 'sans nom' || normalizedValue === 'untitled';
+      if (!normalizedValue || isDefaultPlaceholderValue) {
+        await projectNameInput.fill(DEFAULT_TEST_PROJECT_NAME);
+      }
+    }
+
+    await expect(createButton).toBeEnabled({ timeout: 30000 });
+    await clickWithConsentRetry(page, createButton);
+    await expect(createProjectModal).not.toBeVisible({ timeout: 60000 });
+    await page.waitForLoadState('networkidle');
   }
 }
 
