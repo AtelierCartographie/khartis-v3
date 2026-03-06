@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -35,12 +36,7 @@
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import {
-    Button,
-    Dropdown,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
+  import { Dropdown, Select, SelectItem } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
     ClassificationMethod,
@@ -368,11 +364,10 @@
         />
       </div>
       <div class="field-row-action">
-        <Button
+        <IconButton
           icon={LetterAa}
           kind={showPrimaryFormat ? 'primary' : 'ghost'}
           size="field"
-          hasIconOnly
           iconDescription={m.text_format_button()}
           on:click={togglePrimaryFormat}
         />
@@ -535,11 +530,10 @@
         />
       </div>
       <div class="field-row-action">
-        <Button
+        <IconButton
           icon={LetterAa}
           kind={showSecondaryFormat ? 'primary' : 'ghost'}
           size="field"
-          hasIconOnly
           disabled={!hasSecondaryField}
           iconDescription={m.text_format_button()}
           on:click={toggleSecondaryFormat}

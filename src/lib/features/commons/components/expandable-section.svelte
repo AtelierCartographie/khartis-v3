@@ -1,7 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { ChevronDown, ChevronRight } from 'carbon-icons-svelte';
+  import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
   import Switch from './switch.svelte';
@@ -189,9 +189,9 @@
         aria-hidden="true"
       >
         {#if expanded}
-          <ChevronDown size={16} />
+          <ChevronUp size={16} />
         {:else}
-          <ChevronRight size={16} />
+          <ChevronDown size={16} />
         {/if}
       </span>
     </button>

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import {
@@ -7,7 +9,6 @@
   } from '$lib/features/commons/store/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { GROUPS, PROJECTIONS } from './data';
@@ -76,7 +77,7 @@
   <div class={headerClass}>
     <div><span>{description}</span></div>
     <div class="projection-buttons">
-      <Button
+      <IconButton
         kind="ghost"
         icon={List}
         size="small"
@@ -86,7 +87,7 @@
         on:click={() => projectionActions.setViewMode(ViewMode.LIST)}
       />
 
-      <Button
+      <IconButton
         kind="ghost"
         icon={Grid}
         size="small"
@@ -216,8 +217,8 @@
   }
 
   .projection-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: var(--cds-spacing-03);
   }
 

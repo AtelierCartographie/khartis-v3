@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
@@ -14,8 +15,7 @@
     Modal,
     OverflowMenu,
     OverflowMenuItem,
-    SkeletonPlaceholder,
-    Tooltip
+    SkeletonPlaceholder
   } from 'carbon-components-svelte';
   import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';

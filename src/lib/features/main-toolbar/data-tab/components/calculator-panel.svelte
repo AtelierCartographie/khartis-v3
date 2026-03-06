@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Button,
     Link,
     Select,
     SelectItem,
@@ -329,10 +330,9 @@
             <SelectItem value={column.name} text={column.name} />
           {/each}
         </Select>
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ArrowRight}
           iconDescription={m.calc_insert_variable()}
           disabled={!selectedVariable}
@@ -367,10 +367,9 @@
             <SelectItem value={fn.value} text={fn.label} />
           {/each}
         </Select>
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ArrowRight}
           iconDescription={m.calc_insert_function()}
           on:click={insertFunction}

@@ -14,7 +14,7 @@
 </script>
 
 <div id="khartis-custom-size-tool">
-  <Grid padding noGutter>
+  <Grid noGutter>
     <Row>
       <Column>
         <div class="size-grid">

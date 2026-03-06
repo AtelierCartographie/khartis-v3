@@ -1,10 +1,11 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import * as m from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
-  import type { Snippet } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { fly } from 'svelte/transition';
   import { dataToolsStore } from '../data-tools.store.svelte';
 
@@ -15,29 +16,79 @@
 
   let { title, children }: Props = $props();
 
-  const toolbarWidth = $derived.by(() => {
-    switch (globalState.toolbarState) {
+  const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
+
+  function getFallbackPanelRight(toolbarState: ToolbarState): string {
+    switch (toolbarState) {
       case ToolbarState.Collapsed:
         return '50px';
-
       case ToolbarState.Compact:
-        return '400px';
-
+        return '434px';
       default:
-        return '50vw';
+        return 'clamp(400px, 50vw, 800px)';
     }
+  }
+
+  function readPanelRight(): string {
+    if (typeof window === 'undefined') {
+      return getFallbackPanelRight(globalState.toolbarState);
+    }
+
+    const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
+    if (!toolbar) {
+      return getFallbackPanelRight(globalState.toolbarState);
+    }
+
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const rightOffset = Math.max(0, window.innerWidth - toolbarRect.left);
+
+    return `${Math.round(rightOffset)}px`;
+  }
+
+  let panelRight = $state(readPanelRight());
+
+  function updatePanelPosition(): void {
+    panelRight = readPanelRight();
+  }
+
+  $effect(() => {
+    void globalState.toolbarState;
+    updatePanelPosition();
+  });
+
+  onMount(() => {
+    updatePanelPosition();
+
+    const toolbar = document.getElementById(MAIN_TOOLBAR_ID);
+    const resizeObserver =
+      toolbar && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            updatePanelPosition();
+          })
+        : null;
+
+    if (toolbar && resizeObserver) {
+      resizeObserver.observe(toolbar);
+    }
+
+    window.addEventListener(EVENT.RESIZE, updatePanelPosition);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener(EVENT.RESIZE, updatePanelPosition);
+    };
   });
 </script>
 
 <aside
   class="data-tool-panel"
-  style:right={toolbarWidth}
+  style:right={panelRight}
   in:fly={{ x: 20, duration: 200 }}
   out:fly={{ x: 20, duration: 150 }}
 >
   <header class="panel-header">
     <h3>{title}</h3>
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       icon={Close}
@@ -53,7 +104,7 @@
 <style>
   .data-tool-panel {
     position: fixed;
-    right: 50vw;
+    right: 0;
     top: 50%;
     transform: translateY(-50%);
     width: 280px;

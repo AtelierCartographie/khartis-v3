@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Button,
     Search,
     Select,
     SelectItem,
@@ -343,19 +344,17 @@
     <div class="results-navigation">
       <span class="result-text">{navigationText}</span>
       <div class="nav-buttons">
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ChevronLeft}
           iconDescription={m.search_prev_result()}
           disabled={!hasResults}
           on:click={handlePrevResult}
         />
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ChevronRight}
           iconDescription={m.search_next_result()}
           disabled={!hasResults}

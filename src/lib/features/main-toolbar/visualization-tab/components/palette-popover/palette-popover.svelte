@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import { ArrowRight, Close } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
@@ -197,10 +198,9 @@
     >
       <header class="popover-header">
         <h3>{popoverTitle}</h3>
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={Close}
           iconDescription={m.button_cancel()}
           on:click={handleClose}

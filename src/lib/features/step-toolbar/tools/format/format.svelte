@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Grid } from 'carbon-components-svelte';
   import { formatState } from './format.store.svelte';
   import ColorSelector from './color-selector.svelte';
   import CustomSize from './custom-size.svelte';
@@ -13,25 +12,29 @@
   const isPreset = $derived(formatState.mode === PRESET_MODE);
 </script>
 
-<div id="khartis-format-tool">
-  <Grid noGutter fullWidth>
-    <FormatModeTabs />
+<div id="khartis-format-tool" class="format-sections">
+  <FormatModeTabs />
 
-    {#if isPreset}
-      <ModelSelect />
-    {:else}
-      <CustomSize />
-    {/if}
+  {#if isPreset}
+    <ModelSelect />
+  {:else}
+    <CustomSize />
+  {/if}
 
-    <ColorSelector />
+  <ColorSelector />
 
-    <MarginsEditor />
+  <MarginsEditor />
 
-    <GridToggle />
-  </Grid>
+  <GridToggle />
 </div>
 
 <style lang="scss">
+  .format-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
   #khartis-format-tool :global(.bx--number input[type='number']) {
     min-width: 0 !important;
   }

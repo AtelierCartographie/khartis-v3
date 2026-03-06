@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ANNOTATION_ROLE } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import { TextAlign } from '$lib/features/commons/types/enums';
@@ -11,7 +13,6 @@
   } from '$lib/features/step-toolbar/tools/legend/legend.constants';
   import * as m from '$lib/paraglide/messages';
   import {
-    Button,
     Column,
     Grid,
     Row,
@@ -241,7 +242,7 @@
       <div class="section text-format-controls">
         <div class="format-buttons">
           <div class:format-btn-active={effectiveStyle.bold}>
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_bold()}
@@ -251,7 +252,7 @@
             />
           </div>
           <div class:format-btn-active={effectiveStyle.italic}>
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_italic()}
@@ -263,7 +264,7 @@
             />
           </div>
           <div class:format-btn-active={effectiveStyle.underlined}>
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_underline()}
@@ -279,7 +280,7 @@
             class:format-btn-active={effectiveStyle.textAlign ===
               TextAlign.Left}
           >
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_align_left()}
@@ -291,7 +292,7 @@
             class:format-btn-active={effectiveStyle.textAlign ===
               TextAlign.Center}
           >
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_align_center()}
@@ -303,7 +304,7 @@
             class:format-btn-active={effectiveStyle.textAlign ===
               TextAlign.Right}
           >
-            <Button
+            <IconButton
               kind="ghost"
               size="field"
               iconDescription={m.annotations_align_right()}

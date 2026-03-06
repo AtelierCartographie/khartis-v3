@@ -32,7 +32,7 @@
   }
 </script>
 
-<Grid padding noGutter>
+<Grid noGutter>
   <Row>
     <Column>
       <Select

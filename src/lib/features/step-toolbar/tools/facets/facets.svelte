@@ -283,10 +283,6 @@
 </div>
 
 <style>
-  #khartis-facets-tool {
-    padding: var(--cds-spacing-05, 16px);
-  }
-
   .facets-content {
     display: flex;
     flex-direction: column;

@@ -14,7 +14,7 @@
 </script>
 
 <div id="khartis-grid-toggle-tool">
-  <Grid padding noGutter>
+  <Grid noGutter>
     <Row>
       <Column>
         <Toggle

@@ -1,10 +1,7 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { m } from '$lib/paraglide/messages';
-  import {
-    Button,
-    OverflowMenu,
-    OverflowMenuItem
-  } from 'carbon-components-svelte';
+  import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import {
     Draggable,
     Settings,
@@ -98,14 +95,14 @@
       </div>
 
       <div class="sublayer-actions">
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           icon={layer.visible ? ViewFilled : ViewOff}
           iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
           onclick={() => onToggleVisibility(layer.id)}
         />
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           icon={Settings}
@@ -133,7 +130,7 @@
       <span class="layer-title">{layer.name}</span>
 
       <div class="layer-actions">
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           icon={layer.visible ? ViewFilled : ViewOff}
