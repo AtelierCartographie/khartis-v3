@@ -1,11 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import {
-    Accordion,
-    AccordionItem,
-    Modal,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Modal, TextInput } from 'carbon-components-svelte';
   import { ColorPalette, Earth } from 'carbon-icons-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
@@ -59,12 +54,10 @@
     return children;
   });
 
-  // Rename modal state
   let renameModalOpen = $state(false);
   let renameLayerId = $state<string | null>(null);
   let renameValue = $state('');
 
-  // Delete modal state
   let deleteModalOpen = $state(false);
   let deleteLayerId = $state<string | null>(null);
 
@@ -149,55 +142,35 @@
     deleteLayerId = null;
   }
 
-  function handleReorderLayers(dragIndex: number, hoverIndex: number): void {
-    store.reorderLayers('visualization', dragIndex, hoverIndex);
+  function handleReorderLayers(fromIndex: number, toIndex: number): void {
+    store.reorderLayers('visualization', fromIndex, toIndex);
   }
 
   function handleReorderSubLayers(
     parentId: string,
-    dragIndex: number,
-    hoverIndex: number
+    fromIndex: number,
+    toIndex: number
   ): void {
-    store.reorderSubLayers(parentId, dragIndex, hoverIndex);
+    store.reorderSubLayers(parentId, fromIndex, toIndex);
   }
 </script>
 
-<div id="khartis-layers-tool">
+<div class="layers-tool">
   <p class="description">{m.layers_description()}</p>
 
-  {#if parentLayers.length > 1}
-    <Accordion>
-      {#each parentLayers as parentLayer (parentLayer.id)}
-        <AccordionItem open title={parentLayer.name}>
-          <LayersList
-            layers={[parentLayer]}
-            childLayersByParent={childLayersByParent}
-            onToggleVisibility={handleToggleVisibility}
-            onOpenSettings={handleOpenSettings}
-            onReorderSubLayer={handleReorderSubLayers}
-            onRenameLayer={handleRenameLayer}
-            onDuplicateLayer={handleDuplicateLayer}
-            onDeleteLayer={handleDeleteLayer}
-          />
-        </AccordionItem>
-      {/each}
-    </Accordion>
-  {:else}
-    <LayersList
-      layers={parentLayers}
-      childLayersByParent={childLayersByParent}
-      onToggleVisibility={handleToggleVisibility}
-      onOpenSettings={handleOpenSettings}
-      onReorderLayer={handleReorderLayers}
-      onReorderSubLayer={handleReorderSubLayers}
-      onRenameLayer={handleRenameLayer}
-      onDuplicateLayer={handleDuplicateLayer}
-      onDeleteLayer={handleDeleteLayer}
-    />
-  {/if}
+  <LayersList
+    parentLayers={parentLayers}
+    childLayersByParent={childLayersByParent}
+    onToggleVisibility={handleToggleVisibility}
+    onOpenSettings={handleOpenSettings}
+    onReorderLayers={handleReorderLayers}
+    onReorderSubLayers={handleReorderSubLayers}
+    onRenameLayer={handleRenameLayer}
+    onDuplicateLayer={handleDuplicateLayer}
+    onDeleteLayer={handleDeleteLayer}
+  />
 </div>
 
-<!-- Rename modal -->
 <Modal
   bind:open={renameModalOpen}
   modalHeading={m.layers_rename()}
@@ -213,7 +186,6 @@
   <TextInput labelText={m.layers_rename_prompt()} bind:value={renameValue} />
 </Modal>
 
-<!-- Delete confirmation modal -->
 <Modal
   danger
   bind:open={deleteModalOpen}
@@ -229,7 +201,7 @@
 </Modal>
 
 <style>
-  #khartis-layers-tool {
+  .layers-tool {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
@@ -241,21 +213,5 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-helper);
     margin: 0;
-  }
-
-  #khartis-layers-tool :global(.bx--accordion) {
-    border: 1px solid var(--cds-border-subtle);
-  }
-
-  #khartis-layers-tool :global(.bx--accordion__item) {
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  #khartis-layers-tool :global(.bx--accordion__item:first-child) {
-    border-top: none;
-  }
-
-  #khartis-layers-tool :global(.bx--accordion__content) {
-    padding: var(--cds-spacing-03) 0;
   }
 </style>
