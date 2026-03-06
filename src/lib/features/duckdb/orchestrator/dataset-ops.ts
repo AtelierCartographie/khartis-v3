@@ -72,9 +72,10 @@ export async function registerExistingTable(
 
     const columns = await Duck.analyse(tableName);
     const rowCount = await callbacks.getRowCount(tableName);
+    const existingDataset = findDatasetByIdOrSourceFile(sourceFileId);
 
     const dataset: DuckDBDataset = {
-      id: crypto.randomUUID(),
+      id: existingDataset?.id ?? crypto.randomUUID(),
       tableName,
       sourceFileId,
       name: fileName,
@@ -88,6 +89,11 @@ export async function registerExistingTable(
     };
 
     updateDatasets((datasets) => {
+      for (const [id, existing] of datasets.entries()) {
+        if (existing.sourceFileId === sourceFileId && id !== dataset.id) {
+          datasets.delete(id);
+        }
+      }
       datasets.set(dataset.id, dataset);
     });
 

@@ -115,16 +115,7 @@ export async function calculateBreaks(
     const macroName = mapMethodToMacro(method);
     let breaks: number[] = [];
 
-    const query =
-      macroName === 'quantile'
-        ? `SELECT quantile_disc("${escapedCol}", list_transform(range(1, ${numClasses}), c -> c::DOUBLE / ${numClasses})) as breaks
-           FROM "${escapedTable}"
-           WHERE "${escapedCol}" IS NOT NULL`
-        : macroName === 'equi_width'
-          ? `SELECT equi_width_bins(MIN("${escapedCol}"), MAX("${escapedCol}"), ${Math.max(numClasses - 1, 1)}, false) as breaks
-             FROM "${escapedTable}"
-             WHERE "${escapedCol}" IS NOT NULL`
-          : `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+    const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
     logger.debug('Executing breaks query', LogCategory.DATA, { query });
 
     const result = (await Duck.query(query)) as Table;
