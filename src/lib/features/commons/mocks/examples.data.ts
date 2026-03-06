@@ -1,5 +1,5 @@
-import { base } from '$app/paths';
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
+import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import * as m from '$lib/paraglide/messages';
 import type { ExampleProject } from '../store/create-project.types';
 
@@ -18,6 +18,10 @@ export const EXAMPLE_CATEGORIES: ExampleCategoryConfig[] = [
   { id: ExampleCategory.HYBRIDS, label: 'try_example_hybrids' }
 ];
 
+function resolveExampleAssetPath(path?: string): string | undefined {
+  return path ? resolveStaticAssetUrl(path) : undefined;
+}
+
 export const EXAMPLE_PROJECTS: ExampleProject[] = [
   {
     id: 'world-population',
@@ -25,8 +29,10 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_world_population_subtitle(),
     description: m.example_world_population_description(),
     category: ExampleCategory.POLYGONS,
-    thumbnail: '/examples/world-population-thumb.png',
-    dataUrl: '/examples/data/countries-population-simple.csv',
+    thumbnail: resolveExampleAssetPath('/examples/world-population-thumb.png'),
+    dataUrl: resolveExampleAssetPath(
+      '/examples/data/countries-population-simple.csv'
+    ),
     baseMapId: 'world-countries',
     visualizations: [
       {
@@ -50,8 +56,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_european_cities_subtitle(),
     description: m.example_european_cities_description(),
     category: ExampleCategory.SYMBOLS,
-    thumbnail: '/examples/european-cities-thumb.png',
-    dataUrl: '/examples/data/european-cities.csv',
+    thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.png'),
+    dataUrl: resolveExampleAssetPath('/examples/data/european-cities.csv'),
     baseMapId: 'europe-countries',
     visualizations: [
       {
@@ -76,8 +82,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_world_countries_subtitle(),
     description: m.example_world_countries_description(),
     category: ExampleCategory.POLYGONS,
-    thumbnail: '/examples/world-countries-thumb.png',
-    dataUrl: '/examples/data/world-countries.geojson',
+    thumbnail: resolveExampleAssetPath('/examples/world-countries-thumb.png'),
+    dataUrl: resolveExampleAssetPath('/examples/data/world-countries.geojson'),
     visualizations: [
       {
         type: 'simple',
@@ -99,8 +105,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_gdp_evolution_subtitle(),
     description: m.example_gdp_evolution_description(),
     category: ExampleCategory.HYBRIDS,
-    thumbnail: '/examples/gdp-evolution-thumb.png',
-    dataUrl: '/examples/data/gdp-growth-2023.csv',
+    thumbnail: resolveExampleAssetPath('/examples/gdp-evolution-thumb.png'),
+    dataUrl: resolveExampleAssetPath('/examples/data/gdp-growth-2023.csv'),
     baseMapId: 'world-countries',
     visualizations: [
       {
@@ -123,8 +129,8 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     subtitle: m.example_transport_flows_subtitle(),
     description: m.example_transport_flows_description(),
     category: ExampleCategory.LINES,
-    thumbnail: '/examples/transport-flows-thumb.png',
-    dataUrl: '/examples/data/transport-flows.geojson',
+    thumbnail: resolveExampleAssetPath('/examples/transport-flows-thumb.png'),
+    dataUrl: resolveExampleAssetPath('/examples/data/transport-flows.geojson'),
     visualizations: [
       {
         type: 'flow',
@@ -156,10 +162,7 @@ export async function loadExampleData(
     if (!example.dataUrl) {
       throw new Error(m.error_example_data_url_missing());
     }
-    const url = example.dataUrl.startsWith('/')
-      ? `${base}${example.dataUrl}`
-      : example.dataUrl;
-    const response = await fetch(url);
+    const response = await fetch(example.dataUrl);
 
     if (!response.ok) {
       throw new Error(

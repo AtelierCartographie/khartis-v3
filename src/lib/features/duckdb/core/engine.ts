@@ -1,6 +1,6 @@
-import { base } from '$app/paths';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
@@ -120,8 +120,7 @@ async function configureRuntimeSettings(): Promise<void> {
 async function configureLocalExtensionRepository(): Promise<void> {
   if (!connection) return;
   const startTime = performance.now();
-  const originUrl = typeof window !== 'undefined' ? window.location.origin : '';
-  const repositoryUrl = `${originUrl}${base}/duckdb-extensions`;
+  const repositoryUrl = resolveStaticAssetUrl('/duckdb-extensions');
 
   try {
     await executeQuery(

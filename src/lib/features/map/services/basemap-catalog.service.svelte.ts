@@ -1,15 +1,15 @@
-import { base } from '$app/paths';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
 import type { GPSBounds } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../commons/utils/logger';
+import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import type {
   BasemapCatalog,
   BasemapMetadata,
   BasemapSuggestion
 } from '../types/basemap.types';
 
-const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
+const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 
 function createBasemapCatalogService() {
   const state = $state<{
@@ -26,7 +26,9 @@ function createBasemapCatalogService() {
     }
 
     try {
-      const response = await fetch(BASEMAP_METADATA_URL);
+      const response = await fetch(
+        resolveStaticAssetUrl(BASEMAP_METADATA_PATH)
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch catalog: ${response.statusText}`);

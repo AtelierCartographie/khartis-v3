@@ -26,6 +26,7 @@
   } from 'geojson';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
@@ -41,7 +42,7 @@
     (_, index) => index
   );
   const SCALE_FALLBACK_ZOOM = 2;
-  const INSET_MAP_DATA_URL = '/basemaps/geometry/world-countries-50m.geojson';
+  const INSET_MAP_DATA_PATH = '/basemaps/geometry/world-countries-50m.geojson';
   const INSET_PLANISPHERE_RATIO = 0.62;
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_MAX_RATIO = 0.34;
@@ -91,7 +92,9 @@
 
     const loadWorldFeatures = async (): Promise<void> => {
       try {
-        const response = await fetch(INSET_MAP_DATA_URL);
+        const response = await fetch(
+          resolveStaticAssetUrl(INSET_MAP_DATA_PATH)
+        );
         if (!response.ok) {
           return;
         }
