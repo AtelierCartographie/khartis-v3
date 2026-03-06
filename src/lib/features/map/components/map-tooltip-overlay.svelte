@@ -1,5 +1,9 @@
 <script lang="ts">
+  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
+  import { DECK_CANVAS_ID } from '../constants';
+  import { resolveTooltipViewportPosition } from '../utils/tooltip-position';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import ChevronRight from 'carbon-icons-svelte/lib/ChevronRight.svelte';
@@ -22,6 +26,23 @@
   );
   const hasSecondaryEntries = $derived(secondaryEntries.length > 0);
 
+  function getActiveViewportRect(): { left: number; top: number } | null {
+    if (typeof document === 'undefined') {
+      return null;
+    }
+
+    const mapCanvas = mapInstanceStore.map?.getCanvas() ?? null;
+    const orthographicCanvas = document.getElementById(DECK_CANVAS_ID);
+    const viewportElement = mapCanvas ?? orthographicCanvas;
+
+    if (!(viewportElement instanceof HTMLElement)) {
+      return null;
+    }
+
+    const { left, top } = viewportElement.getBoundingClientRect();
+    return { left, top };
+  }
+
   // Reset accordion when tooltip hides or entries change
   $effect(() => {
     void tooltipState.entries;
@@ -33,26 +54,31 @@
       return { left: 0, top: 0 };
     }
 
-    let left = tooltipState.x + TOOLTIP_OFFSET_X;
-    let top = tooltipState.y + TOOLTIP_OFFSET_Y;
+    // Deck.gl PickingInfo.x/y are relative to the active map viewport, not the
+    // browser window. Convert them to viewport coordinates for the global overlay.
+    void globalState.zoom.pageZoomLevel;
+    void globalState.zoom.pagePanOffset.x;
+    void globalState.zoom.pagePanOffset.y;
+    void mapInstanceStore.deckInstance;
 
-    if (typeof window !== 'undefined' && tooltipElement) {
-      const rect = tooltipElement.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+    const rect = tooltipElement?.getBoundingClientRect();
+    const viewportRect = getActiveViewportRect();
 
-      if (left + rect.width > viewportWidth - VIEWPORT_PADDING) {
-        left = tooltipState.x - rect.width - TOOLTIP_OFFSET_X;
-      }
-      if (top + rect.height > viewportHeight - VIEWPORT_PADDING) {
-        top = tooltipState.y - rect.height - TOOLTIP_OFFSET_Y;
-      }
-
-      left = Math.max(VIEWPORT_PADDING, left);
-      top = Math.max(VIEWPORT_PADDING, top);
-    }
-
-    return { left, top };
+    return resolveTooltipViewportPosition({
+      anchor: { x: tooltipState.x, y: tooltipState.y },
+      viewportOrigin: viewportRect,
+      tooltipSize: {
+        width: rect?.width ?? 0,
+        height: rect?.height ?? 0
+      },
+      viewportSize: {
+        width: typeof window !== 'undefined' ? window.innerWidth : 0,
+        height: typeof window !== 'undefined' ? window.innerHeight : 0
+      },
+      offsetX: TOOLTIP_OFFSET_X,
+      offsetY: TOOLTIP_OFFSET_Y,
+      padding: VIEWPORT_PADDING
+    });
   });
 
   function handleClose(): void {
