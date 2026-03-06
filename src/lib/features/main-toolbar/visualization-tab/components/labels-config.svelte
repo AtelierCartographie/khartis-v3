@@ -266,7 +266,8 @@
       [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
+      [ClassificationMethod.STANDARD_DEVIATION]:
+        m.discretization_method_nested_means,
       [ClassificationMethod.MANUAL]: m.discretization_method_manual,
       [ClassificationMethod.Q6]: m.discretization_method_q6,
       [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,

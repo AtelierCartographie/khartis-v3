@@ -3,6 +3,10 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import {
+    DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    NESTED_MEANS_CLASS_COUNTS
+  } from './discretization.utils';
+  import {
     Button,
     Column,
     Grid,
@@ -17,7 +21,6 @@
     | 'jenks'
     | 'quantile'
     | 'equal-interval'
-    | 'stddev'
     | 'manual'
     | 'q6'
     | 'nested-means'
@@ -33,6 +36,7 @@
   interface Props {
     method?: ClassificationMethod;
     numClasses?: number;
+    classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
     showHistogram?: boolean;
@@ -45,6 +49,7 @@
   let {
     method = $bindable<ClassificationMethod>('quantile'),
     numClasses = $bindable(5),
+    classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
       { min: 0, max: 20, count: 45, color: '#f7fbff' },
       { min: 20, max: 40, count: 72, color: '#c6dbef' },
@@ -68,7 +73,6 @@
       jenks: m.discretization_desc_jenks,
       quantile: m.discretization_desc_quantile,
       'equal-interval': m.discretization_desc_equal_interval,
-      stddev: m.discretization_desc_stddev,
       manual: m.discretization_desc_manual,
       q6: m.discretization_desc_q6,
       'nested-means': m.discretization_desc_nested_means,
@@ -85,8 +89,6 @@
   const isClassCountLocked = $derived(method === 'q6');
   const isNestedMeans = $derived(method === 'nested-means');
 
-  const NESTED_MEANS_VALUES = [2, 4, 8, 16] as const;
-
   function handleMethodChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
@@ -95,7 +97,7 @@
       numClasses = 6;
       onclasseschange?.(6);
     } else if (newMethod === 'nested-means') {
-      const closest = NESTED_MEANS_VALUES.reduce((prev, curr) =>
+      const closest = NESTED_MEANS_CLASS_COUNTS.reduce((prev, curr) =>
         Math.abs(curr - numClasses) < Math.abs(prev - numClasses) ? curr : prev
       );
       numClasses = closest;
@@ -196,10 +198,6 @@
               text={m.discretization_method_head_tail()}
             />
             <SelectItem
-              value="stddev"
-              text={m.discretization_method_stddev()}
-            />
-            <SelectItem
               value="manual"
               text={m.discretization_method_manual()}
             />
@@ -216,7 +214,7 @@
                 value={String(numClasses)}
                 on:change={handleNestedMeansChange}
               >
-                {#each NESTED_MEANS_VALUES as val (val)}
+                {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
                   <SelectItem value={String(val)} text={String(val)} />
                 {/each}
               </Select>
@@ -224,7 +222,7 @@
               <CompactNumberInput
                 bind:value={numClasses}
                 min={2}
-                max={12}
+                max={classCountMax}
                 disabled={isClassCountLocked}
                 onchange={handleClassesChange}
                 width="100%"

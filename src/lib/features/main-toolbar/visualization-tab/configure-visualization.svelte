@@ -17,6 +17,11 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import {
+    normalizeClassificationMethod,
+    resolveComputedClassCount,
+    resolveRequestedClassCount
+  } from './components/discretization.utils';
   import { FillMode } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -229,7 +234,27 @@
       return;
     }
 
-    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${selectedViz.classification?.method}-${selectedViz.classification?.numClasses}`;
+    const method = selectedViz.classification?.method;
+    const numClasses = selectedViz.classification?.numClasses ?? 5;
+
+    if (!method) {
+      logger.debug(
+        '[configure-visualization] skipped breaks computation (missing method)',
+        LogCategory.UI,
+        {
+          trigger,
+          selectedVisualizationId: selectedViz.id
+        }
+      );
+      return;
+    }
+
+    const normalizedMethod = normalizeClassificationMethod(method);
+    const requestedClassCount = resolveRequestedClassCount(
+      normalizedMethod,
+      numClasses
+    );
+    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}`;
     if (computeKey === lastComputedKey) {
       logger.debug(
         '[configure-visualization] skipped breaks computation (same compute key)',
@@ -261,44 +286,30 @@
       return;
     }
 
-    const method = selectedViz.classification?.method;
-    const numClasses = selectedViz.classification?.numClasses ?? 5;
-
-    if (!method) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (missing method)',
-        LogCategory.UI,
-        {
-          trigger,
-          requestId,
-          selectedVisualizationId: selectedViz.id
-        }
-      );
-      return;
-    }
-
     logger.info('[configure-visualization] computing breaks', LogCategory.UI, {
       trigger,
       requestId,
       selectedVisualizationId: selectedViz.id,
       sourceFileId: dataset.sourceFileId,
       valueColumn: selectedViz.mapping.valueColumn,
-      method,
-      numClasses
+      method: normalizedMethod,
+      numClasses: requestedClassCount
     });
 
     try {
       const result = await calculateBreaks({
         datasetId: dataset.sourceFileId,
         columnName: selectedViz.mapping.valueColumn,
-        method,
-        numClasses
+        method: normalizedMethod,
+        numClasses: requestedClassCount
       });
 
       if (result && selectedViz?.id) {
-        // For head-tail, the algorithm auto-determines the number of classes
-        // which may be less than the requested numClasses. Sync to actual result.
-        const actualNumClasses = result.breaks.length - 1;
+        const actualNumClasses = resolveComputedClassCount(
+          normalizedMethod,
+          requestedClassCount,
+          result.counts.length
+        );
         const existingColors = selectedViz.classification?.colors;
         const colors =
           existingColors && existingColors.length === actualNumClasses
@@ -312,9 +323,12 @@
           colors
         };
         if (
-          method === ClassificationMethod.HEAD_TAIL &&
-          actualNumClasses !== numClasses
+          normalizedMethod !== method ||
+          actualNumClasses !== numClasses ||
+          selectedViz.classification?.classes !== actualNumClasses
         ) {
+          classificationUpdate.method = normalizedMethod;
+          classificationUpdate.classes = actualNumClasses;
           classificationUpdate.numClasses = actualNumClasses;
         }
         visualizationStore.updateClassification(
