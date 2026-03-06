@@ -435,6 +435,7 @@ export async function deserializeProjectData(
         legendActions.setState({
           items: legend.items,
           position: legend.position,
+          dragPosition: legend.dragPosition ?? null,
           visible: legend.visible,
           style: legend.style,
           hasBeenOpened: legend.hasBeenOpened ?? false

@@ -8,6 +8,7 @@ import {
 } from '$lib/types/data';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
+import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
   formatError,
@@ -738,17 +739,23 @@ function createDataOrchestratorService() {
     processedFileIds.clear();
 
     const currentProject = projectStore.currentProject;
+    const vizSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.visualizationSettings;
+
+    // Preload persisted visualizations before datasets are restored so the
+    // project reload path does not briefly recreate default visualizations.
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+    }
+
     if (currentProject?.data?.sourceFiles) {
       await processProjectFiles(currentProject.data.sourceFiles);
     }
 
-    // Restore visualization settings after datasets are loaded.
-    // This must happen after processProjectFiles() so that the auto-create
-    // $effect in visualization-tab.svelte has already run (adding the dataset
-    // to initializedDatasetIds), preventing it from overriding the restored settings.
-    const vizSettings = (
-      currentProject?.data as unknown as SerializedProjectData
-    )?.visualizationSettings;
+    // Restore once more after dataset loading so the runtime store matches the
+    // serialized project exactly, even if dataset restoration created
+    // temporary default visualizations.
     if (vizSettings) {
       visualizationStore.restoreFromSerialized(vizSettings);
       logger.debug(
@@ -757,6 +764,8 @@ function createDataOrchestratorService() {
       );
     }
 
+    layersActions.syncWithVisualizations();
+    legendActions.syncWithVisualizations();
     globalActions.ensureTabSelected();
   }
 
