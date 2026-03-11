@@ -44,6 +44,12 @@ Khartis is a web application to create professional thematic maps without prior 
 - **Export**: PNG/SVG/PDF; data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); auto-save and project versions (`.kh`)
 - **Accessibility and i18n**: keyboard shortcuts, French/English interface
 
+## Screenshots
+
+| Accueil | Visualisation | Habillage |
+|:---:|:---:|:---:|
+| ![Écran d'accueil](static/screenshots/welcome.png) | ![Étape Visualisation](static/screenshots/visualization.png) | ![Étape Habillage](static/screenshots/styling.png) |
+
 ## Tech stack
 
 - SvelteKit 5 (Runes), TypeScript, Vite
