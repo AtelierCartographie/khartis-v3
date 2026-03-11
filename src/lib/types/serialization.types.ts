@@ -41,6 +41,7 @@ export interface SerializedBasemapSettings {
   layers: BasemapLayerConfig[];
   style: BasemapStyle;
   mapProjection: MapProjectionType;
+  referenceBasemapId?: string | null;
 }
 
 export interface SerializedVisualizationSettings {
@@ -104,4 +105,6 @@ export interface SerializedUploadedFile {
   // ZIP multi-file support
   sourceArchive?: string;
   duckdbTableName?: string;
+  // Stable dataset ID — reused on restore so visualization.datasetId references remain valid
+  datasetId?: string;
 }

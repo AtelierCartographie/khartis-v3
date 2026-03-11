@@ -1,8 +1,13 @@
-export type MapProjectionType = 'mercator' | 'globe';
+import {
+  MAP_PROJECTION_TYPE,
+  type MapProjectionTypeValue
+} from '$lib/features/commons/constants';
 
-const DEFAULT_MAP_PROJECTION: MapProjectionType = 'mercator';
-const PROJECTION_MERCATOR: MapProjectionType = 'mercator';
-const PROJECTION_GLOBE: MapProjectionType = 'globe';
+export type MapProjectionType = MapProjectionTypeValue;
+
+const DEFAULT_MAP_PROJECTION: MapProjectionType = MAP_PROJECTION_TYPE.MERCATOR;
+const PROJECTION_MERCATOR: MapProjectionType = MAP_PROJECTION_TYPE.MERCATOR;
+const PROJECTION_GLOBE: MapProjectionType = MAP_PROJECTION_TYPE.GLOBE;
 
 function createMapProjectionStore() {
   const state = $state({

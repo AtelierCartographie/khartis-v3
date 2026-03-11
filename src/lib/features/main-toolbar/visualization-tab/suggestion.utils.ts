@@ -1,4 +1,46 @@
+import type { GeometryType } from '$lib/features/commons/services/viz-suggester.service';
 import { VisualizationType } from '$lib/features/commons/store/visualization.store.svelte';
+
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+
+interface DatasetGeometrySource {
+  geometry?: { type?: string | null };
+  sourceFileId?: string;
+}
+
+export function resolveDatasetGeometryType(
+  dataset?: DatasetGeometrySource
+): GeometryType | null {
+  if (!dataset) {
+    return null;
+  }
+
+  const rawGeometry = dataset.geometry?.type;
+  if (typeof rawGeometry === 'string' && rawGeometry.length > 0) {
+    return rawGeometry as GeometryType;
+  }
+
+  if (!dataset.sourceFileId) {
+    return null;
+  }
+
+  const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
+    dataset.sourceFileId
+  );
+  if (!duckDataset) {
+    return null;
+  }
+
+  if (duckDataset.gpsMode) {
+    return 'Point';
+  }
+
+  if (duckDataset.joinedBasemap) {
+    return 'Polygon';
+  }
+
+  return null;
+}
 
 export function mapSuggestionToType(suggestionId: string): VisualizationType {
   const mapping: Record<string, VisualizationType> = {

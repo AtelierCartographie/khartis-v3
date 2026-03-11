@@ -14,8 +14,7 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import {
   simplifyGeometryTable,
-  calculateToleranceFromRate,
-  SIMPLIFICATION_TOLERANCE
+  calculateToleranceFromRate
 } from '$lib/features/duckdb/operations/simplification';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -68,32 +67,49 @@ const { actions, getState } = createToolStore<
         throw new Error('No basemap loaded');
       }
 
-      const basemapId = currentBasemap.metadata.file;
-      const tolerance = SIMPLIFICATION_TOLERANCE[s.level];
+      const metadata = currentBasemap.metadata;
+      const basemapId = metadata.file;
 
-      logger.info('Starting basemap simplification', LogCategory.DUCKDB, {
+      // Basemap simplification uses pre-built variant files prepared by the Atelier.
+      // No on-the-fly SQL simplification — variants must be declared in metadata.
+      const variantFile = metadata.variants?.[s.level];
+      if (!variantFile) {
+        logger.info(
+          'No variant available for this basemap at this level',
+          LogCategory.DUCKDB,
+          { basemapId, level: s.level }
+        );
+
+        return {
+          type: SimplificationTarget.BASEMAP,
+          level: s.level,
+          simplified: false,
+          vertexReduction: 0,
+          originalVertices: 0,
+          simplifiedVertices: 0
+        };
+      }
+
+      logger.info(
+        'Loading basemap variant for simplification',
+        LogCategory.DUCKDB,
+        { basemapId, level: s.level, variantFile }
+      );
+
+      await basemapService.loadVariant(basemapId, variantFile, s.level);
+
+      logger.success('Basemap variant loaded', LogCategory.DUCKDB, {
         basemapId,
-        level: s.level,
-        tolerance
-      });
-
-      const tableName = await basemapService.loadGeometryIntoDuckDB(basemapId);
-      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance);
-
-      await basemapService.simplifyBasemap(basemapId, s.level);
-
-      logger.success('Basemap simplification completed', LogCategory.DUCKDB, {
-        basemapId,
-        metrics
+        variantFile
       });
 
       return {
         type: SimplificationTarget.BASEMAP,
         level: s.level,
         simplified: true,
-        vertexReduction: metrics.reductionPercentage,
-        originalVertices: metrics.originalVertices,
-        simplifiedVertices: metrics.simplifiedVertices
+        vertexReduction: 0,
+        originalVertices: 0,
+        simplifiedVertices: 0
       };
     } else {
       const dataset = datasetsStore.selectedDataset;
@@ -103,6 +119,15 @@ const { actions, getState } = createToolStore<
           LogCategory.DUCKDB
         );
         throw new Error('No dataset selected');
+      }
+
+      if (dataset.joinedBasemap) {
+        logger.error(
+          'Cannot simplify a dataset joined to a catalog basemap',
+          LogCategory.DUCKDB,
+          { datasetId: dataset.id, joinedBasemap: dataset.joinedBasemap }
+        );
+        throw new Error('Cannot simplify a catalog basemap dataset');
       }
 
       if (!dataset.geometry?.bounds) {

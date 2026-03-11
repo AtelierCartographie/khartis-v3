@@ -3,7 +3,12 @@ import { visualizationStore } from '$lib/features/commons/store/visualization.st
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { generateFacetVisualizations } from '$lib/features/commons/utils/facet-generator';
 
-export type ScaleMode = 'shared' | 'independent';
+export const SCALE_MODE = {
+  SHARED: 'shared',
+  INDEPENDENT: 'independent'
+} as const;
+
+export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
 export interface FacetsLayout {
   columns: 2 | 3 | 4;
@@ -28,7 +33,7 @@ const DEFAULT_STATE: FacetsState = {
     columns: 3,
     gap: 16
   },
-  scaleMode: 'independent',
+  scaleMode: SCALE_MODE.INDEPENDENT,
   syncPanZoom: false,
   generatedVisualizationIds: []
 };
@@ -129,9 +134,18 @@ function createFacetsStore() {
     state.layout.gap = gap;
   }
 
+  function toggleSyncPanZoom(): void {
+    state.syncPanZoom = !state.syncPanZoom;
+    logger.info('Toggled syncPanZoom', LogCategory.STORE, {
+      syncPanZoom: state.syncPanZoom
+    });
+  }
+
   async function toggleScaleMode(): Promise<void> {
     const newMode: ScaleMode =
-      state.scaleMode === 'shared' ? 'independent' : 'shared';
+      state.scaleMode === SCALE_MODE.SHARED
+        ? SCALE_MODE.INDEPENDENT
+        : SCALE_MODE.SHARED;
 
     logger.info('Toggling scale mode', LogCategory.STORE, {
       from: state.scaleMode,
@@ -196,9 +210,9 @@ function createFacetsStore() {
     setVariables,
     setColumns,
     setGap,
-    toggleScaleMode
+    toggleScaleMode,
+    toggleSyncPanZoom
   };
 }
 
 export const facetsStore = createFacetsStore();
-export const getFacetsState = () => facetsStore;

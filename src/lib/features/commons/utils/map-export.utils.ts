@@ -2,12 +2,16 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
 import type { Geometry, Position } from 'geojson';
+import { SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   getCategoricalColorMap,
   getColorForValue,
   getSizeForValue
 } from '../../map/utils/data-styling.utils';
-import type { VisualizationConfig } from '../store/visualization.store.svelte';
+import {
+  VisualizationType,
+  type VisualizationConfig
+} from '../store/visualization.store.svelte';
 import { hexToRgb, hslToHex } from './color-utils';
 import { LogCategory, logger } from './logger';
 import type {
@@ -105,7 +109,9 @@ function calculateDatasetBounds(
     };
   }
 
-  const geometryColumn = dataset.columns.find((col) => col.type === COLUMN_TYPE_GEOMETRY);
+  const geometryColumn = dataset.columns.find(
+    (col) => col.type === COLUMN_TYPE_GEOMETRY
+  );
   if (!geometryColumn) return null;
 
   let minX = Infinity;
@@ -280,7 +286,7 @@ function getFeatureStyle(
   let radius = 5;
 
   if (
-    visualization.type === 'choropleth' &&
+    visualization.type === VisualizationType.CHOROPLETH &&
     visualization.mapping.valueColumn
   ) {
     const value = row[visualization.mapping.valueColumn];
@@ -299,7 +305,7 @@ function getFeatureStyle(
   }
 
   if (
-    visualization.type === 'categorical' &&
+    visualization.type === VisualizationType.CATEGORICAL &&
     visualization.mapping.categoryColumn
   ) {
     const category = row[visualization.mapping.categoryColumn];
@@ -326,7 +332,7 @@ function getFeatureStyle(
   }
 
   if (
-    visualization.type === 'proportional' &&
+    visualization.type === VisualizationType.PROPORTIONAL &&
     visualization.mapping.sizeColumn
   ) {
     const value = row[visualization.mapping.sizeColumn];
@@ -411,7 +417,7 @@ function renderShapeAnnotation(item: Annotation): string {
   const { x, y } = item.position;
   const originX = x;
   const originY = y;
-  const shapeType = String(item.content ?? 'circle');
+  const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE);
   const style = item.style ?? {};
   const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
   const stroke = resolveColor(style.strokeColor, SVG_COLORS.DEFAULT_STROKE);
@@ -420,21 +426,21 @@ function renderShapeAnnotation(item: Annotation): string {
   const size = style.size ?? 50;
 
   switch (shapeType) {
-    case 'circle':
+    case SHAPE_TYPE.CIRCLE:
       return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'line':
+    case SHAPE_TYPE.LINE:
       return `    <line x1="${originX}" y1="${originY + size / 2}" x2="${originX + size}" y2="${originY + size / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'rectangle':
+    case SHAPE_TYPE.RECTANGLE:
       return `    <rect x="${originX}" y="${originY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case 'triangle': {
+    case SHAPE_TYPE.TRIANGLE: {
       const points = `${originX + size / 2},${originY} ${originX},${originY + size} ${originX + size},${originY + size}`;
       return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
-    case 'arrow': {
+    case SHAPE_TYPE.ARROW: {
       const arrowPath = `M${originX},${originY + size / 2} L${originX + size * 0.7},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.2} L${originX + size},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.8} L${originX + size * 0.7},${originY + size / 2} Z`;
       return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
     }
-    case 'star': {
+    case SHAPE_TYPE.STAR: {
       const outerR = size / 2;
       const innerR = outerR * 0.4;
       const centerX = originX + outerR;
@@ -693,26 +699,10 @@ export function exportMapToSvg(
 ): Blob {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
 
-  logger.info('[SVG DEBUG] exportMapToSvg called', LogCategory.EXPORT, {
-    datasetCount: datasets.length,
-    datasets: datasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      geometry: d.geometry,
-      dataLength: d.data?.length ?? 0
-    })),
-    visualizationCount: visualizations.length
-  });
-
   const geometricDatasets = datasets.filter((d) => d.geometry);
   if (geometricDatasets.length === 0) {
     throw new Error(m.error_no_geometric_data_export());
   }
-
-  logger.info('[SVG DEBUG] Geometric datasets', LogCategory.EXPORT, {
-    count: geometricDatasets.length,
-    ids: geometricDatasets.map((d) => d.id)
-  });
 
   const bounds = geometricDatasets
     .map((d) => calculateDatasetBounds(d))
@@ -726,8 +716,6 @@ export function exportMapToSvg(
       }),
       { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
     );
-
-  logger.info('[SVG DEBUG] Calculated bounds', LogCategory.EXPORT, { bounds });
 
   if (!isFinite(bounds.minX)) {
     throw new Error(m.error_unable_calculate_map_bounds());
@@ -744,78 +732,31 @@ export function exportMapToSvg(
 
   const enabledVisualizations = visualizations.filter((v) => v.enabled);
 
-  logger.info('[SVG DEBUG] Processing visualizations', LogCategory.EXPORT, {
-    enabledCount: enabledVisualizations.length,
-    visualizations: enabledVisualizations.map((v) => ({
-      id: v.id,
-      datasetId: v.datasetId
-    }))
-  });
-
   for (const visualization of enabledVisualizations) {
-    const dataset = datasets.find((d) => d.id === visualization.datasetId);
-
-    logger.info('[SVG DEBUG] Processing visualization', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      vizDatasetId: visualization.datasetId,
-      datasetFound: !!dataset,
-      datasetGeometry: dataset?.geometry,
-      datasetDataLength: dataset?.data?.length ?? 0
-    });
-
-    if (!dataset || !dataset.geometry) {
+    // Direct ID match; fall back to sole dataset when IDs are stale (e.g. after page reload)
+    let dataset = datasets.find((d) => d.id === visualization.datasetId);
+    if (!dataset && datasets.length === 1 && datasets[0].geometry) {
+      dataset = datasets[0];
       logger.warn(
-        '[SVG DEBUG] Skipping viz - no dataset or geometry',
+        'Dataset ID mismatch — using sole available dataset as fallback',
         LogCategory.EXPORT,
         {
-          vizId: visualization.id
+          vizDatasetId: visualization.datasetId,
+          fallbackDatasetId: datasets[0].id
         }
       );
-      continue;
     }
+
+    if (!dataset || !dataset.geometry) continue;
 
     const geometryColumn = dataset.columns.find(
       (col) => col.type === COLUMN_TYPE_GEOMETRY
     );
 
-    logger.info('[SVG DEBUG] Geometry column search', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      geometryColumnFound: !!geometryColumn,
-      geometryColumnName: geometryColumn?.name,
-      allColumnTypes: dataset.columns.map((c) => ({
-        name: c.name,
-        type: c.type
-      }))
-    });
-
-    if (!geometryColumn) {
-      logger.warn(
-        '[SVG DEBUG] Skipping viz - no geometry column',
-        LogCategory.EXPORT,
-        {
-          vizId: visualization.id
-        }
-      );
-      continue;
-    }
+    if (!geometryColumn) continue;
 
     const polygons: string[] = [];
     const symbols: string[] = [];
-
-    logger.info('[SVG DEBUG] Iterating data rows', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      rowCount: dataset.data.length,
-      firstRowKeys: dataset.data[0] ? Object.keys(dataset.data[0]) : [],
-      firstRowGeomType: dataset.data[0]
-        ? typeof dataset.data[0][geometryColumn.name]
-        : 'N/A',
-      firstRowGeomValue: dataset.data[0]
-        ? JSON.stringify(dataset.data[0][geometryColumn.name])?.substring(
-            0,
-            200
-          )
-        : 'N/A'
-    });
 
     for (const row of dataset.data) {
       const geometry = row[geometryColumn.name] as Geometry | null | undefined;
@@ -825,8 +766,12 @@ export function exportMapToSvg(
       const svgElement = renderGeometryToSvg(geometry, project, style, radius);
 
       if (svgElement) {
-        const isPolygon = geometry.type === GEOJSON_TYPE.POLYGON || geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
-        const isLine = geometry.type === GEOJSON_TYPE.LINE_STRING || geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
+        const isPolygon =
+          geometry.type === GEOJSON_TYPE.POLYGON ||
+          geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
+        const isLine =
+          geometry.type === GEOJSON_TYPE.LINE_STRING ||
+          geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
         if (isPolygon || isLine) {
           polygons.push(`        ${svgElement}`);
         } else {
@@ -834,12 +779,6 @@ export function exportMapToSvg(
         }
       }
     }
-
-    logger.info('[SVG DEBUG] Rendered elements', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      polygonCount: polygons.length,
-      symbolCount: symbols.length
-    });
 
     svgContent += `  <g id="viz-${visualization.id}">
     <g id="polygons">

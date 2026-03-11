@@ -1,10 +1,12 @@
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services';
 import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
@@ -47,6 +49,55 @@ export { serializeUploadedFile, deserializeUploadedFile };
 
 interface SerializeOptions {
   preserveBinary?: boolean;
+}
+
+function toSafeString(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function toSafeInteger(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+}
+
+function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Partial<BasemapMetadata>;
+  return (
+    typeof candidate.file === 'string' &&
+    candidate.file.length > 0 &&
+    typeof candidate.title === 'string' &&
+    typeof candidate.description === 'string' &&
+    typeof candidate.source === 'string' &&
+    typeof candidate.date === 'string' &&
+    typeof candidate.projection === 'string' &&
+    Array.isArray(candidate.layers) &&
+    Array.isArray(candidate.bbox) &&
+    candidate.bbox.length === 4
+  );
+}
+
+async function ensureDuckDbReady(operation: string): Promise<boolean> {
+  try {
+    await duckDBOrchestrator.waitForInitialization();
+  } catch (error) {
+    logger.warn(
+      `DuckDB initialization failed while ${operation}`,
+      LogCategory.PROJECT,
+      error
+    );
+    return false;
+  }
+
+  if (!Duck) {
+    logger.warn(`DuckDB unavailable while ${operation}`, LogCategory.PROJECT);
+    return false;
+  }
+
+  return true;
 }
 
 export async function serialize(
@@ -129,6 +180,14 @@ export async function serializeProjectData(
         }
       }
 
+      // Persist the DatasetResult ID so visualization.datasetId references survive restore
+      const storeDataset = datasetsStore.datasets.find(
+        (d) => d.sourceFileId === file.id
+      );
+      if (storeDataset) {
+        serializedFile.datasetId = storeDataset.id;
+      }
+
       return serializedFile;
     });
   }
@@ -137,7 +196,10 @@ export async function serializeProjectData(
     (b: BasemapMetadata) => b.isCustom
   );
 
-  if (customBasemaps.length > 0 && Duck) {
+  if (
+    customBasemaps.length > 0 &&
+    (await ensureDuckDbReady('serializing custom basemap attributes'))
+  ) {
     try {
       const tableExists = await Duck.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = 'custom_basemap_attributes'`,
@@ -167,7 +229,8 @@ export async function serializeProjectData(
   serialized.basemapSettings = {
     layers: basemapLayersStore.layers,
     style: basemapStyleStore.selectedStyle,
-    mapProjection: mapProjectionStore.projection
+    mapProjection: mapProjectionStore.projection,
+    referenceBasemapId: basemapStyleStore.referenceBasemapId
   };
 
   const visualizations = visualizationStore.visualizations;
@@ -198,6 +261,7 @@ export async function serializeProjectData(
     legend: {
       items: legendState.items,
       position: legendState.position,
+      dragPosition: legendState.dragPosition,
       visible: legendState.visible,
       style: legendState.style,
       hasBeenOpened: legendState.hasBeenOpened
@@ -233,9 +297,43 @@ export async function deserializeProjectData(
     ) as SerializedUploadedFile[];
   }
 
-  if (data.customBasemaps && Duck) {
+  if (
+    data.customBasemaps &&
+    (await ensureDuckDbReady('restoring custom basemaps'))
+  ) {
     try {
       const { metadata, attributes } = data.customBasemaps;
+      const validMetadata = Array.isArray(metadata)
+        ? metadata.filter(isValidBasemapMetadata)
+        : [];
+      const validAttributes = Array.isArray(attributes)
+        ? attributes
+            .filter((attribute) => attribute && typeof attribute === 'object')
+            .map((attribute) => {
+              const candidate =
+                attribute as Partial<SerializedBasemapAttribute>;
+              return {
+                raw: toSafeString(candidate.raw),
+                id: toSafeString(candidate.id),
+                variant: toSafeString(candidate.variant),
+                normalized: toSafeString(candidate.normalized),
+                basemap: toSafeString(candidate.basemap),
+                basemap_count: toSafeInteger(candidate.basemap_count)
+              };
+            })
+            .filter((attribute) => attribute.basemap.length > 0)
+        : [];
+
+      if (Array.isArray(metadata) && validMetadata.length !== metadata.length) {
+        logger.warn(
+          'Skipping invalid custom basemap metadata entries during restore',
+          LogCategory.PROJECT,
+          {
+            total: metadata.length,
+            restored: validMetadata.length
+          }
+        );
+      }
 
       await Duck.query(`
         CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
@@ -250,8 +348,8 @@ export async function deserializeProjectData(
 
       await Duck.query('DELETE FROM custom_basemap_attributes');
 
-      if (attributes && attributes.length > 0) {
-        const insertValues = attributes
+      if (validAttributes.length > 0) {
+        const insertValues = validAttributes
           .map(
             (attr) =>
               `('${escapeSqlString(attr.raw)}', '${escapeSqlString(attr.id)}', '${escapeSqlString(attr.variant)}', '${escapeSqlString(attr.normalized)}', '${escapeSqlString(attr.basemap)}', ${attr.basemap_count})`
@@ -264,13 +362,13 @@ export async function deserializeProjectData(
         `);
       }
 
-      metadata.forEach((basemap: BasemapMetadata) => {
+      validMetadata.forEach((basemap: BasemapMetadata) => {
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      logger.error(
+      logger.warn(
         'Failed to restore custom basemaps',
-        LogCategory.DATA,
+        LogCategory.PROJECT,
         error
       );
     }
@@ -278,12 +376,13 @@ export async function deserializeProjectData(
 
   if (data.basemapSettings) {
     try {
-      const { layers, style, mapProjection } = data.basemapSettings;
+      const { layers, style, mapProjection, referenceBasemapId } =
+        data.basemapSettings;
       if (layers) {
         basemapLayersStore.restoreFromSerialized(layers);
       }
       if (style) {
-        basemapStyleStore.restoreFromSerialized(style);
+        basemapStyleStore.restoreFromSerialized(style, referenceBasemapId);
       }
       if (mapProjection) {
         mapProjectionStore.restoreFromSerialized(mapProjection);
@@ -336,6 +435,7 @@ export async function deserializeProjectData(
         legendActions.setState({
           items: legend.items,
           position: legend.position,
+          dragPosition: legend.dragPosition ?? null,
           visible: legend.visible,
           style: legend.style,
           hasBeenOpened: legend.hasBeenOpened ?? false

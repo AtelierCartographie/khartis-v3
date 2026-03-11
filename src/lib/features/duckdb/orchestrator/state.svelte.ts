@@ -137,7 +137,8 @@ export function getDatasetBySourceFile(
   sourceFileId: string
 ): DuckDBDataset | undefined {
   touchDatasetsVersion();
-  for (const dataset of _state.datasets.values()) {
+  const datasets = Array.from(_state.datasets.values()).reverse();
+  for (const dataset of datasets) {
     if (dataset.sourceFileId === sourceFileId) {
       return dataset;
     }

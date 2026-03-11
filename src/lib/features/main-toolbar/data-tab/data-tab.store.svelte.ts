@@ -71,8 +71,11 @@ function setActiveStep(index: number) {
 function markStepComplete(index: number) {
   const maxIndex = getStepCount() - 1;
   if (index < 0 || index > maxIndex) return;
+  if (state.hasCompletedStep[index]) return;
 
-  state.hasCompletedStep[index] = true;
+  const next = [...state.hasCompletedStep] as [boolean, boolean, boolean];
+  next[index] = true;
+  state.hasCompletedStep = next;
 
   if (index < maxIndex) {
     state.canNavigateToStep[index + 1] = true;
@@ -82,8 +85,11 @@ function markStepComplete(index: number) {
 function resetStepCompletion(index: number) {
   const maxIndex = getStepCount() - 1;
   if (index < 0 || index > maxIndex) return;
+  if (!state.hasCompletedStep[index]) return;
 
-  state.hasCompletedStep[index] = false;
+  const next = [...state.hasCompletedStep] as [boolean, boolean, boolean];
+  next[index] = false;
+  state.hasCompletedStep = next;
 }
 
 function updateNavigationPermissions() {

@@ -4,12 +4,14 @@
   import type { FeatureCollection } from 'geojson';
   import ThematicMap from '$lib/features/map/components/thematic-map.svelte';
   import type { FacetsLayout } from './facets.store.svelte';
+  import type { FacetSyncViewState } from '$lib/features/map/types';
 
   let {
     visualizations,
     tables,
     geoJSONs,
     layout,
+    syncPanZoom = false,
     containerWidth = 1200,
     containerHeight: _containerHeight = 800
   }: {
@@ -17,6 +19,7 @@
     tables: Map<string, ArrowTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
+    syncPanZoom?: boolean;
     containerWidth?: number;
     containerHeight?: number;
   } = $props();
@@ -31,6 +34,21 @@
 
   const gridColumns = $derived(`repeat(${layout.columns}, 1fr)`);
   const gap = $derived(`${layout.gap}px`);
+
+  // Shared view state for pan/zoom sync
+  let sharedViewState = $state<FacetSyncViewState | null>(null);
+  let syncSourceIdx = $state<number>(-1);
+
+  function handleMoveSync(idx: number, state: FacetSyncViewState): void {
+    if (!syncPanZoom) return;
+    syncSourceIdx = idx;
+    sharedViewState = state;
+  }
+
+  function getSyncViewState(idx: number): FacetSyncViewState | null {
+    if (!syncPanZoom || syncSourceIdx === idx) return null;
+    return sharedViewState;
+  }
 </script>
 
 <div
@@ -38,7 +56,7 @@
   style:grid-template-columns={gridColumns}
   style:gap={gap}
 >
-  {#each visualizations as viz (viz.id)}
+  {#each visualizations as viz, idx (viz.id)}
     <div class="facet-cell">
       <h4 class="facet-title">{viz.name}</h4>
       <ThematicMap
@@ -47,6 +65,8 @@
         width={facetWidth}
         height={facetHeight}
         forcedVisualizationIds={[viz.id]}
+        onMoveSync={syncPanZoom ? (s) => handleMoveSync(idx, s) : undefined}
+        syncViewState={getSyncViewState(idx)}
       />
     </div>
   {/each}

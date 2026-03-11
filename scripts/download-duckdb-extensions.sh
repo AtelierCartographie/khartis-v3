@@ -15,7 +15,7 @@
 set -e
 
 EXTENSIONS=("spatial" "httpfs" "parquet")
-PLATFORM="wasm_eh"
+PLATFORMS=("wasm_eh" "wasm_mvp")
 BASE_URL="https://extensions.duckdb.org"
 OUTPUT_DIR="static/duckdb-extensions"
 
@@ -58,15 +58,21 @@ detect_duckdb_version() {
 # Check if extensions already exist for this version
 check_existing() {
   local version=$1
-  local dir="$OUTPUT_DIR/$version/$PLATFORM"
 
-  if [ -d "$dir" ]; then
-    local count=$(ls -1 "$dir"/*.wasm 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$count" -eq "${#EXTENSIONS[@]}" ]; then
-      return 0  # All extensions exist
+  for platform in "${PLATFORMS[@]}"; do
+    local dir="$OUTPUT_DIR/$version/$platform"
+
+    if [ ! -d "$dir" ]; then
+      return 1
     fi
-  fi
-  return 1  # Need to download
+
+    local count=$(find "$dir" -maxdepth 1 -name '*.wasm' | wc -l | tr -d ' ')
+    if [ "$count" -ne "${#EXTENSIONS[@]}" ]; then
+      return 1
+    fi
+  done
+
+  return 0
 }
 
 # Clean up old extension versions
@@ -86,8 +92,17 @@ cleanup_old_versions() {
 # Check if a version is available on the CDN
 check_version_available() {
   local version=$1
-  local test_url="$BASE_URL/$version/$PLATFORM/spatial.duckdb_extension.wasm"
-  curl -s -f -I "$test_url" > /dev/null 2>&1
+
+  for platform in "${PLATFORMS[@]}"; do
+    for ext in "${EXTENSIONS[@]}"; do
+      local test_url="$BASE_URL/$version/$platform/$ext.duckdb_extension.wasm"
+      if ! curl -s -f -I "$test_url" > /dev/null 2>&1; then
+        return 1
+      fi
+    done
+  done
+
+  return 0
 }
 
 # Find an available version (detected or fallback)
@@ -149,7 +164,9 @@ fi
 # Check if already downloaded for the available version
 if check_existing "$AVAILABLE_VERSION"; then
   echo "Extensions already up-to-date for $AVAILABLE_VERSION"
-  echo "Location: $OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM/"
+  for platform in "${PLATFORMS[@]}"; do
+    echo "Location: $OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"
+  done
   exit 0
 fi
 
@@ -158,30 +175,35 @@ echo "Downloading DuckDB extensions for version $AVAILABLE_VERSION..."
 # Clean up old versions
 cleanup_old_versions "$AVAILABLE_VERSION"
 
-# Create output directory
-mkdir -p "$OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM"
+for platform in "${PLATFORMS[@]}"; do
+  mkdir -p "$OUTPUT_DIR/$AVAILABLE_VERSION/$platform"
 
-# Download each extension
-for ext in "${EXTENSIONS[@]}"; do
-  OUTPUT_FILE="$OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM/$ext.duckdb_extension.wasm"
-  URL="$BASE_URL/$AVAILABLE_VERSION/$PLATFORM/$ext.duckdb_extension.wasm"
+  for ext in "${EXTENSIONS[@]}"; do
+    OUTPUT_FILE="$OUTPUT_DIR/$AVAILABLE_VERSION/$platform/$ext.duckdb_extension.wasm"
+    URL="$BASE_URL/$AVAILABLE_VERSION/$platform/$ext.duckdb_extension.wasm"
 
-  echo "Downloading $ext extension..."
-  if curl -f -s -o "$OUTPUT_FILE" "$URL"; then
-    SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
-    echo "  $ext downloaded ($SIZE)"
-  else
-    echo "  Failed to download $ext from $URL"
-    echo "  This is unexpected since version was verified. Check your connection."
-    exit 1
-  fi
+    echo "Downloading $ext extension for $platform..."
+    if curl -f -s -o "$OUTPUT_FILE" "$URL"; then
+      SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
+      echo "  $ext ($platform) downloaded ($SIZE)"
+    else
+      echo "  Failed to download $ext from $URL"
+      echo "  This is unexpected since version was verified. Check your connection."
+      exit 1
+    fi
+  done
 done
 
 # Print summary
 echo ""
-echo "Extensions downloaded to $OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM/"
+echo "Extensions downloaded to:"
+for platform in "${PLATFORMS[@]}"; do
+  echo "  $OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"
+done
 echo ""
-du -h "$OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM/"*
+for platform in "${PLATFORMS[@]}"; do
+  du -h "$OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"*
+done
 echo ""
 echo "Total size:"
-du -sh "$OUTPUT_DIR/$AVAILABLE_VERSION/$PLATFORM/"
+du -sh "$OUTPUT_DIR/$AVAILABLE_VERSION"

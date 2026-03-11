@@ -8,7 +8,12 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
-import type { LegendItem, LegendState, LegendStyle } from './legend.types';
+import type {
+  LegendDragPosition,
+  LegendItem,
+  LegendState,
+  LegendStyle
+} from './legend.types';
 
 export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
   hue: 0,
@@ -26,6 +31,7 @@ export const DEFAULT_LEGEND_BACKGROUND_COLOR: LegendStyle['background']['color']
 const DEFAULT_STATE: LegendState = {
   items: [],
   position: LegendPosition.TOP_RIGHT,
+  dragPosition: null,
   visible: true,
   style: {
     fontFamily: LEGEND_DEFAULTS.FONT_FAMILY,
@@ -56,6 +62,7 @@ type LegendActions = {
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
   setPosition: (position: LegendPosition) => void;
+  setDragPosition: (pos: LegendDragPosition | null) => void;
   setActiveTab: (tab: LegendTab) => void;
   updateStyle: (updates: Partial<LegendStyle>) => void;
   updateBackground: (
@@ -178,6 +185,10 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     },
     setPosition: (position: LegendPosition) => {
       s.position = position;
+      s.dragPosition = null;
+    },
+    setDragPosition: (pos: LegendDragPosition | null) => {
+      s.dragPosition = pos;
     },
     setActiveTab: (tab: LegendTab) => {
       s.activeTab = tab;

@@ -17,6 +17,7 @@
     DEFAULT_COLORS,
     FillMode
   } from '../../../constants';
+  import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -48,6 +49,7 @@
     symbolMode,
     onSymbolsChange,
     onMappingChange,
+    onClassificationChange,
     onMissingDataChange,
     onOpenDiscretization,
     onModesChange,
@@ -58,16 +60,22 @@
   let discretizationModalOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   let selectedFieldId = $state<number>(0);
+  let selectedFieldBId = $state<number>(0);
+  let fillClassFieldId = $state<number>(0);
+  let fillCategoryFieldId = $state<number>(0);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.POINT);
+  let sizeScale = $state<ScaleType>(ScaleType.SQRT);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
 
   // Fill mode states
+  let categoryCount = $state<number>(4);
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
+  let fillColorB = $state<string>('#ff832b');
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let fillPattern = $state<boolean>(false);
 
@@ -75,10 +83,45 @@
   const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
 
   $effect(() => {
+    if (dataFields.length > 0 && visualization?.mapping) {
+      const mappedFieldName =
+        symbolMode === SymbolMode.PROPORTIONAL
+          ? visualization.mapping.sizeColumn
+          : visualization.mapping.valueColumn;
+
+      if (mappedFieldName) {
+        const fieldIndex = dataFields.findIndex(
+          (field) => field.text === mappedFieldName
+        );
+        if (fieldIndex >= 0) {
+          selectedFieldId = dataFields[fieldIndex].id;
+        }
+      }
+
+      if (visualization.mapping.valueColumn) {
+        const valueFieldIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.valueColumn
+        );
+        if (valueFieldIndex >= 0) {
+          fillClassFieldId = dataFields[valueFieldIndex].id;
+        }
+      }
+
+      if (visualization.mapping.categoryColumn) {
+        const categoryFieldIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.categoryColumn
+        );
+        if (categoryFieldIndex >= 0) {
+          fillCategoryFieldId = dataFields[categoryFieldIndex].id;
+        }
+      }
+    }
+
     if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
       shapeType = visualization.symbols.type ?? ShapeType.POINT;
+      sizeScale = visualization.symbols.sizeScale ?? ScaleType.SQRT;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -91,14 +134,23 @@
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      proportionalType =
+        visualization.modes.proportionalType ?? ProportionalType.SINGLE;
     }
     if (visualization?.style) {
       fillColor =
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
+      fillColorB = visualization.style.fillColorB ?? '#ff832b';
       fillOpacity =
         visualization.style.fillOpacity !== undefined
           ? Math.round(visualization.style.fillOpacity * 100)
           : VISUALIZATION_DEFAULTS.fillOpacity;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -126,6 +178,20 @@
       FillMode.CATEGORIES
     ].indexOf(fillMode)
   );
+
+  function handleProportionalTypeChange(type: ProportionalType) {
+    proportionalType = type;
+    onModesChange?.({ proportionalType: type });
+  }
+
+  function handleFieldBSelect(fieldId: number) {
+    selectedFieldBId = fieldId;
+  }
+
+  function handleFillColorBChange(value: string) {
+    fillColorB = value;
+    onStyleChange?.({ fillColorB: value });
+  }
 
   function handleShapeTypeChange(value: ShapeType) {
     shapeType = value;
@@ -187,19 +253,45 @@
     selectedFieldId = fieldId;
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      if (symbolMode === SymbolMode.PROPORTIONAL) {
+        onMappingChange?.({ sizeColumn: field.text });
+      } else {
+        onMappingChange?.({ valueColumn: field.text });
+      }
     }
   }
 
   function handleClassificationChange(
-    _classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>
   ) {
-    // Placeholder for future classification handling
+    onClassificationChange?.(classification);
+  }
+
+  function handleFillClassFieldSelect(fieldId: number) {
+    fillClassFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
+  }
+
+  function handleFillCategoryFieldSelect(fieldId: number) {
+    fillCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ categoryColumn: field.text });
+    }
   }
 
   function handleShapeSelectChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     handleShapeTypeChange(target.value as ShapeType);
+  }
+
+  function handleScaleTypeChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    sizeScale = target.value as ScaleType;
+    onSymbolsChange?.({ sizeScale });
   }
 </script>
 
@@ -209,7 +301,11 @@
       {m.proportional_symbols_label()}
       <InfoPopover text={m.proportional_type_info()} />
     </span>
-    <RadioButtonGroup bind:selected={proportionalType}>
+    <RadioButtonGroup
+      selected={proportionalType}
+      on:change={(e) =>
+        handleProportionalTypeChange(e.detail as ProportionalType)}
+    >
       <RadioButton
         id="prop-single"
         value={ProportionalType.SINGLE}
@@ -225,7 +321,9 @@
 
   <div class="field-group">
     <span class="field-label">
-      {m.size_according()}
+      {proportionalType === ProportionalType.DOUBLE
+        ? m.symbol_variable_a()
+        : m.size_according()}
       <InfoPopover text={m.size_according_info()} />
     </span>
     <Dropdown
@@ -235,6 +333,20 @@
       type="default"
     />
   </div>
+
+  {#if proportionalType === ProportionalType.DOUBLE}
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_variable_b()}
+      </span>
+      <Dropdown
+        items={dataFields}
+        selectedId={selectedFieldBId}
+        on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
+        type="default"
+      />
+    </div>
+  {/if}
 {/if}
 
 <SliderWithInput
@@ -245,6 +357,26 @@
   max={SLIDER_LIMITS.symbolMaxSize.max}
   onchange={handleSymbolMaxSizeChange}
 />
+
+{#if symbolMode === SymbolMode.PROPORTIONAL}
+  <div class="field-group">
+    <span class="field-label">
+      {m.scale_type()}
+      <InfoPopover text={m.scale_type_info()} />
+    </span>
+    <Select
+      id="scale-type"
+      hideLabel
+      selected={sizeScale}
+      size="sm"
+      on:change={handleScaleTypeChange}
+    >
+      <SelectItem value={ScaleType.LINEAR} text={m.scale_linear()} />
+      <SelectItem value={ScaleType.SQRT} text={m.scale_sqrt()} />
+      <SelectItem value={ScaleType.LOG} text={m.scale_log()} />
+    </Select>
+  </div>
+{/if}
 
 {#if symbolMode === SymbolMode.CLASSES}
   <div class="field-group">
@@ -309,11 +441,30 @@
 </div>
 
 {#if fillMode === FillMode.UNIQUE}
-  <ColorSelector
-    label={m.color()}
-    value={fillColor}
-    onchange={handleFillColorChange}
-  />
+  {#if proportionalType === ProportionalType.DOUBLE}
+    <div class="double-color-row">
+      <div class="double-color-item double-color-a">
+        <ColorSelector
+          label={m.symbol_color_a()}
+          value={fillColor}
+          onchange={handleFillColorChange}
+        />
+      </div>
+      <div class="double-color-item double-color-b">
+        <ColorSelector
+          label={m.symbol_color_b()}
+          value={fillColorB}
+          onchange={handleFillColorBChange}
+        />
+      </div>
+    </div>
+  {:else}
+    <ColorSelector
+      label={m.color()}
+      value={fillColor}
+      onchange={handleFillColorChange}
+    />
+  {/if}
   <SliderWithInput
     label={m.opacity()}
     bind:value={fillOpacity}
@@ -326,7 +477,8 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={fillClassFieldId}
+      on:select={(e) => handleFillClassFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
@@ -338,7 +490,9 @@
   <PalettePreview
     label={m.color_palette()}
     colors={sequentialPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -363,19 +517,21 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={fillCategoryFieldId}
+      on:select={(e) => handleFillCategoryFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: 4 })}
+    value={m.categories_count({ count: categoryCount })}
     onsettings={onOpenDiscretization}
   />
   <PalettePreview
     label={m.color_palette()}
     colors={qualitativePalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -419,6 +575,24 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .double-color-row {
+    display: flex;
+    gap: var(--cds-spacing-03);
+  }
+
+  .double-color-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .double-color-a :global(.color-selector-label) {
+    color: var(--cds-interactive);
+  }
+
+  .double-color-b :global(.color-selector-label) {
+    color: #ff832b;
   }
 
   .field-label {

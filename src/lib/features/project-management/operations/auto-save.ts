@@ -24,10 +24,6 @@ export function createAutoSaveController(
   }
 
   function schedule(isDirty: boolean): void {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
     if (timer) {
       clearTimeout(timer);
       timer = undefined;
@@ -37,19 +33,14 @@ export function createAutoSaveController(
       return;
     }
 
-    timer = window.setTimeout(() => {
+    timer = setTimeout(() => {
       save().catch((error) => {
         logger.error('Auto-save failed', LogCategory.PERSISTENCE, error);
       });
-    }, config.interval);
+    }, config.interval) as unknown as number;
   }
 
   function cancel(): void {
-    if (typeof window === 'undefined') {
-      timer = undefined;
-      return;
-    }
-
     if (timer) {
       clearTimeout(timer);
       timer = undefined;

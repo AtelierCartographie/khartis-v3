@@ -2,6 +2,7 @@
   import AppLoader from '$lib/features/commons/components/app-loader.svelte';
   import KeyboardShortcuts from '$lib/features/commons/components/keyboard-shortcuts.svelte';
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
+  import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
   import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import {
@@ -14,7 +15,8 @@
   import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import CreateProject from '$lib/features/create-project/create-project.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
 
@@ -24,14 +26,21 @@
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
   import MobileToolbar from '$lib/features/main-toolbar/mobile-toolbar.svelte';
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
+  import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
   import Sidenav from '$lib/features/side-nav.svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import {
+    colorBlindnessActions,
+    getColorBlindnessState
+  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+  import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Tag, Theme } from 'carbon-components-svelte';
+  import { Button, Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import * as m from '$lib/paraglide/messages';
@@ -49,6 +58,7 @@
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
+  const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
@@ -66,8 +76,6 @@
       }
     }
 
-    globalActions.initializeFromUrl();
-
     handleResize();
     window.addEventListener(EVENT.RESIZE, handleResize);
 
@@ -77,7 +85,9 @@
         e.returnValue = '';
       }
     };
-    window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+    if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
+      window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+    }
 
     const initApp = async () => {
       try {
@@ -125,8 +135,10 @@
     initApp();
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener(EVENT.RESIZE, handleResize);
+      if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
+        window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
+      }
     };
   });
 
@@ -134,10 +146,47 @@
     globalState.isCreateProjectModalOpen = false;
   }
 
-  const pageZoomScale = $derived(globalState.zoom.pageZoomLevel / 100);
-  const pageTransformStyle = $derived(
-    `transform: scale(${pageZoomScale}); transform-origin: center center;`
+  const colorBlindnessState = $derived(getColorBlindnessState());
+  const isColorBlindnessActive = $derived(
+    colorBlindnessState.simulationType !== ColorBlindnessType.NONE
   );
+
+  function handleDeactivateColorBlindness() {
+    colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE);
+  }
+
+  const pageZoomScale = $derived(globalState.zoom.pageZoomLevel / 100);
+  const pagePan = $derived(globalState.zoom.pagePanOffset);
+  const pageTransformStyle = $derived(
+    pagePan.x === 0 && pagePan.y === 0
+      ? `transform: scale(${pageZoomScale}); transform-origin: center center;`
+      : `transform: translate(${pagePan.x}px, ${pagePan.y}px) scale(${pageZoomScale}); transform-origin: center center;`
+  );
+
+  const MIDDLE_BUTTON = 1;
+  let pageDragState = $state<{ lastX: number; lastY: number } | null>(null);
+
+  function handleMainContentPointerDown(event: PointerEvent): void {
+    if (event.button !== MIDDLE_BUTTON) return;
+    event.preventDefault();
+    pageDragState = { lastX: event.clientX, lastY: event.clientY };
+    window.addEventListener(EVENT.POINTERMOVE, handlePagePanMove);
+    window.addEventListener(EVENT.POINTERUP, handlePagePanUp);
+  }
+
+  function handlePagePanMove(event: PointerEvent): void {
+    if (!pageDragState) return;
+    const dx = event.clientX - pageDragState.lastX;
+    const dy = event.clientY - pageDragState.lastY;
+    pageDragState = { lastX: event.clientX, lastY: event.clientY };
+    globalActions.panPageBy(dx, dy);
+  }
+
+  function handlePagePanUp(): void {
+    pageDragState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handlePagePanMove);
+    window.removeEventListener(EVENT.POINTERUP, handlePagePanUp);
+  }
 
   $effect(() => {
     const currentStep = globalState.selectedStep;
@@ -149,6 +198,16 @@
       enteringStylingStep &&
       currentProjectId !== null &&
       stylingElementsInitializedForProject !== currentProjectId;
+
+    const leavingStylingStep =
+      previousStep === ToolbarStep.Styling &&
+      currentStep !== ToolbarStep.Styling;
+
+    if (enteringStylingStep) {
+      zoomModeStore.setPageMode();
+    } else if (leavingStylingStep) {
+      zoomModeStore.setMapMode();
+    }
 
     if (shouldInitStylingElements) {
       const hasPageElements = getAnnotationsState().items.some(
@@ -183,11 +242,20 @@
   <KeyboardShortcuts />
 
   <main class:mobile-view={globalState.isMobileView}>
-    <article class="main-content">
-      {#if !globalState.isMobileView}
-        <StepToolbar />
-      {/if}
+    <CreateProject
+      open={!isLoading && globalState.isCreateProjectModalOpen}
+      onClose={handleCloseModal}
+    />
 
+    {#if !globalState.isMobileView}
+      <StepToolbar />
+    {/if}
+
+    <article
+      class="main-content"
+      class:page-panning={pageDragState !== null}
+      onpointerdown={handleMainContentPointerDown}
+    >
       <div class="page-content-wrapper" style={pageTransformStyle}>
         {@render children()}
       </div>
@@ -203,20 +271,34 @@
           </Tag>
         </div>
       {/if}
-    </article>
 
-    <CreateProject
-      open={!isLoading && globalState.isCreateProjectModalOpen}
-      onClose={handleCloseModal}
-    />
+      {#if isColorBlindnessActive}
+        <div class="colorblind-notification">
+          <div class="colorblind-notification-content">
+            <strong>{m.colorblind_notification_title()}</strong>
+            <p>{m.colorblind_notification_message()}</p>
+            <Button
+              kind="ghost"
+              size="small"
+              on:click={handleDeactivateColorBlindness}
+            >
+              {m.colorblind_deactivate()}
+            </Button>
+          </div>
+        </div>
+      {/if}
+    </article>
 
     {#if globalState.isMobileView}
       <MobileToolbar />
     {:else}
       <MainToolbar />
     {/if}
+
+    <MapTooltipOverlay />
     <NotificationContainer />
     <PwaUpdatePrompt />
+    <ConsentBanner />
   </main>
 {/if}
 
@@ -241,8 +323,7 @@
     height: 100%;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
+    justify-content: center;
     overflow: visible;
   }
 
@@ -262,6 +343,14 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
+  .page-panning .page-content-wrapper {
+    transition: none;
+  }
+
+  .page-panning {
+    cursor: grabbing;
+  }
+
   .unsaved-indicator {
     position: absolute;
     top: var(--cds-spacing-03);
@@ -269,5 +358,34 @@
     z-index: var(--z-content);
     pointer-events: none;
     opacity: 0.85;
+  }
+
+  .colorblind-notification {
+    position: absolute;
+    bottom: var(--cds-spacing-05);
+    right: var(--cds-spacing-05);
+    z-index: var(--z-content);
+  }
+
+  .colorblind-notification-content {
+    background: var(--cds-ui-01);
+    border: 1px solid var(--cds-border-subtle);
+    border-left: 3px solid var(--cds-support-warning, #f1c21b);
+    padding: var(--cds-spacing-04);
+    max-width: 320px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+
+  .colorblind-notification-content strong {
+    display: block;
+    margin-bottom: var(--cds-spacing-02);
+    font-size: 0.875rem;
+  }
+
+  .colorblind-notification-content p {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary);
+    margin-bottom: var(--cds-spacing-03);
+    line-height: 1.3;
   }
 </style>

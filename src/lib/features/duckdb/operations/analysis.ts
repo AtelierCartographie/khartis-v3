@@ -7,6 +7,7 @@ import { getTableMetadata } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import { getRowCount } from './table-ops';
+import { DuckDBSimplifiedType } from '../types';
 import type {
   AnalyseOptions,
   AnalysisResult,
@@ -66,15 +67,19 @@ export async function analyse(
   )) as Record<string, unknown>[];
 
   const numericColumns = describe_full.filter(
-    (d) => d.type_simple === 'numeric'
+    (d) => d.type_simple === DuckDBSimplifiedType.NUMERIC
   );
-  const dateColumns = describe_full.filter((d) => d.type_simple === 'date');
-  const stringColumns = describe_full.filter((d) => d.type_simple === 'string');
+  const dateColumns = describe_full.filter(
+    (d) => d.type_simple === DuckDBSimplifiedType.DATE
+  );
+  const stringColumns = describe_full.filter(
+    (d) => d.type_simple === DuckDBSimplifiedType.STRING
+  );
   const otherColumns = describe_full.filter(
     (d) =>
-      d.type_simple !== 'numeric' &&
-      d.type_simple !== 'date' &&
-      d.type_simple !== 'string'
+      d.type_simple !== DuckDBSimplifiedType.NUMERIC &&
+      d.type_simple !== DuckDBSimplifiedType.DATE &&
+      d.type_simple !== DuckDBSimplifiedType.STRING
   );
 
   const rowCount = await getRowCount(ctx, table);
@@ -107,7 +112,10 @@ export async function analyse(
 
   const processColumnBatch = async (
     columns: Record<string, unknown>[],
-    type: string
+    type:
+      | DuckDBSimplifiedType.NUMERIC
+      | DuckDBSimplifiedType.DATE
+      | DuckDBSimplifiedType.STRING
   ): Promise<AnalysisResult[]> => {
     if (columns.length === 0) return [];
 
@@ -143,7 +151,7 @@ export async function analyse(
             });
 
           switch (type) {
-            case 'numeric': {
+            case DuckDBSimplifiedType.NUMERIC: {
               const [general, numeric, hist] = await Promise.all([
                 generalPromise,
                 executeQuery(
@@ -178,7 +186,7 @@ export async function analyse(
               break;
             }
 
-            case 'date': {
+            case DuckDBSimplifiedType.DATE: {
               const [general, dateSum, histDate] = await Promise.all([
                 generalPromise,
                 executeQuery(
@@ -213,7 +221,7 @@ export async function analyse(
               break;
             }
 
-            case 'string': {
+            case DuckDBSimplifiedType.STRING: {
               const [general, histStr] = await Promise.all([
                 generalPromise,
                 executeQuery(
@@ -245,9 +253,9 @@ export async function analyse(
   try {
     const [numericResults, dateResults, stringResults, otherResults] =
       await Promise.all([
-        processColumnBatch(numericColumns, 'numeric'),
-        processColumnBatch(dateColumns, 'date'),
-        processColumnBatch(stringColumns, 'string'),
+        processColumnBatch(numericColumns, DuckDBSimplifiedType.NUMERIC),
+        processColumnBatch(dateColumns, DuckDBSimplifiedType.DATE),
+        processColumnBatch(stringColumns, DuckDBSimplifiedType.STRING),
         Promise.resolve(otherColumns.map((d) => ({ ...d }) as AnalysisResult))
       ]);
 

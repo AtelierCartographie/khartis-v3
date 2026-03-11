@@ -1,5 +1,5 @@
 import { Duck } from '$lib/features/duckdb';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
@@ -23,7 +23,7 @@ type BreaksRow = { breaks: number[] };
 
 function mapMethodToMacro(
   method: ClassificationMethod
-): 'quantile' | 'equi_width' | 'kmeans' | 'nested_means' {
+): 'quantile' | 'equi_width' | 'kmeans' | 'nested_means' | 'q6' | 'headtail2' {
   switch (method) {
     case ClassificationMethod.QUANTILES:
       return 'quantile';
@@ -33,6 +33,12 @@ function mapMethodToMacro(
       return 'kmeans';
     case ClassificationMethod.STANDARD_DEVIATION:
       return 'nested_means';
+    case ClassificationMethod.Q6:
+      return 'q6';
+    case ClassificationMethod.NESTED_MEANS:
+      return 'nested_means';
+    case ClassificationMethod.HEAD_TAIL:
+      return 'headtail2';
     case ClassificationMethod.MANUAL:
       return 'quantile';
     default:
@@ -78,9 +84,18 @@ export async function calculateBreaks(
       return null;
     }
 
-    const { min_val: min, max_val: max } = minMaxRows[0];
+    const rawMin = minMaxRows[0].min_val;
+    const rawMax = minMaxRows[0].max_val;
+    const min = rawMin != null ? Number(rawMin) : null;
+    const max = rawMax != null ? Number(rawMax) : null;
 
-    if (min === max || min === null || max === null) {
+    if (
+      min === max ||
+      min === null ||
+      max === null ||
+      isNaN(min) ||
+      isNaN(max)
+    ) {
       logger.warn(
         'Insufficient data range for classification',
         LogCategory.DATA,
@@ -100,25 +115,17 @@ export async function calculateBreaks(
     const macroName = mapMethodToMacro(method);
     let breaks: number[] = [];
 
-    const query =
-      macroName === 'quantile'
-        ? `SELECT quantile_disc("${escapedCol}", list_transform(range(1, ${numClasses}), c -> c::DOUBLE / ${numClasses})) as breaks
-           FROM "${escapedTable}"
-           WHERE "${escapedCol}" IS NOT NULL`
-        : macroName === 'equi_width'
-          ? `SELECT equi_width_bins(MIN("${escapedCol}"), MAX("${escapedCol}"), ${Math.max(numClasses - 1, 1)}, false) as breaks
-             FROM "${escapedTable}"
-             WHERE "${escapedCol}" IS NOT NULL`
-          : `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+    const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
     logger.debug('Executing breaks query', LogCategory.DATA, { query });
 
     const result = (await Duck.query(query)) as Table;
     const rows = result.toArray() as BreaksRow[];
 
     if (rows.length > 0 && rows[0].breaks) {
-      breaks = rows[0].breaks.filter(
-        (b): b is number => b !== null && !isNaN(b)
-      );
+      breaks = rows[0].breaks
+        .filter((b) => b !== null && b !== undefined)
+        .map((b) => Number(b))
+        .filter((b) => !isNaN(b));
     }
 
     if (breaks.length === 0) {
@@ -130,6 +137,32 @@ export async function calculateBreaks(
       const step = (max - min) / numClasses;
       for (let i = 1; i < numClasses; i++) {
         breaks.push(min + step * i);
+      }
+    }
+
+    if (breaks.length > 0 && method !== ClassificationMethod.MANUAL) {
+      try {
+        const breaksListLiteral = `[${breaks.join(', ')}]`;
+        const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}') as rounded`;
+        const roundResult = (await Duck.query(roundQuery)) as Table;
+        const roundRows = roundResult.toArray() as Array<{
+          rounded: number[];
+        }>;
+        if (roundRows.length > 0 && roundRows[0].rounded) {
+          const rounded = roundRows[0].rounded
+            .filter((b) => b !== null && b !== undefined)
+            .map((b) => Number(b))
+            .filter((b) => !isNaN(b));
+          if (rounded.length === breaks.length) {
+            breaks = rounded;
+          }
+        }
+      } catch (roundError) {
+        logger.warn(
+          'round_thresholds failed, using unrounded breaks',
+          LogCategory.DATA,
+          { roundError }
+        );
       }
     }
 

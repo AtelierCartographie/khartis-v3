@@ -7,13 +7,13 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
@@ -38,7 +38,14 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import {
+    getDatasetIdentity,
+    shouldResetJoinState
+  } from './services/dataset-identity';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
+  import { hasBlockingJoinIssues } from './services/join-validation';
+
+  const OSM_TAB_INDEX = 2;
 
   let activeTabIndex = $state(0);
 
@@ -69,14 +76,24 @@
   let importedBasemap = $state<BasemapMetadata | null>(null);
   let showSuggestionModal = $state(false);
   let joinLoading = $state(false);
+  let suggestionsDatasetIdentity = $state<string | null>(null);
+  let basemapAttributeValues = $state<string[]>([]);
 
   let currentJoinAbortController: AbortController | null = null;
+  let previousJoinContext: string | null = null;
+  let previousLinkedVariableName: string | null = null;
+  const DATASET_READY_RETRY_DELAY_MS = 120;
+  const DATASET_READY_MAX_RETRIES = 8;
 
   const hasGPSCoordinates = $derived(() => {
     if (!selectedDataset) return false;
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns);
   });
+
+  const isGPSModeActive = $derived(
+    osmBasemapStore.isActive && hasGPSCoordinates()
+  );
 
   const suggestedBasemaps = $derived(() => {
     return basemapSuggestions
@@ -90,23 +107,117 @@
     }[];
   });
 
+  function hasAvailableBasemap(basemapId: string): boolean {
+    if (!basemapId) return false;
+    return allBasemaps.some((basemap) => basemap.file === basemapId);
+  }
+
+  async function autoSelectFirstSuggestedBasemap(): Promise<void> {
+    if (basemapSuggestions.length === 0) return;
+
+    const firstSuggestion = allBasemaps.find(
+      (basemap) => basemap.file === basemapSuggestions[0]?.file
+    );
+
+    if (!firstSuggestion) return;
+
+    await handleSelectBasemap(firstSuggestion);
+  }
+
+  function isDatasetNotFoundError(error: unknown): boolean {
+    return error instanceof Error && error.message === 'Dataset not found';
+  }
+
+  function isOSMBasemapId(basemapId: string): boolean {
+    return basemapId.startsWith('osm_');
+  }
+
+  async function waitForDatasetAvailability(
+    datasetId: string,
+    abortSignal: AbortSignal
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt <= DATASET_READY_MAX_RETRIES; attempt++) {
+      if (abortSignal.aborted) return false;
+
+      const dataset =
+        duckDBOrchestrator.getDataset(datasetId) ||
+        duckDBOrchestrator.getDatasetBySourceFile(datasetId);
+      if (dataset) {
+        return true;
+      }
+
+      if (attempt === DATASET_READY_MAX_RETRIES) {
+        return false;
+      }
+
+      await new Promise<void>((resolve) => {
+        const timeoutId = setTimeout(() => {
+          abortSignal.removeEventListener('abort', onAbort);
+          resolve();
+        }, DATASET_READY_RETRY_DELAY_MS);
+
+        const onAbort = () => {
+          clearTimeout(timeoutId);
+          resolve();
+        };
+
+        abortSignal.addEventListener('abort', onAbort, { once: true });
+      });
+    }
+
+    return false;
+  }
+
+  function fetchBasemapAttributeValues(basemap: BasemapMetadata): void {
+    duckDBOrchestrator
+      .getBasemapAttributeValues(basemap)
+      .then((values) => {
+        basemapAttributeValues = values;
+      })
+      .catch((error) => {
+        logger.error(
+          'Failed to fetch basemap attribute values',
+          LogCategory.MAP,
+          error
+        );
+        basemapAttributeValues = [];
+      });
+  }
+
   async function computeAndAutoFinalizeJoin(
     basemap: BasemapMetadata,
-    abortSignal: AbortSignal
+    abortSignal: AbortSignal,
+    linkedVariableName = dataTabState.geolocation.linkedVariableName
   ): Promise<void> {
-    if (
-      !selectedDataset ||
-      !datasetIdForOrchestrator ||
-      !dataTabState.geolocation.linkedVariableName
-    )
-      return;
+    const resolvedDatasetId = datasetIdForOrchestrator;
+    if (!selectedDataset || !resolvedDatasetId || !linkedVariableName) return;
+    if (isOSMBasemapId(basemap.file)) return;
 
     joinLoading = true;
     try {
+      const datasetReady = await waitForDatasetAvailability(
+        resolvedDatasetId,
+        abortSignal
+      );
+
+      if (abortSignal.aborted) return;
+
+      if (!datasetReady) {
+        logger.warn(
+          'Skipping join stats computation - dataset not ready in orchestrator',
+          LogCategory.MAP,
+          {
+            datasetId: resolvedDatasetId,
+            basemap: basemap.file
+          }
+        );
+        return;
+      }
+
       const stats = await duckDBOrchestrator.computeJoinStats(
-        datasetIdForOrchestrator,
+        resolvedDatasetId,
         basemap,
-        dataTabState.geolocation.linkedVariableName
+        linkedVariableName
       );
 
       if (abortSignal.aborted) {
@@ -119,12 +230,15 @@
 
       dataTabActions.setJoinStats(stats);
 
-      const hasBlockingErrors =
-        stats.toVerifyCount > 0 ||
-        stats.entities.filter((e) => e.status === JoinStatus.DUPLICATE).length >
-          0;
+      if (stats.unrecognizedCount > 0) {
+        fetchBasemapAttributeValues(basemap);
+      } else {
+        basemapAttributeValues = [];
+      }
 
-      if (!hasBlockingErrors && stats.joinedCount > 0) {
+      const hasBlocking = hasBlockingJoinIssues(stats);
+
+      if (!hasBlocking && stats.joinedCount > 0) {
         logger.info(
           'Auto-finalizing join - no errors detected',
           LogCategory.MAP,
@@ -133,9 +247,9 @@
 
         try {
           await duckDBOrchestrator.finalizeJoin(
-            datasetIdForOrchestrator,
+            resolvedDatasetId,
             basemap,
-            dataTabState.geolocation.linkedVariableName
+            linkedVariableName
           );
           dataTabStore.markStepComplete(2);
           logger.success(
@@ -143,6 +257,18 @@
             LogCategory.MAP
           );
         } catch (finalizeError) {
+          if (isDatasetNotFoundError(finalizeError)) {
+            logger.warn(
+              'Skipping auto-finalize - dataset not ready in orchestrator',
+              LogCategory.MAP,
+              {
+                datasetId: resolvedDatasetId,
+                basemap: basemap.file
+              }
+            );
+            return;
+          }
+
           logger.error(
             'Failed to auto-finalize join',
             LogCategory.MAP,
@@ -155,6 +281,19 @@
       if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
+
+      if (isDatasetNotFoundError(error)) {
+        logger.warn(
+          'Skipping join stats computation - dataset not ready in orchestrator',
+          LogCategory.MAP,
+          {
+            datasetId: resolvedDatasetId,
+            basemap: basemap.file
+          }
+        );
+        return;
+      }
+
       logger.error('Failed to compute join stats', LogCategory.MAP, error);
       showError(m.join_error_title(), m.join_error_message());
     } finally {
@@ -171,6 +310,7 @@
 
     osmBasemapStore.clear();
     dataTabActions.clearJoinStats();
+    basemapAttributeValues = [];
     dataTabStore.resetStepCompletion(2);
     dataTabActions.selectBasemap(basemap.file);
     basemapStyleStore.setReferenceBasemap(basemap.file);
@@ -229,7 +369,7 @@
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
-      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedBasemap = customBasemap;
 
@@ -280,6 +420,14 @@
       logger.warn('No dataset selected for OSM basemap', LogCategory.MAP);
       return;
     }
+
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+      currentJoinAbortController = null;
+    }
+
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(2);
 
     const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
@@ -373,10 +521,15 @@
 
         dataTabActions.setJoinStats(stats);
 
-        const hasBlockingErrors =
-          stats.toVerifyCount > 0 || stats.duplicateCount > 0;
+        if (stats.unrecognizedCount > 0) {
+          fetchBasemapAttributeValues(basemap);
+        } else {
+          basemapAttributeValues = [];
+        }
 
-        if (hasBlockingErrors || stats.joinedCount === 0) {
+        const hasBlocking = hasBlockingJoinIssues(stats);
+
+        if (hasBlocking || stats.joinedCount === 0) {
           logger.info(
             'Corrections applied but join still requires manual validation',
             LogCategory.MAP,
@@ -409,6 +562,77 @@
     }
   }
 
+  async function handleManualCorrection(
+    dataValue: string,
+    basemapValue: string
+  ): Promise<void> {
+    if (
+      !selectedDataset ||
+      !datasetIdForOrchestrator ||
+      !dataTabState.geolocation.linkedVariableName
+    )
+      return;
+
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
+    const corrections: Record<string, string> = { [dataValue]: basemapValue };
+
+    try {
+      joinLoading = true;
+      await duckDBOrchestrator.applyJoinCorrections(
+        datasetIdForOrchestrator,
+        dataTabState.geolocation.linkedVariableName,
+        corrections
+      );
+
+      if (abortSignal.aborted) return;
+
+      const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+      if (basemap) {
+        const stats = await duckDBOrchestrator.computeJoinStats(
+          datasetIdForOrchestrator,
+          basemap,
+          dataTabState.geolocation.linkedVariableName
+        );
+
+        if (abortSignal.aborted) return;
+
+        dataTabActions.setJoinStats(stats);
+
+        if (stats.unrecognizedCount > 0) {
+          fetchBasemapAttributeValues(basemap);
+        } else {
+          basemapAttributeValues = [];
+        }
+
+        const hasBlocking = hasBlockingJoinIssues(stats);
+
+        if (!hasBlocking && stats.joinedCount > 0) {
+          await duckDBOrchestrator.finalizeJoin(
+            datasetIdForOrchestrator,
+            basemap,
+            dataTabState.geolocation.linkedVariableName
+          );
+          dataTabStore.markStepComplete(2);
+          logger.success(
+            'Manual correction applied and join finalized',
+            LogCategory.MAP
+          );
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      logger.error('Failed to apply manual correction', LogCategory.MAP, error);
+      showError(m.join_error_title(), m.join_error_message());
+    } finally {
+      joinLoading = false;
+    }
+  }
+
   async function handleFinalizeJoin() {
     if (
       !selectedDataset ||
@@ -423,8 +647,12 @@
       return;
     }
 
-    const hasBlockingErrors = toVerifyCount > 0 || duplicates.length > 0;
-    if (hasBlockingErrors) {
+    const hasBlocking = hasBlockingJoinIssues({
+      joinedCount,
+      toVerifyCount,
+      duplicateCount: duplicates.length
+    });
+    if (hasBlocking) {
       logger.warn(
         'Cannot finalize join with unresolved entities',
         LogCategory.MAP,
@@ -477,12 +705,73 @@
       }
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
-      const suggestions = await basemapCatalogService.getSuggestions(
+      const geoColumn = dataTabState.geolocation.linkedVariableName;
+      let suggestions = await basemapCatalogService.getSuggestions(
         processedDataset,
         3,
-        dataTabState.geolocation.linkedVariableName
+        geoColumn
       );
+
+      // Fallback: suggest basemaps by GPS bbox when no text geo column
+      if (
+        suggestions.length === 0 &&
+        hasGPSCoordinates() &&
+        datasetIdForOrchestrator
+      ) {
+        const gpsBounds = await duckDBOrchestrator.getGPSBounds(
+          datasetIdForOrchestrator
+        );
+        if (gpsBounds) {
+          suggestions =
+            basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
+          basemapSuggestions = suggestions;
+        }
+      }
+
+      // Re-rank suggestions using actual join quality when possible
+      if (geoColumn && datasetIdForOrchestrator) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetIdForOrchestrator,
+            geoColumn
+          );
+          if (synthesis.length > 0) {
+            const scoreMap = new Map(
+              synthesis.map((s) => [s.basemap, s.shareCandidate])
+            );
+            suggestions = suggestions
+              .map((s) => ({
+                ...s,
+                matchScore: scoreMap.get(s.file) ?? s.matchScore
+              }))
+              .sort((a, b) => b.matchScore - a.matchScore);
+          }
+        } catch (err) {
+          logger.warn(
+            'Join synthesis unavailable, using heuristic ranking',
+            LogCategory.MAP,
+            err
+          );
+        }
+      }
+
       basemapSuggestions = suggestions;
+
+      const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
+      const isDatasetChanged =
+        suggestionsDatasetIdentity !== currentDatasetIdentity;
+      suggestionsDatasetIdentity = currentDatasetIdentity;
+
+      if (
+        suggestions.length > 0 &&
+        !osmBasemapStore.isActive &&
+        !selectedDataset?.geometry &&
+        (isDatasetChanged ||
+          !dataTabState.basemapJoin.selectedBasemap ||
+          !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
+      ) {
+        await autoSelectFirstSuggestedBasemap();
+      }
     } catch (error) {
       logger.error(
         'Failed to load basemap suggestions',
@@ -515,39 +804,100 @@
             const customBasemapData =
               savedBasemap.data as unknown as BasemapMetadata;
             basemapCatalogService.addCustomBasemap(customBasemapData);
+            if (savedBasemap.type === 'custom') {
+              basemapService.registerCustomBasemapMetadata(customBasemapData);
+            }
 
             if (savedBasemap.type === 'osm') {
               osmBasemapStore.setOSMBasemap(customBasemapData);
             }
           }
 
-          if (
-            selectedDataset &&
-            datasetIdForOrchestrator &&
-            dataTabState.geolocation.linkedVariableName
-          ) {
-            const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
-            if (basemap) {
-              joinLoading = true;
-              try {
-                const stats = await duckDBOrchestrator.computeJoinStats(
-                  datasetIdForOrchestrator,
-                  basemap,
-                  dataTabState.geolocation.linkedVariableName
-                );
-                if (controller.signal.aborted) return;
-                dataTabActions.setJoinStats(stats);
-              } catch (error) {
-                if (controller.signal.aborted) return;
-                logger.error(
-                  'Failed to restore join stats',
-                  LogCategory.MAP,
-                  error
-                );
-              } finally {
-                joinLoading = false;
-              }
+          if (!selectedDataset || !datasetIdForOrchestrator) return;
+
+          const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
+          if (!basemap) return;
+
+          if (savedBasemap.type === 'osm' || isOSMBasemapId(basemap.file)) {
+            const datasetReady = await waitForDatasetAvailability(
+              datasetIdForOrchestrator,
+              controller.signal
+            );
+            if (controller.signal.aborted || !datasetReady) return;
+
+            joinLoading = true;
+            try {
+              await duckDBOrchestrator.finalizeJoin(
+                datasetIdForOrchestrator,
+                basemap,
+                ''
+              );
+              if (controller.signal.aborted) return;
+
+              dataTabActions.clearJoinStats();
+              dataTabStore.markStepComplete(2);
+              previousJoinContext = `${datasetIdForOrchestrator}::${basemap.file}`;
+              previousLinkedVariableName =
+                dataTabState.geolocation.linkedVariableName || null;
+            } catch (error) {
+              if (controller.signal.aborted) return;
+              logger.error(
+                'Failed to restore OSM join',
+                LogCategory.MAP,
+                error
+              );
+            } finally {
+              joinLoading = false;
             }
+            return;
+          }
+
+          if (!dataTabState.geolocation.linkedVariableName) return;
+
+          const datasetReady = await waitForDatasetAvailability(
+            datasetIdForOrchestrator,
+            controller.signal
+          );
+          if (controller.signal.aborted || !datasetReady) return;
+
+          joinLoading = true;
+          try {
+            const stats = await duckDBOrchestrator.computeJoinStats(
+              datasetIdForOrchestrator,
+              basemap,
+              dataTabState.geolocation.linkedVariableName
+            );
+            if (controller.signal.aborted) return;
+            dataTabActions.setJoinStats(stats);
+            if (stats.unrecognizedCount > 0) {
+              fetchBasemapAttributeValues(basemap);
+            }
+            previousJoinContext = `${datasetIdForOrchestrator}::${basemap.file}`;
+            previousLinkedVariableName =
+              dataTabState.geolocation.linkedVariableName || null;
+
+            if (!hasBlockingJoinIssues(stats) && stats.joinedCount > 0) {
+              await duckDBOrchestrator.finalizeJoin(
+                datasetIdForOrchestrator,
+                basemap,
+                dataTabState.geolocation.linkedVariableName
+              );
+              if (controller.signal.aborted) return;
+              dataTabStore.markStepComplete(2);
+              logger.success(
+                'Join restored and finalized after project reload',
+                LogCategory.MAP
+              );
+            }
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            logger.error(
+              'Failed to restore join stats',
+              LogCategory.MAP,
+              error
+            );
+          } finally {
+            joinLoading = false;
           }
         }
       } catch (error) {
@@ -574,17 +924,114 @@
     }
   });
 
-  let previousDatasetId: string | null = null;
   $effect(() => {
-    const currentDatasetId = selectedDataset?.id ?? null;
+    void basemapSuggestions.length;
+    void basemapSelected;
 
-    if (previousDatasetId !== null && currentDatasetId !== previousDatasetId) {
+    if (
+      basemapSuggestions.length > 0 &&
+      !osmBasemapStore.isActive &&
+      !selectedDataset?.geometry &&
+      (!basemapSelected || !hasAvailableBasemap(basemapSelected))
+    ) {
+      void autoSelectFirstSuggestedBasemap();
+    }
+  });
+
+  $effect(() => {
+    const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+    const selectedBasemapId = basemapSelected;
+    const resolvedDatasetId = datasetIdForOrchestrator;
+
+    if (!selectedDataset || !selectedBasemapId || !resolvedDatasetId) {
+      previousJoinContext = null;
+      previousLinkedVariableName = null;
+      return;
+    }
+
+    if (isOSMBasemapId(selectedBasemapId)) {
+      dataTabActions.clearJoinStats();
+      previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
+      previousLinkedVariableName = linkedVariableName || null;
+      return;
+    }
+
+    const joinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
+    if (previousJoinContext !== joinContext) {
+      previousJoinContext = joinContext;
+      previousLinkedVariableName = linkedVariableName || null;
+      return;
+    }
+
+    if (
+      !linkedVariableName ||
+      linkedVariableName === previousLinkedVariableName
+    ) {
+      previousLinkedVariableName = linkedVariableName || null;
+      return;
+    }
+
+    previousLinkedVariableName = linkedVariableName;
+
+    const basemap = allBasemaps.find((b) => b.file === selectedBasemapId);
+    if (!basemap) return;
+
+    logger.info(
+      'Recomputing join after linked variable change',
+      LogCategory.MAP,
+      {
+        basemap: selectedBasemapId,
+        linkedVariableName
+      }
+    );
+
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
+    dataTabActions.clearJoinStats();
+    dataTabStore.resetStepCompletion(2);
+
+    void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
+  });
+
+  // Restore step completion after project reload when GPS join was already finalized
+  $effect(() => {
+    if (dataTabStore.hasCompletedStep[2]) return;
+    const id = datasetIdForOrchestrator;
+    if (!id) return;
+    // Use getDatasetBySourceFile since datasetIdForOrchestrator returns sourceFileId
+    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(id);
+    if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
+      dataTabStore.markStepComplete(2);
+      logger.info(
+        'Join step restored from persisted GPS mode',
+        LogCategory.MAP,
+        { id }
+      );
+    }
+  });
+
+  let previousDatasetIdentity: string | null = null;
+  $effect(() => {
+    const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
+    const hasDatasets = datasetsStore.datasets.length > 0;
+
+    if (
+      shouldResetJoinState({
+        previousIdentity: previousDatasetIdentity,
+        currentIdentity: currentDatasetIdentity,
+        hasDatasets
+      })
+    ) {
       logger.info(
         'Clearing join state due to dataset change',
         LogCategory.MAP,
         {
-          previousDatasetId,
-          newDatasetId: currentDatasetId
+          previousDatasetIdentity,
+          newDatasetIdentity: currentDatasetIdentity
         }
       );
 
@@ -595,14 +1042,19 @@
 
       osmBasemapStore.clear();
       dataTabActions.clearJoinStats();
+      basemapAttributeValues = [];
       dataTabActions.selectBasemap('');
       basemapStyleStore.setReferenceBasemap(null);
       dataTabStore.resetStepCompletion(2);
       importedBasemap = null;
       importError = null;
+      previousJoinContext = null;
+      previousLinkedVariableName = null;
     }
 
-    previousDatasetId = currentDatasetId;
+    if (currentDatasetIdentity !== null || !hasDatasets) {
+      previousDatasetIdentity = currentDatasetIdentity;
+    }
   });
 </script>
 
@@ -628,6 +1080,7 @@
       allBasemaps={allBasemaps}
       basemapSelected={basemapSelected}
       onSelectBasemap={handleSelectBasemap}
+      onSuggestBasemap={() => (showSuggestionModal = true)}
     />
   {:else if activeTabIndex === 1}
     <BasemapImportTab
@@ -638,7 +1091,7 @@
       onFileInputChange={handleFileInputChange}
       onLoadUrl={handleLoadUrl}
     />
-  {:else if activeTabIndex === 2}
+  {:else if activeTabIndex === OSM_TAB_INDEX}
     <BasemapOsmTab
       hasGPSCoordinates={hasGPSCoordinates()}
       onSelectOSM={handleSelectOSM}
@@ -646,7 +1099,7 @@
     />
   {/if}
 
-  {#if basemapSelected}
+  {#if basemapSelected && !isGPSModeActive}
     <hr class="join-separator" />
     <JoinAssistedSection
       joinRows={joinRows}
@@ -655,10 +1108,12 @@
       joinedCount={joinedCount}
       toVerifyCount={toVerifyCount}
       linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      basemapValues={basemapAttributeValues}
       loading={joinLoading}
       joinFinalized={dataTabStore.hasCompletedStep[2]}
       onApplyCorrections={handleApplyCorrections}
       onFinalizeJoin={handleFinalizeJoin}
+      onManualCorrection={handleManualCorrection}
     />
   {/if}
 </section>

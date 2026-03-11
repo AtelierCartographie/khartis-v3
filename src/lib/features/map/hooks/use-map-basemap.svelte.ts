@@ -19,6 +19,7 @@ export interface UseMapBasemapProps {
 export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
+  syncLabelsVisibility: () => void;
   syncProjection: () => void;
   cleanup: () => void;
   readonly isStyleLoading: boolean;
@@ -143,6 +144,32 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
   }
 
+  function syncLabelsVisibility(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+
+    const show = basemapStyleStore.showLabels;
+    const visibility = show ? 'visible' : 'none';
+
+    try {
+      const style = map.getStyle();
+      if (!style?.layers) return;
+
+      for (const layer of style.layers) {
+        if (
+          layer.type === 'symbol' &&
+          layer.layout &&
+          'text-field' in layer.layout &&
+          layer.layout['text-field']
+        ) {
+          map.setLayoutProperty(layer.id, 'visibility', visibility);
+        }
+      }
+    } catch {
+      logger.warn('Failed to sync labels visibility', LogCategory.MAP);
+    }
+  }
+
   function syncProjection(): void {
     const map = getMap();
     if (!map || !getIsMapLoaded()) return;
@@ -171,6 +198,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   return {
     syncBasemapStyle,
     syncOSMRasterLayer,
+    syncLabelsVisibility,
     syncProjection,
     cleanup,
     get isStyleLoading() {

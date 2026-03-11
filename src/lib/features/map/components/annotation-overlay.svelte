@@ -1,6 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { SHAPE_TYPE } from '$lib/features/commons/constants';
+  import {
+    globalState,
+    globalActions
+  } from '$lib/features/commons/store/global.svelte';
   import { StylingTools } from '$lib/features/commons/types/global';
   import {
     AnnotationKind,
@@ -13,6 +17,10 @@
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import {
+    computeDrawingBounds,
+    smoothDrawingPath
+  } from '../utils/annotation-drawing.utils';
   import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
@@ -67,12 +75,13 @@
       return;
     }
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width - 10);
-    const maxY = Math.max(0, rect.height - 10);
+    const maxX = Math.max(0, rect.width / scale - 10);
+    const maxY = Math.max(0, rect.height / scale - 10);
 
-    let x = event.clientX - rect.left - dragState.offsetX;
-    let y = event.clientY - rect.top - dragState.offsetY;
+    let x = (event.clientX - rect.left) / scale - dragState.offsetX;
+    let y = (event.clientY - rect.top) / scale - dragState.offsetY;
 
     x = clamp(x, 0, maxX);
     y = clamp(y, 0, maxY);
@@ -97,11 +106,12 @@
 
     annotationsActions.selectAnnotation(item.id);
 
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
     dragState = {
       id: item.id,
-      offsetX: event.clientX - rect.left - item.position.x,
-      offsetY: event.clientY - rect.top - item.position.y
+      offsetX: (event.clientX - rect.left) / scale - item.position.x,
+      offsetY: (event.clientY - rect.top) / scale - item.position.y
     };
 
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -117,6 +127,29 @@
     }
 
     annotationsActions.selectAnnotation(itemId);
+  }
+
+  function handleAnnotationDblClick(event: MouseEvent, itemId: string): void {
+    event.stopPropagation();
+    activateStylingToolFromMap(StylingTools.Annotations);
+    annotationsActions.setPageElementsVisibility(true);
+    annotationsActions.selectAnnotation(itemId);
+
+    centerPageOnClick(event);
+  }
+
+  function centerPageOnClick(event: MouseEvent): void {
+    const mainContent = overlayElement?.closest('.main-content');
+    if (!mainContent) return;
+
+    const rect = mainContent.getBoundingClientRect();
+    const contentCenterX = rect.left + rect.width / 2;
+    const contentCenterY = rect.top + rect.height / 2;
+
+    globalActions.panPageBy(
+      contentCenterX - event.clientX,
+      contentCenterY - event.clientY
+    );
   }
 
   function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
@@ -188,6 +221,20 @@
     const color = getColorValue(style.color, '#000000');
     styles.push(`color: ${color}`);
 
+    if (style.backgroundColor) {
+      const bgColor = getColorValue(style.backgroundColor, '#ffffff');
+      const bgOpacity =
+        style.backgroundOpacity !== undefined
+          ? Math.max(0, Math.min(100, style.backgroundOpacity)) / 100
+          : 0.9;
+      styles.push(
+        `background: color-mix(in srgb, ${bgColor} ${bgOpacity * 100}%, transparent)`
+      );
+    } else {
+      styles.push('background: transparent');
+      styles.push('box-shadow: none');
+    }
+
     return styles.join('; ');
   }
 
@@ -220,34 +267,45 @@
     const baseSize = 40;
 
     switch (shapeType) {
-      case 'arrow':
+      case SHAPE_TYPE.ARROW: {
+        const curvature = item.style?.curvature ?? 40;
+        const cy = baseSize / 2;
+        const curveOffset = ((curvature - 50) / 50) * baseSize * 0.4;
+        const controlY = cy - curveOffset;
+        const shaftEnd = baseSize * 0.7;
+        const headTop = baseSize * 0.2;
+        const headBottom = baseSize * 0.8;
         return {
           type: 'path',
-          path: `M 0,${baseSize / 2} L ${baseSize * 0.7},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.2} L ${baseSize},${baseSize / 2} L ${baseSize * 0.7},${baseSize * 0.8} L ${baseSize * 0.7},${baseSize / 2} Z`
+          path:
+            curvature === 50
+              ? `M 0,${cy} L ${shaftEnd},${cy} L ${shaftEnd},${headTop} L ${baseSize},${cy} L ${shaftEnd},${headBottom} L ${shaftEnd},${cy} Z`
+              : `M 0,${cy} Q ${shaftEnd / 2},${controlY} ${shaftEnd},${cy} L ${shaftEnd},${headTop} L ${baseSize},${cy} L ${shaftEnd},${headBottom} L ${shaftEnd},${cy} Z`
         };
-      case 'line':
+      }
+      case SHAPE_TYPE.LINE:
         return {
           type: 'path',
           path: `M 0,${baseSize / 2} L ${baseSize},${baseSize / 2}`
         };
-      case 'rectangle':
+      case SHAPE_TYPE.RECTANGLE:
         return {
           type: 'rect',
           path: `M 0,0 L ${baseSize},0 L ${baseSize},${baseSize} L 0,${baseSize} Z`
         };
-      case 'circle':
+      case SHAPE_TYPE.CIRCLE:
         return {
-          type: 'circle',
+          type: SHAPE_TYPE.CIRCLE,
           cx: baseSize / 2,
           cy: baseSize / 2,
           r: baseSize / 2
         };
-      case 'triangle':
+      case SHAPE_TYPE.TRIANGLE:
         return {
           type: 'path',
           path: `M ${baseSize / 2},0 L ${baseSize},${baseSize} L 0,${baseSize} Z`
         };
-      case 'star':
+      case SHAPE_TYPE.STAR:
         return {
           type: 'path',
           path: createStarPath(
@@ -260,7 +318,7 @@
         };
       default:
         return {
-          type: 'circle',
+          type: SHAPE_TYPE.CIRCLE,
           cx: baseSize / 2,
           cy: baseSize / 2,
           r: baseSize / 2
@@ -303,6 +361,8 @@
         aria-disabled="false"
         aria-label={m.annotationImageAlt()}
         onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
+        ondblclick={(event: MouseEvent) =>
+          handleAnnotationDblClick(event, item.id)}
         onpointerdown={(event: PointerEvent) =>
           handleAnnotationPointerDown(event, item)}
         onkeydown={(event: KeyboardEvent) =>
@@ -315,7 +375,7 @@
         {:else if item.type === AnnotationKind.SHAPE}
           {@const shapeData = renderShape(
             item,
-            String(item.content ?? 'circle')
+            String(item.content ?? SHAPE_TYPE.CIRCLE)
           )}
           {@const shapeStyle = getShapeStyle(item)}
           <svg
@@ -324,7 +384,7 @@
             class="annotation-shape"
             style="opacity: {shapeStyle.opacity};"
           >
-            {#if shapeData.type === 'circle'}
+            {#if shapeData.type === SHAPE_TYPE.CIRCLE}
               <circle
                 cx={shapeData.cx}
                 cy={shapeData.cy}
@@ -356,17 +416,22 @@
           {@const drawingStyle = getShapeStyle(item)}
           {@const points = Array.isArray(item.content) ? item.content : []}
           {#if points.length > 0}
+            {@const isClosed = item.style?.drawingType === DrawingType.ZONE}
+            {@const smoothness = item.style?.smoothness ?? 0}
+            {@const drawingBounds = computeDrawingBounds(
+              points,
+              drawingStyle.strokeWidth
+            )}
             <svg
+              width={drawingBounds.width}
+              height={drawingBounds.height}
+              viewBox={drawingBounds.viewBox}
               class="annotation-drawing"
-              style="overflow: visible; opacity: {drawingStyle.opacity};"
+              style="opacity: {drawingStyle.opacity};"
             >
               <path
-                d={points
-                  .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
-                  .join(' ')}
-                fill={item.style?.drawingType === DrawingType.ZONE
-                  ? drawingStyle.fill
-                  : 'none'}
+                d={smoothDrawingPath(points, smoothness, isClosed)}
+                fill={isClosed ? drawingStyle.fill : 'none'}
                 stroke={drawingStyle.stroke}
                 stroke-width={drawingStyle.strokeWidth}
                 stroke-dasharray={drawingStyle.strokeDasharray}
@@ -377,7 +442,7 @@
           {/if}
         {:else if item.type === AnnotationKind.IMAGE}
           {@const imgSrc = String(item.content ?? '')}
-          {@const size = item.style?.size ?? 100}
+          {@const size = item.style?.size ?? 200}
           {@const opacity = toOpacityUnit(item.style?.opacity)}
           {#if imgSrc}
             <img
@@ -417,7 +482,12 @@
     cursor: move;
   }
 
+  .annotation-item:hover {
+    outline: 1px dashed #726e6e;
+  }
+
   .annotation-item.selected {
+    outline: 1px dashed #726e6e;
     box-shadow: 0 0 0 2px var(--cds-interactive-01);
     border-radius: 4px;
   }

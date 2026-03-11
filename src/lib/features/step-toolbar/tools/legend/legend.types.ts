@@ -32,9 +32,15 @@ export interface LegendStyle {
   };
 }
 
+export interface LegendDragPosition {
+  x: number;
+  y: number;
+}
+
 export interface LegendState {
   items: LegendItem[];
   position: LegendPosition;
+  dragPosition: LegendDragPosition | null;
   visible: boolean;
   style: LegendStyle;
   activeTab: LegendTab;

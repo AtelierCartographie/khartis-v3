@@ -61,6 +61,10 @@ function setCache(key: string, results: SearchStats): void {
   searchCache.set(key, { results, timestamp: Date.now() });
 }
 
+function normalizeRowId(value: number | bigint): number {
+  return typeof value === 'bigint' ? Number(value) : value;
+}
+
 function buildExactSearchSQL(
   tableName: string,
   textColumns: string[],
@@ -303,7 +307,7 @@ export async function searchInTable(
     const fuzzyCount = fuzzyResults.length;
 
     const cellResults: CellSearchResult[] = allResults.map((r) => ({
-      rowId: r.__id,
+      rowId: normalizeRowId(r.__id),
       columnName: r.column_name,
       value: r.column_value,
       score: r.score

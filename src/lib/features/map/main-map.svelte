@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {
@@ -15,14 +15,19 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { globalState } from '../commons/store/global.svelte';
+  import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
-  import { ColorBlindnessType } from '../commons/constants/ui.constants';
+  import {
+    ColorBlindnessType,
+    FormatMode
+  } from '../commons/constants/ui.constants';
   import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
+  import { EVENT } from '../commons/constants/dom.constants';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
@@ -35,11 +40,11 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let isResizing = $state(false);
-  let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let transitionEndCleanup: (() => void) | null = null;
   let containerResizeObserver: ResizeObserver | null = null;
 
-  const TOOLBAR_TRANSITION_MS = 600;
+  const TOOLBAR_TRANSITION_SAFETY_MS = 400;
   const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
@@ -47,6 +52,7 @@
   let displayGeoJSONs = $state<SvelteMap<string, FeatureCollection>>(
     new SvelteMap<string, FeatureCollection>()
   );
+  let displayDataVersion = $state(0);
 
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
@@ -54,12 +60,52 @@
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
+  const facetsSyncPanZoom = $derived(facetsStore.syncPanZoom);
 
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
 
   function isStaleLoad(generation: number): boolean {
     return loadGeneration !== generation;
+  }
+
+  function bumpDisplayDataVersion(): void {
+    displayDataVersion += 1;
+  }
+
+  function setDisplayArrowTable(datasetId: string, table: ArrowTable): void {
+    const previousTable = displayTables.get(datasetId);
+    const hadGeoJSON = displayGeoJSONs.has(datasetId);
+
+    displayTables.set(datasetId, table);
+    displayGeoJSONs.delete(datasetId);
+
+    if (previousTable !== table || hadGeoJSON) {
+      displayTables = new SvelteMap(displayTables);
+      if (hadGeoJSON) {
+        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      }
+      bumpDisplayDataVersion();
+    }
+  }
+
+  function setDisplayGeoJSON(
+    datasetId: string,
+    geoJSON: FeatureCollection
+  ): void {
+    const previousGeoJSON = displayGeoJSONs.get(datasetId);
+    const hadTable = displayTables.has(datasetId);
+
+    displayGeoJSONs.set(datasetId, geoJSON);
+    displayTables.delete(datasetId);
+
+    if (previousGeoJSON !== geoJSON || hadTable) {
+      displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      if (hadTable) {
+        displayTables = new SvelteMap(displayTables);
+      }
+      bumpDisplayDataVersion();
+    }
   }
 
   async function loadGeoDatasetTable(
@@ -118,8 +164,18 @@
   }
 
   function removeDatasetFromDisplay(datasetId: string): void {
-    displayTables.delete(datasetId);
-    displayGeoJSONs.delete(datasetId);
+    const removedTable = displayTables.delete(datasetId);
+    const removedGeoJSON = displayGeoJSONs.delete(datasetId);
+
+    if (removedTable || removedGeoJSON) {
+      if (removedTable) {
+        displayTables = new SvelteMap(displayTables);
+      }
+      if (removedGeoJSON) {
+        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      }
+      bumpDisplayDataVersion();
+    }
   }
 
   async function loadJoinedBasemap(
@@ -155,8 +211,7 @@
       }
 
       if (joinedTable) {
-        displayTables.set(datasetId, joinedTable);
-        displayGeoJSONs.delete(datasetId);
+        setDisplayArrowTable(datasetId, joinedTable);
         logger.success('Joined basemap ready for rendering', LogCategory.MAP, {
           datasetId,
           rows: joinedTable.numRows,
@@ -202,8 +257,7 @@
       }
 
       if (table) {
-        displayTables.set(datasetId, table);
-        displayGeoJSONs.delete(datasetId);
+        setDisplayArrowTable(datasetId, table);
         logger.success('GPS data ready for rendering on OSM', LogCategory.MAP, {
           datasetId,
           rows: table.numRows,
@@ -243,8 +297,7 @@
 
       if (result) {
         if ('numRows' in result) {
-          displayTables.set(datasetId, result);
-          displayGeoJSONs.delete(datasetId);
+          setDisplayArrowTable(datasetId, result);
           logger.info(
             'Dataset added to display as Arrow table',
             LogCategory.MAP,
@@ -254,8 +307,7 @@
             }
           );
         } else if ('features' in result) {
-          displayGeoJSONs.set(datasetId, result);
-          displayTables.delete(datasetId);
+          setDisplayGeoJSON(datasetId, result);
           logger.info('Dataset added to display as GeoJSON', LogCategory.MAP, {
             datasetId,
             features: result.features.length
@@ -293,21 +345,22 @@
 
     const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
 
-    // Remove display entries for datasets that are no longer enabled
-    const tableIdsToRemove = [...displayTables.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    // displayTables/displayGeoJSONs are outputs of this effect.
+    // Read them untracked to avoid a self-triggering reload loop.
+    const tableIdsToRemove = untrack(() =>
+      [...displayTables.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
-    for (const tableId of tableIdsToRemove) {
-      displayTables.delete(tableId);
-    }
-
-    const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
-      (id) => !currentEnabledIds.has(id)
+    const geojsonIdsToRemove = untrack(() =>
+      [...displayGeoJSONs.keys()].filter((id) => !currentEnabledIds.has(id))
     );
 
-    for (const geojsonId of geojsonIdsToRemove) {
-      displayGeoJSONs.delete(geojsonId);
+    const datasetIdsToRemove = new Set([
+      ...tableIdsToRemove,
+      ...geojsonIdsToRemove
+    ]);
+    for (const datasetId of datasetIdsToRemove) {
+      removeDatasetFromDisplay(datasetId);
     }
 
     // Bump load generation so any in-flight loads from a previous version are discarded
@@ -363,22 +416,65 @@
     }
   });
 
+  function cleanupTransitionListener(): void {
+    if (transitionEndCleanup) {
+      transitionEndCleanup();
+      transitionEndCleanup = null;
+    }
+  }
+
+  function finishToolbarTransition(): void {
+    cleanupTransitionListener();
+    if (toolbarTransitionTimeoutId) {
+      clearTimeout(toolbarTransitionTimeoutId);
+      toolbarTransitionTimeoutId = null;
+    }
+    globalState.isToolbarTransitioning = false;
+    handleContainerResize();
+  }
+
   $effect(() => {
     void globalState.toolbarState;
 
     untrack(() => {
       if (!isMapReady) return;
 
-      isResizing = true;
+      globalState.isToolbarTransitioning = true;
 
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
+      // Clean up previous transition tracking
+      cleanupTransitionListener();
+      if (toolbarTransitionTimeoutId) {
+        clearTimeout(toolbarTransitionTimeoutId);
       }
 
-      resizeTimeoutId = setTimeout(() => {
-        isResizing = false;
-        resizeTimeoutId = null;
-      }, TOOLBAR_TRANSITION_MS);
+      // Safety timeout in case transitionend never fires
+      toolbarTransitionTimeoutId = setTimeout(
+        finishToolbarTransition,
+        TOOLBAR_TRANSITION_SAFETY_MS
+      );
+
+      // Listen for CSS transition end on the toolbar element
+      const toolbar = document.getElementById('khartis-main-toolbar');
+      if (toolbar) {
+        const handler = (event: TransitionEvent) => {
+          if (event.propertyName === 'width') {
+            finishToolbarTransition();
+          }
+        };
+        toolbar.addEventListener(EVENT.TRANSITIONEND, handler, { once: true });
+        transitionEndCleanup = () =>
+          toolbar.removeEventListener(EVENT.TRANSITIONEND, handler);
+      }
+    });
+  });
+
+  $effect(() => {
+    void formatState.model;
+    const mode = formatState.mode;
+
+    untrack(() => {
+      if (!containerRef || mode !== FormatMode.PRESET) return;
+      handleContainerResize();
     });
   });
 
@@ -433,13 +529,15 @@
     initializeMap();
 
     return () => {
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
+      if (toolbarTransitionTimeoutId) {
+        clearTimeout(toolbarTransitionTimeoutId);
       }
+      cleanupTransitionListener();
       if (containerResizeTimeoutId) {
         clearTimeout(containerResizeTimeoutId);
       }
       containerResizeObserver?.disconnect();
+      handleResizeUp();
     };
   });
 
@@ -458,6 +556,77 @@
       applyColorBlindnessFilter(thematicMapRef, simulationType);
     }
   });
+
+  // --- Resize handles for styling step ---
+  type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+  const RESIZE_EDGES: ResizeEdge[] = [
+    'n',
+    's',
+    'e',
+    'w',
+    'ne',
+    'nw',
+    'se',
+    'sw'
+  ];
+  const MIN_MAP_SIZE = 100;
+
+  const showResizeHandles = $derived(
+    globalState.selectedStep === ToolbarStep.Styling && isMapReady
+  );
+
+  let resizeState = $state<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
+
+  function handleResizePointerDown(
+    event: PointerEvent,
+    edge: ResizeEdge
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeState = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startW: formatState.width,
+      startH: formatState.height
+    };
+    formatActions.setMode(FormatMode.CUSTOM);
+    window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
+
+  function handleResizeMove(event: PointerEvent): void {
+    if (!resizeState) return;
+    const { edge, startX, startY, startW, startH } = resizeState;
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    const dx = (event.clientX - startX) / scale;
+    const dy = (event.clientY - startY) / scale;
+
+    let newW = startW;
+    let newH = startH;
+
+    if (edge.includes('e')) newW = startW + dx;
+    if (edge.includes('w')) newW = startW - dx;
+    if (edge.includes('s')) newH = startH + dy;
+    if (edge.includes('n')) newH = startH - dy;
+
+    formatActions.setSize(
+      Math.max(MIN_MAP_SIZE, Math.round(newW)),
+      Math.max(MIN_MAP_SIZE, Math.round(newH))
+    );
+  }
+
+  function handleResizeUp(): void {
+    resizeState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -498,6 +667,7 @@
           tables={displayTables}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
+          syncPanZoom={facetsSyncPanZoom}
           containerWidth={formatState.width}
           containerHeight={formatState.height}
         />
@@ -505,12 +675,30 @@
         <ThematicMap
           tables={displayTables}
           geoJSONs={displayGeoJSONs}
+          dataVersion={displayDataVersion}
           width={formatState.width}
           height={formatState.height}
           onReady={handleMapReady}
         />
       {/if}
-      <div class="resize-overlay" class:active={isResizing}></div>
+    </div>
+  {/if}
+
+  {#if showResizeHandles}
+    <div
+      class="resize-handles-frame"
+      style="width: {formatState.width}px; height: {formatState.height}px;"
+    >
+      {#each RESIZE_EDGES as edge (edge)}
+        <div
+          class="resize-handle resize-{edge}"
+          role="separator"
+          aria-orientation={edge === 'n' || edge === 's'
+            ? 'horizontal'
+            : 'vertical'}
+          onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
+        ></div>
+      {/each}
     </div>
   {/if}
 </div>
@@ -534,20 +722,6 @@
 
   .thematic-map-wrapper.visible {
     opacity: 1;
-  }
-
-  .resize-overlay {
-    position: absolute;
-    inset: 0;
-    background: var(--cds-ui-background, #f4f4f4);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-out;
-  }
-
-  .resize-overlay.active {
-    opacity: 1;
-    transition: none;
   }
 
   .skeleton-loader {
@@ -585,5 +759,90 @@
 
   .error-state :global(.bx--inline-notification) {
     max-width: 400px;
+  }
+
+  /* --- Resize handles --- */
+  .resize-handles-frame {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .resize-handle {
+    position: absolute;
+    pointer-events: auto;
+    z-index: var(--z-content-raised, 2);
+  }
+
+  /* Edge handles — thin bars along each side */
+  .resize-n {
+    top: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: n-resize;
+  }
+
+  .resize-s {
+    bottom: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: s-resize;
+  }
+
+  .resize-e {
+    right: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: e-resize;
+  }
+
+  .resize-w {
+    left: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: w-resize;
+  }
+
+  /* Corner handles — small squares */
+  .resize-ne {
+    top: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: ne-resize;
+  }
+
+  .resize-nw {
+    top: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: nw-resize;
+  }
+
+  .resize-se {
+    bottom: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: se-resize;
+  }
+
+  .resize-sw {
+    bottom: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: sw-resize;
+  }
+
+  /* Visual indicator on hover */
+  .resize-handle:hover {
+    background: var(--cds-interactive-01, #0f62fe);
+    opacity: 0.4;
+    border-radius: 1px;
   }
 </style>

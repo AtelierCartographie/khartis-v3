@@ -9,12 +9,14 @@
     PalettePreview,
     SectionHeading,
     SliderWithInput,
-    ToggleWithLabel
+    ToggleWithLabel,
+    VizFilterSection
   } from './shared';
   import type {
     MissingDataConfig,
     VisualizationConfig,
-    VisualizationModes
+    VisualizationModes,
+    VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
@@ -39,7 +41,6 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -50,11 +51,14 @@
     ) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
+    filters?: VizDataFilter[];
+    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onRemoveFilter?: (filterId: string) => void;
+    onClearFilters?: () => void;
   }
 
   let {
     dataFields = [],
-    discretizationMethods: _discretizationMethods = [],
     visualization,
     onStyleChange,
     onModesChange,
@@ -62,11 +66,17 @@
     onClassificationChange,
     onMappingChange,
     onInvertPalette,
-    onToggleVisibility
+    onToggleVisibility,
+    filters = [],
+    onAddFilter = () => {},
+    onRemoveFilter = () => {},
+    onClearFilters = () => {}
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedFieldId = $state<number>(0);
+  let selectedValueFieldId = $state<number>(0);
+  let selectedSizeFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
@@ -74,16 +84,50 @@
         (f) => f.text === visualization.mapping.valueColumn
       );
       if (fieldIndex >= 0) {
-        selectedFieldId = fieldIndex;
+        selectedValueFieldId = dataFields[fieldIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.sizeColumn && dataFields.length > 0) {
+      const sizeIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.sizeColumn
+      );
+      if (sizeIndex >= 0) {
+        selectedSizeFieldId = dataFields[sizeIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
       }
     }
   });
 
-  function handleFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
-    const field = dataFields[fieldId];
+  function handleValueFieldSelect(fieldId: number) {
+    selectedValueFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
+    }
+  }
+
+  function handleSizeFieldSelect(fieldId: number) {
+    selectedSizeFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ sizeColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -110,6 +154,9 @@
   });
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(false);
+  let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
+  let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let _missingDataLabel = $state<string>('');
 
   $effect(() => {
@@ -118,8 +165,13 @@
         visualization.style.lineWidth ?? VISUALIZATION_DEFAULTS.lineWidth;
       maxThickness =
         visualization.style.lineMaxWidth ?? VISUALIZATION_DEFAULTS.lineMaxWidth;
+      const lineOpacity = visualization.style.lineOpacity;
       opacity =
-        visualization.style.lineOpacity ?? VISUALIZATION_DEFAULTS.lineOpacity;
+        lineOpacity !== undefined
+          ? lineOpacity <= 1
+            ? Math.round(lineOpacity * 100)
+            : lineOpacity
+          : VISUALIZATION_DEFAULTS.lineOpacity;
       color = (visualization.style.lineColor as string) ?? DEFAULT_COLORS.line;
       dashed = visualization.style.lineDashed ?? false;
     }
@@ -129,6 +181,14 @@
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.enabled ?? false;
+      missingDataColor =
+        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataOpacity =
+        visualization.missingData.opacity !== undefined
+          ? Math.round(visualization.missingData.opacity * 100)
+          : VISUALIZATION_DEFAULTS.lineOpacity;
+      missingDataShape =
+        visualization.missingData.shape ?? MissingDataShape.CIRCLE;
       _missingDataLabel = visualization.missingData.label ?? '';
     }
   });
@@ -178,7 +238,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ lineOpacity: value });
+    onStyleChange?.({ lineOpacity: value / 100 });
   }
 
   function handleDashedChange(value: boolean) {
@@ -196,14 +256,17 @@
   }
 
   function handleMissingDataColorChange(value: string) {
+    missingDataColor = value;
     onMissingDataChange?.({ color: value });
   }
 
   function handleMissingDataOpacityChange(value: number) {
+    missingDataOpacity = value;
     onMissingDataChange?.({ opacity: value / 100 });
   }
 
   function handleMissingDataShapeChange(shape: string) {
+    missingDataShape = shape as MissingDataShape;
     onMissingDataChange?.({ shape: shape as MissingDataShape });
   }
 
@@ -243,8 +306,12 @@
       [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual
+      [ClassificationMethod.STANDARD_DEVIATION]:
+        m.discretization_method_nested_means,
+      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
+      [ClassificationMethod.Q6]: m.discretization_method_q6,
+      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
+      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
     };
     const method =
       visualization.classification.method ?? ClassificationMethod.QUANTILES;
@@ -293,8 +360,8 @@
         <Dropdown
           titleText={m.thickness_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedSizeFieldId}
+          on:select={(e) => handleSizeFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -310,8 +377,8 @@
         <Dropdown
           titleText={m.thickness_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedValueFieldId}
+          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -351,8 +418,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+          selectedId={selectedValueFieldId}
+          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -364,14 +431,17 @@
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {:else if colorMode === ColorMode.CATEGORIES}
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedCategoryFieldId}
+          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -383,7 +453,9 @@
       <PalettePreview
         label={m.color_palette()}
         colors={qualitativePalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {/if}
 
@@ -404,13 +476,21 @@
     <MissingDataSection
       show={showMissingData}
       onshowchange={handleMissingDataToggle}
-      color={visualization?.missingData?.color}
+      color={missingDataColor}
       oncolorchange={handleMissingDataColorChange}
-      opacity={visualization?.missingData?.opacity}
+      opacity={missingDataOpacity}
       onopacitychange={handleMissingDataOpacityChange}
-      shape={visualization?.missingData?.shape}
+      shape={missingDataShape}
       onshapechange={handleMissingDataShapeChange}
       showShapeSelector={true}
+    />
+
+    <VizFilterSection
+      dataFields={dataFields}
+      filters={filters}
+      onAddFilter={onAddFilter}
+      onRemoveFilter={onRemoveFilter}
+      onClearFilters={onClearFilters}
     />
   </div>
 </ExpandableSection>

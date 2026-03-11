@@ -4,6 +4,14 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
+  import type {
+    EnrichDataState,
+    GeolocationState
+  } from '$lib/features/commons/store/data-tab.types';
+  import {
     showError,
     showSuccess,
     showWarning
@@ -11,7 +19,8 @@
   import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
   import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+  import { Duck } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -64,6 +73,10 @@
       ? datasetsStore.hasModifications(selectedDataset.id)
       : false
   );
+  const hiddenColumnsCount = $derived.by(() => {
+    if (!selectedDataset?.id) return 0;
+    return datasetsStore.getHiddenColumns(selectedDataset.id).length;
+  });
 
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
@@ -133,12 +146,83 @@
     forceRefreshKey++;
   }
 
+  async function handleCalculatedColumnCreated() {
+    refreshTable();
+
+    if (!selectedDataset || !currentDuckTable || !Duck) return;
+
+    try {
+      const duckColumns = (await Duck.analyse(currentDuckTable, {
+        force: true
+      })) as DuckAnalyticsColumn[];
+      const newColumns = enrichColumns(duckColumns);
+      datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
+    } catch {
+      // Keep UI responsive even if metadata refresh fails; table data is already updated in DuckDB.
+    }
+  }
+
   function handleOpenReset() {
     resetModalOpen = true;
   }
 
   function handleOpenCsvOptions() {
     csvOptionsModalOpen = true;
+  }
+
+  function handleShowHiddenColumns() {
+    if (!selectedDataset?.id) return;
+    const hiddenColumns = datasetsStore.getHiddenColumns(selectedDataset.id);
+    if (!hiddenColumns.length) return;
+    for (const columnName of hiddenColumns) {
+      datasetsStore.showColumn(selectedDataset.id, columnName);
+    }
+    refreshTable();
+  }
+
+  function handleColumnDeleted(columnName: string) {
+    const geolocationUpdates: Partial<GeolocationState> = {};
+    let geolocationChanged = false;
+
+    if (dataTabState.geolocation.linkedVariableName === columnName) {
+      geolocationUpdates.linkedVariable = null;
+      geolocationUpdates.linkedVariableName = '';
+      geolocationChanged = true;
+    }
+
+    if (dataTabState.geolocation.latitudeColumn === columnName) {
+      geolocationUpdates.latitudeColumn = undefined;
+      geolocationChanged = true;
+    }
+
+    if (dataTabState.geolocation.longitudeColumn === columnName) {
+      geolocationUpdates.longitudeColumn = undefined;
+      geolocationChanged = true;
+    }
+
+    if (geolocationChanged) {
+      dataTabActions.setGeolocationState(geolocationUpdates);
+      dataTabActions.clearJoinStats();
+      dataTabStore.resetStepCompletion(1);
+      dataTabStore.resetStepCompletion(2);
+    }
+
+    const enrichUpdates: Partial<EnrichDataState> = {};
+    let enrichChanged = false;
+
+    if (dataTabState.enrichData.targetColumn === columnName) {
+      enrichUpdates.targetColumn = undefined;
+      enrichChanged = true;
+    }
+
+    if (dataTabState.enrichData.enrichmentColumn === columnName) {
+      enrichUpdates.enrichmentColumn = undefined;
+      enrichChanged = true;
+    }
+
+    if (enrichChanged) {
+      dataTabActions.setEnrichDataState(enrichUpdates);
+    }
   }
 
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
@@ -194,6 +278,12 @@
 
       datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+      datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
+        header: options.header,
+        decimalSeparator: options.decimalSeparator,
+        thousandsSeparator: options.thousandsSeparator,
+        delimiter: options.delimiter
+      });
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();
@@ -356,7 +446,7 @@
     if (!currentDuckTable || !selectedDataset) return;
 
     try {
-      const count =
+      const { count, rowIds } =
         await duckDBOrchestrator.deleteFilteredRows(currentDuckTable);
 
       if (count > 0) {
@@ -369,6 +459,7 @@
           `Deleted ${count} filtered rows (new total: ${newRowCount})`
         );
         datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+        await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 
         refreshTable();
         showSuccess(
@@ -436,13 +527,14 @@
       <DataToolPanel title={m.data_tool_calculator()}>
         <CalculatorPanel
           tableName={currentDuckTable || undefined}
-          onColumnCreated={refreshTable}
+          onColumnCreated={handleCalculatedColumnCreated}
         />
       </DataToolPanel>
     {:else if activeTool === DataToolType.Filters}
       <DataToolPanel title={m.data_tool_filters()}>
         <FiltersPanel
           tableName={currentDuckTable || undefined}
+          datasetVersion={duckDBDatasetsVersion}
           onFilterChange={refreshTable}
           onDeleteFilteredRows={handleOpenDeleteFilteredModal}
         />
@@ -506,10 +598,12 @@
       onExpand={() => (isModalOpen = true)}
       onCsvOptions={handleOpenCsvOptions}
       onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
+      onShowHiddenColumns={handleShowHiddenColumns}
       selectionCount={selectedRowIds.length}
       resetDisabled={!hasDataModifications}
       showCsvOptions={isCsvFile &&
         !!(sourceFile?.originalFile || sourceFile?.content)}
+      showHiddenColumns={hiddenColumnsCount > 0}
       showSummaryPlots={showSummaryPlots}
     />
   {/if}
@@ -525,8 +619,11 @@
           cellHighlights={searchHighlight.cellHighlights}
           currentCell={searchHighlight.currentCell}
           highlightedRowIds={searchHighlight.highlightedRowIds}
+          activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
+            undefined}
           isExpanded={false}
           isSelectable={true}
+          onColumnDeleted={handleColumnDeleted}
           onSelectionChange={handleSelectionChange}
         />
       {/key}
@@ -569,6 +666,7 @@
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
     isSelectable={true}
+    onColumnDeleted={handleColumnDeleted}
     onSelectionChange={handleSelectionChange}
     onClose={() => (isModalOpen = false)}
   />

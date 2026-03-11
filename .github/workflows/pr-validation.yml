@@ -2,17 +2,32 @@ name: Pull Request Validation
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - converted_to_draft
     branches:
       - staging
       - main
+  merge_group:
+    types:
+      - checks_requested
 
 env:
   NODE_VERSION: '22'
 
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 jobs:
-  dependency-setup:
-    name: Dependencies Setup
+  quality-checks:
+    name: Quality Checks
+    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -28,225 +43,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache dependencies
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-
-  lint:
-    name: Code Linting
-    needs: dependency-setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Run ESLint and Prettier
-        id: lint
-        run: |
-          set -o pipefail
-          pnpm lint 2>&1 | tee lint-output.txt
-
-      - name: Generate lint summary
-        if: always()
-        run: |
-          echo "## 🔍 Code Quality" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.lint.outcome }}" == "success" ]; then
-            echo "✅ **ESLint**: No errors" >> $GITHUB_STEP_SUMMARY
-            echo "✅ **Prettier**: Code formatted correctly" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Lint failed** - see logs for details" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  svelte-check:
-    name: Svelte Type Check
-    needs: dependency-setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
-      - name: Run Svelte Check
-        id: svelte-check
-        run: |
-          set -o pipefail
-          pnpm check 2>&1 | tee svelte-check-output.txt
+      - name: Run lint
+        run: pnpm lint
 
-      - name: Generate type check summary
-        if: always()
-        run: |
-          echo "## 📝 TypeScript / Svelte Check" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.svelte-check.outcome }}" == "success" ]; then
-            echo "✅ **Type check passed** - 0 errors" >> $GITHUB_STEP_SUMMARY
-          else
-            ERRORS=$(grep -c "Error:" svelte-check-output.txt || echo "0")
-            WARNINGS=$(grep -c "Warning:" svelte-check-output.txt || echo "0")
-            echo "| Type | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
-            echo "| ⚠️ Warnings | $WARNINGS |" >> $GITHUB_STEP_SUMMARY
-          fi
+      - name: Run type check
+        run: pnpm check
 
-  unit-tests:
-    name: Unit Tests
-    needs: dependency-setup
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Run pipeline tests
+        run: NODE_OPTIONS='--max-old-space-size=4096' pnpm exec vitest run --project server tests/pipeline
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Compile Paraglide
-        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
-
-      - name: Run unit tests
-        run: |
-          set -o pipefail
-          pnpm run test:unit -- --run --reporter=verbose 2>&1 | tee test-output.txt
-
-      - name: Generate unit test summary
-        if: always()
-        run: |
-          echo "## 🧪 Unit Tests Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f test-output.txt ]; then
-            # Strip ANSI codes and extract test summary
-            CLEAN=$(cat test-output.txt | sed 's/\x1b\[[0-9;]*m//g')
-            PASSED=$(echo "$CLEAN" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            FAILED=$(echo "$CLEAN" | grep -oE '[0-9]+ failed' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            SKIPPED=$(echo "$CLEAN" | grep -oE '[0-9]+ skipped' | tail -1 | grep -oE '[0-9]+' || echo "0")
-            echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Passed | ${PASSED:-0} |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failed | ${FAILED:-0} |" >> $GITHUB_STEP_SUMMARY
-            echo "| ⏭️ Skipped | ${SKIPPED:-0} |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-  build-check:
-    name: Build Verification
-    needs: [lint, svelte-check, unit-tests]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
+      - name: Run DuckDB tests
+        run: NODE_OPTIONS='--max-old-space-size=4096' pnpm exec vitest run --project server tests/duckdb
 
       - name: Build application
-        run: |
-          set -o pipefail
-          pnpm build 2>&1 | tee build-output.txt
-
-      - name: Generate build summary
-        if: always()
-        run: |
-          echo "## 📦 Build Metrics" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Calculate build size
-          if [ -d "build" ]; then
-            TOTAL_SIZE=$(du -sh build | cut -f1)
-            JS_SIZE=$(find build -name "*.js" -exec du -ch {} + 2>/dev/null | tail -1 | cut -f1 || echo "N/A")
-            CSS_SIZE=$(find build -name "*.css" -exec du -ch {} + 2>/dev/null | tail -1 | cut -f1 || echo "N/A")
-
-            echo "| Asset Type | Size |" >> $GITHUB_STEP_SUMMARY
-            echo "|------------|------|" >> $GITHUB_STEP_SUMMARY
-            echo "| 📁 Total | $TOTAL_SIZE |" >> $GITHUB_STEP_SUMMARY
-            echo "| 📜 JavaScript | $JS_SIZE |" >> $GITHUB_STEP_SUMMARY
-            echo "| 🎨 CSS | $CSS_SIZE |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Cache build output
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            build
-            .svelte-kit/output
-          key: ${{ runner.os }}-build-${{ github.sha }}
+        run: pnpm build
 
   e2e-tests:
-    name: E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})
-    needs: build-check
+    name: E2E Tests (Playwright)
+    if: ${{ github.event_name == 'merge_group' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -259,177 +78,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Compile Paraglide
         run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
-      - name: Restore build output
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            build
-            .svelte-kit/output
-          key: ${{ runner.os }}-build-${{ github.sha }}
-          fail-on-cache-miss: true
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
 
-      - name: Install Playwright Browsers
-        run: npx playwright install chromium --with-deps
-
-      - name: Run Playwright tests
-        run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-        env:
-          CI: true
-          NODE_OPTIONS: --max-old-space-size=4096
-
-      - name: Upload blob report
-        uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: blob-report-${{ matrix.shardIndex }}
-          path: blob-report
-          retention-days: 1
-
-  merge-reports:
-    name: Merge E2E Reports
-    if: ${{ !cancelled() }}
-    needs: e2e-tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: pnpm
-
-      - name: Restore dependencies
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            */*/node_modules
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - name: Download blob reports
-        uses: actions/download-artifact@v4
-        with:
-          path: all-blob-reports
-          pattern: blob-report-*
-          merge-multiple: true
-
-      - name: Merge into HTML Report
-        run: npx playwright merge-reports --reporter html,markdown ./all-blob-reports
-
-      - name: Generate E2E test summary
-        if: always()
-        run: |
-          echo "## 🎭 E2E Tests Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -f report.md ]; then
-            cat report.md >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Upload HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          retention-days: 14
-
-  pr-validation-complete:
-    name: PR Validation Complete
-    needs:
-      [lint, svelte-check, unit-tests, build-check, e2e-tests, merge-reports]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate Health Report
-        run: |
-          echo "# 🏥 Khartis Application Health Report" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Determine overall status
-          LINT="${{ needs.lint.result }}"
-          TYPECHECK="${{ needs.svelte-check.result }}"
-          UNIT="${{ needs.unit-tests.result }}"
-          BUILD="${{ needs.build-check.result }}"
-          E2E="${{ needs.e2e-tests.result }}"
-
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-
-          if [ "$LINT" == "success" ]; then
-            echo "| 🔍 Code Quality (ESLint + Prettier) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🔍 Code Quality (ESLint + Prettier) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "$TYPECHECK" == "success" ]; then
-            echo "| 📝 Type Check (Svelte + TS) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 📝 Type Check (Svelte + TS) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "$UNIT" == "success" ]; then
-            echo "| 🧪 Unit Tests (Vitest) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🧪 Unit Tests (Vitest) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "$BUILD" == "success" ]; then
-            echo "| 📦 Build | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 📦 Build | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          if [ "$E2E" == "success" ]; then
-            echo "| 🎭 E2E Tests (Playwright) | ✅ Passed |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| 🎭 E2E Tests (Playwright) | ❌ Failed |" >> $GITHUB_STEP_SUMMARY
-          fi
-
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          # Calculate health score (20 points each for 5 checks)
-          SCORE=0
-          [ "$LINT" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$TYPECHECK" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$UNIT" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$BUILD" == "success" ] && SCORE=$((SCORE + 20))
-          [ "$E2E" == "success" ] && SCORE=$((SCORE + 20))
-
-          echo "## Health Score: $SCORE/100" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ $SCORE -eq 100 ]; then
-            echo "🎉 **All checks passed!** PR is ready for review." >> $GITHUB_STEP_SUMMARY
-          elif [ $SCORE -ge 80 ]; then
-            echo "⚠️ **Almost there!** Some checks need attention." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ **Issues detected.** Please fix before merging." >> $GITHUB_STEP_SUMMARY
-          fi
-
-      - name: Check overall result
-        if: |
-          needs.lint.result != 'success' ||
-          needs.svelte-check.result != 'success' ||
-          needs.unit-tests.result != 'success' ||
-          needs.build-check.result != 'success' ||
-          needs.e2e-tests.result != 'success'
-        run: exit 1
+      - name: Run E2E tests
+        run: pnpm run test:e2e

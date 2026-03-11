@@ -99,6 +99,8 @@ export interface UploadedFile {
   missingShapefileComponents?: string[];
   isVirtualCopy?: boolean;
   originalSourceFileId?: string;
+  /** Stable dataset ID — persisted so visualization.datasetId references survive page reloads */
+  datasetId?: string;
 }
 
 export interface ExampleProject {
@@ -136,6 +138,7 @@ export interface CreateProjectState {
     isProcessingFiles: boolean;
     processingFileCount: number;
     error?: string;
+    warning?: string;
     validationErrors: string[];
   };
 

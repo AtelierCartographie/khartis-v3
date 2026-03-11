@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -35,12 +36,7 @@
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import {
-    Button,
-    Dropdown,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
+  import { Dropdown, Select, SelectItem } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import {
     ClassificationMethod,
@@ -49,8 +45,8 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
@@ -64,8 +60,8 @@
 
   let {
     dataFields = [],
-    discretizationMethods: __discretizationMethods = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onMissingDataChange,
@@ -79,6 +75,7 @@
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
@@ -91,6 +88,17 @@
       );
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
+      }
+    } else if (dataFields.length > 0) {
+      selectedFieldId = 0;
+      onMappingChange?.({ labelColumn: dataFields[0].text });
+    }
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
       }
     }
     if (visualization?.mapping.secondaryLabelColumn && dataFields.length > 0) {
@@ -110,6 +118,14 @@
     const field = dataFields[fieldId];
     if (field && onMappingChange) {
       onMappingChange({ labelColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -154,8 +170,13 @@
 
   $effect(() => {
     if (visualization?.style) {
+      const textOpacity = visualization.style.textOpacity;
       opacity =
-        visualization.style.textOpacity ?? VISUALIZATION_DEFAULTS.textOpacity;
+        textOpacity !== undefined
+          ? textOpacity <= 1
+            ? Math.round(textOpacity * 100)
+            : textOpacity
+          : VISUALIZATION_DEFAULTS.textOpacity;
       color = (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
       bold = visualization.style.textBold ?? false;
       italic = visualization.style.textItalic ?? false;
@@ -208,7 +229,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ textOpacity: value });
+    onStyleChange?.({ textOpacity: value / 100 });
   }
 
   function handleBoldChange(value: boolean) {
@@ -257,6 +278,9 @@
   }
 
   function handleToggleChange(checked: boolean) {
+    if (checked && opacity <= 0) {
+      opacity = VISUALIZATION_DEFAULTS.textOpacity;
+    }
     onToggleVisibility?.(checked);
   }
 
@@ -301,7 +325,10 @@
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
       [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual
+      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
+      [ClassificationMethod.Q6]: m.discretization_method_q6,
+      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
+      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
     };
     const method =
       visualization.classification.method ?? ClassificationMethod.QUANTILES;
@@ -332,6 +359,8 @@
   defaultOpen={false}
   showToggle
   toggleChecked={enabled}
+  disabled={disabled}
+  disabledReason={disabled ? m.texts_disabled_no_geometry() : undefined}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
@@ -350,11 +379,10 @@
         />
       </div>
       <div class="field-row-action">
-        <Button
+        <IconButton
           icon={LetterAa}
           kind={showPrimaryFormat ? 'primary' : 'ghost'}
           size="field"
-          hasIconOnly
           iconDescription={m.text_format_button()}
           on:click={togglePrimaryFormat}
         />
@@ -398,14 +426,17 @@
           <PalettePreview
             label={m.color_palette()}
             colors={currentPalette}
+            selectedPaletteId={visualization?.classification?.paletteId}
             oninvert={onInvertPalette}
+            onClassificationChange={handleClassificationChange}
           />
         {:else if colorMode === ColorMode.CATEGORIES}
           <div class="field-group">
             <Dropdown
               titleText={m.color_according()}
               items={dataFields}
-              bind:selectedId={selectedFieldId}
+              selectedId={selectedCategoryFieldId}
+              on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
               type="default"
             />
           </div>
@@ -418,6 +449,7 @@
             label={m.color_palette()}
             colors={qualitativePalette}
             oninvert={onInvertPalette}
+            onClassificationChange={handleClassificationChange}
           />
         {/if}
 
@@ -515,11 +547,10 @@
         />
       </div>
       <div class="field-row-action">
-        <Button
+        <IconButton
           icon={LetterAa}
           kind={showSecondaryFormat ? 'primary' : 'ghost'}
           size="field"
-          hasIconOnly
           disabled={!hasSecondaryField}
           iconDescription={m.text_format_button()}
           on:click={toggleSecondaryFormat}

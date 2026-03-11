@@ -11,6 +11,7 @@ export function hideColumn(
     state.hiddenColumns.get(datasetId) ?? new SvelteSet<string>();
   hiddenSet.add(columnName);
   state.hiddenColumns.set(datasetId, hiddenSet);
+  state.hiddenColumns = new Map(state.hiddenColumns);
   logger.debug('Column hidden', LogCategory.STORE, { datasetId, columnName });
 }
 
@@ -25,6 +26,7 @@ export function showColumn(
     if (hiddenSet.size === 0) {
       state.hiddenColumns.delete(datasetId);
     }
+    state.hiddenColumns = new Map(state.hiddenColumns);
   }
   logger.debug('Column shown', LogCategory.STORE, { datasetId, columnName });
 }

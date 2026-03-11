@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import {
@@ -7,8 +9,7 @@
   } from '$lib/features/commons/store/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
-  import { Button, Tag } from 'carbon-components-svelte';
-  import { Grid, List } from 'carbon-icons-svelte';
+  import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { GROUPS, PROJECTIONS } from './data';
   import {
@@ -76,7 +77,7 @@
   <div class={headerClass}>
     <div><span>{description}</span></div>
     <div class="projection-buttons">
-      <Button
+      <IconButton
         kind="ghost"
         icon={List}
         size="small"
@@ -86,7 +87,7 @@
         on:click={() => projectionActions.setViewMode(ViewMode.LIST)}
       />
 
-      <Button
+      <IconButton
         kind="ghost"
         icon={Grid}
         size="small"
@@ -101,9 +102,10 @@
   {#if viewMode === ViewMode.LIST}
     <div class="projection-tags">
       {#each filterOptions as opt (opt.id)}
-        <Tag
-          on:click={() => setFilter(opt.id)}
-          type={activeFilter === opt.id ? 'blue' : undefined}>{opt.label}</Tag
+        <button
+          class="projection-tag"
+          class:projection-tag--selected={activeFilter === opt.id}
+          onclick={() => setFilter(opt.id)}>{opt.label}</button
         >
       {/each}
     </div>
@@ -123,6 +125,15 @@
         />
       {/each}
     </div>
+
+    <Button
+      kind="tertiary"
+      size="small"
+      icon={MagicWandFilled}
+      class="show-more-btn"
+      on:click={() => projectionActions.suggestProjectionForCurrentData()}
+      >{m.show_other_suggestions()}</Button
+    >
   {:else}
     <div class="projection-scroll-x">
       <div class="projection-grid">
@@ -172,14 +183,49 @@
   }
 
   .projection-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cds-spacing-03);
     padding-top: var(--cds-spacing-05);
     padding-bottom: var(--cds-spacing-05);
   }
 
+  .projection-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 9px;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    cursor: pointer;
+    border: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+    background-color: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+    transition: background-color 0.1s ease;
+  }
+
+  .projection-tag:hover:not(.projection-tag--selected) {
+    background-color: var(--cds-medium-blue, #a8e2ff);
+  }
+
+  .projection-tag--selected {
+    border-color: transparent;
+    background-color: var(--khartis-additions-focus-suggestions, #0072c3);
+    color: #ffffff;
+  }
+
   .projection-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-direction: column;
     gap: var(--cds-spacing-03);
+  }
+
+  .projection-content :global(.show-more-btn) {
+    width: 100%;
+    max-width: 100%;
+    margin-top: var(--cds-spacing-05);
   }
 
   .projection-grid {

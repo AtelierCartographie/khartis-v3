@@ -187,6 +187,9 @@ export function deserializeUploadedFile(
   if (data.duckdbTableName) {
     file.duckdbTableName = data.duckdbTableName;
   }
+  if (data.datasetId) {
+    file.datasetId = data.datasetId;
+  }
 
   return file as UploadedFile;
 }

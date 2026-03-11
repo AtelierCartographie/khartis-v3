@@ -1,7 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification } from 'carbon-components-svelte';
-  import { Launch } from 'carbon-icons-svelte';
 
   interface Props {
     isActive?: boolean;
@@ -33,8 +32,8 @@
   {:else if isActive}
     <InlineNotification
       kind="success"
-      title={m.osm_basemap_title({ style: 'OpenStreetMap' })}
-      subtitle={m.osm_modal_description()}
+      title={m.osm_basemap_title()}
+      subtitle={m.osm_basemap_description()}
       hideCloseButton={true}
       lowContrast
     />
@@ -65,17 +64,6 @@
       <p class="osm-note">{m.osm_customization_note()}</p>
     {/if}
   {/if}
-
-  <Button
-    kind="ghost"
-    icon={Launch}
-    iconDescription={m.learn_more()}
-    href="https://www.sciencespo.fr/cartographie/khartis/docs/data"
-    target="_blank"
-    size="small"
-  >
-    {m.osm_learn_more()}
-  </Button>
 </div>
 
 <style>

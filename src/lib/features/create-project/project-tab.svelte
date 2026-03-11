@@ -1,5 +1,6 @@
 <script lang="ts">
   import { RadioButton } from 'carbon-components-svelte';
+  import { ArrowRight } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import { KEY } from '../commons/constants/dom.constants';
@@ -8,6 +9,7 @@
     title: string;
     icon: Snippet;
     selected?: boolean;
+    selectable?: boolean;
     name?: string;
     onclick?: (e: Event) => void | undefined;
     onkeydown?: (e: KeyboardEvent) => void | undefined;
@@ -19,6 +21,7 @@
     title,
     icon,
     selected = false,
+    selectable = true,
     name = 'project-type',
     onclick,
     onkeydown,
@@ -58,13 +61,21 @@
     </div>
 
     <div class="flex justify-end">
-      <RadioButton name={name} checked={selected} />
+      {#if selectable}
+        <RadioButton name={name} checked={selected} />
+      {/if}
     </div>
   </div>
 
   <div class="self-start mt-3 mb-5">
     <h6 class="text-left">{title}</h6>
   </div>
+
+  {#if !selectable}
+    <div class="nav-arrow">
+      <ArrowRight size={16} />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -84,5 +95,12 @@
       rgba(230, 20, 45, 0.35) 0%,
       rgba(230, 20, 45, 0.05) 100%
     );
+  }
+
+  .nav-arrow {
+    position: absolute;
+    bottom: var(--cds-spacing-05);
+    right: var(--cds-spacing-05);
+    opacity: 0.6;
   }
 </style>

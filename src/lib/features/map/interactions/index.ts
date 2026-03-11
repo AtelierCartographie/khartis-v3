@@ -1,5 +1,6 @@
 export {
-  createTooltipHandler,
-  formatTooltipValue,
-  getTooltip
+  createClickHandler,
+  createHoverHandler,
+  extractTooltipEntries,
+  formatTooltipValue
 } from './tooltip.service';

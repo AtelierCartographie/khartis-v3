@@ -23,13 +23,29 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
   let joinTabularEnabled = $state(false);
-  let overlayBasemapEnabled = $state(false);
 
   import { dataTabStore } from './data-tab.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+
+  let overlayBasemapEnabled = $state(
+    osmBasemapStore.isActive || basemapStyleStore.referenceBasemapId !== null
+  );
+
+  // Sync toggle ON when a basemap becomes active externally (e.g., restored from project)
+  $effect(() => {
+    if (
+      osmBasemapStore.isActive ||
+      basemapStyleStore.referenceBasemapId !== null
+    ) {
+      overlayBasemapEnabled = true;
+    }
+  });
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
   let previousDatasetId = $state<string | undefined>(undefined);
+  let previousEnrichmentDatasetId = $state<string | undefined>(undefined);
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
@@ -72,7 +88,21 @@
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
       joinTabularEnabled = false;
+      overlayBasemapEnabled =
+        osmBasemapStore.isActive ||
+        basemapStyleStore.referenceBasemapId !== null;
       fileHook.handleRemoveFile();
+      joinHook.resetJoinState();
+    }
+  });
+
+  // Reset join state when enrichment source changes to avoid stale stats/mappings.
+  $effect(() => {
+    const currentEnrichmentId = fileHook.enrichmentDataset?.id;
+    if (currentEnrichmentId !== previousEnrichmentDatasetId) {
+      previousEnrichmentDatasetId = currentEnrichmentId;
+      enrichLinkedVariableId = undefined;
+      geoFileColumnId = undefined;
       joinHook.resetJoinState();
     }
   });
@@ -200,12 +230,17 @@
       toggleChecked={overlayBasemapEnabled}
       onToggleChange={(checked) => {
         overlayBasemapEnabled = checked;
+        if (!checked) {
+          osmBasemapStore.clear();
+          basemapStyleStore.setReferenceBasemap(null);
+        }
       }}
     >
       <EnrichmentBasemapSelector
         basemapTabIndex={basemapHook.basemapTabIndex}
         selectedBasemapId={basemapHook.selectedBasemapId}
         basemaps={basemapHook.basemaps}
+        suggestedBasemaps={basemapHook.suggestedBasemaps}
         basemapImportUploading={basemapHook.basemapImportUploading}
         basemapImportError={basemapHook.basemapImportError}
         importedCustomBasemap={basemapHook.importedCustomBasemap}

@@ -1,8 +1,13 @@
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+import {
+  dataTabActions,
+  dataTabState
+} from '$lib/features/commons/store/data-tab.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
@@ -15,6 +20,11 @@ import {
 } from '$lib/features/map/utils/basemap-import.utils';
 import * as m from '$lib/paraglide/messages';
 
+export interface BasemapSuggestionItem {
+  basemap: BasemapMetadata;
+  score: number;
+}
+
 export interface UseEnrichmentBasemapReturn {
   readonly basemapTabIndex: number;
   readonly selectedBasemapId: string | undefined;
@@ -22,6 +32,7 @@ export interface UseEnrichmentBasemapReturn {
   readonly basemapImportUploading: boolean;
   readonly importedCustomBasemap: BasemapMetadata | null;
   readonly basemaps: BasemapMetadata[];
+  readonly suggestedBasemaps: BasemapSuggestionItem[];
   setBasemapTabIndex: (index: number) => void;
   handleSelectBasemap: (basemapId: string) => void;
   handleBasemapImportFile: (file: File) => Promise<void>;
@@ -36,6 +47,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   let basemapImportError = $state<string | null>(null);
   let basemapImportUploading = $state(false);
   let importedCustomBasemap = $state<BasemapMetadata | null>(null);
+  let suggestedBasemaps = $state<BasemapSuggestionItem[]>([]);
 
   const basemaps = $derived(basemapCatalogService.basemaps);
 
@@ -72,7 +84,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
-      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;
@@ -139,6 +151,67 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     basemapImportError = null;
   }
 
+  $effect(() => {
+    const datasetId = datasetsStore.selectedDataset?.id;
+    const linkedVariableName = dataTabState.geolocation.linkedVariableName;
+    const basemapCount = basemapCatalogService.basemaps.length;
+
+    void datasetId;
+    void linkedVariableName;
+    void basemapCount;
+
+    let cancelled = false;
+
+    async function refreshSuggestions() {
+      const selectedDataset = datasetsStore.selectedDataset;
+      if (!selectedDataset) {
+        if (!cancelled) {
+          suggestedBasemaps = [];
+        }
+        return;
+      }
+
+      if (!basemapCatalogService.isLoaded) {
+        await basemapCatalogService.loadCatalog();
+      }
+
+      const processedDataset = normalizeToProcessedDataset(selectedDataset);
+      const suggestions = basemapCatalogService.getSuggestions(
+        processedDataset,
+        3,
+        dataTabState.geolocation.linkedVariableName
+      );
+
+      if (cancelled) return;
+
+      const mappedSuggestions = suggestions.map((suggestion) => ({
+        basemap:
+          basemapCatalogService.getBasemapById(suggestion.file) ?? suggestion,
+        score: suggestion.matchScore
+      }));
+
+      suggestedBasemaps = mappedSuggestions;
+
+      if (!selectedBasemapId && mappedSuggestions.length > 0) {
+        handleSelectBasemap(mappedSuggestions[0].basemap.file);
+      }
+    }
+
+    void refreshSuggestions().catch((error) => {
+      if (cancelled) return;
+      logger.error(
+        'Failed to refresh enrichment basemap suggestions',
+        LogCategory.MAP,
+        error
+      );
+      suggestedBasemaps = [];
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  });
+
   return {
     get basemapTabIndex() {
       return basemapTabIndex;
@@ -157,6 +230,9 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     },
     get basemaps() {
       return basemaps;
+    },
+    get suggestedBasemaps() {
+      return suggestedBasemaps;
     },
     setBasemapTabIndex,
     handleSelectBasemap,

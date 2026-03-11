@@ -1,4 +1,4 @@
-import { getTableMetadata, invalidateTableCache } from './cache/cache-manager';
+import { getTableMetadata, markTableMutated } from './cache/cache-manager';
 import {
   getContext,
   initEngine,
@@ -19,6 +19,7 @@ import { analyse as analyseMacros } from './macros/analyse';
 import { breaks as breaksMacros } from './macros/breaks';
 import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
+import { simplification_macros } from './macros/simplification';
 
 import type {
   AnalyseOptions,
@@ -187,7 +188,7 @@ export const Duck = {
 
   invalidateTableCache(table: string): void {
     const ctx = getContext();
-    invalidateTableCache(ctx, table);
+    markTableMutated(ctx, table);
   },
 
   get_table_metadata(table: string): TableMetadata {
@@ -227,7 +228,11 @@ export async function initDuckDB(): Promise<void> {
     try {
       await initEngine();
       const allMacros =
-        breaksMacros + analyseMacros + join_macros + search_macros;
+        breaksMacros +
+        analyseMacros +
+        join_macros +
+        search_macros +
+        simplification_macros;
       await loadMacros(allMacros);
     } catch (error) {
       duckInitPromise = null;

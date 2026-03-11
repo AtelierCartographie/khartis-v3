@@ -37,6 +37,10 @@
   background-color: var(--cds-interactive-01);
 }
 
+.bg-layer-01-suggestions {
+  background-color: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+}
+
 .border {
   border-style: solid;
   border-width: 1px;

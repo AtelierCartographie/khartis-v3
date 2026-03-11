@@ -1,6 +1,4 @@
 export {
-  BASE_FILL_COLOR,
-  BASE_STROKE_COLOR,
   createCategoricalColorAccessor,
   createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
@@ -8,7 +6,11 @@ export {
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
   HIGHLIGHT_FILL_COLOR,
-  withOpacity
+  withGeoJsonRowHighlight,
+  withGeoJsonRowHighlightAccessor,
+  withOpacity,
+  withRowHighlight,
+  withRowHighlightAccessor
 } from './layer-helpers';
 
 export {

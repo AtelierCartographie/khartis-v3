@@ -7,7 +7,7 @@ import {
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import type { SearchState } from './search.types';
 

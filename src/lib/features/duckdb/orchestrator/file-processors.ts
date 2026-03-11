@@ -1,5 +1,3 @@
-import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
-import type { Table } from 'apache-arrow/Arrow';
 import type { AnalysisResult } from '../types';
 
 export interface DuckDBClientForFileProcessing {
@@ -20,12 +18,4 @@ export interface DuckDBClientForFileProcessing {
     file: File,
     options: { tablename: string; shapefile?: boolean }
   ): Promise<string | unknown>;
-}
-
-export interface FileProcessorCallbacks {
-  getRowCount: (tableName: string) => Promise<number>;
-  createArrowTableWithMetadata: (tableName: string) => Promise<{
-    arrowTableWithMetadata: Table;
-    geoArrowMetadata: GeoArrowMetadata | null;
-  }>;
 }

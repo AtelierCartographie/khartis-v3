@@ -1,6 +1,11 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import {
+    SHAPE_TYPE,
+    SHAPE_TYPES,
+    type ShapeTypeValue
+  } from '$lib/features/commons/constants';
   import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
   import {
     createColorValue,
@@ -52,30 +57,31 @@
     );
   }
 
-  const shapes = [
-    { value: 'arrow', text: m.annotations_shape_arrow() },
-    { value: 'line', text: m.annotations_shape_line() },
-    { value: 'rectangle', text: m.annotations_shape_rectangle() },
-    { value: 'circle', text: m.annotations_shape_circle() },
-    { value: 'triangle', text: m.triangle() }
+  const shapes: { value: ShapeTypeValue; text: string }[] = [
+    { value: SHAPE_TYPE.ARROW, text: m.annotations_shape_arrow() },
+    { value: SHAPE_TYPE.LINE, text: m.annotations_shape_line() },
+    { value: SHAPE_TYPE.RECTANGLE, text: m.annotations_shape_rectangle() },
+    { value: SHAPE_TYPE.CIRCLE, text: m.annotations_shape_circle() },
+    { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
   ];
 
-  let selectedShape = $state('arrow');
+  let selectedShape = $state<ShapeTypeValue>(SHAPE_TYPE.ARROW);
   let strokeColor = $state('#ffffff');
   let hue = $state(0);
   let saturation = $state(0);
   let lightness = $state(100);
 
   $effect(() => {
-    if (defaultStyle.strokeColor) {
-      if (typeof defaultStyle.strokeColor === 'string') {
-        strokeColor = defaultStyle.strokeColor as string;
+    const style = effectiveStyle;
+    if (style.strokeColor) {
+      if (typeof style.strokeColor === 'string') {
+        strokeColor = style.strokeColor as string;
         const hsl = hexToHsl(strokeColor);
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
-        const c = defaultStyle.strokeColor;
+      } else if (isStrokeColorDescriptor(style.strokeColor)) {
+        const c = style.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -84,6 +90,13 @@
       }
     }
   });
+
+  function handleShapeChange(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value;
+    if (SHAPE_TYPES.includes(value as ShapeTypeValue)) {
+      selectedShape = value as ShapeTypeValue;
+    }
+  }
 
   function handleAddShape() {
     annotationsActions.addAnnotation(AnnotationKind.SHAPE, selectedShape);
@@ -117,8 +130,7 @@
       <Select
         labelText={m.shape()}
         selected={selectedShape}
-        on:change={(e) =>
-          (selectedShape = (e.currentTarget as HTMLSelectElement).value)}
+        on:change={handleShapeChange}
       >
         {#each shapes as s (s.value)}
           <SelectItem value={s.value} text={s.text} />
@@ -130,10 +142,10 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_shape_helper()}</p>
-        <Button kind="primary" icon={Add} on:click={handleAddShape}>
+        <Button kind="primary" icon={Add} onclick={handleAddShape}>
           {m.annotations_add_shape()}
         </Button>
+        <p class="helper">{m.annotations_shape_helper()}</p>
       </div>
     </Column>
   </Row>
@@ -149,6 +161,8 @@
           step={1}
           stepMultiplier={1}
           on:change={handleThicknessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -165,6 +179,8 @@
           step={1}
           stepMultiplier={5}
           on:change={handleCurvatureChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -233,6 +249,8 @@
           stepMultiplier={5}
           on:change={(e) =>
             annotationsActions.applyStyle({ opacity: e.detail })}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -249,7 +267,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.SHAPE}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.SHAPE &&
               annotationsActions.removeAnnotation(selected.id)}
@@ -272,9 +290,10 @@
   }
 
   .helper {
-    margin: 0 0 var(--cds-spacing-03) 0;
+    margin: var(--cds-spacing-03) 0 0 0;
     color: var(--cds-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .toggle-row {

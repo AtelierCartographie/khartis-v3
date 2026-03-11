@@ -1,8 +1,11 @@
 import { MIME } from '$lib/features/commons/constants';
+import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
+import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
-import { PIPELINE_CONST, isGeospatialFile } from '../constants';
+import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import type {
@@ -13,12 +16,57 @@ import type {
   RawDataset,
   UploadedFilePayload
 } from '../types';
+import { detectCsvHeader } from '../utils/csv-header-detector';
 import { detectDecimalSeparator } from '../utils/decimal-detector';
 
 export interface ProcessFileOptions {
   originalName?: string;
   rawDataset?: RawDataset;
   companionFiles?: File[];
+}
+
+const GEO_DETECTION_SAMPLE_LIMIT = 200;
+
+function applyGeoDetection(
+  dataset: DatasetResult,
+  geoDetection?: GeoDetectionResult
+): void {
+  if (!geoDetection) return;
+
+  dataset.geoDetection = geoDetection;
+  dataset.analysis = {
+    columns: dataset.analysis?.columns ?? dataset.columns,
+    hasGeoData:
+      geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
+    geoColumns: geoDetection.geoColumns,
+    rowCount: dataset.rowCount,
+    warnings: [...(dataset.analysis?.warnings ?? []), ...geoDetection.warnings]
+  };
+}
+
+async function detectGeoColumnsFromTable(
+  tableName: string,
+  columns: string[]
+): Promise<GeoDetectionResult | undefined> {
+  if (columns.length === 0) return undefined;
+
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedColumns = columns
+    .map((column) => `"${escapeIdentifier(column)}"`)
+    .join(', ');
+
+  const sampleRows = (await Duck.query(
+    `SELECT ${escapedColumns} FROM "${escapedTable}" LIMIT ${GEO_DETECTION_SAMPLE_LIMIT}`,
+    { format: 'array' }
+  )) as Array<Record<string, unknown>>;
+
+  if (!sampleRows.length) return undefined;
+
+  const matrix = sampleRows.map((row) => columns.map((column) => row[column]));
+
+  return GeoColumnDetector.detectGeoColumns(columns, matrix, {
+    sampleSize: Math.min(GEO_DETECTION_SAMPLE_LIMIT, matrix.length)
+  });
 }
 
 export async function processFileInternal(
@@ -45,6 +93,13 @@ export async function processFileInternal(
     isShapefile,
     hasCompanionFiles: Boolean(options.companionFiles?.length)
   });
+
+  if (
+    isShapefile &&
+    (!options.companionFiles || options.companionFiles.length === 0)
+  ) {
+    throw new Error(m.pipeline_error_shp_standalone());
+  }
 
   await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
 
@@ -75,6 +130,22 @@ export async function processFileInternal(
       dataset.columns,
       options.rawDataset
     );
+  }
+
+  if (!isGeoFile) {
+    try {
+      const geoDetection = await detectGeoColumnsFromTable(
+        dataset.tableName,
+        dataset.columns.map((column) => column.name)
+      );
+      applyGeoDetection(dataset, geoDetection);
+    } catch (error) {
+      logger.warn(
+        'Failed to compute geo detection for tabular dataset',
+        LogCategory.DATA,
+        { tableName: dataset.tableName, error }
+      );
+    }
   }
 
   logger.success('DuckDB dataset built', LogCategory.DATA, {
@@ -123,8 +194,12 @@ async function readTabularFile(
   tableName: string,
   fileName: string
 ): Promise<CsvImportOptions | undefined> {
-  const isParquet = fileName.toLowerCase().endsWith('.parquet');
-  const isArrow = fileName.toLowerCase().endsWith('.arrow');
+  const lowerFileName = fileName.toLowerCase();
+  const isParquet =
+    lowerFileName.endsWith('.parquet') ||
+    lowerFileName.endsWith('.geoparquet') ||
+    lowerFileName.endsWith('.gpq');
+  const isArrow = lowerFileName.endsWith('.arrow');
 
   if (isParquet || isArrow) {
     await Duck.read_tabular(file, {
@@ -138,17 +213,32 @@ async function readTabularFile(
   if (detection.separator === ',') {
     logger.info('European decimal format detected', LogCategory.DATA, {
       confidence: detection.confidence,
-      sampleSize: detection.sampleSize
+      sampleSize: detection.sampleSize,
+      delimiter: detection.delimiter,
+      thousandsSeparator: detection.thousandsSeparator
     });
   }
+  const headerDetection = await detectCsvHeader(file, detection.delimiter);
+  logger.debug('CSV header detection completed', LogCategory.DATA, {
+    hasHeader: headerDetection.hasHeader,
+    confidence: headerDetection.confidence,
+    comparedColumns: headerDetection.comparedColumns,
+    delimiter: detection.delimiter,
+    fileName
+  });
+
   await Duck.read_tabular(file, {
     tablename: tableName,
-    decimal_separator: detection.separator
+    header: headerDetection.hasHeader,
+    decimal_separator: detection.separator,
+    delimiter: detection.delimiter,
+    thousands_separator: detection.thousandsSeparator
   });
 
   return {
-    header: true,
+    header: headerDetection.hasHeader,
     decimalSeparator: detection.separator,
+    thousandsSeparator: detection.thousandsSeparator,
     delimiter: detection.delimiter
   };
 }

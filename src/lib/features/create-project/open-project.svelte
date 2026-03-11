@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Tooltip from '$lib/features/commons/components/carbon/tooltip.svelte';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import {
@@ -14,8 +15,7 @@
     Modal,
     OverflowMenu,
     OverflowMenuItem,
-    SkeletonPlaceholder,
-    Tooltip
+    SkeletonPlaceholder
   } from 'carbon-components-svelte';
   import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
@@ -227,32 +227,28 @@
                     >{formatDate(project.updatedAt)}</span
                   >
                 </div>
-                <OverflowMenu
-                  size="sm"
-                  flipped
-                  on:click={(e: MouseEvent) => e.stopPropagation()}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div
+                  onclick={(e: MouseEvent) => e.stopPropagation()}
+                  onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
                 >
-                  <OverflowMenuItem
-                    text={m.open_project_duplicate()}
-                    disabled={isDuplicating}
-                    on:click={(e) => {
-                      e.stopPropagation();
-                      handleDuplicateProject(project.id);
-                    }}
-                  >
-                    <Copy size={16} />
-                  </OverflowMenuItem>
-                  <OverflowMenuItem
-                    danger
-                    text={m.open_project_delete()}
-                    on:click={(e) => {
-                      e.stopPropagation();
-                      confirmDeleteProject(project.id);
-                    }}
-                  >
-                    <TrashCan size={16} />
-                  </OverflowMenuItem>
-                </OverflowMenu>
+                  <OverflowMenu size="sm" flipped>
+                    <OverflowMenuItem
+                      text={m.open_project_duplicate()}
+                      disabled={isDuplicating}
+                      on:click={() => handleDuplicateProject(project.id)}
+                    >
+                      <Copy size={16} />
+                    </OverflowMenuItem>
+                    <OverflowMenuItem
+                      danger
+                      text={m.open_project_delete()}
+                      on:click={() => confirmDeleteProject(project.id)}
+                    >
+                      <TrashCan size={16} />
+                    </OverflowMenuItem>
+                  </OverflowMenu>
+                </div>
               </div>
             {/snippet}
           </ProjectCard>

@@ -17,9 +17,19 @@ import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.s
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
-import type { DataExportFormat } from '../types';
+import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
+import {
+  COLUMN_TYPE_GEOMETRY,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 
 export interface ExportError extends Error {
   title: string;
@@ -150,8 +160,14 @@ export async function exportData(
 
   const formatConfig = getDataFormatConfig(format);
   const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
+
+  const datasetsToExport =
+    format === DATA_FORMAT.CSV_GEO || format === DATA_FORMAT.GEOJSON
+      ? await fetchDatasetsWithGeometry(normalizedDatasets)
+      : normalizedDatasets;
+
   const blob = await exportProcessedDatasets(
-    normalizedDatasets,
+    datasetsToExport,
     formatConfig.format
   );
   const filename = generateExportFilename(fileName, formatConfig.extension);
@@ -174,17 +190,100 @@ function validateMapExportPrerequisites(): void {
 }
 
 function getDataFormatConfig(format: DataExportFormat): {
-  format: 'csv' | 'geojson' | 'json' | 'csv-geo';
+  format: DataExportFormat;
   extension: string;
 } {
   switch (format) {
-    case 'csv':
-      return { format: 'csv', extension: 'csv' };
-    case 'geojson':
-      return { format: 'geojson', extension: 'geojson' };
-    case 'csv-geo':
-      return { format: 'csv-geo', extension: 'csv' };
+    case DATA_FORMAT.CSV:
+      return { format: DATA_FORMAT.CSV, extension: DATA_FORMAT.CSV };
+    case DATA_FORMAT.GEOJSON:
+      return { format: DATA_FORMAT.GEOJSON, extension: DATA_FORMAT.GEOJSON };
+    case DATA_FORMAT.CSV_GEO:
+      return { format: DATA_FORMAT.CSV_GEO, extension: DATA_FORMAT.CSV };
   }
+}
+
+async function fetchJoinedDatasetWithGeometry(
+  dataset: ProcessedDataset,
+  joinedBasemapId: string
+): Promise<ProcessedDataset> {
+  const geometryTable =
+    await basemapService.loadGeometryIntoDuckDB(joinedBasemapId);
+
+  const geomColumns = (await Duck.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'
+     AND column_name NOT IN ('${INTERNAL_COLUMN.GEOM}', '${INTERNAL_COLUMN.GEOMETRY}', '${INTERNAL_COLUMN.WKB_GEOMETRY}', '${INTERNAL_COLUMN.THE_GEOM}')
+     AND data_type IN ('VARCHAR', 'TEXT')`,
+    { format: 'array' }
+  )) as Array<{ column_name: string }>;
+
+  const colList = geomColumns
+    .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+    .join(', ');
+  const escapedDataset = escapeIdentifier(dataset.duckdbTableName!);
+  const escapedGeometry = escapeIdentifier(geometryTable);
+  const viewName = `export_joined_${dataset.duckdbTableName!.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+
+  await Duck.query(`
+    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
+    WITH geom_unpivot AS (
+      UNPIVOT "${escapedGeometry}"
+      ON ${colList}
+      INTO NAME _attr_col VALUE _attr_val
+    )
+    SELECT d.*, ST_AsGeoJSON(gu.geom) AS geom
+    FROM "${escapedDataset}" d
+    INNER JOIN (
+      SELECT DISTINCT _attr_val, geom
+      FROM geom_unpivot
+    ) gu
+    ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+    WHERE gu.geom IS NOT NULL
+  `);
+
+  const rows = (await Duck.query(`SELECT * FROM "${viewName}"`, {
+    format: 'array'
+  })) as Record<string, unknown>[];
+
+  // DuckDB Arrow rows have non-enumerable properties — must copy by explicit column name
+  const allColumnNames = [
+    ...dataset.columns.map((c) => c.name),
+    INTERNAL_COLUMN.GEOM
+  ];
+
+  const dataWithParsedGeometry = rows.map((row) => {
+    const newRow: Record<string, unknown> = {};
+    for (const colName of allColumnNames) {
+      newRow[colName] = row[colName];
+    }
+    const geomValue = newRow[INTERNAL_COLUMN.GEOM];
+    if (typeof geomValue === 'string') {
+      try {
+        newRow[INTERNAL_COLUMN.GEOM] = JSON.parse(geomValue);
+      } catch {
+        newRow[INTERNAL_COLUMN.GEOM] = null;
+      }
+    }
+    return newRow;
+  });
+
+  return {
+    ...dataset,
+    geometry: 'Polygon',
+    data: dataWithParsedGeometry,
+    columns: [
+      ...dataset.columns,
+      {
+        name: INTERNAL_COLUMN.GEOM,
+        type: COLUMN_TYPE_GEOMETRY,
+        label: INTERNAL_COLUMN.GEOM,
+        originalType: 'GEOMETRY',
+        nullable: true,
+        unique: false
+      } as (typeof dataset.columns)[0]
+    ]
+  };
 }
 
 async function fetchDatasetsWithGeometry(
@@ -194,6 +293,34 @@ async function fetchDatasetsWithGeometry(
 
   for (const dataset of datasets) {
     if (!dataset.duckdbTableName || !dataset.geometry) {
+      // Check if this is a joined dataset (CSV joined to a basemap)
+      if (dataset.sourceFileId) {
+        const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
+        if (duckDataset?.joinedBasemap) {
+          try {
+            const joinedDataset = await fetchJoinedDatasetWithGeometry(
+              dataset,
+              duckDataset.joinedBasemap
+            );
+            results.push(joinedDataset);
+          } catch (error) {
+            logger.error(
+              'Failed to fetch joined geometry for export',
+              LogCategory.EXPORT,
+              {
+                datasetId: dataset.id,
+                joinedBasemap: duckDataset.joinedBasemap,
+                error: error instanceof Error ? error.message : String(error)
+              }
+            );
+            results.push(dataset);
+          }
+          continue;
+        }
+      }
+
       logger.warn(
         'Skipping geometry hydration for dataset without table/geometry',
         LogCategory.EXPORT,
@@ -207,7 +334,9 @@ async function fetchDatasetsWithGeometry(
       continue;
     }
 
-    const geomColumn = dataset.columns.find((col) => col.type === 'geometry');
+    const geomColumn = dataset.columns.find(
+      (col) => col.type === COLUMN_TYPE_GEOMETRY
+    );
     if (!geomColumn) {
       logger.warn(
         'Skipping geometry hydration for dataset without geometry column',

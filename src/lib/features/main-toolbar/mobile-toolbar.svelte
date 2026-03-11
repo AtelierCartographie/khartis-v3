@@ -1,4 +1,5 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     globalActions,
     globalState
@@ -11,7 +12,6 @@
     VisualizationTools
   } from '$lib/features/commons/types/global';
   import * as m from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import {
     Add,
     ChevronDown,
@@ -131,14 +131,14 @@
       </div>
       <div class="header-actions">
         {#if globalState.selectedStep === ToolbarStep.Visualizations}
-          <Button
+          <IconButton
             kind="ghost"
             size="small"
             icon={Add}
             iconDescription={m.new_visualization_button()}
           />
         {/if}
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
           icon={ChevronDown}
@@ -235,7 +235,7 @@
 
   {#if showToolsBar && hasProject}
     <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={Search}
@@ -243,7 +243,7 @@
         isSelected={globalState.selectedTool === VisualizationTools.Search}
         on:click={() => handleToolSelect(VisualizationTools.Search)}
       />
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={Layers}
@@ -251,7 +251,7 @@
         isSelected={globalState.selectedTool === VisualizationTools.Layers}
         on:click={() => handleToolSelect(VisualizationTools.Layers)}
       />
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={Earth}
@@ -259,7 +259,7 @@
         isSelected={globalState.selectedTool === VisualizationTools.Projection}
         on:click={() => handleToolSelect(VisualizationTools.Projection)}
       />
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={EdgeNode}
@@ -268,7 +268,7 @@
           VisualizationTools.Simplification}
         on:click={() => handleToolSelect(VisualizationTools.Simplification)}
       />
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={GridIcon}

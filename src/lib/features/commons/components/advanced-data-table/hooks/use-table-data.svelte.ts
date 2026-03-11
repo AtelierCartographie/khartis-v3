@@ -1,5 +1,6 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { duckDBOrchestrator, type AnalysisResult } from '$lib/features/duckdb';
+import { type AnalysisResult } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../../utils/logger';
 import { EXCLUDED_COLUMNS } from '../../../constants/data.constants';
@@ -35,6 +36,23 @@ function getValue<T>(prop: T | (() => T)): T {
   return typeof prop === 'function' ? (prop as () => T)() : prop;
 }
 
+function normalizeRowId(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
 export function useTableData(props: UseTableDataProps): UseTableDataReturn {
   let columns = $state<ColumnInfo[]>([]);
   let columnAnalysis = new SvelteMap<string, AnalysisResult>();
@@ -53,6 +71,14 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       isLoading = true;
       initialLoadComplete = false;
       error = null;
+
+      // Clear stale columns synchronously before the async fetch.
+      // This prevents Svelte from reconciling old → new column headers
+      // in a single keyed-each pass, which can crash when Portal-based
+      // components (TableColumnHeader) are destroyed mid-reconciliation.
+      columns = [];
+      tableData = [];
+      columnAnalysis = new SvelteMap();
 
       if (tableName) {
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
@@ -137,10 +163,11 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
               row[col.name] = rowProxy[col.name];
             }
 
-            if (rowProxy.__id !== undefined) {
-              row.__id = rowProxy.__id;
-            } else if (rowProxy['__id'] !== undefined) {
-              row.__id = rowProxy['__id'];
+            const normalizedRowId =
+              normalizeRowId(rowProxy.__id) ?? normalizeRowId(rowProxy['__id']);
+
+            if (normalizedRowId !== undefined) {
+              row.__id = normalizedRowId;
             }
 
             rows.push(row);

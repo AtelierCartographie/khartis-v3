@@ -20,6 +20,7 @@ report.*.json
 .vercel
 .netlify
 .wrangler
+.turbo/
 /.svelte-kit
 /build
 dist
@@ -61,6 +62,7 @@ src/lib/paraglide
 
 # Coverage
 coverage/
+coverage-duckdb/
 .nyc_output
 
 # Playwright
@@ -91,6 +93,7 @@ CLAUDE.md
 
 # Editors/IDEs
 .vscode/
+.zed/
 .idea/
 *.suo
 *.ntvs*
@@ -103,6 +106,9 @@ CLAUDE.md
 .tmp/
 tmp/
 *.tmp
+
+# Local agent/tool state
+.codex/
 
 # Inlang cache
 project.inlang/cache/

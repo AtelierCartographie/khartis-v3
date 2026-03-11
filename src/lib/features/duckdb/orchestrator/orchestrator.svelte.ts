@@ -35,7 +35,7 @@ import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
 import * as conversionOps from './conversion-ops';
 import * as datasetOps from './dataset-ops';
-import { createFilterRecord } from './filter-ops';
+import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as searchOps from './search-ops';
@@ -191,6 +191,14 @@ export const duckDBOrchestrator = {
   beginBatch: state.beginBatch,
   endBatch: state.endBatch,
 
+  async invalidateAndReanalyse(tableName: string): Promise<void> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    invalidateDatasetCache(tableName);
+    await Duck.analyse(tableName, { force: true });
+    state.bumpDatasetsVersion();
+  },
+
   initialize,
 
   async waitForInitialization(): Promise<void> {
@@ -255,6 +263,15 @@ export const duckDBOrchestrator = {
 
   getBasemapAttributesId: joinOps.getBasemapAttributesId,
 
+  updateDatasetJoinInfo: datasetOps.updateDatasetJoinInfo,
+
+  async getBasemapAttributeValues(basemap: BasemapMetadata): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    return joinOps.getBasemapAttributeValues(basemap, Duck);
+  },
+
   async computeJoinStats(
     datasetId: string,
     basemap: BasemapMetadata,
@@ -266,7 +283,32 @@ export const duckDBOrchestrator = {
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) throw new Error('Dataset not found');
 
-    return joinOps.computeJoinStats(dataset, basemap, geoColumn, Duck);
+    const filterClause = buildFilterWhereClause(
+      state.getFiltersMap().get(dataset.tableName)
+    );
+    return joinOps.computeJoinStats(
+      dataset,
+      basemap,
+      geoColumn,
+      Duck,
+      filterClause
+    );
+  },
+
+  async computeJoinSynthesis(
+    datasetId: string,
+    geoColumn: string
+  ): Promise<joinOps.JoinSynthesisResult[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    const filterClause = buildFilterWhereClause(
+      state.getFiltersMap().get(dataset.tableName)
+    );
+    return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck, filterClause);
   },
 
   async applyJoinCorrections(
@@ -432,12 +474,13 @@ export const duckDBOrchestrator = {
   async renameColumn(
     tableName: string,
     oldName: string,
-    newName: string
+    newName: string,
+    options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await columnOps.renameColumn(tableName, oldName, newName, Duck);
+    await columnOps.renameColumn(tableName, oldName, newName, Duck, options);
 
     const filters = state.getFilters(tableName);
     if (filters.length > 0) {
@@ -448,72 +491,108 @@ export const duckDBOrchestrator = {
       state.setFilters(tableName, updatedFilters);
     }
 
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
   async changeColumnType(
     tableName: string,
     columnName: string,
-    newType: string
+    newType: string,
+    options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await columnOps.changeColumnType(tableName, columnName, newType, Duck);
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    await columnOps.changeColumnType(
+      tableName,
+      columnName,
+      newType,
+      Duck,
+      options
+    );
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
-  async dropColumn(tableName: string, columnName: string): Promise<void> {
+  async dropColumn(
+    tableName: string,
+    columnName: string,
+    options?: { skipAnalysis?: boolean }
+  ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await columnOps.dropColumn(tableName, columnName, Duck);
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    await columnOps.dropColumn(tableName, columnName, Duck, options);
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
-  async dropRows(tableName: string, rowIds: number[]): Promise<void> {
+  async dropRows(
+    tableName: string,
+    rowIds: number[],
+    options?: { skipAnalysis?: boolean }
+  ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await columnOps.dropRows(tableName, rowIds, Duck);
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    await columnOps.dropRows(tableName, rowIds, Duck, options);
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
-  async deleteFilteredRows(tableName: string): Promise<number> {
+  async deleteFilteredRows(tableName: string): Promise<{
+    count: number;
+    rowIds: number[];
+  }> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     const rowIds = await tableDataOps.getExcludedRowIds(tableName, Duck);
-    if (rowIds.length === 0) return 0;
+    if (rowIds.length === 0) return { count: 0, rowIds: [] };
 
     await columnOps.dropRows(tableName, rowIds, Duck);
     invalidateDatasetCache(tableName);
     state.bumpDatasetsVersion();
-    return rowIds.length;
+    return { count: rowIds.length, rowIds };
   },
 
   async refineColumn(
     tableName: string,
     columnName: string,
-    operation: RefineOperation
+    operation: RefineOperation,
+    options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    await columnOps.refineColumn(tableName, columnName, operation, Duck);
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    await columnOps.refineColumn(
+      tableName,
+      columnName,
+      operation,
+      Duck,
+      options
+    );
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
   async replaceInColumn(
     tableName: string,
     columnName: string,
     searchValue: string,
-    replaceValue: string
+    replaceValue: string,
+    options?: { skipAnalysis?: boolean }
   ): Promise<number> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
@@ -523,17 +602,21 @@ export const duckDBOrchestrator = {
       columnName,
       searchValue,
       replaceValue,
-      Duck
+      Duck,
+      options
     );
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
     return count;
   },
 
   async addCalculatedColumn(
     tableName: string,
     columnName: string,
-    expression: string
+    expression: string,
+    options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
@@ -542,15 +625,18 @@ export const duckDBOrchestrator = {
       tableName,
       columnName,
       expression,
-      Duck
+      Duck,
+      options
     );
 
     const dataset = state.getDatasetByTable(tableName);
     if (dataset) {
       datasetOps.updateDatasetColumns(dataset.id, updatedColumns);
     }
-    invalidateDatasetCache(tableName);
-    state.bumpDatasetsVersion();
+    if (!options?.skipAnalysis) {
+      invalidateDatasetCache(tableName);
+      state.bumpDatasetsVersion();
+    }
   },
 
   async testExpression(
@@ -617,9 +703,16 @@ export const duckDBOrchestrator = {
     return arrowOps.exportTableToGeoParquet(tableName, Duck);
   },
 
-  async getArrowTableDirect(tableName: string): Promise<Table> {
+  async getArrowTableDirect(
+    tableName: string,
+    yearFilter?: { column: string; value: number | string }
+  ): Promise<Table> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const whereClause = yearFilter
+      ? arrowOps.buildYearFilterWhereClause(yearFilter)
+      : null;
 
     return arrowOps.getArrowTableDirect(
       tableName,
@@ -635,7 +728,8 @@ export const duckDBOrchestrator = {
         }
         return undefined;
       },
-      (table) => state.setDatasetArrowTable(tableName, table)
+      (table) => state.setDatasetArrowTable(tableName, table),
+      whereClause
     );
   },
 
@@ -644,7 +738,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      return arrowOps.getArrowTableWithCache(
+      return await arrowOps.getArrowTableWithCache(
         tableName,
         Duck,
         (table) => geoParquetReader.extractMetadata(table),

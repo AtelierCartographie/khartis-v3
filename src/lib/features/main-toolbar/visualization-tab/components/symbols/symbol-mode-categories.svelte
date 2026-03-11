@@ -21,7 +21,9 @@
     dataFields = [],
     visualization,
     onMappingChange,
+    onSymbolsChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -37,6 +39,15 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
 
   $effect(() => {
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (field) => field.text === visualization.mapping.categoryColumn
+      );
+      if (fieldIndex >= 0) {
+        selectedFieldId = dataFields[fieldIndex].id;
+      }
+    }
+
     if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
@@ -50,6 +61,12 @@
       missingDataSize = visualization.missingData.size ?? 2;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -77,8 +94,13 @@
     selectedFieldId = fieldId;
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onMappingChange?.({ categoryColumn: field.text });
     }
+  }
+
+  function handleOpacityChange(value: number) {
+    symbolOpacity = value;
+    onSymbolsChange?.({ opacity: value / 100 });
   }
 </script>
 
@@ -106,12 +128,14 @@
   label={m.color_palette()}
   colors={qualitativePalette}
   oninvert={onInvertPalette}
+  onClassificationChange={onClassificationChange}
 />
 <SliderWithInput
   label={m.opacity()}
   bind:value={symbolOpacity}
   min={SLIDER_LIMITS.opacity.min}
   max={SLIDER_LIMITS.opacity.max}
+  onchange={handleOpacityChange}
 />
 
 <MissingDataSection
