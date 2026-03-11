@@ -1,4 +1,5 @@
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { UploadedFile } from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
@@ -112,7 +113,6 @@ function createImportRollbackService() {
 
   async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
-      const { Duck } = await import('$lib/features/duckdb');
       Duck?.cleanupTableResources(tableName);
     } catch (error) {
       logger.warn(

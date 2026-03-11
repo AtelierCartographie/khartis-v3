@@ -10,4 +10,5 @@ export interface ProjectionState {
   center?: [number, number];
   autoFit?: boolean;
   customCode?: string;
+  simplifiedPreview?: boolean;
 }

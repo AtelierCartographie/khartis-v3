@@ -23,6 +23,7 @@
     onMappingChange,
     onSymbolsChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -60,6 +61,12 @@
       missingDataSize = visualization.missingData.size ?? 2;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -121,6 +128,7 @@
   label={m.color_palette()}
   colors={qualitativePalette}
   oninvert={onInvertPalette}
+  onClassificationChange={onClassificationChange}
 />
 <SliderWithInput
   label={m.opacity()}

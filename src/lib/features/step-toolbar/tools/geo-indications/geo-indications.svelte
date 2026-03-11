@@ -6,7 +6,6 @@
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
-    Button,
     Column,
     Grid,
     NumberInput,
@@ -18,13 +17,25 @@
     Slider
   } from 'carbon-components-svelte';
   import {
+    AVAILABLE_FONTS,
+    LEGEND_FONT_SIZES
+  } from '$lib/features/step-toolbar/tools/legend/legend.constants';
+  import {
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
 
   const store = geoIndicationsActions;
-  const state = $derived(geoIndicationsState);
-  const geoIndicationsVisible = $derived(state.visible);
+  const geoState = $derived(geoIndicationsState);
+  const geoIndicationsVisible = $derived(geoState.visible);
+
+  let localScaleFontFamily = $state<string>(AVAILABLE_FONTS[0]);
+  let localScaleFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
+
+  $effect(() => {
+    localScaleFontFamily = geoState.scale.fontFamily;
+    localScaleFontSize = geoState.scale.fontSize;
+  });
 
   const formOptions = [
     { value: ScaleForm.LINE, text: m.geo_scale_form_line() },
@@ -33,37 +44,37 @@
 
   const scaleHex = $derived(
     hslToHex(
-      state.scale.color.hue,
-      state.scale.color.saturation,
-      state.scale.color.lightness
+      geoState.scale.color.hue,
+      geoState.scale.color.saturation,
+      geoState.scale.color.lightness
     )
   );
   const orientationHex = $derived(
     hslToHex(
-      state.orientation.color.hue,
-      state.orientation.color.saturation,
-      state.orientation.color.lightness
+      geoState.orientation.color.hue,
+      geoState.orientation.color.saturation,
+      geoState.orientation.color.lightness
     )
   );
   const insetMapWindowHex = $derived(
     hslToHex(
-      state.insetMap.windowColor.hue,
-      state.insetMap.windowColor.saturation,
-      state.insetMap.windowColor.lightness
+      geoState.insetMap.windowColor.hue,
+      geoState.insetMap.windowColor.saturation,
+      geoState.insetMap.windowColor.lightness
     )
   );
   const insetMapContinentHex = $derived(
     hslToHex(
-      state.insetMap.continentColor.hue,
-      state.insetMap.continentColor.saturation,
-      state.insetMap.continentColor.lightness
+      geoState.insetMap.continentColor.hue,
+      geoState.insetMap.continentColor.saturation,
+      geoState.insetMap.continentColor.lightness
     )
   );
   const insetMapSeaHex = $derived(
     hslToHex(
-      state.insetMap.seaColor.hue,
-      state.insetMap.seaColor.saturation,
-      state.insetMap.seaColor.lightness
+      geoState.insetMap.seaColor.hue,
+      geoState.insetMap.seaColor.saturation,
+      geoState.insetMap.seaColor.lightness
     )
   );
 
@@ -75,14 +86,14 @@
   };
 
   function handleVisibilityChange(visible: boolean): void {
-    if (visible !== state.visible) {
+    if (visible !== geoState.visible) {
       store.setVisibility(visible);
     }
   }
 
   function handleScaleFormChange(event: Event): void {
     const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
-    if (form !== state.scale.form) {
+    if (form !== geoState.scale.form) {
       store.setScaleForm(form);
     }
   }
@@ -144,18 +155,18 @@
   <div class="expandable-stack">
     <ExpandableSection
       title={m.geo_scale()}
-      defaultOpen={state.scale.expanded}
+      defaultOpen={geoState.scale.expanded}
       showToggle={true}
-      toggleChecked={state.scale.enabled}
+      toggleChecked={geoState.scale.enabled}
       onToggleChange={() => store.toggleScale()}
     >
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <Select
               id="form-select"
-              labelText={m.geo_scale_form()}
-              selected={state.scale.form}
+              labelText={m.geo_style()}
+              selected={geoState.scale.form}
               on:change={handleScaleFormChange}
               size="xl"
             >
@@ -167,42 +178,19 @@
         </Row>
 
         <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="distance-controls">
-              <NumberInput
-                id="distance-input"
-                labelText={m.geo_distance()}
-                value={state.scale.distance}
-                on:change={(e) =>
-                  store.setScaleDistance(
-                    getNumericEventValue(e, state.scale.distance)
-                  )}
-                min={0}
-                hideSteppers
-                size="xl"
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="distance-buttons">
-              <Button
-                kind="ghost"
-                size="small"
-                on:click={() => store.decrementScaleDistance()}
-                class="distance-button"
-              >
-                −
-              </Button>
-              <Button
-                kind="ghost"
-                size="small"
-                on:click={() => store.incrementScaleDistance()}
-                class="distance-button"
-              >
-                +
-              </Button>
-            </div>
+          <Column>
+            <NumberInput
+              id="distance-input"
+              labelText={m.geo_distance()}
+              value={geoState.scale.distance}
+              on:change={(e) =>
+                store.setScaleDistance(
+                  getNumericEventValue(e, geoState.scale.distance)
+                )}
+              min={0}
+              step={500}
+              size="xl"
+            />
           </Column>
         </Row>
 
@@ -210,7 +198,7 @@
           <Column>
             <RadioButtonGroup
               legendText={m.geo_units()}
-              selected={state.scale.units}
+              selected={geoState.scale.units}
               on:change={(e) => store.setScaleUnits((e as CustomEvent).detail)}
             >
               <RadioButton
@@ -225,20 +213,50 @@
 
         <Row>
           <Column>
-            <ColorPicker
-              triggerLabel={m.geo_color()}
-              hex={scaleHex}
-              hue={state.scale.color.hue}
-              saturation={state.scale.color.saturation}
-              lightness={state.scale.color.lightness}
-              onValidate={({
-                hue,
-                saturation,
-                lightness
-              }: ColorPickerValidateEvent) => {
-                store.setScaleColor({ hue, saturation, lightness });
-              }}
-            />
+            <div class="text-style-row">
+              <div class="text-style-font">
+                <Select
+                  id="scale-font-select"
+                  labelText={m.legend_font()}
+                  bind:selected={localScaleFontFamily}
+                  on:change={() =>
+                    store.setScaleFontFamily(localScaleFontFamily)}
+                  size="sm"
+                >
+                  {#each AVAILABLE_FONTS as f (f)}
+                    <SelectItem value={f} text={f} />
+                  {/each}
+                </Select>
+              </div>
+              <div class="text-style-size">
+                <Select
+                  id="scale-font-size"
+                  labelText={m.legend_font_size()}
+                  bind:selected={localScaleFontSize}
+                  on:change={() => store.setScaleFontSize(localScaleFontSize)}
+                  size="sm"
+                >
+                  {#each LEGEND_FONT_SIZES as s (s)}
+                    <SelectItem value={s} text={String(s)} />
+                  {/each}
+                </Select>
+              </div>
+              <div class="text-style-color">
+                <ColorPicker
+                  hex={scaleHex}
+                  hue={geoState.scale.color.hue}
+                  saturation={geoState.scale.color.saturation}
+                  lightness={geoState.scale.color.lightness}
+                  onValidate={({
+                    hue,
+                    saturation,
+                    lightness
+                  }: ColorPickerValidateEvent) => {
+                    store.setScaleColor({ hue, saturation, lightness });
+                  }}
+                />
+              </div>
+            </div>
           </Column>
         </Row>
       </Grid>
@@ -248,15 +266,15 @@
       title={m.geo_orientation()}
       defaultOpen={false}
       showToggle={true}
-      toggleChecked={state.orientation.enabled}
+      toggleChecked={geoState.orientation.enabled}
       onToggleChange={() => store.toggleOrientation()}
     >
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <RadioButtonGroup
               legendText={m.geo_orientation_style()}
-              selected={state.orientation.style}
+              selected={geoState.orientation.style}
               on:change={(e) =>
                 store.setOrientationStyle((e as CustomEvent).detail)}
             >
@@ -275,30 +293,22 @@
         </Row>
 
         <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider">
-              <Slider
-                labelText={m.geo_orientation_size()}
-                min={5}
-                max={30}
-                step={1}
-                value={state.orientation.size}
-                on:change={(e) =>
-                  store.setOrientationSize(
-                    getNumericEventValue(e, state.orientation.size)
-                  )}
-                hideTextInput
-                fullWidth
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <div class="value-display">
-                {state.orientation.size}
-              </div>
-            </div>
+          <Column>
+            <Slider
+              labelText={m.geo_orientation_size()}
+              min={5}
+              max={30}
+              step={1}
+              value={geoState.orientation.size}
+              on:change={(e) =>
+                store.setOrientationSize(
+                  getNumericEventValue(e, geoState.orientation.size)
+                )}
+              minLabel=""
+              maxLabel=""
+              hideTextInput={false}
+              fullWidth
+            />
           </Column>
         </Row>
 
@@ -307,9 +317,9 @@
             <ColorPicker
               triggerLabel={m.geo_orientation_color()}
               hex={orientationHex}
-              hue={state.orientation.color.hue}
-              saturation={state.orientation.color.saturation}
-              lightness={state.orientation.color.lightness}
+              hue={geoState.orientation.color.hue}
+              saturation={geoState.orientation.color.saturation}
+              lightness={geoState.orientation.color.lightness}
               onValidate={({
                 hue,
                 saturation,
@@ -327,15 +337,15 @@
       title={m.geo_inset_map()}
       defaultOpen={false}
       showToggle={true}
-      toggleChecked={state.insetMap.enabled}
+      toggleChecked={geoState.insetMap.enabled}
       onToggleChange={() => store.toggleInsetMap()}
     >
-      <Grid padding noGutter>
+      <Grid noGutter>
         <Row>
           <Column>
             <RadioButtonGroup
               legendText={m.geo_inset_map_type()}
-              selected={state.insetMap.type}
+              selected={geoState.insetMap.type}
               on:change={(e) =>
                 store.setInsetMapType((e as CustomEvent).detail)}
             >
@@ -354,30 +364,22 @@
         </Row>
 
         <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider">
-              <Slider
-                labelText={m.geo_inset_map_size()}
-                min={20}
-                max={210}
-                step={1}
-                value={state.insetMap.size}
-                on:change={(e) =>
-                  store.setInsetMapSize(
-                    getNumericEventValue(e, state.insetMap.size)
-                  )}
-                hideTextInput
-                fullWidth
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <div class="value-display">
-                {state.insetMap.size}
-              </div>
-            </div>
+          <Column>
+            <Slider
+              labelText={m.geo_inset_map_size()}
+              min={20}
+              max={800}
+              step={1}
+              value={geoState.insetMap.size}
+              on:change={(e) =>
+                store.setInsetMapSize(
+                  getNumericEventValue(e, geoState.insetMap.size)
+                )}
+              minLabel=""
+              maxLabel=""
+              hideTextInput={false}
+              fullWidth
+            />
           </Column>
         </Row>
 
@@ -386,9 +388,9 @@
             <ColorPicker
               triggerLabel={m.geo_inset_map_window_color()}
               hex={insetMapWindowHex}
-              hue={state.insetMap.windowColor.hue}
-              saturation={state.insetMap.windowColor.saturation}
-              lightness={state.insetMap.windowColor.lightness}
+              hue={geoState.insetMap.windowColor.hue}
+              saturation={geoState.insetMap.windowColor.saturation}
+              lightness={geoState.insetMap.windowColor.lightness}
               onValidate={({
                 hue,
                 saturation,
@@ -402,9 +404,49 @@
 
         <Row>
           <Column>
+            <Slider
+              labelText={m.geo_inset_map_zoom()}
+              min={0}
+              max={100}
+              step={1}
+              value={geoState.insetMap.zoom}
+              on:change={(e) =>
+                store.setInsetMapZoom(
+                  getNumericEventValue(e, geoState.insetMap.zoom)
+                )}
+              minLabel=""
+              maxLabel=""
+              hideTextInput={false}
+              fullWidth
+            />
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
+            <Slider
+              labelText={m.geo_inset_map_centering()}
+              min={-180}
+              max={180}
+              step={1}
+              value={geoState.insetMap.centerLongitude}
+              on:change={(e) =>
+                store.setInsetMapCenterLongitude(
+                  getNumericEventValue(e, geoState.insetMap.centerLongitude)
+                )}
+              minLabel="-180°"
+              maxLabel="180°"
+              hideTextInput={false}
+              fullWidth
+            />
+          </Column>
+        </Row>
+
+        <Row>
+          <Column>
             <Switch
               labelText={m.geo_inset_map_use_basemap_colors()}
-              toggled={state.insetMap.useBasemapColors}
+              toggled={geoState.insetMap.useBasemapColors}
               labelA={m.no()}
               labelB={m.yes()}
               showStateLabel
@@ -413,129 +455,46 @@
           </Column>
         </Row>
 
-        {#if !state.insetMap.useBasemapColors}
-          <Row>
-            <Column>
-              <ColorPicker
-                triggerLabel={m.geo_inset_map_continent_color()}
-                hex={insetMapContinentHex}
-                hue={state.insetMap.continentColor.hue}
-                saturation={state.insetMap.continentColor.saturation}
-                lightness={state.insetMap.continentColor.lightness}
-                onValidate={({
-                  hue,
-                  saturation,
-                  lightness
-                }: ColorPickerValidateEvent) => {
-                  store.setInsetMapContinentColor({
+        <Row>
+          <Column>
+            <div class="colors-row">
+              <div class="color-col">
+                <ColorPicker
+                  triggerLabel={m.geo_inset_map_continent_color()}
+                  hex={insetMapContinentHex}
+                  hue={geoState.insetMap.continentColor.hue}
+                  saturation={geoState.insetMap.continentColor.saturation}
+                  lightness={geoState.insetMap.continentColor.lightness}
+                  disabled={geoState.insetMap.useBasemapColors}
+                  onValidate={({
                     hue,
                     saturation,
                     lightness
-                  });
-                }}
-              />
-            </Column>
-          </Row>
-
-          <Row>
-            <Column>
-              <ColorPicker
-                triggerLabel={m.geo_inset_map_sea_color()}
-                hex={insetMapSeaHex}
-                hue={state.insetMap.seaColor.hue}
-                saturation={state.insetMap.seaColor.saturation}
-                lightness={state.insetMap.seaColor.lightness}
-                onValidate={({
-                  hue,
-                  saturation,
-                  lightness
-                }: ColorPickerValidateEvent) => {
-                  store.setInsetMapSeaColor({ hue, saturation, lightness });
-                }}
-              />
-            </Column>
-          </Row>
-        {/if}
-
-        <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider">
-              <Slider
-                labelText={m.geo_inset_map_zoom()}
-                min={0}
-                max={100}
-                step={1}
-                value={state.insetMap.zoom}
-                on:change={(e) =>
-                  store.setInsetMapZoom(
-                    getNumericEventValue(e, state.insetMap.zoom)
-                  )}
-                hideTextInput
-                fullWidth
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <div class="value-display">
-                {state.insetMap.zoom}%
+                  }: ColorPickerValidateEvent) => {
+                    store.setInsetMapContinentColor({
+                      hue,
+                      saturation,
+                      lightness
+                    });
+                  }}
+                />
               </div>
-            </div>
-          </Column>
-        </Row>
-
-        <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider">
-              <Slider
-                labelText={m.geo_inset_map_center_longitude()}
-                min={-180}
-                max={180}
-                step={1}
-                value={state.insetMap.centerLongitude}
-                on:change={(e) =>
-                  store.setInsetMapCenterLongitude(
-                    getNumericEventValue(e, state.insetMap.centerLongitude)
-                  )}
-                hideTextInput
-                fullWidth
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <div class="value-display">
-                {state.insetMap.centerLongitude}°
-              </div>
-            </div>
-          </Column>
-        </Row>
-
-        <Row>
-          <Column sm={3} md={6} lg={13}>
-            <div class="slider">
-              <Slider
-                labelText={m.geo_inset_map_center_latitude()}
-                min={-90}
-                max={90}
-                step={1}
-                value={state.insetMap.centerLatitude}
-                on:change={(e) =>
-                  store.setInsetMapCenterLatitude(
-                    getNumericEventValue(e, state.insetMap.centerLatitude)
-                  )}
-                hideTextInput
-                fullWidth
-              />
-            </div>
-          </Column>
-
-          <Column sm={1} md={2} lg={3}>
-            <div class="input-wrapper">
-              <div class="value-display">
-                {state.insetMap.centerLatitude}°
+              <div class="color-col">
+                <ColorPicker
+                  triggerLabel={m.geo_inset_map_sea_color()}
+                  hex={insetMapSeaHex}
+                  hue={geoState.insetMap.seaColor.hue}
+                  saturation={geoState.insetMap.seaColor.saturation}
+                  lightness={geoState.insetMap.seaColor.lightness}
+                  disabled={geoState.insetMap.useBasemapColors}
+                  onValidate={({
+                    hue,
+                    saturation,
+                    lightness
+                  }: ColorPickerValidateEvent) => {
+                    store.setInsetMapSeaColor({ hue, saturation, lightness });
+                  }}
+                />
               </div>
             </div>
           </Column>
@@ -556,12 +515,6 @@
     border-top: 0;
   }
 
-  .distance-controls {
-    display: flex;
-    align-items: flex-end;
-    width: 100%;
-  }
-
   .switch-row {
     display: flex;
     justify-content: space-between;
@@ -576,63 +529,66 @@
     font-weight: 400;
   }
 
-  .distance-buttons {
+  .text-style-row {
     display: flex;
-    flex-direction: column;
-    margin-left: var(--cds-spacing-02);
-    height: 100%;
-    align-items: center;
-    justify-content: flex-end;
+    align-items: flex-end;
+    gap: var(--cds-spacing-02);
   }
 
-  #khartis-geo-indications-tool :global(.distance-button) {
-    height: 1.25rem;
-    padding: 0 var(--cds-spacing-02);
-    font-size: 0.875rem;
-    min-height: unset;
-    margin-bottom: 1px;
+  .text-style-font {
+    flex: 1;
+    min-width: 0;
   }
 
-  #khartis-geo-indications-tool :global(.distance-button:first-child) {
-    margin-bottom: 2px;
+  .text-style-size {
+    width: 80px;
+    flex-shrink: 0;
   }
 
-  .slider {
+  .text-style-color {
+    flex-shrink: 0;
+    padding-bottom: 1px;
+  }
+
+  #khartis-geo-indications-tool :global(.bx--slider-container) {
     width: 100%;
   }
 
-  #khartis-geo-indications-tool .slider :global(.bx--slider) {
-    min-width: 200px !important;
+  #khartis-geo-indications-tool :global(.bx--slider) {
+    min-width: auto !important;
+    max-width: none !important;
+    flex: 1;
+    margin: 0 0.5rem;
   }
 
-  #khartis-geo-indications-tool .slider :global(.bx--slider__track) {
+  #khartis-geo-indications-tool :global(.bx--slider__track) {
     background: var(--cds-ui-03);
   }
 
-  #khartis-geo-indications-tool .slider :global(.bx--slider__filled-track) {
+  #khartis-geo-indications-tool :global(.bx--slider__filled-track) {
     background: var(--cds-text-01);
   }
 
-  .input-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
+  #khartis-geo-indications-tool :global(.bx--slider-text-input) {
+    width: 3.5rem !important;
+    min-width: 3.5rem !important;
+    flex-shrink: 0;
+    text-align: center;
   }
 
-  .value-display {
-    min-width: 3rem;
-    text-align: center;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--cds-text-01);
-    padding: 0 var(--cds-spacing-02);
-    background: var(--cds-ui-02);
-    height: 2rem;
+  #khartis-geo-indications-tool :global(.bx--slider__range-label) {
+    min-width: 2rem;
+    font-size: 0.75rem;
+  }
+
+  .colors-row {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 2px;
+    gap: var(--cds-spacing-05);
+    width: 100%;
+  }
+
+  .color-col {
+    flex: 1;
+    min-width: 0;
   }
 </style>

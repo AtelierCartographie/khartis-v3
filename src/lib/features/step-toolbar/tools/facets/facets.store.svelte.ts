@@ -134,6 +134,13 @@ function createFacetsStore() {
     state.layout.gap = gap;
   }
 
+  function toggleSyncPanZoom(): void {
+    state.syncPanZoom = !state.syncPanZoom;
+    logger.info('Toggled syncPanZoom', LogCategory.STORE, {
+      syncPanZoom: state.syncPanZoom
+    });
+  }
+
   async function toggleScaleMode(): Promise<void> {
     const newMode: ScaleMode =
       state.scaleMode === SCALE_MODE.SHARED
@@ -203,7 +210,8 @@ function createFacetsStore() {
     setVariables,
     setColumns,
     setGap,
-    toggleScaleMode
+    toggleScaleMode,
+    toggleSyncPanZoom
   };
 }
 

@@ -46,6 +46,22 @@ import {
 import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 
+// Shared extension instance — avoids re-allocation per layer per frame
+const DASH_EXTENSION = new PathStyleExtension({ dash: true });
+
+// --- Graticule cache (Opt #2) ---
+let cachedGraticuleKey: string | null = null;
+let cachedGraticuleData: FeatureCollection<
+  LineString | MultiLineString
+> | null = null;
+
+// --- Cities cache (Opt #3) ---
+let cachedCitiesKey: string | null = null;
+let cachedCitiesSource: FeatureCollection<Point> | null = null;
+let cachedFilteredCities: FeatureCollection<Point> | null = null;
+let cachedPolygonCitiesKey: string | null = null;
+let cachedPolygonCities: FeatureCollection<Polygon> | null = null;
+
 interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
@@ -82,6 +98,18 @@ function isGeoArrowPolygonEncoding(geometryInfo: GeometryInfo): boolean {
     (geometryInfo.encoding === ArrowExtension.GEOARROW_POLYGON ||
       geometryInfo.encoding === ArrowExtension.GEOARROW_MULTIPOLYGON)
   );
+}
+
+function isGeoArrowLineEncoding(geometryInfo: GeometryInfo): boolean {
+  return Boolean(
+    geometryInfo.encoding &&
+    (geometryInfo.encoding === ArrowExtension.GEOARROW_LINESTRING ||
+      geometryInfo.encoding === ArrowExtension.GEOARROW_MULTILINESTRING)
+  );
+}
+
+function isLineGeometry(geometryInfo: GeometryInfo): boolean {
+  return geometryInfo.type.includes('LINE');
 }
 
 function toRgbColor(hex: string): RGBColor {
@@ -169,9 +197,7 @@ export function createTerreLayers(
         lineWidthScale: effectiveStrokeThickness,
         lineWidthMinPixels: 0,
         lineWidthMaxPixels: 0.5,
-        extensions: config.strokeDotted
-          ? [new PathStyleExtension({ dash: true })]
-          : [],
+        extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
@@ -219,9 +245,7 @@ export function createTerreLayers(
           getLineWidth: effectiveStrokeThickness,
           lineWidthMinPixels: 0,
           lineWidthMaxPixels: 0.5,
-          extensions: config.strokeDotted
-            ? [new PathStyleExtension({ dash: true })]
-            : [],
+          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           ...baseProps,
           updateTriggers: {
@@ -289,13 +313,13 @@ export function createMersLayer(
 }
 
 export function createFrontieresLayer(
-  worldBaseTable: ArrowTable,
+  frontieresTable: ArrowTable,
   config: FrontieresLayerConfig,
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
-  const geometryInfo = extractGeometryInfo(worldBaseTable);
+  const geometryInfo = extractGeometryInfo(frontieresTable);
   if (!geometryInfo) return null;
 
   const strokeColor = toRgbColor(config.color);
@@ -321,31 +345,34 @@ export function createFrontieresLayer(
   };
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    isLineGeometry(geometryInfo) &&
+    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
-    return new geodecklayers.GeoArrowPolygonLayer({
+    return new geodecklayers.GeoArrowPathLayer({
       id: layerId,
-      data: worldBaseTable,
-      filled: false,
-      stroked: true,
-      getLineColor: withOpacity(strokeColor, effectiveOpacity),
-      lineWidthUnits: 'pixels',
-      lineWidthScale: effectiveThickness,
-      lineWidthMinPixels: 0,
-      lineWidthMaxPixels: 0.5,
-      extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+      data: frontieresTable,
+      getColor: withOpacity(strokeColor, effectiveOpacity),
+      widthUnits: 'pixels',
+      getWidth: effectiveThickness,
+      widthMinPixels: 0,
+      extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
         ...updateTriggers,
-        lineWidthScale: [effectiveThickness]
+        getWidth: [effectiveThickness]
       }
     });
   }
 
-  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+  if (
+    isLineGeometry(geometryInfo) &&
+    (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded)
+  ) {
+    const geojson = arrowTableToGeoJSON(
+      frontieresTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
       return new GeoJsonLayer({
         id: layerId,
@@ -357,9 +384,58 @@ export function createFrontieresLayer(
         getLineWidth: effectiveThickness,
         lineWidthMinPixels: 0,
         lineWidthMaxPixels: 0.5,
-        extensions: config.dotted
-          ? [new PathStyleExtension({ dash: true })]
-          : [],
+        extensions: config.dotted ? [DASH_EXTENSION] : [],
+        getDashArray: dashArray,
+        ...baseProps,
+        updateTriggers: {
+          ...updateTriggers,
+          getLineWidth: [effectiveThickness]
+        }
+      });
+    }
+  }
+
+  if (
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
+  ) {
+    return new geodecklayers.GeoArrowPolygonLayer({
+      id: layerId,
+      data: frontieresTable,
+      filled: false,
+      stroked: true,
+      getLineColor: withOpacity(strokeColor, effectiveOpacity),
+      lineWidthUnits: 'pixels',
+      lineWidthScale: effectiveThickness,
+      lineWidthMinPixels: 0,
+      lineWidthMaxPixels: 0.5,
+      extensions: config.dotted ? [DASH_EXTENSION] : [],
+      getDashArray: dashArray,
+      ...baseProps,
+      updateTriggers: {
+        ...updateTriggers,
+        lineWidthScale: [effectiveThickness]
+      }
+    });
+  }
+
+  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    const geojson = arrowTableToGeoJSON(
+      frontieresTable,
+      geometryInfo.geoColumn
+    );
+    if (geojson) {
+      return new GeoJsonLayer({
+        id: layerId,
+        data: geojson,
+        filled: false,
+        stroked: true,
+        getLineColor: withOpacity(strokeColor, effectiveOpacity),
+        lineWidthUnits: 'pixels',
+        getLineWidth: effectiveThickness,
+        lineWidthMinPixels: 0,
+        lineWidthMaxPixels: 0.5,
+        extensions: config.dotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
@@ -369,7 +445,7 @@ export function createFrontieresLayer(
       });
     }
     logger.warn(
-      'Failed to convert world base table to GeoJSON for frontieres layer',
+      'Failed to convert frontieres table to GeoJSON for frontieres layer',
       LogCategory.MAP
     );
   }
@@ -421,7 +497,7 @@ export function createEquateurLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -446,32 +522,38 @@ export function createMeridiensLayer(
     ctx.projectionSuffix
   );
 
-  const stepMap: Record<string, [number, number]> = {
-    'equator-tropics': [30, 23.5],
-    major: [15, 15],
-    minor: [5, 5],
-    all: [10, 10]
-  };
-  const step = stepMap[config.remarquables] ?? [10, 10];
+  const graticuleKey = config.remarquables;
+  if (cachedGraticuleKey !== graticuleKey || !cachedGraticuleData) {
+    const stepMap: Record<string, [number, number]> = {
+      'equator-tropics': [30, 23.5],
+      major: [15, 15],
+      minor: [5, 5],
+      all: [10, 10]
+    };
+    const step = stepMap[config.remarquables] ?? [10, 10];
 
-  const graticule = d3
-    .geoGraticule()
-    .step(step)
-    .extent([
-      [-180, -90],
-      [180, 90]
-    ]);
+    const graticule = d3
+      .geoGraticule()
+      .step(step)
+      .extent([
+        [-180, -90],
+        [180, 90]
+      ]);
 
-  const graticuleGeoJSON: Feature<MultiLineString> = {
-    type: GEOJSON_TYPE.FEATURE,
-    properties: {},
-    geometry: graticule()
-  };
+    const graticuleGeoJSON: Feature<MultiLineString> = {
+      type: GEOJSON_TYPE.FEATURE,
+      properties: {},
+      geometry: graticule()
+    };
 
-  const featuresCollection: FeatureCollection<LineString | MultiLineString> = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: [graticuleGeoJSON]
-  };
+    cachedGraticuleData = {
+      type: GEOJSON_TYPE.FEATURE_COLLECTION,
+      features: [graticuleGeoJSON]
+    };
+    cachedGraticuleKey = graticuleKey;
+  }
+
+  const featuresCollection = cachedGraticuleData;
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
@@ -486,7 +568,7 @@ export function createMeridiensLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 0.5,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -556,7 +638,7 @@ export function createRivieresLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 0.5,
-    extensions: config.dotted ? [new PathStyleExtension({ dash: true })] : [],
+    extensions: config.dotted ? [DASH_EXTENSION] : [],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
@@ -794,8 +876,20 @@ export function createVillesLayer(
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
-  const filteredCities = filterCitiesByCategory(citiesData, config.category);
-  if (filteredCities.features.length === 0) return null;
+  // Cache filtered cities by category and input source reference.
+  // This avoids stale data reuse if the caller provides a new cities dataset.
+  const filterKey = config.category;
+  const isNewSource = cachedCitiesSource !== citiesData;
+  if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
+    cachedFilteredCities = filterCitiesByCategory(citiesData, config.category);
+    cachedCitiesKey = filterKey;
+    cachedCitiesSource = citiesData;
+    // Invalidate polygon cache when filter changes
+    cachedPolygonCitiesKey = null;
+    cachedPolygonCities = null;
+  }
+
+  if (cachedFilteredCities.features.length === 0) return null;
 
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
@@ -810,7 +904,7 @@ export function createVillesLayer(
   if (isCircle) {
     return new GeoJsonLayer({
       id: layerId,
-      data: filteredCities,
+      data: cachedFilteredCities,
       filled: true,
       stroked: true,
       pointType: 'circle',
@@ -830,15 +924,20 @@ export function createVillesLayer(
     });
   }
 
-  const polygonCities = convertCitiesToPolygons(
-    filteredCities,
-    config.symbol,
-    config.size
-  );
+  // Cache polygon conversion by (category, symbol, size)
+  const polygonKey = `${config.category}:${config.symbol}:${config.size}`;
+  if (cachedPolygonCitiesKey !== polygonKey || !cachedPolygonCities) {
+    cachedPolygonCities = convertCitiesToPolygons(
+      cachedFilteredCities,
+      config.symbol,
+      config.size
+    );
+    cachedPolygonCitiesKey = polygonKey;
+  }
 
   return new GeoJsonLayer({
     id: layerId,
-    data: polygonCities,
+    data: cachedPolygonCities,
     filled: true,
     stroked: true,
     getFillColor: withOpacity(fillColor, opacity),
@@ -857,6 +956,7 @@ interface BasemapAdditionalData {
   lakesData?: FeatureCollection<Polygon | MultiPolygon>;
   riversData?: FeatureCollection<LineString | MultiLineString>;
   citiesData?: FeatureCollection<Point>;
+  frontieresTable?: ArrowTable;
 }
 
 export function createBasemapLayers(
@@ -913,7 +1013,7 @@ export function createBasemapLayers(
         case BASEMAP_LAYER_ID.FRONTIERES:
           if (worldBaseTable) {
             const layer = createFrontieresLayer(
-              worldBaseTable,
+              additionalData?.frontieresTable ?? worldBaseTable,
               config as FrontieresLayerConfig,
               ctx
             );

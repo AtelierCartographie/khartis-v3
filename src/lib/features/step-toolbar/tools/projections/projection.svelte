@@ -1,7 +1,11 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { FileStorage, MagicWandFilled } from 'carbon-icons-svelte';
+  import {
+    Catalog,
+    MagicWandFilled,
+    SettingsAdjust
+  } from 'carbon-icons-svelte';
   import { projectionActions } from './projection.store.svelte';
   import { parseProjectionCode } from './projection-code.utils';
   import ProjectionMain from './projection-main.svelte';
@@ -39,7 +43,7 @@
 
     <ExpandableSection title={m.projection_other_title()}>
       {#snippet icon()}
-        <FileStorage size={20} />
+        <Catalog size={20} />
       {/snippet}
 
       <ProjectionOther
@@ -50,7 +54,7 @@
 
     <ExpandableSection title={m.projection_settings_title()}>
       {#snippet icon()}
-        <FileStorage size={20} />
+        <SettingsAdjust size={20} />
       {/snippet}
       <ProjectionSettings />
     </ExpandableSection>

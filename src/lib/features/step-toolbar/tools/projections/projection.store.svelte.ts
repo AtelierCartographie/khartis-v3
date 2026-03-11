@@ -24,7 +24,8 @@ const DEFAULT_STATE: ProjectionState = {
   latitude: 0,
   rotation: 0,
   scale: 1,
-  autoFit: true
+  autoFit: true,
+  simplifiedPreview: true
 };
 
 function isGeometryCandidate(value: unknown): value is Geometry {
@@ -42,6 +43,7 @@ type ProjectionActions = {
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
   setScale: (scale: number) => void;
+  setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applyProjectionToDataset: (
     datasetId: string,
@@ -113,6 +115,9 @@ const { actions, getState } = createToolStore<
     setScale: (scale: number) => {
       s.scale = Math.max(0.1, Math.min(10, scale));
     },
+    setSimplifiedPreview: (value: boolean) => {
+      s.simplifiedPreview = value;
+    },
     suggestProjectionForCurrentData: () => {
       const geoDatasets = datasetsStore.getDatasetsByType(true);
       if (geoDatasets.length === 0) return;
@@ -174,7 +179,7 @@ const { actions, getState } = createToolStore<
           scale: projection.scale(),
           translate: projection.translate(),
           rotate: [s.rotation, 0, 0],
-          center: s.center
+          center: s.center || [s.longitude, s.latitude]
         });
 
         return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION

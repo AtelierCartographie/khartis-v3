@@ -65,11 +65,16 @@ export async function detectCsvHeader(
     (category) => category === 'numeric'
   ).length;
 
-  const hasHeader = !(
-    similarity >= similarityThreshold &&
-    firstRowNumericCount > 0 &&
-    secondRowNumericCount > 0
+  const firstRowAllNumericOrEmpty = firstRow.every(
+    (category) => category === 'numeric' || category === 'empty'
   );
+  const hasHeader =
+    !firstRowAllNumericOrEmpty ||
+    !(
+      similarity >= similarityThreshold &&
+      firstRowNumericCount > 0 &&
+      secondRowNumericCount > 0
+    );
 
   return {
     hasHeader,

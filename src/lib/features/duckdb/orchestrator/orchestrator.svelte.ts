@@ -35,7 +35,7 @@ import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
 import * as conversionOps from './conversion-ops';
 import * as datasetOps from './dataset-ops';
-import { createFilterRecord } from './filter-ops';
+import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
 import * as searchOps from './search-ops';
@@ -263,6 +263,15 @@ export const duckDBOrchestrator = {
 
   getBasemapAttributesId: joinOps.getBasemapAttributesId,
 
+  updateDatasetJoinInfo: datasetOps.updateDatasetJoinInfo,
+
+  async getBasemapAttributeValues(basemap: BasemapMetadata): Promise<string[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    return joinOps.getBasemapAttributeValues(basemap, Duck);
+  },
+
   async computeJoinStats(
     datasetId: string,
     basemap: BasemapMetadata,
@@ -274,7 +283,32 @@ export const duckDBOrchestrator = {
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) throw new Error('Dataset not found');
 
-    return joinOps.computeJoinStats(dataset, basemap, geoColumn, Duck);
+    const filterClause = buildFilterWhereClause(
+      state.getFiltersMap().get(dataset.tableName)
+    );
+    return joinOps.computeJoinStats(
+      dataset,
+      basemap,
+      geoColumn,
+      Duck,
+      filterClause
+    );
+  },
+
+  async computeJoinSynthesis(
+    datasetId: string,
+    geoColumn: string
+  ): Promise<joinOps.JoinSynthesisResult[]> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    const dataset = state.findDatasetByIdOrSourceFile(datasetId);
+    if (!dataset) throw new Error('Dataset not found');
+
+    const filterClause = buildFilterWhereClause(
+      state.getFiltersMap().get(dataset.tableName)
+    );
+    return joinOps.computeJoinSynthesis(dataset, geoColumn, Duck, filterClause);
   },
 
   async applyJoinCorrections(
@@ -704,7 +738,7 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      return arrowOps.getArrowTableWithCache(
+      return await arrowOps.getArrowTableWithCache(
         tableName,
         Duck,
         (table) => geoParquetReader.extractMetadata(table),

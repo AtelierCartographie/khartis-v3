@@ -1,8 +1,12 @@
 import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+import { EVENT } from '$lib/features/commons/constants/dom.constants';
 import { globalState } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
 import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
+
+const SIDENAV_CONTAINER_ID = 'khartis-side-nav';
+const HAMBURGER_SELECTOR = '.bx--header__menu-trigger';
 
 export interface UseSideNavReturn {
   readonly currentLocale: Locale;
@@ -23,6 +27,27 @@ export interface UseSideNavReturn {
 export function useSideNav(): UseSideNavReturn {
   let currentLocale = $state<Locale>(getLocale());
   let isDuplicating = $state(false);
+
+  $effect(() => {
+    if (!globalState.isSideNavOpen) return;
+
+    function handleOutsideClick(event: MouseEvent) {
+      const target = event.target as Element;
+      if (target.closest(`#${SIDENAV_CONTAINER_ID}`)) return;
+      if (target.closest(HAMBURGER_SELECTOR)) return;
+
+      globalState.isSideNavOpen = false;
+    }
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener(EVENT.CLICK, handleOutsideClick);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener(EVENT.CLICK, handleOutsideClick);
+    };
+  });
 
   function closeSideNav() {
     globalState.isSideNavOpen = false;

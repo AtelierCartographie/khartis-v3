@@ -1,6 +1,6 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Button,
     Select,
     SelectItem,
     InlineNotification
@@ -94,7 +94,7 @@
   <div class="year-filter-header">
     <span class="year-filter-title">{m.year_filter_title()}</span>
     {#if hasYearFilter}
-      <Button
+      <IconButton
         kind="ghost"
         size="small"
         icon={Close}

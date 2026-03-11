@@ -1,11 +1,11 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import {
     StylingTools,
     VisualizationTools
   } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { selectTool } from '../tools-list/tool-list.utils.svelte';
@@ -61,30 +61,57 @@
 
 <aside class="tool-container">
   <header class="tool-header">
-    <h5>{title}</h5>
+    <p class="tool-title">{title}</p>
 
-    <Button
+    <IconButton
       kind="ghost"
       size="small"
       iconDescription={m.close()}
       icon={Close}
       on:click={() => selectTool(undefined)}
-      class="float-right"
     />
   </header>
 
-  {@render selectedComponent?.()}
+  <div class="tool-body">
+    {@render selectedComponent?.()}
+  </div>
 </aside>
 
 <style>
   .tool-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: var(--cds-spacing-03);
+    gap: var(--cds-spacing-02);
+    padding-bottom: var(--cds-spacing-03);
+    padding-left: var(--cds-spacing-05);
+    padding-right: var(--cds-spacing-02);
+    position: sticky;
+    top: 0;
+    background-color: var(--cds-background, white);
+    z-index: 2;
+  }
+
+  .tool-title {
+    flex: 1 0 0;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.5rem;
+    color: var(--cds-text-01, #161616);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   aside {
     position: relative;
+  }
+
+  .tool-body {
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+  }
+
+  .tool-body :global(.expandable-stack) {
+    margin: 0 calc(-1 * var(--cds-spacing-05));
   }
 </style>

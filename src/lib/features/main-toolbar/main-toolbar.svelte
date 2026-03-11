@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     globalActions,
     globalState
@@ -10,18 +12,10 @@
   } from '$lib/features/commons/types/global';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ProgressIndicator,
-    ProgressStep
-  } from 'carbon-components-svelte';
-  import {
-    ArrowRight,
-    ChevronLeft,
-    ChevronRight,
-    Table
-  } from 'carbon-icons-svelte';
+  import { ProgressIndicator, ProgressStep } from 'carbon-components-svelte';
+  import { ArrowRight, OpenPanelFilledRight } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { tick } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
   import { dataTabStore } from './data-tab/data-tab.store.svelte';
   import DataTab from './data-tab/data-tab.svelte';
@@ -31,9 +25,40 @@
   } from './main-toolbar.state.svelte';
   import VizualisationTab from './visualization-tab/visualization-tab.svelte';
 
+  let toolbarContent = $state<HTMLElement | null>(null);
+
   function setToolbar(state: ToolbarState) {
     globalActions.setToolbarState(state);
   }
+
+  const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
+    geo: ['data-control-step', 'enrich-data-step'],
+    tabular: ['data-control-step', 'geolocation-step', 'basemap-join-step']
+  };
+
+  async function handleBreadcrumbStep(stepIndex: number) {
+    if (dataTabStore.canNavigateToStep[stepIndex]) {
+      dataTabStore.setActiveStep(stepIndex);
+      await tick();
+      const mode = dataTabStore.isGeographicMode ? 'geo' : 'tabular';
+      const sectionId = DATA_STEP_SECTION_IDS[mode][stepIndex];
+      const section = toolbarContent?.querySelector(`#${sectionId}`);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (toolbarContent) {
+        toolbarContent.scrollTop = 0;
+      }
+    }
+  }
+
+  $effect(() => {
+    if (
+      globalState.selectedStep === ToolbarStep.Visualizations &&
+      globalState.toolbarState === ToolbarState.Full
+    ) {
+      globalActions.setToolbarState(ToolbarState.Compact);
+    }
+  });
 
   let lastUiSnapshot = $state<string>('');
 
@@ -77,51 +102,36 @@
   })}
 >
   <header class="flex sticky z-1000 border-b main-toolbar-header">
-    {#if globalState.toolbarState === ToolbarState.Compact}
-      <Button
-        kind="ghost"
-        iconDescription={m.toolbar_expand()}
-        icon={ChevronLeft}
-        on:click={() => setToolbar(ToolbarState.Full)}
-      />
-    {/if}
-
-    {#if globalState.toolbarState === ToolbarState.Collapsed}
-      <Button
-        kind="ghost"
-        iconDescription={m.toolbar_expand()}
-        disabled={globalState.selectedStep === ToolbarStep.Styling}
-        icon={ChevronLeft}
-        on:click={() => setToolbar(ToolbarState.Full)}
-      />
-    {:else}
-      <Button
-        kind="ghost"
-        iconDescription={m.toolbar_collapse()}
-        tooltipAlignment="start"
-        icon={ChevronRight}
-        on:click={() => setToolbar(ToolbarState.Collapsed)}
-      />
-
-      <Button
-        kind="ghost"
-        iconDescription={globalState.toolbarState === ToolbarState.Compact
-          ? m.toolbar_expand()
-          : m.toolbar_compact()}
-        icon={Table}
-        on:click={() =>
+    <IconButton
+      kind="ghost"
+      iconDescription={globalState.toolbarState === ToolbarState.Full
+        ? m.toolbar_compact()
+        : m.toolbar_expand()}
+      icon={OpenPanelFilledRight}
+      on:click={() => {
+        const isVizStep =
+          globalState.selectedStep === ToolbarStep.Visualizations;
+        if (isVizStep) {
           setToolbar(
-            globalState.toolbarState === ToolbarState.Compact
-              ? ToolbarState.Full
-              : ToolbarState.Compact
-          )}
-      />
-    {/if}
+            globalState.toolbarState === ToolbarState.Collapsed
+              ? ToolbarState.Compact
+              : ToolbarState.Collapsed
+          );
+        } else {
+          setToolbar(
+            globalState.toolbarState === ToolbarState.Full
+              ? ToolbarState.Compact
+              : ToolbarState.Full
+          );
+        }
+      }}
+    />
 
     <ToolbarTabs />
   </header>
 
   <article
+    bind:this={toolbarContent}
     class={clsx(
       'toolbar-content scrollbar-hidden',
       globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
@@ -150,9 +160,7 @@
         spaceEqually
         on:click={(e) => {
           const detail = e.detail;
-          if (detail !== undefined && dataTabStore.canNavigateToStep[detail]) {
-            dataTabStore.setActiveStep(detail);
-          }
+          if (detail !== undefined) handleBreadcrumbStep(detail);
         }}
       >
         <ProgressStep
@@ -220,6 +228,7 @@
     flex-direction: column;
     border-left: 1px solid var(--cds-ui-01);
     z-index: var(--z-main-toolbar);
+    will-change: width;
     transition:
       width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
       flex 0.3s cubic-bezier(0.4, 0, 0.2, 1);

@@ -54,6 +54,7 @@ export function useExportModal(): UseExportModalReturn {
 
   function open(): void {
     fileName = projectStore.projectName || DEFAULT_FILE_NAME;
+    selectedTab = ExportTab.PROJECT;
     logger.info('Export modal opened', LogCategory.EXPORT);
     isOpen = true;
   }

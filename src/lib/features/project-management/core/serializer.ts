@@ -1,10 +1,12 @@
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
-import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services';
 import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
@@ -178,6 +180,14 @@ export async function serializeProjectData(
         }
       }
 
+      // Persist the DatasetResult ID so visualization.datasetId references survive restore
+      const storeDataset = datasetsStore.datasets.find(
+        (d) => d.sourceFileId === file.id
+      );
+      if (storeDataset) {
+        serializedFile.datasetId = storeDataset.id;
+      }
+
       return serializedFile;
     });
   }
@@ -219,7 +229,8 @@ export async function serializeProjectData(
   serialized.basemapSettings = {
     layers: basemapLayersStore.layers,
     style: basemapStyleStore.selectedStyle,
-    mapProjection: mapProjectionStore.projection
+    mapProjection: mapProjectionStore.projection,
+    referenceBasemapId: basemapStyleStore.referenceBasemapId
   };
 
   const visualizations = visualizationStore.visualizations;
@@ -250,6 +261,7 @@ export async function serializeProjectData(
     legend: {
       items: legendState.items,
       position: legendState.position,
+      dragPosition: legendState.dragPosition,
       visible: legendState.visible,
       style: legendState.style,
       hasBeenOpened: legendState.hasBeenOpened
@@ -364,12 +376,13 @@ export async function deserializeProjectData(
 
   if (data.basemapSettings) {
     try {
-      const { layers, style, mapProjection } = data.basemapSettings;
+      const { layers, style, mapProjection, referenceBasemapId } =
+        data.basemapSettings;
       if (layers) {
         basemapLayersStore.restoreFromSerialized(layers);
       }
       if (style) {
-        basemapStyleStore.restoreFromSerialized(style);
+        basemapStyleStore.restoreFromSerialized(style, referenceBasemapId);
       }
       if (mapProjection) {
         mapProjectionStore.restoreFromSerialized(mapProjection);
@@ -422,6 +435,7 @@ export async function deserializeProjectData(
         legendActions.setState({
           items: legend.items,
           position: legend.position,
+          dragPosition: legend.dragPosition ?? null,
           visible: legend.visible,
           style: legend.style,
           hasBeenOpened: legend.hasBeenOpened ?? false

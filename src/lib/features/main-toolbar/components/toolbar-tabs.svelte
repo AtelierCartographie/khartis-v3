@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
@@ -6,13 +8,16 @@
   } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
-  import { ToolbarState } from '$lib/features/commons/types/global';
+  import {
+    ToolbarState,
+    ToolbarStep
+  } from '$lib/features/commons/types/global';
   import {
     showError,
     showSuccess
   } from '$lib/features/commons/utils/notification.utils.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Button, Modal, Tag, TextInput } from 'carbon-components-svelte';
+  import { Modal, Tag, TextInput } from 'carbon-components-svelte';
   import {
     Add,
     Checkmark,
@@ -28,6 +33,14 @@
   import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import { UI_CONSTANTS } from '../constants';
+  import {
+    visualizationStore,
+    VisualizationType
+  } from '$lib/features/commons/store/visualization.store.svelte';
+
+  const isVizStep = $derived(
+    globalState.selectedStep === ToolbarStep.Visualizations
+  );
 
   let tabsScroller: HTMLDivElement | null = $state(null);
 
@@ -363,6 +376,24 @@
   let isDeleteConfirmOpen = $state(false);
   let fileToDelete = $state<{ id: string; name: string } | null>(null);
 
+  const vizTabs = $derived.by(() => {
+    const vizs = visualizationStore.visualizations;
+    return vizs.map((viz, idx) => ({
+      id: viz.id,
+      label: `${m.viz_tab_label()} (${idx + 1})`,
+      isSelected: visualizationStore.selectedVisualization?.id === viz.id
+    }));
+  });
+
+  function handleAddVizTab() {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset) return;
+    visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+  }
+
   const openAddDataModal = () => {
     isAddDataModalOpen = true;
   };
@@ -413,159 +444,188 @@
     bind:this={tabsScroller}
     onwheel={onWheel}
   >
-    {#each globalState.dataButtons as dataButton (dataButton.id)}
-      {@const fileInfo = getFileInfo(dataButton.label)}
-      {@const datasetCount = getDatasetCountForTab(dataButton.id)}
-      {@const selectedDataset = getSelectedDatasetForTab(dataButton.id)}
-      {@const displayName =
-        datasetCount > 1 && selectedDataset
-          ? selectedDataset.name
-          : fileInfo.name}
-      <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
-        <Button
-          isSelected={dataButton.isSelected}
-          kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
-          on:click={() => handleTabClick(dataButton.id, dataButton.isSelected)}
-          class="tab-button"
-          title={displayName}
-        >
-          <div class="tab-content">
-            {#if editingTabId === dataButton.id}
-              <input
-                type="text"
-                class="tab-name-input"
-                bind:value={editedName}
-                bind:this={nameInputRef}
-                onkeydown={handleTabKeyPress}
-                onblur={handleTabBlur}
-                onclick={(e: MouseEvent) => e.stopPropagation()}
-              />
-            {:else}
+    {#if isVizStep}
+      {#each vizTabs as vizTab (vizTab.id)}
+        <div class="tab-button-wrapper">
+          <Button
+            isSelected={vizTab.isSelected}
+            kind={vizTab.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
+            on:click={() => visualizationStore.selectVisualization(vizTab.id)}
+            class="tab-button"
+            title={vizTab.label}
+          >
+            <div class="tab-content">
               <span class="tab-label">
-                {truncateFileName(displayName)}
+                {vizTab.label}
               </span>
-            {/if}
-            {#if datasetCount > 1}
-              <Tag type="high-contrast" size="sm" class="dataset-count-tag">
-                {datasetCount}
-              </Tag>
-            {/if}
-          </div>
-          <button
-            class="tab-menu-button"
-            onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
-            aria-label={m.file_options()}
-            title={m.file_options()}
-            aria-haspopup="true"
-            aria-expanded={menuOpenTabId === dataButton.id}
-          >
-            <OverflowMenuVertical size={16} />
-          </button>
-        </Button>
-        {#if menuOpenTabId === dataButton.id}
-          {@const menuDatasets = getDatasetsForTab(dataButton.id)}
-          <div
-            class="tab-context-menu"
-            style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
-            role="menu"
-          >
-            {#if menuDatasets.length > 1}
-              <div class="tab-menu-section-label">
-                {m.datasets_label()}
-              </div>
-              {#each menuDatasets as dataset (dataset.id)}
-                <div class="tab-menu-item-dataset-row">
-                  {#if editingDatasetId === dataset.id}
-                    <TextInput
-                      size="sm"
-                      hideLabel
-                      labelText={m.dataset_name_label()}
-                      bind:value={editedDatasetName}
-                      on:keydown={handleDatasetEditKeyPress}
-                      on:blur={saveDatasetRename}
-                      on:click={(e) => e.stopPropagation()}
-                    />
-                  {:else}
-                    <button
-                      class="tab-menu-item tab-menu-item-dataset"
-                      class:tab-menu-item-selected={dataset.isSelected}
-                      onclick={(e: Event) => handleSelectDataset(dataset.id, e)}
-                      role="menuitemradio"
-                      aria-checked={dataset.isSelected}
-                    >
-                      <span class="dataset-check-icon">
-                        {#if dataset.isSelected}
-                          <Checkmark size={16} />
-                        {/if}
-                      </span>
-                      <span class="dataset-name">{dataset.name}</span>
-                    </button>
-                  {/if}
-                  <Button
-                    kind="ghost"
-                    size="small"
-                    iconDescription={m.dataset_rename_action()}
-                    icon={Edit}
-                    on:click={(e) =>
-                      startEditingDataset(dataset.id, dataset.name, e)}
-                  />
-                  <Button
-                    kind="danger-ghost"
-                    size="small"
-                    iconDescription={m.dataset_delete_action()}
-                    icon={TrashCan}
-                    on:click={(e) =>
-                      handleDeleteDataset(dataset.id, dataset.name, e)}
-                  />
-                </div>
-              {/each}
-              <div class="tab-menu-divider"></div>
-            {/if}
-            <button
-              class="tab-menu-item"
-              onclick={(e: Event) =>
-                handleRenameFromMenu(dataButton.id, dataButton.label, e)}
-              role="menuitem"
-            >
-              <Edit size={16} />
-              {m.tab_rename_action()}
-            </button>
-            <button
-              class="tab-menu-item"
-              onclick={(e: Event) => handleDuplicateTab(dataButton.id, e)}
-              role="menuitem"
-            >
-              <Copy size={16} />
-              {m.tab_duplicate_action()}
-            </button>
-            <div class="tab-menu-divider"></div>
-            <button
-              class="tab-menu-item tab-menu-item-danger"
-              onclick={(e: Event) =>
-                handleDeleteFromMenu(dataButton.id, dataButton.label, e)}
-              role="menuitem"
-            >
-              <TrashCan size={16} />
-              {m.tab_delete_action()}
-            </button>
-          </div>
-        {/if}
-      </div>
-    {/each}
+            </div>
+          </Button>
+        </div>
+      {/each}
 
-    {#if globalState.dataButtons.length === 0}
-      <span class="no-files-text">{m.no_files_imported()}</span>
+      {#if vizTabs.length === 0}
+        <span class="no-files-text">{m.no_files_imported()}</span>
+      {/if}
+    {:else}
+      {#each globalState.dataButtons as dataButton (dataButton.id)}
+        {@const fileInfo = getFileInfo(dataButton.label)}
+        {@const datasetCount = getDatasetCountForTab(dataButton.id)}
+        {@const selectedDataset = getSelectedDatasetForTab(dataButton.id)}
+        {@const displayName =
+          datasetCount > 1 && selectedDataset
+            ? selectedDataset.name
+            : fileInfo.name}
+        <div class="tab-button-wrapper" use:registerTab={dataButton.id}>
+          <Button
+            isSelected={dataButton.isSelected}
+            kind={dataButton.isSelected ? ButtonKind.Primary : ButtonKind.Ghost}
+            on:click={() =>
+              handleTabClick(dataButton.id, dataButton.isSelected)}
+            class="tab-button"
+            title={displayName}
+          >
+            <div class="tab-content">
+              {#if editingTabId === dataButton.id}
+                <input
+                  type="text"
+                  class="tab-name-input"
+                  bind:value={editedName}
+                  bind:this={nameInputRef}
+                  onkeydown={handleTabKeyPress}
+                  onblur={handleTabBlur}
+                  onclick={(e: MouseEvent) => e.stopPropagation()}
+                />
+              {:else}
+                <span class="tab-label">
+                  {truncateFileName(displayName)}
+                </span>
+              {/if}
+              {#if datasetCount > 1}
+                <Tag type="high-contrast" size="sm" class="dataset-count-tag">
+                  {datasetCount}
+                </Tag>
+              {/if}
+            </div>
+            <button
+              class="tab-menu-button"
+              onclick={(e: MouseEvent) => toggleTabMenu(dataButton.id, e)}
+              aria-label={m.file_options()}
+              title={m.file_options()}
+              aria-haspopup="true"
+              aria-expanded={menuOpenTabId === dataButton.id}
+            >
+              <OverflowMenuVertical size={16} />
+            </button>
+          </Button>
+          {#if menuOpenTabId === dataButton.id}
+            {@const menuDatasets = getDatasetsForTab(dataButton.id)}
+            <div
+              class="tab-context-menu"
+              style="top: {menuPosition.top}px; left: {menuPosition.left}px;"
+              role="menu"
+            >
+              {#if menuDatasets.length > 1}
+                <div class="tab-menu-section-label">
+                  {m.datasets_label()}
+                </div>
+                {#each menuDatasets as dataset (dataset.id)}
+                  <div class="tab-menu-item-dataset-row">
+                    {#if editingDatasetId === dataset.id}
+                      <TextInput
+                        size="sm"
+                        hideLabel
+                        labelText={m.dataset_name_label()}
+                        bind:value={editedDatasetName}
+                        on:keydown={handleDatasetEditKeyPress}
+                        on:blur={saveDatasetRename}
+                        on:click={(e) => e.stopPropagation()}
+                      />
+                    {:else}
+                      <button
+                        class="tab-menu-item tab-menu-item-dataset"
+                        class:tab-menu-item-selected={dataset.isSelected}
+                        onclick={(e: Event) =>
+                          handleSelectDataset(dataset.id, e)}
+                        role="menuitemradio"
+                        aria-checked={dataset.isSelected}
+                      >
+                        <span class="dataset-check-icon">
+                          {#if dataset.isSelected}
+                            <Checkmark size={16} />
+                          {/if}
+                        </span>
+                        <span class="dataset-name">{dataset.name}</span>
+                      </button>
+                    {/if}
+                    <IconButton
+                      kind="ghost"
+                      size="small"
+                      iconDescription={m.dataset_rename_action()}
+                      icon={Edit}
+                      on:click={(e) =>
+                        startEditingDataset(dataset.id, dataset.name, e)}
+                    />
+                    <IconButton
+                      kind="danger-ghost"
+                      size="small"
+                      iconDescription={m.dataset_delete_action()}
+                      icon={TrashCan}
+                      on:click={(e) =>
+                        handleDeleteDataset(dataset.id, dataset.name, e)}
+                    />
+                  </div>
+                {/each}
+                <div class="tab-menu-divider"></div>
+              {/if}
+              <button
+                class="tab-menu-item"
+                onclick={(e: Event) =>
+                  handleRenameFromMenu(dataButton.id, dataButton.label, e)}
+                role="menuitem"
+              >
+                <Edit size={16} />
+                {m.tab_rename_action()}
+              </button>
+              <button
+                class="tab-menu-item"
+                onclick={(e: Event) => handleDuplicateTab(dataButton.id, e)}
+                role="menuitem"
+              >
+                <Copy size={16} />
+                {m.tab_duplicate_action()}
+              </button>
+              <div class="tab-menu-divider"></div>
+              <button
+                class="tab-menu-item tab-menu-item-danger"
+                onclick={(e: Event) =>
+                  handleDeleteFromMenu(dataButton.id, dataButton.label, e)}
+                role="menuitem"
+              >
+                <TrashCan size={16} />
+                {m.tab_delete_action()}
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/each}
+
+      {#if globalState.dataButtons.length === 0}
+        <span class="no-files-text">{m.no_files_imported()}</span>
+      {/if}
     {/if}
   </div>
 
   <div class="add-btn-wrapper">
     <Button
       kind="ghost"
-      iconDescription={m.add_files_action()}
+      size="small"
+      iconDescription={isVizStep ? m.add_viz_tooltip() : m.add_data_tooltip()}
       icon={Add}
-      on:click={openAddDataModal}
-      aria-label={m.add_files_action()}
-    />
+      on:click={isVizStep ? handleAddVizTab : openAddDataModal}
+      aria-label={isVizStep ? m.add_viz_tooltip() : m.add_data_tooltip()}
+    >
+      {m.add_button_label()}
+    </Button>
   </div>
 </div>
 
@@ -606,7 +666,6 @@
 <style>
   .tabs-scroller {
     display: flex;
-    gap: var(--cds-spacing-03);
     overflow-x: auto;
     overflow-y: hidden;
     white-space: nowrap;

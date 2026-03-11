@@ -33,16 +33,24 @@
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import type { DeckMapProps } from '../types';
+  import type { DeckMapProps, DeckOrthographicViewStateMap } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
-    formatState,
+    getFormatState,
     PAGE_GRID_SIZE_PX
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
+  import {
+    resolveOrthographicReferenceTable,
+    shouldUseBasemapReferenceInOrthographicView
+  } from '../utils/orthographic-reference';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -54,21 +62,24 @@
     width,
     height,
     onReady,
-    forcedVisualizationIds
+    forcedVisualizationIds,
+    onMoveSync,
+    syncViewState
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
+  const fmtState = $derived(getFormatState());
   const formatColor = $derived(
-    typeof formatState.color === 'object' && formatState.color
-      ? formatState.color
+    typeof fmtState.color === 'object' && fmtState.color
+      ? fmtState.color
       : DEFAULT_PAGE_COLOR
   );
   const pageBackgroundColor = $derived(
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
-  const pageMargins = $derived(formatState.margins);
+  const pageMargins = $derived(fmtState.margins);
   const showPageGrid = $derived(
-    formatState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
+    fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
   );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
@@ -100,6 +111,10 @@
     tables.size > 0 ? tables.keys().next().value : undefined
   );
 
+  const colorBlindnessMatrix = $derived(
+    getColorBlindnessMatrix(getColorBlindnessState().simulationType)
+  );
+
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
 
@@ -109,13 +124,13 @@
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let worldBaseTable = $state<ArrowTable | null>(null);
   let isLoadingBasemap = false;
+  const RESIZE_DEBOUNCE_MS = 150;
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let isSwitchingViewMode = $state(false);
   let pendingLayerUpdate = $state(false);
   let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  const RESIZE_DEBOUNCE_MS = 150;
   const LAYER_UPDATE_DEBOUNCE_MS = 16;
   const PROJECT_EMPTY_RESET_DEBOUNCE_MS = 250;
 
@@ -130,6 +145,7 @@
   let effectTriggerLog: string[] = [];
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
+  let isApplyingMapLibreSync = false;
 
   function logEffect(name: string): void {
     effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
@@ -300,8 +316,27 @@
       }
     },
     onZoom: () => mapInstanceStore.updateZoomFromMap(),
-    onMoveEnd: () => mapPosition.savePosition(),
-    getActiveVisualizations: () => mapState.activeVisualizations
+    onMoveEnd: () => {
+      mapPosition.savePosition();
+      if (
+        onMoveSync &&
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        mapInit.map &&
+        !isApplyingMapLibreSync
+      ) {
+        const center = mapInit.map.getCenter();
+        onMoveSync({
+          type: 'maplibre',
+          center: [center.lng, center.lat],
+          zoom: mapInit.map.getZoom()
+        });
+      }
+      isApplyingMapLibreSync = false;
+    },
+    getActiveVisualizations: () => mapState.activeVisualizations,
+    onOrthographicViewStateChanged: (target, zoom) => {
+      onMoveSync?.({ type: 'orthographic', target, zoom });
+    }
   });
 
   const mapPosition = useMapPosition({
@@ -312,6 +347,31 @@
     }
   });
 
+  function getTableFiltersForDataset(datasetId: string) {
+    const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
+    if (!dataset?.sourceFileId) return undefined;
+    const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+      dataset.sourceFileId
+    );
+    if (!duckDBDataset?.tableName) return undefined;
+    return getFiltersMap().get(duckDBDataset.tableName);
+  }
+
+  function getRenderedDataset(datasetId: string | undefined) {
+    if (!datasetId) return null;
+    return (
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId) ?? null
+    );
+  }
+
+  function getRenderedDuckDBDataset(datasetId: string | undefined) {
+    const dataset = getRenderedDataset(datasetId);
+    if (!dataset?.sourceFileId) return null;
+    return (
+      duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId) ?? null
+    );
+  }
+
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
@@ -321,7 +381,8 @@
     getActiveVisualizations: () => mapState.activeVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
     getShouldRenderDatasetFallbacks: () =>
-      globalState.selectedStep === ToolbarStep.Data
+      globalState.selectedStep === ToolbarStep.Data,
+    getTableFilters: getTableFiltersForDataset
   });
 
   function updateCanvasSize() {
@@ -331,22 +392,6 @@
         height: mapContainer.offsetHeight || 600
       });
     }
-  }
-
-  function syncOrthographicDeckSize(): void {
-    if (!mapContainer || mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
-      return;
-    }
-
-    const deckInstance = mapInit.deckInstance;
-    if (!deckInstance) {
-      return;
-    }
-
-    deckInstance.setProps({
-      width: mapContainer.offsetWidth || 800,
-      height: mapContainer.offsetHeight || 600
-    });
   }
 
   function fitOrthographicViewport(): void {
@@ -373,6 +418,7 @@
     onStyleLoaded: () => {
       logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
+      mapBasemap.syncLabelsVisibility();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -396,7 +442,7 @@
 
   $effect(() => {
     const margins = pageMargins;
-    const layoutSnapshot = `${formatState.width}x${formatState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
+    const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
 
     if (lastLayoutSnapshot === null) {
       lastLayoutSnapshot = layoutSnapshot;
@@ -411,8 +457,8 @@
 
     untrack(() => {
       annotationsActions.redistributePageElements({
-        width: formatState.width,
-        height: formatState.height,
+        width: fmtState.width,
+        height: fmtState.height,
         margins
       });
       legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
@@ -424,7 +470,14 @@
     void mapCanvasHeight;
 
     untrack(() => {
-      syncOrthographicDeckSize();
+      updateCanvasSize();
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInit.viewMode === ViewMode.MAPLIBRE
+      ) {
+        mapInit.map?.resize();
+      }
     });
   });
 
@@ -496,14 +549,13 @@
     if (lastApplied) {
       logEffect('simplification:lastApplied');
       logger.debug(
-        'Simplification applied, reloading basemap',
+        'Simplification applied, updating basemap table',
         LogCategory.MAP
       );
 
-      untrack(async () => {
-        const loaded = await basemapService.loadDefaultBasemap();
+      untrack(() => {
+        const loaded = basemapService.currentBasemap;
         if (loaded) {
-          // Use simplified version if active
           if (loaded.activeSimplificationLevel) {
             const simplifiedTable = basemapService.getSimplifiedBasemapTable(
               loaded.metadata.file,
@@ -513,8 +565,6 @@
           } else {
             worldBaseTable = loaded.geometryTable;
           }
-          // Note: worldBaseTable assignment triggers the worldBaseTable $effect
-          // which calls scheduleLayerUpdate — no need to call it here.
         }
       });
     }
@@ -526,7 +576,20 @@
     if (firstTable && canUpdate) {
       logEffect('firstTable');
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-        const bounds = calculateBoundsFromGeoArrow(firstTable);
+        const dataset = getRenderedDataset(firstDatasetId);
+        const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+        const shouldUseBasemapReference =
+          shouldUseBasemapReferenceInOrthographicView(dataset, duckDataset);
+        const referenceTable = resolveOrthographicReferenceTable({
+          dataset,
+          duckDataset,
+          datasetTable: firstTable,
+          basemapTable: worldBaseTable
+        });
+        const bounds = referenceTable
+          ? calculateBoundsFromGeoArrow(referenceTable)
+          : null;
+
         if (bounds) {
           const [[minX, minY], [maxX, maxY]] = bounds as [
             [number, number],
@@ -538,7 +601,12 @@
             fitOrthographicViewport();
           });
           triggerOnReady();
-        } else {
+        } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
+          untrack(() => {
+            fitOrthographicViewport();
+          });
+          triggerOnReady();
+        } else if (!shouldUseBasemapReference) {
           const geoMetadata = firstTable.schema.metadata?.get('geo');
           if (geoMetadata) {
             untrack(() => {
@@ -749,17 +817,30 @@
   });
 
   $effect(() => {
+    void basemapStyleStore.showLabels;
+    logEffect('basemapStyleStore.showLabels');
+    untrack(() => mapBasemap.syncLabelsVisibility());
+  });
+
+  $effect(() => {
     void mapProjectionStore.projection;
     logEffect('mapProjectionStore.projection');
     untrack(() => mapBasemap.syncProjection());
   });
+
+  const filtersVersion = $derived(
+    Array.from(getFiltersMap().entries())
+      .map(([k, v]) => `${k}:${v.length}:${v.map((f) => f.id).join(',')}`)
+      .join('|')
+  );
 
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
-    dataSize: `${tables.size}-${geoJSONs.size}`
+    dataSize: `${tables.size}-${geoJSONs.size}`,
+    filtersVersion
   });
 
   $effect(() => {
@@ -823,9 +904,15 @@
 
             // Fit map view to new basemap bounds
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              if (!bounds && loaded.metadata.bbox) {
+                const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
+                bounds = [
+                  [minLng, minLat],
+                  [maxLng, maxLat]
+                ];
+              }
               if (bounds) {
-                mapBounds.resetFitState();
                 mapBounds.fitToBounds(bounds, true);
               }
             } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
@@ -943,6 +1030,27 @@
     }
   }
 
+  $effect(() => {
+    const sv = syncViewState;
+    const deck = mapInit.deckInstance;
+    const map = mapInit.map;
+    if (!sv) return;
+
+    if (sv.type === 'orthographic' && sv.target && deck) {
+      const orthographicViewState: DeckOrthographicViewStateMap = {
+        main: { target: sv.target, zoom: sv.zoom, minZoom: -10, maxZoom: 10 }
+      };
+      deck.setProps({
+        viewState: orthographicViewState as Parameters<
+          typeof deck.setProps
+        >[0]['viewState']
+      });
+    } else if (sv.type === 'maplibre' && sv.center && map) {
+      isApplyingMapLibreSync = true;
+      map.jumpTo({ center: sv.center, zoom: sv.zoom });
+    }
+  });
+
   onMount(() => {
     const initialViewMode = basemapStyleStore.requiresMapLibre
       ? ViewMode.MAPLIBRE
@@ -953,29 +1061,22 @@
     loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
-      if (resizeTimeoutId) {
-        clearTimeout(resizeTimeoutId);
+      updateCanvasSize();
+
+      const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
+      if (canUpdate && mapInit.viewMode === ViewMode.MAPLIBRE) {
+        mapInit.map?.resize();
       }
 
-      resizeTimeoutId = setTimeout(() => {
-        // Debounce updateCanvasSize together with resize handling to avoid
-        // triggering projectionStore reactive effects on every intermediate frame.
-        updateCanvasSize();
-
-        // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
-        const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
-        if (canUpdate) {
-          if (mapInit.viewMode === ViewMode.MAPLIBRE) {
-            // Only resize the canvas — do NOT re-fit viewport bounds.
-            // Preserves the user's current zoom and pan position.
-            mapInit.map?.resize();
-          } else {
-            syncOrthographicDeckSize();
-          }
-          scheduleLayerUpdate('resizeObserver');
+      if (canUpdate && !globalState.isToolbarTransitioning) {
+        if (resizeTimeoutId) {
+          clearTimeout(resizeTimeoutId);
         }
-        resizeTimeoutId = null;
-      }, RESIZE_DEBOUNCE_MS);
+        resizeTimeoutId = setTimeout(() => {
+          scheduleLayerUpdate('resizeObserver');
+          resizeTimeoutId = null;
+        }, RESIZE_DEBOUNCE_MS);
+      }
     });
     resizeObserver.observe(mapContainer);
 
@@ -999,10 +1100,24 @@
   });
 </script>
 
+<svg aria-hidden="true" class="color-blindness-svg-defs">
+  <defs>
+    <filter id="color-blindness-filter" color-interpolation-filters="sRGB">
+      <feColorMatrix
+        type="matrix"
+        values={colorBlindnessMatrix ??
+          '1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0'}
+      />
+    </filter>
+  </defs>
+</svg>
+
 <div class="page-container" style={pageStyle}>
   <div
     class="map-stage"
-    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;"
+    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+      ? ' filter: url(#color-blindness-filter);'
+      : ''}"
   >
     <div
       bind:this={mapContainer}
@@ -1020,21 +1135,24 @@
       </div>
     {/if}
 
-    {#if mapLoadingStore.isUpdatingLayers}
-      <div class="layer-update-indicator" transition:fade={{ duration: 150 }}>
-        <div class="spinner"></div>
-      </div>
-    {/if}
+    <LegendOverlay />
 
     {#if isStylingMode}
       <GeoIndicationsOverlay />
-      <LegendOverlay />
       <AnnotationOverlay />
     {/if}
   </div>
 </div>
 
 <style>
+  .color-blindness-svg-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
   .page-container {
     position: relative;
     flex-shrink: 0;
@@ -1052,8 +1170,8 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
-      linear-gradient(to right, rgba(22, 22, 22, 0.12) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(22, 22, 22, 0.12) 1px, transparent 1px);
+      linear-gradient(to right, rgba(22, 22, 22, 0.14) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(22, 22, 22, 0.14) 1px, transparent 1px);
   }
 
   .map-canvas {
@@ -1078,39 +1196,7 @@
     height: 100%;
   }
 
-  .layer-update-indicator {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: var(--z-map-overlay);
-    background: var(--cds-ui-01);
-    border-radius: 50%;
-    padding: 8px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    pointer-events: none;
-  }
-
-  .spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--cds-ui-03);
-    border-top-color: var(--cds-interactive-01);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   :global(.maplibregl-ctrl-attrib) {
     display: none;
-  }
-
-  :global(.deck-tooltip) {
-    z-index: var(--z-notification) !important;
-    pointer-events: none !important;
   }
 </style>

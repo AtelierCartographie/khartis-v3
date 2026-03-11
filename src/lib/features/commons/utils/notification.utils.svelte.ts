@@ -32,6 +32,18 @@ function createNotificationManager() {
     type: NotificationType,
     options: NotificationOptions
   ): string {
+    // Deduplicate: if a notification with the same type + title + subtitle
+    // already exists, return its id instead of creating a duplicate.
+    const existing = notifications.find(
+      (n) =>
+        n.type === type &&
+        n.title === options.title &&
+        n.subtitle === options.subtitle
+    );
+    if (existing) {
+      return existing.id;
+    }
+
     const id = crypto.randomUUID();
     const notification: Notification = {
       id,

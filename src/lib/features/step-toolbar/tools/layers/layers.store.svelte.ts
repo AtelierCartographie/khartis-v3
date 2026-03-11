@@ -35,6 +35,11 @@ type LayersActions = {
     fromIndex: number,
     toIndex: number
   ) => void;
+  reorderSubLayers: (
+    parentId: string,
+    fromIndex: number,
+    toIndex: number
+  ) => void;
   duplicateLayer: (id: string) => Layer | null;
   syncWithVisualizations: () => void;
 };
@@ -331,6 +336,27 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
               (layer) => (layer.basemapLayerId ?? layer.id) as BasemapLayerId
             )
           );
+        }
+
+        syncFromSources();
+      },
+      reorderSubLayers: (
+        parentId: string,
+        fromIndex: number,
+        toIndex: number
+      ) => {
+        const subLayers = s.layers
+          .filter((layer) => layer.isSubLayer && layer.parentId === parentId)
+          .sort((a, b) => a.order - b.order);
+
+        const reordered = reorderIds(subLayers, fromIndex, toIndex);
+
+        const basemapIds = reordered
+          .filter((layer) => layer.basemapLayerId)
+          .map((layer) => layer.basemapLayerId as BasemapLayerId);
+
+        if (basemapIds.length > 0) {
+          basemapLayersStore.setLayerOrder(basemapIds);
         }
 
         syncFromSources();

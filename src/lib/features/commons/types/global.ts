@@ -9,6 +9,7 @@ export interface ZoomState {
   minPageZoom: number;
   maxPageZoom: number;
   pageZoomStep: number;
+  pagePanOffset: { x: number; y: number };
 }
 
 export interface GlobalState {
@@ -26,6 +27,7 @@ export interface GlobalState {
   zoom: ZoomState;
   isMobileView: boolean;
   isMobileToolbarOpen: boolean;
+  isToolbarTransitioning: boolean;
 }
 
 export const enum ToolbarStep {

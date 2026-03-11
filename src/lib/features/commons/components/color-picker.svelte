@@ -20,6 +20,7 @@
     saturation = 0,
     lightness = 100,
     livePreview = false,
+    disabled = false,
     onCancel = () => {},
     onPreview = (_color: ColorPayload) => {},
     onValidate = (_color: ColorPayload) => {},
@@ -170,7 +171,7 @@
 
 <div
   id="khartis-color-picker"
-  class={clsx('color-picker-wrap')}
+  class={clsx('color-picker-wrap', { 'is-disabled': disabled })}
   use:clickOutside={{ enabled: colorOpen }}
   onoutsideclick={handleOutsideClick}
 >
@@ -182,7 +183,8 @@
     id="color-picker-trigger"
     class="color-trigger"
     type="button"
-    onclick={() => (colorOpen = !colorOpen)}
+    disabled={disabled}
+    onclick={() => !disabled && (colorOpen = !colorOpen)}
     aria-expanded={colorOpen}
     bind:this={triggerEl}
   >
@@ -392,6 +394,16 @@
   .color-trigger:focus {
     outline: 2px solid var(--cds-focus);
     outline-offset: -2px;
+  }
+
+  .is-disabled .form-label {
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+  }
+
+  .is-disabled .color-trigger {
+    border-bottom-color: var(--cds-border-disabled, #c6c6c6);
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   .swatch {

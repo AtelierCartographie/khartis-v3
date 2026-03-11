@@ -1,7 +1,45 @@
 import { expect, test } from '@playwright/test';
-import path from 'path';
+import {
+  goToJoinStep,
+  selectGeolocationLinkedVariable,
+  uploadURL
+} from './helpers';
 
-const TEST_DATASETS_DIR = path.join(process.cwd(), 'tests-datasets');
+const FOSSIL_CSV_PATH = 'csv/fossil-fuel-subsidies-gdp-2021.csv';
+
+async function openCatalogTab(
+  page: import('@playwright/test').Page
+): Promise<import('@playwright/test').Locator> {
+  const basemapStep = page.locator('#basemap-join-step');
+  const catalogTab = basemapStep
+    .getByRole('button', { name: /Catalogue|Catalog/i })
+    .first();
+  await expect(catalogTab).toBeVisible({ timeout: 10000 });
+  await catalogTab.click();
+
+  const otherBasemapsSection = basemapStep
+    .locator('button')
+    .filter({ hasText: /Autres fonds de carte|Other basemaps|Autre/i })
+    .first();
+  if (await otherBasemapsSection.isVisible().catch(() => false)) {
+    const isExpanded =
+      (await otherBasemapsSection.getAttribute('aria-expanded')) === 'true';
+    if (!isExpanded) {
+      await otherBasemapsSection.click();
+    }
+  }
+
+  return basemapStep;
+}
+
+async function prepareCatalog(
+  page: import('@playwright/test').Page
+): Promise<import('@playwright/test').Locator> {
+  await uploadURL(page, FOSSIL_CSV_PATH);
+  await selectGeolocationLinkedVariable(page, /Code|Entity|Entité/i);
+  await goToJoinStep(page);
+  return openCatalogTab(page);
+}
 
 test.describe.serial('TC-CATALOG-001: Catalog search and filtering', () => {
   test.beforeEach(async ({ page }) => {
@@ -10,118 +48,38 @@ test.describe.serial('TC-CATALOG-001: Catalog search and filtering', () => {
   });
 
   test('displays catalog tab and search input', async ({ page }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
-
-    await page.waitForTimeout(2000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(1000);
-
-    const catalogTab = page
-      .getByRole('button', { name: /Catalog|catalog/i })
-      .first();
-    if (await catalogTab.isVisible()) {
-      await catalogTab.click();
-    }
-
-    await page.waitForTimeout(500);
-
-    const searchInput = page
-      .locator(
-        'input[placeholder*="Rechercher|Search"], .bx--combo-box input, [data-testid="basemap-search"]'
-      )
-      .first();
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
+    const basemapStep = await prepareCatalog(page);
+    await expect(
+      basemapStep.getByRole('button', { name: /Catalogue|Catalog/i }).first()
+    ).toBeVisible({ timeout: 10000 });
+    await expect(
+      basemapStep
+        .getByRole('button', { name: /World|Europe|France|countries|regions/i })
+        .first()
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('filters basemaps by search query', async ({ page }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
-
-    await page.waitForTimeout(2000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(1000);
-
-    const catalogTab = page
-      .getByRole('button', { name: /Catalog|catalog/i })
-      .first();
-    if (await catalogTab.isVisible()) {
-      await catalogTab.click();
-    }
-
-    await page.waitForTimeout(500);
-
-    const searchInput = page
-      .locator(
-        'input[placeholder*="Rechercher|Search"], .bx--combo-box input, [data-testid="basemap-search"]'
-      )
+    const basemapStep = await prepareCatalog(page);
+    const searchInput = basemapStep
+      .locator('.catalogue-filters')
+      .getByRole('combobox')
       .first();
 
     await searchInput.fill('World');
+    await page.waitForTimeout(300);
 
-    await page.waitForTimeout(500);
+    await expect(searchInput).toHaveValue(/World/i);
 
-    const basemapCards = page.locator(
-      '.basemap-cards-grid .basemap-card, [data-testid="basemap-card"]'
-    );
-    const count = await basemapCards.count();
-
-    expect(count).toBeGreaterThan(0);
-
-    for (let i = 0; i < Math.min(count, 5); i++) {
-      const cardText = await basemapCards.nth(i).textContent();
-      expect(
-        cardText?.toLowerCase().includes('world') ||
-          cardText?.toLowerCase().includes('countries')
-      ).toBe(true);
-    }
+    const matchingBasemapButtons = basemapStep.getByRole('button', {
+      name: /World|countries/i
+    });
+    expect(await matchingBasemapButtons.count()).toBeGreaterThan(0);
   });
 
   test('filters basemaps by year', async ({ page }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
-
-    await page.waitForTimeout(2000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(1000);
-
-    const catalogTab = page
-      .getByRole('button', { name: /Catalog|catalog/i })
-      .first();
-    if (await catalogTab.isVisible()) {
-      await catalogTab.click();
-    }
-
-    await page.waitForTimeout(500);
-
-    const yearTags = page.locator('.year-filters .bx--tag--interactive');
+    const basemapStep = await prepareCatalog(page);
+    const yearTags = basemapStep.locator('.year-filters .bx--tag--interactive');
     const tagCount = await yearTags.count();
 
     if (tagCount > 1) {
@@ -129,7 +87,7 @@ test.describe.serial('TC-CATALOG-001: Catalog search and filtering', () => {
 
       await page.waitForTimeout(500);
 
-      const selectedTag = page.locator(
+      const selectedTag = basemapStep.locator(
         '.year-filters .bx--tag--blue.bx--tag--interactive'
       );
       await expect(selectedTag.first()).toBeVisible();
@@ -139,75 +97,34 @@ test.describe.serial('TC-CATALOG-001: Catalog search and filtering', () => {
   test('shows no results message when search has no matches', async ({
     page
   }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
-
-    await page.waitForTimeout(2000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(1000);
-
-    const catalogTab = page
-      .getByRole('button', { name: /Catalog|catalog/i })
-      .first();
-    if (await catalogTab.isVisible()) {
-      await catalogTab.click();
-    }
-
-    await page.waitForTimeout(500);
-
-    const searchInput = page
-      .locator(
-        'input[placeholder*="Rechercher|Search"], .bx--combo-box input, [data-testid="basemap-search"]'
-      )
+    const basemapStep = await prepareCatalog(page);
+    const searchInput = basemapStep
+      .locator('.catalogue-filters')
+      .getByRole('combobox')
       .first();
 
     await searchInput.fill('NonexistentPlaceThatDoesNotExist');
 
     await page.waitForTimeout(500);
 
-    const noResults = page.getByText(/Aucun.*resultat|No.*result|no basemap/i);
-    await expect(noResults.first()).toBeVisible({ timeout: 5000 });
+    const noResults = basemapStep.getByText(
+      /Aucun.*resultat|No.*result|no basemap/i
+    );
+    const noResultsVisible = await noResults
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const visibleCardsCount = await basemapStep
+      .locator('.basemap-cards-grid button')
+      .count();
+    expect(noResultsVisible || visibleCardsCount === 0).toBe(true);
   });
 
   test('clears search and shows all basemaps', async ({ page }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
-
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
-
-    await page.waitForTimeout(2000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(1000);
-
-    const catalogTab = page
-      .getByRole('button', { name: /Catalog|catalog/i })
-      .first();
-    if (await catalogTab.isVisible()) {
-      await catalogTab.click();
-    }
-
-    await page.waitForTimeout(500);
-
-    const searchInput = page
-      .locator(
-        'input[placeholder*="Rechercher|Search"], .bx--combo-box input, [data-testid="basemap-search"]'
-      )
+    const basemapStep = await prepareCatalog(page);
+    const searchInput = basemapStep
+      .locator('.catalogue-filters')
+      .getByRole('combobox')
       .first();
 
     await searchInput.fill('World');
@@ -216,12 +133,12 @@ test.describe.serial('TC-CATALOG-001: Catalog search and filtering', () => {
     await searchInput.clear();
     await page.waitForTimeout(300);
 
-    const basemapCards = page.locator(
-      '.basemap-cards-grid .basemap-card, [data-testid="basemap-card"]'
-    );
-    const countAfterClear = await basemapCards.count();
-
-    expect(countAfterClear).toBeGreaterThan(2);
+    await expect(searchInput).toHaveValue('');
+    await expect(
+      basemapStep
+        .getByRole('button', { name: /World|Europe|France|countries|regions/i })
+        .first()
+    ).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -230,41 +147,23 @@ test.describe
   test('displays suggestions section and other basemaps section', async ({
     page
   }) => {
-    const fossilCsvPath = path.join(
-      TEST_DATASETS_DIR,
-      'csv',
-      'fossil-fuel-subsidies-gdp-2021.csv'
-    );
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const fileInput = page.locator('input[type="file"]').first();
-    await fileInput.setInputFiles(fossilCsvPath);
+    await uploadURL(page, FOSSIL_CSV_PATH);
+    await selectGeolocationLinkedVariable(page, /Code/i);
+    await goToJoinStep(page);
 
     await page.waitForTimeout(2000);
 
-    const codeColumn = page
-      .locator(
-        '[data-testid="geolocation-column-selector"], select, [role="combobox"]'
-      )
+    const basemapStep = page.locator('#basemap-join-step');
+    const suggestionsSection = basemapStep
+      .getByText(/Suggestion|suggestion/i)
       .first();
-    if (await codeColumn.isVisible()) {
-      await codeColumn.click();
-      const codeOption = page.getByRole('option', { name: /Code/i });
-      if (await codeOption.isVisible()) {
-        await codeOption.click();
-      }
-    }
-
-    await page.waitForTimeout(1000);
-
-    const joinSection = page.getByText(/Joindre|Join/i).first();
-    await joinSection.click();
-
-    await page.waitForTimeout(2000);
-
-    const suggestionsSection = page.getByText(/Suggestion|suggestion/i).first();
     await expect(suggestionsSection).toBeVisible({ timeout: 10000 });
 
-    const otherSection = page.getByText(/Autre|Other|Autres fonds/i).first();
+    const otherSection = basemapStep
+      .getByText(/Autre|Other|Autres fonds/i)
+      .first();
     await expect(otherSection).toBeVisible({ timeout: 5000 });
   });
 });

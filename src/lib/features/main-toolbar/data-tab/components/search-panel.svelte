@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Button,
     Search,
     Select,
     SelectItem,
@@ -12,7 +13,8 @@
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { duckDBOrchestrator, type SearchStats } from '$lib/features/duckdb';
+  import { type SearchStats } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import { SearchSource, UI_CONSTANTS } from '../../constants';
 
@@ -342,19 +344,17 @@
     <div class="results-navigation">
       <span class="result-text">{navigationText}</span>
       <div class="nav-buttons">
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ChevronLeft}
           iconDescription={m.search_prev_result()}
           disabled={!hasResults}
           on:click={handlePrevResult}
         />
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ChevronRight}
           iconDescription={m.search_next_result()}
           disabled={!hasResults}

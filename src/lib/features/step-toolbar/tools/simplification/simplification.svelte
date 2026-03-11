@@ -7,16 +7,15 @@
   } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import {
-    Column,
-    Grid,
     InlineNotification,
     RadioButton,
     RadioButtonGroup,
-    Row,
     Slider
   } from 'carbon-components-svelte';
-  import { DocumentAdd, Earth } from 'carbon-icons-svelte';
+  import { Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     simplificationActions,
     getSimplificationState
@@ -26,8 +25,12 @@
   const store = simplificationActions;
   const state = $derived(getSimplificationState());
   const isOsmBasemapActive = $derived(osmBasemapStore.isActive);
+  const hasBasemapVariants = $derived(
+    !!basemapService.currentBasemap?.metadata.variants
+  );
   const isBasemapSourceBlocked = $derived(
-    state.source === SimplificationSource.Basemap && isOsmBasemapActive
+    state.source === SimplificationSource.Basemap &&
+      (isOsmBasemapActive || !hasBasemapVariants)
   );
   let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -35,23 +38,32 @@
     state.source === SimplificationSource.Basemap ? 0 : 1
   );
 
-  const sources = [
-    { icon: Earth, label: m.simplification_source_basemap(), iconSize: 20 },
+  const geoDatasets = $derived(
+    datasetsStore.getDatasetsByType(true).filter((d) => !d.joinedBasemap)
+  );
+  const hasGeoDatasets = $derived(geoDatasets.length > 0);
+
+  const geoDatasetLabel = $derived.by(() => {
+    const selected = datasetsStore.selectedDataset;
+    if (selected?.geometry && !selected.joinedBasemap) return selected.name;
+    return geoDatasets[0]?.name ?? m.simplification_source_geodata();
+  });
+
+  const sources = $derived([
+    { icon: Earth, label: m.simplification_source_basemap(), iconSize: 16 },
     {
-      icon: DocumentAdd,
-      label: m.simplification_source_geodata(),
-      iconSize: 20
+      icon: LicenseGlobal,
+      label: geoDatasetLabel,
+      iconSize: 16
     }
-  ];
+  ]);
 
   function onSourceChange(index: number) {
+    if (index === 1 && !hasGeoDatasets) return;
+
     const newSource =
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
     store.setSource(newSource);
-
-    if (newSource === SimplificationSource.Basemap && isOsmBasemapActive) {
-      return;
-    }
 
     scheduleSimplificationApply('source-change');
   }
@@ -65,11 +77,9 @@
   async function applySimplificationNow(trigger: string): Promise<void> {
     if (isBasemapSourceBlocked) {
       logger.info(
-        'Simplification skipped: OSM basemap is active',
+        'Simplification skipped: basemap source blocked',
         LogCategory.UI,
-        {
-          trigger
-        }
+        { trigger }
       );
       return;
     }
@@ -112,120 +122,115 @@
   });
 </script>
 
-<div id="khartis-simplification-tool">
-  <Grid noGutter fullWidth class="simplification-grid">
-    <Row>
-      <Column>
-        <p class="description">{m.simplification_description()}</p>
-      </Column>
-    </Row>
+<div id="khartis-simplification-tool" class="simplification-sections">
+  <p class="description">{m.simplification_description()}</p>
 
-    <Row>
-      <Column>
-        <ToggleTabs
-          items={sources}
-          activeIndex={sourceIndex}
-          onChange={onSourceChange}
-          className="source-tabs"
-          activeClass="active"
-          fullWidthClass="full-width"
-          hideInactiveLabel
+  <ToggleTabs
+    items={sources}
+    activeIndex={sourceIndex}
+    onChange={onSourceChange}
+    className="source-tabs"
+    activeClass="active"
+    fullWidthClass="full-width"
+    hideInactiveLabel
+  />
+
+  {#if state.source === SimplificationSource.Basemap}
+    {#if isOsmBasemapActive}
+      <InlineNotification
+        kind="warning"
+        lowContrast
+        title={m.simplification_osm_not_available()}
+        subtitle={m.simplification_osm_explanation()}
+      />
+    {:else if !hasBasemapVariants}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        title={m.simplification_no_variants()}
+      />
+    {/if}
+
+    <div>
+      <div class="form-label">{m.simplification_level_label()}</div>
+      <RadioButtonGroup
+        orientation="horizontal"
+        selected={state.level}
+        on:change={(e) => {
+          if (isBasemapSourceBlocked) return;
+          store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+          scheduleSimplificationApply('level-change');
+        }}
+      >
+        <RadioButton
+          value={SimplificationLevel.Low}
+          labelText={m.simplification_level_low()}
+          disabled={isBasemapSourceBlocked}
         />
-      </Column>
-    </Row>
+        <RadioButton
+          value={SimplificationLevel.Medium}
+          labelText={m.simplification_level_medium()}
+          disabled={isBasemapSourceBlocked}
+        />
+        <RadioButton
+          value={SimplificationLevel.High}
+          labelText={m.simplification_level_high()}
+          disabled={isBasemapSourceBlocked}
+        />
+      </RadioButtonGroup>
+    </div>
+  {/if}
 
-    {#if state.source === SimplificationSource.Basemap}
-      {#if isOsmBasemapActive}
-        <Row>
-          <Column>
-            <InlineNotification
-              kind="warning"
-              lowContrast
-              title={m.simplification_osm_not_available()}
-              subtitle={m.simplification_osm_explanation()}
-            />
-          </Column>
-        </Row>
-      {/if}
+  {#if state.source === SimplificationSource.Geo}
+    <InlineNotification
+      kind="warning"
+      lowContrast
+      title={m.simplification_warning_title()}
+      subtitle={m.simplification_warning_subtitle()}
+    />
 
-      <Row>
-        <Column>
-          <div class="form-label">{m.simplification_level_label()}</div>
-          <RadioButtonGroup
-            orientation="horizontal"
-            selected={state.level}
-            on:change={(e) => {
-              if (isOsmBasemapActive) return;
-              store.setLevel((e as CustomEvent).detail as SimplificationLevel);
-              scheduleSimplificationApply('level-change');
-            }}
-          >
-            <RadioButton
-              value={SimplificationLevel.Low}
-              labelText={m.simplification_level_low()}
-              disabled={isOsmBasemapActive}
-            />
-            <RadioButton
-              value={SimplificationLevel.Medium}
-              labelText={m.simplification_level_medium()}
-              disabled={isOsmBasemapActive}
-            />
-            <RadioButton
-              value={SimplificationLevel.High}
-              labelText={m.simplification_level_high()}
-              disabled={isOsmBasemapActive}
-            />
-          </RadioButtonGroup>
-        </Column>
-      </Row>
-    {/if}
-
-    {#if state.source === SimplificationSource.Geo}
-      <Row>
-        <Column>
-          <InlineNotification
-            kind="warning"
-            lowContrast
-            title={m.simplification_warning_title()}
-            subtitle={m.simplification_warning_subtitle()}
-          />
-        </Column>
-      </Row>
-
-      <Row>
-        <Column>
-          <div class="form-label">{m.simplification_rate_label()}</div>
-          <div class="slider-row">
-            <Slider
-              min={0}
-              max={100}
-              step={1}
-              value={state.rate}
-              on:change={(e) => {
-                store.setRate((e as CustomEvent).detail || 50);
-                scheduleSimplificationApply('rate-change', 250);
-              }}
-              labelText=""
-              minLabel="0"
-              maxLabel="100"
-              fullWidth
-            />
-          </div>
-        </Column>
-      </Row>
-    {/if}
-  </Grid>
+    <div>
+      <div class="form-label">{m.simplification_rate_label()}</div>
+      <div class="slider-row">
+        <Slider
+          min={0}
+          max={100}
+          step={1}
+          value={state.rate}
+          on:change={(e) => {
+            store.setRate((e as CustomEvent).detail || 50);
+            scheduleSimplificationApply('rate-change', 250);
+          }}
+          labelText=""
+          minLabel="0"
+          maxLabel="100"
+          fullWidth
+        />
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
+  .simplification-sections {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
   .description {
     color: var(--cds-text-secondary);
     font-size: 1rem;
-    margin-bottom: 1.5rem;
   }
+
   #khartis-simplification-tool :global(.source-tabs) {
     width: 100%;
-    margin-bottom: 1.5rem;
+    border-color: #cac5c4;
+    border-radius: 4px;
+  }
+
+  #khartis-simplification-tool :global(.source-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
   }
 
   .slider-row {
@@ -233,9 +238,7 @@
     align-items: center;
     gap: 1rem;
   }
-  #khartis-simplification-tool :global(.bx--number) {
-    width: 96px;
-  }
+
   .form-label {
     font-size: 0.875rem;
     font-weight: 500;
@@ -243,6 +246,7 @@
     margin-bottom: var(--cds-spacing-03);
     display: block;
   }
+
   #khartis-simplification-tool :global(.bx--radio-button-group--horizontal) {
     gap: 2rem;
   }

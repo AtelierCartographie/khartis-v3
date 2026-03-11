@@ -38,6 +38,7 @@
     onSymbolsChange,
     onMappingChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -97,6 +98,12 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       fillPattern = visualization.missingData.pattern ?? false;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -266,7 +273,9 @@
   <PalettePreview
     label={m.color_palette()}
     colors={sequentialPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -305,6 +314,7 @@
     label={m.color_palette()}
     colors={qualitativePalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -335,6 +345,7 @@
   onModesChange={onModesChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
+  onClassificationChange={onClassificationChange}
 />
 
 <style lang="scss">

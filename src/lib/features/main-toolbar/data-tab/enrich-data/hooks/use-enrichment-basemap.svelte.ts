@@ -84,7 +84,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
-      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;

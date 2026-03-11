@@ -5,6 +5,7 @@ import type {
 import {
   FillMode,
   MissingDataShape,
+  ProportionalType,
   ShapeType,
   StrokeMode,
   SymbolMode
@@ -36,7 +37,10 @@ export enum ClassificationMethod {
   QUANTILES = 'quantiles',
   JENKS = 'jenks',
   MANUAL = 'manual',
-  STANDARD_DEVIATION = 'standard_deviation'
+  STANDARD_DEVIATION = 'standard_deviation',
+  Q6 = 'q6',
+  NESTED_MEANS = 'nested_means',
+  HEAD_TAIL = 'head_tail'
 }
 
 export enum ScaleType {
@@ -58,6 +62,13 @@ export interface VisualizationModes {
   thickness?: import('$lib/features/main-toolbar/constants').ThicknessMode;
   color?: import('$lib/features/main-toolbar/constants').ColorMode;
   size?: import('$lib/features/main-toolbar/constants').SizeMode;
+  proportionalType?: ProportionalType;
+}
+
+export interface PatternParams {
+  angle?: 0 | 45 | 315;
+  size?: number;
+  scale?: number;
 }
 
 export interface ClassificationConfig {
@@ -67,8 +78,11 @@ export interface ClassificationConfig {
   breaks?: number[];
   counts?: number[];
   colors?: string[];
+  paletteId?: string;
   labels?: string[];
   breakpointValue?: number | null;
+  patternId?: string;
+  patternParams?: PatternParams;
 }
 
 export interface MissingDataConfig {
@@ -98,6 +112,22 @@ export interface YearFilter {
   value: number | string;
 }
 
+export type VizFilterOperator =
+  | 'gte'
+  | 'lte'
+  | 'equals'
+  | 'not_equals'
+  | 'between';
+
+export interface VizDataFilter {
+  id: string;
+  column: string;
+  operator: VizFilterOperator;
+  value: string;
+  secondaryValue?: string;
+  primitiveType?: PrimitiveFilter;
+}
+
 export interface VisualizationConfig {
   id: string;
   name: string;
@@ -108,6 +138,7 @@ export interface VisualizationConfig {
   primitiveFilters?: PrimitiveFilter[];
   style: {
     fillColor?: string | string[];
+    fillColorB?: string;
     fillOpacity?: number;
     strokeColor?: string;
     strokeWidth?: number;
@@ -158,6 +189,7 @@ export interface VisualizationConfig {
   };
   missingData?: MissingDataConfig;
   yearFilter?: YearFilter;
+  dataFilters?: VizDataFilter[];
 }
 
 interface VisualizationState {
@@ -214,6 +246,13 @@ export interface VisualizationStore {
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
   getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
   setYearFilter: (id: string, filter: YearFilter | null) => void;
+  addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
+  removeDataFilter: (id: string, filterId: string) => void;
+  clearDataFilters: (id: string) => void;
+  clearDataFiltersForPrimitive: (
+    id: string,
+    primitiveType: PrimitiveFilter
+  ) => void;
   clear: () => void;
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
@@ -535,7 +574,7 @@ function createVisualizationStore(): VisualizationStore {
         : [...currentFilters, primitive];
 
       return {
-        primitiveFilters: nextFilters.length > 0 ? nextFilters : currentFilters
+        primitiveFilters: nextFilters
       };
     });
   }
@@ -578,12 +617,13 @@ function createVisualizationStore(): VisualizationStore {
     classification: Partial<ClassificationConfig>
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
-      if (!visualization.classification) {
-        return null;
-      }
+      const existing = visualization.classification ?? {
+        method: ClassificationMethod.QUANTILES,
+        classes: DEFAULT_QUANTILES_CLASS_COUNT
+      };
 
       return {
-        classification: { ...visualization.classification, ...classification }
+        classification: { ...existing, ...classification }
       };
     });
   }
@@ -760,6 +800,39 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => ({ yearFilter: filter ?? undefined }));
   }
 
+  function addDataFilter(id: string, filter: Omit<VizDataFilter, 'id'>): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      const newFilter: VizDataFilter = {
+        ...filter,
+        id: crypto.randomUUID()
+      };
+      return { dataFilters: [...existing, newFilter] };
+    });
+  }
+
+  function removeDataFilter(id: string, filterId: string): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      return { dataFilters: existing.filter((f) => f.id !== filterId) };
+    });
+  }
+
+  function clearDataFilters(id: string): void {
+    applyVisualizationUpdate(id, () => ({ dataFilters: [] }));
+  }
+
+  function clearDataFiltersForPrimitive(
+    id: string,
+    primitiveType: PrimitiveFilter
+  ): void {
+    applyVisualizationUpdate(id, (viz) => ({
+      dataFilters: (viz.dataFilters ?? []).filter(
+        (f) => f.primitiveType !== primitiveType
+      )
+    }));
+  }
+
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
@@ -814,6 +887,10 @@ function createVisualizationStore(): VisualizationStore {
     getVisualizationsByDataset,
     getVisualizationsUsingColumn,
     setYearFilter,
+    addDataFilter,
+    removeDataFilter,
+    clearDataFilters,
+    clearDataFiltersForPrimitive,
     clear,
     restoreFromSerialized
   };

@@ -6,7 +6,11 @@ export {
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
   HIGHLIGHT_FILL_COLOR,
-  withOpacity
+  withGeoJsonRowHighlight,
+  withGeoJsonRowHighlightAccessor,
+  withOpacity,
+  withRowHighlight,
+  withRowHighlightAccessor
 } from './layer-helpers';
 
 export {

@@ -1,7 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
-    Button,
     Column,
     FormGroup,
     Grid,
@@ -50,6 +50,7 @@
   primaryButtonText={modal.isExporting
     ? m.download_exporting()
     : m.download_button()}
+  secondaryButtonText={m.cancel()}
   on:close={modal.close}
   on:click:button--secondary={modal.close}
   on:submit={modal.executeExport}

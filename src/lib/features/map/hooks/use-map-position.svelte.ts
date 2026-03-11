@@ -20,6 +20,10 @@ export function useMapPosition(
 ): UseMapPositionReturn {
   const { getMap, getIsMapLoaded, onPositionRestored } = props;
 
+  function isFiniteCoordinate(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
   function savePosition(): void {
     const map = getMap();
     if (!map || !getIsMapLoaded()) return;
@@ -45,11 +49,24 @@ export function useMapPosition(
     if (!savedCenter || !savedZoom) return null;
 
     try {
-      const center = JSON.parse(savedCenter);
+      const center = JSON.parse(savedCenter) as {
+        lng?: unknown;
+        lat?: unknown;
+      };
       const zoom = parseFloat(savedZoom);
 
-      if (center.lng && center.lat && !isNaN(zoom)) {
-        return { center, zoom };
+      if (
+        isFiniteCoordinate(center.lng) &&
+        isFiniteCoordinate(center.lat) &&
+        Number.isFinite(zoom)
+      ) {
+        return {
+          center: {
+            lng: center.lng,
+            lat: center.lat
+          },
+          zoom
+        };
       }
     } catch {
       return null;
