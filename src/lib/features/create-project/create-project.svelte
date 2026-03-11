@@ -80,7 +80,11 @@
   }
 </script>
 
-<div id="khartis-create-project" data-testid="create-project-modal" use:linkDialogToTitle>
+<div
+  id="khartis-create-project"
+  data-testid="create-project-modal"
+  use:linkDialogToTitle
+>
   <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader
       title={m.create_project_welcome()}
