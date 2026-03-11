@@ -50,6 +50,19 @@ export default defineConfig(({ mode }) => {
       exclude: ['@geoarrow/geoparquet-wasm']
     },
     plugins: [
+      {
+        name: 'font-display-swap',
+        generateBundle(_, bundle) {
+          for (const chunk of Object.values(bundle)) {
+            if (chunk.type === 'asset' && chunk.fileName.endsWith('.css')) {
+              chunk.source = (chunk.source as string).replaceAll(
+                'font-display:auto',
+                'font-display:swap'
+              );
+            }
+          }
+        }
+      },
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',

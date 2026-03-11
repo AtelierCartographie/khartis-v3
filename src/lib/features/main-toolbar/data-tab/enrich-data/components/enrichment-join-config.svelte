@@ -140,7 +140,7 @@
   {/if}
 
   <div class="join-columns-section">
-    <h5 class="subsection-title">{m.enrich_geo_reference()}</h5>
+    <h4 class="subsection-title">{m.enrich_geo_reference()}</h4>
     <p class="section-description">{m.enrich_choose_multiple()}</p>
 
     <div class="geo-columns-row">

@@ -155,7 +155,6 @@
       class="section-expand-btn"
       aria-expanded={expanded && !disabled}
       aria-disabled={disabled}
-      aria-label={m.section_toggle()}
       title={disabled && disabledReason ? disabledReason : undefined}
       disabled={disabled}
       onclick={toggle}

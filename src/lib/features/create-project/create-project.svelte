@@ -23,6 +23,16 @@
   import TryWithExample from './try-with-example.svelte';
   import { KEY } from '../commons/constants/dom.constants';
 
+  function linkDialogToTitle(node: HTMLElement) {
+    const dialog = node.querySelector<HTMLElement>('[role="dialog"]');
+    const title = node.querySelector<HTMLElement>('.bx--modal-header__heading');
+    if (dialog && title) {
+      const id = 'create-project-dialog-title';
+      title.id = id;
+      dialog.setAttribute('aria-labelledby', id);
+    }
+  }
+
   interface Props {
     open?: boolean;
     onClose?: () => void;
@@ -70,7 +80,7 @@
   }
 </script>
 
-<div id="khartis-create-project" data-testid="create-project-modal">
+<div id="khartis-create-project" data-testid="create-project-modal" use:linkDialogToTitle>
   <ComposedModal preventCloseOnClickOutside open={open} on:close={handleClose}>
     <ModalHeader
       title={m.create_project_welcome()}
