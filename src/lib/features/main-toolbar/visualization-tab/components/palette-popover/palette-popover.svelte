@@ -219,6 +219,7 @@
         />
 
         <PaletteCustom
+          selectedPaletteId={draftPaletteId}
           numClasses={numClasses}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}

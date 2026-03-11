@@ -72,15 +72,16 @@
   let lightness = $state(100);
 
   $effect(() => {
-    if (defaultStyle.strokeColor) {
-      if (typeof defaultStyle.strokeColor === 'string') {
-        strokeColor = defaultStyle.strokeColor as string;
+    const style = effectiveStyle;
+    if (style.strokeColor) {
+      if (typeof style.strokeColor === 'string') {
+        strokeColor = style.strokeColor as string;
         const hsl = hexToHsl(strokeColor);
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
-        const c = defaultStyle.strokeColor;
+      } else if (isStrokeColorDescriptor(style.strokeColor)) {
+        const c = style.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;

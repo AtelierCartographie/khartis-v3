@@ -3,6 +3,7 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
   import { fly } from 'svelte/transition';
   import {
     type Palette,
@@ -53,16 +54,20 @@
 
   function updatePosition() {
     if (!triggerElement) return;
+    const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = triggerElement.getBoundingClientRect();
+    const top = rect.top / scale;
+    const bottom = rect.bottom / scale;
+    const left = rect.left / scale;
+    const width = rect.width / scale;
     const estimatedDropdownHeight = 300;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const shouldFlip =
-      spaceBelow < estimatedDropdownHeight && rect.top > spaceBelow;
+    const spaceBelow = window.innerHeight / scale - bottom;
+    const shouldFlip = spaceBelow < estimatedDropdownHeight && top > spaceBelow;
 
     dropdownPos = {
-      top: shouldFlip ? rect.top - estimatedDropdownHeight : rect.bottom,
-      left: rect.left,
-      width: rect.width
+      top: shouldFlip ? top - estimatedDropdownHeight : bottom,
+      left,
+      width
     };
   }
 
@@ -88,15 +93,21 @@
       // Refine position after render using actual dropdown height
       requestAnimationFrame(() => {
         if (dropdownRef) {
-          const actualHeight = dropdownRef.getBoundingClientRect().height;
+          const scale = globalState.zoom.pageZoomLevel / 100;
+          const actualHeight =
+            dropdownRef.getBoundingClientRect().height / scale;
           if (!triggerElement) return;
           const rect = triggerElement.getBoundingClientRect();
-          const spaceBelow = window.innerHeight - rect.bottom;
-          const shouldFlip = spaceBelow < actualHeight && rect.top > spaceBelow;
+          const top = rect.top / scale;
+          const bottom = rect.bottom / scale;
+          const left = rect.left / scale;
+          const width = rect.width / scale;
+          const spaceBelow = window.innerHeight / scale - bottom;
+          const shouldFlip = spaceBelow < actualHeight && top > spaceBelow;
           dropdownPos = {
-            top: shouldFlip ? rect.top - actualHeight : rect.bottom,
-            left: rect.left,
-            width: rect.width
+            top: shouldFlip ? top - actualHeight : bottom,
+            left,
+            width
           };
         }
       });

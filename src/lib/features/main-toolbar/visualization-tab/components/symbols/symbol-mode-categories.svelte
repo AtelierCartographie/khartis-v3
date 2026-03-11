@@ -62,6 +62,12 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
+    }
   });
 
   function handleMissingDataShowChange(show: boolean) {

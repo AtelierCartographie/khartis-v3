@@ -99,6 +99,12 @@
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       fillPattern = visualization.missingData.pattern ?? false;
     }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
+    }
   });
 
   const fillModeItems = [
@@ -267,6 +273,7 @@
   <PalettePreview
     label={m.color_palette()}
     colors={sequentialPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />

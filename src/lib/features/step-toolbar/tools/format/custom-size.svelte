@@ -6,6 +6,11 @@
   let width = $state(formatState.width ?? 842);
   let height = $state(formatState.height ?? 595);
 
+  $effect(() => {
+    width = formatState.width ?? 842;
+    height = formatState.height ?? 595;
+  });
+
   function updateSize(newWidth: number, newHeight: number): void {
     width = newWidth;
     height = newHeight;

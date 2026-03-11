@@ -65,16 +65,17 @@
   let fillLightness = $state(100);
 
   $effect(() => {
-    if (defaultStyle.drawingType) drawingType = defaultStyle.drawingType;
-    if (defaultStyle.strokeColor) {
-      if (typeof defaultStyle.strokeColor === 'string') {
-        strokeColor = defaultStyle.strokeColor as string;
+    const style = effectiveStyle;
+    if (style.drawingType) drawingType = style.drawingType;
+    if (style.strokeColor) {
+      if (typeof style.strokeColor === 'string') {
+        strokeColor = style.strokeColor as string;
         const hsl = hexToHsl(strokeColor);
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
-        const c = defaultStyle.strokeColor;
+      } else if (isStrokeColorDescriptor(style.strokeColor)) {
+        const c = style.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -82,15 +83,15 @@
         strokeColor = cv.hex;
       }
     }
-    if (defaultStyle.fillColor) {
-      if (typeof defaultStyle.fillColor === 'string') {
-        fillColor = defaultStyle.fillColor as string;
+    if (style.fillColor) {
+      if (typeof style.fillColor === 'string') {
+        fillColor = style.fillColor as string;
         const hsl = hexToHsl(fillColor);
         fillHue = hsl.hue;
         fillSaturation = hsl.saturation;
         fillLightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.fillColor)) {
-        const c = defaultStyle.fillColor;
+      } else if (isStrokeColorDescriptor(style.fillColor)) {
+        const c = style.fillColor;
         fillHue = c.hue ?? 0;
         fillSaturation = c.saturation ?? 0;
         fillLightness = c.lightness ?? 100;

@@ -41,7 +41,6 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -60,7 +59,6 @@
 
   let {
     dataFields = [],
-    discretizationMethods: _discretizationMethods = [],
     visualization,
     onStyleChange,
     onModesChange,
@@ -156,6 +154,9 @@
   });
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(false);
+  let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
+  let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let _missingDataLabel = $state<string>('');
 
   $effect(() => {
@@ -180,6 +181,14 @@
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.enabled ?? false;
+      missingDataColor =
+        visualization.missingData.color ?? DEFAULT_COLORS.missingData;
+      missingDataOpacity =
+        visualization.missingData.opacity !== undefined
+          ? Math.round(visualization.missingData.opacity * 100)
+          : VISUALIZATION_DEFAULTS.lineOpacity;
+      missingDataShape =
+        visualization.missingData.shape ?? MissingDataShape.CIRCLE;
       _missingDataLabel = visualization.missingData.label ?? '';
     }
   });
@@ -247,14 +256,17 @@
   }
 
   function handleMissingDataColorChange(value: string) {
+    missingDataColor = value;
     onMissingDataChange?.({ color: value });
   }
 
   function handleMissingDataOpacityChange(value: number) {
+    missingDataOpacity = value;
     onMissingDataChange?.({ opacity: value / 100 });
   }
 
   function handleMissingDataShapeChange(shape: string) {
+    missingDataShape = shape as MissingDataShape;
     onMissingDataChange?.({ shape: shape as MissingDataShape });
   }
 
@@ -419,6 +431,7 @@
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
@@ -440,6 +453,7 @@
       <PalettePreview
         label={m.color_palette()}
         colors={qualitativePalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
@@ -462,11 +476,11 @@
     <MissingDataSection
       show={showMissingData}
       onshowchange={handleMissingDataToggle}
-      color={visualization?.missingData?.color}
+      color={missingDataColor}
       oncolorchange={handleMissingDataColorChange}
-      opacity={visualization?.missingData?.opacity}
+      opacity={missingDataOpacity}
       onopacitychange={handleMissingDataOpacityChange}
-      shape={visualization?.missingData?.shape}
+      shape={missingDataShape}
       onshapechange={handleMissingDataShapeChange}
       showShapeSelector={true}
     />

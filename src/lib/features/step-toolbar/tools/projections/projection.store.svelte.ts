@@ -179,7 +179,7 @@ const { actions, getState } = createToolStore<
           scale: projection.scale(),
           translate: projection.translate(),
           rotate: [s.rotation, 0, 0],
-          center: s.center
+          center: s.center || [s.longitude, s.latitude]
         });
 
         return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION

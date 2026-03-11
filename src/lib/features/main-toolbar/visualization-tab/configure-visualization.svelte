@@ -54,13 +54,6 @@
     return dataset.columns.some((col) => col.type === COLUMN_TYPE_GEOMETRY);
   });
 
-  const discretizationMethods = [
-    { id: 0, text: m.discretization_method_jenks() },
-    { id: 1, text: m.discretization_method_quantile() },
-    { id: 2, text: m.discretization_method_equal_interval() },
-    { id: 3, text: m.discretization_method_manual() }
-  ];
-
   function handleInvertPalette() {
     if (selectedViz?.id) {
       visualizationStore.invertPalette(selectedViz.id);
@@ -427,7 +420,6 @@
 
     <PolygonsConfig
       dataFields={dataFieldItems}
-      discretizationMethods={discretizationMethods}
       visualization={selectedViz}
       filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
       onStyleChange={handleStyleChange}

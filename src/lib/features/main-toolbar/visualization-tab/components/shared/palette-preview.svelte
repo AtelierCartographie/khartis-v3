@@ -67,6 +67,7 @@
     onselect?.(palette);
     onClassificationChange?.({
       colors: newColors,
+      paletteId: palette.id,
       patternId: palette.patternId ?? undefined
     });
     dropdownOpen = false;
@@ -93,6 +94,9 @@
     const changes: Parameters<NonNullable<typeof onClassificationChange>>[0] = {
       colors: newColors
     };
+    if (palette) {
+      changes.paletteId = palette.id;
+    }
     if (palette?.patternId) {
       changes.patternId = palette.patternId;
       if (patternParams) {

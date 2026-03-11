@@ -118,8 +118,8 @@
   });
   const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 90);
 
-  let localFont = $state('Cabin');
-  let localFontSize = $state(12);
+  let localFont = $state<string>(AVAILABLE_FONTS[0]);
+  let localFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
 
   $effect(() => {
     localFont = effectiveFont;
