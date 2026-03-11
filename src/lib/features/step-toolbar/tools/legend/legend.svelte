@@ -39,7 +39,7 @@
   const legendState = $derived(getLegendState());
   const items = $derived(legendState.items);
 
-  let localFontFamily = $state('');
+  let localFontFamily = $state<string>(AVAILABLE_FONTS[0]);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
 
@@ -164,9 +164,13 @@
                   size="xl"
                   placeholder={item.name}
                   id={`${item.id}-title`}
-                  bind:value={item.title}
-                  on:change={() =>
-                    updateItemField(item.id, 'title', item.title)}
+                  value={item.title}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'title',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>
@@ -178,9 +182,13 @@
                   size="sm"
                   placeholder={m.legend_no_subtitle()}
                   id={`${item.id}-subtitle`}
-                  bind:value={item.subtitle}
-                  on:change={() =>
-                    updateItemField(item.id, 'subtitle', item.subtitle)}
+                  value={item.subtitle}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'subtitle',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>
@@ -192,8 +200,13 @@
                   size="sm"
                   placeholder={m.legend_no_note()}
                   id={`${item.id}-note`}
-                  bind:value={item.note}
-                  on:change={() => updateItemField(item.id, 'note', item.note)}
+                  value={item.note}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'note',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>

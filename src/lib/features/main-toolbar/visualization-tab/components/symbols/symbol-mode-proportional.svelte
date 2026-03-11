@@ -72,6 +72,7 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
 
   // Fill mode states
+  let categoryCount = $state<number>(4);
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillColorB = $state<string>('#ff832b');
@@ -139,10 +140,17 @@
     if (visualization?.style) {
       fillColor =
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
+      fillColorB = visualization.style.fillColorB ?? '#ff832b';
       fillOpacity =
         visualization.style.fillOpacity !== undefined
           ? Math.round(visualization.style.fillOpacity * 100)
           : VISUALIZATION_DEFAULTS.fillOpacity;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -182,6 +190,7 @@
 
   function handleFillColorBChange(value: string) {
     fillColorB = value;
+    onStyleChange?.({ fillColorB: value });
   }
 
   function handleShapeTypeChange(value: ShapeType) {
@@ -481,6 +490,7 @@
   <PalettePreview
     label={m.color_palette()}
     colors={sequentialPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -514,7 +524,7 @@
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: 4 })}
+    value={m.categories_count({ count: categoryCount })}
     onsettings={onOpenDiscretization}
   />
   <PalettePreview

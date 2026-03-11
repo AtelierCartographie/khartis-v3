@@ -177,6 +177,7 @@
     <PalettePreview
       label={m.color_palette()}
       colors={classesPalette}
+      selectedPaletteId={visualization?.classification?.paletteId}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />
@@ -197,6 +198,7 @@
     <PalettePreview
       label={m.color_palette()}
       colors={categoriesPalette}
+      selectedPaletteId={visualization?.classification?.paletteId}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />

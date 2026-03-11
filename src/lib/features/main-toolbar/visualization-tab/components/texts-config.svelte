@@ -45,7 +45,6 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -61,7 +60,6 @@
 
   let {
     dataFields = [],
-    discretizationMethods: __discretizationMethods = [],
     visualization,
     disabled = false,
     onStyleChange,
@@ -77,6 +75,7 @@
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
@@ -93,6 +92,14 @@
     } else if (dataFields.length > 0) {
       selectedFieldId = 0;
       onMappingChange?.({ labelColumn: dataFields[0].text });
+    }
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
+      }
     }
     if (visualization?.mapping.secondaryLabelColumn && dataFields.length > 0) {
       const secondaryIndex = secondaryFieldItems.findIndex(
@@ -111,6 +118,14 @@
     const field = dataFields[fieldId];
     if (field && onMappingChange) {
       onMappingChange({ labelColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -411,6 +426,7 @@
           <PalettePreview
             label={m.color_palette()}
             colors={currentPalette}
+            selectedPaletteId={visualization?.classification?.paletteId}
             oninvert={onInvertPalette}
             onClassificationChange={handleClassificationChange}
           />
@@ -419,7 +435,8 @@
             <Dropdown
               titleText={m.color_according()}
               items={dataFields}
-              bind:selectedId={selectedFieldId}
+              selectedId={selectedCategoryFieldId}
+              on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
               type="default"
             />
           </div>

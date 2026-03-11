@@ -65,7 +65,7 @@
     onbreakschange
   }: Props = $props();
 
-  let useDivergent = $state(false);
+  let useDivergent = $state(breakpointValue !== null);
   let editingBreakIndex = $state<number | null>(null);
 
   function getMethodDescription(method: ClassificationMethod): string {
@@ -90,6 +90,7 @@
   const isNestedMeans = $derived(method === 'nested-means');
 
   function handleMethodChange(e: Event) {
+    validationErrors = [];
     const target = e.target as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
     method = newMethod;

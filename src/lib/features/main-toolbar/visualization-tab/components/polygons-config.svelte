@@ -44,7 +44,6 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -63,7 +62,6 @@
 
   let {
     dataFields = [],
-    discretizationMethods: _discretizationMethods = [],
     visualization,
     onStyleChange,
     onModesChange,
@@ -299,6 +297,7 @@
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
@@ -320,6 +319,7 @@
       <PalettePreview
         label={m.color_palette()}
         colors={qualitativePalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />

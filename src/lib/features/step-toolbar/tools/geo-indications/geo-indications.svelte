@@ -29,8 +29,8 @@
   const geoState = $derived(geoIndicationsState);
   const geoIndicationsVisible = $derived(geoState.visible);
 
-  let localScaleFontFamily = $state('Cabin');
-  let localScaleFontSize = $state(12);
+  let localScaleFontFamily = $state<string>(AVAILABLE_FONTS[0]);
+  let localScaleFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
 
   $effect(() => {
     localScaleFontFamily = geoState.scale.fontFamily;

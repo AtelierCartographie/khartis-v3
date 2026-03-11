@@ -40,7 +40,6 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -55,7 +54,6 @@
 
   let {
     dataFields = [],
-    discretizationMethods: _discretizationMethods = [],
     visualization,
     disabled = false,
     onStyleChange,
@@ -68,6 +66,7 @@
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
 
   $effect(() => {
     if (visualization?.mapping.labelColumn && dataFields.length > 0) {
@@ -81,6 +80,14 @@
       selectedFieldId = 0;
       onMappingChange?.({ labelColumn: dataFields[0].text });
     }
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
+      }
+    }
   });
 
   function handleFieldSelect(fieldId: number) {
@@ -88,6 +95,14 @@
     const field = dataFields[fieldId];
     if (field && onMappingChange) {
       onMappingChange({ labelColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -266,8 +281,7 @@
       [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]:
-        m.discretization_method_nested_means,
+      [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
       [ClassificationMethod.MANUAL]: m.discretization_method_manual,
       [ClassificationMethod.Q6]: m.discretization_method_q6,
       [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
@@ -345,6 +359,7 @@
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
@@ -353,7 +368,8 @@
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedCategoryFieldId}
+          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>

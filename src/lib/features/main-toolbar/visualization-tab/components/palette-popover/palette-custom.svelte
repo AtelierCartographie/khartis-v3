@@ -11,12 +11,18 @@
   } from './palette.constants';
 
   interface Props {
+    selectedPaletteId?: string;
     numClasses: number;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
   }
 
-  let { numClasses, onColorsChange, onPatternSelect }: Props = $props();
+  let {
+    selectedPaletteId,
+    numClasses,
+    onColorsChange,
+    onPatternSelect
+  }: Props = $props();
 
   let activeTab = $state(0);
   let singleColor = $state('#08519c');
@@ -35,6 +41,15 @@
   ]);
 
   const patternPalettes = $derived(getPatternPalettes());
+
+  $effect(() => {
+    if (selectedPaletteId?.startsWith('pattern-')) {
+      const match = patternPalettes.find((p) => p.id === selectedPaletteId);
+      if (match) {
+        selectedPatternId = match.id;
+      }
+    }
+  });
 
   // Line patterns support angle selection (CDC §2.B.2.c)
   const LINE_PATTERN_IDS = [

@@ -78,6 +78,7 @@ export interface ClassificationConfig {
   breaks?: number[];
   counts?: number[];
   colors?: string[];
+  paletteId?: string;
   labels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
@@ -137,6 +138,7 @@ export interface VisualizationConfig {
   primitiveFilters?: PrimitiveFilter[];
   style: {
     fillColor?: string | string[];
+    fillColorB?: string;
     fillOpacity?: number;
     strokeColor?: string;
     strokeWidth?: number;

@@ -36,6 +36,14 @@
   function setType(type: PaletteType) {
     paletteType = type;
     onTypeChange?.(type);
+
+    const newPalettes = getPalettesForType(type, colorBlindFilter);
+    if (
+      !newPalettes.some((p) => p.id === selectedPaletteId) &&
+      newPalettes.length > 0
+    ) {
+      onSelect?.(newPalettes[0]);
+    }
   }
 
   function toggleColorBlind() {
