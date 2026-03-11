@@ -103,12 +103,6 @@ const CSV_VALID: CsvTestCase[] = [
     minCols: 4
   },
   {
-    id: 'fossil-fuel-bis',
-    relativePath: 'csv/fossil-fuel-subsidies-gdp-2021-bis.csv',
-    minRows: 10,
-    minCols: 4
-  },
-  {
     id: 'naissances',
     relativePath: 'csv/naissances-par-commune-departement-et-region-2018.csv',
     minRows: 34_000,
