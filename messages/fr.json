@@ -1537,6 +1537,7 @@
   "enrich_status_pending": "Enrichir vos données géographiques",
   "simplification_osm_not_available": "Les fonds de référence ne peuvent pas être simplifiés",
   "simplification_osm_explanation": "Le fond de référence utilise des tuiles vectorielles optimisées par niveau de zoom",
+  "simplification_no_variants": "Aucune variante simplifiée disponible pour ce fond de carte",
   "simplification_processing": "Simplification de la géométrie...",
   "simplification_success": "Simplifié de {originalVertices} à {simplifiedVertices} ({reductionPercentage}% de réduction)",
   "simplification_error": "Échec de la simplification de la géométrie",

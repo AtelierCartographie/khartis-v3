@@ -4,12 +4,9 @@ import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '../../commons/utils/sanitize.utils';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
-import type { BasemapLayer, BasemapMetadata } from '../types/basemap.types';
+import type { BasemapMetadata } from '../types/basemap.types';
 import type {
   FeatureCollection,
   Point,
@@ -24,18 +21,9 @@ import {
 } from '../utils/read-geojson-arrow';
 import { SimplificationLevel } from '../../commons/types/enums';
 import {
-  simplifyGeometryTable,
-  getSimplifiedArrowTable,
-  SIMPLIFICATION_FACTOR
-} from '../../duckdb/operations/simplification';
-import {
   addGeoArrowMetadataFromDuckDB,
   fetchArrowTableWithGeometry
 } from '../../duckdb/orchestrator/arrow-ops';
-import {
-  getBasemapCentroidsTableName,
-  getBasemapInnerlinesTableName
-} from '../utils/basemap-import.utils';
 
 interface AdditionalBasemapData {
   lakesData: FeatureCollection<Polygon | MultiPolygon> | null;
@@ -73,10 +61,6 @@ interface LoadedBasemap {
   geometryTable: ArrowTable;
   layerTables: SvelteMap<string, ArrowTable>;
   simplifiedVariants?: SvelteMap<SimplificationLevel, ArrowTable>;
-  simplifiedLayerVariants?: SvelteMap<
-    SimplificationLevel,
-    SvelteMap<string, ArrowTable>
-  >;
   activeSimplificationLevel?: SimplificationLevel | null;
 }
 
@@ -209,12 +193,6 @@ function createBasemapService() {
       durationMs: (performance.now() - start).toFixed(2)
     });
     return jsTable;
-  }
-
-  function getPrimaryLayer(metadata: BasemapMetadata): BasemapLayer | null {
-    return (
-      metadata.layers.find((layer) => !layer.file) ?? metadata.layers[0] ?? null
-    );
   }
 
   async function doesDuckTableExist(tableName: string): Promise<boolean> {
@@ -582,53 +560,6 @@ function createBasemapService() {
     await Promise.all([loadLakesData(), loadRiversData(), loadCitiesData()]);
   }
 
-  async function buildSimplifiedCustomLayerTables(
-    loadedBasemap: LoadedBasemap,
-    simplifiedTableName: string
-  ): Promise<SvelteMap<string, ArrowTable>> {
-    const layerTables = new SvelteMap<string, ArrowTable>();
-    const escapedSimplifiedTable = escapeIdentifier(simplifiedTableName);
-
-    for (const layer of loadedBasemap.metadata.layers) {
-      if (!layer.file) {
-        continue;
-      }
-
-      let sourceTableName: string | null = null;
-
-      if (layer.type === BasemapLayerType.LIMIT) {
-        sourceTableName = getBasemapInnerlinesTableName(simplifiedTableName);
-        await Duck.query(`
-          CREATE OR REPLACE TABLE "${escapeIdentifier(sourceTableName)}" AS
-          FROM extract_innerlines('${escapeSqlString(simplifiedTableName)}')
-        `);
-      } else if (layer.type === BasemapLayerType.CENTROID) {
-        sourceTableName = getBasemapCentroidsTableName(simplifiedTableName);
-        await Duck.query(`
-          CREATE OR REPLACE TABLE "${escapeIdentifier(sourceTableName)}" AS
-          SELECT * REPLACE (
-            ST_MaximumInscribedCircle("geom").center AS "geom"
-          )
-          FROM "${escapedSimplifiedTable}"
-          WHERE "geom" IS NOT NULL
-        `);
-      }
-
-      if (sourceTableName) {
-        const table = await loadGeometryFromDuckTable(sourceTableName);
-        layerTables.set(layer.file, table);
-        continue;
-      }
-
-      const originalTable = loadedBasemap.layerTables.get(layer.file);
-      if (originalTable) {
-        layerTables.set(layer.file, originalTable);
-      }
-    }
-
-    return layerTables;
-  }
-
   function getResolvedLayerTables(
     loadedBasemap: LoadedBasemap | null
   ): Map<string, ArrowTable> {
@@ -636,122 +567,7 @@ function createBasemapService() {
       return new Map();
     }
 
-    const activeLevel = loadedBasemap.activeSimplificationLevel;
-    if (
-      activeLevel &&
-      loadedBasemap.simplifiedLayerVariants?.has(activeLevel)
-    ) {
-      return loadedBasemap.simplifiedLayerVariants.get(activeLevel)!;
-    }
-
     return loadedBasemap.layerTables;
-  }
-
-  async function simplifyBasemap(
-    basemapId: string,
-    level: SimplificationLevel
-  ): Promise<ArrowTable> {
-    const loadedBasemap = basemapCache.get(basemapId);
-
-    if (!loadedBasemap) {
-      throw new Error(`Basemap not loaded: ${basemapId}`);
-    }
-
-    if (!loadedBasemap.simplifiedVariants) {
-      loadedBasemap.simplifiedVariants = new SvelteMap<
-        SimplificationLevel,
-        ArrowTable
-      >();
-    }
-
-    if (!loadedBasemap.simplifiedLayerVariants) {
-      loadedBasemap.simplifiedLayerVariants = new SvelteMap<
-        SimplificationLevel,
-        SvelteMap<string, ArrowTable>
-      >();
-    }
-
-    const primaryLayer = getPrimaryLayer(loadedBasemap.metadata);
-    if (!primaryLayer) {
-      throw new Error(`Basemap has no primary layer: ${basemapId}`);
-    }
-
-    if (primaryLayer.type !== BasemapLayerType.POLYGON) {
-      logger.info(
-        'Skipping topology-aware simplification for non-polygon basemap',
-        LogCategory.MAP,
-        { basemapId, layerType: primaryLayer.type }
-      );
-      loadedBasemap.activeSimplificationLevel = null;
-      return loadedBasemap.geometryTable;
-    }
-
-    if (loadedBasemap.simplifiedVariants.has(level)) {
-      logger.debug('Using cached simplified basemap', LogCategory.MAP, {
-        basemapId,
-        level
-      });
-      loadedBasemap.activeSimplificationLevel = level;
-      return loadedBasemap.simplifiedVariants.get(level)!;
-    }
-
-    const start = performance.now();
-    logger.info('Simplifying basemap geometry', LogCategory.MAP, {
-      basemapId,
-      level
-    });
-
-    try {
-      const tableName = await loadGeometryIntoDuckDB(basemapId);
-      const tolerance = SIMPLIFICATION_FACTOR[level];
-      const geometryColumn = loadedBasemap.metadata.isCustom
-        ? primaryLayer.name
-        : 'geom';
-
-      const metrics = await simplifyGeometryTable(Duck, tableName, tolerance, {
-        geometryColumn
-      });
-
-      const simplifiedTable = await getSimplifiedArrowTable(
-        Duck,
-        tableName,
-        tolerance,
-        { geometryColumn }
-      );
-
-      loadedBasemap.simplifiedVariants.set(level, simplifiedTable);
-
-      if (
-        loadedBasemap.metadata.isCustom &&
-        loadedBasemap.layerTables.size > 0
-      ) {
-        const simplifiedLayerTables = await buildSimplifiedCustomLayerTables(
-          loadedBasemap,
-          `${tableName}_simplified`
-        );
-        loadedBasemap.simplifiedLayerVariants.set(level, simplifiedLayerTables);
-      }
-
-      loadedBasemap.activeSimplificationLevel = level;
-
-      logger.success('Basemap geometry simplified', LogCategory.MAP, {
-        basemapId,
-        level,
-        originalVertices: metrics.originalVertices,
-        simplifiedVertices: metrics.simplifiedVertices,
-        reductionPercentage: `${metrics.reductionPercentage}%`,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
-
-      return simplifiedTable;
-    } catch (error) {
-      logger.error('Failed to simplify basemap geometry', LogCategory.MAP, {
-        basemapId,
-        level,
-        error
-      });
-      throw error;
-    }
   }
 
   async function loadVariant(
@@ -859,7 +675,7 @@ function createBasemapService() {
       const loadedBasemap = basemapCache.get(basemapId);
       if (loadedBasemap) {
         loadedBasemap.simplifiedVariants?.clear();
-        loadedBasemap.simplifiedLayerVariants?.clear();
+
         loadedBasemap.activeSimplificationLevel = null;
         logger.debug(
           'Simplification cache cleared for basemap',
@@ -872,7 +688,7 @@ function createBasemapService() {
     } else {
       for (const [_id, basemap] of basemapCache) {
         basemap.simplifiedVariants?.clear();
-        basemap.simplifiedLayerVariants?.clear();
+
         basemap.activeSimplificationLevel = null;
       }
       logger.debug(
@@ -957,7 +773,6 @@ function createBasemapService() {
       return additionalData.citiesData;
     },
     loadAdditionalLayers,
-    simplifyBasemap,
     loadVariant,
     getSimplifiedBasemapTable,
     clearSimplificationCache,

@@ -70,44 +70,37 @@ const { actions, getState } = createToolStore<
       const metadata = currentBasemap.metadata;
       const basemapId = metadata.file;
 
-      // When variants are available, load the variant file instead of
-      // running SQL simplification. This avoids expensive on-the-fly
-      // processing and uses pre-built simplified geometry files.
+      // Basemap simplification uses pre-built variant files prepared by the Atelier.
+      // No on-the-fly SQL simplification — variants must be declared in metadata.
       const variantFile = metadata.variants?.[s.level];
-      if (variantFile) {
+      if (!variantFile) {
         logger.info(
-          'Loading basemap variant for simplification',
+          'No variant available for this basemap at this level',
           LogCategory.DUCKDB,
-          { basemapId, level: s.level, variantFile }
+          { basemapId, level: s.level }
         );
-
-        await basemapService.loadVariant(basemapId, variantFile, s.level);
-
-        logger.success('Basemap variant loaded', LogCategory.DUCKDB, {
-          basemapId,
-          variantFile
-        });
 
         return {
           type: SimplificationTarget.BASEMAP,
           level: s.level,
-          simplified: true,
+          simplified: false,
           vertexReduction: 0,
           originalVertices: 0,
           simplifiedVertices: 0
         };
       }
 
-      // Fallback: SQL simplification when no variant file is available
-      logger.info('Starting basemap simplification', LogCategory.DUCKDB, {
+      logger.info(
+        'Loading basemap variant for simplification',
+        LogCategory.DUCKDB,
+        { basemapId, level: s.level, variantFile }
+      );
+
+      await basemapService.loadVariant(basemapId, variantFile, s.level);
+
+      logger.success('Basemap variant loaded', LogCategory.DUCKDB, {
         basemapId,
-        level: s.level
-      });
-
-      await basemapService.simplifyBasemap(basemapId, s.level);
-
-      logger.success('Basemap simplification completed', LogCategory.DUCKDB, {
-        basemapId
+        variantFile
       });
 
       return {

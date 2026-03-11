@@ -1,10 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { SimplificationLevel } from '$lib/features/commons/types/enums';
-import { Table, tableFromIPC } from 'apache-arrow/Arrow';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
-import { addGeoArrowMetadataFromDuckDB } from '../orchestrator/arrow-ops';
 
 export interface SimplificationMetrics {
   originalVertices: number;
@@ -17,23 +14,6 @@ export interface SimplificationOptions {
   geometryColumn?: string;
   createView?: boolean;
 }
-
-/**
- * Normalized simplification factor mapped from preset levels.
- * 0.0 = no simplification, 1.0 = maximum simplification.
- */
-export const SIMPLIFICATION_FACTOR = {
-  [SimplificationLevel.Low]: 0.15,
-  [SimplificationLevel.Medium]: 0.4,
-  [SimplificationLevel.High]: 0.75
-} as const;
-
-/** Legacy tolerance values kept for backward compatibility with stored state. */
-export const SIMPLIFICATION_TOLERANCE = {
-  [SimplificationLevel.Low]: 0.0001,
-  [SimplificationLevel.Medium]: 0.001,
-  [SimplificationLevel.High]: 0.01
-} as const;
 
 async function countVertices(
   Duck: DuckDBClientForArrow,
@@ -124,45 +104,6 @@ export async function simplifyGeometryTable(
     reductionPercentage,
     duration
   };
-}
-
-export async function getSimplifiedArrowTable(
-  Duck: DuckDBClientForArrow,
-  tableName: string,
-  tolerance: number,
-  options: SimplificationOptions = {}
-): Promise<Table> {
-  const geometryColumn = options.geometryColumn ?? 'geom';
-
-  if (!Number.isFinite(tolerance) || tolerance < 0) {
-    throw new Error(`Invalid simplification tolerance: ${tolerance}`);
-  }
-
-  const escapedTable = escapeIdentifier(tableName);
-
-  logger.debug('Fetching simplified Arrow table', LogCategory.DUCKDB, {
-    tableName,
-    tolerance
-  });
-
-  const buffer = (await Duck.query(
-    `SELECT * REPLACE (ST_AsWKB(geom) AS geom)
-     FROM simplify_and_clean('${escapedTable}', '${geometryColumn}', ${tolerance})`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  )) as ArrayBuffer | Uint8Array;
-
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let table = tableFromIPC(ipcBuffer);
-
-  table = await addGeoArrowMetadataFromDuckDB(table, tableName, Duck);
-
-  logger.debug('Simplified Arrow table ready', LogCategory.DUCKDB, {
-    rows: table.numRows,
-    columns: table.numCols
-  });
-
-  return table;
 }
 
 export function calculateToleranceFromRate(

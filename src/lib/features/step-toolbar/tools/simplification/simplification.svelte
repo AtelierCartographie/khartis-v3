@@ -14,6 +14,7 @@
   } from 'carbon-components-svelte';
   import { Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     simplificationActions,
@@ -24,8 +25,12 @@
   const store = simplificationActions;
   const state = $derived(getSimplificationState());
   const isOsmBasemapActive = $derived(osmBasemapStore.isActive);
+  const hasBasemapVariants = $derived(
+    !!basemapService.currentBasemap?.metadata.variants
+  );
   const isBasemapSourceBlocked = $derived(
-    state.source === SimplificationSource.Basemap && isOsmBasemapActive
+    state.source === SimplificationSource.Basemap &&
+      (isOsmBasemapActive || !hasBasemapVariants)
   );
   let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -60,10 +65,6 @@
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
     store.setSource(newSource);
 
-    if (newSource === SimplificationSource.Basemap && isOsmBasemapActive) {
-      return;
-    }
-
     scheduleSimplificationApply('source-change');
   }
 
@@ -76,11 +77,9 @@
   async function applySimplificationNow(trigger: string): Promise<void> {
     if (isBasemapSourceBlocked) {
       logger.info(
-        'Simplification skipped: OSM basemap is active',
+        'Simplification skipped: basemap source blocked',
         LogCategory.UI,
-        {
-          trigger
-        }
+        { trigger }
       );
       return;
     }
@@ -144,6 +143,12 @@
         title={m.simplification_osm_not_available()}
         subtitle={m.simplification_osm_explanation()}
       />
+    {:else if !hasBasemapVariants}
+      <InlineNotification
+        kind="info"
+        lowContrast
+        title={m.simplification_no_variants()}
+      />
     {/if}
 
     <div>
@@ -152,7 +157,7 @@
         orientation="horizontal"
         selected={state.level}
         on:change={(e) => {
-          if (isOsmBasemapActive) return;
+          if (isBasemapSourceBlocked) return;
           store.setLevel((e as CustomEvent).detail as SimplificationLevel);
           scheduleSimplificationApply('level-change');
         }}
@@ -160,17 +165,17 @@
         <RadioButton
           value={SimplificationLevel.Low}
           labelText={m.simplification_level_low()}
-          disabled={isOsmBasemapActive}
+          disabled={isBasemapSourceBlocked}
         />
         <RadioButton
           value={SimplificationLevel.Medium}
           labelText={m.simplification_level_medium()}
-          disabled={isOsmBasemapActive}
+          disabled={isBasemapSourceBlocked}
         />
         <RadioButton
           value={SimplificationLevel.High}
           labelText={m.simplification_level_high()}
-          disabled={isOsmBasemapActive}
+          disabled={isBasemapSourceBlocked}
         />
       </RadioButtonGroup>
     </div>
