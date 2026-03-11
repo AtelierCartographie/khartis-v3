@@ -1,6 +1,6 @@
 import type { Layer } from '@deck.gl/core';
 import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
-import { FillStyleExtension } from '@deck.gl/extensions';
+import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -54,12 +54,14 @@ const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 50];
 
-/** Cached FillStyleExtension instance (reused across renders) */
-let fillStyleExtensionInstance: FillStyleExtension | null = null;
+/** Cached RotatableFillStyleExtension instance (reused across renders) */
+let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
 
-function getFillStyleExtension(): FillStyleExtension {
+function getFillStyleExtension(): RotatableFillStyleExtension {
   if (!fillStyleExtensionInstance) {
-    fillStyleExtensionInstance = new FillStyleExtension({ pattern: true });
+    fillStyleExtensionInstance = new RotatableFillStyleExtension({
+      pattern: true
+    });
   }
   return fillStyleExtensionInstance;
 }
@@ -69,7 +71,7 @@ function getFillStyleExtension(): FillStyleExtension {
  * Returns null if no pattern should be applied.
  */
 function buildPatternProps(ctx: LayerContext): {
-  extensions: FillStyleExtension[];
+  extensions: RotatableFillStyleExtension[];
   fillPatternAtlas: HTMLCanvasElement;
   fillPatternMapping: Record<
     string,
@@ -78,6 +80,7 @@ function buildPatternProps(ctx: LayerContext): {
   fillPatternMask: boolean;
   getFillPattern: () => string;
   getFillPatternScale: number;
+  getFillPatternRotation: number;
 } | null {
   const patternId = ctx.viz?.classification?.patternId;
   if (!isValidPatternId(patternId)) {
@@ -89,13 +92,16 @@ function buildPatternProps(ctx: LayerContext): {
     return null;
   }
 
+  const patternAngle = ctx.viz?.classification?.patternParams?.angle ?? 0;
+
   return {
     extensions: [getFillStyleExtension()],
     fillPatternAtlas: atlas,
     fillPatternMapping: mapping,
     fillPatternMask: true,
     getFillPattern: () => patternId,
-    getFillPatternScale: 200
+    getFillPatternScale: 200,
+    getFillPatternRotation: patternAngle
   };
 }
 
@@ -1170,7 +1176,8 @@ export function createPolygonLayers(
         fillPatternMapping: patternProps.fillPatternMapping,
         fillPatternMask: patternProps.fillPatternMask,
         getFillPattern: patternProps.getFillPattern,
-        getFillPatternScale: patternProps.getFillPatternScale
+        getFillPatternScale: patternProps.getFillPatternScale,
+        getFillPatternRotation: patternProps.getFillPatternRotation
       }),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
@@ -1192,7 +1199,8 @@ export function createPolygonLayers(
         ],
         ...(patternProps && {
           getFillPattern: [viz?.classification?.patternId],
-          getFillPatternScale: [viz?.classification?.patternId]
+          getFillPatternScale: [viz?.classification?.patternId],
+          getFillPatternRotation: [viz?.classification?.patternParams?.angle]
         })
       },
       dataComparator: (newData, oldData) => newData === oldData
