@@ -21,7 +21,7 @@
         <Icon size={24} />
       </div>
     {/if}
-    <h5 class="header-title">{title}</h5>
+    <h2 class="header-title">{title}</h2>
   </div>
   {#if showDivider}
     <div class="header-divider"></div>

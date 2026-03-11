@@ -66,6 +66,7 @@ interface LoadedBasemap {
 
 function createBasemapService() {
   let availableBasemaps: BasemapMetadata[] = [];
+  let isInitialized = false;
   let currentBasemap: LoadedBasemap | null = null;
   let attributesLoaded = false;
   const basemapCache = new SvelteMap<string, LoadedBasemap>();
@@ -280,7 +281,14 @@ function createBasemapService() {
     );
 
     if (!metadata) {
-      logger.error(`Basemap not found: ${basemapId}`, LogCategory.MAP);
+      if (isInitialized) {
+        logger.error(`Basemap not found: ${basemapId}`, LogCategory.MAP);
+      } else {
+        logger.debug(
+          `Basemap not yet available (service initializing): ${basemapId}`,
+          LogCategory.MAP
+        );
+      }
       return null;
     }
 
@@ -731,6 +739,7 @@ function createBasemapService() {
         );
       });
 
+      isInitialized = true;
       logger.success('Basemap service initialized', LogCategory.MAP, {
         basemapCount: availableBasemaps.length
       });

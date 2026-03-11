@@ -137,7 +137,7 @@
   }
 
   header span {
-    color: var(--cds-ui-04);
+    color: var(--cds-text-01);
     font-weight: bold;
     font-size: 14px;
   }

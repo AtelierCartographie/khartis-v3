@@ -90,33 +90,45 @@
     }
 
     const initApp = async () => {
-      try {
-        await duckDBOrchestrator.initialize();
-        await basemapService.initialize();
-        isLoading = false;
-
-        logger.info(
-          'App ready - continuing background initialization',
-          LogCategory.SYSTEM
-        );
-      } catch (error) {
-        logger.error(
-          'DuckDB initialization failed - application cannot continue',
-          LogCategory.DUCKDB,
-          error
-        );
-        isLoading = false;
-        globalState.isCreateProjectModalOpen = true;
-        return;
-      }
+      // Start DuckDB in background — don't block UI on it (LCP optimization)
+      const duckDBReadyPromise = duckDBOrchestrator
+        .initialize()
+        .then(() => basemapService.initialize())
+        .catch((error) => {
+          logger.error(
+            'DuckDB initialization failed',
+            LogCategory.DUCKDB,
+            error
+          );
+        });
 
       try {
+        // Project store uses IndexedDB only — fast (~100ms), independent of DuckDB
         await projectStore.waitForInit();
-        await dataOrchestratorService.initialize();
+        isLoading = false;
 
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
         }
+
+        logger.info(
+          'UI ready — DuckDB loading in background',
+          LogCategory.SYSTEM
+        );
+      } catch (error) {
+        logger.error(
+          'Project store initialization failed',
+          LogCategory.SYSTEM,
+          error
+        );
+        isLoading = false;
+        globalState.isCreateProjectModalOpen = true;
+      }
+
+      // Wait for DuckDB, then restore any existing project data
+      try {
+        await duckDBReadyPromise;
+        await dataOrchestratorService.initialize();
 
         logger.success(
           'Background initialization complete',
@@ -134,11 +146,32 @@
 
     initApp();
 
+    // Fix Carbon ComboBox ARIA: outer wrapper incorrectly has role="listbox"
+    // causing "ARIA required children" violations. Options list (.bx--list-box__menu)
+    // keeps its correct role="listbox".
+    const fixComboboxAria = (root: Element | Document = document) => {
+      (root as Element)
+        .querySelectorAll?.('.bx--combo-box[role="listbox"]')
+        .forEach((el) => el.setAttribute('role', 'group'));
+    };
+    fixComboboxAria();
+    const ariaObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            fixComboboxAria(node as Element);
+          }
+        }
+      }
+    });
+    ariaObserver.observe(document.body, { childList: true, subtree: true });
+
     return () => {
       window.removeEventListener(EVENT.RESIZE, handleResize);
       if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
         window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
       }
+      ariaObserver.disconnect();
     };
   });
 

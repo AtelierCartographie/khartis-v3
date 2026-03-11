@@ -199,20 +199,22 @@
           />
         {/if}
 
-        <Button
-          on:click={mainToolbarActions.navigateToVisualization}
-          disabled={!canVisualizeNow}
-          icon={ArrowRight}
-          class="visualize-button"
-          tooltipPosition="top"
-          tooltipAlignment="end"
-          iconDescription={!canVisualizeNow
-            ? isGeographicMode
-              ? m.data_step_status_clean()
-              : m.join_status_pending()
-            : m.go_to_visualization()}
-          size="small">{m.data_tab_visualize()}</Button
-        >
+        <li>
+          <Button
+            on:click={mainToolbarActions.navigateToVisualization}
+            disabled={!canVisualizeNow}
+            icon={ArrowRight}
+            class="visualize-button"
+            tooltipPosition="top"
+            tooltipAlignment="end"
+            iconDescription={!canVisualizeNow
+              ? isGeographicMode
+                ? m.data_step_status_clean()
+                : m.join_status_pending()
+              : m.go_to_visualization()}
+            size="small">{m.data_tab_visualize()}</Button
+          >
+        </li>
       </ProgressIndicator>
     </footer>
   {/if}
