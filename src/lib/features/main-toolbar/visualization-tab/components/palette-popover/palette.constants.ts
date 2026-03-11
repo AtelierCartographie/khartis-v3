@@ -1,4 +1,6 @@
 import * as m from '$lib/paraglide/messages';
+import { resolveColor } from '@ateliercartographie/ok-palette';
+import type { WebGLColor } from '@ateliercartographie/ok-palette';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 
 export type { PatternParams };
@@ -195,21 +197,17 @@ export function getPatternPalettes(): Palette[] {
   ];
 }
 
-export function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result
-    ? {
-        r: parseInt(result[1], 16),
-        g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
-      }
-    : { r: 0, g: 0, b: 0 };
+function webglToHex([r, g, b]: WebGLColor): string {
+  return (
+    '#' +
+    [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+  );
 }
 
-export function rgbToHex(r: number, g: number, b: number): string {
-  return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
-}
-
+/**
+ * Interpolates colors in Oklch perceptual color space via ok-palette.
+ * Supports multi-stop palettes (sequential, diverging with center, etc.).
+ */
 export function interpolateColors(colors: string[], count: number): string[] {
   if (colors.length === count) return colors;
   if (colors.length >= count) return colors.slice(0, count);
@@ -225,12 +223,9 @@ export function interpolateColors(colors: string[], count: number): string[] {
     if (frac === 0) {
       result.push(colors[lowIdx]);
     } else {
-      const c1 = hexToRgb(colors[lowIdx]);
-      const c2 = hexToRgb(colors[highIdx]);
-      const r = Math.round(c1.r + (c2.r - c1.r) * frac);
-      const g = Math.round(c1.g + (c2.g - c1.g) * frac);
-      const b = Math.round(c1.b + (c2.b - c1.b) * frac);
-      result.push(rgbToHex(r, g, b));
+      const pct = Math.round(frac * 100);
+      const mixed = `color-mix(in oklch, ${colors[highIdx]} ${pct}%, ${colors[lowIdx]})`;
+      result.push(webglToHex(resolveColor(mixed, { format: 'webgl' })));
     }
   }
   return result;
