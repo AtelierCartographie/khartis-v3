@@ -18,6 +18,7 @@
     highlightedRowIds?: number[];
     isSelectable?: boolean;
     onSelectionChange?: (ids: number[], count: number) => void;
+    onColumnDeleted?: (columnName: string) => void;
     onClose: () => void;
   }
 
@@ -31,6 +32,7 @@
     highlightedRowIds = [],
     isSelectable = false,
     onSelectionChange,
+    onColumnDeleted,
     onClose
   }: Props = $props();
 
@@ -58,6 +60,11 @@
     return sourceFile?.name || dataset?.name || m.dataset_default_name();
   });
   const fileInfo = $derived(getFileInfo(displayName));
+  const tableRenderKey = $derived(
+    `${dataset?.id ?? 'no-dataset'}::${tableName ?? 'no-table'}::${
+      datasetVersion ?? 0
+    }`
+  );
 
   function startEditing() {
     if (!dataset?.sourceFileId) return;
@@ -151,18 +158,21 @@
     </div>
 
     <div class="modal-table-container">
-      <AdvancedDataTable
-        dataset={dataset}
-        tableName={tableName}
-        datasetVersion={datasetVersion}
-        showSummaryPlots={true}
-        cellHighlights={cellHighlights}
-        currentCell={currentCell}
-        highlightedRowIds={highlightedRowIds}
-        isExpanded={true}
-        isSelectable={isSelectable}
-        onSelectionChange={onSelectionChange}
-      />
+      {#key tableRenderKey}
+        <AdvancedDataTable
+          dataset={dataset}
+          tableName={tableName}
+          datasetVersion={datasetVersion}
+          showSummaryPlots={true}
+          cellHighlights={cellHighlights}
+          currentCell={currentCell}
+          highlightedRowIds={highlightedRowIds}
+          isExpanded={true}
+          isSelectable={isSelectable}
+          onColumnDeleted={onColumnDeleted}
+          onSelectionChange={onSelectionChange}
+        />
+      {/key}
     </div>
   </Modal>
 </div>
@@ -182,17 +192,15 @@
   }
 
   #khartis-expanded-table-modal :global(.bx--modal) {
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
-    max-width: 100vw !important;
-    width: 100vw !important;
-    max-height: 100vh !important;
-    height: 100vh !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    background-color: var(--cds-background);
+    max-width: 90vw !important;
+    width: 90vw !important;
+    max-height: 85vh !important;
+    height: 85vh !important;
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-content) {
@@ -201,7 +209,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-header) {
@@ -209,13 +217,13 @@
     flex-shrink: 0;
     padding: var(--cds-spacing-05);
     padding-bottom: var(--cds-spacing-03);
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container) {
     display: flex;
     flex-direction: column;
-    background-color: var(--cds-background);
+    background-color: var(--cds-ui-01);
   }
 
   .custom-header {

@@ -1,11 +1,8 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    InlineNotification,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { InlineNotification, TextInput } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
     CloudUpload,

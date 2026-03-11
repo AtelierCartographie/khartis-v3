@@ -1,8 +1,9 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
   import { m } from '$lib/paraglide/messages.js';
-  import { Button, TextInput } from 'carbon-components-svelte';
+  import { TextInput } from 'carbon-components-svelte';
   import { Save } from 'carbon-icons-svelte';
   import { KEY } from '../commons/constants/dom.constants';
 
@@ -67,7 +68,7 @@
   />
 
   <div class="project-title-save">
-    <Button
+    <IconButton
       size="small"
       tooltipPosition="bottom"
       tooltipAlignment="end"

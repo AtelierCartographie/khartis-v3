@@ -14,20 +14,26 @@
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { ColumnType } from '$lib/features/data-pipeline';
   import {
-    duckDBOrchestrator,
     type DataTableFilter,
     type FilterOperator,
     type FilterStats
   } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
 
   interface Props {
     tableName?: string;
+    datasetVersion?: number;
     onFilterChange?: () => void;
     onDeleteFilteredRows?: (count: number) => void;
   }
 
-  let { tableName, onFilterChange, onDeleteFilteredRows }: Props = $props();
+  let {
+    tableName,
+    datasetVersion,
+    onFilterChange,
+    onDeleteFilteredRows
+  }: Props = $props();
 
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
@@ -221,6 +227,7 @@
   }
 
   $effect(() => {
+    void datasetVersion;
     if (tableName) {
       refreshFilters();
     }

@@ -2,6 +2,10 @@ import {
   AnnotationKind,
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
+import {
+  ANNOTATION_ROLES,
+  ANNOTATION_ROLE
+} from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
@@ -24,7 +28,7 @@ const DEFAULT_STATE: AnnotationsState = {
   items: [],
   selectedId: null,
   activeType: AnnotationKind.TEXT,
-  predefinedStyle: 'note',
+  predefinedStyle: ANNOTATION_ROLE.NOTE,
   textContent: '',
   defaultStyle: {
     font: 'cabin',
@@ -91,19 +95,19 @@ type PageLayout = {
 };
 
 const PAGE_ELEMENT_WIDTHS: Record<PageElementRole, number> = {
-  title: 320,
-  subtitle: 320,
-  source: 220,
-  basemap_source: 220,
-  signature: 220,
-  credit: 220
+  [ANNOTATION_ROLE.TITLE]: 320,
+  [ANNOTATION_ROLE.SUBTITLE]: 320,
+  [ANNOTATION_ROLE.SOURCE]: 220,
+  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 220,
+  [ANNOTATION_ROLE.SIGNATURE]: 220,
+  [ANNOTATION_ROLE.CREDIT]: 220
 };
 
 const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
-  'credit',
-  'basemap_source',
-  'signature',
-  'source'
+  ANNOTATION_ROLE.CREDIT,
+  ANNOTATION_ROLE.BASEMAP_SOURCE,
+  ANNOTATION_ROLE.SIGNATURE,
+  ANNOTATION_ROLE.SOURCE
 ];
 const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
@@ -373,9 +377,9 @@ function getPageElementPosition(
   }
 
   switch (role) {
-    case 'title':
+    case ANNOTATION_ROLE.TITLE:
       return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
-    case 'subtitle':
+    case ANNOTATION_ROLE.SUBTITLE:
       return { x: titleX, y: clamp(margins.top + 52, minY, maxY) };
     default:
       return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
@@ -386,23 +390,31 @@ function isEmptyContent(content: unknown): boolean {
   return typeof content !== 'string' || content.trim().length === 0;
 }
 
+function isPageElementRole(role: unknown): role is PageElementRole {
+  return (
+    typeof role === 'string' &&
+    ANNOTATION_ROLES.includes(role as (typeof ANNOTATION_ROLES)[number]) &&
+    role !== ANNOTATION_ROLE.NOTE
+  );
+}
+
 function getPageElementDefaultContent(
   role: PageElementRole,
   basemapSource: string,
   withPlaceholders: boolean
 ): string {
   switch (role) {
-    case 'title':
-      return withPlaceholders ? m.annotations_style_title() : '';
-    case 'subtitle':
-      return withPlaceholders ? m.annotations_style_subtitle() : '';
-    case 'source':
-      return withPlaceholders ? m.source() : '';
-    case 'basemap_source':
+    case ANNOTATION_ROLE.TITLE:
+      return withPlaceholders ? m.annotations_placeholder_title() : '';
+    case ANNOTATION_ROLE.SUBTITLE:
+      return withPlaceholders ? m.annotations_placeholder_subtitle() : '';
+    case ANNOTATION_ROLE.SOURCE:
+      return withPlaceholders ? m.annotations_placeholder_source() : '';
+    case ANNOTATION_ROLE.BASEMAP_SOURCE:
       return basemapSource || (withPlaceholders ? m.basemap_source() : '');
-    case 'signature':
-      return withPlaceholders ? m.annotations_note() : '';
-    case 'credit':
+    case ANNOTATION_ROLE.SIGNATURE:
+      return withPlaceholders ? m.annotations_placeholder_note() : '';
+    case ANNOTATION_ROLE.CREDIT:
       return m.map_export_signature();
     default:
       return '';
@@ -475,6 +487,15 @@ const { actions, getState } = createToolStore<
   },
   selectAnnotation: (id: string | null) => {
     s.selectedId = id;
+    if (id) {
+      const item = s.items.find((i) => i.id === id);
+      if (item) {
+        s.activeType = item.type;
+        if (item.style) {
+          s.defaultStyle = { ...s.defaultStyle, ...item.style };
+        }
+      }
+    }
   },
   updateAnnotation: (id: string, updates: Partial<Annotation>) => {
     s.items = s.items.map((item) =>
@@ -592,10 +613,12 @@ const { actions, getState } = createToolStore<
     const layout = resolvePageLayout();
     const basemapSource = basemapService.currentBasemap?.metadata?.source || '';
 
-    const hasPageElements = s.items.some((item) => item.role != null);
+    const hasPageElements = s.items.some((item) =>
+      isPageElementRole(item.role)
+    );
     if (hasPageElements) {
       s.items = s.items.map((item) => {
-        if (!item.role) {
+        if (!isPageElementRole(item.role)) {
           return item;
         }
 
@@ -621,12 +644,21 @@ const { actions, getState } = createToolStore<
       role: PageElementRole;
       style: Partial<AnnotationStyle>;
     }[] = [
-      { role: 'title', style: { ...PREDEFINED_STYLES.title } },
-      { role: 'subtitle', style: { ...PREDEFINED_STYLES.subtitle } },
-      { role: 'source', style: { ...PREDEFINED_STYLES.caption } },
-      { role: 'basemap_source', style: { ...PREDEFINED_STYLES.caption } },
-      { role: 'signature', style: { ...PREDEFINED_STYLES.caption } },
-      { role: 'credit', style: { ...PREDEFINED_STYLES.caption } }
+      { role: ANNOTATION_ROLE.TITLE, style: { ...PREDEFINED_STYLES.title } },
+      {
+        role: ANNOTATION_ROLE.SUBTITLE,
+        style: { ...PREDEFINED_STYLES.subtitle }
+      },
+      { role: ANNOTATION_ROLE.SOURCE, style: { ...PREDEFINED_STYLES.caption } },
+      {
+        role: ANNOTATION_ROLE.BASEMAP_SOURCE,
+        style: { ...PREDEFINED_STYLES.caption }
+      },
+      {
+        role: ANNOTATION_ROLE.SIGNATURE,
+        style: { ...PREDEFINED_STYLES.caption }
+      },
+      { role: ANNOTATION_ROLE.CREDIT, style: { ...PREDEFINED_STYLES.caption } }
     ];
 
     const timestamp = Date.now();
@@ -652,12 +684,14 @@ const { actions, getState } = createToolStore<
     s.items = [...s.items, ...newAnnotations];
   },
   setPageElementsVisibility: (visible: boolean) => {
-    s.items = s.items.map((item) => (item.role ? { ...item, visible } : item));
+    s.items = s.items.map((item) =>
+      isPageElementRole(item.role) ? { ...item, visible } : item
+    );
   },
   redistributePageElements: (layoutOverrides) => {
     const layout = resolvePageLayout(layoutOverrides);
     s.items = s.items.map((item) => {
-      if (!item.role) {
+      if (!isPageElementRole(item.role)) {
         return item;
       }
 

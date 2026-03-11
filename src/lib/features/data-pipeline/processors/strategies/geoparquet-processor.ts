@@ -15,12 +15,14 @@ export const geoparquetProcessor: FileProcessor = {
   supportedFileTypes: [FileType.GEOPARQUET, FileType.ARROW],
 
   canHandle(file: UploadedFile): boolean {
+    const lowerName = file.name.toLowerCase();
     return (
       file.fileType === FileType.GEOPARQUET ||
       file.fileType === FileType.ARROW ||
-      file.name.toLowerCase().endsWith('.parquet') ||
-      file.name.toLowerCase().endsWith('.geoparquet') ||
-      file.name.toLowerCase().endsWith('.arrow')
+      lowerName.endsWith('.parquet') ||
+      lowerName.endsWith('.geoparquet') ||
+      lowerName.endsWith('.gpq') ||
+      lowerName.endsWith('.arrow')
     );
   },
 

@@ -1,10 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-import { SimplificationLevel } from '$lib/features/commons/types/enums';
-import { Schema, Table, tableFromIPC } from 'apache-arrow/Arrow';
-import { DUCK_CONST, SQL_FUNCTIONS } from '../constants';
+import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
-import { addGeoArrowMetadataFromDuckDB } from '../orchestrator/arrow-ops';
 
 export interface SimplificationMetrics {
   originalVertices: number;
@@ -15,15 +12,8 @@ export interface SimplificationMetrics {
 
 export interface SimplificationOptions {
   geometryColumn?: string;
-  preserveTopology?: boolean;
   createView?: boolean;
 }
-
-export const SIMPLIFICATION_TOLERANCE = {
-  [SimplificationLevel.Low]: 0.0001,
-  [SimplificationLevel.Medium]: 0.001,
-  [SimplificationLevel.High]: 0.01
-} as const;
 
 async function countVertices(
   Duck: DuckDBClientForArrow,
@@ -42,6 +32,11 @@ async function countVertices(
   return result[0]?.total_vertices ?? 0;
 }
 
+/**
+ * Simplify geometry using topology-aware `simplify_and_clean` macro.
+ * Preserves topology between adjacent polygons (no gaps / overlaps)
+ * and cleans up triangle artefacts.
+ */
 export async function simplifyGeometryTable(
   Duck: DuckDBClientForArrow,
   sourceTable: string,
@@ -50,15 +45,13 @@ export async function simplifyGeometryTable(
 ): Promise<SimplificationMetrics> {
   const start = performance.now();
   const geometryColumn = options.geometryColumn ?? 'geom';
-  const preserveTopology = options.preserveTopology ?? true;
   const createView = options.createView ?? false;
 
-  logger.info('Starting geometry simplification', LogCategory.DUCKDB, {
-    sourceTable,
-    tolerance,
-    geometryColumn,
-    preserveTopology
-  });
+  logger.info(
+    'Starting topology-aware geometry simplification',
+    LogCategory.DUCKDB,
+    { sourceTable, tolerance, geometryColumn }
+  );
 
   const originalVertices = await countVertices(
     Duck,
@@ -70,16 +63,11 @@ export async function simplifyGeometryTable(
     throw new Error(`Invalid simplification tolerance: ${tolerance}`);
   }
 
-  const escapedGeom = escapeIdentifier(geometryColumn);
   const escapedSource = escapeIdentifier(sourceTable);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
   const escapedTarget = escapeIdentifier(targetTable);
-
-  const simplifyFunction = preserveTopology
-    ? SQL_FUNCTIONS.ST_SIMPLIFY_PRESERVE_TOPOLOGY
-    : SQL_FUNCTIONS.ST_SIMPLIFY;
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
@@ -87,18 +75,11 @@ export async function simplifyGeometryTable(
 
   await Duck.query(`
     ${createStatement} "${escapedTarget}" AS
-    SELECT * REPLACE (
-      ${simplifyFunction}("${escapedGeom}", ${tolerance}) AS "${escapedGeom}"
-    )
-    FROM "${escapedSource}"
-    WHERE "${escapedGeom}" IS NOT NULL
+    FROM simplify_and_clean('${escapedSource}', '${geometryColumn}', ${tolerance})
   `);
 
-  const simplifiedVertices = await countVertices(
-    Duck,
-    targetTable,
-    geometryColumn
-  );
+  // The simplify_and_clean macro always normalizes the geometry column to 'geom'
+  const simplifiedVertices = await countVertices(Duck, targetTable, 'geom');
 
   const reductionPercentage =
     originalVertices > 0
@@ -125,99 +106,11 @@ export async function simplifyGeometryTable(
   };
 }
 
-export async function getSimplifiedArrowTable(
-  Duck: DuckDBClientForArrow,
-  tableName: string,
-  tolerance: number,
-  options: SimplificationOptions = {}
-): Promise<Table> {
-  const geometryColumn = options.geometryColumn ?? 'geom';
-  const preserveTopology = options.preserveTopology ?? true;
-
-  if (!Number.isFinite(tolerance) || tolerance < 0) {
-    throw new Error(`Invalid simplification tolerance: ${tolerance}`);
-  }
-
-  const escapedGeom = escapeIdentifier(geometryColumn);
-  const escapedTable = escapeIdentifier(tableName);
-  const simplifyFunction = preserveTopology
-    ? SQL_FUNCTIONS.ST_SIMPLIFY_PRESERVE_TOPOLOGY
-    : SQL_FUNCTIONS.ST_SIMPLIFY;
-
-  logger.debug('Fetching simplified Arrow table', LogCategory.DUCKDB, {
-    tableName,
-    tolerance,
-    simplifyFunction
-  });
-
-  const buffer = (await Duck.query(
-    `SELECT * REPLACE (
-       ST_AsWKB(${simplifyFunction}("${escapedGeom}", ${tolerance})) AS "${escapedGeom}"
-     )
-     FROM "${escapedTable}"
-     WHERE "${escapedGeom}" IS NOT NULL`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  )) as ArrayBuffer | Uint8Array;
-
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let table = tableFromIPC(ipcBuffer);
-
-  table = await addGeoArrowMetadataFromDuckDB(table, tableName, Duck);
-
-  logger.debug('Simplified Arrow table ready', LogCategory.DUCKDB, {
-    rows: table.numRows,
-    columns: table.numCols
-  });
-
-  return table;
-}
-
 export function calculateToleranceFromRate(
   rate: number,
-  bounds?: [number, number, number, number]
+  _bounds?: [number, number, number, number]
 ): number {
-  if (!bounds) {
-    return 0.001;
-  }
-
-  const [minX, minY, maxX, maxY] = bounds;
-  const extent = Math.max(maxX - minX, maxY - minY);
-
-  return (extent * rate) / 10000;
-}
-
-export async function tableToArrowWithGeoMetadata(
-  Duck: DuckDBClientForArrow,
-  tableName: string,
-  originalSchema?: Schema
-): Promise<Table> {
-  const buffer = (await Duck.query(`SELECT * FROM "${tableName}"`, {
-    format: 'arrow-ipc' as never
-  })) as ArrayBuffer | Uint8Array;
-
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let arrowTable = tableFromIPC(ipcBuffer);
-
-  if (originalSchema?.metadata) {
-    const geoMetadata = originalSchema.metadata.get('geo');
-    if (geoMetadata) {
-      const newSchema = new Schema(
-        arrowTable.schema.fields,
-        new Map([['geo', geoMetadata]])
-      );
-      arrowTable = new Table(newSchema, arrowTable.batches);
-
-      logger.debug(
-        'GeoArrow metadata preserved from original schema',
-        LogCategory.DUCKDB,
-        {
-          tableName
-        }
-      );
-    }
-  }
-
-  return arrowTable;
+  // The `simplify_and_clean` macro uses a normalized factor (0.0 – 1.0).
+  // Convert user percentage (0 – 100) to normalized factor.
+  return Math.max(0, Math.min(1, rate / 100));
 }

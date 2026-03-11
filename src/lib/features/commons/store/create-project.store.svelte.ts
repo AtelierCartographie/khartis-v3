@@ -3,7 +3,8 @@ import {
   ExampleCategory,
   FileStatus
 } from '$lib/features/commons/constants/ui.constants';
-import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import * as m from '$lib/paraglide/messages';
 import { SvelteMap } from 'svelte/reactivity';
 import {
@@ -24,7 +25,7 @@ import {
 } from '../utils/file-import.utils';
 import { formatFileSize } from '../utils/format.utils';
 import { LogCategory, logger } from '../utils/logger';
-import { showError, showWarning } from '../utils/notification.utils.svelte';
+import { showError } from '../utils/notification.utils.svelte';
 import type {
   CreateProjectState,
   ExampleProject,
@@ -100,6 +101,23 @@ export const createProjectActions = {
     );
   },
 
+  findCompleteShapefile(baseName: string): UploadedFile | undefined {
+    const normalizedBaseName = baseName.toLowerCase();
+    return createProjectState.newProject.uploadedFiles.find((file) => {
+      if (
+        file.status !== FileStatus.COMPLETE ||
+        file.fileType !== FileType.SHAPEFILE
+      ) {
+        return false;
+      }
+
+      const fileBaseName =
+        file.shapefileBaseName?.toLowerCase() ??
+        file.name.toLowerCase().replace(/\.shp$/i, '');
+      return fileBaseName === normalizedBaseName;
+    });
+  },
+
   async mergeIntoIncompleteShapefile(
     incompleteFile: UploadedFile,
     newFiles: File[],
@@ -147,6 +165,40 @@ export const createProjectActions = {
     }
   },
 
+  mergeIntoCompleteShapefile(
+    completeFile: UploadedFile,
+    newFiles: File[]
+  ): void {
+    const existingFiles = completeFile.relatedFileObjects ?? [];
+    const existingNames = new Set(
+      existingFiles.map((file) => file.name.toLowerCase())
+    );
+    const filesToAdd = newFiles.filter(
+      (file) => !existingNames.has(file.name.toLowerCase())
+    );
+
+    if (filesToAdd.length === 0) return;
+
+    const mergedFiles = [...existingFiles, ...filesToAdd];
+    completeFile.relatedFileObjects = mergedFiles;
+    completeFile.relatedFiles = mergedFiles.map((file) => file.name);
+    completeFile.size = mergedFiles.reduce((sum, file) => sum + file.size, 0);
+
+    if (!completeFile.originalFile) {
+      const shpFile = mergedFiles.find((file) =>
+        file.name.toLowerCase().endsWith('.shp')
+      );
+      if (shpFile) {
+        completeFile.originalFile = shpFile;
+      }
+    }
+
+    logger.info('Shapefile companion files merged', LogCategory.FILE, {
+      shapefile: completeFile.name,
+      addedFiles: filesToAdd.map((file) => file.name)
+    });
+  },
+
   async processFiles(
     files: File[],
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
@@ -165,6 +217,19 @@ export const createProjectActions = {
             sourceType
           );
           fileGroups.delete(baseName);
+          continue;
+        }
+
+        const hasShpComponent = groupFiles.some((file) =>
+          file.name.toLowerCase().endsWith('.shp')
+        );
+
+        if (!hasShpComponent) {
+          const completeShapefile = this.findCompleteShapefile(baseName);
+          if (completeShapefile) {
+            this.mergeIntoCompleteShapefile(completeShapefile, groupFiles);
+            fileGroups.delete(baseName);
+          }
         }
       }
 
@@ -244,6 +309,8 @@ export const createProjectActions = {
           this.addUploadedFile(incompleteFile);
           toProcess.delete(baseName);
         } else if (hasOtherErrors) {
+          const validationErrors = fileValidation?.errors ?? [];
+          const validationWarnings = fileValidation?.warnings ?? [];
           const errorFile: UploadedFile = {
             id: crypto.randomUUID(),
             name: mainFileName,
@@ -255,13 +322,14 @@ export const createProjectActions = {
               ? FileType.SHAPEFILE
               : FileType.UNKNOWN,
             sourceType,
+            errorMessage: validationErrors[0] ?? m.create_project_error_label(),
             relatedFiles: groupFiles
               .filter((f) => f !== mainFile)
               .map((f) => f.name),
             validation: {
               isValid: false,
-              errors: fileValidation.errors,
-              warnings: fileValidation.warnings
+              errors: validationErrors,
+              warnings: validationWarnings
             }
           };
           this.addUploadedFile(errorFile);
@@ -270,8 +338,7 @@ export const createProjectActions = {
       }
 
       if (duplicates.length > 0) {
-        showWarning(
-          m.warning_files_duplicate_title(),
+        this.setNewProjectWarning(
           m.warning_files_duplicate_message({ files: duplicates.join(', ') })
         );
       }
@@ -296,8 +363,7 @@ export const createProjectActions = {
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
     if (this.isFileDuplicate(file.name)) {
-      showWarning(
-        m.warning_files_duplicate_title(),
+      this.setNewProjectWarning(
         m.warning_files_duplicate_message({ files: file.name })
       );
       return;
@@ -331,8 +397,7 @@ export const createProjectActions = {
   ): Promise<void> {
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
     if (totalSize > STORAGE_LIMITS.maxFileSize) {
-      showError(
-        m.error_shapefile_too_large_title(),
+      this.setNewProjectError(
         m.error_shapefile_too_large_message({
           size: formatFileSize(totalSize),
           max: formatFileSize(STORAGE_LIMITS.maxFileSize)
@@ -393,10 +458,7 @@ export const createProjectActions = {
       }
     } catch (error) {
       logger.error('Failed to read shapefile content', LogCategory.DATA, error);
-      showError(
-        m.error_shapefile_read_failed_title(),
-        m.error_shapefile_read_failed_message()
-      );
+      this.setNewProjectError(m.error_shapefile_read_failed_message());
       return;
     }
 
@@ -422,10 +484,7 @@ export const createProjectActions = {
     const result = extractDataFromPaste(pastedText);
 
     if (!result) {
-      showError(
-        m.error_pasted_data_invalid_title(),
-        m.error_pasted_data_invalid_message()
-      );
+      this.setNewProjectError(m.error_pasted_data_invalid_message());
       this.setPastedData('');
       return;
     }
@@ -528,6 +587,10 @@ export const createProjectActions = {
     }
   },
 
+  setNewProjectWarning(warning?: string): void {
+    createProjectState.newProject.warning = warning;
+  },
+
   async loadOnlineFile(): Promise<void> {
     const inputValue = createProjectState.newProject.onlineFileUrl;
     const urls = extractUrlsFromInput(inputValue);
@@ -607,7 +670,12 @@ export const createProjectActions = {
         'application/zip',
         'application/x-zip-compressed',
         'application/geoparquet',
-        'application/parquet'
+        'application/parquet',
+        'application/gpx+xml',
+        'application/vnd.google-earth.kml+xml',
+        'application/vnd.google-earth.kmz',
+        'text/xml',
+        'application/xml'
       ];
 
       const isAllowed =

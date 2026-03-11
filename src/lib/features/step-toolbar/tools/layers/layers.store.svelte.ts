@@ -8,6 +8,7 @@ import {
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
   basemapLayersStore,
+  BASEMAP_LAYER_ID,
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import * as m from '$lib/paraglide/messages';
@@ -31,6 +32,11 @@ type LayersActions = {
   toggleLayerVisibility: (id: string) => void;
   reorderLayers: (
     type: 'visualization' | 'geographic',
+    fromIndex: number,
+    toIndex: number
+  ) => void;
+  reorderSubLayers: (
+    parentId: string,
     fromIndex: number,
     toIndex: number
   ) => void;
@@ -76,7 +82,7 @@ function buildVisualizationSubLayerId(
 
 function buildBasemapSubLayerId(
   visualizationId: string,
-  basemapLayerId: string
+  basemapLayerId: BasemapLayerId
 ): string {
   return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}basemap${VISUALIZATION_SUBLAYER_SEPARATOR}${basemapLayerId}`;
 }
@@ -110,25 +116,25 @@ function getVisualizationPrimitiveOpacity(
   }
 }
 
-function getBasemapLayerName(layerId: string): string {
+function getBasemapLayerName(layerId: BasemapLayerId): string {
   switch (layerId) {
-    case 'terre':
+    case BASEMAP_LAYER_ID.TERRE:
       return m.basemap_layer_terre();
-    case 'mers':
+    case BASEMAP_LAYER_ID.MERS:
       return m.basemap_layer_mers();
-    case 'lacs':
+    case BASEMAP_LAYER_ID.LACS:
       return m.basemap_layer_lacs();
-    case 'rivieres':
+    case BASEMAP_LAYER_ID.RIVIERES:
       return m.basemap_layer_rivieres();
-    case 'relief':
+    case BASEMAP_LAYER_ID.RELIEF:
       return m.basemap_layer_relief();
-    case 'equateur':
+    case BASEMAP_LAYER_ID.EQUATEUR:
       return m.basemap_layer_equateur();
-    case 'meridiens':
+    case BASEMAP_LAYER_ID.MERIDIENS:
       return m.basemap_layer_meridiens();
-    case 'frontieres':
+    case BASEMAP_LAYER_ID.FRONTIERES:
       return m.basemap_layer_frontieres();
-    case 'villes':
+    case BASEMAP_LAYER_ID.VILLES:
       return m.basemap_layer_villes();
     default:
       return layerId;
@@ -330,6 +336,27 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
               (layer) => (layer.basemapLayerId ?? layer.id) as BasemapLayerId
             )
           );
+        }
+
+        syncFromSources();
+      },
+      reorderSubLayers: (
+        parentId: string,
+        fromIndex: number,
+        toIndex: number
+      ) => {
+        const subLayers = s.layers
+          .filter((layer) => layer.isSubLayer && layer.parentId === parentId)
+          .sort((a, b) => a.order - b.order);
+
+        const reordered = reorderIds(subLayers, fromIndex, toIndex);
+
+        const basemapIds = reordered
+          .filter((layer) => layer.basemapLayerId)
+          .map((layer) => layer.basemapLayerId as BasemapLayerId);
+
+        if (basemapIds.length > 0) {
+          basemapLayersStore.setLayerOrder(basemapIds);
         }
 
         syncFromSources();

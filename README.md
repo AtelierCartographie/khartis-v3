@@ -1,13 +1,20 @@
 # Khartis v3
 
 <div align="center">
-  <h3>🗺️ Simple thematic mapping tool</h3>
+  <h3>Simple thematic mapping tool</h3>
   <p>An open-source project by <a href="http://www.sciencespo.fr/cartographie/">Sciences Po – Cartography Workshop</a></p>
-  
+
   <p>
-    <img alt="Version" src="https://img.shields.io/badge/version-0.0.1-blue?style=flat">
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-green?style=flat">
-    <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen?style=flat&logo=node.js">
+    <a href="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/release.yml">
+      <img alt="Release" src="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/release.yml/badge.svg?branch=staging">
+    </a>
+    <a href="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/pr-validation.yml">
+      <img alt="PR Validation" src="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/pr-validation.yml/badge.svg">
+    </a>
+    <a href="LICENSE">
+      <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat">
+    </a>
+    <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen?style=flat&logo=node.js">
   </p>
   <p>
     <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white">
@@ -23,103 +30,89 @@
   </p>
 </div>
 
-Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client‑side to keep your data private.
+Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client-side — your data never leaves the browser.
 
-- Website (coming soon)
-- Documentation: see the `docs/` folder (entry: `docs/README.md`)
+- Website: https://www.sciencespo.fr/cartographie/khartis
+- Issues and feature requests: [GitHub Issues](https://github.com/AtelierCartographie/khartis-v3/issues)
 
 ## Features
 
-- Data management: import CSV/GeoJSON/GeoPackage, variable typing, cleaning, join assistant, geolocation, enrichment
-- Visualization: choropleth, proportional, categorical, bivariate; palettes and classification; suggestions and presets
-- Map tools: projection catalog with WKT/PROJ.4 import, simplification, layers, search
-- Layout: legends, scale, north arrow, inset maps, annotations, grids, margins
-- Export: JPEG, SVG, PDF (optional); data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); project auto‑save and versions
-- Accessibility and i18n: RGAA/WCAG, keyboard shortcuts, French/English interface
+- **Data**: import CSV, GeoJSON, GeoPackage, Shapefile, GPX, KML; variable typing, column operations, filters, join assistant, geolocation
+- **Visualization**: choropleth, proportional symbols, categorical, bivariate; classification methods (Jenks, quantiles, equal interval, Q6, nested means, head-tail); palette editor
+- **Map tools**: 150+ projection catalog, topology-aware simplification, layer manager, geographic search
+- **Layout**: legends, scale bar, north arrow, inset maps, annotations, color-blindness simulation, facets
+- **Export**: PNG/SVG/PDF; data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); auto-save and project versions (`.kh`)
+- **Accessibility and i18n**: keyboard shortcuts, French/English interface
+
+## Screenshots
+
+| Accueil | Visualisation | Habillage |
+|:---:|:---:|:---:|
+| ![Écran d'accueil](static/screenshots/welcome.png) | ![Étape Visualisation](static/screenshots/visualization.png) | ![Étape Habillage](static/screenshots/styling.png) |
 
 ## Tech stack
 
 - SvelteKit 5 (Runes), TypeScript, Vite
-- Carbon Design System (Svelte) for UI
-- Deck.gl + WebGL for rendering; D3 for projections
-- DuckDB WASM + Spatial for in‑browser data processing
+- Carbon Design System (Svelte) for UI components
+- Deck.gl 9 + WebGL for GPU-accelerated rendering; D3 for projections
+- DuckDB WASM + Spatial for all in-browser data processing
 - Playwright + Vitest for tests; ESLint + Prettier for lint/format
-
-## Screenshots
-
-TODO: add screenshots
 
 ## Quick Start
 
-**Prerequisites**: Node.js >= 18, pnpm 10 (via Corepack)
+**Prerequisites**: Node.js >= 22, pnpm (via Corepack)
 
 ```bash
 # Enable Corepack (once)
 corepack enable pnpm
 
-# Install
+# Install dependencies (also downloads DuckDB WASM extensions)
 pnpm install
 
-# Dev server
+# Dev server on :5176
 pnpm dev
 
-# Build
+# Production build
 pnpm build && pnpm preview
 ```
 
 ## Commands
 
-| Command          | Description             |
-| ---------------- | ----------------------- |
-| `pnpm dev`       | Development server      |
-| `pnpm build`     | Production build        |
-| `pnpm check`     | Svelte type check       |
-| `pnpm lint`      | ESLint + Prettier check |
-| `pnpm format`    | Auto-format code        |
-| `pnpm test`      | All tests (unit + E2E)  |
-| `pnpm test:unit` | Vitest unit tests       |
-| `pnpm test:e2e`  | Playwright E2E tests    |
+| Command               | Description                        |
+| --------------------- | ---------------------------------- |
+| `pnpm dev`            | Development server on :5176        |
+| `pnpm build`          | Production build                   |
+| `pnpm check`          | TypeScript + Svelte type check     |
+| `pnpm lint`           | ESLint + Prettier check            |
+| `pnpm format`         | Auto-format code                   |
+| `pnpm test:unit`      | Vitest unit tests                  |
+| `pnpm test:e2e`       | Playwright E2E tests               |
+| `pnpm test:pipeline`  | Pipeline + DuckDB integration tests|
 
-**DuckDB Extensions**: Auto-downloaded on `pnpm install` (spatial, parquet, httpfs) for offline PWA.
-
-**Testing**: See `docs/TESTING.md` for detailed guide.
-
-**i18n**: Inlang Paraglide (English, French)
-
-## Documentation
-
-- Start here: `docs/README.md`
-- Key documentation:
-  - Architecture: `docs/ARCHITECTURE.md`
-  - Data Pipeline: `docs/DATA_PIPELINE.md`
-  - State & Features: `docs/STATE_AND_FEATURES.md`
-  - Developer Guide: `docs/DEVELOPER_GUIDE.md`
-  - Visualization: `docs/VISUALIZATION.md`
-  - Basemaps: `docs/BASEMAPS.md`
-  - PWA Configuration: `docs/PWA_CONFIGURATION.md`
-  - Testing: `docs/TESTING.md`
-  - Reference: `docs/REFERENCE.md`
+**i18n**: Inlang Paraglide (English, French) — all user-facing strings via `m.key()` syntax.
 
 ## Privacy, security, and data
 
-- Client‑side only: imported data never leaves the browser
-- Content Security Policy and dependency scanning in place
-- Optional audience analytics, consent‑based and privacy‑preserving
+- **Client-side only**: imported data never leaves the browser; no server, no tracking
+- All processing runs in DuckDB WASM and IndexedDB
+- Dependency scanning via Dependabot
+- To report a security vulnerability, see [SECURITY.md](SECURITY.md)
 
 ## Browser compatibility
 
-- Recent versions of Chrome, Firefox, Edge, and Safari on desktop and mobile
+Recent versions of Chrome, Firefox, Edge, and Safari on desktop.
 
 ## Contributing
 
-We welcome contributions once the repo opens to the public. Before submitting a PR:
+See [CONTRIBUTING.md](CONTRIBUTING.md). Before submitting a PR:
 
-- Follow commit conventions and run lint/tests locally
-- Add/update documentation when behavior changes
-- Keep performance and accessibility budgets in mind
+- Follow [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `fix:`, `refactor:`, `test:`, `chore:`
+- Run `pnpm lint && pnpm check && pnpm test:unit` locally
+- Add/update i18n keys when adding user-facing text (no hardcoded strings)
+- Keep accessibility in mind (keyboard navigation, contrast)
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — see [LICENSE](LICENSE).
 
 © Atelier de cartographie / Sciences Po, 2025

@@ -1,5 +1,6 @@
 import {
   GEOMETRY_COLUMN_TYPE,
+  GEOMETRY_WKT_TYPES,
   hasGeometryType
 } from '$lib/features/commons/constants/geometry.constants';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
@@ -17,9 +18,26 @@ export interface DuckDBClientForArrow {
   copy_to_geoparquet_as_buffer(tableName: string): Promise<Uint8Array>;
 }
 
+export interface YearFilterClause {
+  column: string;
+  value: number | string;
+}
+
+export function buildYearFilterWhereClause(
+  filter: YearFilterClause | undefined
+): string | null {
+  if (!filter) return null;
+  const value =
+    typeof filter.value === 'number'
+      ? filter.value
+      : `'${String(filter.value).replace(/'/g, "''")}'`;
+  return `"${filter.column}" = ${value}`;
+}
+
 export async function fetchArrowTableWithGeometry(
   tableName: string,
-  Duck: DuckDBClientForArrow
+  Duck: DuckDBClientForArrow,
+  whereClause?: string | null
 ): Promise<Table> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -36,6 +54,10 @@ export async function fetchArrowTableWithGeometry(
     query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ST_AsWKB("${geomColumn.column_name}") AS "${geomColumn.column_name}" FROM "${tableName}"`;
   } else {
     query = `SELECT * FROM "${tableName}"`;
+  }
+
+  if (whereClause) {
+    query += ` WHERE ${whereClause}`;
   }
 
   const buffer = (await Duck.query(query, {
@@ -108,9 +130,12 @@ export async function addGeoArrowMetadataFromDuckDB(
 
     if (cachedGeoArrowMetadata) {
       const primaryColumn = cachedGeoArrowMetadata.primary_column;
-      geomColumn = { column_name: primaryColumn, column_type: 'GEOMETRY' };
+      geomColumn = {
+        column_name: primaryColumn,
+        column_type: GEOMETRY_COLUMN_TYPE
+      };
       const columnMeta = cachedGeoArrowMetadata.columns[primaryColumn];
-      geometryType = columnMeta?.geometry_types?.[0] || 'GEOMETRY';
+      geometryType = columnMeta?.geometry_types?.[0] || GEOMETRY_COLUMN_TYPE;
       if (!geometryType.startsWith('ST_')) {
         geometryType = 'ST_' + geometryType;
       }
@@ -127,7 +152,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       }));
 
       geomColumn = columns.find(
-        (c: { column_type: string }) => c.column_type === 'GEOMETRY'
+        (c: { column_type: string }) => c.column_type === GEOMETRY_COLUMN_TYPE
       );
 
       if (!geomColumn) {
@@ -149,7 +174,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       const types = geomTypeResult.map((r) => r.geom_type);
 
       if (types.length === 0) {
-        geometryType = 'GEOMETRY';
+        geometryType = GEOMETRY_COLUMN_TYPE;
       } else if (types.length === 1) {
         geometryType = types[0];
       } else {
@@ -161,13 +186,13 @@ export async function addGeoArrowMetadataFromDuckDB(
         const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
 
         if (hasPolygon || hasMultiPolygon) {
-          geometryType = 'MULTIPOLYGON';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
         } else if (hasLineString || hasMultiLineString) {
-          geometryType = 'MULTILINESTRING';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
         } else if (hasPoint || hasMultiPoint) {
-          geometryType = 'MULTIPOINT';
+          geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
         } else {
-          geometryType = 'GEOMETRY';
+          geometryType = GEOMETRY_COLUMN_TYPE;
         }
 
         logger.info(
@@ -354,8 +379,31 @@ export async function getArrowTableDirect(
   tableName: string,
   Duck: DuckDBClientForArrow,
   getCachedTable: () => Table | undefined,
-  setCache: (table: Table) => void
+  setCache: (table: Table) => void,
+  whereClause?: string | null
 ): Promise<Table> {
+  if (whereClause) {
+    const baseTable = await fetchArrowTableWithGeometry(
+      tableName,
+      Duck,
+      whereClause
+    );
+    const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
+      baseTable,
+      tableName,
+      Duck
+    );
+    logger.info(
+      'Created filtered Arrow table with metadata',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        whereClause
+      }
+    );
+    return tableWithMetadata;
+  }
+
   const cached = getCachedTable();
   if (cached) {
     logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {

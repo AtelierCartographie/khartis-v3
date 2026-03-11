@@ -5,8 +5,17 @@ import {
 import { FileType } from '../store/create-project.types';
 import { getFileExtension } from './file.utils';
 import { LogCategory, logger } from './logger';
-import { GEOJSON_TYPE, SIMPLE_GEOMETRY_TYPES } from '$lib/features/commons/constants';
+import {
+  FILE_EXTENSIONS,
+  GEOJSON_TYPE,
+  MIME_TYPE_PATTERNS,
+  SIMPLE_GEOMETRY_TYPES
+} from '$lib/features/commons/constants';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+import * as m from '$lib/paraglide/messages';
+
+const TABULAR_TEXT_EXTENSION = 'txt';
+const SHAPEFILE_AUX_EXTENSIONS = ['sbn', 'sbx'] as const;
 
 export interface FileValidationConfig {
   maxFileSize: number;
@@ -188,11 +197,9 @@ export const FileValidator = {
 
   validateBasicProperties(file: File, result: DetailedValidationResult): void {
     if (file.size === 0) {
-      result.errors.push('File is empty');
+      result.errors.push(m.validation_file_empty());
     } else if (file.size > config.maxFileSize) {
-      result.errors.push(
-        `File exceeds the limit of ${config.maxFileSize / (1024 * 1024)} MB`
-      );
+      result.errors.push(m.validation_file_too_large());
     } else if (file.size > config.maxFileSize * 0.8) {
       result.warnings.push('Large file, processing may be slow');
     }
@@ -238,57 +245,78 @@ export const FileValidator = {
   detectFileType(file: File): FileType {
     const extension = getFileExtension(file.name);
     const mimeType = file.type?.toLowerCase() || '';
+    const hasExtension = <T extends readonly string[]>(values: T): boolean =>
+      values.includes(extension as T[number]);
+    const hasMimePattern = (pattern: string): boolean =>
+      mimeType.includes(pattern);
 
-    if (extension === 'csv' || mimeType.includes('csv')) {
+    if (
+      hasExtension(FILE_EXTENSIONS.CSV) ||
+      hasMimePattern(MIME_TYPE_PATTERNS.CSV)
+    ) {
       return FileType.CSV;
     }
-    if (extension === 'tsv' || mimeType.includes('tab-separated')) {
+    if (
+      hasExtension(FILE_EXTENSIONS.TSV) ||
+      hasMimePattern(MIME_TYPE_PATTERNS.TAB_SEPARATED)
+    ) {
       return FileType.TSV;
     }
-    if (extension === 'txt' && !mimeType.includes('json')) {
+    if (
+      extension === TABULAR_TEXT_EXTENSION &&
+      !hasMimePattern(FILE_EXTENSIONS.GEOJSON[1])
+    ) {
       return FileType.CSV;
     }
 
     if (
-      extension === 'geojson' ||
-      extension === 'json' ||
-      mimeType.includes('geo+json') ||
-      mimeType.includes('json')
+      hasExtension(FILE_EXTENSIONS.GEOJSON) ||
+      hasMimePattern('geo+json') ||
+      hasMimePattern(FILE_EXTENSIONS.GEOJSON[1])
     ) {
       return FileType.GEOJSON;
     }
 
-    if (['shp', 'shx', 'dbf', 'prj', 'cpg', 'sbn', 'sbx'].includes(extension)) {
+    if (
+      hasExtension(FILE_EXTENSIONS.SHAPEFILE) ||
+      SHAPEFILE_AUX_EXTENSIONS.includes(
+        extension as (typeof SHAPEFILE_AUX_EXTENSIONS)[number]
+      )
+    ) {
       return FileType.SHAPEFILE;
     }
 
-    if (extension === 'gpkg' || mimeType.includes('geopackage')) {
+    if (
+      hasExtension(FILE_EXTENSIONS.GEOPACKAGE) ||
+      hasMimePattern('geopackage')
+    ) {
       return FileType.GEOPACKAGE;
     }
 
     if (
-      extension === 'geoparquet' ||
-      extension === 'gpq' ||
-      extension === 'parquet' ||
-      mimeType.includes('parquet')
+      hasExtension(FILE_EXTENSIONS.GEOPARQUET) ||
+      hasMimePattern(MIME_TYPE_PATTERNS.PARQUET)
     ) {
       return FileType.GEOPARQUET;
     }
 
-    if (extension === 'arrow' || mimeType.includes('arrow')) {
+    if (hasExtension(FILE_EXTENSIONS.ARROW) || hasMimePattern('arrow')) {
       return FileType.ARROW;
     }
 
-    if (extension === 'kml' || mimeType.includes('kml')) {
+    if (hasExtension(FILE_EXTENSIONS.KML) || hasMimePattern('kml')) {
       return FileType.KML;
     }
-    if (extension === 'kmz' || mimeType.includes('kmz')) {
+    if (hasExtension(FILE_EXTENSIONS.KMZ) || hasMimePattern('kmz')) {
       return FileType.KMZ;
     }
-    if (extension === 'gpx' || mimeType.includes('gpx')) {
+    if (hasExtension(FILE_EXTENSIONS.GPX) || hasMimePattern('gpx')) {
       return FileType.GPX;
     }
-    if (extension === 'zip' || mimeType.includes('zip')) {
+    if (
+      hasExtension(FILE_EXTENSIONS.ZIP) ||
+      hasMimePattern(MIME_TYPE_PATTERNS.ZIP)
+    ) {
       return FileType.ZIP;
     }
 
@@ -435,7 +463,10 @@ export const FileValidator = {
           result.errors.push(`Invalid GeoJSON type: ${parsed.type}`);
         }
 
-        if (parsed.type === GEOJSON_TYPE.FEATURE_COLLECTION && !parsed.features) {
+        if (
+          parsed.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
+          !parsed.features
+        ) {
           result.errors.push('FeatureCollection without "features" property');
         }
       }
@@ -548,7 +579,8 @@ export const FileValidator = {
       }
 
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
-      if (blockedDomains.includes(parsed.hostname)) {
+      const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
+      if (!isDev && blockedDomains.includes(parsed.hostname)) {
         result.errors.push('Domain not allowed');
       }
 

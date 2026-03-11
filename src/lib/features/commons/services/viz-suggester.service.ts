@@ -191,6 +191,28 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
   }
 ] as const;
 
+const COLUMN_TYPE = {
+  NUMBER: 'number',
+  INTEGER: 'integer',
+  BIGINT: 'bigint',
+  DATE: 'date',
+  STRING: 'string',
+  TEXT: 'text',
+  BOOLEAN: 'boolean'
+} as const;
+
+const NUMERIC_COLUMN_TYPES = [
+  COLUMN_TYPE.NUMBER,
+  COLUMN_TYPE.INTEGER,
+  COLUMN_TYPE.BIGINT
+] as const;
+
+const STRING_LIKE_COLUMN_TYPES = [
+  COLUMN_TYPE.STRING,
+  COLUMN_TYPE.TEXT,
+  COLUMN_TYPE.BOOLEAN
+] as const;
+
 function simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
   if (geomType.includes('Point')) return 'point';
   if (geomType.includes('Line')) return 'line';
@@ -199,19 +221,24 @@ function simplifyGeometryType(geomType: GeometryType): SimplifiedGeometryType {
 }
 
 function mapTypeToSimple(columnType: string): DuckDBSimplifiedType {
-  switch (columnType) {
-    case 'number':
-    case 'integer':
-    case 'bigint':
-      return DuckDBSimplifiedType.NUMERIC;
-    case 'date':
-      return DuckDBSimplifiedType.DATE;
-    case 'string':
-    case 'text':
-    case 'boolean':
-    default:
-      return DuckDBSimplifiedType.STRING;
+  if (
+    NUMERIC_COLUMN_TYPES.includes(
+      columnType as (typeof NUMERIC_COLUMN_TYPES)[number]
+    )
+  ) {
+    return DuckDBSimplifiedType.NUMERIC;
   }
+  if (columnType === COLUMN_TYPE.DATE) {
+    return DuckDBSimplifiedType.DATE;
+  }
+  if (
+    STRING_LIKE_COLUMN_TYPES.includes(
+      columnType as (typeof STRING_LIKE_COLUMN_TYPES)[number]
+    )
+  ) {
+    return DuckDBSimplifiedType.STRING;
+  }
+  return DuckDBSimplifiedType.STRING;
 }
 
 function getTotalCount(column: ColumnAnalysis): number {

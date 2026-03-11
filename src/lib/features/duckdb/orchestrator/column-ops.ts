@@ -25,7 +25,8 @@ export async function renameColumn(
   tableName: string,
   oldName: string,
   newName: string,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   const start = performance.now();
 
@@ -37,7 +38,9 @@ export async function renameColumn(
     `ALTER TABLE "${escapedTable}" RENAME COLUMN "${escapedOld}" TO "${escapedNew}"`
   );
 
-  await Duck.analyse(tableName, { force: true });
+  if (!options?.skipAnalysis) {
+    await Duck.analyse(tableName, { force: true });
+  }
 
   logger.info('Renamed DuckDB column', LogCategory.DUCKDB, {
     tableName,
@@ -51,7 +54,8 @@ export async function changeColumnType(
   tableName: string,
   columnName: string,
   newType: string,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   const start = performance.now();
 
@@ -114,7 +118,9 @@ export async function changeColumnType(
     `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}`
   );
 
-  await Duck.analyse(tableName, { force: true });
+  if (!options?.skipAnalysis) {
+    await Duck.analyse(tableName, { force: true });
+  }
 
   logger.info('Changed DuckDB column type', LogCategory.DUCKDB, {
     tableName,
@@ -127,7 +133,8 @@ export async function changeColumnType(
 export async function dropColumn(
   tableName: string,
   columnName: string,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   const start = performance.now();
 
@@ -136,7 +143,9 @@ export async function dropColumn(
 
   await Duck.query(`ALTER TABLE "${escapedTable}" DROP COLUMN "${escapedCol}"`);
 
-  await Duck.analyse(tableName, { force: true });
+  if (!options?.skipAnalysis) {
+    await Duck.analyse(tableName, { force: true });
+  }
 
   logger.info('Dropped DuckDB column', LogCategory.DUCKDB, {
     tableName,
@@ -148,14 +157,17 @@ export async function dropColumn(
 export async function dropRows(
   tableName: string,
   rowIds: number[],
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   if (!rowIds.length) return;
 
   const start = performance.now();
 
   await Duck.drop_rows(tableName, rowIds);
-  await Duck.analyse(tableName, { force: true });
+  if (!options?.skipAnalysis) {
+    await Duck.analyse(tableName, { force: true });
+  }
 
   logger.info('Dropped rows from DuckDB table', LogCategory.DUCKDB, {
     tableName,
@@ -168,7 +180,8 @@ export async function refineColumn(
   tableName: string,
   columnName: string,
   operation: RefineOperation,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<void> {
   const start = performance.now();
 
@@ -178,14 +191,28 @@ export async function refineColumn(
   const operations: Record<RefineOperation, string> = {
     [RefineOperation.UPPERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = UPPER("${escapedCol}")`,
     [RefineOperation.LOWERCASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = LOWER("${escapedCol}")`,
-    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = INITCAP("${escapedCol}")`,
+    [RefineOperation.TITLECASE]: `UPDATE "${escapedTable}" SET "${escapedCol}" = CASE
+      WHEN "${escapedCol}" IS NULL THEN NULL
+      ELSE array_to_string(
+        list_transform(
+          string_split(lower("${escapedCol}"::VARCHAR), ' '),
+          x -> CASE
+            WHEN x = '' THEN x
+            ELSE upper(substr(x, 1, 1)) || substr(x, 2)
+          END
+        ),
+        ' '
+      )
+    END`,
     [RefineOperation.TRIM]: `UPDATE "${escapedTable}" SET "${escapedCol}" = TRIM("${escapedCol}")`,
     [RefineOperation.TRIM_ALL]: `UPDATE "${escapedTable}" SET "${escapedCol}" = REGEXP_REPLACE("${escapedCol}", '\\s+', ' ', 'g')`
   };
 
   await Duck.query(operations[operation]);
 
-  await Duck.analyse(tableName, { force: true });
+  if (!options?.skipAnalysis) {
+    await Duck.analyse(tableName, { force: true });
+  }
 
   logger.info('Refined DuckDB column', LogCategory.DUCKDB, {
     tableName,
@@ -200,7 +227,8 @@ export async function replaceInColumn(
   columnName: string,
   searchValue: string,
   replaceValue: string,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<number> {
   const start = performance.now();
 
@@ -240,7 +268,9 @@ export async function replaceInColumn(
       `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedReplaceValue}' WHERE ${exactMatchCondition}`
     );
 
-    await Duck.analyse(tableName, { force: true });
+    if (!options?.skipAnalysis) {
+      await Duck.analyse(tableName, { force: true });
+    }
     logger.success(
       'Column values replaced (exact matches)',
       LogCategory.DUCKDB,
@@ -363,7 +393,8 @@ export async function addCalculatedColumn(
   tableName: string,
   columnName: string,
   expression: string,
-  Duck: DuckDBClient
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
 ): Promise<AnalysisResult[]> {
   const start = performance.now();
 
@@ -390,7 +421,9 @@ export async function addCalculatedColumn(
     `CREATE OR REPLACE TABLE "${escapedTable}" AS SELECT *, (${expression}) AS "${escapedColumn}" FROM "${escapedTable}"`
   );
 
-  const updatedColumns = await Duck.analyse(tableName, { force: true });
+  const updatedColumns = options?.skipAnalysis
+    ? columns
+    : await Duck.analyse(tableName, { force: true });
 
   logger.success('Calculated column added to DuckDB', LogCategory.DUCKDB, {
     tableName,

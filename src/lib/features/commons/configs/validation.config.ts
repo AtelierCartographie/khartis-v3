@@ -2,8 +2,7 @@ export type { ValidationResult } from '$lib/features/data-pipeline/types';
 
 export {
   validationSuccess,
-  validationFailure,
-  mergeValidationResults
+  validationFailure
 } from '$lib/features/data-pipeline/types';
 
 export interface StorageLimits {

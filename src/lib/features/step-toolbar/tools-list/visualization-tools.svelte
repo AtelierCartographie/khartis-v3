@@ -1,8 +1,9 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { VisualizationTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages.js';
-  import { Button, Column, Grid, Row } from 'carbon-components-svelte';
+  import { Column, Grid, Row } from 'carbon-components-svelte';
   import {
     Earth,
     EdgeNode,
@@ -55,7 +56,7 @@
   <Grid noGutter padding={false} class={CSS_CLASSES.TOOLS_GRID}>
     <Row>
       <Column>
-        <Button
+        <IconButton
           kind="ghost"
           iconDescription={m.tool_search()}
           tooltipPosition="right"
@@ -69,7 +70,7 @@
 
     <Row>
       <Column>
-        <Button
+        <IconButton
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_layers()}
@@ -84,7 +85,7 @@
     <Row>
       <Column>
         <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <Button
+          <IconButton
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_projection()}
@@ -103,7 +104,7 @@
 
     <Row>
       <Column>
-        <Button
+        <IconButton
           tooltipPosition="right"
           kind="ghost"
           iconDescription={m.tool_simplification()}
@@ -119,7 +120,7 @@
     <Row>
       <Column>
         <div class={CSS_CLASSES.TOOL_BUTTON_WRAPPER}>
-          <Button
+          <IconButton
             tooltipPosition="right"
             kind="ghost"
             iconDescription={m.tool_facets()}

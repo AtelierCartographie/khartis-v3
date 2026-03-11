@@ -36,7 +36,9 @@
     onStyleChange,
     onModesChange,
     onSymbolsChange,
+    onMappingChange,
     onMissingDataChange,
+    onClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -52,10 +54,29 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let fillPattern = $state<boolean>(false);
-  let selectedFieldId = $state<number>(0);
+  let selectedClassFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
   let categoryCount = $state<number>(4);
 
   $effect(() => {
+    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
+      const valueFieldIndex = dataFields.findIndex(
+        (field) => field.text === visualization.mapping.valueColumn
+      );
+      if (valueFieldIndex >= 0) {
+        selectedClassFieldId = dataFields[valueFieldIndex].id;
+      }
+    }
+
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryFieldIndex = dataFields.findIndex(
+        (field) => field.text === visualization.mapping.categoryColumn
+      );
+      if (categoryFieldIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryFieldIndex].id;
+      }
+    }
+
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
     }
@@ -77,6 +98,12 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       fillPattern = visualization.missingData.pattern ?? false;
+    }
+    if (visualization?.classification) {
+      categoryCount =
+        visualization.classification.numClasses ??
+        visualization.classification.classes ??
+        4;
     }
   });
 
@@ -151,6 +178,22 @@
     onMissingDataChange?.({ pattern: value });
   }
 
+  function handleClassFieldSelect(fieldId: number) {
+    selectedClassFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ categoryColumn: field.text });
+    }
+  }
+
   const shapeItems = [
     { icon: CircleFilled, label: m.point(), iconSize: 16 },
     { icon: SquareFill, label: m.square(), iconSize: 16 },
@@ -217,7 +260,8 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={selectedClassFieldId}
+      on:select={(e) => handleClassFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
@@ -229,7 +273,9 @@
   <PalettePreview
     label={m.color_palette()}
     colors={sequentialPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -254,7 +300,8 @@
     <Dropdown
       titleText={m.color_according()}
       items={dataFields}
-      bind:selectedId={selectedFieldId}
+      selectedId={selectedCategoryFieldId}
+      on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
       type="default"
     />
   </div>
@@ -267,6 +314,7 @@
     label={m.color_palette()}
     colors={qualitativePalette}
     oninvert={onInvertPalette}
+    onClassificationChange={onClassificationChange}
   />
   <SliderWithInput
     label={m.opacity()}
@@ -297,6 +345,7 @@
   onModesChange={onModesChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
+  onClassificationChange={onClassificationChange}
 />
 
 <style lang="scss">

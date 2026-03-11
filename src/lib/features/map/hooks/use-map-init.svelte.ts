@@ -9,14 +9,14 @@ export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
-  BASEMAP_STYLES,
   BasemapStyle,
   DECK_VIEW_ID,
   DECK_CANVAS_ID,
-  DECK_DEVICE_TYPE
+  DECK_DEVICE_TYPE,
+  getBasemapStyle
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
-import { createTooltipHandler } from '../interactions';
+import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -35,7 +35,6 @@ interface OrthographicViewStateChangeParams {
   oldViewState?: DeckOrthographicViewStateMap;
 }
 
-
 export interface MapInitConfig {
   center: [number, number];
   zoom: number;
@@ -48,6 +47,10 @@ export interface UseMapInitProps {
   onZoom: () => void;
   onMoveEnd: () => void;
   getActiveVisualizations?: () => import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig[];
+  onOrthographicViewStateChanged?: (
+    target: [number, number, number],
+    zoom: number
+  ) => void;
 }
 
 export interface UseMapInitReturn {
@@ -69,7 +72,10 @@ const DEFAULT_CONFIG: MapInitConfig = {
   maxZoom: 20
 };
 
-const ORTHOGRAPHIC_VIEW = new OrthographicView({ id: DECK_VIEW_ID, flipY: false });
+const ORTHOGRAPHIC_VIEW = new OrthographicView({
+  id: DECK_VIEW_ID,
+  flipY: false
+});
 let hasPatchedLumaCanvasContext = false;
 let hasWebGL2Support: boolean | null = null;
 
@@ -186,7 +192,13 @@ function createDeckWithDeferredResizeObserver(
 }
 
 export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
-  const { onMapLoaded, onZoom, onMoveEnd, getActiveVisualizations } = props;
+  const {
+    onMapLoaded,
+    onZoom,
+    onMoveEnd,
+    getActiveVisualizations,
+    onOrthographicViewStateChanged
+  } = props;
   patchLumaCanvasContextResizeGuard();
 
   let map = $state<maplibregl.Map | null>(null);
@@ -277,13 +289,26 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
 
     const handleViewStateChange = ({
-      viewState
+      viewState,
+      interactionState
     }: OrthographicViewStateChangeParams): DeckOrthographicViewStateMap => {
       if (viewState.main) {
         mapInstanceStore.updateDeckViewState({
           target: viewState.main.target,
           zoom: viewState.main.zoom
         });
+
+        if (
+          onOrthographicViewStateChanged &&
+          (interactionState.isDragging ||
+            interactionState.isPanning ||
+            interactionState.isZooming)
+        ) {
+          onOrthographicViewStateChanged(
+            viewState.main.target,
+            viewState.main.zoom
+          );
+        }
       }
       onZoom();
       return viewState;
@@ -309,7 +334,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           height: '100%',
           controller: { scrollZoom: false, doubleClickZoom: false },
           layers: [],
-          getTooltip: createTooltipHandler(getActiveVisualizations),
+          onHover: createHoverHandler(getActiveVisualizations),
+          onClick: createClickHandler(getActiveVisualizations),
           onViewStateChange: handleViewStateChange as DeckProps<
             [OrthographicView]
           >['onViewStateChange'],
@@ -343,6 +369,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckInstance = orthographicDeck;
     currentViewMode = ViewMode.ORTHOGRAPHIC;
     mapInstanceStore.setDeckInstance(orthographicDeck);
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__deck = orthographicDeck;
+    }
   }
 
   let _initialStyleKey: string | null = null;
@@ -384,7 +413,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       deckOverlay = new MapboxOverlay({
         interleaved: true,
         layers: [],
-        getTooltip: createTooltipHandler(getActiveVisualizations)
+        onHover: createHoverHandler(getActiveVisualizations),
+        onClick: createClickHandler(getActiveVisualizations)
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);
@@ -400,6 +430,10 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
       logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
+      if (import.meta.env.DEV) {
+        (window as unknown as Record<string, unknown>).__maplibreMap = map;
+        (window as unknown as Record<string, unknown>).__deck = deckOverlay;
+      }
 
       onMapLoaded();
 
@@ -416,9 +450,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       );
       if (!isMapLoaded && map) {
         map.setStyle(
-          BASEMAP_STYLES[
+          getBasemapStyle(
             BasemapStyle.BLANK_WHITE
-          ] as maplibregl.StyleSpecification
+          ) as maplibregl.StyleSpecification
         );
       }
     });

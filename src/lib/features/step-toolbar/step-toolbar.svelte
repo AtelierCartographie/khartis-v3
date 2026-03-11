@@ -7,6 +7,7 @@
   import { m } from '$lib/paraglide/messages.js';
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
   import clsx from 'clsx';
+  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import {
     DOM_IDS,
@@ -18,6 +19,9 @@
   import StylingTools from './tools-list/styling-tools.svelte';
   import VisualizationTools from './tools-list/visualization-tools.svelte';
   import ToolContainer from './tools/tool-container.svelte';
+
+  const MAIN_TOOLBAR_CONTENT_SELECTOR =
+    '#khartis-main-toolbar .toolbar-content';
 
   const listToolsComponents = {
     [ToolbarStep.Visualizations]: VisualizationTools,
@@ -39,9 +43,14 @@
       : undefined
   );
 
-  const selectStep = (step: ToolbarStep): void => {
+  const selectStep = async (step: ToolbarStep): Promise<void> => {
     globalActions.setNavigationState(step);
     globalState.selectedTool = undefined;
+    await tick();
+    const content = document.querySelector(MAIN_TOOLBAR_CONTENT_SELECTOR);
+    if (content) {
+      content.scrollTop = 0;
+    }
   };
 
   const isStepSelected = (step: ToolbarStep): boolean => {
@@ -124,6 +133,7 @@
   :global(#khartis-step-toolbar) {
     position: relative;
     z-index: var(--z-toolbar);
+    align-self: center;
   }
 
   header span {
@@ -161,7 +171,8 @@
   }
 
   .nav-item.selected {
-    background-color: var(--cds-ui-03);
+    background-color: #cac5c4;
+    border-left: 3px solid #cac5c4;
   }
 
   .nav-item span {

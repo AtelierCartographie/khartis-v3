@@ -1,5 +1,5 @@
 import { FileStatus } from '$lib/features/commons/constants/ui.constants';
-import { MIME } from '$lib/features/commons/constants';
+import { FILE_EXTENSIONS, MIME } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import { FileType } from '$lib/features/commons/store/create-project.types';
@@ -14,39 +14,51 @@ import { FileValidator } from '$lib/features/commons/utils/file-validator.utils'
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { DataValidator } from '$lib/features/commons/utils/validation.utils';
+import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
+
+const TABULAR_TEXT_EXTENSION = 'txt';
 
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
-  switch (ext) {
-    case 'csv':
-      return FileType.CSV;
-    case 'tsv':
-    case 'txt':
-      return FileType.TSV;
-    case 'geojson':
-    case 'json':
-      return FileType.GEOJSON;
-    case 'shp':
-      return FileType.SHAPEFILE;
-    case 'gpkg':
-      return FileType.GEOPACKAGE;
-    case 'geoparquet':
-    case 'parquet':
-      return FileType.GEOPARQUET;
-    case 'arrow':
-      return FileType.ARROW;
-    case 'kml':
-      return FileType.KML;
-    case 'kmz':
-      return FileType.KMZ;
-    case 'gpx':
-      return FileType.GPX;
-    case 'zip':
-      return FileType.ZIP;
-    default:
-      return FileType.UNKNOWN;
+  const matches = <T extends readonly string[]>(values: T): boolean =>
+    values.includes(ext as T[number]);
+
+  if (matches(FILE_EXTENSIONS.CSV)) {
+    return FileType.CSV;
   }
+  if (matches(FILE_EXTENSIONS.TSV) || ext === TABULAR_TEXT_EXTENSION) {
+    return FileType.TSV;
+  }
+  if (matches(FILE_EXTENSIONS.GEOJSON)) {
+    return FileType.GEOJSON;
+  }
+  if (matches(FILE_EXTENSIONS.SHAPEFILE)) {
+    return FileType.SHAPEFILE;
+  }
+  if (matches(FILE_EXTENSIONS.GEOPACKAGE)) {
+    return FileType.GEOPACKAGE;
+  }
+  if (matches(FILE_EXTENSIONS.GEOPARQUET)) {
+    return FileType.GEOPARQUET;
+  }
+  if (matches(FILE_EXTENSIONS.ARROW)) {
+    return FileType.ARROW;
+  }
+  if (matches(FILE_EXTENSIONS.KML)) {
+    return FileType.KML;
+  }
+  if (matches(FILE_EXTENSIONS.KMZ)) {
+    return FileType.KMZ;
+  }
+  if (matches(FILE_EXTENSIONS.GPX)) {
+    return FileType.GPX;
+  }
+  if (matches(FILE_EXTENSIONS.ZIP)) {
+    return FileType.ZIP;
+  }
+
+  return FileType.UNKNOWN;
 }
 
 function getMimeTypeFromFileType(fileType: FileType): string {
@@ -161,10 +173,10 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
   async function computeDuplicatesAsync(
     fileId: string,
     tableName: string,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     try {
-      const duplicateResult = (await Duck.query(
+      const duplicateResult = (await duck.query(
         `SELECT (SELECT COUNT(*) FROM "${tableName}") - (SELECT COUNT(*) FROM (SELECT DISTINCT * FROM "${tableName}")) as duplicate_count`,
         { format: 'array' }
       )) as Array<{ duplicate_count: bigint | number }>;
@@ -233,7 +245,6 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     });
 
     const { dataPipeline } = await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName, columns, rowCount } = dataset;
@@ -250,7 +261,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await Duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -274,7 +285,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     }
 
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    computeDuplicatesAsync(uploadedFile.id, tableName, Duck!);
+    computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
   }
 
   return { process };
@@ -359,12 +370,11 @@ function createGeoPackageProcessor(
     });
 
     const { dataPipeline } = await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const dataset = (await dataPipeline.processFile(file)) as DatasetResult;
     const { tableName } = dataset;
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await Duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -405,7 +415,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       }>;
     },
     fileContent: ArrayBuffer,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     const { tableName, columns, rowCount } = dataset as {
       tableName: string;
@@ -429,7 +439,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const statistics = buildColumnStatistics(columns as ColumnInfo[], rowCount);
 
-    const sampleData = (await Duck!.query(
+    const sampleData = (await duck.query(
       `SELECT * FROM "${tableName}" LIMIT 100`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
@@ -465,7 +475,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       >
     >,
     fileContent: ArrayBuffer,
-    Duck: Awaited<typeof import('$lib/features/duckdb')>['Duck']
+    duck: typeof Duck
   ): Promise<void> {
     void fileContent;
     const result = zipResult as {
@@ -492,7 +502,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
       let fullData: Array<Record<string, unknown>> = [];
       try {
-        fullData = (await Duck!.query(`SELECT * FROM "${tableName}"`, {
+        fullData = (await duck.query(`SELECT * FROM "${tableName}"`, {
           format: 'array'
         })) as Array<Record<string, unknown>>;
       } catch {
@@ -571,7 +581,6 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
 
     const { dataPipeline, isZipDatasetResult } =
       await import('$lib/features/data-pipeline');
-    const { Duck } = await import('$lib/features/duckdb');
 
     const result = await dataPipeline.processFile(file);
 

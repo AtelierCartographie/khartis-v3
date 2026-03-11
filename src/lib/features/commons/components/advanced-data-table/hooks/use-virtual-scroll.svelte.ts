@@ -23,6 +23,10 @@ function createIndexArray(length: number, start = 0): number[] {
   return Array.from({ length }, (_, i) => i + start);
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 export function useVirtualScroll(
   props: UseVirtualScrollProps
 ): UseVirtualScrollReturn {
@@ -49,10 +53,11 @@ export function useVirtualScroll(
   async function initializeRows(start: number): Promise<void> {
     const numRows = getNumRows();
     const maxRows = getMaxRows();
-    const end = numRows - start;
+    const safeStart = clamp(start, 0, Math.max(0, numRows - 1));
+    const end = numRows - safeStart;
     const length = Math.min(end, maxRows * 2);
-    rows = createIndexArray(length, start);
-    startIndex = start;
+    rows = createIndexArray(length, safeStart);
+    startIndex = safeStart;
     await props.onLoadMore();
   }
 
@@ -87,14 +92,25 @@ export function useVirtualScroll(
     const numRows = getNumRows();
     if (numRows === 0 || position < 0 || position >= numRows) return;
 
-    const newStartIndex = Math.max(0, position - offsetRows);
+    const maxWindowSize = Math.max(1, getMaxRows() * 2);
+    const maxStartIndex = Math.max(0, numRows - maxWindowSize);
+    const newStartIndex = clamp(position - offsetRows, 0, maxStartIndex);
+
+    if (tableContainer) {
+      tableContainer.scrollTop = 0;
+    }
+
     await initializeRows(newStartIndex);
     await tick();
 
     const targetRowPosition = position - newStartIndex;
     const scrollPosition = Math.max(0, (targetRowPosition - 3) * rowHeight);
     if (tableContainer) {
-      tableContainer.scrollTop = scrollPosition;
+      const maxScrollTop = Math.max(
+        0,
+        tableContainer.scrollHeight - tableContainer.clientHeight
+      );
+      tableContainer.scrollTop = Math.min(scrollPosition, maxScrollTop);
     }
   }
 

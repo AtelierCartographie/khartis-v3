@@ -24,7 +24,7 @@ export const TEST_IDS = {
 } as const;
 
 export const POPOVER_DIMENSIONS = {
-  DEFAULT_LIST_WIDTH: 420,
+  DEFAULT_LIST_WIDTH: 320,
   DEFAULT_GRID_WIDTH: '790px',
   MAX_HEIGHT: '70vh',
   DROPDOWN_MAX_HEIGHT: '11rem'
@@ -34,11 +34,4 @@ export const STORAGE_KEYS = {
   PROJECTION_TOOL_OPENED: 'khartis_projection_tool_opened',
   FACETS_TOOL_OPENED: 'khartis_facets_tool_opened',
   STORAGE_VALUE_OPENED: '1'
-} as const;
-
-export const NOTIFICATION_BADGE_SIZE = {
-  TOP: 2,
-  RIGHT: 2,
-  WIDTH: 8,
-  HEIGHT: 8
 } as const;

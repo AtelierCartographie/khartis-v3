@@ -2,8 +2,13 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, InlineNotification, Tag } from 'carbon-components-svelte';
-  import { List, MagicWand } from 'carbon-icons-svelte';
+  import {
+    Button,
+    ComboBox,
+    InlineNotification,
+    Tag
+  } from 'carbon-components-svelte';
+  import { Add, List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
 
   interface SuggestedBasemap {
@@ -22,13 +27,15 @@
     allBasemaps: BasemapMetadata[];
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
+    onSuggestBasemap?: () => void;
   }
 
   let {
     suggestedBasemaps,
     allBasemaps,
     basemapSelected,
-    onSelectBasemap
+    onSelectBasemap,
+    onSuggestBasemap
   }: Props = $props();
 
   let searchQuery = $state('');
@@ -43,8 +50,9 @@
   const filteredBasemaps = $derived(() => {
     let results: BasemapMetadata[] = [...allBasemaps];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
+    const trimmedQuery = searchQuery.trim();
+    if (trimmedQuery) {
+      const query = trimmedQuery.toLowerCase();
       results = results.filter(
         (b) =>
           b.title.toLowerCase().includes(query) ||
@@ -60,12 +68,15 @@
     return results;
   });
 
+  const suggestionIds = $derived(
+    new Set(suggestedBasemaps.map((s) => s.basemap.file))
+  );
+
   const displayedBasemaps = $derived(() => {
     if (searchQuery.trim() || selectedYear !== 'all') {
-      return filteredBasemaps();
+      return filteredBasemaps().filter((b) => !suggestionIds.has(b.file));
     }
 
-    const suggestionIds = new Set(suggestedBasemaps.map((s) => s.basemap.file));
     return allBasemaps.filter((b) => !suggestionIds.has(b.file));
   });
 
@@ -90,6 +101,8 @@
   ) {
     if (e.detail.selectedItem) {
       searchQuery = e.detail.selectedItem.basemap.title;
+      // Selecting from the ComboBox must trigger the same flow as clicking a card.
+      onSelectBasemap(e.detail.selectedItem.basemap);
     } else {
       searchQuery = '';
     }
@@ -103,7 +116,10 @@
 </script>
 
 <div class="tab-content">
-  <ExpandableSection title={m.section_suggestions()} defaultOpen={true}>
+  <ExpandableSection
+    title={m.section_suggestions()}
+    open={suggestedBasemaps.length > 0}
+  >
     {#snippet icon()}
       <MagicWand size={16} />
     {/snippet}
@@ -134,7 +150,10 @@
     {/if}
   </ExpandableSection>
 
-  <ExpandableSection title={m.basemap_other()} defaultOpen={false}>
+  <ExpandableSection
+    title={m.basemap_other()}
+    open={suggestedBasemaps.length === 0}
+  >
     {#snippet icon()}
       <List size={16} />
     {/snippet}
@@ -143,6 +162,7 @@
       <ComboBox
         items={searchComboBoxItems()}
         selectedId={searchSelectedId}
+        bind:value={searchQuery}
         placeholder={m.basemap_search_placeholder()}
         shouldFilterItem={(item, value) => {
           if (!value) return true;
@@ -192,6 +212,18 @@
             variant="gray"
           />
         {/each}
+      </div>
+    {/if}
+    {#if onSuggestBasemap}
+      <div class="suggest-action">
+        <Button
+          kind="ghost"
+          size="small"
+          icon={Add}
+          on:click={onSuggestBasemap}
+        >
+          {m.basemap_suggest_button()}
+        </Button>
       </div>
     {/if}
   </ExpandableSection>
@@ -272,5 +304,13 @@
     text-align: center;
     color: var(--cds-text-02);
     font-size: 0.875rem;
+  }
+
+  .suggest-action {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-03);
+    border-top: 1px solid var(--cds-border-subtle-01);
   }
 </style>

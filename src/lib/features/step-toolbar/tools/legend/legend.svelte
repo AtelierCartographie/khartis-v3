@@ -9,7 +9,6 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import {
-    Button,
     Column,
     Grid,
     Row,
@@ -18,7 +17,7 @@
     Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { Document, TextFont, ViewFilled, ViewOff } from 'carbon-icons-svelte';
+  import { TableOfContents, TextFont } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import {
     LEGEND_DEFAULTS,
@@ -40,7 +39,7 @@
   const legendState = $derived(getLegendState());
   const items = $derived(legendState.items);
 
-  let localFontFamily = $state('');
+  let localFontFamily = $state<string>(AVAILABLE_FONTS[0]);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
 
@@ -61,8 +60,8 @@
   );
 
   const tabItems = $derived([
-    { icon: Document, label: m.legend_content(), iconSize: 20 },
-    { icon: TextFont, label: m.legend_style(), iconSize: 20 }
+    { icon: TableOfContents, label: m.legend_content(), iconSize: 16 },
+    { icon: TextFont, label: m.legend_style(), iconSize: 16 }
   ]);
 
   $effect(() => {
@@ -73,15 +72,6 @@
   const activeTabIndex = $derived(
     legendState.activeTab === LegendTab.CONTENT ? 0 : 1
   );
-  const legendVisible = $derived(legendState.visible);
-
-  function toggleVisibility(id: string): void {
-    const item = items.find((i) => i.id === id);
-    if (item) {
-      legendActions.updateLegendItem(id, { visible: !item.visible });
-    }
-  }
-
   function updateItemField(
     id: string,
     field: keyof LegendItem,
@@ -95,12 +85,6 @@
     legendActions.setActiveTab(
       newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
     );
-  }
-
-  function handleLegendVisibilityChange(visible: boolean): void {
-    if (visible !== legendState.visible) {
-      legendActions.setVisibility(visible);
-    }
   }
 
   function handleFontFamilyChange(): void {
@@ -153,7 +137,7 @@
 </script>
 
 <div id={DOM_IDS.LEGEND_TOOL}>
-  <Grid padding noGutter fullWidth>
+  <Grid noGutter fullWidth>
     <Row>
       <Column>
         <ToggleTabs
@@ -166,40 +150,13 @@
         />
       </Column>
     </Row>
-
-    <Row>
-      <Column>
-        <div class="switch-row">
-          <span class="switch-label">{m.tool_legend()}</span>
-          <Switch
-            toggled={legendVisible}
-            labelText={m.tool_legend()}
-            hideLabel
-            labelA={m.layers_hide()}
-            labelB={m.layers_show()}
-            showStateLabel
-            onchange={handleLegendVisibilityChange}
-          />
-        </div>
-      </Column>
-    </Row>
   </Grid>
 
   {#if activeTabIndex === 0}
     <div class="expandable-stack">
       {#each items as item, index (item.id)}
         <ExpandableSection title={item.name} defaultOpen={index === 0}>
-          {#snippet icon()}
-            <Button
-              kind="ghost"
-              size="small"
-              icon={item.visible ? ViewFilled : ViewOff}
-              iconDescription={item.visible ? m.layers_hide() : m.layers_show()}
-              onclick={() => toggleVisibility(item.id)}
-            />
-          {/snippet}
-
-          <Grid padding noGutter>
+          <Grid noGutter>
             <Row>
               <Column>
                 <TextInput
@@ -207,9 +164,13 @@
                   size="xl"
                   placeholder={item.name}
                   id={`${item.id}-title`}
-                  bind:value={item.title}
-                  on:change={() =>
-                    updateItemField(item.id, 'title', item.title)}
+                  value={item.title}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'title',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>
@@ -218,12 +179,16 @@
               <Column>
                 <TextInput
                   labelText={m.legend_subtitle()}
-                  size="xl"
+                  size="sm"
                   placeholder={m.legend_no_subtitle()}
                   id={`${item.id}-subtitle`}
-                  bind:value={item.subtitle}
-                  on:change={() =>
-                    updateItemField(item.id, 'subtitle', item.subtitle)}
+                  value={item.subtitle}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'subtitle',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>
@@ -232,11 +197,16 @@
               <Column>
                 <TextInput
                   labelText={m.legend_note()}
-                  size="xl"
+                  size="sm"
                   placeholder={m.legend_no_note()}
                   id={`${item.id}-note`}
-                  bind:value={item.note}
-                  on:change={() => updateItemField(item.id, 'note', item.note)}
+                  value={item.note}
+                  on:input={(e) =>
+                    updateItemField(
+                      item.id,
+                      'note',
+                      (e.currentTarget as HTMLInputElement)?.value ?? ''
+                    )}
                 />
               </Column>
             </Row>
@@ -245,7 +215,7 @@
       {/each}
     </div>
   {:else}
-    <Grid padding noGutter fullWidth>
+    <Grid noGutter fullWidth>
       <Row>
         <Column>
           <p class="description">
@@ -255,51 +225,51 @@
       </Row>
 
       <Row>
-        <Column sm={2} md={4} lg={8}>
-          <Select
-            id={DOM_IDS.FONT_SELECT}
-            labelText={m.legend_font()}
-            bind:selected={localFontFamily}
-            on:change={handleFontFamilyChange}
-            size="xl"
-          >
-            {#each AVAILABLE_FONTS as f (f)}
-              <SelectItem value={f} text={f} />
-            {/each}
-          </Select>
-        </Column>
-
-        <Column sm={2} md={4} lg={8}>
-          <Select
-            id={DOM_IDS.FONT_SIZE}
-            labelText={m.legend_font_size()}
-            bind:selected={localFontSize}
-            on:change={handleFontSizeChange}
-            size="xl"
-          >
-            {#each LEGEND_FONT_SIZES as s (s)}
-              <SelectItem value={s} text={String(s)} />
-            {/each}
-          </Select>
-        </Column>
-      </Row>
-
-      <Row>
         <Column>
-          <ColorPicker
-            triggerLabel={m.legend_text_color()}
-            hex={textColorHex}
-            hue={textColor.hue}
-            saturation={textColor.saturation}
-            lightness={textColor.lightness}
-            onValidate={({
-              hue,
-              saturation,
-              lightness
-            }: ColorPickerValidateEvent) => {
-              handleTextColorChange({ hue, saturation, lightness });
-            }}
-          />
+          <div class="text-style-row">
+            <div class="text-style-font">
+              <Select
+                id={DOM_IDS.FONT_SELECT}
+                labelText={m.legend_font()}
+                bind:selected={localFontFamily}
+                on:change={handleFontFamilyChange}
+                size="sm"
+              >
+                {#each AVAILABLE_FONTS as f (f)}
+                  <SelectItem value={f} text={f} />
+                {/each}
+              </Select>
+            </div>
+            <div class="text-style-size">
+              <Select
+                id={DOM_IDS.FONT_SIZE}
+                labelText={m.legend_font_size()}
+                bind:selected={localFontSize}
+                on:change={handleFontSizeChange}
+                size="sm"
+              >
+                {#each LEGEND_FONT_SIZES as s (s)}
+                  <SelectItem value={s} text={String(s)} />
+                {/each}
+              </Select>
+            </div>
+            <div class="text-style-color">
+              <ColorPicker
+                triggerLabel={m.legend_text_color()}
+                hex={textColorHex}
+                hue={textColor.hue}
+                saturation={textColor.saturation}
+                lightness={textColor.lightness}
+                onValidate={({
+                  hue,
+                  saturation,
+                  lightness
+                }: ColorPickerValidateEvent) => {
+                  handleTextColorChange({ hue, saturation, lightness });
+                }}
+              />
+            </div>
+          </div>
         </Column>
       </Row>
 
@@ -307,14 +277,18 @@
 
       <Row>
         <Column>
-          <Switch
-            labelText={m.legend_background()}
-            toggled={backgroundEnabled}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={handleBackgroundEnabledChange}
-          />
+          <div class="switch-row">
+            <span class="switch-label">{m.legend_background()}</span>
+            <Switch
+              labelText={m.legend_background()}
+              hideLabel
+              toggled={backgroundEnabled}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={handleBackgroundEnabledChange}
+            />
+          </div>
         </Column>
 
         <Column>
@@ -336,34 +310,17 @@
       </Row>
 
       <Row>
-        <Column sm={3} md={6} lg={13}>
-          <div class="slider">
-            <Slider
-              labelText={m.legend_opacity()}
-              min={0}
-              max={100}
-              step={1}
-              bind:value={localOpacity}
-              on:change={handleOpacityChange}
-              hideTextInput
-            />
-          </div>
-        </Column>
-
-        <Column sm={1} md={2} lg={3}>
-          <div class="input-wrapper">
-            <input
-              id={DOM_IDS.OPACITY}
-              class="number"
-              type="number"
-              min={0}
-              max={100}
-              step={1}
-              bind:value={localOpacity}
-              onchange={handleOpacityChange}
-              inputmode="numeric"
-            />
-          </div>
+        <Column>
+          <Slider
+            labelText={m.legend_opacity()}
+            min={0}
+            max={100}
+            step={1}
+            bind:value={localOpacity}
+            on:change={handleOpacityChange}
+            minLabel=""
+            maxLabel=""
+          />
         </Column>
       </Row>
     </Grid>
@@ -409,8 +366,25 @@
     background: var(--cds-border-subtle);
   }
 
-  .slider {
-    width: 100%;
+  .text-style-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--cds-spacing-02);
+  }
+
+  .text-style-font {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .text-style-size {
+    width: 80px;
+    flex-shrink: 0;
+  }
+
+  .text-style-color {
+    flex-shrink: 0;
+    padding-bottom: 1px;
   }
 
   :global(#khartis-legend-tool .slider .bx--slider) {
@@ -423,51 +397,5 @@
 
   :global(#khartis-legend-tool .slider .bx--slider__filled-track) {
     background: var(--cds-text-01);
-  }
-
-  .input-wrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: flex-end;
-  }
-
-  .input-wrapper .number {
-    width: 100%;
-    height: 32px;
-    min-width: unset;
-    padding: 0 var(--cds-spacing-03);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    background: var(--cds-ui-02);
-    color: var(--cds-text-01);
-    font-weight: normal;
-    font-family: var(--cds-code-01-font-family);
-    line-height: var(--cds-body-short-01-line-height);
-    border-radius: 0;
-    box-sizing: border-box;
-    font-weight: 600;
-  }
-
-  .input-wrapper .number:focus {
-    outline: none;
-    border-bottom-color: var(--cds-border-strong);
-  }
-
-  .input-wrapper .number:disabled {
-    background: var(--cds-ui-03);
-    color: var(--cds-text-02);
-    cursor: not-allowed;
-  }
-
-  input[type='number']::-webkit-outer-spin-button,
-  input[type='number']::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  input[type='number'] {
-    appearance: textfield;
-    -moz-appearance: textfield;
   }
 </style>

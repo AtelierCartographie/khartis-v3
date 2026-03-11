@@ -40,8 +40,8 @@
 
   interface Props {
     dataFields?: Array<{ id: number; text: string }>;
-    discretizationMethods?: Array<{ id: number; text: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
@@ -54,8 +54,8 @@
 
   let {
     dataFields = [],
-    discretizationMethods: _discretizationMethods = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onClassificationChange,
@@ -66,6 +66,7 @@
 
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
+  let selectedCategoryFieldId = $state<number>(0);
 
   $effect(() => {
     if (visualization?.mapping.labelColumn && dataFields.length > 0) {
@@ -75,6 +76,17 @@
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
       }
+    } else if (dataFields.length > 0) {
+      selectedFieldId = 0;
+      onMappingChange?.({ labelColumn: dataFields[0].text });
+    }
+    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+      const categoryIndex = dataFields.findIndex(
+        (f) => f.text === visualization.mapping.categoryColumn
+      );
+      if (categoryIndex >= 0) {
+        selectedCategoryFieldId = dataFields[categoryIndex].id;
+      }
     }
   });
 
@@ -83,6 +95,14 @@
     const field = dataFields[fieldId];
     if (field && onMappingChange) {
       onMappingChange({ labelColumn: field.text });
+    }
+  }
+
+  function handleCategoryFieldSelect(fieldId: number) {
+    selectedCategoryFieldId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field && onMappingChange) {
+      onMappingChange({ categoryColumn: field.text });
     }
   }
 
@@ -111,8 +131,13 @@
 
   $effect(() => {
     if (visualization?.style) {
+      const labelOpacity = visualization.style.labelOpacity;
       opacity =
-        visualization.style.labelOpacity ?? VISUALIZATION_DEFAULTS.labelOpacity;
+        labelOpacity !== undefined
+          ? labelOpacity <= 1
+            ? Math.round(labelOpacity * 100)
+            : labelOpacity
+          : VISUALIZATION_DEFAULTS.labelOpacity;
       color =
         (visualization.style.labelColor as string) ?? DEFAULT_COLORS.label;
       size = visualization.style.labelSize ?? VISUALIZATION_DEFAULTS.labelSize;
@@ -172,7 +197,7 @@
 
   function handleOpacityChange(value: number) {
     opacity = value;
-    onStyleChange?.({ labelOpacity: value });
+    onStyleChange?.({ labelOpacity: value / 100 });
   }
 
   function handleSizeChange(value: number) {
@@ -216,6 +241,9 @@
   }
 
   function handleToggleChange(checked: boolean) {
+    if (checked && opacity <= 0) {
+      opacity = VISUALIZATION_DEFAULTS.labelOpacity;
+    }
     onToggleVisibility?.(checked);
   }
 
@@ -254,7 +282,10 @@
       [ClassificationMethod.EQUAL_INTERVAL]:
         m.discretization_method_equal_interval,
       [ClassificationMethod.STANDARD_DEVIATION]: m.discretization_method_stddev,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual
+      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
+      [ClassificationMethod.Q6]: m.discretization_method_q6,
+      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
+      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
     };
     const method =
       visualization.classification.method ?? ClassificationMethod.QUANTILES;
@@ -272,6 +303,8 @@
   defaultOpen={false}
   showToggle
   toggleChecked={enabled}
+  disabled={disabled}
+  disabledReason={disabled ? m.labels_disabled_no_geometry() : undefined}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
@@ -326,14 +359,17 @@
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
+        selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {:else if colorMode === ColorMode.CATEGORIES}
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
           items={dataFields}
-          bind:selectedId={selectedFieldId}
+          selectedId={selectedCategoryFieldId}
+          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
         />
       </div>
@@ -346,6 +382,7 @@
         label={m.color_palette()}
         colors={qualitativePalette}
         oninvert={onInvertPalette}
+        onClassificationChange={handleClassificationChange}
       />
     {/if}
 

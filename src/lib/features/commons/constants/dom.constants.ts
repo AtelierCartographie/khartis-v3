@@ -68,7 +68,8 @@ export const EVENT = {
   DRAGEND: 'dragend',
   DRAGOVER: 'dragover',
   DROP: 'drop',
-  CONTEXTMENU: 'contextmenu'
+  CONTEXTMENU: 'contextmenu',
+  TRANSITIONEND: 'transitionend'
 } as const;
 
 export const CUSTOM_EVENT = {

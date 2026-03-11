@@ -73,7 +73,7 @@
     height: 22px;
     border: none;
     border-radius: 9999px;
-    background-color: var(--cds-border-strong-01, #8d8d8d);
+    background-color: var(--cds-ui-04, #8d8d8d);
     cursor: pointer;
     transition: background-color 0.12s ease;
     flex-shrink: 0;
@@ -87,7 +87,7 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background-color: var(--cds-layer-01, #ffffff);
+    background-color: var(--cds-icon-03, #ffffff);
     transition: transform 0.12s ease;
   }
 
@@ -102,7 +102,7 @@
   }
 
   .kh-switch-input:checked {
-    background-color: var(--cds-focus, #0f62fe);
+    background-color: var(--cds-support-02, #198038);
   }
 
   .kh-switch-input:checked::before {

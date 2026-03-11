@@ -9,7 +9,7 @@ export const DUCK_CONST = {
     /** Default format for tabular data */
     FORMAT_TABULAR: 'csv',
     /** Common null value representations recognized during parsing */
-    NULL_VALUES: `['', ':', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'none', 'NONE']`,
+    NULL_VALUES: `['', ':', '-', 'null', 'NULL', 'NA', 'N/A', 'n/a', '#N/A', 'NaN', 'nil', 'NIL', 'none', 'NONE', 'None']`,
     /** Default data source identifier */
     SOURCE: 'user'
   },
@@ -33,7 +33,7 @@ export const DUCK_CONST = {
   REGEX: {
     TABULAR: /\.(csv|tsv|text|txt)/i,
     GEO: /\.(geojson|json|gpkg|kml|kmz|gpx)/i,
-    PARQUET: /\.(parquet|geoparquet)/i,
+    PARQUET: /\.(parquet|geoparquet|gpq)/i,
     ARROW: /\.arrow$/i,
     COLUMN_VALIDATION_INTEGER: /^-?\d+$/,
     COLUMN_VALIDATION_DOUBLE: /^-?\d+(\.\d+)?$/,
@@ -116,7 +116,6 @@ export const EXTENSIONS = {
   SPATIAL: 'spatial',
   HTTPFS: 'httpfs'
 } as const;
-
 
 /**
  * Table name patterns and suffixes.

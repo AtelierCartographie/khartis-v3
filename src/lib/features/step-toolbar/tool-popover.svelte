@@ -27,7 +27,7 @@
       | 'right'
       | 'right-bottom'
       | 'right-top',
-    listWidth = 340,
+    listWidth = 320,
     gridWidth = '50vw',
     content
   } = $props();
@@ -42,6 +42,19 @@
       globalState.selectedTool = undefined;
     }
   }
+
+  $effect(() => {
+    if (!open) return;
+
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        globalState.selectedTool = undefined;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
+    return () => window.removeEventListener('keydown', handleKeydown);
+  });
 </script>
 
 <div
@@ -78,8 +91,7 @@
     max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--cds-spacing-03) var(--cds-spacing-06) var(--cds-spacing-03)
-      var(--cds-spacing-06);
+    padding: var(--cds-spacing-03) 0;
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {

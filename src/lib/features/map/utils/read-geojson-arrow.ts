@@ -1,4 +1,7 @@
-import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
@@ -112,10 +115,7 @@ function resolveGeometryEncoding(
     if (extensionName === ArrowExtension.OGC_WKB) {
       return {
         arrowExtension: ArrowExtension.OGC_WKB,
-        geometryTypes: [
-          GEOJSON_TYPE.POLYGON,
-          GEOJSON_TYPE.MULTI_POLYGON
-        ]
+        geometryTypes: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON]
       };
     }
   }
@@ -133,10 +133,7 @@ function resolveGeometryEncoding(
 
   return {
     arrowExtension: ArrowExtension.OGC_WKB,
-    geometryTypes: [
-      GEOJSON_TYPE.POLYGON,
-      GEOJSON_TYPE.MULTI_POLYGON
-    ]
+    geometryTypes: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON]
   };
 }
 
@@ -145,7 +142,8 @@ export function addGeoArrowMetadata(
   geoParquetEncoding?: string
 ): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
+    (f) =>
+      f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -239,7 +237,8 @@ export async function readGeoJSONAsArrow(
 
 function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   const geomColumn = table.schema.fields.find(
-    (f) => f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
+    (f) =>
+      f.name === INTERNAL_COLUMN.GEOM || f.name === INTERNAL_COLUMN.GEOMETRY
   );
 
   if (!geomColumn) {
@@ -254,10 +253,7 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
     columns: {
       [geoColumnName]: {
         encoding: GeometryEncoding.GEOJSON,
-        geometry_types: [
-          GEOJSON_TYPE.POLYGON,
-          GEOJSON_TYPE.MULTI_POLYGON
-        ],
+        geometry_types: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON],
         crs: {
           type: 'name',
           properties: {
@@ -290,9 +286,16 @@ function addGeoJsonMetadata(table: ArrowTable): ArrowTable {
   return newTable;
 }
 
-async function readParquetGeoEncoding(
+interface ParquetGeoInfo {
+  encoding: string | undefined;
+  sourceCrs: string | undefined;
+  isProjectedCRS: boolean;
+  primaryColumn: string;
+}
+
+async function readParquetGeoInfo(
   escapedFileId: string
-): Promise<string | undefined> {
+): Promise<ParquetGeoInfo> {
   try {
     const result = (await Duck.query(
       `SELECT value FROM parquet_kv_metadata('${escapedFileId}') WHERE key = 'geo'`,
@@ -301,17 +304,28 @@ async function readParquetGeoEncoding(
 
     if (result.length > 0 && result[0].value) {
       const geo = JSON.parse(result[0].value);
-      const primaryCol = geo.primary_column ?? INTERNAL_COLUMN.GEOM;
-      return geo.columns?.[primaryCol]?.encoding;
+      const primaryCol: string = geo.primary_column ?? INTERNAL_COLUMN.GEOM;
+      const colMeta = geo.columns?.[primaryCol];
+      const encoding: string | undefined = colMeta?.encoding;
+      const crs = colMeta?.crs;
+
+      const isProjectedCRS = crs?.type === 'ProjectedCRS';
+      let sourceCrs: string | undefined;
+      if (isProjectedCRS && crs?.id?.authority && crs?.id?.code) {
+        sourceCrs = `${crs.id.authority}:${crs.id.code}`;
+      }
+
+      return { encoding, sourceCrs, isProjectedCRS, primaryColumn: primaryCol };
     }
   } catch (error) {
-    logger.warn(
-      'Failed to read GeoParquet metadata for encoding',
-      LogCategory.MAP,
-      error
-    );
+    logger.warn('Failed to read GeoParquet metadata', LogCategory.MAP, error);
   }
-  return undefined;
+  return {
+    encoding: undefined,
+    sourceCrs: undefined,
+    isProjectedCRS: false,
+    primaryColumn: INTERNAL_COLUMN.GEOM
+  };
 }
 
 export async function readGeoParquetViaDuckDB(
@@ -338,8 +352,72 @@ export async function readGeoParquetViaDuckDB(
     fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
   const escapedFileId = escapeSqlString(fileId);
 
-  // Read GeoParquet encoding metadata before reading data
-  const geoEncoding = await readParquetGeoEncoding(escapedFileId);
+  // Read GeoParquet metadata (encoding + CRS info)
+  const geoInfo = await readParquetGeoInfo(escapedFileId);
+
+  // If the parquet uses a projected (non-WGS84) CRS, reproject geometry to WGS84.
+  // Cast to ::GEOMETRY is required because read_parquet returns native GeoArrow types
+  // (e.g. MULTIPOLYGON_2D) which ST_Transform does not accept directly.
+  if (geoInfo.isProjectedCRS && geoInfo.sourceCrs) {
+    const geomCol = geoInfo.primaryColumn;
+    const escapedGeomCol = escapeIdentifier(geomCol);
+    const escapedSourceCrs = escapeSqlString(geoInfo.sourceCrs);
+    logger.info(
+      `Reprojecting parquet geometry from ${geoInfo.sourceCrs} to EPSG:4326`,
+      LogCategory.MAP,
+      { sourceCrs: geoInfo.sourceCrs, geomCol }
+    );
+    // Attempt 1: read_parquet with explicit GEOMETRY cast
+    try {
+      const result = await Duck.query(
+        `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM read_parquet('${escapedFileId}')`,
+        { format: 'arrow-ipc' }
+      );
+      let table = tableFromIPC(result as Uint8Array);
+      table = addGeoJsonMetadata(table);
+      logger.info('Reprojection via read_parquet succeeded', LogCategory.MAP);
+      return table;
+    } catch (err1) {
+      logger.warn(
+        'Reprojection via read_parquet failed, trying ST_Read',
+        LogCategory.MAP,
+        { error: err1 }
+      );
+    }
+    // Attempt 2: ST_Read (GDAL) always returns GEOMETRY type
+    try {
+      const result = await Duck.query(
+        `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}", '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM ST_Read('${escapedFileId}')`,
+        { format: 'arrow-ipc' }
+      );
+      let table = tableFromIPC(result as Uint8Array);
+      table = addGeoJsonMetadata(table);
+      logger.info('Reprojection via ST_Read succeeded', LogCategory.MAP);
+      return table;
+    } catch (err2) {
+      logger.warn(
+        'Reprojection via ST_Read also failed, using raw coordinates',
+        LogCategory.MAP,
+        { error: err2 }
+      );
+    }
+  }
+
+  // Default path: read raw parquet (WGS84 assumed).
+  // For WKB-encoded GeoParquet, DuckDB spatial auto-converts the binary column to its
+  // internal GEOMETRY type on read, making the Arrow IPC bytes incompatible with the
+  // standard WKB parser. Use ST_AsGeoJSON to return a consistently parseable result.
+  const defaultGeomCol = geoInfo.primaryColumn;
+  const escapedDefaultGeomCol = escapeIdentifier(defaultGeomCol);
+  if (geoInfo.encoding?.toLowerCase() === 'wkb') {
+    const wkbResult = await Duck.query(
+      `SELECT * EXCLUDE ("${escapedDefaultGeomCol}"), ST_AsGeoJSON("${escapedDefaultGeomCol}") as "${escapedDefaultGeomCol}" FROM read_parquet('${escapedFileId}')`,
+      { format: 'arrow-ipc' }
+    );
+    let wkbTable = tableFromIPC(wkbResult as Uint8Array);
+    wkbTable = addGeoJsonMetadata(wkbTable);
+    return wkbTable;
+  }
 
   const result = await Duck.query(
     `SELECT * FROM read_parquet('${escapedFileId}')`,
@@ -349,7 +427,7 @@ export async function readGeoParquetViaDuckDB(
   let table = tableFromIPC(result as Uint8Array);
 
   if (!table.schema.metadata.has(GeoArrowMetadataKey.GEO)) {
-    table = addGeoArrowMetadata(table, geoEncoding);
+    table = addGeoArrowMetadata(table, geoInfo.encoding);
   }
 
   return table;

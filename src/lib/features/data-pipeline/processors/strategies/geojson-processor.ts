@@ -7,7 +7,6 @@ import {
 import { convertGeoJSONToArrow } from '$lib/features/commons/utils/geojson-to-arrow.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { isGeoJSONFeatureCollection } from '$lib/types/data';
-import { PIPELINE_CONST } from '../../constants';
 import type {
   FileProcessor,
   ProcessContext,

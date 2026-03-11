@@ -7,7 +7,6 @@ export {
   isGeoArrowMetadata,
   isNumericType,
   isZipDatasetResult,
-  mergeValidationResults,
   validationFailure,
   validationSuccess
 } from './types';
@@ -17,6 +16,7 @@ export type {
   ColumnAnalysis,
   ColumnInfo,
   ColumnStats,
+  CsvImportOptions,
   DatasetMetadata,
   DatasetResult,
   DuckAnalyticsColumn,
@@ -42,11 +42,7 @@ export { PIPELINE_CONST, isGeospatialFile } from './constants';
 
 export { detectFileFormat, generateTableName } from './core/parsers';
 
-export {
-  validateFile,
-  validateFileExtension,
-  validateMimeType
-} from './core/validators';
+export { validateFile } from './core/validators';
 
 export {
   extractGeoArrowMetadata,
@@ -55,15 +51,3 @@ export {
   readGeoParquet,
   tableHasGeoArrowMetadata
 } from './io/geoparquet-reader';
-
-export {
-  describeGeojsonStructure,
-  isFeature,
-  isFeatureArray,
-  isFeatureCollection,
-  isGeometry,
-  isGeometryCollection,
-  isRecord,
-  normalizeGeojsonInput
-} from './utils/geojson-guards';
-export type { GeoJSONLike } from './utils/geojson-guards';

@@ -6,13 +6,15 @@
     ScaleForm
   } from '$lib/features/commons/constants/ui.constants';
   import { StylingTools } from '$lib/features/commons/types/global';
+  import { globalState } from '$lib/features/commons/store/global.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     geoIndicationsActions,
     geoIndicationsState
   } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
   import type {
@@ -24,6 +26,7 @@
   } from 'geojson';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
@@ -39,7 +42,7 @@
     (_, index) => index
   );
   const SCALE_FALLBACK_ZOOM = 2;
-  const INSET_MAP_DATA_URL = '/basemaps/geometry/world-countries-50m.geojson';
+  const INSET_MAP_DATA_PATH = '/basemaps/geometry/world-countries-50m.geojson';
   const INSET_PLANISPHERE_RATIO = 0.62;
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_MAX_RATIO = 0.34;
@@ -89,7 +92,9 @@
 
     const loadWorldFeatures = async (): Promise<void> => {
       try {
-        const response = await fetch(INSET_MAP_DATA_URL);
+        const response = await fetch(
+          resolveStaticAssetUrl(INSET_MAP_DATA_PATH)
+        );
         if (!response.ok) {
           return;
         }
@@ -653,6 +658,105 @@
     } satisfies InsetRenderState;
   });
 
+  type DragTarget = 'scale' | 'orientation' | 'inset';
+
+  let overlayElement = $state<HTMLDivElement | null>(null);
+  let scaleElement = $state<HTMLDivElement | null>(null);
+  let orientationElement = $state<HTMLDivElement | null>(null);
+  let insetMapElement = $state<HTMLDivElement | null>(null);
+  let currentDrag = $state<DragTarget | null>(null);
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  const isGeoIndicationsActive = $derived(
+    globalState.selectedTool === StylingTools.GeoIndications
+  );
+
+  function stopDragging(): void {
+    currentDrag = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.removeEventListener(EVENT.POINTERUP, handlePointerUp);
+  }
+
+  function handlePointerUp(): void {
+    stopDragging();
+  }
+
+  function handlePointerMove(event: PointerEvent): void {
+    if (!currentDrag || !overlayElement) {
+      return;
+    }
+
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    const rect = overlayElement.getBoundingClientRect();
+    const x = clamp(
+      (event.clientX - rect.left) / scale - dragOffsetX,
+      0,
+      Math.max(0, rect.width / scale - 10)
+    );
+    const y = clamp(
+      (event.clientY - rect.top) / scale - dragOffsetY,
+      0,
+      Math.max(0, rect.height / scale - 10)
+    );
+
+    if (currentDrag === 'scale') {
+      geoIndicationsActions.setScaleDragPosition({ x, y });
+    } else if (currentDrag === 'orientation') {
+      geoIndicationsActions.setOrientationDragPosition({ x, y });
+    } else if (currentDrag === 'inset') {
+      geoIndicationsActions.setInsetMapDragPosition({ x, y });
+    }
+  }
+
+  function startDrag(
+    event: PointerEvent,
+    target: DragTarget,
+    element: HTMLDivElement | null
+  ): void {
+    if (!isGeoIndicationsActive || !overlayElement || !element) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    const overlayRect = overlayElement.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+
+    const currentX = (elementRect.left - overlayRect.left) / scale;
+    const currentY = (elementRect.top - overlayRect.top) / scale;
+
+    let dragPos: { x: number; y: number } | null = null;
+    if (target === 'scale') {
+      dragPos = geoIndicationsState.scale.dragPosition;
+    } else if (target === 'orientation') {
+      dragPos = geoIndicationsState.orientation.dragPosition;
+    } else if (target === 'inset') {
+      dragPos = geoIndicationsState.insetMap.dragPosition;
+    }
+
+    if (!dragPos) {
+      const initialPos = { x: currentX, y: currentY };
+      if (target === 'scale') {
+        geoIndicationsActions.setScaleDragPosition(initialPos);
+      } else if (target === 'orientation') {
+        geoIndicationsActions.setOrientationDragPosition(initialPos);
+      } else if (target === 'inset') {
+        geoIndicationsActions.setInsetMapDragPosition(initialPos);
+      }
+      dragPos = initialPos;
+    }
+
+    dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPos.x;
+    dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPos.y;
+    currentDrag = target;
+
+    window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
+    window.addEventListener(EVENT.POINTERUP, handlePointerUp);
+  }
+
   function handleGeoIndicationsActivate(
     event: MouseEvent | KeyboardEvent
   ): void {
@@ -661,24 +765,47 @@
   }
 
   function handleGeoIndicationsKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Enter' && event.key !== ' ') {
+    if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
 
     event.preventDefault();
     handleGeoIndicationsActivate(event);
   }
+
+  function handleScalePointerDown(event: PointerEvent): void {
+    startDrag(event, 'scale', scaleElement);
+  }
+
+  function handleOrientationPointerDown(event: PointerEvent): void {
+    startDrag(event, 'orientation', orientationElement);
+  }
+
+  function handleInsetMapPointerDown(event: PointerEvent): void {
+    startDrag(event, 'inset', insetMapElement);
+  }
+
+  onDestroy(() => {
+    stopDragging();
+  });
 </script>
 
-<div class="geo-indications-overlay">
+<div class="geo-indications-overlay" bind:this={overlayElement}>
   {#if geoIndicationsState.visible && geoIndicationsState.scale.enabled}
     <div
+      bind:this={scaleElement}
       class="scale-bar"
+      class:draggable={isGeoIndicationsActive}
+      class:dragging={currentDrag === 'scale'}
+      style={geoIndicationsState.scale.dragPosition
+        ? `left: ${geoIndicationsState.scale.dragPosition.x}px; top: ${geoIndicationsState.scale.dragPosition.y}px; bottom: auto; right: auto;`
+        : ''}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
       onclick={handleGeoIndicationsActivate}
       onkeydown={handleGeoIndicationsKeyDown}
+      onpointerdown={handleScalePointerDown}
     >
       <svg
         width={scaleSvgWidth}
@@ -716,22 +843,6 @@
             stroke={scaleColor}
             stroke-width="2"
           />
-          <line
-            x1={SCALE_PADDING}
-            y1="17"
-            x2={SCALE_PADDING}
-            y2="27"
-            stroke={scaleColor}
-            stroke-width="2"
-          />
-          <line
-            x1={scaleBarWidth + SCALE_PADDING}
-            y1="17"
-            x2={scaleBarWidth + SCALE_PADDING}
-            y2="27"
-            stroke={scaleColor}
-            stroke-width="2"
-          />
           <text
             x={scaleLabelX}
             y="11"
@@ -749,12 +860,19 @@
 
   {#if geoIndicationsState.visible && geoIndicationsState.orientation.enabled}
     <div
+      bind:this={orientationElement}
       class="north-arrow"
+      class:draggable={isGeoIndicationsActive}
+      class:dragging={currentDrag === 'orientation'}
+      style={geoIndicationsState.orientation.dragPosition
+        ? `left: ${geoIndicationsState.orientation.dragPosition.x}px; top: ${geoIndicationsState.orientation.dragPosition.y}px; bottom: auto; right: auto;`
+        : ''}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
       onclick={handleGeoIndicationsActivate}
       onkeydown={handleGeoIndicationsKeyDown}
+      onpointerdown={handleOrientationPointerDown}
     >
       <svg
         width={orientationSize}
@@ -822,13 +940,20 @@
 
   {#if geoIndicationsState.visible && geoIndicationsState.insetMap.enabled}
     <div
+      bind:this={insetMapElement}
       class="inset-map-panel"
+      class:draggable={isGeoIndicationsActive}
+      class:dragging={currentDrag === 'inset'}
+      style="background-color: {insetPanelBackgroundColor}; border: 1px solid {insetPanelBorderColor};{geoIndicationsState
+        .insetMap.dragPosition
+        ? ` left: ${geoIndicationsState.insetMap.dragPosition.x}px; top: ${geoIndicationsState.insetMap.dragPosition.y}px; bottom: auto; right: auto;`
+        : ''}"
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
       onclick={handleGeoIndicationsActivate}
       onkeydown={handleGeoIndicationsKeyDown}
-      style="background-color: {insetPanelBackgroundColor}; border: 1px solid {insetPanelBorderColor};"
+      onpointerdown={handleInsetMapPointerDown}
     >
       <div
         class="inset-map {geoIndicationsState.insetMap.type ===
@@ -953,6 +1078,8 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
     pointer-events: auto;
     cursor: pointer;
+    touch-action: none;
+    outline: none;
   }
 
   .north-arrow {
@@ -965,6 +1092,8 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
     pointer-events: auto;
     cursor: pointer;
+    touch-action: none;
+    outline: none;
   }
 
   .inset-map-panel {
@@ -977,6 +1106,21 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
     pointer-events: auto;
     cursor: pointer;
+    touch-action: none;
+    outline: none;
+  }
+
+  .scale-bar.draggable,
+  .north-arrow.draggable,
+  .inset-map-panel.draggable {
+    cursor: grab;
+  }
+
+  .scale-bar.dragging,
+  .north-arrow.dragging,
+  .inset-map-panel.dragging {
+    cursor: grabbing;
+    user-select: none;
   }
 
   .inset-map {

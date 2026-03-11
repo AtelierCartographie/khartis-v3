@@ -4,9 +4,17 @@ import {
   OrientationIndicatorStyle,
   ScaleForm
 } from '$lib/features/commons/constants/ui.constants';
+import {
+  AVAILABLE_FONTS,
+  LEGEND_FONT_SIZES
+} from '$lib/features/step-toolbar/tools/legend/legend.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import type { ColorState, GeoIndicationsState } from './geo-indications.types';
+import type {
+  ColorState,
+  DragPosition,
+  GeoIndicationsState
+} from './geo-indications.types';
 
 const DEFAULT_STATE: GeoIndicationsState = {
   visible: true,
@@ -16,13 +24,17 @@ const DEFAULT_STATE: GeoIndicationsState = {
     distance: 0,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
-    expanded: true
+    fontFamily: AVAILABLE_FONTS[0],
+    fontSize: LEGEND_FONT_SIZES[2],
+    expanded: true,
+    dragPosition: null
   },
   orientation: {
     enabled: false,
     style: OrientationIndicatorStyle.ARROW,
     size: 10,
-    color: { hue: 0, saturation: 0, lightness: 0 }
+    color: { hue: 0, saturation: 0, lightness: 0 },
+    dragPosition: null
   },
   insetMap: {
     enabled: false,
@@ -34,7 +46,8 @@ const DEFAULT_STATE: GeoIndicationsState = {
     useBasemapColors: false,
     zoom: 50,
     centerLongitude: 0,
-    centerLatitude: 0
+    centerLatitude: 0,
+    dragPosition: null
   }
 };
 
@@ -73,6 +86,22 @@ function normalizeColorState(
   };
 }
 
+function normalizeDragPosition(
+  input: DragPosition | null | undefined,
+  current: DragPosition | null
+): DragPosition | null {
+  if (input === undefined) {
+    return current;
+  }
+  if (input === null) {
+    return null;
+  }
+  return {
+    x: toFiniteNumber(input.x, 0),
+    y: toFiniteNumber(input.y, 0)
+  };
+}
+
 function normalizeState(
   partial: Partial<GeoIndicationsState>,
   current: GeoIndicationsState
@@ -105,10 +134,28 @@ function normalizeState(
           ? nextScale.units
           : current.scale.units,
       color: normalizeColorState(nextScale?.color, current.scale.color),
+      fontFamily:
+        typeof nextScale?.fontFamily === 'string' &&
+        AVAILABLE_FONTS.includes(
+          nextScale.fontFamily as (typeof AVAILABLE_FONTS)[number]
+        )
+          ? nextScale.fontFamily
+          : current.scale.fontFamily,
+      fontSize:
+        typeof nextScale?.fontSize === 'number' &&
+        LEGEND_FONT_SIZES.includes(
+          nextScale.fontSize as (typeof LEGEND_FONT_SIZES)[number]
+        )
+          ? nextScale.fontSize
+          : current.scale.fontSize,
       expanded:
         typeof nextScale?.expanded === 'boolean'
           ? nextScale.expanded
-          : current.scale.expanded
+          : current.scale.expanded,
+      dragPosition: normalizeDragPosition(
+        nextScale?.dragPosition,
+        current.scale.dragPosition
+      )
     },
     orientation: {
       enabled:
@@ -124,6 +171,10 @@ function normalizeState(
       color: normalizeColorState(
         nextOrientation?.color,
         current.orientation.color
+      ),
+      dragPosition: normalizeDragPosition(
+        nextOrientation?.dragPosition,
+        current.orientation.dragPosition
       )
     },
     insetMap: {
@@ -136,7 +187,7 @@ function normalizeState(
         nextInsetMap?.type === InsetMapType.PLANISPHERE
           ? nextInsetMap.type
           : current.insetMap.type,
-      size: clampNumber(nextInsetMap?.size, 20, 210, current.insetMap.size),
+      size: clampNumber(nextInsetMap?.size, 20, 800, current.insetMap.size),
       windowColor: normalizeColorState(
         nextInsetMap?.windowColor,
         current.insetMap.windowColor
@@ -165,6 +216,10 @@ function normalizeState(
         -90,
         90,
         current.insetMap.centerLatitude
+      ),
+      dragPosition: normalizeDragPosition(
+        nextInsetMap?.dragPosition,
+        current.insetMap.dragPosition
       )
     }
   };
@@ -179,11 +234,11 @@ type GeoIndicationsActions = {
   toggleInsetMap: () => void;
   toggleScaleExpanded: () => void;
   setScaleForm: (form: ScaleForm) => void;
-  incrementScaleDistance: (step?: number) => void;
-  decrementScaleDistance: (step?: number) => void;
   setScaleUnits: (units: DistanceUnit) => void;
   setScaleColor: (colorState: ColorState) => void;
   setScaleColorFromHex: (hex: string) => void;
+  setScaleFontFamily: (fontFamily: string) => void;
+  setScaleFontSize: (fontSize: number) => void;
   setOrientationStyle: (style: OrientationIndicatorStyle) => void;
   setOrientationSize: (size: number) => void;
   setOrientationColor: (colorState: ColorState) => void;
@@ -200,6 +255,9 @@ type GeoIndicationsActions = {
   setInsetMapZoom: (zoom: number) => void;
   setInsetMapCenterLongitude: (longitude: number) => void;
   setInsetMapCenterLatitude: (latitude: number) => void;
+  setScaleDragPosition: (pos: DragPosition | null) => void;
+  setOrientationDragPosition: (pos: DragPosition | null) => void;
+  setInsetMapDragPosition: (pos: DragPosition | null) => void;
 };
 
 const { state, actions } = createToolStore<
@@ -235,14 +293,6 @@ const { state, actions } = createToolStore<
   setScaleForm: (form: ScaleForm) => {
     s.scale.form = form;
   },
-  incrementScaleDistance: (step: number = 500) => {
-    const increment = clampNumber(step, 1, Number.MAX_SAFE_INTEGER, 500);
-    s.scale.distance = Math.max(0, s.scale.distance + increment);
-  },
-  decrementScaleDistance: (step: number = 500) => {
-    const decrement = clampNumber(step, 1, Number.MAX_SAFE_INTEGER, 500);
-    s.scale.distance = Math.max(0, s.scale.distance - decrement);
-  },
   setScaleUnits: (units: DistanceUnit) => {
     s.scale.units = units;
   },
@@ -251,6 +301,20 @@ const { state, actions } = createToolStore<
   },
   setScaleColorFromHex: (hex: string) => {
     s.scale.color = hexToHsl(hex);
+  },
+  setScaleFontFamily: (fontFamily: string) => {
+    if (
+      AVAILABLE_FONTS.includes(fontFamily as (typeof AVAILABLE_FONTS)[number])
+    ) {
+      s.scale.fontFamily = fontFamily;
+    }
+  },
+  setScaleFontSize: (fontSize: number) => {
+    if (
+      LEGEND_FONT_SIZES.includes(fontSize as (typeof LEGEND_FONT_SIZES)[number])
+    ) {
+      s.scale.fontSize = fontSize;
+    }
   },
   setOrientationStyle: (style: OrientationIndicatorStyle) => {
     s.orientation.style = style;
@@ -268,7 +332,7 @@ const { state, actions } = createToolStore<
     s.insetMap.type = type;
   },
   setInsetMapSize: (size: number) => {
-    s.insetMap.size = clampNumber(size, 20, 210, s.insetMap.size);
+    s.insetMap.size = clampNumber(size, 20, 600, s.insetMap.size);
   },
   setInsetMapWindowColor: (colorState: ColorState) => {
     s.insetMap.windowColor = colorState;
@@ -309,6 +373,15 @@ const { state, actions } = createToolStore<
       90,
       s.insetMap.centerLatitude
     );
+  },
+  setScaleDragPosition: (pos: DragPosition | null) => {
+    s.scale.dragPosition = pos;
+  },
+  setOrientationDragPosition: (pos: DragPosition | null) => {
+    s.orientation.dragPosition = pos;
+  },
+  setInsetMapDragPosition: (pos: DragPosition | null) => {
+    s.insetMap.dragPosition = pos;
   }
 }));
 

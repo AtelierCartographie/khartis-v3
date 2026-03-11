@@ -1,3 +1,8 @@
+import {
+  MAP_VIEW_MODE,
+  type MapViewModeValue
+} from '$lib/features/commons/constants';
+
 export enum GeometryType {
   POINT = 'POINT',
   MULTIPOINT = 'MULTIPOINT',
@@ -41,6 +46,8 @@ export enum DeckLayerId {
   POINT_LAYER = 'point-layer',
   LINE_LAYER = 'line-layer',
   POLYGON_LAYER = 'polygon-layer',
+  LABEL_LAYER = 'label-layer',
+  TEXT_LAYER = 'text-layer',
   GEOJSON_LAYER = 'geojson-layer',
   WORLD_BASE_LAYER = 'world-base-layer',
   BASEMAP_TERRE = 'basemap-terre',
@@ -77,10 +84,12 @@ export enum MapLibreLayerType {
   BACKGROUND = 'background'
 }
 
-export enum ViewMode {
-  ORTHOGRAPHIC = 'orthographic',
-  MAPLIBRE = 'maplibre'
-}
+export const ViewMode = {
+  ORTHOGRAPHIC: MAP_VIEW_MODE.ORTHOGRAPHIC,
+  MAPLIBRE: MAP_VIEW_MODE.MAPLIBRE
+} as const;
+
+export type ViewMode = MapViewModeValue;
 
 export const DECK_VIEW_ID = 'main';
 export const DECK_CANVAS_ID = 'deckgl-overlay';

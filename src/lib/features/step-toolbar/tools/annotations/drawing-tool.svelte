@@ -65,16 +65,17 @@
   let fillLightness = $state(100);
 
   $effect(() => {
-    if (defaultStyle.drawingType) drawingType = defaultStyle.drawingType;
-    if (defaultStyle.strokeColor) {
-      if (typeof defaultStyle.strokeColor === 'string') {
-        strokeColor = defaultStyle.strokeColor as string;
+    const style = effectiveStyle;
+    if (style.drawingType) drawingType = style.drawingType;
+    if (style.strokeColor) {
+      if (typeof style.strokeColor === 'string') {
+        strokeColor = style.strokeColor as string;
         const hsl = hexToHsl(strokeColor);
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
-        const c = defaultStyle.strokeColor;
+      } else if (isStrokeColorDescriptor(style.strokeColor)) {
+        const c = style.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -82,15 +83,15 @@
         strokeColor = cv.hex;
       }
     }
-    if (defaultStyle.fillColor) {
-      if (typeof defaultStyle.fillColor === 'string') {
-        fillColor = defaultStyle.fillColor as string;
+    if (style.fillColor) {
+      if (typeof style.fillColor === 'string') {
+        fillColor = style.fillColor as string;
         const hsl = hexToHsl(fillColor);
         fillHue = hsl.hue;
         fillSaturation = hsl.saturation;
         fillLightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.fillColor)) {
-        const c = defaultStyle.fillColor;
+      } else if (isStrokeColorDescriptor(style.fillColor)) {
+        const c = style.fillColor;
         fillHue = c.hue ?? 0;
         fillSaturation = c.saturation ?? 0;
         fillLightness = c.lightness ?? 100;
@@ -136,8 +137,8 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <p class="field-label">{m.annotations_type()}</p>
       <RadioButtonGroup
+        legendText={m.annotations_type()}
         selected={drawingType}
         on:change={handleDrawingTypeChange}
       >
@@ -156,10 +157,10 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_drawing_helper()}</p>
         <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
           {m.annotations_add_drawing()}
         </Button>
+        <p class="helper">{m.annotations_drawing_helper()}</p>
       </div>
     </Column>
   </Row>
@@ -175,6 +176,8 @@
           step={1}
           stepMultiplier={1}
           on:change={handleThicknessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -191,6 +194,8 @@
           step={1}
           stepMultiplier={5}
           on:change={handleSmoothnessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -299,6 +304,8 @@
           stepMultiplier={5}
           on:change={(e) =>
             annotationsActions.applyStyle({ opacity: e.detail })}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -315,7 +322,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.DRAWING}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.DRAWING &&
               annotationsActions.removeAnnotation(selected.id)}
@@ -337,17 +344,11 @@
     margin-top: var(--cds-spacing-05);
   }
 
-  .field-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-01);
-    margin-bottom: var(--cds-spacing-03);
-  }
-
   .helper {
-    margin: 0 0 var(--cds-spacing-03) 0;
+    margin: var(--cds-spacing-03) 0 0 0;
     color: var(--cds-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
   .toggle-row {
     display: flex;

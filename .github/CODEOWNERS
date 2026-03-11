@@ -1,0 +1,7 @@
+# Global ownership — Atelier de cartographie Sciences Po
+* @AtelierCartographie/khartis-team
+
+# CI / build configuration
+.github/ @jb-thery
+vite.config.ts @jb-thery
+package.json @jb-thery

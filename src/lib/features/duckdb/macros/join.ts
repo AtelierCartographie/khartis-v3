@@ -6,22 +6,24 @@
  * @example SELECT normalize_text_join('Héllo Wørld!');
  */
 const normalize_text_join_macro = `CREATE OR REPLACE MACRO normalize_text_join(string) AS (
-    nfc_normalize(string).strip_accents().lower().trim()
+    nfc_normalize(CAST(string AS VARCHAR)).strip_accents().lower().trim()
 );`;
 
 /**
  * SQL macro that calculates the Jaro-Winkler similarity score between a candidate string
  * and a table of strings, categorizes the similarity into 'exact', 'partial', or 'toofar',
- * and returns matches excluding 'toofar'.
+ * and returns all matches including 'toofar'.
  * Uses score_cutoff=0.85 for early pruning of low-similarity pairs.
+ *
+ * Callers are responsible for filtering out 'toofar' entries when needed.
  *
  * @param candidate - The candidate string to find similar matches for.
  * @param join_table - The name of the table to search for similar strings.
- * @returns A table with similarity matches, excluding those categorized as 'toofar'.
+ * @returns A table with all similarity matches ordered by score descending.
  */
 const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, join_table) AS TABLE (
   WITH t0 AS (
-    SELECT normalize_text_join(candidate) as search_term
+    SELECT normalize_text_join(CAST(candidate AS VARCHAR)) as search_term
   ), t1 AS (
     -- Jaro-Winkler score on all entities across all basemaps
     -- Categorized into 3 types: exact, partial, toofar
@@ -35,17 +37,15 @@ const get_similarity_macro = `CREATE OR REPLACE MACRO get_similarity(candidate, 
       END as typo_match,
       * EXCLUDE (search_term, normalized)
   )
-    -- Filter out 'toofar' results
     FROM t1
     SELECT *
-    WHERE typo_match <> 'toofar'
     ORDER BY score DESC
 );`;
 
 const analyze_join_quality_macro = `CREATE OR REPLACE MACRO analyze_join_quality(candidates_table, geoname_column, join_table) AS TABLE (
     WITH source_with_counts AS (
         SELECT
-            "geoname_column" as original_name,
+            CAST("geoname_column" AS VARCHAR) as original_name,
             COUNT(*) OVER (PARTITION BY normalize_text_join(CAST("geoname_column" AS VARCHAR))) as source_dup_count
         FROM query_table(candidates_table)
         WHERE "geoname_column" IS NOT NULL
@@ -107,7 +107,7 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         "main_id" as raw,
         "main_id" as id,
         "main_id" as variant,
-        normalize_text_join("main_id") as normalized,
+        normalize_text_join(CAST("main_id" AS VARCHAR)) as normalized,
         basemap_table as basemap,
         t1.count as basemap_count
     ),
@@ -133,7 +133,7 @@ const get_join_table_from_basemap_macro = `CREATE OR REPLACE MACRO get_join_tabl
         raw,
         id,
         variant,
-        normalize_text_join(raw) as normalized,
+        normalize_text_join(CAST(raw AS VARCHAR)) as normalized,
         basemap_table as basemap,
         t1.count as basemap_count,
       ORDER BY variant, raw
@@ -175,7 +175,7 @@ const apply_join_across_basemaps_macro = `CREATE OR REPLACE MACRO apply_join_acr
     WITH t1 AS (
         FROM query_table(candidates_table)
         SELECT
-            "geoname_column" as geoname,
+            CAST("geoname_column" AS VARCHAR) as geoname,
             count() over() as candidate_count -- used later in synthesis figures
     ), t2 AS (
         FROM t1, LATERAL (SELECT * FROM get_similarity(geoname, join_table))

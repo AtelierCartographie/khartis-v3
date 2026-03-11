@@ -10,7 +10,12 @@
     ModalBody,
     ModalHeader
   } from 'carbon-components-svelte';
-  import { FileStorage, ShapeExclude, Upload } from 'carbon-icons-svelte';
+  import {
+    FileStorage,
+    Information,
+    ShapeExclude,
+    Upload
+  } from 'carbon-icons-svelte';
   import CreateNewProject from './create-new-project.svelte';
   import OpenProject from './open-project.svelte';
   import ProjectName from './project-name.svelte';
@@ -72,9 +77,21 @@
       class={canDismiss ? '' : 'no-close-button'}
     >
       <div class="mb-3"></div>
-      <span class="text-grey">
-        {m.create_project_welcome_description()}
-      </span>
+      <div class="welcome-description">
+        <span class="text-grey">
+          {m.create_project_welcome_description()}
+        </span>
+        <a
+          href="https://www.sciencespo.fr/cartographie/khartis/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="info-icon-link"
+          aria-label={m.create_project_welcome_info()}
+          title={m.create_project_welcome_info()}
+        >
+          <Information size={16} />
+        </a>
+      </div>
     </ModalHeader>
 
     <ModalBody class="fixed-modal-body">
@@ -102,6 +119,7 @@
           <div class="tab-wrapper" bind:this={tabRefs[1]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 2}
+              selectable={false}
               onclick={() => selectTile(2)}
               onkeydown={(e) => handleTabKeydown(e, 2)}
               tabIndex={createProjectState.selectedTab === 2 ? 0 : -1}
@@ -117,6 +135,7 @@
           <div class="tab-wrapper" bind:this={tabRefs[2]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 3}
+              selectable={false}
               onclick={() => selectTile(3)}
               onkeydown={(e) => handleTabKeydown(e, 3)}
               tabIndex={createProjectState.selectedTab === 3 ? 0 : -1}
@@ -149,6 +168,24 @@
 </div>
 
 <style lang="scss">
+  .welcome-description {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--cds-spacing-03);
+  }
+
+  .info-icon-link {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary);
+    display: flex;
+    align-items: center;
+    padding-top: 2px;
+
+    &:hover {
+      color: var(--cds-icon-primary);
+    }
+  }
+
   #khartis-create-project :global(.bx--modal-container) {
     width: 90vw;
     max-width: 700px;

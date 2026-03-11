@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
@@ -9,19 +11,13 @@
   } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
+    PrimitiveFilterType,
     visualizationStore,
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
-  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
-  import type { ColumnAnalysis } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ComboBox,
-    Link,
-    RadioButton
-  } from 'carbon-components-svelte';
+  import { ComboBox, Link, Modal, RadioButton } from 'carbon-components-svelte';
   import {
     ColorPalette,
     Edit,
@@ -30,11 +26,13 @@
     Pin,
     CircleFilled,
     Shapes,
-    EdgeNode
+    EdgeNode,
+    TrashCan,
+    Copy
   } from 'carbon-icons-svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { mapSuggestionToType } from './suggestion.utils';
+  import { resolveDatasetGeometryType } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -43,33 +41,39 @@
 
   const { onCreateVisualization }: Props = $props();
 
-  let selectedFieldId = $state<number>(0);
+  let selectedDatasetId = $state<string>(datasetsStore.selectedDatasetId ?? '');
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
+  let renamingVizId = $state<string | undefined>(undefined);
+  let renameValue = $state<string>('');
+  let deletingViz = $state<{ id: string; name: string } | null>(null);
+  let isDeleteConfirmOpen = $state(false);
 
-  const dataFieldItems = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    if (!dataset?.columns) return [];
-    return dataset.columns
-      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col, id) => ({ id, text: col.name }));
-  });
-
-  const selectedFieldName = $derived.by(
-    () => dataFieldItems.find((item) => item.id === selectedFieldId)?.text
+  const datasetItems = $derived.by(() =>
+    datasetsStore.datasets.map((ds, id) => ({
+      id,
+      text: ds.name,
+      datasetId: ds.id
+    }))
   );
 
-  const datasetColumns = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
-    return dataset?.columns || [];
+  const selectedDataset = $derived.by(() => {
+    if (selectedDatasetId) {
+      return (
+        datasetsStore.datasets.find((ds) => ds.id === selectedDatasetId) ?? null
+      );
+    }
+    return datasetsStore.selectedDataset ?? null;
   });
 
+  const datasetColumns = $derived(selectedDataset?.columns ?? []);
+
   const suggestions = $derived.by((): VizSuggestion[] => {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = selectedDataset;
     if (!dataset?.columns) return [];
 
-    const columnAnalysis: ColumnAnalysis[] = dataset.columns.map((col) => ({
+    const columnAnalysis = dataset.columns.map((col) => ({
       name: col.name,
       type: col.type,
       stats: {
@@ -86,25 +90,22 @@
       }
     }));
 
-    const geometryType = (dataset.geometry?.type as GeometryType) || null;
+    const geometryType =
+      resolveDatasetGeometryType(
+        dataset as {
+          geometry?: { type?: string | null };
+          sourceFileId?: string;
+        }
+      ) ||
+      (dataset.geometry?.type as GeometryType) ||
+      null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
       maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
     });
   });
 
-  const filteredSuggestions = $derived.by(() => {
-    const suggestionsList = suggestions;
-    if (!selectedFieldName) {
-      return suggestionsList;
-    }
-
-    const withSelectedField = suggestionsList.filter((suggestion) =>
-      suggestion.columns?.includes(selectedFieldName)
-    );
-
-    return withSelectedField.length > 0 ? withSelectedField : suggestionsList;
-  });
+  const filteredSuggestions = $derived(suggestions);
 
   const visibleSuggestions = $derived(
     filteredSuggestions.slice(0, visibleCount)
@@ -124,11 +125,11 @@
 
   function getGeometryIcon(geometry: string) {
     switch (geometry) {
-      case 'point':
+      case PrimitiveFilterType.POINT:
         return CircleFilled;
-      case 'polygon':
+      case PrimitiveFilterType.POLYGON:
         return Shapes;
-      case 'line':
+      case PrimitiveFilterType.LINE:
         return EdgeNode;
       default:
         return CircleFilled;
@@ -151,46 +152,84 @@
   }
 
   function handleCreateVisualization() {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = selectedDataset;
     if (!dataset) return;
 
-    const suggestion = filteredSuggestions.find(
-      (s) => s.id === selectedSuggestion
-    );
-    if (!suggestion) return;
-
-    const vizType = mapSuggestionToType(suggestion.id);
-    const viz = visualizationStore.createVisualization(vizType, dataset.id);
-
-    if (suggestion.columns && suggestion.columns.length > 0) {
-      const column = suggestion.columns[0];
-      const mappingUpdate: Record<string, string> = {};
-
-      switch (vizType) {
-        case VisualizationType.CHOROPLETH:
-          mappingUpdate.valueColumn = column;
-          break;
-        case VisualizationType.PROPORTIONAL:
-          mappingUpdate.sizeColumn = column;
-          break;
-        case VisualizationType.CATEGORICAL:
-          mappingUpdate.categoryColumn = column;
-          break;
-        case VisualizationType.BIVARIATE:
-          mappingUpdate.valueColumn = column;
-          if (suggestion.columns.length > 1) {
-            mappingUpdate.colorColumn = suggestion.columns[1];
-          }
-          break;
+    if (datasetVisualizations.length === 0) {
+      const geometryType = resolveDatasetGeometryType(
+        dataset as {
+          geometry?: { type?: string | null };
+          sourceFileId?: string;
+        }
+      );
+      const defaultType = geometryType?.toLowerCase().includes('point')
+        ? VisualizationType.PROPORTIONAL
+        : VisualizationType.CHOROPLETH;
+      visualizationStore.createVisualization(defaultType, dataset.id);
+    } else {
+      // Reset suggestion presets: clear column mappings so the user configures from scratch
+      const selectedViz = visualizationStore.selectedVisualization;
+      if (selectedViz) {
+        visualizationStore.updateVisualization(selectedViz.id, {
+          mapping: { geometryColumn: selectedViz.mapping?.geometryColumn }
+        });
       }
-
-      visualizationStore.updateVisualization(viz.id, {
-        mapping: { ...viz.mapping, ...mappingUpdate }
-      });
     }
 
     suggestionsExpanded = false;
     onCreateVisualization?.();
+  }
+
+  const datasetVisualizations = $derived.by(() => {
+    if (!selectedDataset) return [];
+    return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
+  });
+
+  function handleSelectViz(id: string) {
+    visualizationStore.selectVisualization(id);
+  }
+
+  function handleDuplicateViz(id: string) {
+    visualizationStore.duplicateVisualization(id);
+  }
+
+  function handleDeleteViz(viz: { id: string; name: string }) {
+    deletingViz = viz;
+    isDeleteConfirmOpen = true;
+  }
+
+  function confirmDeleteViz() {
+    if (deletingViz) {
+      visualizationStore.removeVisualization(deletingViz.id);
+    }
+    isDeleteConfirmOpen = false;
+    deletingViz = null;
+  }
+
+  function cancelDeleteViz() {
+    isDeleteConfirmOpen = false;
+    deletingViz = null;
+  }
+
+  function handleStartRename(viz: { id: string; name: string }) {
+    renamingVizId = viz.id;
+    renameValue = viz.name;
+  }
+
+  function handleConfirmRename(id: string) {
+    const trimmed = renameValue.trim();
+    if (trimmed) {
+      visualizationStore.updateVisualization(id, { name: trimmed });
+    }
+    renamingVizId = undefined;
+  }
+
+  function handleRenameKeydown(e: KeyboardEvent, id: string) {
+    if (e.key === 'Enter') {
+      handleConfirmRename(id);
+    } else if (e.key === 'Escape') {
+      renamingVizId = undefined;
+    }
   }
 
   export function collapseSuggestions() {
@@ -198,21 +237,18 @@
   }
 
   $effect(() => {
-    const fields = dataFieldItems;
-    if (!fields.length) {
+    const datasets = datasetsStore.datasets;
+    if (!datasets.length) {
       return;
     }
-
-    const hasSelectedField = fields.some(
-      (field) => field.id === selectedFieldId
-    );
-    if (!hasSelectedField) {
-      selectedFieldId = fields[0].id;
+    const exists = datasets.some((ds) => ds.id === selectedDatasetId);
+    if (!exists) {
+      selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
     }
   });
 
   $effect(() => {
-    void selectedFieldName;
+    void selectedDatasetId;
     visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
@@ -245,19 +281,82 @@
         <InfoPopover text={m.data_visualized_info()} />
       </div>
       <ComboBox
-        items={dataFieldItems}
-        selectedId={selectedFieldId}
-        on:select={(e) => (selectedFieldId = e.detail.selectedId)}
+        items={datasetItems}
+        selectedId={datasetItems.find(
+          (item) => item.datasetId === selectedDatasetId
+        )?.id ?? 0}
+        on:select={(e) => {
+          const item = datasetItems.find((d) => d.id === e.detail.selectedId);
+          if (item) selectedDatasetId = item.datasetId;
+        }}
         placeholder={m.choose_data_field_placeholder()}
         labelText=""
         size="xl"
       />
     </div>
 
+    {#if datasetVisualizations.length > 0}
+      <div class="viz-list" role="list">
+        {#each datasetVisualizations as viz (viz.id)}
+          {@const isSelected =
+            visualizationStore.selectedVisualization?.id === viz.id}
+          {@const isRenaming = renamingVizId === viz.id}
+          <div class="viz-item" class:selected={isSelected} role="listitem">
+            <button
+              type="button"
+              class="viz-item-select"
+              onclick={() => handleSelectViz(viz.id)}
+              aria-pressed={isSelected}
+            >
+              {#if isRenaming}
+                <input
+                  class="viz-rename-input"
+                  type="text"
+                  bind:value={renameValue}
+                  onkeydown={(e: KeyboardEvent) =>
+                    handleRenameKeydown(e, viz.id)}
+                  onblur={() => handleConfirmRename(viz.id)}
+                  onclick={(e: MouseEvent) => e.stopPropagation()}
+                />
+              {:else}
+                <span class="viz-item-name">{viz.name}</span>
+              {/if}
+            </button>
+            <div class="viz-item-actions">
+              <IconButton
+                kind="ghost"
+                size="small"
+                icon={Edit}
+                iconDescription={m.viz_list_rename()}
+                tooltipPosition="top"
+                on:click={() => handleStartRename(viz)}
+              />
+              <IconButton
+                kind="ghost"
+                size="small"
+                icon={Copy}
+                iconDescription={m.viz_list_duplicate()}
+                tooltipPosition="top"
+                on:click={() => handleDuplicateViz(viz.id)}
+              />
+              <IconButton
+                kind="ghost"
+                size="small"
+                icon={TrashCan}
+                iconDescription={m.viz_list_delete()}
+                tooltipPosition="top"
+                on:click={() => handleDeleteViz(viz)}
+              />
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
     <div class="suggestions-section">
       <ExpandableSection
         title={m.section_suggestions()}
-        defaultOpen={suggestionsExpanded}
+        open={suggestionsExpanded}
         onToggle={(expanded) => (suggestionsExpanded = expanded)}
         titleClass="suggestions-title"
       >
@@ -302,7 +401,7 @@
 
               <div class="card-content">
                 <div class="card-header">
-                  <h6 class="card-title">{suggestion.label}</h6>
+                  <p class="card-title">{suggestion.label}</p>
                   <span class="radio-indicator">
                     <RadioButton checked={isSelected} />
                   </span>
@@ -425,6 +524,22 @@
     </div>
   </div>
 </section>
+
+<Modal
+  danger
+  open={isDeleteConfirmOpen}
+  modalHeading={m.viz_list_delete_title()}
+  primaryButtonText={m.delete_confirm_button()}
+  secondaryButtonText={m.cancel()}
+  size="sm"
+  on:click:button--secondary={cancelDeleteViz}
+  on:click:button--primary={confirmDeleteViz}
+  on:close={cancelDeleteViz}
+>
+  <p>
+    {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
+  </p>
+</Modal>
 
 <style lang="scss">
   #choose-visualization {
@@ -666,5 +781,74 @@
 
   .learn-more :global(svg) {
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
+  }
+
+  .viz-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-05);
+  }
+
+  .viz-item {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    background: var(--cds-layer-01, #f4f4f4);
+    min-height: 40px;
+    transition: border-color 0.15s ease;
+
+    &:hover {
+      border-color: var(--cds-border-strong-01, #8d8d8d);
+
+      .viz-item-actions {
+        opacity: 1;
+      }
+    }
+
+    &.selected {
+      border-color: var(--cds-border-interactive, #726e6e);
+      background: var(--cds-layer-selected-01, #e8e8e8);
+    }
+  }
+
+  .viz-item-select {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--cds-spacing-04);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    min-height: 40px;
+    overflow: hidden;
+  }
+
+  .viz-item-name {
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .viz-rename-input {
+    width: 100%;
+    border: none;
+    border-bottom: 2px solid var(--cds-border-interactive, #726e6e);
+    background: transparent;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    outline: none;
+    padding: 0;
+  }
+
+  .viz-item-actions {
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
   }
 </style>

@@ -3,6 +3,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
@@ -23,6 +24,23 @@ export interface GetTableDataOptions {
   order?: 'ASC' | 'DESC' | null;
 }
 
+function normalizeRowId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
 export async function getTableData(
   tableName: string,
   Duck: DuckDBClientForTableData,
@@ -37,8 +55,8 @@ export async function getTableData(
       const geomCols = columns
         .filter(
           (c) =>
-            String(c.type || '').toUpperCase() === 'GEOMETRY' ||
-            String(c.type_simple || '') === 'geometry'
+            String(c.type || '').toUpperCase() === GEOMETRY_COLUMN_TYPE ||
+            String(c.type_simple || '') === GEOMETRY_COLUMN_TYPE.toLowerCase()
         )
         .map((c) => `"${c.name}"`);
       if (geomCols.length > 0) {
@@ -109,7 +127,7 @@ export async function getRowCount(
 
 export async function getRowPosition(
   tableName: string,
-  rowId: number,
+  rowId: number | bigint | string,
   Duck: DuckDBClientForTableData,
   options?: {
     orderBy?: string | null;
@@ -121,7 +139,9 @@ export async function getRowPosition(
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     const filterCondition = whereClause ? `AND ${whereClause}` : '';
 
-    if (!Number.isInteger(rowId)) {
+    const normalizedRowId = normalizeRowId(rowId);
+
+    if (normalizedRowId === null) {
       logger.error('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
         rowId
       });
@@ -136,13 +156,13 @@ export async function getRowPosition(
 
       const query = `
         WITH target AS (
-          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${rowId}
+          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${normalizedRowId}
         )
         SELECT COUNT(*) as position
         FROM "${escapedTable}", target
         WHERE (
           ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
-          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${rowId})
+          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${normalizedRowId})
         )
         ${filterCondition}
       `;
@@ -156,7 +176,7 @@ export async function getRowPosition(
       const query = `
         SELECT COUNT(*) as position
         FROM "${escapedTable}"
-        WHERE __id < ${rowId}
+        WHERE __id < ${normalizedRowId}
         ${filterCondition}
       `;
 
@@ -204,7 +224,10 @@ export async function getExcludedRowIds(
   if (!whereClause) return [];
 
   const escapedTable = escapeIdentifier(tableName);
-  const query = `SELECT __id FROM "${escapedTable}" WHERE NOT (${whereClause})`;
+  // Treat NULL predicate results as excluded rows too.
+  // Example: rows with NULL values on filtered columns should be removable
+  // when deleting "excluded" rows from a filter.
+  const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
   const ids: number[] = [];
