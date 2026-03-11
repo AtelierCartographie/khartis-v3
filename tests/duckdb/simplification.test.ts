@@ -1,15 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DUCK_CONST } from '$lib/features/duckdb/constants';
-import { SimplificationLevel } from '$lib/features/commons/types/enums';
 import { simplification_macros } from '$lib/features/duckdb/macros/simplification';
 
 const mocks = vi.hoisted(() => ({
   queryMock: vi.fn(),
-  addGeoArrowMetadataMock: vi.fn(),
-  tableFromIpcMock: vi.fn(),
   loggerInfoMock: vi.fn(),
-  loggerSuccessMock: vi.fn(),
-  loggerDebugMock: vi.fn()
+  loggerSuccessMock: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -18,25 +13,12 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   },
   logger: {
     info: mocks.loggerInfoMock,
-    success: mocks.loggerSuccessMock,
-    debug: mocks.loggerDebugMock
+    success: mocks.loggerSuccessMock
   }
 }));
 
-vi.mock('$lib/features/duckdb/orchestrator/arrow-ops', () => ({
-  addGeoArrowMetadataFromDuckDB: mocks.addGeoArrowMetadataMock
-}));
-
-vi.mock('apache-arrow/Arrow', () => ({
-  Table: class MockTable {},
-  tableFromIPC: mocks.tableFromIpcMock
-}));
-
 import {
-  SIMPLIFICATION_FACTOR,
-  SIMPLIFICATION_TOLERANCE,
   calculateToleranceFromRate,
-  getSimplifiedArrowTable,
   simplifyGeometryTable
 } from '$lib/features/duckdb/operations/simplification';
 
@@ -51,16 +33,6 @@ function createDuck() {
 describe('simplification operations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('exposes expected simplification constants', () => {
-    expect(SIMPLIFICATION_FACTOR[SimplificationLevel.Low]).toBe(0.15);
-    expect(SIMPLIFICATION_FACTOR[SimplificationLevel.Medium]).toBe(0.4);
-    expect(SIMPLIFICATION_FACTOR[SimplificationLevel.High]).toBe(0.75);
-
-    expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.Low]).toBe(0.0001);
-    expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.Medium]).toBe(0.001);
-    expect(SIMPLIFICATION_TOLERANCE[SimplificationLevel.High]).toBe(0.01);
   });
 
   it('registers the full polygon cleanup macro chain', () => {
@@ -147,40 +119,5 @@ describe('simplification operations', () => {
         "FROM simplify_and_clean('roads', 'geometry', 0.5)"
       )
     );
-  });
-
-  it('rejects invalid tolerance for Arrow simplification', async () => {
-    const Duck = createDuck();
-    await expect(getSimplifiedArrowTable(Duck, 'cities', NaN)).rejects.toThrow(
-      'Invalid simplification tolerance'
-    );
-    expect(mocks.queryMock).not.toHaveBeenCalled();
-  });
-
-  it('returns simplified Arrow table with GeoArrow metadata', async () => {
-    const ipc = new Uint8Array([1, 2, 3, 4]);
-    const rawTable = { numRows: 2, numCols: 1 };
-    const enrichedTable = { numRows: 2, numCols: 1, enriched: true };
-
-    mocks.queryMock.mockResolvedValueOnce(ipc.buffer);
-    mocks.tableFromIpcMock.mockReturnValueOnce(rawTable);
-    mocks.addGeoArrowMetadataMock.mockResolvedValueOnce(enrichedTable);
-
-    const Duck = createDuck();
-    const table = await getSimplifiedArrowTable(Duck, 'departements', 0.3);
-
-    expect(mocks.queryMock).toHaveBeenCalledWith(
-      expect.stringContaining(
-        "FROM simplify_and_clean('departements', 'geom', 0.3)"
-      ),
-      { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-    );
-    expect(mocks.tableFromIpcMock).toHaveBeenCalledWith(expect.any(Uint8Array));
-    expect(mocks.addGeoArrowMetadataMock).toHaveBeenCalledWith(
-      rawTable,
-      'departements',
-      Duck
-    );
-    expect(table).toBe(enrichedTable);
   });
 });

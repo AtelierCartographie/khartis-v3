@@ -1537,6 +1537,7 @@
   "enrich_status_pending": "Enrich your geographic data",
   "simplification_osm_not_available": "Reference basemaps cannot be simplified",
   "simplification_osm_explanation": "The reference basemap uses tiled vector data optimized per zoom level",
+  "simplification_no_variants": "No simplified variant available for this basemap",
   "simplification_processing": "Simplifying geometry...",
   "simplification_success": "Simplified {originalVertices} to {simplifiedVertices} ({reductionPercentage}% reduction)",
   "simplification_error": "Failed to simplify geometry",
