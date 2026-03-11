@@ -699,26 +699,10 @@ export function exportMapToSvg(
 ): Blob {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
 
-  logger.info('[SVG DEBUG] exportMapToSvg called', LogCategory.EXPORT, {
-    datasetCount: datasets.length,
-    datasets: datasets.map((d) => ({
-      id: d.id,
-      name: d.name,
-      geometry: d.geometry,
-      dataLength: d.data?.length ?? 0
-    })),
-    visualizationCount: visualizations.length
-  });
-
   const geometricDatasets = datasets.filter((d) => d.geometry);
   if (geometricDatasets.length === 0) {
     throw new Error(m.error_no_geometric_data_export());
   }
-
-  logger.info('[SVG DEBUG] Geometric datasets', LogCategory.EXPORT, {
-    count: geometricDatasets.length,
-    ids: geometricDatasets.map((d) => d.id)
-  });
 
   const bounds = geometricDatasets
     .map((d) => calculateDatasetBounds(d))
@@ -732,8 +716,6 @@ export function exportMapToSvg(
       }),
       { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
     );
-
-  logger.info('[SVG DEBUG] Calculated bounds', LogCategory.EXPORT, { bounds });
 
   if (!isFinite(bounds.minX)) {
     throw new Error(m.error_unable_calculate_map_bounds());
@@ -750,78 +732,31 @@ export function exportMapToSvg(
 
   const enabledVisualizations = visualizations.filter((v) => v.enabled);
 
-  logger.info('[SVG DEBUG] Processing visualizations', LogCategory.EXPORT, {
-    enabledCount: enabledVisualizations.length,
-    visualizations: enabledVisualizations.map((v) => ({
-      id: v.id,
-      datasetId: v.datasetId
-    }))
-  });
-
   for (const visualization of enabledVisualizations) {
-    const dataset = datasets.find((d) => d.id === visualization.datasetId);
-
-    logger.info('[SVG DEBUG] Processing visualization', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      vizDatasetId: visualization.datasetId,
-      datasetFound: !!dataset,
-      datasetGeometry: dataset?.geometry,
-      datasetDataLength: dataset?.data?.length ?? 0
-    });
-
-    if (!dataset || !dataset.geometry) {
+    // Direct ID match; fall back to sole dataset when IDs are stale (e.g. after page reload)
+    let dataset = datasets.find((d) => d.id === visualization.datasetId);
+    if (!dataset && datasets.length === 1 && datasets[0].geometry) {
+      dataset = datasets[0];
       logger.warn(
-        '[SVG DEBUG] Skipping viz - no dataset or geometry',
+        'Dataset ID mismatch — using sole available dataset as fallback',
         LogCategory.EXPORT,
         {
-          vizId: visualization.id
+          vizDatasetId: visualization.datasetId,
+          fallbackDatasetId: datasets[0].id
         }
       );
-      continue;
     }
+
+    if (!dataset || !dataset.geometry) continue;
 
     const geometryColumn = dataset.columns.find(
       (col) => col.type === COLUMN_TYPE_GEOMETRY
     );
 
-    logger.info('[SVG DEBUG] Geometry column search', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      geometryColumnFound: !!geometryColumn,
-      geometryColumnName: geometryColumn?.name,
-      allColumnTypes: dataset.columns.map((c) => ({
-        name: c.name,
-        type: c.type
-      }))
-    });
-
-    if (!geometryColumn) {
-      logger.warn(
-        '[SVG DEBUG] Skipping viz - no geometry column',
-        LogCategory.EXPORT,
-        {
-          vizId: visualization.id
-        }
-      );
-      continue;
-    }
+    if (!geometryColumn) continue;
 
     const polygons: string[] = [];
     const symbols: string[] = [];
-
-    logger.info('[SVG DEBUG] Iterating data rows', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      rowCount: dataset.data.length,
-      firstRowKeys: dataset.data[0] ? Object.keys(dataset.data[0]) : [],
-      firstRowGeomType: dataset.data[0]
-        ? typeof dataset.data[0][geometryColumn.name]
-        : 'N/A',
-      firstRowGeomValue: dataset.data[0]
-        ? JSON.stringify(dataset.data[0][geometryColumn.name])?.substring(
-            0,
-            200
-          )
-        : 'N/A'
-    });
 
     for (const row of dataset.data) {
       const geometry = row[geometryColumn.name] as Geometry | null | undefined;
@@ -844,12 +779,6 @@ export function exportMapToSvg(
         }
       }
     }
-
-    logger.info('[SVG DEBUG] Rendered elements', LogCategory.EXPORT, {
-      vizId: visualization.id,
-      polygonCount: polygons.length,
-      symbolCount: symbols.length
-    });
 
     svgContent += `  <g id="viz-${visualization.id}">
     <g id="polygons">

@@ -19,7 +19,8 @@
   import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
   import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
+  import { Duck } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DataTableSkeleton,
@@ -277,6 +278,12 @@
 
       datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+      datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
+        header: options.header,
+        decimalSeparator: options.decimalSeparator,
+        thousandsSeparator: options.thousandsSeparator,
+        delimiter: options.delimiter
+      });
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();
@@ -612,6 +619,8 @@
           cellHighlights={searchHighlight.cellHighlights}
           currentCell={searchHighlight.currentCell}
           highlightedRowIds={searchHighlight.highlightedRowIds}
+          activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
+            undefined}
           isExpanded={false}
           isSelectable={true}
           onColumnDeleted={handleColumnDeleted}

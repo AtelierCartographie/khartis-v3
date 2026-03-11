@@ -18,12 +18,6 @@ export interface Layer {
   basemapLayerId?: string;
 }
 
-export interface DragState {
-  dragIndex: number | null;
-  dragOverIndex: number | null;
-  isDragging?: boolean;
-}
-
 export interface LayersState {
   layers: Omit<Layer, 'icon'>[];
 }

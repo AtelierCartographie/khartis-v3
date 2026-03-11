@@ -2,11 +2,8 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
-  import {
-    Duck,
-    RefineOperation,
-    duckDBOrchestrator
-  } from '$lib/features/duckdb';
+  import { Duck, RefineOperation } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { renameColumn } from '$lib/features/duckdb/orchestrator/column-ops';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -17,7 +14,7 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onMount, untrack, type Component } from 'svelte';
+  import { onMount, tick, untrack, type Component } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
@@ -34,12 +31,13 @@
     type ColumnType
   } from './types';
 
-  import TableColumnHeader from './components/TableColumnHeader.svelte';
-  import TableHeaderInfo from './components/TableHeaderInfo.svelte';
-  import TableRow from './components/TableRow.svelte';
+  import TableColumnHeader from './components/table-column-header.svelte';
+  import TableHeaderInfo from './components/table-header-info.svelte';
+  import TableRow from './components/table-row.svelte';
 
   const LOCAL_UPDATE_DELAY_MS = 100;
   const SCROLL_TO_CELL_DEBOUNCE_MS = 150;
+  const MAX_SCROLL_CELL_ATTEMPTS = 5;
 
   interface DataTableSkeletonRuntimeProps {
     columns?: number;
@@ -79,6 +77,7 @@
     isSelectable?: boolean;
     isReadOnly?: boolean;
     datasetVersion?: number;
+    activeJoinColumn?: string;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
     onColumnDeleted?: (columnName: string) => void;
   }
@@ -95,6 +94,7 @@
     isSelectable = false,
     isReadOnly = false,
     datasetVersion,
+    activeJoinColumn,
     onSelectionChange,
     onColumnDeleted
   }: Props = $props();
@@ -383,6 +383,10 @@
 
   const geoidColumns = $derived.by(() => {
     const set = new SvelteSet<string>();
+    if (activeJoinColumn) {
+      set.add(activeJoinColumn);
+      return set;
+    }
     for (const [name, a] of tableData.columnAnalysis) {
       if (
         a?.semioType === 'geoid' &&
@@ -418,9 +422,90 @@
     return () => window.removeEventListener('resize', handleResize);
   });
 
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function escapeSelectorValue(value: string): string {
+    if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
+      return CSS.escape(value);
+    }
+
+    return value.replace(/["\\]/g, '\\$&');
+  }
+
+  function normalizeRowId(value: number | bigint | string): number | null {
+    if (typeof value === 'number' && Number.isInteger(value)) {
+      return value;
+    }
+
+    if (typeof value === 'bigint') {
+      return Number(value);
+    }
+
+    if (typeof value === 'string') {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isInteger(parsed) ? parsed : null;
+    }
+
+    return null;
+  }
+
+  async function scrollToCurrentCell(options: {
+    tableName: string;
+    rowId: number;
+    columnName: string;
+    sortColumn: string | null;
+    sortOrder: 'ASC' | 'DESC' | null;
+  }): Promise<void> {
+    if (!tableContainer) return;
+
+    const normalizedRowId = normalizeRowId(options.rowId);
+    if (normalizedRowId === null) return;
+
+    virtualScroll.setTableContainer(tableContainer);
+
+    let position = await duckDBOrchestrator.getRowPosition(
+      options.tableName,
+      normalizedRowId,
+      {
+        orderBy: options.sortColumn,
+        order: options.sortOrder
+      }
+    );
+
+    if (position < 0) {
+      position = Math.max(normalizedRowId - 1, 0);
+    }
+
+    if (position >= 0) {
+      await virtualScroll.goToPosition(position);
+    }
+
+    const rowSelector = `tr[data-row-id="${normalizedRowId}"]`;
+    const cellSelector = `${rowSelector} td[data-column="${escapeSelectorValue(options.columnName)}"]`;
+
+    for (let attempt = 0; attempt < MAX_SCROLL_CELL_ATTEMPTS; attempt += 1) {
+      await tick();
+
+      const cell =
+        tableContainer?.querySelector<HTMLTableCellElement>(cellSelector);
+      if (cell) {
+        cell.scrollIntoView({
+          behavior: 'smooth',
+          inline: 'center',
+          block: 'nearest'
+        });
+        return;
+      }
+
+      await wait(DOM_UPDATE_DELAY_MS);
+    }
+  }
+
   let scrollToCellTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    if (currentCell && filters.numRows > 0 && tableName) {
+    if (currentCell && filters.numRows > 0 && tableName && tableContainer) {
       const rowId = currentCell.rowId;
       const columnName = currentCell.columnName;
       const currentSortColumn = sort.sortColumn;
@@ -429,26 +514,20 @@
 
       clearTimeout(scrollToCellTimer);
       scrollToCellTimer = setTimeout(() => {
-        untrack(async () => {
-          const position = await duckDBOrchestrator.getRowPosition(
-            currentTableName,
+        untrack(() => {
+          void scrollToCurrentCell({
+            tableName: currentTableName,
             rowId,
-            { orderBy: currentSortColumn, order: currentSortOrder }
-          );
-
-          if (position >= 0) {
-            await virtualScroll.goToPosition(position);
-          }
-
-          setTimeout(() => {
-            const cellSelector = `td[data-column="${columnName}"]`;
-            const cell = tableContainer?.querySelector(cellSelector);
-            cell?.scrollIntoView({
-              behavior: 'smooth',
-              inline: 'center',
-              block: 'nearest'
-            });
-          }, DOM_UPDATE_DELAY_MS);
+            columnName,
+            sortColumn: currentSortColumn,
+            sortOrder: currentSortOrder
+          }).catch((error) => {
+            logger.error(
+              'Error scrolling to current search result',
+              LogCategory.UI,
+              error
+            );
+          });
         });
       }, SCROLL_TO_CELL_DEBOUNCE_MS);
     }
@@ -577,9 +656,7 @@
                     <button
                       class="histogram-toggle"
                       onclick={toggleHistograms}
-                      title={histogramVisible
-                        ? m.column_hide()
-                        : m.column_show()}
+                      title={m.data_toggle_summary_plots()}
                     >
                       {#if histogramVisible}
                         <ChevronUp size={16} />

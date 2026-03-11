@@ -1,14 +1,15 @@
-import { base } from '$app/paths';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
+import type { GPSBounds } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../commons/utils/logger';
+import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import type {
   BasemapCatalog,
   BasemapMetadata,
   BasemapSuggestion
 } from '../types/basemap.types';
 
-const BASEMAP_METADATA_URL = `${base}/basemaps/all-basemaps-metadata.json`;
+const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 
 function createBasemapCatalogService() {
   const state = $state<{
@@ -25,7 +26,9 @@ function createBasemapCatalogService() {
     }
 
     try {
-      const response = await fetch(BASEMAP_METADATA_URL);
+      const response = await fetch(
+        resolveStaticAssetUrl(BASEMAP_METADATA_PATH)
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch catalog: ${response.statusText}`);
@@ -204,6 +207,40 @@ function createBasemapCatalogService() {
     return suggestions;
   }
 
+  function getSuggestionsByGPSBbox(
+    gpsBounds: GPSBounds,
+    limit: number = 3
+  ): BasemapSuggestion[] {
+    if (!state.catalog) return [];
+
+    function overlapArea(bbox: [number, number, number, number]): number {
+      const [bMinLon, bMinLat, bMaxLon, bMaxLat] = bbox;
+      const overlapW =
+        Math.min(gpsBounds.maxLon, bMaxLon) -
+        Math.max(gpsBounds.minLon, bMinLon);
+      const overlapH =
+        Math.min(gpsBounds.maxLat, bMaxLat) -
+        Math.max(gpsBounds.minLat, bMinLat);
+      if (overlapW <= 0 || overlapH <= 0) return 0;
+      return overlapW * overlapH;
+    }
+
+    const dataArea =
+      (gpsBounds.maxLon - gpsBounds.minLon) *
+      (gpsBounds.maxLat - gpsBounds.minLat);
+
+    return state.catalog.basemaps
+      .map((basemap) => {
+        const area = overlapArea(basemap.bbox);
+        const matchScore =
+          dataArea > 0 ? Math.min((area / dataArea) * 100, 100) : 0;
+        return { ...basemap, matchScore, matchReason: 'GPS bbox overlap' };
+      })
+      .filter((s) => s.matchScore > 0)
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
+  }
+
   function searchBasemaps(query: string): BasemapMetadata[] {
     if (!state.catalog) {
       return [];
@@ -276,6 +313,7 @@ function createBasemapCatalogService() {
     },
     loadCatalog,
     getSuggestions,
+    getSuggestionsByGPSBbox,
     searchBasemaps,
     getBasemapById,
     filterByYear,

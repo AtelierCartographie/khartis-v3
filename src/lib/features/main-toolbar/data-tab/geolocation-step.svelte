@@ -16,11 +16,11 @@
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import {
     Duck,
-    duckDBOrchestrator,
     validateGPSColumns,
     type AnalysisResult,
     type GPSValidationResult
   } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';

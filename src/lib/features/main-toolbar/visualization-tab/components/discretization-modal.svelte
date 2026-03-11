@@ -12,13 +12,23 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { untrack } from 'svelte';
+  import {
+    DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    normalizeClassificationMethod,
+    resolveComputedClassCount,
+    resolveHeadTailClassCountMax,
+    resolveRequestedClassCount
+  } from './discretization.utils';
 
   type PanelMethod =
     | 'jenks'
     | 'quantile'
     | 'equal-interval'
-    | 'stddev'
-    | 'manual';
+    | 'manual'
+    | 'q6'
+    | 'nested-means'
+    | 'head-tail';
 
   interface ClassBreak {
     min: number;
@@ -48,8 +58,11 @@
       [ClassificationMethod.JENKS]: 'jenks',
       [ClassificationMethod.QUANTILES]: 'quantile',
       [ClassificationMethod.EQUAL_INTERVAL]: 'equal-interval',
-      [ClassificationMethod.STANDARD_DEVIATION]: 'stddev',
-      [ClassificationMethod.MANUAL]: 'manual'
+      [ClassificationMethod.STANDARD_DEVIATION]: 'nested-means',
+      [ClassificationMethod.MANUAL]: 'manual',
+      [ClassificationMethod.Q6]: 'q6',
+      [ClassificationMethod.NESTED_MEANS]: 'nested-means',
+      [ClassificationMethod.HEAD_TAIL]: 'head-tail'
     };
     return mapping[method] ?? 'quantile';
   }
@@ -59,8 +72,10 @@
       jenks: ClassificationMethod.JENKS,
       quantile: ClassificationMethod.QUANTILES,
       'equal-interval': ClassificationMethod.EQUAL_INTERVAL,
-      stddev: ClassificationMethod.STANDARD_DEVIATION,
-      manual: ClassificationMethod.MANUAL
+      manual: ClassificationMethod.MANUAL,
+      q6: ClassificationMethod.Q6,
+      'nested-means': ClassificationMethod.NESTED_MEANS,
+      'head-tail': ClassificationMethod.HEAD_TAIL
     };
     return mapping[method] ?? ClassificationMethod.QUANTILES;
   }
@@ -69,17 +84,30 @@
   let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
+  let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
 
   $effect(() => {
     if (visualization?.classification) {
-      currentMethod = storeMethodToPanelMethod(
+      const method = normalizeClassificationMethod(
         visualization.classification.method ?? ClassificationMethod.QUANTILES
       );
-      currentNumClasses =
+      const storedNumClasses =
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         5;
+      const actualClassCount = visualization.classification.counts?.length;
+
+      currentMethod = storeMethodToPanelMethod(method);
+      currentNumClasses = resolveComputedClassCount(
+        method,
+        storedNumClasses,
+        actualClassCount ?? storedNumClasses
+      );
       currentBreakpoint = visualization.classification.breakpointValue ?? null;
+      headTailClassCountMax =
+        method === ClassificationMethod.HEAD_TAIL
+          ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
+          : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
     }
   });
 
@@ -89,7 +117,7 @@
       visualization?.datasetId &&
       visualization?.mapping.valueColumn
     ) {
-      computeBreaks();
+      untrack(() => computeBreaks());
     }
   });
 
@@ -107,30 +135,46 @@
 
     _isCalculating = true;
     try {
+      const storeMethod = panelMethodToStoreMethod(currentMethod);
+      const requestedClassCount = resolveRequestedClassCount(
+        storeMethod,
+        currentNumClasses
+      );
       const result = await calculateBreaks({
         datasetId: dataset.sourceFileId,
         columnName: visualization.mapping.valueColumn,
-        method: panelMethodToStoreMethod(currentMethod),
-        numClasses: currentNumClasses
+        method: storeMethod,
+        numClasses: requestedClassCount
       });
 
       if (result) {
+        const actualClassCount = result.counts.length;
+        const resolvedClassCount = resolveComputedClassCount(
+          storeMethod,
+          requestedClassCount,
+          actualClassCount
+        );
         const paletteType =
           currentBreakpoint !== null ? 'diverging' : 'sequential';
-        const colors = generateColorsForBreaks(currentNumClasses, paletteType);
+        const colors = generateColorsForBreaks(resolvedClassCount, paletteType);
         const allBreaks = [result.min, ...result.breaks, result.max];
 
+        currentNumClasses = resolvedClassCount;
         currentBreaks = result.counts.map((count, i) => ({
           min: allBreaks[i],
           max: allBreaks[i + 1],
           count,
           color: colors[i] || colors[colors.length - 1]
         }));
+        headTailClassCountMax =
+          storeMethod === ClassificationMethod.HEAD_TAIL
+            ? resolveHeadTailClassCountMax(actualClassCount)
+            : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
 
         onchange?.({
-          method: panelMethodToStoreMethod(currentMethod),
-          classes: currentNumClasses,
-          numClasses: currentNumClasses,
+          method: storeMethod,
+          classes: resolvedClassCount,
+          numClasses: resolvedClassCount,
           breaks: result.breaks,
           counts: result.counts,
           colors,
@@ -144,6 +188,9 @@
 
   function handleMethodChange(method: PanelMethod) {
     currentMethod = method;
+    if (method !== 'head-tail') {
+      headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+    }
     if (method !== 'manual') {
       computeBreaks();
     } else {
@@ -202,6 +249,9 @@
     bind:numClasses={currentNumClasses}
     bind:breaks={currentBreaks}
     bind:breakpointValue={currentBreakpoint}
+    classCountMax={currentMethod === 'head-tail'
+      ? headTailClassCountMax
+      : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
     onmethodchange={handleMethodChange}
     onclasseschange={handleClassesChange}
     onbreakpointchange={handleBreakpointChange}

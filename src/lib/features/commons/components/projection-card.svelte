@@ -58,11 +58,11 @@
     clsx('projection-card', {
       'full-width': fullWidth,
       'border-2 border-dark-gray': selected && (disabled || isGrayVariant),
-      'border-2 border-blue':
+      'border-selected-blue':
         selected && !disabled && (isBlueVariant || isDefaultVariant),
       'border border-medium-gray': !selected && (disabled || isGrayVariant),
       'border border-medium-blue': !selected && !disabled && isBlueVariant,
-      'border border-pale-blue': !selected && !disabled && isDefaultVariant,
+      'border-unselected-blue': !selected && !disabled && isDefaultVariant,
       'opacity-50': disabled,
       'cursor-pointer': !disabled,
       vertical: layout === 'vertical'
@@ -81,7 +81,7 @@
     clsx('card-right', {
       'variant-gray': isGrayVariant,
       'bg-light-gray color-text-01': disabled || isGrayVariant,
-      'bg-pale-blue color-blue':
+      'bg-layer-01-suggestions':
         !disabled && (isBlueVariant || isDefaultVariant)
     })
   );
@@ -96,9 +96,9 @@
   onkeydown={handleKeyDown}
 >
   <div class={leftClasses}>
-    <Earth size={32} />
+    <Earth size={20} />
 
-    <h4 class="mt-2">{ratio}</h4>
+    <h4 class="ratio">{ratio}</h4>
 
     <span class="text-sm">{previewLabel}</span>
   </div>
@@ -157,45 +157,60 @@
     border-radius: 0;
   }
 
+  /* Selected: 4px solid #0072c3 (focus-suggestions) */
+  .border-selected-blue {
+    border: 4px solid var(--khartis-additions-focus-suggestions, #0072c3);
+  }
+
+  /* Unselected default: 1px solid #82cfff (border-tile-01-suggestions) */
+  .border-unselected-blue {
+    border: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+  }
+
   .card-left {
-    min-width: 112px;
-    padding: 1rem 0.75rem;
+    width: 96px;
+    min-width: 96px;
+    flex-shrink: 0;
+    padding: 0.5rem;
     border-right: 1px solid var(--cds-layer-accent);
-    gap: 0.25rem;
-    background-color: var(--cds-ui-02);
+    gap: 0.125rem;
+    background-color: var(--khartis-additions-layer-02-suggestions, #ffffff);
   }
 
   #kh-projection-card.vertical .card-left {
-    min-width: auto;
     width: 100%;
+    min-width: auto;
     border-right: none;
     border-bottom: 1px solid var(--cds-layer-accent);
   }
 
-  .card-left h4 {
-    font-size: 0.9rem;
-    line-height: 1.2;
-    margin: 0.25rem 0 0;
+  .card-left .ratio {
+    font-size: 0.75rem;
+    line-height: 1;
+    margin: 0.125rem 0 0;
   }
 
   .card-right {
     flex: 1 1 auto;
-    padding: 0.75rem;
+    min-width: 0;
+    padding: 0.5rem;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 0.75rem;
+    gap: 0.25rem;
   }
 
   #kh-projection-card.vertical .card-right {
     width: 100%;
   }
 
-  #kh-projection-card:hover:not(.opacity-50) .card-right {
-    background-color: var(--cds-medium-blue);
+  #kh-projection-card:hover:not(.opacity-50)
+    .card-right.bg-layer-01-suggestions {
+    background-color: var(--cds-medium-blue, #a8e2ff);
   }
   #kh-projection-card:hover:not(.opacity-50) .card-right.variant-gray {
-    background-color: var(--cds-medium-gray);
+    background-color: var(--cds-medium-gray, #e0e0e0);
   }
 
   .card-header {
@@ -208,6 +223,8 @@
     margin: 0;
     font-size: 0.75rem;
     font-weight: 700;
+    /* text-primary-suggestions: #003a6d */
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
   .card-body .subtitle {
@@ -215,19 +232,29 @@
     align-items: center;
     gap: 0.25rem;
     font-size: 0.75rem;
-    color: var(--cds-blue);
+    /* text-secondary-suggestions: #00539a */
+    color: var(--khartis-additions-text-secondary-suggestions, #00539a);
   }
 
   .card-footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  #kh-projection-card .card-footer :global(.bx--tag) {
+    max-width: calc(100% - 32px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .info-btn {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
     background: transparent;
     display: inline-flex;
     align-items: center;
@@ -242,8 +269,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 9999px;
     background: var(--cds-blue);
     color: var(--cds-inverse-01);
@@ -253,10 +280,7 @@
     outline: none;
   }
   .text-sm {
-    font-size: 0.7rem;
-  }
-  .mt-2 {
-    margin-top: 0.5rem;
+    font-size: 0.625rem;
   }
   .ml-1 {
     margin-left: 0.25rem;

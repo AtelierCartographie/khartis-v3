@@ -12,7 +12,8 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
@@ -44,6 +45,8 @@
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
   import { hasBlockingJoinIssues } from './services/join-validation';
 
+  const OSM_TAB_INDEX = 2;
+
   let activeTabIndex = $state(0);
 
   const tabItems = [
@@ -74,6 +77,7 @@
   let showSuggestionModal = $state(false);
   let joinLoading = $state(false);
   let suggestionsDatasetIdentity = $state<string | null>(null);
+  let basemapAttributeValues = $state<string[]>([]);
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -86,6 +90,10 @@
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns);
   });
+
+  const isGPSModeActive = $derived(
+    osmBasemapStore.isActive && hasGPSCoordinates()
+  );
 
   const suggestedBasemaps = $derived(() => {
     return basemapSuggestions
@@ -160,6 +168,22 @@
     return false;
   }
 
+  function fetchBasemapAttributeValues(basemap: BasemapMetadata): void {
+    duckDBOrchestrator
+      .getBasemapAttributeValues(basemap)
+      .then((values) => {
+        basemapAttributeValues = values;
+      })
+      .catch((error) => {
+        logger.error(
+          'Failed to fetch basemap attribute values',
+          LogCategory.MAP,
+          error
+        );
+        basemapAttributeValues = [];
+      });
+  }
+
   async function computeAndAutoFinalizeJoin(
     basemap: BasemapMetadata,
     abortSignal: AbortSignal,
@@ -205,6 +229,12 @@
       }
 
       dataTabActions.setJoinStats(stats);
+
+      if (stats.unrecognizedCount > 0) {
+        fetchBasemapAttributeValues(basemap);
+      } else {
+        basemapAttributeValues = [];
+      }
 
       const hasBlocking = hasBlockingJoinIssues(stats);
 
@@ -280,6 +310,7 @@
 
     osmBasemapStore.clear();
     dataTabActions.clearJoinStats();
+    basemapAttributeValues = [];
     dataTabStore.resetStepCompletion(2);
     dataTabActions.selectBasemap(basemap.file);
     basemapStyleStore.setReferenceBasemap(basemap.file);
@@ -338,7 +369,7 @@
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
       dataTabActions.selectBasemap(customBasemap.file);
-      basemapService.registerCustomBasemap(customBasemap, geometryTable);
+      await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedBasemap = customBasemap;
 
@@ -490,6 +521,12 @@
 
         dataTabActions.setJoinStats(stats);
 
+        if (stats.unrecognizedCount > 0) {
+          fetchBasemapAttributeValues(basemap);
+        } else {
+          basemapAttributeValues = [];
+        }
+
         const hasBlocking = hasBlockingJoinIssues(stats);
 
         if (hasBlocking || stats.joinedCount === 0) {
@@ -519,6 +556,77 @@
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') return;
       logger.error('Failed to apply corrections', LogCategory.MAP, error);
+      showError(m.join_error_title(), m.join_error_message());
+    } finally {
+      joinLoading = false;
+    }
+  }
+
+  async function handleManualCorrection(
+    dataValue: string,
+    basemapValue: string
+  ): Promise<void> {
+    if (
+      !selectedDataset ||
+      !datasetIdForOrchestrator ||
+      !dataTabState.geolocation.linkedVariableName
+    )
+      return;
+
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+    }
+    currentJoinAbortController = new AbortController();
+    const abortSignal = currentJoinAbortController.signal;
+
+    const corrections: Record<string, string> = { [dataValue]: basemapValue };
+
+    try {
+      joinLoading = true;
+      await duckDBOrchestrator.applyJoinCorrections(
+        datasetIdForOrchestrator,
+        dataTabState.geolocation.linkedVariableName,
+        corrections
+      );
+
+      if (abortSignal.aborted) return;
+
+      const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+      if (basemap) {
+        const stats = await duckDBOrchestrator.computeJoinStats(
+          datasetIdForOrchestrator,
+          basemap,
+          dataTabState.geolocation.linkedVariableName
+        );
+
+        if (abortSignal.aborted) return;
+
+        dataTabActions.setJoinStats(stats);
+
+        if (stats.unrecognizedCount > 0) {
+          fetchBasemapAttributeValues(basemap);
+        } else {
+          basemapAttributeValues = [];
+        }
+
+        const hasBlocking = hasBlockingJoinIssues(stats);
+
+        if (!hasBlocking && stats.joinedCount > 0) {
+          await duckDBOrchestrator.finalizeJoin(
+            datasetIdForOrchestrator,
+            basemap,
+            dataTabState.geolocation.linkedVariableName
+          );
+          dataTabStore.markStepComplete(2);
+          logger.success(
+            'Manual correction applied and join finalized',
+            LogCategory.MAP
+          );
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      logger.error('Failed to apply manual correction', LogCategory.MAP, error);
       showError(m.join_error_title(), m.join_error_message());
     } finally {
       joinLoading = false;
@@ -597,11 +705,56 @@
       }
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
-      const suggestions = await basemapCatalogService.getSuggestions(
+      const geoColumn = dataTabState.geolocation.linkedVariableName;
+      let suggestions = await basemapCatalogService.getSuggestions(
         processedDataset,
         3,
-        dataTabState.geolocation.linkedVariableName
+        geoColumn
       );
+
+      // Fallback: suggest basemaps by GPS bbox when no text geo column
+      if (
+        suggestions.length === 0 &&
+        hasGPSCoordinates() &&
+        datasetIdForOrchestrator
+      ) {
+        const gpsBounds = await duckDBOrchestrator.getGPSBounds(
+          datasetIdForOrchestrator
+        );
+        if (gpsBounds) {
+          suggestions =
+            basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
+          basemapSuggestions = suggestions;
+        }
+      }
+
+      // Re-rank suggestions using actual join quality when possible
+      if (geoColumn && datasetIdForOrchestrator) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetIdForOrchestrator,
+            geoColumn
+          );
+          if (synthesis.length > 0) {
+            const scoreMap = new Map(
+              synthesis.map((s) => [s.basemap, s.shareCandidate])
+            );
+            suggestions = suggestions
+              .map((s) => ({
+                ...s,
+                matchScore: scoreMap.get(s.file) ?? s.matchScore
+              }))
+              .sort((a, b) => b.matchScore - a.matchScore);
+          }
+        } catch (err) {
+          logger.warn(
+            'Join synthesis unavailable, using heuristic ranking',
+            LogCategory.MAP,
+            err
+          );
+        }
+      }
+
       basemapSuggestions = suggestions;
 
       const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
@@ -611,6 +764,8 @@
 
       if (
         suggestions.length > 0 &&
+        !osmBasemapStore.isActive &&
+        !selectedDataset?.geometry &&
         (isDatasetChanged ||
           !dataTabState.basemapJoin.selectedBasemap ||
           !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
@@ -699,6 +854,12 @@
 
           if (!dataTabState.geolocation.linkedVariableName) return;
 
+          const datasetReady = await waitForDatasetAvailability(
+            datasetIdForOrchestrator,
+            controller.signal
+          );
+          if (controller.signal.aborted || !datasetReady) return;
+
           joinLoading = true;
           try {
             const stats = await duckDBOrchestrator.computeJoinStats(
@@ -708,9 +869,26 @@
             );
             if (controller.signal.aborted) return;
             dataTabActions.setJoinStats(stats);
+            if (stats.unrecognizedCount > 0) {
+              fetchBasemapAttributeValues(basemap);
+            }
             previousJoinContext = `${datasetIdForOrchestrator}::${basemap.file}`;
             previousLinkedVariableName =
               dataTabState.geolocation.linkedVariableName || null;
+
+            if (!hasBlockingJoinIssues(stats) && stats.joinedCount > 0) {
+              await duckDBOrchestrator.finalizeJoin(
+                datasetIdForOrchestrator,
+                basemap,
+                dataTabState.geolocation.linkedVariableName
+              );
+              if (controller.signal.aborted) return;
+              dataTabStore.markStepComplete(2);
+              logger.success(
+                'Join restored and finalized after project reload',
+                LogCategory.MAP
+              );
+            }
           } catch (error) {
             if (controller.signal.aborted) return;
             logger.error(
@@ -752,6 +930,8 @@
 
     if (
       basemapSuggestions.length > 0 &&
+      !osmBasemapStore.isActive &&
+      !selectedDataset?.geometry &&
       (!basemapSelected || !hasAvailableBasemap(basemapSelected))
     ) {
       void autoSelectFirstSuggestedBasemap();
@@ -817,6 +997,23 @@
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
   });
 
+  // Restore step completion after project reload when GPS join was already finalized
+  $effect(() => {
+    if (dataTabStore.hasCompletedStep[2]) return;
+    const id = datasetIdForOrchestrator;
+    if (!id) return;
+    // Use getDatasetBySourceFile since datasetIdForOrchestrator returns sourceFileId
+    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(id);
+    if (duckDataset?.gpsMode && duckDataset.joinedBasemap) {
+      dataTabStore.markStepComplete(2);
+      logger.info(
+        'Join step restored from persisted GPS mode',
+        LogCategory.MAP,
+        { id }
+      );
+    }
+  });
+
   let previousDatasetIdentity: string | null = null;
   $effect(() => {
     const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
@@ -845,6 +1042,7 @@
 
       osmBasemapStore.clear();
       dataTabActions.clearJoinStats();
+      basemapAttributeValues = [];
       dataTabActions.selectBasemap('');
       basemapStyleStore.setReferenceBasemap(null);
       dataTabStore.resetStepCompletion(2);
@@ -882,6 +1080,7 @@
       allBasemaps={allBasemaps}
       basemapSelected={basemapSelected}
       onSelectBasemap={handleSelectBasemap}
+      onSuggestBasemap={() => (showSuggestionModal = true)}
     />
   {:else if activeTabIndex === 1}
     <BasemapImportTab
@@ -892,7 +1091,7 @@
       onFileInputChange={handleFileInputChange}
       onLoadUrl={handleLoadUrl}
     />
-  {:else if activeTabIndex === 2}
+  {:else if activeTabIndex === OSM_TAB_INDEX}
     <BasemapOsmTab
       hasGPSCoordinates={hasGPSCoordinates()}
       onSelectOSM={handleSelectOSM}
@@ -900,7 +1099,7 @@
     />
   {/if}
 
-  {#if basemapSelected}
+  {#if basemapSelected && !isGPSModeActive}
     <hr class="join-separator" />
     <JoinAssistedSection
       joinRows={joinRows}
@@ -909,10 +1108,12 @@
       joinedCount={joinedCount}
       toVerifyCount={toVerifyCount}
       linkedVariableName={dataTabState.geolocation.linkedVariableName}
+      basemapValues={basemapAttributeValues}
       loading={joinLoading}
       joinFinalized={dataTabStore.hasCompletedStep[2]}
       onApplyCorrections={handleApplyCorrections}
       onFinalizeJoin={handleFinalizeJoin}
+      onManualCorrection={handleManualCorrection}
     />
   {/if}
 </section>

@@ -3,7 +3,8 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
+import { RefineOperation } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { LogCategory, logger } from '../../../utils/logger';
 import type { ColumnInfo, ColumnType } from '../types';
 

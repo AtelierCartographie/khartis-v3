@@ -72,15 +72,16 @@
   let lightness = $state(100);
 
   $effect(() => {
-    if (defaultStyle.strokeColor) {
-      if (typeof defaultStyle.strokeColor === 'string') {
-        strokeColor = defaultStyle.strokeColor as string;
+    const style = effectiveStyle;
+    if (style.strokeColor) {
+      if (typeof style.strokeColor === 'string') {
+        strokeColor = style.strokeColor as string;
         const hsl = hexToHsl(strokeColor);
         hue = hsl.hue;
         saturation = hsl.saturation;
         lightness = hsl.lightness;
-      } else if (isStrokeColorDescriptor(defaultStyle.strokeColor)) {
-        const c = defaultStyle.strokeColor;
+      } else if (isStrokeColorDescriptor(style.strokeColor)) {
+        const c = style.strokeColor;
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
@@ -141,10 +142,10 @@
   <Row>
     <Column>
       <div class="section">
-        <p class="helper">{m.annotations_shape_helper()}</p>
-        <Button kind="primary" icon={Add} on:click={handleAddShape}>
+        <Button kind="primary" icon={Add} onclick={handleAddShape}>
           {m.annotations_add_shape()}
         </Button>
+        <p class="helper">{m.annotations_shape_helper()}</p>
       </div>
     </Column>
   </Row>
@@ -160,6 +161,8 @@
           step={1}
           stepMultiplier={1}
           on:change={handleThicknessChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -176,6 +179,8 @@
           step={1}
           stepMultiplier={5}
           on:change={handleCurvatureChange}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -244,6 +249,8 @@
           stepMultiplier={5}
           on:change={(e) =>
             annotationsActions.applyStyle({ opacity: e.detail })}
+          minLabel=""
+          maxLabel=""
         />
       </div>
     </Column>
@@ -260,7 +267,7 @@
             kind="danger-tertiary"
             icon={TrashCan}
             disabled={!selected || selected.type !== AnnotationKind.SHAPE}
-            on:click={() =>
+            onclick={() =>
               selected &&
               selected.type === AnnotationKind.SHAPE &&
               annotationsActions.removeAnnotation(selected.id)}
@@ -283,9 +290,10 @@
   }
 
   .helper {
-    margin: 0 0 var(--cds-spacing-03) 0;
+    margin: var(--cds-spacing-03) 0 0 0;
     color: var(--cds-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .toggle-row {

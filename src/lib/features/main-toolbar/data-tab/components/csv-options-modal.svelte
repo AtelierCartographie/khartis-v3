@@ -1,5 +1,11 @@
 <script lang="ts">
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import {
+    canUseThousandsSeparator,
+    fromThousandsSeparatorSelectValue,
+    toThousandsSeparatorSelectValue,
+    type ThousandsSeparatorSelectValue
+  } from '$lib/features/main-toolbar/data-tab/services/csv-options.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     InlineLoading,
@@ -26,7 +32,7 @@
 
   let header = $state(true);
   let decimalSeparator = $state('.');
-  let thousandsSeparator = $state('none');
+  let thousandsSeparator = $state<ThousandsSeparatorSelectValue>('none');
   let delimiter = $state('auto');
   let isApplying = $state(false);
 
@@ -34,7 +40,9 @@
     if (open) {
       header = currentOptions.header;
       decimalSeparator = currentOptions.decimalSeparator;
-      thousandsSeparator = currentOptions.thousandsSeparator || 'none';
+      thousandsSeparator = toThousandsSeparatorSelectValue(
+        currentOptions.thousandsSeparator
+      );
       delimiter = currentOptions.delimiter || 'auto';
     }
   });
@@ -53,7 +61,7 @@
         header,
         decimalSeparator,
         thousandsSeparator:
-          thousandsSeparator === 'none' ? undefined : thousandsSeparator,
+          fromThousandsSeparatorSelectValue(thousandsSeparator),
         delimiter: delimiter === 'auto' ? undefined : delimiter
       });
       onClose();
@@ -77,15 +85,20 @@
     { value: ',', label: m.csv_options_decimal_comma() }
   ];
 
-  const thousandsOptions = [
+  const thousandsOptions: Array<{
+    value: ThousandsSeparatorSelectValue;
+    label: string;
+  }> = [
     { value: 'none', label: m.csv_options_thousands_none() },
-    { value: ' ', label: m.csv_options_thousands_space() },
+    { value: 'space', label: m.csv_options_thousands_space() },
     { value: ',', label: m.csv_options_thousands_comma() },
     { value: '.', label: m.csv_options_thousands_period() }
   ];
 
   const filteredThousandsOptions = $derived(
-    thousandsOptions.filter((opt) => opt.value !== decimalSeparator)
+    thousandsOptions.filter((opt) =>
+      canUseThousandsSeparator(opt.value, decimalSeparator)
+    )
   );
 </script>
 

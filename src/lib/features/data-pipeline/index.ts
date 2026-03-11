@@ -16,6 +16,7 @@ export type {
   ColumnAnalysis,
   ColumnInfo,
   ColumnStats,
+  CsvImportOptions,
   DatasetMetadata,
   DatasetResult,
   DuckAnalyticsColumn,

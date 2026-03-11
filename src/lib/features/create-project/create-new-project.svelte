@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import {
     createProjectActions,
@@ -10,7 +11,6 @@
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';
   import { m } from '$lib/paraglide/messages';
   import {
-    Button,
     FileUploaderDropContainer,
     FileUploaderItem,
     InlineLoading,
@@ -275,6 +275,16 @@
       />
     {/if}
 
+    {#if createProjectState.newProject.warning}
+      <InlineNotification
+        lowContrast
+        kind="warning"
+        title={m.warning_files_duplicate_title()}
+        subtitle={createProjectState.newProject.warning}
+        on:close={() => createProjectActions.setNewProjectWarning()}
+      />
+    {/if}
+
     <div aria-live="polite" aria-atomic="true" class="sr-only">
       {#each createProjectState.newProject.uploadedFiles as file (file.id)}
         {#if file.status === FileStatus.PROCESSING}
@@ -284,6 +294,12 @@
     </div>
 
     <div class="files-section">
+      {#if createProjectState.newProject.uploadedFiles.length > 0}
+        <span class="files-imported-label"
+          >{m.create_project_file_imported()}</span
+        >
+      {/if}
+
       {#if globalValidationErrors.length > 0}
         <InlineNotification
           kind="error"
@@ -467,10 +483,11 @@
                             · <span data-testid="file-row-count"
                               >{rowCount}</span
                             >
-                            lignes ·
+                            {m.rows()} ·
                             <span data-testid="file-column-count"
                               >{columnCount}</span
-                            > colonnes
+                            >
+                            {m.columns()}
                           </span>
                         {/if}
                       </div>
@@ -588,6 +605,12 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-04);
+  }
+
+  .files-imported-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary);
+    letter-spacing: 0.32px;
   }
 
   .files-header {

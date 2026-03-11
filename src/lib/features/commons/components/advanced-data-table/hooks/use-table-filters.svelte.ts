@@ -1,9 +1,6 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import {
-  duckDBOrchestrator,
-  type DataTableFilter,
-  type FilterStats
-} from '$lib/features/duckdb';
+import { type DataTableFilter, type FilterStats } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 
 export interface UseTableFiltersProps {
   tableName?: string | (() => string | undefined);

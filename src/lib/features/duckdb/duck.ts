@@ -19,6 +19,7 @@ import { analyse as analyseMacros } from './macros/analyse';
 import { breaks as breaksMacros } from './macros/breaks';
 import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
+import { simplification_macros } from './macros/simplification';
 
 import type {
   AnalyseOptions,
@@ -227,7 +228,11 @@ export async function initDuckDB(): Promise<void> {
     try {
       await initEngine();
       const allMacros =
-        breaksMacros + analyseMacros + join_macros + search_macros;
+        breaksMacros +
+        analyseMacros +
+        join_macros +
+        search_macros +
+        simplification_macros;
       await loadMacros(allMacros);
     } catch (error) {
       duckInitPromise = null;

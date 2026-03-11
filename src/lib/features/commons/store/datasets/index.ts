@@ -60,6 +60,7 @@ export {
   updateDataset,
   updateDatasetRowCount,
   updateDatasetTableName,
+  updateDatasetCsvOptions,
   renameDataset,
   renameDatasetOnly,
   hasModifications,

@@ -8,17 +8,6 @@ export type {
   OrthographicViewState
 } from '@deck.gl/core';
 
-// TooltipContent type (matches @deck.gl/core internal type, not publicly exported)
-export type TooltipContent =
-  | null
-  | string
-  | {
-      text?: string;
-      html?: string;
-      className?: string;
-      style?: Partial<CSSStyleDeclaration>;
-    };
-
 export type {
   BasemapCatalog,
   BasemapLayer,
@@ -64,6 +53,13 @@ export interface DeckOrthographicViewStateMap {
   main: OrthographicMainViewState;
 }
 
+export interface FacetSyncViewState {
+  type: 'orthographic' | 'maplibre';
+  target?: [number, number, number];
+  center?: [number, number];
+  zoom: number;
+}
+
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
   geoJSONs: Map<string, FeatureCollection>;
@@ -72,6 +68,8 @@ export interface DeckMapProps {
   height: number;
   onReady?: () => void;
   forcedVisualizationIds?: string[];
+  onMoveSync?: (state: FacetSyncViewState) => void;
+  syncViewState?: FacetSyncViewState | null;
 }
 
 export interface LayerContext {

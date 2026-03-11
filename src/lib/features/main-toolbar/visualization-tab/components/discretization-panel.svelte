@@ -3,6 +3,11 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import {
+    DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
+    NESTED_MEANS_CLASS_COUNTS
+  } from './discretization.utils';
+  import {
+    Button,
     Column,
     Grid,
     Row,
@@ -16,8 +21,10 @@
     | 'jenks'
     | 'quantile'
     | 'equal-interval'
-    | 'stddev'
-    | 'manual';
+    | 'manual'
+    | 'q6'
+    | 'nested-means'
+    | 'head-tail';
 
   interface ClassBreak {
     min: number;
@@ -29,6 +36,7 @@
   interface Props {
     method?: ClassificationMethod;
     numClasses?: number;
+    classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
     showHistogram?: boolean;
@@ -41,6 +49,7 @@
   let {
     method = $bindable<ClassificationMethod>('quantile'),
     numClasses = $bindable(5),
+    classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
       { min: 0, max: 20, count: 45, color: '#f7fbff' },
       { min: 20, max: 40, count: 72, color: '#c6dbef' },
@@ -56,7 +65,7 @@
     onbreakschange
   }: Props = $props();
 
-  let useDivergent = $state(false);
+  let useDivergent = $state(breakpointValue !== null);
   let editingBreakIndex = $state<number | null>(null);
 
   function getMethodDescription(method: ClassificationMethod): string {
@@ -64,8 +73,10 @@
       jenks: m.discretization_desc_jenks,
       quantile: m.discretization_desc_quantile,
       'equal-interval': m.discretization_desc_equal_interval,
-      stddev: m.discretization_desc_stddev,
-      manual: m.discretization_desc_manual
+      manual: m.discretization_desc_manual,
+      q6: m.discretization_desc_q6,
+      'nested-means': m.discretization_desc_nested_means,
+      'head-tail': m.discretization_desc_head_tail
     };
     return descriptions[method]();
   }
@@ -75,15 +86,36 @@
     return maxCount;
   });
 
+  const isClassCountLocked = $derived(method === 'q6');
+  const isNestedMeans = $derived(method === 'nested-means');
+
   function handleMethodChange(e: Event) {
+    validationErrors = [];
     const target = e.target as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
     method = newMethod;
+    if (newMethod === 'q6') {
+      numClasses = 6;
+      onclasseschange?.(6);
+    } else if (newMethod === 'nested-means') {
+      const closest = NESTED_MEANS_CLASS_COUNTS.reduce((prev, curr) =>
+        Math.abs(curr - numClasses) < Math.abs(prev - numClasses) ? curr : prev
+      );
+      numClasses = closest;
+      onclasseschange?.(closest);
+    }
     onmethodchange?.(newMethod);
   }
 
   function handleClassesChange() {
     onclasseschange?.(numClasses);
+  }
+
+  function handleNestedMeansChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    const value = Number(target.value);
+    numClasses = value;
+    onclasseschange?.(value);
   }
 
   function handleDivergentToggle(checked: boolean): void {
@@ -153,13 +185,18 @@
               value="quantile"
               text={m.discretization_method_quantile()}
             />
+            <SelectItem value="q6" text={m.discretization_method_q6()} />
             <SelectItem
               value="equal-interval"
               text={m.discretization_method_equal_interval()}
             />
             <SelectItem
-              value="stddev"
-              text={m.discretization_method_stddev()}
+              value="nested-means"
+              text={m.discretization_method_nested_means()}
+            />
+            <SelectItem
+              value="head-tail"
+              text={m.discretization_method_head_tail()}
             />
             <SelectItem
               value="manual"
@@ -169,16 +206,29 @@
         </Column>
         <Column sm={4} md={4} lg={8}>
           <div class="labeled-input">
-            <label for="num-classes" class="input-label"
-              >{m.discretization_num_classes()}</label
-            >
-            <CompactNumberInput
-              bind:value={numClasses}
-              min={2}
-              max={12}
-              onchange={handleClassesChange}
-              width="100%"
-            />
+            <p class="input-label">{m.discretization_num_classes()}</p>
+            {#if isNestedMeans}
+              <Select
+                id="nested-means-classes"
+                labelText=""
+                hideLabel
+                value={String(numClasses)}
+                on:change={handleNestedMeansChange}
+              >
+                {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
+                  <SelectItem value={String(val)} text={String(val)} />
+                {/each}
+              </Select>
+            {:else}
+              <CompactNumberInput
+                bind:value={numClasses}
+                min={2}
+                max={classCountMax}
+                disabled={isClassCountLocked}
+                onchange={handleClassesChange}
+                width="100%"
+              />
+            {/if}
           </div>
         </Column>
       </Row>
@@ -209,9 +259,7 @@
     {#if useDivergent}
       <div class="breakpoint-input">
         <div class="labeled-input">
-          <label for="breakpoint-value" class="input-label"
-            >{m.discretization_breakpoint_value()}</label
-          >
+          <p class="input-label">{m.discretization_breakpoint_value()}</p>
           <CompactNumberInput
             value={breakpointValue ?? 0}
             onchange={(v) => {
@@ -227,7 +275,7 @@
 
   {#if showHistogram}
     <div class="section histogram-section">
-      <h6 class="label">{m.discretization_histogram()}</h6>
+      <p class="label">{m.discretization_histogram()}</p>
       <div class="histogram-container">
         <div class="histogram">
           {#each breaks as breakItem, index (index)}
@@ -254,12 +302,12 @@
   {/if}
 
   <div class="section breaks-section">
-    <h6 class="label">
+    <p class="label">
       {m.discretization_class_bounds()}
       {#if method !== 'manual'}
         <span class="label-hint">{m.discretization_click_to_edit()}</span>
       {/if}
-    </h6>
+    </p>
     <div class="breaks-list">
       {#each breaks as breakItem, index (index)}
         <div class="break-row" class:editing={editingBreakIndex === index}>
@@ -294,17 +342,17 @@
               />
             </div>
           {:else}
-            <button
-              type="button"
+            <Button
+              kind="ghost"
               class="break-values"
-              onclick={() => startEditingBreak(index)}
+              on:click={() => startEditingBreak(index)}
               aria-label={m.discretization_edit_bounds()}
             >
               <span>{breakItem.min}</span>
               <span class="break-separator">—</span>
               <span>{breakItem.max}</span>
               <Edit size={16} class="edit-icon" />
-            </button>
+            </Button>
           {/if}
 
           <span class="break-count">{breakItem.count}</span>
@@ -495,7 +543,7 @@
     flex-shrink: 0;
   }
 
-  .break-values {
+  :global(.break-values) {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
@@ -508,20 +556,20 @@
     font-size: 0.875rem;
     color: var(--cds-text-primary);
     transition: background-color 0.15s ease;
+  }
 
-    &:hover {
-      background-color: var(--cds-layer-hover);
+  :global(.break-values:hover) {
+    background-color: var(--cds-layer-hover);
+  }
 
-      :global(.edit-icon) {
-        opacity: 1;
-      }
-    }
+  :global(.break-values:hover .edit-icon) {
+    opacity: 1;
+  }
 
-    :global(.edit-icon) {
-      opacity: 0;
-      color: var(--cds-text-02);
-      transition: opacity 0.15s ease;
-    }
+  :global(.break-values .edit-icon) {
+    opacity: 0;
+    color: var(--cds-text-02);
+    transition: opacity 0.15s ease;
   }
 
   .break-inputs {

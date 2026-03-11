@@ -1,9 +1,11 @@
 import { MIME } from '$lib/features/commons/constants';
+import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import {
   FileType,
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
   ProcessContext,
@@ -47,21 +49,29 @@ export const shapefileProcessor: FileProcessor = {
       }))
     });
 
+    const baseName = shpFile.name.replace(/\.shp$/i, '');
+    const companionExtensions = new Set(
+      companionFiles.map((f) =>
+        f.name.toLowerCase().replace(baseName.toLowerCase(), '')
+      )
+    );
+    const hasDbf = companionExtensions.has('.dbf');
+    const hasShx = companionExtensions.has('.shx');
+
+    if (!hasDbf || !hasShx) {
+      throw new ParseError(m.pipeline_error_shp_standalone(), file.fileType, {
+        fileName: shpFile.name
+      });
+    }
+
     const shapefileComponents = [shpFile, ...companionFiles];
 
     await ctx.Duck.register_files(shapefileComponents, { shapefile: true });
 
-    if (companionFiles.length === 0) {
-      logger.warn(
-        'No companion files found for Shapefile - ingestion may fail',
-        LogCategory.DUCKDB
-      );
-    } else {
-      logger.debug(
-        `Registered ${companionFiles.length} companion files for Shapefile`,
-        LogCategory.DUCKDB
-      );
-    }
+    logger.debug(
+      `Registered ${companionFiles.length} companion files for Shapefile`,
+      LogCategory.DUCKDB
+    );
 
     const resultTableName = await ctx.Duck.read_geofile(shpFile, {
       tablename: ctx.tableName,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { DatasetResult } from '$lib/features/data-pipeline';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import {
@@ -15,14 +15,19 @@
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { globalState } from '../commons/store/global.svelte';
+  import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
-  import { ColorBlindnessType } from '../commons/constants/ui.constants';
+  import {
+    ColorBlindnessType,
+    FormatMode
+  } from '../commons/constants/ui.constants';
   import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     formatActions,
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
+  import { EVENT } from '../commons/constants/dom.constants';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
@@ -35,11 +40,11 @@
   let isMapReady = $state(false);
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
-  let isToolbarTransitioning = $state(false);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let transitionEndCleanup: (() => void) | null = null;
   let containerResizeObserver: ResizeObserver | null = null;
 
-  const TOOLBAR_TRANSITION_MS = 600;
+  const TOOLBAR_TRANSITION_SAFETY_MS = 400;
   const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
@@ -55,6 +60,7 @@
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
+  const facetsSyncPanZoom = $derived(facetsStore.syncPanZoom);
 
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
@@ -410,25 +416,65 @@
     }
   });
 
+  function cleanupTransitionListener(): void {
+    if (transitionEndCleanup) {
+      transitionEndCleanup();
+      transitionEndCleanup = null;
+    }
+  }
+
+  function finishToolbarTransition(): void {
+    cleanupTransitionListener();
+    if (toolbarTransitionTimeoutId) {
+      clearTimeout(toolbarTransitionTimeoutId);
+      toolbarTransitionTimeoutId = null;
+    }
+    globalState.isToolbarTransitioning = false;
+    handleContainerResize();
+  }
+
   $effect(() => {
     void globalState.toolbarState;
 
     untrack(() => {
       if (!isMapReady) return;
 
-      // Mark toolbar as transitioning to suppress intermediate fitToContainer calls
-      isToolbarTransitioning = true;
+      globalState.isToolbarTransitioning = true;
 
+      // Clean up previous transition tracking
+      cleanupTransitionListener();
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
       }
 
-      toolbarTransitionTimeoutId = setTimeout(() => {
-        isToolbarTransitioning = false;
-        toolbarTransitionTimeoutId = null;
-        // Trigger a single fitToContainer with final dimensions after transition
-        handleContainerResize();
-      }, TOOLBAR_TRANSITION_MS);
+      // Safety timeout in case transitionend never fires
+      toolbarTransitionTimeoutId = setTimeout(
+        finishToolbarTransition,
+        TOOLBAR_TRANSITION_SAFETY_MS
+      );
+
+      // Listen for CSS transition end on the toolbar element
+      const toolbar = document.getElementById('khartis-main-toolbar');
+      if (toolbar) {
+        const handler = (event: TransitionEvent) => {
+          if (event.propertyName === 'width') {
+            finishToolbarTransition();
+          }
+        };
+        toolbar.addEventListener(EVENT.TRANSITIONEND, handler, { once: true });
+        transitionEndCleanup = () =>
+          toolbar.removeEventListener(EVENT.TRANSITIONEND, handler);
+      }
+    });
+  });
+
+  $effect(() => {
+    void formatState.model;
+    const mode = formatState.mode;
+
+    untrack(() => {
+      if (!containerRef || mode !== FormatMode.PRESET) return;
+      handleContainerResize();
     });
   });
 
@@ -443,10 +489,6 @@
   }
 
   function handleContainerResizeDebounced() {
-    // Skip intermediate resizes during toolbar animation.
-    // The toolbar transition effect will trigger a final resize after animation ends.
-    if (isToolbarTransitioning) return;
-
     if (containerResizeTimeoutId) {
       clearTimeout(containerResizeTimeoutId);
     }
@@ -490,10 +532,12 @@
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
       }
+      cleanupTransitionListener();
       if (containerResizeTimeoutId) {
         clearTimeout(containerResizeTimeoutId);
       }
       containerResizeObserver?.disconnect();
+      handleResizeUp();
     };
   });
 
@@ -512,6 +556,77 @@
       applyColorBlindnessFilter(thematicMapRef, simulationType);
     }
   });
+
+  // --- Resize handles for styling step ---
+  type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+  const RESIZE_EDGES: ResizeEdge[] = [
+    'n',
+    's',
+    'e',
+    'w',
+    'ne',
+    'nw',
+    'se',
+    'sw'
+  ];
+  const MIN_MAP_SIZE = 100;
+
+  const showResizeHandles = $derived(
+    globalState.selectedStep === ToolbarStep.Styling && isMapReady
+  );
+
+  let resizeState = $state<{
+    edge: ResizeEdge;
+    startX: number;
+    startY: number;
+    startW: number;
+    startH: number;
+  } | null>(null);
+
+  function handleResizePointerDown(
+    event: PointerEvent,
+    edge: ResizeEdge
+  ): void {
+    event.preventDefault();
+    event.stopPropagation();
+    resizeState = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startW: formatState.width,
+      startH: formatState.height
+    };
+    formatActions.setMode(FormatMode.CUSTOM);
+    window.addEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.addEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
+
+  function handleResizeMove(event: PointerEvent): void {
+    if (!resizeState) return;
+    const { edge, startX, startY, startW, startH } = resizeState;
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    const dx = (event.clientX - startX) / scale;
+    const dy = (event.clientY - startY) / scale;
+
+    let newW = startW;
+    let newH = startH;
+
+    if (edge.includes('e')) newW = startW + dx;
+    if (edge.includes('w')) newW = startW - dx;
+    if (edge.includes('s')) newH = startH + dy;
+    if (edge.includes('n')) newH = startH - dy;
+
+    formatActions.setSize(
+      Math.max(MIN_MAP_SIZE, Math.round(newW)),
+      Math.max(MIN_MAP_SIZE, Math.round(newH))
+    );
+  }
+
+  function handleResizeUp(): void {
+    resizeState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
+    window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
+  }
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
@@ -552,6 +667,7 @@
           tables={displayTables}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
+          syncPanZoom={facetsSyncPanZoom}
           containerWidth={formatState.width}
           containerHeight={formatState.height}
         />
@@ -565,6 +681,24 @@
           onReady={handleMapReady}
         />
       {/if}
+    </div>
+  {/if}
+
+  {#if showResizeHandles}
+    <div
+      class="resize-handles-frame"
+      style="width: {formatState.width}px; height: {formatState.height}px;"
+    >
+      {#each RESIZE_EDGES as edge (edge)}
+        <div
+          class="resize-handle resize-{edge}"
+          role="separator"
+          aria-orientation={edge === 'n' || edge === 's'
+            ? 'horizontal'
+            : 'vertical'}
+          onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
+        ></div>
+      {/each}
     </div>
   {/if}
 </div>
@@ -625,5 +759,90 @@
 
   .error-state :global(.bx--inline-notification) {
     max-width: 400px;
+  }
+
+  /* --- Resize handles --- */
+  .resize-handles-frame {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .resize-handle {
+    position: absolute;
+    pointer-events: auto;
+    z-index: var(--z-content-raised, 2);
+  }
+
+  /* Edge handles — thin bars along each side */
+  .resize-n {
+    top: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: n-resize;
+  }
+
+  .resize-s {
+    bottom: -3px;
+    left: 8px;
+    right: 8px;
+    height: 6px;
+    cursor: s-resize;
+  }
+
+  .resize-e {
+    right: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: e-resize;
+  }
+
+  .resize-w {
+    left: -3px;
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+    cursor: w-resize;
+  }
+
+  /* Corner handles — small squares */
+  .resize-ne {
+    top: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: ne-resize;
+  }
+
+  .resize-nw {
+    top: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: nw-resize;
+  }
+
+  .resize-se {
+    bottom: -4px;
+    right: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: se-resize;
+  }
+
+  .resize-sw {
+    bottom: -4px;
+    left: -4px;
+    width: 8px;
+    height: 8px;
+    cursor: sw-resize;
+  }
+
+  /* Visual indicator on hover */
+  .resize-handle:hover {
+    background: var(--cds-interactive-01, #0f62fe);
+    opacity: 0.4;
+    border-radius: 1px;
   }
 </style>

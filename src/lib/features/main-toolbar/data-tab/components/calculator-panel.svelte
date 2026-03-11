@@ -1,6 +1,7 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
-    Button,
     Link,
     Select,
     SelectItem,
@@ -10,9 +11,13 @@
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    INTERNAL_COLUMN,
+    COLUMN_TYPE_GEOMETRY
+  } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
   import AutocompleteTextarea, {
     type Suggestion
@@ -28,7 +33,10 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(
     selectedDataset?.columns.filter(
-      (c) => c.name !== INTERNAL_COLUMN.GEOM && c.name !== INTERNAL_COLUMN.ID
+      (c) =>
+        c.name !== INTERNAL_COLUMN.GEOM &&
+        c.name !== INTERNAL_COLUMN.ID &&
+        c.type !== COLUMN_TYPE_GEOMETRY
     ) ?? []
   );
 
@@ -38,8 +46,11 @@
   let selectedFunction = $state('list_avg');
   let testResult = $state<string | null>(null);
   let errorMessage = $state<string | null>(null);
+  let successMessage = $state<string | null>(null);
   let isTesting = $state(false);
   let isCalculating = $state(false);
+
+  let variableCounter = $state(1);
 
   const hasData = $derived(columns.length > 0);
 
@@ -128,6 +139,7 @@
     formula = newValue;
     errorMessage = null;
     testResult = null;
+    successMessage = null;
     dataToolsStore.setCalculatorFormula(formula);
   }
 
@@ -218,9 +230,10 @@
       testResult = m.calc_test_result_label({ result: String(result) });
       dataToolsStore.setCalculatorTestResult(result);
     } catch (err) {
-      errorMessage =
-        err instanceof Error ? err.message : m.error_calc_expression_invalid();
-      dataToolsStore.setCalculatorError(errorMessage);
+      errorMessage = m.error_calc_generic();
+      dataToolsStore.setCalculatorError(
+        err instanceof Error ? err.message : m.error_calc_expression_invalid()
+      );
     } finally {
       isTesting = false;
     }
@@ -228,30 +241,40 @@
 
   async function handleCalculate() {
     if (isCalculating) return;
-    if (!tableName || !variableName.trim() || !formula.trim()) {
+
+    // Use default variable name if not provided
+    const effectiveName =
+      variableName.trim() ||
+      m.calc_default_variable_name({ count: variableCounter });
+
+    if (!tableName || !formula.trim()) {
       errorMessage = m.error_calc_name_formula_required();
       return;
     }
 
     isCalculating = true;
     errorMessage = null;
+    successMessage = null;
 
     try {
       await duckDBOrchestrator.addCalculatedColumn(
         tableName,
-        variableName.trim(),
+        effectiveName,
         formula
       );
 
+      variableCounter++;
       variableName = '';
       formula = '';
       testResult = null;
+      successMessage = m.calc_success();
       dataToolsStore.resetCalculator();
       onColumnCreated?.();
     } catch (err) {
-      errorMessage =
-        err instanceof Error ? err.message : m.error_calc_execution_failed();
-      dataToolsStore.setCalculatorError(errorMessage);
+      errorMessage = m.error_calc_generic();
+      dataToolsStore.setCalculatorError(
+        err instanceof Error ? err.message : m.error_calc_execution_failed()
+      );
     } finally {
       isCalculating = false;
     }
@@ -307,10 +330,9 @@
             <SelectItem value={column.name} text={column.name} />
           {/each}
         </Select>
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ArrowRight}
           iconDescription={m.calc_insert_variable()}
           disabled={!selectedVariable}
@@ -345,10 +367,9 @@
             <SelectItem value={fn.value} text={fn.label} />
           {/each}
         </Select>
-        <Button
+        <IconButton
           kind="ghost"
           size="small"
-          hasIconOnly
           icon={ArrowRight}
           iconDescription={m.calc_insert_function()}
           on:click={insertFunction}
@@ -367,6 +388,15 @@
 
     {#if testResult}
       <p class="test-result">{testResult}</p>
+    {/if}
+
+    {#if successMessage}
+      <InlineNotification
+        kind="success"
+        title={successMessage}
+        lowContrast
+        hideCloseButton
+      />
     {/if}
 
     {#if errorMessage}
@@ -391,10 +421,7 @@
       <Button
         kind="primary"
         size="small"
-        disabled={isCalculating ||
-          !variableName ||
-          !formula ||
-          !!columnNameError}
+        disabled={isCalculating || !formula || !!columnNameError}
         on:click={handleCalculate}
       >
         {isCalculating ? m.calc_calculating() : m.calc_calculate()}

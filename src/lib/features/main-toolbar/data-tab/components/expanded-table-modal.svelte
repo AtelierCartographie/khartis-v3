@@ -196,12 +196,10 @@
   }
 
   #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
-    max-width: 100vw !important;
-    width: 100vw !important;
-    max-height: 100vh !important;
-    height: 100vh !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
+    max-width: 90vw !important;
+    width: 90vw !important;
+    max-height: 85vh !important;
+    height: 85vh !important;
     background-color: var(--cds-ui-01);
   }
 

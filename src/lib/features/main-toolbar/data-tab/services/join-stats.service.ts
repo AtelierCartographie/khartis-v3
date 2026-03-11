@@ -5,6 +5,8 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { buildFilterWhereClause } from '$lib/features/duckdb/orchestrator/filter-ops';
+import { getFilters } from '$lib/features/duckdb/orchestrator/state.svelte';
 import type { JoinEntity, JoinStats } from '../components';
 
 export interface ComputeJoinStatsOptions {
@@ -23,8 +25,9 @@ interface JoinAnalysisRow {
 
 interface FuzzyMatchRow {
   source_val: string;
-  target_val: string;
+  raw: string;
   score: number;
+  typo_match: string;
 }
 
 export async function computeDatasetJoinStats(
@@ -47,13 +50,16 @@ export async function computeDatasetJoinStats(
   const escapedSourceTable = escapeIdentifier(sourceTableName);
   const escapedTargetTable = escapeIdentifier(targetTableName);
 
+  const sourceFilters = getFilters(sourceTableName);
+  const sourceFilterClause = buildFilterWhereClause(sourceFilters);
+
   const joinAnalysisQuery = `
     WITH source_data AS (
       SELECT
         CAST("${escapedSourceCol}" AS VARCHAR) as source_val,
         normalize_text_join(CAST("${escapedSourceCol}" AS VARCHAR)) as normalized_val
       FROM "${escapedSourceTable}"
-      WHERE "${escapedSourceCol}" IS NOT NULL
+      WHERE "${escapedSourceCol}" IS NOT NULL${sourceFilterClause ? ` AND ${sourceFilterClause}` : ''}
     ),
     source_with_counts AS (
       SELECT
@@ -107,50 +113,33 @@ export async function computeDatasetJoinStats(
       .map((v) => `'${escapeSqlString(v)}'`)
       .join(', ');
 
+    // Build a temporary join table with the `normalized` column expected by get_similarity,
+    // then use a LATERAL join to call get_similarity for each unmatched source value.
+    const tempJoinTable = '__join_stats_target__';
+    await Duck.query(
+      `CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(tempJoinTable)}" AS
+       SELECT DISTINCT
+         CAST("${escapedTargetCol}" AS VARCHAR) AS raw,
+         CAST("${escapedTargetCol}" AS VARCHAR) AS id,
+         normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) AS normalized
+       FROM "${escapedTargetTable}"
+       WHERE "${escapedTargetCol}" IS NOT NULL`,
+      { format: 'array' }
+    );
+
     const fuzzyMatchQuery = `
       WITH unmatched AS (
-        SELECT
-          unnest([${valuesLiteral}]) as source_val
-      ),
-      unmatched_normalized AS (
-        SELECT
-          source_val,
-          normalize_text_join(source_val) as norm_source
-        FROM unmatched
-      ),
-      target_normalized AS (
-        SELECT DISTINCT
-          CAST("${escapedTargetCol}" AS VARCHAR) as target_val,
-          normalize_text_join(CAST("${escapedTargetCol}" AS VARCHAR)) as normalized_target
-        FROM "${escapedTargetTable}"
-        WHERE "${escapedTargetCol}" IS NOT NULL
-      ),
-      scored AS (
-        SELECT
-          u.source_val,
-          t.target_val,
-          u.norm_source,
-          t.normalized_target,
-          jaro_winkler_similarity(u.norm_source, t.normalized_target, 0.85) as jw_score
-        FROM unmatched_normalized u
-        CROSS JOIN target_normalized t
-        WHERE
-          jaro_winkler_similarity(u.norm_source, t.normalized_target, 0.85) > 0
-          OR t.normalized_target LIKE '%' || u.norm_source || '%'
-          OR u.norm_source LIKE '%' || t.normalized_target || '%'
+        SELECT unnest([${valuesLiteral}]) as source_val
       )
       SELECT
-        source_val,
-        target_val,
-        CASE
-          WHEN jw_score >= 0.85 THEN jw_score
-          ELSE 0.5
-        END as score
-      FROM scored
-      WHERE jw_score >= 0.85
-         OR normalized_target LIKE '%' || norm_source || '%'
-         OR norm_source LIKE '%' || normalized_target || '%'
-      ORDER BY source_val, score DESC
+        u.source_val,
+        s.raw,
+        s.score,
+        s.typo_match
+      FROM unmatched u,
+           LATERAL (SELECT * FROM get_similarity(u.source_val, '${tempJoinTable}')) s
+      WHERE s.typo_match != 'toofar'
+      ORDER BY u.source_val, s.score DESC
     `;
 
     const fuzzyResults = (await Duck.query(fuzzyMatchQuery, {
@@ -161,7 +150,7 @@ export async function computeDatasetJoinStats(
     for (const row of fuzzyResults) {
       const existing = matchesBySource.get(row.source_val) || [];
       if (existing.length < 5) {
-        existing.push(row.target_val);
+        existing.push(row.raw);
         matchesBySource.set(row.source_val, existing);
       }
     }

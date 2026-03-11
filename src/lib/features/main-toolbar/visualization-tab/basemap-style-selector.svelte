@@ -1,6 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
+  import {
+    RadioButtonGroup,
+    RadioButton,
+    Toggle
+  } from 'carbon-components-svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
@@ -31,6 +35,11 @@
     basemapStyleStore.setStyle(value);
     projectStore.markAsDirty();
   }
+
+  function handleLabelsToggle(e: CustomEvent<{ toggled: boolean }>): void {
+    basemapStyleStore.setShowLabels(e.detail.toggled);
+    projectStore.markAsDirty();
+  }
 </script>
 
 <div class="basemap-style-selector">
@@ -48,6 +57,14 @@
       <RadioButton labelText={option.label} value={option.value} />
     {/each}
   </RadioButtonGroup>
+  <div class="labels-toggle">
+    <Toggle
+      size="sm"
+      labelText={m.basemap_show_labels()}
+      toggled={basemapStyleStore.showLabels}
+      on:toggle={handleLabelsToggle}
+    />
+  </div>
 </div>
 
 <style>
@@ -67,5 +84,9 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
+  }
+
+  .labels-toggle {
+    margin-top: var(--cds-spacing-04);
   }
 </style>

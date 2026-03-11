@@ -81,7 +81,7 @@ export function createDatasetFromPreprocessedFile(
     `legacy_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
 
   return {
-    id: crypto.randomUUID(),
+    id: file.datasetId ?? crypto.randomUUID(),
     name: file.name,
     sourceFileId: file.id,
     tableName,

@@ -1,4 +1,3 @@
-import { goto } from '$app/navigation';
 import {
   StylingTools,
   ToolbarState,
@@ -16,7 +15,6 @@ const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
 const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const MOBILE_BREAKPOINT_VALUE = 1024;
-const TAB_QUERY_PARAM = 'tab';
 
 const VALID_TOOLBAR_STATES = new Set<string>([
   ToolbarState.Full,
@@ -51,13 +49,15 @@ function createGlobalStore() {
           : 100,
       minPageZoom: 10,
       maxPageZoom: 500,
-      pageZoomStep: 10
+      pageZoomStep: 10,
+      pagePanOffset: { x: 0, y: 0 }
     },
     isMobileView:
       typeof window !== 'undefined'
         ? window.innerWidth < MOBILE_BREAKPOINT_VALUE
         : false,
-    isMobileToolbarOpen: false
+    isMobileToolbarOpen: false,
+    isToolbarTransitioning: false
   });
   const selectedDataButtonState = $state<{
     id: string | undefined;
@@ -196,22 +196,15 @@ function createGlobalStore() {
     state.isMobileToolbarOpen = !state.isMobileToolbarOpen;
   }
 
-  function syncTabToUrl(step: ToolbarStep): void {
-    const url = new URL(window.location.href);
-    url.searchParams.set(TAB_QUERY_PARAM, step);
-    goto(url.toString(), { replaceState: true, keepFocus: true });
-  }
-
-  function setNavigationState(
-    selectedStep: ToolbarStep,
-    updateUrl = true
-  ): void {
+  function setNavigationState(selectedStep: ToolbarStep): void {
     const previousStep = state.selectedStep;
     const previousToolbarState = state.toolbarState;
     state.selectedStep = selectedStep;
 
     if (selectedStep === ToolbarStep.Styling) {
       state.toolbarState = ToolbarState.Collapsed;
+    } else if (selectedStep === ToolbarStep.Visualizations) {
+      state.toolbarState = ToolbarState.Compact;
     } else if (state.toolbarState === ToolbarState.Collapsed) {
       const preferred = readToolbarStateFromStorage();
       state.toolbarState =
@@ -225,34 +218,10 @@ function createGlobalStore() {
       logger.info('[global-store] navigation state changed', LogCategory.UI, {
         fromStep: previousStep,
         toStep: selectedStep,
-        updateUrl,
         fromToolbarState: previousToolbarState,
         toToolbarState: state.toolbarState,
         caller: getCallerHint()
       });
-    }
-
-    if (updateUrl && typeof window !== 'undefined') {
-      syncTabToUrl(selectedStep);
-    }
-  }
-
-  function isValidToolbarStep(value: string): value is ToolbarStep {
-    return (
-      value === ToolbarStep.Data ||
-      value === ToolbarStep.Visualizations ||
-      value === ToolbarStep.Styling
-    );
-  }
-
-  function initializeFromUrl(): void {
-    if (typeof window === 'undefined') return;
-
-    const url = new URL(window.location.href);
-    const tabParam = url.searchParams.get(TAB_QUERY_PARAM);
-
-    if (tabParam && isValidToolbarStep(tabParam)) {
-      setNavigationState(tabParam as ToolbarStep, false);
     }
   }
 
@@ -343,9 +312,25 @@ function createGlobalStore() {
 
   function resetPageZoom(): void {
     state.zoom.pageZoomLevel = 100;
+    state.zoom.pagePanOffset = { x: 0, y: 0 };
     if (typeof window !== 'undefined') {
       localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
     }
+  }
+
+  function panPageBy(deltaX: number, deltaY: number): void {
+    state.zoom.pagePanOffset = {
+      x: state.zoom.pagePanOffset.x + deltaX,
+      y: state.zoom.pagePanOffset.y + deltaY
+    };
+  }
+
+  function resetPagePan(): void {
+    state.zoom.pagePanOffset = { x: 0, y: 0 };
+  }
+
+  function setToolbarTransitioning(value: boolean): void {
+    state.isToolbarTransitioning = value;
   }
 
   function setPageZoom(level: number): void {
@@ -452,13 +437,18 @@ function createGlobalStore() {
     get isMobileToolbarOpen() {
       return state.isMobileToolbarOpen;
     },
+    get isToolbarTransitioning() {
+      return state.isToolbarTransitioning;
+    },
+    set isToolbarTransitioning(value: boolean) {
+      state.isToolbarTransitioning = value;
+    },
     ensureTabSelected,
     setMobileView,
     openMobileToolbar,
     closeMobileToolbar,
     toggleMobileToolbar,
     setNavigationState,
-    initializeFromUrl,
     setToolbarState,
     selectDataButton,
     setProjectionFilter,
@@ -466,7 +456,10 @@ function createGlobalStore() {
     zoomInPage,
     zoomOutPage,
     resetPageZoom,
-    setPageZoom
+    setPageZoom,
+    panPageBy,
+    resetPagePan,
+    setToolbarTransitioning
   };
 }
 
@@ -483,11 +476,13 @@ export const globalActions = {
   zoomOutPage: globalState.zoomOutPage,
   resetPageZoom: globalState.resetPageZoom,
   setPageZoom: globalState.setPageZoom,
+  panPageBy: globalState.panPageBy,
+  resetPagePan: globalState.resetPagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,
   closeMobileToolbar: globalState.closeMobileToolbar,
   toggleMobileToolbar: globalState.toggleMobileToolbar,
-  initializeFromUrl: globalState.initializeFromUrl
+  setToolbarTransitioning: globalState.setToolbarTransitioning
 };
 
 export const MOBILE_BREAKPOINT = 1024;

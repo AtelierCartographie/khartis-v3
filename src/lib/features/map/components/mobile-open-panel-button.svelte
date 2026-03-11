@@ -1,16 +1,16 @@
 <script lang="ts">
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { m } from '$lib/paraglide/messages.js';
-  import { Button } from 'carbon-components-svelte';
   import { ChevronLeft } from 'carbon-icons-svelte';
 </script>
 
 {#if globalState.isMobileView && !globalState.isMobileToolbarOpen}
   <div class="open-panel-button-wrapper">
-    <Button
+    <IconButton
       kind="primary"
       size="small"
       icon={ChevronLeft}

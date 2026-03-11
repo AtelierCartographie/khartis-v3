@@ -24,6 +24,23 @@ export interface GetTableDataOptions {
   order?: 'ASC' | 'DESC' | null;
 }
 
+function normalizeRowId(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
 export async function getTableData(
   tableName: string,
   Duck: DuckDBClientForTableData,
@@ -110,7 +127,7 @@ export async function getRowCount(
 
 export async function getRowPosition(
   tableName: string,
-  rowId: number,
+  rowId: number | bigint | string,
   Duck: DuckDBClientForTableData,
   options?: {
     orderBy?: string | null;
@@ -122,7 +139,9 @@ export async function getRowPosition(
     const whereClause = buildFilterWhereClause(filters.get(tableName));
     const filterCondition = whereClause ? `AND ${whereClause}` : '';
 
-    if (!Number.isInteger(rowId)) {
+    const normalizedRowId = normalizeRowId(rowId);
+
+    if (normalizedRowId === null) {
       logger.error('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
         rowId
       });
@@ -137,13 +156,13 @@ export async function getRowPosition(
 
       const query = `
         WITH target AS (
-          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${rowId}
+          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${normalizedRowId}
         )
         SELECT COUNT(*) as position
         FROM "${escapedTable}", target
         WHERE (
           ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
-          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${rowId})
+          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${normalizedRowId})
         )
         ${filterCondition}
       `;
@@ -157,7 +176,7 @@ export async function getRowPosition(
       const query = `
         SELECT COUNT(*) as position
         FROM "${escapedTable}"
-        WHERE __id < ${rowId}
+        WHERE __id < ${normalizedRowId}
         ${filterCondition}
       `;
 

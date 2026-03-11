@@ -1,11 +1,14 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { createFileFromUpload } from '$lib/features/data-pipeline';
-import { duckDBOrchestrator, RefineOperation } from '$lib/features/duckdb';
+import { Duck, RefineOperation } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
   isGeoJSONFeatureCollection,
   type GeoJSONFeatureCollection
 } from '$lib/types/data';
+import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
+import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
 import {
   formatError,
@@ -18,6 +21,7 @@ import {
   COLUMN_TRANSFORMATION_TYPES
 } from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
+import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
@@ -31,7 +35,6 @@ function createDataOrchestratorService() {
 
   async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
-      const { Duck } = await import('$lib/features/duckdb');
       Duck?.cleanupTableResources(tableName);
     } catch (error) {
       logger.warn(
@@ -134,7 +137,6 @@ function createDataOrchestratorService() {
     dataset: DatasetResult
   ): Promise<void> {
     try {
-      const { Duck } = await import('$lib/features/duckdb');
       if (!Duck) {
         throw new Error('DuckDB not initialized');
       }
@@ -246,6 +248,24 @@ function createDataOrchestratorService() {
           }
         );
 
+        if (registered !== null && (file.joinedBasemap || file.gpsMode)) {
+          duckDBOrchestrator.updateDatasetJoinInfo(registered.id, {
+            joinedBasemap: file.joinedBasemap,
+            geoColumn: file.geoColumn,
+            gpsMode: file.gpsMode,
+            gpsColumns: file.gpsColumns
+          });
+          logger.info(
+            'Restoring join state from persisted data',
+            LogCategory.DUCKDB,
+            {
+              fileId: file.id,
+              joinedBasemap: file.joinedBasemap,
+              gpsMode: file.gpsMode
+            }
+          );
+        }
+
         if (registered === null) {
           logger.info(
             'DuckDB table missing, re-processing file from scratch',
@@ -257,7 +277,18 @@ function createDataOrchestratorService() {
             }
           );
 
-          const fileForDuckDB = await prepareFileForDuckDB(file, dataset);
+          // For geo files (GeoJSON, SHP, etc.), prepareFileForDuckDB returns null
+          // when tableName/geoDuckTableReady are already set — bypass those guards
+          // by passing a stripped dataset so re-processing is forced.
+          const strippedDataset: DatasetResult = {
+            ...dataset,
+            tableName: undefined as unknown as string,
+            metadata: { ...dataset.metadata, geoDuckTableReady: false }
+          };
+          const fileForDuckDB = await prepareFileForDuckDB(
+            file,
+            strippedDataset
+          );
           if (fileForDuckDB) {
             const duckResult =
               await duckDBOrchestrator.processFile(fileForDuckDB);
@@ -355,6 +386,13 @@ function createDataOrchestratorService() {
         visualizationStore.removeVisualization(viz.id);
       });
 
+      // Remove dataset from store BEFORE dropping DuckDB table.
+      // dropTable() bumps datasetsVersion which triggers UI effects —
+      // if the dataset still exists, AdvancedDataTable will try to query
+      // the already-dropped table and crash.
+      datasetsStore.removeDataset(dataset.id);
+      layersActions.syncWithVisualizations();
+
       const duckDataset = duckDBOrchestrator
         .getAllDatasets()
         .find((d) => d.sourceFileId === fileId);
@@ -363,9 +401,6 @@ function createDataOrchestratorService() {
         await cleanupDuckDBResources(duckDataset.tableName);
         geometryDatasetsVersion++;
       }
-
-      datasetsStore.removeDataset(dataset.id);
-      layersActions.syncWithVisualizations();
     }
 
     processedFileIds.delete(fileId);
@@ -524,7 +559,6 @@ function createDataOrchestratorService() {
     try {
       await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
 
-      const { Duck } = await import('$lib/features/duckdb');
       const newRowCount = Duck
         ? await Duck.get_row_count(dataset.tableName)
         : 0;
@@ -558,7 +592,6 @@ function createDataOrchestratorService() {
       return;
     }
 
-    const { globalState } = await import('../store/global.svelte');
     const selectedSourceFileId =
       globalState.selectedDataButtonId ?? unprocessedFiles[0]?.id;
 
@@ -706,11 +739,33 @@ function createDataOrchestratorService() {
     processedFileIds.clear();
 
     const currentProject = projectStore.currentProject;
+    const vizSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.visualizationSettings;
+
+    // Preload persisted visualizations before datasets are restored so the
+    // project reload path does not briefly recreate default visualizations.
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+    }
+
     if (currentProject?.data?.sourceFiles) {
       await processProjectFiles(currentProject.data.sourceFiles);
     }
 
-    const { globalActions } = await import('../store/global.svelte');
+    // Restore once more after dataset loading so the runtime store matches the
+    // serialized project exactly, even if dataset restoration created
+    // temporary default visualizations.
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+      logger.debug(
+        'Visualization settings restored after dataset loading',
+        LogCategory.PROJECT
+      );
+    }
+
+    layersActions.syncWithVisualizations();
+    legendActions.syncWithVisualizations();
     globalActions.ensureTabSelected();
   }
 
