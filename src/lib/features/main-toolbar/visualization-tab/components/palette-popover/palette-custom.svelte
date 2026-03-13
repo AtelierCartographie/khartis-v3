@@ -6,7 +6,8 @@
     type Palette,
     type PatternParams,
     getPatternPalettes,
-    interpolateColors,
+    generateSequentialFromColor,
+    generateSequentialFromColors,
     buildPatternBackground
   } from './palette.constants';
 
@@ -104,19 +105,27 @@
 
   function handleSingleColorChange(color: string) {
     singleColor = color;
-    const colors = interpolateColors(['#ffffff', color], numClasses);
+    const colors = generateSequentialFromColor(color, numClasses);
     onColorsChange?.(colors);
   }
 
   function handleStartColorChange(color: string) {
     startColor = color;
-    const colors = interpolateColors([startColor, endColor], numClasses);
+    const colors = generateSequentialFromColors(
+      startColor,
+      endColor,
+      numClasses
+    );
     onColorsChange?.(colors);
   }
 
   function handleEndColorChange(color: string) {
     endColor = color;
-    const colors = interpolateColors([startColor, endColor], numClasses);
+    const colors = generateSequentialFromColors(
+      startColor,
+      endColor,
+      numClasses
+    );
     onColorsChange?.(colors);
   }
 

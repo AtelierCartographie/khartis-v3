@@ -3,7 +3,19 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
+import { webglToHex } from '../utils/color-utils';
+import {
+  sequential,
+  divergent,
+  resolvePalette
+} from '@ateliercartographie/ok-palette';
+import type { WebGLColor } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
+
+const SEQUENTIAL_COLOR_START = '#f7fbff';
+const SEQUENTIAL_COLOR_END = '#08519c';
+const DIVERGING_COLOR_A = '#b2182b';
+const DIVERGING_COLOR_B = '#2166ac';
 
 export interface BreaksResult {
   breaks: number[];
@@ -216,87 +228,36 @@ export async function calculateBreaks(
   }
 }
 
+/**
+ * Generates palette colors for classification breaks via ok-palette.
+ * Uses Oklch perceptual color space for uniform luminosity across classes.
+ * Supports any class count (no longer clamped to 3–9).
+ */
 export function generateColorsForBreaks(
   numClasses: number,
   palette: 'sequential' | 'diverging' = 'sequential'
 ): string[] {
-  const sequentialPalettes: Record<number, string[]> = {
-    3: ['#deebf7', '#9ecae1', '#3182bd'],
-    4: ['#eff3ff', '#bdd7e7', '#6baed6', '#2171b5'],
-    5: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
-    6: ['#eff3ff', '#c6dbef', '#9ecae1', '#6baed6', '#3182bd', '#08519c'],
-    7: [
-      '#eff3ff',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#084594'
-    ],
-    8: [
-      '#f7fbff',
-      '#deebf7',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#084594'
-    ],
-    9: [
-      '#f7fbff',
-      '#deebf7',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#08519c',
-      '#08306b'
-    ]
-  };
+  const steps = Math.max(2, numClasses);
 
-  const divergingPalettes: Record<number, string[]> = {
-    3: ['#ef8a62', '#f7f7f7', '#67a9cf'],
-    4: ['#ca0020', '#f4a582', '#92c5de', '#0571b0'],
-    5: ['#ca0020', '#f4a582', '#f7f7f7', '#92c5de', '#0571b0'],
-    6: ['#b2182b', '#ef8a62', '#fddbc7', '#d1e5f0', '#67a9cf', '#2166ac'],
-    7: [
-      '#b2182b',
-      '#ef8a62',
-      '#fddbc7',
-      '#f7f7f7',
-      '#d1e5f0',
-      '#67a9cf',
-      '#2166ac'
-    ],
-    8: [
-      '#b2182b',
-      '#d6604d',
-      '#f4a582',
-      '#fddbc7',
-      '#d1e5f0',
-      '#92c5de',
-      '#4393c3',
-      '#2166ac'
-    ],
-    9: [
-      '#b2182b',
-      '#d6604d',
-      '#f4a582',
-      '#fddbc7',
-      '#f7f7f7',
-      '#d1e5f0',
-      '#92c5de',
-      '#4393c3',
-      '#2166ac'
-    ]
-  };
+  let cssColors: string[];
+  if (palette === 'diverging') {
+    const hasCenterClass = steps % 2 === 1;
+    const halfSteps = Math.floor(steps / 2);
+    cssColors = divergent({
+      colorA: DIVERGING_COLOR_A,
+      colorB: DIVERGING_COLOR_B,
+      steps: [halfSteps, halfSteps],
+      hasCenterClass
+    });
+  } else {
+    cssColors = sequential({
+      colorStart: SEQUENTIAL_COLOR_START,
+      colorEnd: SEQUENTIAL_COLOR_END,
+      steps
+    });
+  }
 
-  const palettes =
-    palette === 'diverging' ? divergingPalettes : sequentialPalettes;
-  const clampedClasses = Math.max(3, Math.min(9, numClasses));
-
-  return palettes[clampedClasses] || palettes[5];
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
 }
