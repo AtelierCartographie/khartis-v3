@@ -535,6 +535,13 @@
                   })}
                 </span>
               {/if}
+              {#if histogramData.duplicates > 0}
+                <span class="hist-geo-pill hist-geo-duplicates">
+                  {m.column_warning_duplicates({
+                    count: histogramData.duplicates.toLocaleString()
+                  })}
+                </span>
+              {/if}
             </div>
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
             <div class="hist-warnings">
@@ -566,7 +573,7 @@
                       ? '#ff832b'
                       : '#d02670'}"
                     title="{item.count?.toLocaleString()} – {item.category ??
-                      'nulls'}"
+                      m.column_null_label()}"
                   >
                     <span class="hist-cat-label">
                       {item.category ?? '⌀'}
@@ -600,7 +607,7 @@
                       (histogramData.nullCount / histogramData.maxCount) * 100,
                       100
                     )}%"
-                    title="{histogramData.nullCount.toLocaleString()} nulls"
+                    title="{histogramData.nullCount.toLocaleString()} {m.column_null_label()}"
                   ></div>
                 </div>
               {/if}
@@ -1019,6 +1026,10 @@
 
   .hist-geo-nulls {
     background-color: #ff832b;
+  }
+
+  .hist-geo-duplicates {
+    background-color: #d02670;
   }
 
   .hist-empty {
