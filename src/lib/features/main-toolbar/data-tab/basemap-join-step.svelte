@@ -91,9 +91,7 @@
     return hasGPSCoordinateColumns(columns);
   });
 
-  const isGPSModeActive = $derived(
-    osmBasemapStore.isActive && hasGPSCoordinates()
-  );
+  const isGPSModeActive = $derived(hasGPSCoordinates());
 
   const suggestedBasemaps = $derived(() => {
     return basemapSuggestions
@@ -191,7 +189,7 @@
   ): Promise<void> {
     const resolvedDatasetId = datasetIdForOrchestrator;
     if (!selectedDataset || !resolvedDatasetId || !linkedVariableName) return;
-    if (isOSMBasemapId(basemap.file)) return;
+    if (isOSMBasemapId(basemap.file) || hasGPSCoordinates()) return;
 
     joinLoading = true;
     try {
@@ -323,7 +321,29 @@
       }
     });
 
-    await computeAndAutoFinalizeJoin(basemap, abortSignal);
+    if (hasGPSCoordinates() && datasetIdForOrchestrator) {
+      try {
+        await duckDBOrchestrator.finalizeJoin(
+          datasetIdForOrchestrator,
+          basemap,
+          ''
+        );
+        dataTabStore.markStepComplete(2);
+        logger.success(
+          'Basemap selected with GPS mode — join skipped',
+          LogCategory.MAP
+        );
+      } catch (error) {
+        logger.error(
+          'Failed to finalize GPS mode for catalog basemap',
+          LogCategory.MAP,
+          error
+        );
+        showError(m.join_error_title(), m.join_error_message());
+      }
+    } else {
+      await computeAndAutoFinalizeJoin(basemap, abortSignal);
+    }
   }
 
   function handleFileDrop(event: DragEvent) {
@@ -381,7 +401,20 @@
         }
       });
 
-      await computeAndAutoFinalizeJoin(customBasemap, abortSignal);
+      if (hasGPSCoordinates() && datasetIdForOrchestrator) {
+        await duckDBOrchestrator.finalizeJoin(
+          datasetIdForOrchestrator,
+          customBasemap,
+          ''
+        );
+        dataTabStore.markStepComplete(2);
+        logger.success(
+          'Custom basemap imported with GPS mode — join skipped',
+          LogCategory.MAP
+        );
+      } else {
+        await computeAndAutoFinalizeJoin(customBasemap, abortSignal);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
       logger.error('Error importing custom basemap', LogCategory.MAP, err);
@@ -706,52 +739,49 @@
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
       const geoColumn = dataTabState.geolocation.linkedVariableName;
-      let suggestions = await basemapCatalogService.getSuggestions(
-        processedDataset,
-        3,
-        geoColumn
-      );
+      let suggestions: BasemapSuggestion[] = [];
 
-      // Fallback: suggest basemaps by GPS bbox when no text geo column
-      if (
-        suggestions.length === 0 &&
-        hasGPSCoordinates() &&
-        datasetIdForOrchestrator
-      ) {
+      // GPS mode: use bbox comparison for suggestions
+      if (hasGPSCoordinates() && datasetIdForOrchestrator) {
         const gpsBounds = await duckDBOrchestrator.getGPSBounds(
           datasetIdForOrchestrator
         );
         if (gpsBounds) {
           suggestions =
             basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
-          basemapSuggestions = suggestions;
         }
-      }
+      } else {
+        suggestions = await basemapCatalogService.getSuggestions(
+          processedDataset,
+          3,
+          geoColumn
+        );
 
-      // Re-rank suggestions using actual join quality when possible
-      if (geoColumn && datasetIdForOrchestrator) {
-        try {
-          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
-            datasetIdForOrchestrator,
-            geoColumn
-          );
-          if (synthesis.length > 0) {
-            const scoreMap = new Map(
-              synthesis.map((s) => [s.basemap, s.shareCandidate])
+        // Re-rank suggestions using actual join quality when possible
+        if (geoColumn && datasetIdForOrchestrator) {
+          try {
+            const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+              datasetIdForOrchestrator,
+              geoColumn
             );
-            suggestions = suggestions
-              .map((s) => ({
-                ...s,
-                matchScore: scoreMap.get(s.file) ?? s.matchScore
-              }))
-              .sort((a, b) => b.matchScore - a.matchScore);
+            if (synthesis.length > 0) {
+              const scoreMap = new Map(
+                synthesis.map((s) => [s.basemap, s.shareCandidate])
+              );
+              suggestions = suggestions
+                .map((s) => ({
+                  ...s,
+                  matchScore: scoreMap.get(s.file) ?? s.matchScore
+                }))
+                .sort((a, b) => b.matchScore - a.matchScore);
+            }
+          } catch (err) {
+            logger.warn(
+              'Join synthesis unavailable, using heuristic ranking',
+              LogCategory.MAP,
+              err
+            );
           }
-        } catch (err) {
-          logger.warn(
-            'Join synthesis unavailable, using heuristic ranking',
-            LogCategory.MAP,
-            err
-          );
         }
       }
 
@@ -818,7 +848,11 @@
           const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
           if (!basemap) return;
 
-          if (savedBasemap.type === 'osm' || isOSMBasemapId(basemap.file)) {
+          if (
+            savedBasemap.type === 'osm' ||
+            isOSMBasemapId(basemap.file) ||
+            hasGPSCoordinates()
+          ) {
             const datasetReady = await waitForDatasetAvailability(
               datasetIdForOrchestrator,
               controller.signal
@@ -842,7 +876,7 @@
             } catch (error) {
               if (controller.signal.aborted) return;
               logger.error(
-                'Failed to restore OSM join',
+                'Failed to restore GPS/OSM join',
                 LogCategory.MAP,
                 error
               );
@@ -949,7 +983,7 @@
       return;
     }
 
-    if (isOSMBasemapId(selectedBasemapId)) {
+    if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates()) {
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
       previousLinkedVariableName = linkedVariableName || null;
