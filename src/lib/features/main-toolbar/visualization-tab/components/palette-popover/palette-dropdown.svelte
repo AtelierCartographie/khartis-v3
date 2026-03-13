@@ -9,7 +9,7 @@
     type Palette,
     type PaletteType,
     getPalettesForType,
-    interpolateColors,
+    generatePaletteColors,
     buildPatternBackground,
     PALETTE_TYPE
   } from './palette.constants';
@@ -72,7 +72,7 @@
   }
 
   function handleSelect(palette: Palette) {
-    const colors = interpolateColors(palette.colors, numClasses);
+    const colors = generatePaletteColors(palette, numClasses);
     onselect?.(palette, colors);
     open = false;
   }
@@ -197,7 +197,7 @@
               ></div>
             {:else}
               <div class="swatch-row">
-                {#each interpolateColors(palette.colors, numClasses) as color, i (i)}
+                {#each generatePaletteColors(palette, numClasses) as color, i (i)}
                   <div
                     class="swatch-cell"
                     style="background-color: {color}"

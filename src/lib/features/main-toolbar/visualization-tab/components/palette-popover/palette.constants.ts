@@ -1,9 +1,22 @@
 import * as m from '$lib/paraglide/messages';
-import { resolveColor } from '@ateliercartographie/ok-palette';
+import {
+  sequential,
+  divergent,
+  categorical,
+  resolvePalette,
+  categoricalPatterns,
+  sequentialPatterns,
+  presets,
+  temperature
+} from '@ateliercartographie/ok-palette';
 import type { WebGLColor } from '@ateliercartographie/ok-palette';
+import { motif } from '@ateliercartographie/motif.js';
+import type { PatternOptions } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+import { webglToHex } from '$lib/features/commons/utils/color-utils';
 
 export type { PatternParams };
+export { presets, temperature, categoricalPatterns, sequentialPatterns };
 
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
@@ -197,72 +210,130 @@ export function getPatternPalettes(): Palette[] {
   ];
 }
 
-function webglToHex([r, g, b]: WebGLColor): string {
-  return (
-    '#' +
-    [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+/**
+ * Generates palette colors using ok-palette's perceptual Oklch generators.
+ * Dispatches to the appropriate generator based on palette type.
+ */
+export function generatePaletteColors(
+  palette: Palette,
+  count: number
+): string[] {
+  if (count <= 0) return [];
+  if (count === 1) return [palette.colors[0]];
+
+  switch (palette.type) {
+    case PALETTE_TYPE.SEQUENTIAL: {
+      const colorStart = palette.colors[0];
+      const colorEnd = palette.colors[palette.colors.length - 1];
+      const cssColors = sequential({ colorStart, colorEnd, steps: count });
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.DIVERGING: {
+      const colorA = palette.colors[0];
+      const colorB = palette.colors[palette.colors.length - 1];
+      const hasCenterClass = count % 2 === 1;
+      const halfSteps = Math.floor(count / 2);
+      const cssColors = divergent({
+        colorA,
+        colorB,
+        steps: [halfSteps, halfSteps],
+        hasCenterClass
+      });
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.QUALITATIVE: {
+      if (count <= palette.colors.length) {
+        return palette.colors.slice(0, count);
+      }
+      const cssColors = categorical(count, presets.vif);
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.PATTERN:
+      return palette.colors;
+    default:
+      return palette.colors.slice(0, count);
+  }
+}
+
+/**
+ * Generates sequential colors from one color (monochrome ramp) via ok-palette.
+ */
+export function generateSequentialFromColor(
+  color: string,
+  count: number
+): string[] {
+  if (count <= 0) return [];
+  const cssColors = sequential({ colorStart: color, steps: count });
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
   );
 }
 
 /**
- * Interpolates colors in Oklch perceptual color space via ok-palette.
- * Supports multi-stop palettes (sequential, diverging with center, etc.).
+ * Generates sequential colors from two colors (bi-tone ramp) via ok-palette.
  */
-export function interpolateColors(colors: string[], count: number): string[] {
-  if (colors.length === count) return colors;
-  if (colors.length >= count) return colors.slice(0, count);
-
-  const result: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = i / (count - 1);
-    const idx = t * (colors.length - 1);
-    const lowIdx = Math.floor(idx);
-    const highIdx = Math.min(lowIdx + 1, colors.length - 1);
-    const frac = idx - lowIdx;
-
-    if (frac === 0) {
-      result.push(colors[lowIdx]);
-    } else {
-      const pct = Math.round(frac * 100);
-      const mixed = `color-mix(in oklch, ${colors[highIdx]} ${pct}%, ${colors[lowIdx]})`;
-      result.push(webglToHex(resolveColor(mixed, { format: 'webgl' })));
-    }
-  }
-  return result;
+export function generateSequentialFromColors(
+  colorStart: string,
+  colorEnd: string,
+  count: number
+): string[] {
+  if (count <= 0) return [];
+  const cssColors = sequential({ colorStart, colorEnd, steps: count });
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
 }
 
+/** Maps Khartis PatternId to motif.js PatternOptions */
+const PATTERN_TO_MOTIF: Record<
+  PatternId,
+  Pick<PatternOptions, 'type' | 'angle'>
+> = {
+  diagonal: { type: 'line', angle: 45 },
+  'diagonal-reverse': { type: 'line', angle: 315 },
+  horizontal: { type: 'line', angle: 0 },
+  vertical: { type: 'line', angle: 90 },
+  dots: { type: 'circle' },
+  cross: { type: 'plaid' }
+};
+
+/**
+ * Builds a CSS background for pattern preview using motif.js.
+ * Returns a `url(data:...)` from the motif tile canvas.
+ */
 export function buildPatternBackground(
   palette: Palette,
   params?: PatternParams
 ): string {
   const accent = palette.colors[0] ?? '#3d3d3d';
   const base = palette.colors[1] ?? '#f4f4f4';
-  const size = params?.size ?? 4;
-  const total = params?.scale ?? 8;
+  const sizePx = params?.size ?? 4;
+  const scalePx = params?.scale ?? 8;
 
-  // Angle param overrides patternId for line-type patterns
-  let effectivePatternId = palette.patternId;
+  let effectivePatternId: PatternId = palette.patternId ?? 'diagonal';
   if (params?.angle !== undefined) {
     if (params.angle === 0) effectivePatternId = 'horizontal';
     else if (params.angle === 45) effectivePatternId = 'diagonal';
     else if (params.angle === 315) effectivePatternId = 'diagonal-reverse';
   }
 
-  switch (effectivePatternId) {
-    case 'horizontal':
-      return `repeating-linear-gradient(0deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'vertical':
-      return `repeating-linear-gradient(90deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'dots':
-      return `radial-gradient(${accent} 16%, transparent 17%), linear-gradient(${base}, ${base})`;
-    case 'cross':
-      return `repeating-linear-gradient(0deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), repeating-linear-gradient(90deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), linear-gradient(${base}, ${base})`;
-    case 'diagonal-reverse':
-      return `repeating-linear-gradient(315deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'diagonal':
-    default:
-      return `repeating-linear-gradient(45deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-  }
+  const motifConfig = PATTERN_TO_MOTIF[effectivePatternId];
+  const tile = motif({
+    type: motifConfig.type,
+    angle: motifConfig.angle,
+    fill: accent,
+    background: base,
+    size: Math.round((sizePx / scalePx) * 100),
+    scale: scalePx / 10
+  }).tile();
+
+  return `url(${tile.toDataURL()})`;
 }
 
 export function getPalettesForType(

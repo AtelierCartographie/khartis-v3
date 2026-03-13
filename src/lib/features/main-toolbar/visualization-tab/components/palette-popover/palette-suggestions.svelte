@@ -7,7 +7,7 @@
     type PaletteType,
     type Palette,
     getPalettesForType,
-    interpolateColors,
+    generatePaletteColors,
     buildPatternBackground
   } from './palette.constants';
 
@@ -110,7 +110,7 @@
           ></div>
         {:else}
           <div class="swatch-row">
-            {#each interpolateColors(palette.colors, numClasses) as color, i (i)}
+            {#each generatePaletteColors(palette, numClasses) as color, i (i)}
               <div class="swatch-cell" style="background-color: {color}"></div>
             {/each}
           </div>

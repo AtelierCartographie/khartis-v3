@@ -16,7 +16,7 @@
     type PaletteType,
     type Palette,
     type PatternParams,
-    interpolateColors,
+    generatePaletteColors,
     findPaletteById
   } from './palette.constants';
 
@@ -122,7 +122,7 @@
 
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
-    draftColors = interpolateColors(palette.colors, numClasses);
+    draftColors = generatePaletteColors(palette, numClasses);
   }
 
   function handleTypeChange(type: PaletteType) {
