@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { createLogger, defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -50,6 +51,13 @@ export default defineConfig(({ mode }) => {
       exclude: ['@geoarrow/geoparquet-wasm']
     },
     plugins: [
+      process.env.ANALYZE === 'true' &&
+        visualizer({
+          filename: 'bundle-stats.html',
+          gzipSize: true,
+          brotliSize: true,
+          template: 'treemap'
+        }),
       {
         name: 'font-display-swap',
         generateBundle(_, bundle) {
