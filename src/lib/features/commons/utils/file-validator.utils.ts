@@ -150,7 +150,7 @@ export const FileValidator = {
       }
     } catch (error) {
       logger.error('Async validation failed', LogCategory.FILE, error);
-      result.errors.push('Impossible de valider le contenu du fichier');
+      result.errors.push(m.validation_content_check_failed());
       result.isValid = false;
     }
 
@@ -168,7 +168,7 @@ export const FileValidator = {
 
     if (files.length > config.maxFileCount) {
       globalErrors.push(
-        `Maximum number of files exceeded (${config.maxFileCount})`
+        m.validation_file_count_exceeded({ max: String(config.maxFileCount) })
       );
     }
 
@@ -180,7 +180,7 @@ export const FileValidator = {
 
     if (totalSize > config.maxTotalSize) {
       globalErrors.push(
-        `Total file size exceeds ${config.maxTotalSize / (1024 * 1024)} MB`
+        m.validation_total_size_exceeded({ size: String(config.maxTotalSize / (1024 * 1024)) })
       );
     }
 
@@ -201,11 +201,11 @@ export const FileValidator = {
     } else if (file.size > config.maxFileSize) {
       result.errors.push(m.validation_file_too_large());
     } else if (file.size > config.maxFileSize * 0.8) {
-      result.warnings.push('Large file, processing may be slow');
+      result.warnings.push(m.validation_large_file_slow());
     }
 
     if (!file.name || file.name.length === 0) {
-      result.errors.push('Invalid file name');
+      result.errors.push(m.validation_invalid_filename());
     }
 
     const suspiciousPatterns = [
@@ -218,26 +218,26 @@ export const FileValidator = {
 
     for (const pattern of suspiciousPatterns) {
       if (pattern.test(file.name)) {
-        result.warnings.push('File name contains unusual characters');
+        result.warnings.push(m.validation_filename_unusual_chars());
         break;
       }
     }
 
     const extension = getFileExtension(file.name);
     if (!extension) {
-      result.warnings.push('File without extension');
+      result.warnings.push(m.validation_no_extension());
     } else if (!config.allowedExtensions.includes(extension)) {
       if (config.strictMode) {
-        result.errors.push(`Extension .${extension} not supported`);
+        result.errors.push(m.validation_extension_unsupported({ ext: extension }));
       } else {
-        result.warnings.push(`Extension .${extension} may not be supported`);
+        result.warnings.push(m.validation_extension_maybe_unsupported({ ext: extension }));
       }
     }
 
     if (file.type) {
       result.metadata!.actualMimeType = file.type;
       if (!config.allowedMimeTypes.includes(file.type.toLowerCase())) {
-        result.warnings.push(`MIME type ${file.type} not recognized`);
+        result.warnings.push(m.validation_mime_unrecognized({ mime: file.type }));
       }
     }
   },
@@ -330,40 +330,40 @@ export const FileValidator = {
       // fallthrough
       case FileType.TSV:
         if (file.size > 10 * 1024 * 1024) {
-          result.warnings.push('Large CSV/TSV file, parsing may be slow');
+          result.warnings.push(m.validation_csv_large_slow());
         }
         break;
 
       case FileType.SHAPEFILE: {
         const ext = getFileExtension(file.name);
         if (ext === 'shp' && file.size < 100) {
-          result.warnings.push('SHP file suspiciously small');
+          result.warnings.push(m.validation_shp_too_small());
         }
         break;
       }
 
       case FileType.GEOPACKAGE:
         if (file.size < 1024) {
-          result.errors.push('GeoPackage file too small to be valid');
+          result.errors.push(m.validation_gpkg_too_small());
         }
         break;
 
       case FileType.GEOPARQUET:
         if (file.size < 1024) {
-          result.errors.push('GeoParquet file too small to be valid');
+          result.errors.push(m.validation_geoparquet_too_small());
         }
         break;
 
       case FileType.GEOJSON:
         if (file.size > 20 * 1024 * 1024) {
           result.warnings.push(
-            'Large GeoJSON, consider a more efficient format like GeoPackage'
+            m.validation_geojson_large()
           );
         }
         break;
 
       case FileType.UNKNOWN:
-        result.errors.push('File type not recognized');
+        result.errors.push(m.validation_type_unrecognized());
         break;
     }
   },
@@ -377,14 +377,12 @@ export const FileValidator = {
     const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
     if (lines.length === 0) {
-      result.errors.push('Empty CSV file');
+      result.errors.push(m.validation_csv_empty());
       return;
     }
 
     if (lines.length === 1) {
-      result.warnings.push(
-        'CSV file contains only one line (header or single row of data)'
-      );
+      result.warnings.push(m.validation_csv_single_line());
     }
 
     const separators = [',', ';', '\t', '|'];
@@ -400,9 +398,7 @@ export const FileValidator = {
     }
 
     if (maxCount === 0) {
-      result.warnings.push(
-        'No separator detected, file may not be a valid CSV'
-      );
+      result.warnings.push(m.validation_csv_no_separator());
     }
 
     const firstLineColumns = lines[0].split(detectedSeparator).length;
@@ -415,7 +411,7 @@ export const FileValidator = {
     }
 
     if (inconsistentLines > 0) {
-      result.warnings.push('Inconsistent column count in first rows');
+      result.warnings.push(m.validation_csv_inconsistent_cols());
     }
 
     const hasBOM =
@@ -441,7 +437,7 @@ export const FileValidator = {
     try {
       const trimmed = text.trim();
       if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
-        result.errors.push('File does not start with { or [');
+        result.errors.push(m.validation_json_no_opening());
         return;
       }
 
@@ -449,9 +445,7 @@ export const FileValidator = {
         const parsed = JSON.parse(text);
 
         if (!parsed.type) {
-          result.warnings.push(
-            'Missing "type" property, may not be a valid GeoJSON'
-          );
+          result.warnings.push(m.validation_geojson_missing_type_prop());
         } else if (
           ![
             GEOJSON_TYPE.FEATURE,
@@ -460,14 +454,14 @@ export const FileValidator = {
             GEOJSON_TYPE.GEOMETRY_COLLECTION
           ].includes(parsed.type)
         ) {
-          result.errors.push(`Invalid GeoJSON type: ${parsed.type}`);
+          result.errors.push(m.validation_geojson_invalid_type({ type: parsed.type }));
         }
 
         if (
           parsed.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
           !parsed.features
         ) {
-          result.errors.push('FeatureCollection without "features" property');
+          result.errors.push(m.validation_geojson_no_features_prop());
         }
       }
     } catch (error) {
@@ -477,9 +471,9 @@ export const FileValidator = {
         error
       );
       if (file.size < 1024 * 1024) {
-        result.errors.push('Invalid JSON');
+        result.errors.push(m.validation_json_invalid());
       } else {
-        result.warnings.push('Cannot fully validate JSON (file too large)');
+        result.warnings.push(m.validation_json_too_large_to_validate());
       }
     }
   },
@@ -495,7 +489,7 @@ export const FileValidator = {
     if (ext === 'shp' && buffer.byteLength >= 4) {
       const magic = view.getUint32(0, false);
       if (magic !== 0x0000270a) {
-        result.errors.push('Invalid SHP file signature');
+        result.errors.push(m.validation_shp_invalid_signature());
       }
     }
 
@@ -503,7 +497,7 @@ export const FileValidator = {
       const version = view.getUint8(0);
       const validVersions = [0x03, 0x83, 0x8b, 0xcb, 0xf5, 0xfb];
       if (!validVersions.includes(version)) {
-        result.warnings.push('Non-standard DBF version');
+        result.warnings.push(m.validation_dbf_nonstandard());
       }
     }
   },
@@ -517,12 +511,12 @@ export const FileValidator = {
     const sqliteSignature = new TextDecoder('ascii').decode(signature);
 
     if (!sqliteSignature.startsWith('SQLite format 3')) {
-      result.errors.push('Invalid GeoPackage file (not a SQLite file)');
+      result.errors.push(m.validation_gpkg_not_sqlite());
       return;
     }
 
     if (file.size < 10 * 1024) {
-      result.warnings.push('GeoPackage file suspiciously small');
+      result.warnings.push(m.validation_gpkg_suspicious_small());
     }
   },
 
@@ -575,13 +569,13 @@ export const FileValidator = {
       const parsed = new URL(url);
 
       if (!['http:', 'https:'].includes(parsed.protocol)) {
-        result.errors.push('Only HTTP and HTTPS protocols are allowed');
+        result.errors.push(m.validation_url_protocol_restricted());
       }
 
       const blockedDomains = ['localhost', '127.0.0.1', '0.0.0.0'];
       const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
       if (!isDev && blockedDomains.includes(parsed.hostname)) {
-        result.errors.push('Domain not allowed');
+        result.errors.push(m.validation_url_domain_blocked());
       }
 
       const pathname = parsed.pathname;
@@ -593,15 +587,15 @@ export const FileValidator = {
           type: ''
         } as File);
       } else {
-        result.warnings.push('Cannot determine file type from URL');
+        result.warnings.push(m.validation_url_no_filetype());
       }
 
       if (parsed.protocol === 'http:') {
-        result.warnings.push('Using insecure HTTP');
+        result.warnings.push(m.validation_url_insecure_http());
       }
     } catch (error) {
       logger.error('URL validation failed', LogCategory.FILE, error);
-      result.errors.push('Invalid URL');
+      result.errors.push(m.validation_invalid_url());
     }
 
     result.isValid = result.errors.length === 0;
