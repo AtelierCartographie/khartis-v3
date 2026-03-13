@@ -661,7 +661,12 @@ export async function finalizeJoin(
   });
 
   if (isOSMBasemap(basemap)) {
-    return finalizeOSMJoin(dataset, basemap);
+    return finalizeGPSJoin(dataset, basemap);
+  }
+
+  // GPS mode with a catalog/custom basemap: no textual join needed
+  if (!geoColumn && detectGPSColumns(dataset.columns)) {
+    return finalizeGPSJoin(dataset, basemap);
   }
 
   if (geoColumn) {
@@ -721,12 +726,12 @@ export async function finalizeJoin(
   };
 }
 
-function finalizeOSMJoin(
+function finalizeGPSJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata
 ): FinalizeJoinResult {
   const start = performance.now();
-  logger.info('Finalizing OSM join (GPS mode)', LogCategory.DATA, {
+  logger.info('Finalizing GPS join (no textual join needed)', LogCategory.DATA, {
     datasetId: dataset.id,
     basemap: basemap.file
   });
@@ -734,11 +739,11 @@ function finalizeOSMJoin(
   const gpsColumns = detectGPSColumns(dataset.columns);
   if (!gpsColumns) {
     throw new Error(
-      'GPS columns (latitude/longitude) not found in dataset for OSM basemap'
+      'GPS columns (latitude/longitude) not found in dataset'
     );
   }
 
-  logger.success('OSM join finalized (GPS mode)', LogCategory.DATA, {
+  logger.success('GPS join finalized', LogCategory.DATA, {
     datasetId: dataset.id,
     basemap: basemap.file,
     gpsColumns,
