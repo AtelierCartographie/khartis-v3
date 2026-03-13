@@ -559,7 +559,7 @@ const { actions, getState } = createToolStore<
       const duplicatedContent =
         original.type === AnnotationKind.TEXT &&
         typeof original.content === 'string'
-          ? `${original.content} (copie)`
+          ? `${original.content}${m.copy_suffix()}`
           : Array.isArray(original.content)
             ? original.content.map((point) =>
                 typeof point === 'object' && point !== null

@@ -9,6 +9,7 @@ import { FileStatus } from '../../constants/ui.constants';
 import type { DatasetsState } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
+import * as m from '$lib/paraglide/messages';
 import { projectStore } from '../project.store.svelte';
 
 export async function resetDataset(
@@ -118,7 +119,7 @@ export async function duplicateDataset(
 
     const newId = crypto.randomUUID();
     const newTableName = `dataset_${newId.replace(/-/g, '_')}`;
-    const copyName = `${dataset.name} (copie)`;
+    const copyName = `${dataset.name}${m.copy_suffix()}`;
 
     await Duck.query(
       `CREATE TABLE "${escapeIdentifier(newTableName)}" AS SELECT * FROM "${escapeIdentifier(dataset.tableName)}"`
