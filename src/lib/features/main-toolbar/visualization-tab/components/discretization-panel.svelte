@@ -319,7 +319,7 @@
                 id="break-min-{index}"
                 size="sm"
                 hideLabel
-                labelText="Min"
+                labelText={m.filters_value_min()}
                 value={String(breakItem.min)}
                 on:input={(e) => {
                   const target = e.target as HTMLInputElement;
@@ -332,7 +332,7 @@
                 id="break-max-{index}"
                 size="sm"
                 hideLabel
-                labelText="Max"
+                labelText={m.filters_value_max()}
                 value={String(breakItem.max)}
                 on:input={(e) => {
                   const target = e.target as HTMLInputElement;

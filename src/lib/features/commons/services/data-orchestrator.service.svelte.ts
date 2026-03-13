@@ -27,6 +27,7 @@ import { visualizationStore } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { importRollbackService } from './import-rollback.service';
+import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {
   let geometryDatasetsVersion = $state(0);
@@ -357,15 +358,15 @@ function createDataOrchestratorService() {
         await importRollbackService.rollback(snapshot);
 
         showError(
-          "Erreur fatale lors de l'import",
-          error instanceof Error ? error.message : 'Erreur inconnue'
+          m.error_fatal_import_title(),
+          error instanceof Error ? error.message : m.error_unknown_message()
         );
       } else {
         showWarning(
-          'Avertissement',
+          m.warning_generic_title(),
           error instanceof Error
             ? error.message
-            : "Avertissement lors de l'import"
+            : m.warning_import_message()
         );
       }
 

@@ -385,7 +385,7 @@
                   <ColorPalette size={32} />
                 </div>
                 <div class="preview-ratio">1:1</div>
-                <div class="preview-label">Viz preview</div>
+                <div class="preview-label">{m.viz_preview_label()}</div>
                 <div class="preview-primitives">
                   {#each suggestion.geometries as geometry (geometry)}
                     {@const GeomIcon = getGeometryIcon(geometry)}

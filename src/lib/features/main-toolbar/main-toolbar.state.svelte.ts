@@ -2,6 +2,7 @@ import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
+import * as m from '$lib/paraglide/messages';
 
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
@@ -77,18 +78,18 @@ export const mainToolbarActions = {
     const missingSteps = [];
 
     if (!projectStore.currentProject) {
-      missingSteps.push('Create or load a project');
+      missingSteps.push(m.step_missing_create_project());
     }
 
     const derived = getDerivedToolbarState();
     if (!derived.hasFiles) {
-      missingSteps.push('Import data files');
+      missingSteps.push(m.step_missing_import_data());
     }
 
     const files = projectStore.currentProject?.data?.sourceFiles || [];
     const hasErrors = files.some((f) => f.status === FileStatus.ERROR);
     if (hasErrors) {
-      missingSteps.push('Fix file errors');
+      missingSteps.push(m.step_missing_fix_errors());
     }
 
     return {
