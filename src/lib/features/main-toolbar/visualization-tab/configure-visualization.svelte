@@ -17,6 +17,7 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     normalizeClassificationMethod,
     resolveComputedClassCount,
@@ -307,7 +308,11 @@
         const colors =
           existingColors && existingColors.length === actualNumClasses
             ? existingColors
-            : generateColorsForBreaks(actualNumClasses);
+            : generateColorsForBreaks(
+                actualNumClasses,
+                'sequential',
+                getColorBlindnessState().enabled ? 'high' : undefined
+              );
         const classificationUpdate: Parameters<
           typeof visualizationStore.updateClassification
         >[1] = {

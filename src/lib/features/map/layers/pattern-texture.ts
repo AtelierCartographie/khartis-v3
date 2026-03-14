@@ -20,21 +20,36 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const PATTERN_NAMES = [
   'diagonal',
+  'diagonal-reverse',
   'horizontal',
   'vertical',
   'dots',
-  'cross'
+  'cross',
+  'triangle',
+  'square',
+  'diamond',
+  'plus'
 ] as const;
 
 type PatternName = (typeof PATTERN_NAMES)[number];
 
-/** Maps Khartis pattern IDs to motif.js pattern options */
+/** Maps Khartis pattern IDs to motif.js pattern options (patchSize enables smart inversion at high sizes) */
 const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
-  diagonal: { type: 'line', angle: 45, fill: '#000000' },
-  horizontal: { type: 'line', angle: 0, fill: '#000000' },
-  vertical: { type: 'line', angle: 90, fill: '#000000' },
-  dots: { type: 'circle', fill: '#000000' },
-  cross: { type: 'plaid', fill: '#000000' }
+  diagonal: { type: 'line', angle: 45, fill: '#000000', patchSize: true },
+  'diagonal-reverse': {
+    type: 'line',
+    angle: 315,
+    fill: '#000000',
+    patchSize: true
+  },
+  horizontal: { type: 'line', angle: 0, fill: '#000000', patchSize: true },
+  vertical: { type: 'line', angle: 90, fill: '#000000', patchSize: true },
+  dots: { type: 'circle', fill: '#000000', patchSize: true },
+  cross: { type: 'plaid', fill: '#000000', patchSize: true },
+  triangle: { type: 'triangle', fill: '#000000', patchSize: true },
+  square: { type: 'square', fill: '#000000', patchSize: true },
+  diamond: { type: 'diamond', fill: '#000000', patchSize: true },
+  plus: { type: 'plus', fill: '#000000', patchSize: true }
 };
 
 let cachedResult: AtlasResult | null = null;

@@ -6,10 +6,10 @@ import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { webglToHex } from '../utils/color-utils';
 import {
   sequential,
-  divergent,
+  divergentSequential,
   resolvePalette
 } from '@ateliercartographie/ok-palette';
-import type { WebGLColor } from '@ateliercartographie/ok-palette';
+import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
 
 const SEQUENTIAL_COLOR_START = '#f7fbff';
@@ -235,7 +235,8 @@ export async function calculateBreaks(
  */
 export function generateColorsForBreaks(
   numClasses: number,
-  palette: 'sequential' | 'diverging' = 'sequential'
+  palette: 'sequential' | 'diverging' = 'sequential',
+  contrast?: ContrastMode
 ): string[] {
   const steps = Math.max(2, numClasses);
 
@@ -243,17 +244,19 @@ export function generateColorsForBreaks(
   if (palette === 'diverging') {
     const hasCenterClass = steps % 2 === 1;
     const halfSteps = Math.floor(steps / 2);
-    cssColors = divergent({
+    cssColors = divergentSequential({
       colorA: DIVERGING_COLOR_A,
       colorB: DIVERGING_COLOR_B,
       steps: [halfSteps, halfSteps],
-      hasCenterClass
+      hasCenterClass,
+      contrast
     });
   } else {
     cssColors = sequential({
       colorStart: SEQUENTIAL_COLOR_START,
       colorEnd: SEQUENTIAL_COLOR_END,
-      steps
+      steps,
+      contrast
     });
   }
 

@@ -1,22 +1,41 @@
 import * as m from '$lib/paraglide/messages';
 import {
   sequential,
-  divergent,
+  divergentSequential,
   categorical,
   resolvePalette,
-  categoricalPatterns,
-  sequentialPatterns,
   presets,
   temperature
 } from '@ateliercartographie/ok-palette';
-import type { WebGLColor } from '@ateliercartographie/ok-palette';
+import type {
+  WebGLColor,
+  ContrastMode,
+  CategoricalColorOptions
+} from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
 import type { PatternOptions } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
 
 export type { PatternParams };
-export { presets, temperature, categoricalPatterns, sequentialPatterns };
+export { presets, temperature };
+export type { ContrastMode, CategoricalColorOptions };
+
+/** Default 4-color sequential preview (Blues ramp) — shared across all config components */
+export const DEFAULT_SEQUENTIAL_PREVIEW = [
+  '#c8ddf0',
+  '#78a9cf',
+  '#2171b5',
+  '#084594'
+];
+
+/** Default 4-color qualitative preview — shared across all config components */
+export const DEFAULT_QUALITATIVE_PREVIEW = [
+  '#009d9a',
+  '#f1c21b',
+  '#ff832b',
+  '#a56eff'
+];
 
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
@@ -32,7 +51,11 @@ export type PatternId =
   | 'horizontal'
   | 'vertical'
   | 'dots'
-  | 'cross';
+  | 'cross'
+  | 'triangle'
+  | 'square'
+  | 'diamond'
+  | 'plus';
 
 export interface Palette {
   id: string;
@@ -206,6 +229,38 @@ export function getPatternPalettes(): Palette[] {
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
       patternId: 'cross'
+    },
+    {
+      id: 'pattern-triangle',
+      name: m.pattern_triangle(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'triangle'
+    },
+    {
+      id: 'pattern-square',
+      name: m.pattern_square(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'square'
+    },
+    {
+      id: 'pattern-diamond',
+      name: m.pattern_diamond(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'diamond'
+    },
+    {
+      id: 'pattern-plus',
+      name: m.pattern_plus(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'plus'
     }
   ];
 }
@@ -213,10 +268,15 @@ export function getPatternPalettes(): Palette[] {
 /**
  * Generates palette colors using ok-palette's perceptual Oklch generators.
  * Dispatches to the appropriate generator based on palette type.
+ *
+ * @param contrast Controls lightness range — 'high' improves accessibility (colorblind)
+ * @param categoricalOptions Override categorical generation (presets, temperature)
  */
 export function generatePaletteColors(
   palette: Palette,
-  count: number
+  count: number,
+  contrast?: ContrastMode,
+  categoricalOptions?: CategoricalColorOptions
 ): string[] {
   if (count <= 0) return [];
   if (count === 1) return [palette.colors[0]];
@@ -225,7 +285,12 @@ export function generatePaletteColors(
     case PALETTE_TYPE.SEQUENTIAL: {
       const colorStart = palette.colors[0];
       const colorEnd = palette.colors[palette.colors.length - 1];
-      const cssColors = sequential({ colorStart, colorEnd, steps: count });
+      const cssColors = sequential({
+        colorStart,
+        colorEnd,
+        steps: count,
+        contrast
+      });
       return (
         resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
       ).map(webglToHex);
@@ -235,11 +300,12 @@ export function generatePaletteColors(
       const colorB = palette.colors[palette.colors.length - 1];
       const hasCenterClass = count % 2 === 1;
       const halfSteps = Math.floor(count / 2);
-      const cssColors = divergent({
+      const cssColors = divergentSequential({
         colorA,
         colorB,
         steps: [halfSteps, halfSteps],
-        hasCenterClass
+        hasCenterClass,
+        contrast
       });
       return (
         resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
@@ -249,7 +315,7 @@ export function generatePaletteColors(
       if (count <= palette.colors.length) {
         return palette.colors.slice(0, count);
       }
-      const cssColors = categorical(count, presets.vif);
+      const cssColors = categorical(count, categoricalOptions ?? presets.vif);
       return (
         resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
       ).map(webglToHex);
@@ -266,10 +332,11 @@ export function generatePaletteColors(
  */
 export function generateSequentialFromColor(
   color: string,
-  count: number
+  count: number,
+  contrast?: ContrastMode
 ): string[] {
   if (count <= 0) return [];
-  const cssColors = sequential({ colorStart: color, steps: count });
+  const cssColors = sequential({ colorStart: color, steps: count, contrast });
   return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
     webglToHex
   );
@@ -281,10 +348,16 @@ export function generateSequentialFromColor(
 export function generateSequentialFromColors(
   colorStart: string,
   colorEnd: string,
-  count: number
+  count: number,
+  contrast?: ContrastMode
 ): string[] {
   if (count <= 0) return [];
-  const cssColors = sequential({ colorStart, colorEnd, steps: count });
+  const cssColors = sequential({
+    colorStart,
+    colorEnd,
+    steps: count,
+    contrast
+  });
   return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
     webglToHex
   );
@@ -300,7 +373,11 @@ const PATTERN_TO_MOTIF: Record<
   horizontal: { type: 'line', angle: 0 },
   vertical: { type: 'line', angle: 90 },
   dots: { type: 'circle' },
-  cross: { type: 'plaid' }
+  cross: { type: 'plaid' },
+  triangle: { type: 'triangle' },
+  square: { type: 'square' },
+  diamond: { type: 'diamond' },
+  plus: { type: 'plus' }
 };
 
 /**
@@ -330,7 +407,8 @@ export function buildPatternBackground(
     fill: accent,
     background: base,
     size: Math.round((sizePx / scalePx) * 100),
-    scale: scalePx / 10
+    scale: scalePx / 10,
+    patchSize: true
   }).tile();
 
   return `url(${tile.toDataURL()})`;

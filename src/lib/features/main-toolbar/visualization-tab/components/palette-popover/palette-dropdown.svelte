@@ -72,7 +72,11 @@
   }
 
   function handleSelect(palette: Palette) {
-    const colors = generatePaletteColors(palette, numClasses);
+    const colors = generatePaletteColors(
+      palette,
+      numClasses,
+      colorBlindFilter ? 'high' : undefined
+    );
     onselect?.(palette, colors);
     open = false;
   }
@@ -197,7 +201,7 @@
               ></div>
             {:else}
               <div class="swatch-row">
-                {#each generatePaletteColors(palette, numClasses) as color, i (i)}
+                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined) as color, i (i)}
                   <div
                     class="swatch-cell"
                     style="background-color: {color}"

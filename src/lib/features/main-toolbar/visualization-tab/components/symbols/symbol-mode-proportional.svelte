@@ -8,6 +8,10 @@
   } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    DEFAULT_QUALITATIVE_PREVIEW
+  } from '../palette-popover/palette.constants';
+  import {
     MissingDataShape,
     ProportionalType,
     ShapeType,
@@ -79,8 +83,8 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let fillPattern = $state<boolean>(false);
 
-  const sequentialPalette = ['#c8ddf0', '#78a9cf', '#2171b5', '#084594'];
-  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
+  const sequentialPalette = DEFAULT_SEQUENTIAL_PREVIEW;
+  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
 
   $effect(() => {
     if (dataFields.length > 0 && visualization?.mapping) {

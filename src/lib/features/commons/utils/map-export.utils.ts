@@ -13,6 +13,9 @@ import {
   type VisualizationConfig
 } from '../store/visualization.store.svelte';
 import { hexToRgb, hslToHex } from './color-utils';
+import { motif } from '@ateliercartographie/motif.js';
+import type { PatternOptions } from '@ateliercartographie/motif.js';
+import type { PatternId } from '$lib/features/main-toolbar/visualization-tab/components/palette-popover/palette.constants';
 import { LogCategory, logger } from './logger';
 import type {
   Annotation,
@@ -64,6 +67,52 @@ const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   backgroundColor: DEFAULT_BACKGROUND_COLOR
 };
 
+/** SVG pattern defs cache — populated per export, cleared at start */
+const svgPatternDefsCache = new Map<
+  string,
+  { defsHtml: string; patternUrl: string }
+>();
+
+/** Maps Khartis PatternId to motif.js type + angle for SVG export */
+const SVG_PATTERN_MAP: Record<string, { type: string; angle?: number }> = {
+  diagonal: { type: 'line', angle: 45 },
+  'diagonal-reverse': { type: 'line', angle: 315 },
+  horizontal: { type: 'line', angle: 0 },
+  vertical: { type: 'line', angle: 90 },
+  dots: { type: 'circle' },
+  cross: { type: 'plaid' },
+  triangle: { type: 'triangle' },
+  square: { type: 'square' },
+  diamond: { type: 'diamond' },
+  plus: { type: 'plus' }
+};
+
+/**
+ * Generates SVG <defs> for a fill pattern using motif.js.
+ * Returns the defs outerHTML and the CSS url() reference.
+ */
+function generateSvgPatternDefs(
+  patternId: string,
+  params?: { size?: number; scale?: number }
+): { defsHtml: string; patternUrl: string } | null {
+  const config = SVG_PATTERN_MAP[patternId];
+  if (!config) return null;
+
+  const sizePx = params?.size ?? 4;
+  const scalePx = params?.scale ?? 8;
+  const result = motif({
+    type: config.type as PatternOptions['type'],
+    angle: config.angle,
+    fill: '#000000',
+    background: 'transparent',
+    size: Math.round((sizePx / scalePx) * 100),
+    scale: scalePx / 10,
+    patchSize: true
+  });
+
+  return { defsHtml: result.defs.outerHTML, patternUrl: result.url };
+}
+
 interface GeometryBounds {
   minX: number;
   minY: number;
@@ -77,6 +126,7 @@ interface FeatureStyle {
   strokeColor: string;
   strokeWidth: number;
   strokeOpacity: number;
+  patternId?: PatternId;
 }
 
 type LonLat = [number, number];
@@ -228,7 +278,14 @@ function renderPolygonToSvg(
   const [r, g, b] = hexToRgb(style.fillColor);
   const [sr, sg, sb] = hexToRgb(style.strokeColor);
 
-  return `<path d="${pathData}" fill="rgb(${r},${g},${b})" fill-opacity="${style.fillOpacity}" stroke="rgb(${sr},${sg},${sb})" stroke-width="${style.strokeWidth}" stroke-opacity="${style.strokeOpacity}" />`;
+  let svg = `<path d="${pathData}" fill="rgb(${r},${g},${b})" fill-opacity="${style.fillOpacity}" stroke="rgb(${sr},${sg},${sb})" stroke-width="${style.strokeWidth}" stroke-opacity="${style.strokeOpacity}" />`;
+
+  if (style.patternId && svgPatternDefsCache.has(style.patternId)) {
+    const patternUrl = svgPatternDefsCache.get(style.patternId)!.patternUrl;
+    svg += `\n<path d="${pathData}" fill="${patternUrl}" fill-opacity="0.6" stroke="none" />`;
+  }
+
+  return svg;
 }
 
 function renderGeometryToSvg(
@@ -280,7 +337,8 @@ function getFeatureStyle(
     fillOpacity: visualization.style.fillOpacity ?? 0.8,
     strokeColor: visualization.style.strokeColor || '#1e40af',
     strokeWidth: visualization.style.strokeWidth ?? 1,
-    strokeOpacity: visualization.style.strokeOpacity ?? 1
+    strokeOpacity: visualization.style.strokeOpacity ?? 1,
+    patternId: visualization.classification?.patternId as PatternId | undefined
   };
 
   let radius = 5;
@@ -587,11 +645,21 @@ function renderClassificationLegend(
     style.textColor.lightness
   );
 
+  const patternId = viz.classification?.patternId;
+  const patternEntry = patternId
+    ? svgPatternDefsCache.get(patternId)
+    : undefined;
+
   colors.forEach((color, i) => {
     const y = startY + i * 22;
     elements.push(
       `    <rect x="12" y="${y}" width="20" height="18" fill="${color}" rx="2"/>`
     );
+    if (patternEntry) {
+      elements.push(
+        `    <rect x="12" y="${y}" width="20" height="18" fill="${patternEntry.patternUrl}" fill-opacity="0.6" rx="2"/>`
+      );
+    }
 
     const minVal = i === 0 ? '' : (breaks[i - 1]?.toLocaleString() ?? '');
     const maxVal = breaks[i]?.toLocaleString() ?? '';
@@ -723,14 +791,31 @@ export function exportMapToSvg(
 
   const project = createProjection(bounds, opts.width, opts.height);
 
+  svgPatternDefsCache.clear();
+
+  const enabledVisualizations = visualizations.filter((v) => v.enabled);
+
+  for (const viz of enabledVisualizations) {
+    const pid = viz.classification?.patternId;
+    if (pid && !svgPatternDefsCache.has(pid)) {
+      const defs = generateSvgPatternDefs(
+        pid,
+        viz.classification?.patternParams
+      );
+      if (defs) svgPatternDefsCache.set(pid, defs);
+    }
+  }
+
+  const allPatternDefs = Array.from(svgPatternDefsCache.values())
+    .map((d) => d.defsHtml)
+    .join('\n');
+
   let svgContent = `<?xml version="1.0" encoding="${PIPELINE_CONST.ENCODING.DEFAULT}"?>
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
-  <defs></defs>
+  <defs>${allPatternDefs}</defs>
   <rect id="background" width="100%" height="100%" fill="${opts.backgroundColor}"/>
   <g id="basemap"></g>
 `;
-
-  const enabledVisualizations = visualizations.filter((v) => v.enabled);
 
   for (const visualization of enabledVisualizations) {
     // Direct ID match; fall back to sole dataset when IDs are stale (e.g. after page reload)

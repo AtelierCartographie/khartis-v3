@@ -11,6 +11,7 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { untrack } from 'svelte';
   import {
@@ -156,7 +157,13 @@
         );
         const paletteType =
           currentBreakpoint !== null ? 'diverging' : 'sequential';
-        const colors = generateColorsForBreaks(resolvedClassCount, paletteType);
+        const cbState = getColorBlindnessState();
+        const contrast = cbState.enabled ? ('high' as const) : undefined;
+        const colors = generateColorsForBreaks(
+          resolvedClassCount,
+          paletteType,
+          contrast
+        );
         const allBreaks = [result.min, ...result.breaks, result.max];
 
         currentNumClasses = resolvedClassCount;

@@ -16,6 +16,10 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    DEFAULT_QUALITATIVE_PREVIEW
+  } from './palette-popover/palette.constants';
+  import {
     Category,
     MisuseOutline,
     Subtract,
@@ -107,14 +111,9 @@
   }
 
   const currentPalette = $derived(
-    visualization?.classification?.colors ?? [
-      '#c8ddf0',
-      '#78a9cf',
-      '#2171b5',
-      '#084594'
-    ]
+    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
   );
-  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
+  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
 
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let sizeMode = $state<SizeMode>(SizeMode.FIXED);
