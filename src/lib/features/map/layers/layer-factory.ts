@@ -92,8 +92,6 @@ function buildPatternProps(ctx: LayerContext): {
     return null;
   }
 
-  const patternAngle = ctx.viz?.classification?.patternParams?.angle ?? 0;
-
   return {
     extensions: [getFillStyleExtension()],
     fillPatternAtlas: atlas,
@@ -101,7 +99,7 @@ function buildPatternProps(ctx: LayerContext): {
     fillPatternMask: true,
     getFillPattern: () => patternId,
     getFillPatternScale: 200,
-    getFillPatternRotation: patternAngle
+    getFillPatternRotation: 0
   };
 }
 

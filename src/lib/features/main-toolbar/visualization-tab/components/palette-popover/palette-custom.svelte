@@ -14,6 +14,7 @@
   interface Props {
     selectedPaletteId?: string;
     numClasses: number;
+    colorBlindFilter?: boolean;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
   }
@@ -21,6 +22,7 @@
   let {
     selectedPaletteId,
     numClasses,
+    colorBlindFilter = false,
     onColorsChange,
     onPatternSelect
   }: Props = $props();
@@ -103,9 +105,11 @@
     activeTab = index;
   }
 
+  const contrast = $derived(colorBlindFilter ? ('high' as const) : undefined);
+
   function handleSingleColorChange(color: string) {
     singleColor = color;
-    const colors = generateSequentialFromColor(color, numClasses);
+    const colors = generateSequentialFromColor(color, numClasses, contrast);
     onColorsChange?.(colors);
   }
 
@@ -114,7 +118,8 @@
     const colors = generateSequentialFromColors(
       startColor,
       endColor,
-      numClasses
+      numClasses,
+      contrast
     );
     onColorsChange?.(colors);
   }
@@ -124,7 +129,8 @@
     const colors = generateSequentialFromColors(
       startColor,
       endColor,
-      numClasses
+      numClasses,
+      contrast
     );
     onColorsChange?.(colors);
   }

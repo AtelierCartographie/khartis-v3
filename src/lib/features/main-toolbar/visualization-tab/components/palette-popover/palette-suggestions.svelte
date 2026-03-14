@@ -110,7 +110,7 @@
           ></div>
         {:else}
           <div class="swatch-row">
-            {#each generatePaletteColors(palette, numClasses) as color, i (i)}
+            {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined) as color, i (i)}
               <div class="swatch-cell" style="background-color: {color}"></div>
             {/each}
           </div>

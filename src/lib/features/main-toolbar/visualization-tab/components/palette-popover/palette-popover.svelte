@@ -122,7 +122,11 @@
 
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
-    draftColors = generatePaletteColors(palette, numClasses);
+    draftColors = generatePaletteColors(
+      palette,
+      numClasses,
+      draftColorBlindFilter ? 'high' : undefined
+    );
   }
 
   function handleTypeChange(type: PaletteType) {
@@ -221,6 +225,7 @@
         <PaletteCustom
           selectedPaletteId={draftPaletteId}
           numClasses={numClasses}
+          colorBlindFilter={draftColorBlindFilter}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
         />
