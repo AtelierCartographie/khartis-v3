@@ -10,7 +10,6 @@
     ToolbarState,
     ToolbarStep
   } from '$lib/features/commons/types/global';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import * as m from '$lib/paraglide/messages';
   import { ProgressIndicator, ProgressStep } from 'carbon-components-svelte';
   import { ArrowRight, OpenPanelFilledRight } from 'carbon-icons-svelte';
@@ -33,6 +32,7 @@
 
   const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
     geo: ['data-control-step', 'enrich-data-step'],
+    'tabular-gps': ['data-control-step', 'basemap-join-step'],
     tabular: ['data-control-step', 'geolocation-step', 'basemap-join-step']
   };
 
@@ -40,7 +40,11 @@
     if (dataTabStore.canNavigateToStep[stepIndex]) {
       dataTabStore.setActiveStep(stepIndex);
       await tick();
-      const mode = dataTabStore.isGeographicMode ? 'geo' : 'tabular';
+      const mode = dataTabStore.isGeographicMode
+        ? 'geo'
+        : dataTabStore.isTabularGPSMode
+          ? 'tabular-gps'
+          : 'tabular';
       const sectionId = DATA_STEP_SECTION_IDS[mode][stepIndex];
       const section = toolbarContent?.querySelector(`#${sectionId}`);
       if (section) {
@@ -84,14 +88,6 @@
       return;
     }
     lastUiSnapshot = snapshot;
-
-    logger.info('[main-toolbar] content selection snapshot', LogCategory.UI, {
-      selectedStep,
-      toolbarState,
-      willRenderDataTab: hasDataTabContent,
-      willRenderVisualizationTab: hasVisualizationTabContent,
-      selectedTool: globalState.selectedTool
-    });
   });
 </script>
 
@@ -147,6 +143,7 @@
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
+    {@const isTabularGPSMode = dataTabStore.isTabularGPSMode}
     {@const canVisualizeNow = dataTabStore.isReadyForVisualization}
 
     <footer
@@ -180,6 +177,15 @@
               ? m.enrich_status_done()
               : m.enrich_status_pending()}
           />
+        {:else if isTabularGPSMode}
+          <ProgressStep
+            complete={dataTabStore.hasCompletedStep[1]}
+            disabled={!dataTabStore.canNavigateToStep[1]}
+            label={m.data_tab_join()}
+            description={dataTabStore.hasCompletedStep[1]
+              ? m.join_status_done()
+              : m.join_status_pending()}
+          />
         {:else}
           <ProgressStep
             complete={dataTabStore.hasCompletedStep[1]}
@@ -208,7 +214,7 @@
             tooltipPosition="top"
             tooltipAlignment="end"
             iconDescription={!canVisualizeNow
-              ? isGeographicMode
+              ? isGeographicMode || isTabularGPSMode
                 ? m.data_step_status_clean()
                 : m.join_status_pending()
               : m.go_to_visualization()}
