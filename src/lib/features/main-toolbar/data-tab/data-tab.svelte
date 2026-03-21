@@ -7,11 +7,13 @@
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
 
   const isGeographicMode = $derived(dataTabStore.isGeographicMode);
+  const isTabularGPSMode = $derived(dataTabStore.isTabularGPSMode);
 
   $effect(() => {
     void dataTabStore.hasCompletedStep;
     void dataTabStore.activeStepIndex;
     void isGeographicMode;
+    void isTabularGPSMode;
     dataTabStore.updateNavigationPermissions();
   });
 </script>
@@ -21,6 +23,8 @@
 
   {#if isGeographicMode}
     <EnrichDataStep />
+  {:else if isTabularGPSMode}
+    <BasemapJoinStep />
   {:else}
     <GeolocationStep />
     <BasemapJoinStep />

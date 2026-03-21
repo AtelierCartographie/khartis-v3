@@ -1,10 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   goToJoinStep,
-  selectGeolocationLatitude,
   selectGeolocationLinkedVariable,
-  selectGeolocationLongitude,
-  switchToGeolocationCoordinates,
   uploadURL
 } from './helpers';
 
@@ -246,17 +243,19 @@ test.describe.serial('TC-JOIN-014: OSM indisponible sans GPS', () => {
   });
 });
 
-test.describe.serial('TC-JOIN-015: Activation OSM avec coordonnées', () => {
-  test('active OSM avec coordonnées GPS valides', async ({ page }) => {
+test.describe
+  .serial('TC-JOIN-015: Activation OSM avec coordonnées (tabular-gps)', () => {
+  test('active OSM avec coordonnées GPS valides — geolocation step auto-skipped', async ({
+    page
+  }) => {
     await page.goto('/');
+    // SEVESO CSV has Lat/Long columns → auto-detected as tabular-gps mode
+    // Geolocation step is skipped, basemap step shown directly as step 1
     await uploadURL(page, SEVESO_CSV_PATH);
 
-    await switchToGeolocationCoordinates(page);
-    await selectGeolocationLatitude(page, /lat|latitude/i);
-    await selectGeolocationLongitude(page, /long|longitude/i);
-    await goToJoinStep(page);
-
-    await page.waitForTimeout(1000);
+    // In tabular-gps mode, basemap step is visible directly
+    const basemapStep = page.locator('#basemap-join-step');
+    await expect(basemapStep).toBeVisible({ timeout: 15000 });
 
     await openOsmTab(page);
 

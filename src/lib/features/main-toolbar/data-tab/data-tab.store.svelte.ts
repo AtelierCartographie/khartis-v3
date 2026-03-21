@@ -1,7 +1,13 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
 
-export type DataTabStep = 'control' | 'geolocate' | 'join' | 'enrich';
-export type WorkflowMode = 'tabular' | 'geographic' | 'auto';
+export type DataTabStep =
+  | 'control'
+  | 'geolocate'
+  | 'join'
+  | 'basemap'
+  | 'enrich';
+export type WorkflowMode = 'tabular' | 'tabular-gps' | 'geographic' | 'auto';
 
 interface DataTabState {
   activeStepIndex: number;
@@ -21,9 +27,12 @@ const state = $state<DataTabState>({
   primaryBasemapId: undefined
 });
 
-function getStepNames(isGeographic: boolean): DataTabStep[] {
-  if (isGeographic) {
+function getStepNames(mode: WorkflowMode): DataTabStep[] {
+  if (mode === 'geographic') {
     return ['control', 'enrich'];
+  }
+  if (mode === 'tabular-gps') {
+    return ['control', 'basemap'];
   }
   return ['control', 'geolocate', 'join'];
 }
@@ -34,6 +43,9 @@ function getEffectiveWorkflowMode(): WorkflowMode {
   if (selectedDataset.geometry) {
     return 'geographic';
   }
+  if (hasGPSCoordinateColumns(selectedDataset.columns)) {
+    return 'tabular-gps';
+  }
   return 'tabular';
 }
 
@@ -41,8 +53,16 @@ function isGeographicMode(): boolean {
   return getEffectiveWorkflowMode() === 'geographic';
 }
 
+function isTabularGPSMode(): boolean {
+  return getEffectiveWorkflowMode() === 'tabular-gps';
+}
+
+function isTwoStepMode(): boolean {
+  return isGeographicMode() || isTabularGPSMode();
+}
+
 function getStepCount(): number {
-  return isGeographicMode() ? 2 : 3;
+  return isTwoStepMode() ? 2 : 3;
 }
 
 function setWorkflowMode(mode: WorkflowMode) {
@@ -95,7 +115,7 @@ function resetStepCompletion(index: number) {
 function updateNavigationPermissions() {
   state.canNavigateToStep[0] = true;
 
-  if (isGeographicMode()) {
+  if (isTwoStepMode()) {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
   } else {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
@@ -138,7 +158,8 @@ export const dataTabStore = {
     return state.hasCompletedStep;
   },
   get currentStepName(): DataTabStep {
-    return getStepNames(isGeographicMode())[state.activeStepIndex];
+    const mode = getEffectiveWorkflowMode();
+    return getStepNames(mode)[state.activeStepIndex];
   },
   get canVisualize() {
     return datasetsStore.datasets.length > 0 && state.hasCompletedStep[0];
@@ -152,17 +173,29 @@ export const dataTabStore = {
   get isGeographicMode(): boolean {
     return isGeographicMode();
   },
+  get isTabularGPSMode(): boolean {
+    return isTabularGPSMode();
+  },
   get stepCount(): number {
     return getStepCount();
   },
   get stepNames(): DataTabStep[] {
-    return getStepNames(isGeographicMode());
+    const mode = getEffectiveWorkflowMode();
+    return getStepNames(mode);
+  },
+  /** The step index where the basemap-join step lives (last step for tabular workflows) */
+  get basemapStepIndex(): number {
+    if (isTabularGPSMode()) return 1;
+    if (!isGeographicMode()) return 2;
+    return -1; // geographic mode doesn't have a basemap step
   },
   get isReadyForVisualization(): boolean {
     if (isGeographicMode()) {
       return state.hasCompletedStep[0];
     }
-    return state.hasCompletedStep[2];
+    // tabular-gps: step 1 is basemap, tabular: step 2 is join
+    const lastStepIndex = getStepCount() - 1;
+    return state.hasCompletedStep[lastStepIndex];
   },
   get primaryDatasetId() {
     return state.primaryDatasetId;

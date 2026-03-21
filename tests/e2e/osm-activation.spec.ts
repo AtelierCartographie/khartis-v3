@@ -2,10 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   createProject,
   goToJoinStep,
-  selectGeolocationLatitude,
   selectGeolocationLinkedVariable,
-  selectGeolocationLongitude,
-  switchToGeolocationCoordinates,
   uploadURL
 } from './helpers';
 
@@ -40,24 +37,26 @@ test.describe('TC-OSM-001: OSM basemap activation with GPS data', () => {
 });
 
 test.describe
-  .serial('TC-OSM-002: OSM join marks step 2 complete and enables Visualiser', () => {
+  .serial('TC-OSM-002: OSM join completes basemap step and enables Visualiser (tabular-gps)', () => {
   test.setTimeout(120000);
 
-  test('step 2 Joindre becomes complete and Visualiser is enabled after OSM Ajouter click', async ({
+  test('basemap step becomes complete and Visualiser is enabled after OSM Ajouter click', async ({
     page
   }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
+    // SEVESO CSV has Lat/Long columns → auto-detected as tabular-gps mode
+    // Geolocation step is skipped, basemap step is shown directly as step 1
     await uploadURL(page, SEVESO_CSV_PATH);
 
     await createProject(page, 'Test OSM Step Complete');
-    await switchToGeolocationCoordinates(page);
-    await selectGeolocationLatitude(page, /lat|latitude/i);
-    await selectGeolocationLongitude(page, /long|longitude/i);
-    await goToJoinStep(page);
 
-    // Verify step 2 (Joindre) is NOT complete before OSM activation
+    // In tabular-gps mode, the basemap step is visible directly (no geolocation step)
+    const basemapStep = page.locator('#basemap-join-step');
+    await expect(basemapStep).toBeVisible({ timeout: 15000 });
+
+    // Verify the "Joindre/Join" progress step exists at index 1
     const joindreStep = page
       .locator('.bx--progress-step-button')
       .filter({ hasText: /Joindre|Join/i });
@@ -78,7 +77,7 @@ test.describe
     await osmTabBtn.click();
 
     // Find and click the "Ajouter" button in the OSM tab
-    // This triggers handleSelectOSM -> duckDBOrchestrator.finalizeJoin -> dataTabStore.markStepComplete(2)
+    // This triggers handleSelectOSM -> duckDBOrchestrator.finalizeJoin -> dataTabStore.markStepComplete(basemapStepIndex=1)
     const ajouterBtn = page
       .locator('#basemap-join-step')
       .getByRole('button', { name: /Ajouter|Add|Activer|Activate/i })
