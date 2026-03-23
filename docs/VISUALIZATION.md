@@ -200,7 +200,7 @@ const layers = createDeckLayers(arrowTable, ctx);
    ↓
 4. Attribute Mapping (fillColor, size via layer-helpers.ts)
    ↓
-5. Deck.gl Layer Creation (GeoJsonLayer, GeoArrowScatterplotLayer, etc.)
+5. Deck.gl Layer Creation (GeoJsonLayer, SolidPolygonLayer, PathLayer, ScatterplotLayer via geoarrow-deck-stream)
    ↓
 6. Tooltip Configuration (interactions/tooltip.service.ts)
    ↓
