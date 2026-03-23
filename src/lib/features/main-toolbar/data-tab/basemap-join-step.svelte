@@ -963,6 +963,7 @@
       basemapSuggestions.length > 0 &&
       !osmBasemapStore.isActive &&
       !selectedDataset?.geometry &&
+      !projectStore.currentProject?.data?.basemap?.id &&
       (!basemapSelected || !hasAvailableBasemap(basemapSelected))
     ) {
       void autoSelectFirstSuggestedBasemap();
