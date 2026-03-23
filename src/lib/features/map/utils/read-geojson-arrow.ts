@@ -5,6 +5,7 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { Duck, GEO_CONSTANTS } from '$lib/features/duckdb';
+import { EPSG_DEFINITIONS } from '$lib/features/duckdb/io/reprojection';
 import {
   Field,
   Schema,
@@ -375,7 +376,7 @@ export async function readGeoParquetViaDuckDB(
       );
       let table = tableFromIPC(result as Uint8Array);
       table = addGeoJsonMetadata(table);
-      logger.info('Reprojection via read_parquet succeeded', LogCategory.MAP);
+      logger.debug('Reprojection via read_parquet succeeded', LogCategory.MAP);
       return table;
     } catch (err1) {
       logger.warn(
@@ -392,14 +393,48 @@ export async function readGeoParquetViaDuckDB(
       );
       let table = tableFromIPC(result as Uint8Array);
       table = addGeoJsonMetadata(table);
-      logger.info('Reprojection via ST_Read succeeded', LogCategory.MAP);
+      logger.debug('Reprojection via ST_Read succeeded', LogCategory.MAP);
       return table;
     } catch (err2) {
-      logger.warn(
-        'Reprojection via ST_Read also failed, using raw coordinates',
-        LogCategory.MAP,
-        { error: err2 }
+      logger.warn('Reprojection via ST_Read also failed', LogCategory.MAP, {
+        error: err2
+      });
+    }
+
+    // Attempt 3: ST_Transform with proj4 definition string instead of EPSG code.
+    // DuckDB WASM's PROJ database may lack some CRS definitions (e.g., Lambert-93),
+    // but ST_Transform accepts raw proj4 strings which bypass the lookup.
+    const proj4Def =
+      EPSG_DEFINITIONS[geoInfo.sourceCrs] ??
+      EPSG_DEFINITIONS[geoInfo.sourceCrs.toUpperCase()];
+    if (proj4Def) {
+      const escapedProj4Def = escapeSqlString(proj4Def);
+      const wgs84Def = escapeSqlString(
+        EPSG_DEFINITIONS[GEO_CONSTANTS.WGS84_CRS]
       );
+      logger.info(
+        `Retrying ST_Transform with proj4 definition string for ${geoInfo.sourceCrs}`,
+        LogCategory.MAP
+      );
+      try {
+        const result = await Duck.query(
+          `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedProj4Def}', '${wgs84Def}', true)) as "${escapedGeomCol}" FROM read_parquet('${escapedFileId}')`,
+          { format: 'arrow-ipc' }
+        );
+        let table = tableFromIPC(result as Uint8Array);
+        table = addGeoJsonMetadata(table);
+        logger.info(
+          'Reprojection via proj4 definition string succeeded',
+          LogCategory.MAP
+        );
+        return table;
+      } catch (err3) {
+        logger.warn(
+          'Reprojection via proj4 definition string also failed, using raw coordinates',
+          LogCategory.MAP,
+          { error: err3 }
+        );
+      }
     }
   }
 
