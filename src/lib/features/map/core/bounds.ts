@@ -165,7 +165,9 @@ function calculateBoundsFromGeometryData(
     if (parsed) {
       parsedCount++;
       const coords = extractCoordsFromGeometry(parsed);
-      for (const [lng, lat] of coords) {
+      for (const coord of coords) {
+        if (!Array.isArray(coord) || coord.length < 2) continue;
+        const [lng, lat] = coord;
         if (typeof lng === 'number' && typeof lat === 'number') {
           coordCount++;
           if (lng < minLng) minLng = lng;
@@ -208,11 +210,6 @@ function calculateBoundsFromGeometryData(
   if (!isValidBbox(minLng, minLat, maxLng, maxLat)) {
     return null;
   }
-
-  logger.debug('Calculated bounds from geometry data', LogCategory.MAP, {
-    geoColumn,
-    bounds: [minLng, minLat, maxLng, maxLat]
-  });
 
   return [
     [minLng, minLat],
@@ -277,7 +274,7 @@ export function calculateBoundsFromGeoArrow(
     }
 
     if (primaryColumn) {
-      logger.info(
+      logger.debug(
         'No bbox in metadata, calculating from primary column',
         LogCategory.MAP,
         { primaryColumn }
@@ -288,7 +285,7 @@ export function calculateBoundsFromGeoArrow(
 
     const geoColumn = findGeoColumn(jsTable);
     if (geoColumn && geoColumn !== primaryColumn) {
-      logger.info(
+      logger.debug(
         'Calculating bounds from discovered geometry column',
         LogCategory.MAP,
         { geoColumn }
@@ -297,14 +294,14 @@ export function calculateBoundsFromGeoArrow(
       if (bounds) return bounds;
     }
 
-    logger.info('Trying all columns to find coordinates', LogCategory.MAP, {
+    logger.debug('Trying all columns to find coordinates', LogCategory.MAP, {
       fields: jsTable.schema.fields.map((f) => f.name)
     });
     for (const field of jsTable.schema.fields) {
       if (field.name === primaryColumn || field.name === geoColumn) continue;
       const bounds = calculateBoundsFromGeometryData(jsTable, field.name);
       if (bounds) {
-        logger.info('Found bounds in column', LogCategory.MAP, {
+        logger.debug('Found bounds in column', LogCategory.MAP, {
           column: field.name
         });
         return bounds;
@@ -318,7 +315,7 @@ export function calculateBoundsFromGeoArrow(
     );
     return null;
   } catch (error) {
-    logger.error(
+    logger.warn(
       'Failed to calculate bounds from GeoArrow',
       LogCategory.MAP,
       error
@@ -371,7 +368,7 @@ export function calculateBoundsFromGeoJSON(
       [maxLng, maxLat]
     ];
   } catch (error) {
-    logger.error(
+    logger.warn(
       'Failed to calculate bounds from GeoJSON',
       LogCategory.MAP,
       error
