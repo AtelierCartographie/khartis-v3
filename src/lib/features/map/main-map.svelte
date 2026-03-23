@@ -123,7 +123,17 @@
           dataset.sourceFileId
         );
 
-        if (duckDBDataset?.tableName) {
+        if (!duckDBDataset) {
+          // DuckDB table not yet registered — will retry when duckDBDatasetsVersion updates
+          logger.debug(
+            'DuckDB dataset not yet registered, waiting for next update',
+            LogCategory.MAP,
+            { datasetId: dataset.id }
+          );
+          return null;
+        }
+
+        if (duckDBDataset.tableName) {
           const arrowTable = duckDBDataset.arrowTableWithMetadata
             ? duckDBDataset.arrowTableWithMetadata
             : await duckDBOrchestrator.getArrowTableDirect(
@@ -505,17 +515,46 @@
     });
 
     const initGeneration = ++loadGeneration;
-    const loadPromises = enabledDatasets.map((dataset) =>
-      loadDatasetForDisplay(dataset, initGeneration)
-    );
-    await Promise.all(loadPromises);
+    const [firstDataset, ...remainingDatasets] = enabledDatasets;
 
-    logger.success('Main map data ready', LogCategory.MAP, {
-      durationMs: (performance.now() - start).toFixed(2),
-      tablesLoaded: displayTables.size,
-      geoJSONsLoaded: displayGeoJSONs.size
-    });
+    // Load the first dataset and unblock rendering immediately
+    if (firstDataset) {
+      await loadDatasetForDisplay(firstDataset, initGeneration);
+    }
+
+    logger.success(
+      'First dataset ready, unblocking map render',
+      LogCategory.MAP,
+      {
+        durationMs: (performance.now() - start).toFixed(2),
+        tablesLoaded: displayTables.size,
+        geoJSONsLoaded: displayGeoJSONs.size
+      }
+    );
     isInitializing = false;
+
+    // Load remaining datasets progressively in the background
+    if (remainingDatasets.length > 0) {
+      Promise.all(
+        remainingDatasets.map((dataset) =>
+          loadDatasetForDisplay(dataset, initGeneration)
+        )
+      )
+        .then(() => {
+          logger.success('All datasets loaded', LogCategory.MAP, {
+            durationMs: (performance.now() - start).toFixed(2),
+            tablesLoaded: displayTables.size,
+            geoJSONsLoaded: displayGeoJSONs.size
+          });
+        })
+        .catch((error) => {
+          logger.error(
+            'Failed to load remaining datasets',
+            LogCategory.MAP,
+            error
+          );
+        });
+    }
   }
 
   onMount(() => {
