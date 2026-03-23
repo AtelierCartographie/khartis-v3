@@ -15,14 +15,12 @@
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
-  import { onMount } from 'svelte';
   import {
     mapSuggestionToType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
 
   let configureSection: HTMLElement | undefined = $state();
-  let initializedDatasetIds = $state<string[]>([]);
   let lastSnapshot = $state<string>('');
 
   function buildColumnAnalysis(dataset: {
@@ -132,72 +130,43 @@
     }
   }
 
-  onMount(() => {
-    logger.info('[visualization-tab] mounted', LogCategory.UI);
-    return () => {
-      logger.warn('[visualization-tab] unmounted', LogCategory.UI, {
-        selectedDatasetId: datasetsStore.selectedDataset?.id,
-        visualizationsCount: visualizationStore.visualizations.length
-      });
-    };
-  });
-
   $effect(() => {
     const dataset = datasetsStore.selectedDataset;
     const datasetVisualizations = dataset
       ? visualizationStore.getVisualizationsByDataset(dataset.id)
       : [];
-    const hasNoDatasetViz = datasetVisualizations.length === 0;
-    const hasInitializedDataset = dataset
-      ? initializedDatasetIds.includes(dataset.id)
-      : false;
-    const snapshot = `${dataset?.id ?? 'none'}|${datasetVisualizations.length}|${initializedDatasetIds.join(',')}`;
+    const hasExistingViz = datasetVisualizations.length > 0;
+    const snapshot = `${dataset?.id ?? 'none'}|${datasetVisualizations.length}`;
 
-    if (snapshot !== lastSnapshot) {
+    if (!dataset || hasExistingViz || snapshot === lastSnapshot) {
       lastSnapshot = snapshot;
-      logger.debug(
-        '[visualization-tab] auto-create check snapshot',
-        LogCategory.UI,
-        {
-          selectedDatasetId: dataset?.id,
-          hasNoDatasetViz,
-          hasInitializedDataset,
-          selectedVisualizationId: visualizationStore.selectedVisualization?.id
-        }
-      );
+      return;
     }
 
-    if (dataset && !hasInitializedDataset) {
-      initializedDatasetIds = [...initializedDatasetIds, dataset.id];
+    lastSnapshot = snapshot;
 
-      if (hasNoDatasetViz) {
-        const bestSuggestion = resolveBestSuggestion(dataset);
-        const defaultType = bestSuggestion
-          ? mapSuggestionToType(bestSuggestion.id)
-          : dataset.geometry?.type?.toLowerCase().includes('point')
-            ? VisualizationType.PROPORTIONAL
-            : VisualizationType.CHOROPLETH;
-        const viz = visualizationStore.createVisualization(
-          defaultType,
-          dataset.id
-        );
+    const bestSuggestion = resolveBestSuggestion(dataset);
+    const defaultType = bestSuggestion
+      ? mapSuggestionToType(bestSuggestion.id)
+      : dataset.geometry?.type?.toLowerCase().includes('point')
+        ? VisualizationType.PROPORTIONAL
+        : VisualizationType.CHOROPLETH;
+    const viz = visualizationStore.createVisualization(defaultType, dataset.id);
 
-        if (bestSuggestion) {
-          applySuggestionMapping(viz.id, defaultType, bestSuggestion);
-        }
+    if (bestSuggestion) {
+      applySuggestionMapping(viz.id, defaultType, bestSuggestion);
+    }
 
-        logger.info(
-          '[visualization-tab] auto-created visualization from step entry',
-          LogCategory.UI,
-          {
-            datasetId: dataset.id,
-            defaultType,
-            suggestionId: bestSuggestion?.id,
-            suggestionColumns: bestSuggestion?.columns
-          }
-        );
+    logger.debug(
+      '[visualization-tab] auto-created visualization from step entry',
+      LogCategory.UI,
+      {
+        datasetId: dataset.id,
+        defaultType,
+        suggestionId: bestSuggestion?.id,
+        suggestionColumns: bestSuggestion?.columns
       }
-    }
+    );
   });
 </script>
 

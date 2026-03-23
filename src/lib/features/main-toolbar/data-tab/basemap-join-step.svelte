@@ -793,6 +793,7 @@
         suggestions.length > 0 &&
         !osmBasemapStore.isActive &&
         !selectedDataset?.geometry &&
+        !projectStore.currentProject?.data?.basemap?.id &&
         (isDatasetChanged ||
           !dataTabState.basemapJoin.selectedBasemap ||
           !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
@@ -823,6 +824,9 @@
         const savedBasemap = projectStore.currentProject?.data?.basemap;
         if (savedBasemap?.id) {
           dataTabActions.selectBasemap(savedBasemap.id);
+          basemapStyleStore.setReferenceBasemap(
+            savedBasemap.type === 'osm' ? null : savedBasemap.id
+          );
 
           if (
             (savedBasemap.type === 'custom' || savedBasemap.type === 'osm') &&

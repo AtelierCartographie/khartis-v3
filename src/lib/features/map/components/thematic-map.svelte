@@ -1,5 +1,6 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
+  import type { LngLatBoundsLike } from 'maplibre-gl';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';
@@ -146,6 +147,19 @@
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
   let isApplyingMapLibreSync = false;
+
+  // Cache bounds computation per ArrowTable to avoid redundant O(n) scans
+  const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
+  function cachedCalculateBoundsFromGeoArrow(
+    table: ArrowTable
+  ): LngLatBoundsLike | null {
+    if (boundsCache.has(table)) {
+      return boundsCache.get(table)!;
+    }
+    const bounds = calculateBoundsFromGeoArrow(table);
+    boundsCache.set(table, bounds);
+    return bounds;
+  }
 
   function logEffect(name: string): void {
     effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
@@ -587,7 +601,7 @@
           basemapTable: worldBaseTable
         });
         const bounds = referenceTable
-          ? calculateBoundsFromGeoArrow(referenceTable)
+          ? cachedCalculateBoundsFromGeoArrow(referenceTable)
           : null;
 
         if (bounds) {
@@ -784,7 +798,7 @@
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
+              const bounds = cachedCalculateBoundsFromGeoArrow(worldBaseTable);
               if (bounds) {
                 mapBounds.fitToBounds(bounds, true);
               }
@@ -904,7 +918,9 @@
 
             // Fit map view to new basemap bounds
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              let bounds = cachedCalculateBoundsFromGeoArrow(
+                loaded.geometryTable
+              );
               if (!bounds && loaded.metadata.bbox) {
                 const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
                 bounds = [
@@ -916,7 +932,9 @@
                 mapBounds.fitToBounds(bounds, true);
               }
             } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+              const bounds = cachedCalculateBoundsFromGeoArrow(
+                loaded.geometryTable
+              );
               if (bounds) {
                 const [[minX, minY], [maxX, maxY]] = bounds as [
                   [number, number],
@@ -997,7 +1015,9 @@
         // (bypasses the guard in updateProjectionFromTable which skips
         // when referenceBbox is already set from a previous basemap)
         if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-          const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+          const bounds = cachedCalculateBoundsFromGeoArrow(
+            loaded.geometryTable
+          );
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
               [number, number],
@@ -1011,6 +1031,73 @@
             mapInstanceStore.fitToOrthographicBounds();
           } else {
             pendingOrthographicFit = true;
+          }
+        }
+
+        // After the world basemap loads, check if a reference basemap was
+        // skipped earlier (set before map was ready). If so, trigger its load
+        // now — the map doesn't need to be loaded to fetch basemap data and
+        // assign worldBaseTable; bounds fitting is gated separately below.
+        const pendingRefId = basemapStyleStore.referenceBasemapId;
+        if (pendingRefId) {
+          logger.info(
+            'Loading pending reference basemap after world basemap ready',
+            LogCategory.MAP,
+            { refId: pendingRefId }
+          );
+          const refRequestId = ++referenceBasemapRequestId;
+          const refLoaded = await basemapService.loadBasemap(pendingRefId);
+          if (refRequestId !== referenceBasemapRequestId) {
+            logger.debug(
+              'Ignoring stale pending reference basemap load',
+              LogCategory.MAP,
+              { refId: pendingRefId }
+            );
+          } else if (refLoaded) {
+            worldBaseTable = refLoaded.geometryTable;
+            if (!isSwitchingViewMode) {
+              scheduleLayerUpdate('loadWorldBasemap:pendingRef');
+
+              if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
+                let refBounds = cachedCalculateBoundsFromGeoArrow(
+                  refLoaded.geometryTable
+                );
+                if (!refBounds && refLoaded.metadata.bbox) {
+                  const [minLng, minLat, maxLng, maxLat] =
+                    refLoaded.metadata.bbox;
+                  refBounds = [
+                    [minLng, minLat],
+                    [maxLng, maxLat]
+                  ];
+                }
+                if (refBounds) {
+                  mapBounds.fitToBounds(refBounds, true);
+                }
+              } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+                const refBounds = cachedCalculateBoundsFromGeoArrow(
+                  refLoaded.geometryTable
+                );
+                if (refBounds) {
+                  const [[rMinX, rMinY], [rMaxX, rMaxY]] = refBounds as [
+                    [number, number],
+                    [number, number]
+                  ];
+                  projectionStore.setReferenceBbox([
+                    rMinX,
+                    rMinY,
+                    rMaxX,
+                    rMaxY
+                  ]);
+                } else if (refLoaded.metadata.bbox) {
+                  projectionStore.setReferenceBbox(refLoaded.metadata.bbox);
+                }
+                if (mapInit.isMapLoaded) {
+                  mapInstanceStore.fitToOrthographicBounds();
+                } else {
+                  pendingOrthographicFit = true;
+                }
+              }
+            }
           }
         }
       }

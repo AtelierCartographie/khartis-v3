@@ -67,6 +67,10 @@ interface LoadedBasemap {
 function createBasemapService() {
   let availableBasemaps: BasemapMetadata[] = [];
   let isInitialized = false;
+  let initResolve: (() => void) | null = null;
+  const initPromise = new Promise<void>((resolve) => {
+    initResolve = resolve;
+  });
   let currentBasemap: LoadedBasemap | null = null;
   let attributesLoaded = false;
   const basemapCache = new SvelteMap<string, LoadedBasemap>();
@@ -80,7 +84,7 @@ function createBasemapService() {
 
   async function loadMetadata(): Promise<void> {
     try {
-      logger.info('Loading basemap metadata catalog', LogCategory.MAP);
+      logger.debug('Loading basemap metadata catalog', LogCategory.MAP);
       const response = await fetch(getBasemapMetadataUrl());
 
       if (!response.ok) {
@@ -107,7 +111,7 @@ function createBasemapService() {
         throw new Error(`Failed to fetch attributes: ${response.statusText}`);
       }
 
-      logger.info('Loading basemap attributes into DuckDB', LogCategory.MAP);
+      logger.debug('Loading basemap attributes into DuckDB', LogCategory.MAP);
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
       const attributesFile = new File(
@@ -140,7 +144,6 @@ function createBasemapService() {
       }
 
       attributesLoaded = true;
-      logger.success('Basemap attributes stored in DuckDB', LogCategory.MAP);
     } catch (error) {
       logger.error('Failed to load basemap attributes', LogCategory.MAP, error);
       throw error;
@@ -168,7 +171,8 @@ function createBasemapService() {
   }
 
   async function loadGeometryFromParquet(
-    filename: string
+    filename: string,
+    bbox?: [number, number, number, number]
   ): Promise<ArrowTable> {
     const start = performance.now();
     logger.debug('Loading basemap geometry', LogCategory.MAP, { filename });
@@ -179,16 +183,21 @@ function createBasemapService() {
 
     if (isGeoJSON) {
       const geojsonText = await response.text();
-      jsTable = await readGeoJSONAsArrow(geojsonText, `basemap_${filename}`);
+      jsTable = await readGeoJSONAsArrow(
+        geojsonText,
+        `basemap_${filename}`,
+        bbox
+      );
     } else {
       const arrayBuffer = await response.arrayBuffer();
       jsTable = await readGeoParquetViaDuckDB(
         arrayBuffer,
-        `basemap_${filename}`
+        `basemap_${filename}`,
+        bbox
       );
     }
 
-    logger.success('Basemap geometry loaded', LogCategory.MAP, {
+    logger.debug('Basemap geometry loaded', LogCategory.MAP, {
       filename,
       rows: jsTable.numRows,
       durationMs: (performance.now() - start).toFixed(2)
@@ -228,23 +237,25 @@ function createBasemapService() {
   ): Promise<SvelteMap<string, ArrowTable>> {
     const layerTables = new SvelteMap<string, ArrowTable>();
 
-    for (const layer of metadata.layers) {
-      if (!layer.file) {
-        continue;
-      }
-      try {
-        logger.debug('Loading basemap layer geometry', LogCategory.MAP, {
-          layerFile: layer.file
-        });
+    const loadableLayers = metadata.layers.filter((l) => l.file);
+    if (loadableLayers.length === 0) return layerTables;
+
+    const results = await Promise.allSettled(
+      loadableLayers.map(async (layer) => {
         const table =
-          metadata.isCustom && (await doesDuckTableExist(layer.file))
-            ? await loadGeometryFromDuckTable(layer.file)
-            : await loadGeometryFromParquet(layer.file);
-        layerTables.set(layer.file, table);
-      } catch (error) {
+          metadata.isCustom && (await doesDuckTableExist(layer.file!))
+            ? await loadGeometryFromDuckTable(layer.file!)
+            : await loadGeometryFromParquet(layer.file!);
+        return { file: layer.file!, table };
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        layerTables.set(result.value.file, result.value.table);
+      } else {
         logger.warn('Failed to load basemap layer', LogCategory.MAP, {
-          layerFile: layer.file,
-          error
+          error: result.reason
         });
       }
     }
@@ -276,30 +287,33 @@ function createBasemapService() {
   async function loadBasemapInternal(
     basemapId: string
   ): Promise<LoadedBasemap | null> {
+    if (!isInitialized) {
+      logger.debug(
+        `Basemap service not yet ready, waiting for initialization: ${basemapId}`,
+        LogCategory.MAP
+      );
+      await initPromise;
+    }
+
     const metadata = availableBasemaps.find(
       (basemap) => basemap.file === basemapId
     );
 
     if (!metadata) {
-      if (isInitialized) {
-        logger.error(`Basemap not found: ${basemapId}`, LogCategory.MAP);
-      } else {
-        logger.debug(
-          `Basemap not yet available (service initializing): ${basemapId}`,
-          LogCategory.MAP
-        );
-      }
+      logger.warn(`Basemap not found: ${basemapId}`, LogCategory.MAP);
       return null;
     }
 
     try {
       const start = performance.now();
-      logger.info('Loading basemap', LogCategory.MAP, { basemapId });
+      logger.debug('Loading basemap', LogCategory.MAP, { basemapId });
 
-      const geometryTable = metadata.isCustom
-        ? await loadCustomBasemapGeometry(metadata)
-        : await loadGeometryFromParquet(metadata.file);
-      const layerTables = await loadBasemapLayers(metadata);
+      const [geometryTable, layerTables] = await Promise.all([
+        metadata.isCustom
+          ? loadCustomBasemapGeometry(metadata)
+          : loadGeometryFromParquet(metadata.file, metadata.bbox),
+        loadBasemapLayers(metadata)
+      ]);
 
       currentBasemap = {
         metadata,
@@ -310,7 +324,7 @@ function createBasemapService() {
       basemapCache.set(basemapId, currentBasemap);
       updateProjectionFromTable(geometryTable);
 
-      logger.success('Basemap loaded', LogCategory.MAP, {
+      logger.debug('Basemap loaded', LogCategory.MAP, {
         basemapId,
         layerCount: metadata.layers.length,
         durationMs: (performance.now() - start).toFixed(2)
@@ -386,8 +400,7 @@ function createBasemapService() {
       }
     }
 
-    const start = performance.now();
-    logger.info('Loading basemap geometry into DuckDB', LogCategory.MAP, {
+    logger.debug('Loading basemap geometry into DuckDB', LogCategory.MAP, {
       basemapId: normalizedBasemapId
     });
 
@@ -409,12 +422,6 @@ function createBasemapService() {
       await Duck.read_geofile(geometryFile, { tablename: tableName });
 
       geometryTablesInDuckDB.add(tableName);
-
-      logger.success('Basemap geometry loaded into DuckDB', LogCategory.MAP, {
-        basemapId: normalizedBasemapId,
-        tableName,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
 
       return tableName;
     } catch (error) {
@@ -601,7 +608,7 @@ function createBasemapService() {
     }
 
     const start = performance.now();
-    logger.info('Loading basemap variant file', LogCategory.MAP, {
+    logger.debug('Loading basemap variant file', LogCategory.MAP, {
       basemapId,
       variantFile,
       level
@@ -621,7 +628,7 @@ function createBasemapService() {
     loadedBasemap.simplifiedVariants.set(level, variantTable);
     loadedBasemap.activeSimplificationLevel = level;
 
-    logger.success('Basemap variant loaded', LogCategory.MAP, {
+    logger.debug('Basemap variant loaded', LogCategory.MAP, {
       basemapId,
       variantFile,
       level,
@@ -719,7 +726,7 @@ function createBasemapService() {
 
   async function initialize(): Promise<void> {
     try {
-      logger.info('Initializing basemap service', LogCategory.MAP);
+      logger.debug('Initializing basemap service', LogCategory.MAP);
       await loadMetadata();
 
       if (Duck) {
@@ -740,15 +747,15 @@ function createBasemapService() {
       });
 
       isInitialized = true;
-      logger.success('Basemap service initialized', LogCategory.MAP, {
-        basemapCount: availableBasemaps.length
-      });
+      initResolve?.();
     } catch (error) {
       logger.error(
         'Failed to initialize basemap service',
         LogCategory.MAP,
         error
       );
+      // Resolve even on error to unblock waiters (they'll get null from metadata lookup)
+      initResolve?.();
     }
   }
 
