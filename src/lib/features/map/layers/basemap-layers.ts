@@ -2,8 +2,16 @@ import type { Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
-import * as geodecklayers from '@geoarrow/deck.gl-layers';
+import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import {
+  createSolidPolygonLayerProps,
+  createPathLayerProps
+} from 'geoarrow-deck-stream';
+import {
+  parsePaths,
+  parseSolidPolygons
+} from '../utils/geoarrow-stream-bridge';
 import * as d3 from 'd3-geo';
 import type {
   FeatureCollection,
@@ -163,49 +171,62 @@ export function createTerreLayers(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
+    const polyData = parseSolidPolygons(worldBaseTable);
+    const outlineData = parsePaths(worldBaseTable);
+
     if (config.fillShadow) {
       layers.push(
-        new geodecklayers.GeoArrowPolygonLayer({
+        new PathLayer({
           id: `${layerId}-shadow`,
-          data: worldBaseTable,
-          filled: false,
-          stroked: true,
-          getLineColor: withOpacity([80, 80, 80], 0.15),
-          opacity: 1,
-          lineWidthUnits: 'pixels',
-          lineWidthScale: 1,
-          lineWidthMinPixels: 1,
-          lineWidthMaxPixels: 4,
+          ...createPathLayerProps(outlineData),
+          getColor: withOpacity([80, 80, 80], 0.15),
+          widthUnits: 'pixels',
+          getWidth: 1,
+          widthMinPixels: 1,
+          widthMaxPixels: 4,
           ...baseProps,
           updateTriggers: {
-            lineWidthScale: [config.strokeThickness]
+            getWidth: [config.strokeThickness]
           }
         })
       );
     }
 
+    // Fill layer
     layers.push(
-      new geodecklayers.GeoArrowPolygonLayer({
+      new SolidPolygonLayer({
         id: layerId,
-        data: worldBaseTable,
-        filled: true,
-        stroked: effectiveStrokeThickness > 0,
+        ...createSolidPolygonLayerProps(polyData),
         getFillColor: withOpacity(fillColor, fillOpacity),
-        getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
-        opacity: 1,
-        lineWidthUnits: 'pixels',
-        lineWidthScale: effectiveStrokeThickness,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 0.5,
-        extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
-        getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
-          ...updateTriggers,
-          lineWidthScale: [effectiveStrokeThickness]
+          getFillColor: [config.fillColor, config.fillOpacity]
         }
       })
     );
+
+    // Stroke layer
+    if (effectiveStrokeThickness > 0) {
+      layers.push(
+        new PathLayer({
+          id: `${layerId}-stroke`,
+          ...createPathLayerProps(outlineData),
+          getColor: withOpacity(strokeColor, effectiveStrokeOpacity),
+          widthUnits: 'pixels',
+          getWidth: effectiveStrokeThickness,
+          widthMinPixels: 0,
+          widthMaxPixels: 0.5,
+          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          ...baseProps,
+          updateTriggers: {
+            getColor: [config.strokeColor, effectiveStrokeOpacity],
+            getWidth: [effectiveStrokeThickness],
+            getDashArray: [config.strokeDotted, config.strokeDottedPattern]
+          }
+        })
+      );
+    }
 
     return layers;
   }
@@ -348,9 +369,10 @@ export function createFrontieresLayer(
     isLineGeometry(geometryInfo) &&
     (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
-    return new geodecklayers.GeoArrowPathLayer({
+    const lineData = parsePaths(frontieresTable);
+    return new PathLayer({
       id: layerId,
-      data: frontieresTable,
+      ...createPathLayerProps(lineData),
       getColor: withOpacity(strokeColor, effectiveOpacity),
       widthUnits: 'pixels',
       getWidth: effectiveThickness,
@@ -399,22 +421,21 @@ export function createFrontieresLayer(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
-    return new geodecklayers.GeoArrowPolygonLayer({
+    const outlineData = parsePaths(frontieresTable);
+    return new PathLayer({
       id: layerId,
-      data: frontieresTable,
-      filled: false,
-      stroked: true,
-      getLineColor: withOpacity(strokeColor, effectiveOpacity),
-      lineWidthUnits: 'pixels',
-      lineWidthScale: effectiveThickness,
-      lineWidthMinPixels: 0,
-      lineWidthMaxPixels: 0.5,
+      ...createPathLayerProps(outlineData),
+      getColor: withOpacity(strokeColor, effectiveOpacity),
+      widthUnits: 'pixels',
+      getWidth: effectiveThickness,
+      widthMinPixels: 0,
+      widthMaxPixels: 0.5,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
         ...updateTriggers,
-        lineWidthScale: [effectiveThickness]
+        getWidth: [effectiveThickness]
       }
     });
   }
@@ -649,12 +670,12 @@ export function createRivieresLayer(
   });
 }
 
-export function createReliefLayer(
+export function createReliefLayers(
   worldBaseTable: ArrowTable,
   config: ReliefLayerConfig,
   ctx: BasemapLayerContext
-): Layer<DeckDataRow> | null {
-  if (!config.visible) return null;
+): Layer<DeckDataRow>[] {
+  if (!config.visible) return [];
 
   const geometryInfo = extractGeometryInfo(worldBaseTable);
   if (!geometryInfo) {
@@ -662,7 +683,7 @@ export function createReliefLayer(
       'World base table missing geo metadata for relief layer',
       LogCategory.MAP
     );
-    return null;
+    return [];
   }
 
   const baseColor = toRgbColor(config.color);
@@ -698,45 +719,66 @@ export function createReliefLayer(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
-    return new geodecklayers.GeoArrowPolygonLayer({
-      id: layerId,
-      data: worldBaseTable,
-      filled: !isContours,
-      stroked: true,
-      getFillColor: withOpacity(baseColor, fillOpacity),
-      getLineColor: withOpacity(lineColor, lineOpacity),
-      lineWidthUnits: 'pixels',
-      lineWidthScale: lineWidth,
-      lineWidthMinPixels: 0,
-      lineWidthMaxPixels: 1,
-      ...baseProps,
-      updateTriggers: {
-        ...updateTriggers,
-        lineWidthScale: [lineWidth]
-      }
-    });
+    const result: Layer<DeckDataRow>[] = [];
+    const outlineData = parsePaths(worldBaseTable);
+
+    if (!isContours) {
+      const polyData = parseSolidPolygons(worldBaseTable);
+      result.push(
+        new SolidPolygonLayer({
+          id: layerId,
+          ...createSolidPolygonLayerProps(polyData),
+          getFillColor: withOpacity(baseColor, fillOpacity),
+          ...baseProps,
+          updateTriggers: {
+            getFillColor: [config.color, config.opacity, config.representation]
+          }
+        })
+      );
+    }
+
+    result.push(
+      new PathLayer({
+        id: `${layerId}-stroke`,
+        ...createPathLayerProps(outlineData),
+        getColor: withOpacity(lineColor, lineOpacity),
+        widthUnits: 'pixels',
+        getWidth: lineWidth,
+        widthMinPixels: 0,
+        widthMaxPixels: 1,
+        ...baseProps,
+        updateTriggers: {
+          getColor: [config.color, config.opacity, config.representation],
+          getWidth: [lineWidth]
+        }
+      })
+    );
+
+    return result;
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
     const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
     if (geojson) {
-      return new GeoJsonLayer({
-        id: layerId,
-        data: geojson,
-        filled: !isContours,
-        stroked: true,
-        getFillColor: withOpacity(baseColor, fillOpacity),
-        getLineColor: withOpacity(lineColor, lineOpacity),
-        lineWidthUnits: 'pixels',
-        getLineWidth: lineWidth,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 1,
-        ...baseProps,
-        updateTriggers: {
-          ...updateTriggers,
-          getLineWidth: [lineWidth]
-        }
-      });
+      return [
+        new GeoJsonLayer({
+          id: layerId,
+          data: geojson,
+          filled: !isContours,
+          stroked: true,
+          getFillColor: withOpacity(baseColor, fillOpacity),
+          getLineColor: withOpacity(lineColor, lineOpacity),
+          lineWidthUnits: 'pixels',
+          getLineWidth: lineWidth,
+          lineWidthMinPixels: 0,
+          lineWidthMaxPixels: 1,
+          ...baseProps,
+          updateTriggers: {
+            ...updateTriggers,
+            getLineWidth: [lineWidth]
+          }
+        })
+      ];
     }
     logger.warn(
       'Failed to convert world base table to GeoJSON for relief layer',
@@ -744,7 +786,7 @@ export function createReliefLayer(
     );
   }
 
-  return null;
+  return [];
 }
 
 function getSymbolPolygonSides(symbol: BasemapCitySymbol): number {
@@ -1049,12 +1091,12 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.RELIEF:
           if (worldBaseTable) {
-            const layer = createReliefLayer(
+            const reliefLayers = createReliefLayers(
               worldBaseTable,
               config as ReliefLayerConfig,
               ctx
             );
-            if (layer) layers.push(layer);
+            layers.push(...reliefLayers);
           }
           break;
       }
