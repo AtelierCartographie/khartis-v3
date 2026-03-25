@@ -1,10 +1,12 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { ColorSelector, SliderWithInput } from '../shared';
+  import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
+  import ContentSwitcher from './content-switcher.svelte';
+  import { ColorSelector, SliderWithInput, ToggleWithLabel } from '../shared';
   import {
     type Palette,
     type PatternParams,
+    type ContrastMode,
     getPatternPalettes,
     generateSequentialFromColor,
     generateSequentialFromColors,
@@ -15,32 +17,39 @@
     selectedPaletteId?: string;
     numClasses: number;
     colorBlindFilter?: boolean;
+    inverted?: boolean;
     onColorsChange?: (colors: string[]) => void;
     onPatternSelect?: (palette: Palette, params: PatternParams) => void;
+    onContrastChange?: (contrast: ContrastMode | undefined) => void;
+    onInvertToggle?: (value: boolean) => void;
   }
 
   let {
     selectedPaletteId,
     numClasses,
     colorBlindFilter = false,
+    inverted = $bindable(false),
     onColorsChange,
-    onPatternSelect
+    onPatternSelect,
+    onContrastChange,
+    onInvertToggle
   }: Props = $props();
 
   let activeTab = $state(0);
   let singleColor = $state('#08519c');
   let startColor = $state('#f7fbff');
   let endColor = $state('#08519c');
+  let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
 
   // Pattern state
   let selectedPatternId = $state<string | null>(null);
   let patternSize = $state(4);
   let patternScale = $state(8);
 
-  const tabItems = $derived([
-    { label: m.palette_custom_1_color() },
-    { label: m.palette_custom_2_colors() },
-    { label: m.palette_custom_patterns() }
+  const tabLabels = $derived([
+    m.palette_custom_1_color(),
+    m.palette_custom_2_colors(),
+    m.palette_custom_patterns()
   ]);
 
   const patternPalettes = $derived(getPatternPalettes());
@@ -101,15 +110,44 @@
       : ''
   );
 
+  const resolvedContrast = $derived<ContrastMode | undefined>(
+    contrastMode === 'normal' ? undefined : contrastMode
+  );
+
   function handleTabChange(index: number) {
     activeTab = index;
   }
 
-  const contrast = $derived(colorBlindFilter ? ('high' as const) : undefined);
+  function handleContrastChange(value: string) {
+    contrastMode = value as 'low' | 'normal' | 'high';
+    onContrastChange?.(resolvedContrast);
+
+    // Re-emit current colors with new contrast
+    if (activeTab === 0) {
+      const colors = generateSequentialFromColor(
+        singleColor,
+        numClasses,
+        resolvedContrast
+      );
+      onColorsChange?.(colors);
+    } else if (activeTab === 1) {
+      const colors = generateSequentialFromColors(
+        startColor,
+        endColor,
+        numClasses,
+        resolvedContrast
+      );
+      onColorsChange?.(colors);
+    }
+  }
 
   function handleSingleColorChange(color: string) {
     singleColor = color;
-    const colors = generateSequentialFromColor(color, numClasses, contrast);
+    const colors = generateSequentialFromColor(
+      color,
+      numClasses,
+      resolvedContrast
+    );
     onColorsChange?.(colors);
   }
 
@@ -119,7 +157,7 @@
       startColor,
       endColor,
       numClasses,
-      contrast
+      resolvedContrast
     );
     onColorsChange?.(colors);
   }
@@ -130,7 +168,7 @@
       startColor,
       endColor,
       numClasses,
-      contrast
+      resolvedContrast
     );
     onColorsChange?.(colors);
   }
@@ -176,18 +214,23 @@
   function emitPatternSelect(palette: Palette, params: PatternParams) {
     onPatternSelect?.(palette, params);
   }
+
+  function handleInvertToggle(value: boolean) {
+    inverted = value;
+    onInvertToggle?.(value);
+  }
 </script>
 
 <div class="palette-custom">
-  <div class="section-divider">
-    <span class="divider-label">{m.palette_custom()}</span>
+  <div class="section-title">
+    <span class="section-title-text">{m.palette_custom()}</span>
+    <div class="section-title-line"></div>
   </div>
 
-  <ToggleTabs
-    items={tabItems}
+  <ContentSwitcher
+    items={tabLabels}
     activeIndex={activeTab}
-    onChange={handleTabChange}
-    hideInactiveLabel={false}
+    onchange={handleTabChange}
   />
 
   <div class="tab-content">
@@ -278,6 +321,28 @@
       {/if}
     {/if}
   </div>
+
+  {#if activeTab !== 2}
+    <div class="contrast-section">
+      <span class="contrast-label">{m.contrast_label()}</span>
+      <RadioButtonGroup
+        selected={contrastMode}
+        legendText=""
+        orientation="horizontal"
+        on:change={(e) => handleContrastChange(String(e.detail))}
+      >
+        <RadioButton labelText={m.contrast_low()} value="low" />
+        <RadioButton labelText={m.contrast_normal()} value="normal" />
+        <RadioButton labelText={m.contrast_high()} value="high" />
+      </RadioButtonGroup>
+    </div>
+  {/if}
+
+  <ToggleWithLabel
+    label={m.invert_palette_tooltip()}
+    toggled={inverted}
+    ontoggle={handleInvertToggle}
+  />
 </div>
 
 <style lang="scss">
@@ -287,26 +352,23 @@
     gap: var(--cds-spacing-03);
   }
 
-  .section-divider {
+  .section-title {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    padding-top: var(--cds-spacing-03);
-
-    &::before,
-    &::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--cds-border-subtle);
-    }
   }
 
-  .divider-label {
-    font-size: 0.75rem;
+  .section-title-text {
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-secondary);
+    color: var(--cds-text-primary);
     white-space: nowrap;
+  }
+
+  .section-title-line {
+    flex: 1;
+    height: 1px;
+    background: var(--cds-border-subtle);
   }
 
   .tab-content {
@@ -317,6 +379,17 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
+  }
+
+  .contrast-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+  }
+
+  .contrast-label {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary);
   }
 
   .pattern-list {

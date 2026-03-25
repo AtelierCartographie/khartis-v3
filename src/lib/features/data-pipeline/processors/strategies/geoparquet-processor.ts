@@ -79,7 +79,7 @@ export const geoparquetProcessor: FileProcessor = {
     ]);
 
     const dataset: ProcessorDataset = {
-      id: crypto.randomUUID(),
+      id: file.datasetId ?? file.id,
       tableName: ctx.tableName,
       sourceFileId: file.id,
       name: file.name,

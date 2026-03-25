@@ -81,7 +81,7 @@ export function createDatasetFromPreprocessedFile(
     `legacy_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
 
   return {
-    id: file.datasetId ?? crypto.randomUUID(),
+    id: file.datasetId ?? file.id,
     name: file.name,
     sourceFileId: file.id,
     tableName,
@@ -172,11 +172,6 @@ export async function processFiles(
     const results = await Promise.all(
       files.map(async (file) => {
         return internals.processingSemaphore.run(async () => {
-          logger.debug(
-            `Processing file: ${file.name} (active: ${internals.processingSemaphore.activeCount}, queued: ${internals.processingSemaphore.queuedCount})`,
-            LogCategory.STORE
-          );
-
           if (file.duckdbTableName) {
             logger.debug(
               `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
@@ -207,7 +202,6 @@ export async function processFiles(
             file.originalFile
           );
 
-          logger.debug(`Completed processing: ${file.name}`, LogCategory.STORE);
           return result;
         });
       })

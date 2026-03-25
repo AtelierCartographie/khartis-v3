@@ -23,10 +23,27 @@ import {
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
-import { visualizationStore } from '../store/visualization.store.svelte';
+import {
+  visualizationStore,
+  type VisualizationConfig
+} from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { showError, showWarning } from '../utils/notification.utils.svelte';
 import { importRollbackService } from './import-rollback.service';
+import {
+  calculateBreaks,
+  generateColorsForBreaks
+} from './classification.service';
+import { FillMode } from '../../main-toolbar/constants';
+import {
+  findPaletteById,
+  generatePaletteColors
+} from '../../main-toolbar/visualization-tab/components/palette-popover/palette.constants';
+import {
+  normalizeClassificationMethod,
+  resolveComputedClassCount,
+  resolveRequestedClassCount
+} from '../../main-toolbar/visualization-tab/components/discretization.utils';
 import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {
@@ -175,7 +192,7 @@ function createDataOrchestratorService() {
         }
       );
 
-      logger.success(
+      logger.debug(
         'DuckDB table recreated from parsed data',
         LogCategory.DUCKDB,
         {
@@ -256,15 +273,6 @@ function createDataOrchestratorService() {
             gpsMode: file.gpsMode,
             gpsColumns: file.gpsColumns
           });
-          logger.info(
-            'Restoring join state from persisted data',
-            LogCategory.DUCKDB,
-            {
-              fileId: file.id,
-              joinedBasemap: file.joinedBasemap,
-              gpsMode: file.gpsMode
-            }
-          );
         }
 
         if (registered === null) {
@@ -343,6 +351,10 @@ function createDataOrchestratorService() {
         return;
       }
 
+      // Persist dataset ID on the file so viz.datasetId references survive restores.
+      // On next restore the processor will reuse this stable ID.
+      file.datasetId = dataset.id;
+
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
@@ -364,9 +376,7 @@ function createDataOrchestratorService() {
       } else {
         showWarning(
           m.warning_generic_title(),
-          error instanceof Error
-            ? error.message
-            : m.warning_import_message()
+          error instanceof Error ? error.message : m.warning_import_message()
         );
       }
 
@@ -440,11 +450,6 @@ function createDataOrchestratorService() {
     if (!dataset?.tableName || !file.columnTransformations) {
       return;
     }
-
-    logger.debug(
-      `[DataOrchestrator] Applying ${file.columnTransformations.length} column transformations for ${file.name}`,
-      LogCategory.DATA
-    );
 
     const columnRenames = new Map<string, string>();
 
@@ -552,11 +557,6 @@ function createDataOrchestratorService() {
       return;
     }
 
-    logger.debug(
-      `[DataOrchestrator] Applying ${file.deletedRowIds.length} row deletions for ${file.name}`,
-      LogCategory.DATA
-    );
-
     try {
       await duckDBOrchestrator.dropRows(dataset.tableName, file.deletedRowIds);
 
@@ -564,11 +564,6 @@ function createDataOrchestratorService() {
         ? await Duck.get_row_count(dataset.tableName)
         : 0;
       datasetsStore.updateDatasetRowCount(dataset.id, newRowCount);
-
-      logger.debug(
-        `[DataOrchestrator] Applied row deletions, new row count: ${newRowCount}`,
-        LogCategory.DATA
-      );
     } catch (err) {
       logger.warn(
         `Failed to apply row deletions for ${file.name}`,
@@ -612,107 +607,70 @@ function createDataOrchestratorService() {
     try {
       const concurrency = determineProjectConcurrency();
 
-      await processWithLimit(
-        unprocessedFiles,
-        concurrency,
-        async (file, index, total) => {
-          logger.debug(
-            `[DataOrchestrator] Checking file restoration for ${file.name}`,
-            LogCategory.DATA,
-            {
-              fileType: file.fileType,
-              relatedFiles: file.relatedFiles,
-              hasOriginal: !!file.originalFile
-            }
-          );
-
-          if (
-            file.fileType === FileType.SHAPEFILE &&
-            (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
-          ) {
-            if (file.relatedFilesData) {
-              logger.debug(
-                `[DataOrchestrator] Restoring companion files from data for ${file.name}`,
-                LogCategory.DATA
-              );
-              const companionFiles: File[] = [];
-              for (const [name, buffer] of Object.entries(
-                file.relatedFilesData
-              )) {
-                try {
-                  const restoredFile = new File([buffer], name);
-                  companionFiles.push(restoredFile);
-                } catch (err) {
-                  logger.warn(
-                    `Failed to restore companion file ${name}`,
-                    LogCategory.DATA,
-                    {
-                      error: err
-                    }
-                  );
-                }
-              }
-              if (companionFiles.length > 0) {
-                file.relatedFileObjects = companionFiles;
-                logger.debug(
-                  `[DataOrchestrator] Restored ${companionFiles.length} companion files`,
-                  LogCategory.DATA
+      await processWithLimit(unprocessedFiles, concurrency, async (file) => {
+        if (
+          file.fileType === FileType.SHAPEFILE &&
+          (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
+        ) {
+          if (file.relatedFilesData) {
+            const companionFiles: File[] = [];
+            for (const [name, buffer] of Object.entries(
+              file.relatedFilesData
+            )) {
+              try {
+                const restoredFile = new File([buffer], name);
+                companionFiles.push(restoredFile);
+              } catch (err) {
+                logger.warn(
+                  `Failed to restore companion file ${name}`,
+                  LogCategory.DATA,
+                  {
+                    error: err
+                  }
                 );
               }
-            } else {
-              logger.warn(
-                `[DataOrchestrator] No relatedFilesData found for ${file.name}`,
-                LogCategory.DATA
-              );
+            }
+            if (companionFiles.length > 0) {
+              file.relatedFileObjects = companionFiles;
             }
           }
+        }
 
-          if (!file.originalFile) {
-            try {
-              file.originalFile = await createFileFromUpload(file);
-            } catch (err) {
-              logger.warn(
-                `Failed to restore original file object for ${file.name}`,
-                LogCategory.DATA,
-                { error: err }
-              );
-            }
-          }
-
-          const progress = `${index + 1}/${total}`;
-          logger.debug(
-            `[DataOrchestrator] Processing file ${progress}: ${file.name}`,
-            LogCategory.DATA
-          );
-
-          const autoEnable = file.id === selectedSourceFileId;
-
+        if (!file.originalFile) {
           try {
-            await onFileAdded(file, autoEnable);
-
-            if (
-              file.columnTransformations &&
-              file.columnTransformations.length > 0
-            ) {
-              await applyColumnTransformations(file);
-            }
-
-            if (file.deletedRowIds && file.deletedRowIds.length > 0) {
-              logger.info(
-                `[DataOrchestrator] Found ${file.deletedRowIds.length} deleted rows to apply for ${file.name}`,
-                LogCategory.DATA
-              );
-              await applyRowDeletions(file);
-            }
-          } catch (fileError) {
-            logger.error(
-              `Failed to process file during project restore: ${file.name}`,
+            file.originalFile = await createFileFromUpload(file);
+          } catch (err) {
+            logger.warn(
+              `Failed to restore original file object for ${file.name}`,
               LogCategory.DATA,
-              fileError
+              { error: err }
             );
           }
         }
-      );
+
+        const autoEnable = file.id === selectedSourceFileId;
+
+        try {
+          await onFileAdded(file, autoEnable);
+
+          if (
+            file.columnTransformations &&
+            file.columnTransformations.length > 0
+          ) {
+            await applyColumnTransformations(file);
+          }
+
+          if (file.deletedRowIds && file.deletedRowIds.length > 0) {
+            await applyRowDeletions(file);
+          }
+        } catch (fileError) {
+          logger.error(
+            `Failed to process file during project restore: ${file.name}`,
+            LogCategory.DATA,
+            fileError
+          );
+        }
+      });
     } catch (error) {
       logger.error('Failed to process project files', LogCategory.DATA, error);
     } finally {
@@ -721,12 +679,224 @@ function createDataOrchestratorService() {
     }
   }
 
+  /**
+   * Migrate orphaned viz.datasetId values from pre-stable-ID projects.
+   * Old projects stored random UUIDs as dataset IDs — after the stable-ID fix
+   * (dataset.id = file.id) those references no longer match.
+   * Match orphaned vizs to unmatched datasets by positional order.
+   */
+  function migrateOrphanedVizDatasetIds(): void {
+    const datasets = datasetsStore.datasets;
+    if (datasets.length === 0) return;
+
+    const knownDatasetIds = new Set(datasets.map((d) => d.id));
+    const vizs = visualizationStore.visualizations;
+    const orphanedVizs = vizs.filter((v) => !knownDatasetIds.has(v.datasetId));
+
+    if (orphanedVizs.length === 0) return;
+
+    // Collect unique old dataset IDs preserving insertion order
+    const uniqueOldIds: string[] = [];
+    const seen = new Set<string>();
+    for (const v of orphanedVizs) {
+      if (!seen.has(v.datasetId)) {
+        uniqueOldIds.push(v.datasetId);
+        seen.add(v.datasetId);
+      }
+    }
+
+    // Datasets that no viz currently points to
+    const matchedIds = new Set(
+      vizs
+        .filter((v) => knownDatasetIds.has(v.datasetId))
+        .map((v) => v.datasetId)
+    );
+    const unmatchedDatasets = datasets.filter((d) => !matchedIds.has(d.id));
+
+    if (uniqueOldIds.length !== unmatchedDatasets.length) {
+      logger.warn(
+        'Cannot auto-migrate orphaned viz dataset IDs — count mismatch',
+        LogCategory.DATA,
+        {
+          orphanedGroups: uniqueOldIds.length,
+          unmatchedDatasets: unmatchedDatasets.length
+        }
+      );
+      return;
+    }
+
+    const oldToNew = new Map<string, string>();
+    for (let i = 0; i < uniqueOldIds.length; i++) {
+      oldToNew.set(uniqueOldIds[i], unmatchedDatasets[i].id);
+    }
+
+    for (const viz of orphanedVizs) {
+      const newId = oldToNew.get(viz.datasetId);
+      if (newId) {
+        visualizationStore.updateVisualization(viz.id, { datasetId: newId });
+      }
+    }
+
+    logger.info(
+      `Migrated ${orphanedVizs.length} orphaned viz(s) to stable dataset IDs`,
+      LogCategory.DATA,
+      { mappings: Object.fromEntries(oldToNew) }
+    );
+  }
+
+  /**
+   * Recompute missing classification breaks for all active visualizations.
+   * Breaks are normally computed inside configure-visualization.svelte,
+   * but that component is only mounted on the Visualization tab. After a
+   * page refresh on another tab, breaks may be missing from the restored
+   * config — causing the choropleth to fall back to a flat fill color.
+   */
+  async function recomputeMissingBreaks(): Promise<void> {
+    const vizs = visualizationStore.activeVisualizations;
+    if (!Array.isArray(vizs) || vizs.length === 0) return;
+    for (const viz of vizs) {
+      if (!needsBreaksComputation(viz)) continue;
+
+      const dataset = datasetsStore.datasets.find(
+        (d) => d.id === viz.datasetId
+      );
+      if (!dataset?.sourceFileId) continue;
+
+      const method = viz.classification!.method;
+      const numClasses = viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
+      const normalizedMethod = normalizeClassificationMethod(method);
+      const requestedClassCount = resolveRequestedClassCount(
+        normalizedMethod,
+        numClasses
+      );
+
+      try {
+        const result = await calculateBreaks({
+          datasetId: dataset.sourceFileId,
+          columnName: viz.mapping.valueColumn!,
+          method: normalizedMethod,
+          numClasses: requestedClassCount
+        });
+
+        if (!result) continue;
+
+        const actualNumClasses = resolveComputedClassCount(
+          normalizedMethod,
+          requestedClassCount,
+          result.counts.length
+        );
+        const existingColors = viz.classification?.colors;
+        let colors: string[];
+        if (existingColors && existingColors.length === actualNumClasses) {
+          colors = existingColors;
+        } else {
+          const userPalette = viz.classification?.paletteId
+            ? findPaletteById(viz.classification.paletteId)
+            : undefined;
+          colors = userPalette
+            ? generatePaletteColors(userPalette, actualNumClasses)
+            : generateColorsForBreaks(actualNumClasses, 'sequential');
+        }
+
+        visualizationStore.updateClassification(viz.id, {
+          breaks: result.breaks,
+          counts: result.counts,
+          colors,
+          ...(normalizedMethod !== method ||
+          actualNumClasses !== numClasses ||
+          viz.classification?.classes !== actualNumClasses
+            ? {
+                method: normalizedMethod,
+                classes: actualNumClasses,
+                numClasses: actualNumClasses
+              }
+            : {})
+        });
+
+      } catch (error) {
+        logger.warn(
+          `Failed to recompute breaks for viz ${viz.id}`,
+          LogCategory.DATA,
+          { error }
+        );
+      }
+    }
+  }
+
+  function needsBreaksComputation(viz: VisualizationConfig): boolean {
+    if (
+      viz.modes?.fill !== FillMode.CLASSES ||
+      !viz.mapping.valueColumn ||
+      !viz.classification?.method
+    ) {
+      return false;
+    }
+
+    const breaks = viz.classification.breaks;
+    const colors = viz.classification.colors;
+
+    // No breaks at all
+    if (!breaks || breaks.length < 2) return true;
+
+    // Breaks/colors mismatch: for N colors we expect N-1 or N+1 breaks
+    // A large mismatch (e.g. 32 breaks for 5 colors) means the
+    // serialized data is corrupted — recompute.
+    if (colors && colors.length > 0) {
+      const expectedBreaks = colors.length - 1;
+      if (Math.abs(breaks.length - expectedBreaks) > 2) {
+        logger.warn(
+          'Breaks/colors mismatch detected, will recompute',
+          LogCategory.DATA,
+          {
+            vizId: viz.id,
+            breaksLength: breaks.length,
+            colorsLength: colors.length,
+            expectedBreaks
+          }
+        );
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   async function initialize(): Promise<void> {
     await projectStore.waitForInit();
     const currentProject = projectStore.currentProject;
+
+    const vizSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.visualizationSettings;
+
+    // Preload persisted visualizations before datasets are restored so the
+    // $effect in visualization-tab.svelte does not see 0 vizs and auto-create.
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+    }
+
     if (currentProject?.data?.sourceFiles) {
       await processProjectFiles(currentProject.data.sourceFiles);
     }
+
+    // Restore once more after dataset loading so the runtime store matches the
+    // serialized project exactly, even if dataset restoration created
+    // temporary default visualizations.
+    if (vizSettings) {
+      visualizationStore.restoreFromSerialized(vizSettings);
+    }
+
+    migrateOrphanedVizDatasetIds();
+
+    // Ensure all choropleth visualizations have valid breaks.
+    // Breaks are normally computed in configure-visualization.svelte, but
+    // that component is only mounted on the Viz tab — after a refresh on
+    // another tab, or if the project was saved before breaks were computed,
+    // the choropleth would render without colors.
+    await recomputeMissingBreaks();
+
+    layersActions.syncWithVisualizations();
+    legendActions.syncWithVisualizations();
   }
 
   async function onProjectChanged(): Promise<void> {
@@ -759,11 +929,10 @@ function createDataOrchestratorService() {
     // temporary default visualizations.
     if (vizSettings) {
       visualizationStore.restoreFromSerialized(vizSettings);
-      logger.debug(
-        'Visualization settings restored after dataset loading',
-        LogCategory.PROJECT
-      );
     }
+
+    migrateOrphanedVizDatasetIds();
+    await recomputeMissingBreaks();
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();

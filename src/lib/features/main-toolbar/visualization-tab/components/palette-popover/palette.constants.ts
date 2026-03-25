@@ -13,9 +13,9 @@ import type {
   CategoricalColorOptions
 } from '@ateliercartographie/ok-palette';
 import { motif } from '@ateliercartographie/motif.js';
-import type { PatternOptions } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
+import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
 
 export type { PatternParams };
 export { presets, temperature };
@@ -66,50 +66,127 @@ export interface Palette {
   patternId?: PatternId;
 }
 
-export const sequentialPalettes: Palette[] = [
+export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
+
+/** Monochrome palettes — single seed color, ok-palette generates the light→dark ramp */
+export const monochromePalettes: Palette[] = [
+  {
+    id: 'mono-pink',
+    name: 'Rose',
+    colors: ['#c2185b'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-teal',
+    name: 'Turquoise',
+    colors: ['#00897b'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-gold',
+    name: 'Or',
+    colors: ['#f9a825'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-indigo',
+    name: 'Indigo',
+    colors: ['#1565c0'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-vermilion',
+    name: 'Vermillon',
+    colors: ['#d84315'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  }
+];
+
+/** Bicolor palettes — two seed colors, ok-palette interpolates between them */
+export const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
     name: 'Blues',
-    colors: ['#f7fbff', '#6baed6', '#08519c'],
+    colors: ['#f7fbff', '#08519c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'greens',
     name: 'Greens',
-    colors: ['#f7fcf5', '#74c476', '#006d2c'],
+    colors: ['#f7fcf5', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'oranges',
     name: 'Oranges',
-    colors: ['#fff5eb', '#fd8d3c', '#a63603'],
+    colors: ['#fff5eb', '#a63603'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'purples',
     name: 'Purples',
-    colors: ['#fcfbfd', '#9e9ac8', '#54278f'],
+    colors: ['#fcfbfd', '#54278f'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'reds',
     name: 'Reds',
-    colors: ['#fff5f0', '#fc9272', '#a50f15'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
-  },
-  {
-    id: 'grays',
-    name: 'Grays',
-    colors: ['#ffffff', '#969696', '#252525'],
+    colors: ['#fff5f0', '#a50f15'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   }
 ];
+
+/** Sepia palettes — warm desaturated tones (hue 30°–90° oklch) */
+export const sepiaPalettes: Palette[] = [
+  {
+    id: 'sepia-sand',
+    name: 'Sable',
+    colors: ['#d7ccc8'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-terre',
+    name: 'Terre',
+    colors: ['#8d6e63'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-ochre',
+    name: 'Ocre',
+    colors: ['#bf8f00'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-brique',
+    name: 'Brique',
+    colors: ['#a1887f'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-olive',
+    name: 'Olive',
+    colors: ['#827717'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  }
+];
+
+/** Standard sequential palettes — used by dropdown and getPalettesForType */
+export const sequentialPalettes: Palette[] = bicolorPalettes;
 
 export const divergingPalettes: Palette[] = [
   {
@@ -284,13 +361,15 @@ export function generatePaletteColors(
   switch (palette.type) {
     case PALETTE_TYPE.SEQUENTIAL: {
       const colorStart = palette.colors[0];
-      const colorEnd = palette.colors[palette.colors.length - 1];
-      const cssColors = sequential({
-        colorStart,
-        colorEnd,
-        steps: count,
-        contrast
-      });
+      const isMonochrome = palette.colors.length === 1;
+      const cssColors = isMonochrome
+        ? sequential({ colorStart, steps: count, contrast })
+        : sequential({
+            colorStart,
+            colorEnd: palette.colors[palette.colors.length - 1],
+            steps: count,
+            contrast
+          });
       return (
         resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
       ).map(webglToHex);
@@ -363,23 +442,6 @@ export function generateSequentialFromColors(
   );
 }
 
-/** Maps Khartis PatternId to motif.js PatternOptions */
-const PATTERN_TO_MOTIF: Record<
-  PatternId,
-  Pick<PatternOptions, 'type' | 'angle'>
-> = {
-  diagonal: { type: 'line', angle: 45 },
-  'diagonal-reverse': { type: 'line', angle: 315 },
-  horizontal: { type: 'line', angle: 0 },
-  vertical: { type: 'line', angle: 90 },
-  dots: { type: 'circle' },
-  cross: { type: 'plaid' },
-  triangle: { type: 'triangle' },
-  square: { type: 'square' },
-  diamond: { type: 'diamond' },
-  plus: { type: 'plus' }
-};
-
 /**
  * Builds a CSS background for pattern preview using motif.js.
  * Returns a `url(data:...)` from the motif tile canvas.
@@ -400,7 +462,7 @@ export function buildPatternBackground(
     else if (params.angle === 315) effectivePatternId = 'diagonal-reverse';
   }
 
-  const motifConfig = PATTERN_TO_MOTIF[effectivePatternId];
+  const motifConfig = PATTERN_TYPE_MAP[effectivePatternId];
   const tile = motif({
     type: motifConfig.type,
     angle: motifConfig.angle,
@@ -412,6 +474,30 @@ export function buildPatternBackground(
   }).tile();
 
   return `url(${tile.toDataURL()})`;
+}
+
+export function getSuggestionPalettes(
+  preset: SuggestionPreset,
+  colorBlindFilter: boolean
+): Palette[] {
+  let palettes: Palette[];
+  switch (preset) {
+    case 'monochrome':
+      palettes = monochromePalettes;
+      break;
+    case 'bicolor':
+      palettes = bicolorPalettes;
+      break;
+    case 'sepia':
+      palettes = sepiaPalettes;
+      break;
+    default:
+      palettes = monochromePalettes;
+  }
+  if (colorBlindFilter) {
+    return palettes.filter((p) => p.colorBlindSafe);
+  }
+  return palettes;
 }
 
 export function getPalettesForType(
@@ -443,7 +529,9 @@ export function getPalettesForType(
 
 export function findPaletteById(id: string): Palette | undefined {
   const all = [
-    ...sequentialPalettes,
+    ...monochromePalettes,
+    ...bicolorPalettes,
+    ...sepiaPalettes,
     ...divergingPalettes,
     ...qualitativePalettes,
     ...getPatternPalettes()

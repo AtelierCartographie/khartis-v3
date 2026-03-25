@@ -124,12 +124,6 @@
         );
 
         if (!duckDBDataset) {
-          // DuckDB table not yet registered — will retry when duckDBDatasetsVersion updates
-          logger.debug(
-            'DuckDB dataset not yet registered, waiting for next update',
-            LogCategory.MAP,
-            { datasetId: dataset.id }
-          );
           return null;
         }
 
@@ -297,11 +291,6 @@
       if (isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
-        logger.debug(
-          'Dataset no longer enabled, ignoring result',
-          LogCategory.MAP,
-          { datasetId }
-        );
         return;
       }
 
@@ -532,6 +521,9 @@
       }
     );
     isInitializing = false;
+
+    // Force a layer update now that data + viz state are both available.
+    bumpDisplayDataVersion();
 
     // Load remaining datasets progressively in the background
     if (remainingDatasets.length > 0) {

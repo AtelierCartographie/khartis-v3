@@ -40,15 +40,6 @@ export const shapefileProcessor: FileProcessor = {
         (f) => f.name.toLowerCase() !== shpFile.name.toLowerCase()
       ) ?? [];
 
-    logger.debug('Shapefile registration details', LogCategory.DUCKDB, {
-      shpFileName: shpFile.name,
-      shpFileSize: shpFile.size,
-      relatedFiles: companionFiles.map((f) => ({
-        name: f.name,
-        size: f.size
-      }))
-    });
-
     const baseName = shpFile.name.replace(/\.shp$/i, '');
     const companionExtensions = new Set(
       companionFiles.map((f) =>
@@ -68,11 +59,6 @@ export const shapefileProcessor: FileProcessor = {
 
     await ctx.Duck.register_files(shapefileComponents, { shapefile: true });
 
-    logger.debug(
-      `Registered ${companionFiles.length} companion files for Shapefile`,
-      LogCategory.DUCKDB
-    );
-
     const resultTableName = await ctx.Duck.read_geofile(shpFile, {
       tablename: ctx.tableName,
       shapefile: true
@@ -87,7 +73,7 @@ export const shapefileProcessor: FileProcessor = {
     ]);
 
     const dataset: ProcessorDataset = {
-      id: crypto.randomUUID(),
+      id: file.datasetId ?? file.id,
       tableName: actualTableName,
       sourceFileId: file.id,
       name: file.name,

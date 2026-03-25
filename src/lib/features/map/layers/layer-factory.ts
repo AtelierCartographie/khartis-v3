@@ -51,7 +51,11 @@ import {
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
-import { getPatternAtlas, isValidPatternId } from './pattern-texture';
+import {
+  getPatternAtlas,
+  isValidPatternId,
+  PATTERN_TYPE_MAP
+} from './pattern-texture';
 import {
   createSolidPolygonLayerProps,
   createPathLayerProps,
@@ -73,7 +77,7 @@ const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
-const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 50];
+const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 80];
 
 // WeakMap cache for arrowTableToGeoJSON — keyed by (table, geoColumn).
 // Avoids redundant full-table walks when the same table is converted
@@ -145,7 +149,7 @@ function buildPatternProps(ctx: LayerContext): {
     fillPatternMask: true,
     getFillPattern: () => patternId,
     getFillPatternScale: 200,
-    getFillPatternRotation: 0
+    getFillPatternRotation: PATTERN_TYPE_MAP[patternId]?.angle ?? 0
   };
 }
 
@@ -471,12 +475,6 @@ export function createPointLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
 
   if (!isNativeGeoArrowPoint && (isWkbEncoded || isGeoJsonEncoded)) {
-    logger.info(
-      'Using GeoJsonLayer fallback for points (WKB/GeoJSON encoded)',
-      LogCategory.MAP,
-      { arrowExtension, geometryType: geometryInfo.type }
-    );
-
     let geojsonData;
     try {
       geojsonData = getCachedGeoJSON(jsTable, geoColumn);
@@ -603,7 +601,6 @@ export function createPointLayers(
 
   // Parse Arrow table to binary point data
   const pointData = parsePointData(jsTable);
-  const binaryProps = createScatterplotLayerProps(pointData);
 
   // Build fill color: static or per-feature attribute
   const baseFillAccessor =
@@ -631,9 +628,10 @@ export function createPointLayers(
           )
       : baseFillAccessor;
 
-  const getFillColor = fillColorAccessor
+  // Binary attributes — must be in data.attributes for ScatterplotLayer binary data
+  const fillColorBinAttr = fillColorAccessor
     ? pointColorAttr(pointData, rowAccessor(jsTable, fillColorAccessor))
-    : withOpacity(fillColor, hasHighlights ? 1 : rawFillOpacity);
+    : null;
 
   // Build line color
   const lineColorAccessor = hasHighlights
@@ -645,9 +643,9 @@ export function createPointLayers(
       )
     : null;
 
-  const getLineColor = lineColorAccessor
+  const lineColorBinAttr = lineColorAccessor
     ? pointColorAttr(pointData, rowAccessor(jsTable, lineColorAccessor))
-    : withOpacity(strokeColor, rawStrokeOpacity);
+    : null;
 
   // Build radius: static or per-feature attribute
   const radiusAccessor =
@@ -662,19 +660,38 @@ export function createPointLayers(
         )
       : null;
 
-  const getRadius = radiusAccessor
+  const radiusBinAttr = radiusAccessor
     ? pointRadiusAttr(pointData, rowAccessor(jsTable, radiusAccessor))
-    : 1;
+    : null;
+
+  // Inject binary attributes into data.attributes for ScatterplotLayer
+  const scatterProps = createScatterplotLayerProps(pointData);
+  const scatterBinaryData = scatterProps.data as {
+    attributes: Record<string, unknown>;
+  };
+  if (fillColorBinAttr) {
+    scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
+  }
+  if (lineColorBinAttr) {
+    scatterBinaryData.attributes.getLineColor = lineColorBinAttr;
+  }
+  if (radiusBinAttr) {
+    scatterBinaryData.attributes.getPointRadius = radiusBinAttr;
+  }
 
   return [
     new ScatterplotLayer({
       id: layerId,
-      ...(binaryProps as unknown as Record<string, unknown>),
+      ...(scatterProps as unknown as Record<string, unknown>),
       stroked: true,
-      getFillColor: getFillColor as never,
-      getLineColor: getLineColor as never,
+      ...(!fillColorBinAttr && {
+        getFillColor: withOpacity(fillColor, hasHighlights ? 1 : rawFillOpacity)
+      }),
+      ...(!lineColorBinAttr && {
+        getLineColor: withOpacity(strokeColor, rawStrokeOpacity)
+      }),
       opacity: hasHighlights ? 1 : rawFillOpacity,
-      getRadius: getRadius as never,
+      ...(!radiusBinAttr && { getRadius: 1 }),
       radiusScale: useProportionalSymbols ? 1 : 5,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
@@ -767,17 +784,7 @@ export function createLineLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
   if (isNativeGeoArrowLine || isNativeGeoArrow) {
-    logger.info(
-      'Using PathLayer (geoarrow-deck-stream) for lines',
-      LogCategory.MAP,
-      {
-        encoding: arrowExtension,
-        rows: jsTable.numRows
-      }
-    );
-
     const lineData = parsePaths(jsTable);
-    const binaryPathProps = createPathLayerProps(lineData);
 
     // Build color: choropleth > categorical > static
     const choroplethAccessor =
@@ -826,9 +833,10 @@ export function createLineLayers(
             )
         : baseLineColorAccessor;
 
-    const getColor = lineColorFn
+    // Binary color attribute — must be in data.attributes for PathLayer binary data
+    const colorBinaryAttr = lineColorFn
       ? createColorAttribute(lineData, rowAccessor(jsTable, lineColorFn))
-      : withOpacity(resolvedLineColor, normalizedLineOpacity);
+      : null;
 
     // Build width: proportional or static
     const widthFn =
@@ -843,17 +851,31 @@ export function createLineLayers(
           )
         : null;
 
-    const getWidth = widthFn
+    const widthBinaryAttr = widthFn
       ? createWidthAttribute(lineData, rowAccessor(jsTable, widthFn))
-      : resolvedLineWidth;
+      : null;
+
+    // Inject binary attributes into data.attributes for PathLayer
+    const pathProps = createPathLayerProps(lineData);
+    const pathBinaryData = pathProps.data as {
+      attributes: Record<string, unknown>;
+    };
+    if (colorBinaryAttr) {
+      pathBinaryData.attributes.getColor = colorBinaryAttr;
+    }
+    if (widthBinaryAttr) {
+      pathBinaryData.attributes.getWidth = widthBinaryAttr;
+    }
 
     return [
       new PathLayer({
         id: layerId,
-        ...(binaryPathProps as unknown as Record<string, unknown>),
-        getColor: getColor as never,
+        ...(pathProps as unknown as Record<string, unknown>),
+        ...(!colorBinaryAttr && {
+          getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
+        }),
         widthUnits: 'pixels',
-        getWidth: getWidth as never,
+        ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
         widthMinPixels: 1,
         pickable: true,
         autoHighlight: true,
@@ -918,11 +940,6 @@ export function createLineLayers(
     );
     return [];
   }
-
-  logger.info('Using GeoJsonLayer fallback for lines', LogCategory.MAP, {
-    encoding: arrowExtension,
-    featureCount: lineGeojsonData.features.length
-  });
 
   const baseGeoJsonLineColor =
     useChoropleth && viz
@@ -1053,15 +1070,6 @@ export function createPolygonLayers(
   const patternProps = buildPatternProps(ctx);
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
-    logger.info(
-      'Skipping polygon layer - missing geometry extension metadata',
-      LogCategory.MAP,
-      {
-        geoColumn,
-        arrowExtension,
-        note: 'Polygons require proper geometry metadata to render'
-      }
-    );
     return [];
   }
 
@@ -1070,24 +1078,7 @@ export function createPolygonLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
 
-  // When a fill pattern is active, force GeoJSON path for reliable FillStyleExtension support.
-  // SolidPolygonLayer with binary data doesn't expose the attribute manager that FillStyleExtension requires.
-  const forceGeoJsonForPattern = Boolean(patternProps);
-
-  if (
-    !forceGeoJsonForPattern &&
-    (isNativeGeoArrowPolygon || isNativeGeoArrow)
-  ) {
-    logger.info(
-      'Using SolidPolygonLayer + PathLayer (geoarrow-deck-stream) for polygons',
-      LogCategory.MAP,
-      {
-        encoding: arrowExtension,
-        rows: jsTable.numRows,
-        hasVisualization: Boolean(viz)
-      }
-    );
-
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
     const polyData = parseSolidPolygons(jsTable);
     const outlineData = parsePaths(jsTable);
 
@@ -1118,17 +1109,13 @@ export function createPolygonLayers(
             )
         : baseFillAccessor;
 
-    const getFillColor = fillColorFn
+    // Binary fill color attribute — must be in data.attributes for SolidPolygonLayer binary data
+    const fillColorBinaryAttr = fillColorFn
       ? createPolygonFillColorAttribute(
           polyData,
           rowAccessor(jsTable, fillColorFn)
         )
-      : ([fillColor[0], fillColor[1], fillColor[2], 255] as [
-          number,
-          number,
-          number,
-          number
-        ]);
+      : null;
 
     // Build stroke color
     const strokeColorFn = hasPolyHighlights
@@ -1140,21 +1127,34 @@ export function createPolygonLayers(
         )
       : null;
 
-    const getStrokeColor = strokeColorFn
+    const strokeColorBinaryAttr = strokeColorFn
       ? createColorAttribute(outlineData, rowAccessor(jsTable, strokeColorFn))
-      : withOpacity(strokeColor, rawPolyStrokeOpacity);
+      : null;
 
     const layers: Layer<DeckDataRow>[] = [];
+
+    // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
+    const solidProps = createSolidPolygonLayerProps(polyData);
+    if (fillColorBinaryAttr) {
+      const binaryData = solidProps.data as {
+        attributes: Record<string, unknown>;
+      };
+      binaryData.attributes.getFillColor = fillColorBinaryAttr;
+    }
 
     // Fill layer
     layers.push(
       new SolidPolygonLayer({
         id: layerId,
-        ...(createSolidPolygonLayerProps(polyData) as unknown as Record<
-          string,
-          unknown
-        >),
-        getFillColor: getFillColor as never,
+        ...(solidProps as unknown as Record<string, unknown>),
+        ...(!fillColorBinaryAttr && {
+          getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
+            number,
+            number,
+            number,
+            number
+          ]
+        }),
         opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
         pickable: true,
         autoHighlight: true,
@@ -1175,15 +1175,22 @@ export function createPolygonLayers(
       })
     );
 
-    // Stroke layer
+    // Stroke layer — inject binary color into data.attributes if needed
+    const strokePathProps = createPathLayerProps(outlineData);
+    if (strokeColorBinaryAttr) {
+      const strokeBinaryData = strokePathProps.data as {
+        attributes: Record<string, unknown>;
+      };
+      strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
+    }
+
     layers.push(
       new PathLayer({
         id: `${layerId}-stroke`,
-        ...(createPathLayerProps(outlineData) as unknown as Record<
-          string,
-          unknown
-        >),
-        getColor: getStrokeColor as never,
+        ...(strokePathProps as unknown as Record<string, unknown>),
+        ...(!strokeColorBinaryAttr && {
+          getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+        }),
         widthUnits: 'pixels',
         getWidth: strokeWidth / 4,
         pickable: false,
@@ -1200,6 +1207,43 @@ export function createPolygonLayers(
         }
       })
     );
+
+    // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
+    if (patternProps) {
+      let patternGeojson;
+      try {
+        patternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+      } catch {
+        // Silently skip pattern overlay if GeoJSON conversion fails
+      }
+      if (patternGeojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
+            data: patternGeojson,
+            getFillColor: [0, 0, 0, 255],
+            stroked: false,
+            opacity: 0.6,
+            pickable: false,
+            extensions: patternProps.extensions,
+            fillPatternAtlas: patternProps.fillPatternAtlas,
+            fillPatternMapping: patternProps.fillPatternMapping,
+            fillPatternMask: true,
+            getFillPattern: patternProps.getFillPattern,
+            getFillPatternScale: patternProps.getFillPatternScale,
+            getFillPatternRotation: patternProps.getFillPatternRotation,
+            ...(modelMatrix && { modelMatrix }),
+            ...(beforeId && { beforeId }),
+            updateTriggers: {
+              getFillPattern: [viz?.classification?.patternId],
+              getFillPatternScale: [viz?.classification?.patternId],
+              getFillPatternRotation: [viz?.classification?.patternId]
+            },
+            dataComparator: (newData, oldData) => newData === oldData
+          })
+        );
+      }
+    }
 
     return layers;
   }
@@ -1229,13 +1273,6 @@ export function createPolygonLayers(
     );
     return [];
   }
-
-  logger.info('Using GeoJsonLayer fallback for polygons', LogCategory.MAP, {
-    encoding: arrowExtension,
-    featureCount: geojsonData.features.length,
-    hasVisualization: Boolean(viz),
-    hasPattern: Boolean(patternProps)
-  });
 
   const baseGeoJsonFillColor =
     useChoropleth && viz
@@ -1279,7 +1316,7 @@ export function createPolygonLayers(
       )
     : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
-  return [
+  const geoJsonLayers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
       data: geojsonData,
@@ -1291,15 +1328,6 @@ export function createPolygonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
-      ...(patternProps && {
-        extensions: patternProps.extensions,
-        fillPatternAtlas: patternProps.fillPatternAtlas,
-        fillPatternMapping: patternProps.fillPatternMapping,
-        fillPatternMask: patternProps.fillPatternMask,
-        getFillPattern: patternProps.getFillPattern,
-        getFillPatternScale: patternProps.getFillPatternScale,
-        getFillPatternRotation: patternProps.getFillPatternRotation
-      }),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -1317,16 +1345,42 @@ export function createPolygonLayers(
           rawPolyStrokeOpacity,
           hasPolyHighlights,
           polyHighlightedRowIds
-        ],
-        ...(patternProps && {
-          getFillPattern: [viz?.classification?.patternId],
-          getFillPatternScale: [viz?.classification?.patternId],
-          getFillPatternRotation: [viz?.classification?.patternParams?.angle]
-        })
+        ]
       },
       dataComparator: (newData, oldData) => newData === oldData
     })
   ];
+
+  // Pattern overlay: separate layer on top with pattern as semi-transparent mask
+  if (patternProps) {
+    geoJsonLayers.push(
+      new GeoJsonLayer({
+        id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
+        data: geojsonData,
+        getFillColor: [0, 0, 0, 255],
+        stroked: false,
+        opacity: 0.6,
+        pickable: false,
+        extensions: patternProps.extensions,
+        fillPatternAtlas: patternProps.fillPatternAtlas,
+        fillPatternMapping: patternProps.fillPatternMapping,
+        fillPatternMask: true,
+        getFillPattern: patternProps.getFillPattern,
+        getFillPatternScale: patternProps.getFillPatternScale,
+        getFillPatternRotation: patternProps.getFillPatternRotation,
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
+        updateTriggers: {
+          getFillPattern: [viz?.classification?.patternId],
+          getFillPatternScale: [viz?.classification?.patternId],
+          getFillPatternRotation: [viz?.classification?.patternId]
+        },
+        dataComparator: (newData, oldData) => newData === oldData
+      })
+    );
+  }
+
+  return geoJsonLayers;
 }
 
 export function createGeoJsonLayers(

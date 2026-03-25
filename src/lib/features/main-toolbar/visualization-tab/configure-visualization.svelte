@@ -17,6 +17,10 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import {
+    findPaletteById,
+    generatePaletteColors
+  } from './components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     normalizeClassificationMethod,
@@ -215,16 +219,6 @@
 
   async function computeBreaksForVisualization(trigger = 'unknown') {
     if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (missing dataset/valueColumn)',
-        LogCategory.UI,
-        {
-          trigger,
-          selectedVisualizationId: selectedViz?.id,
-          datasetId: selectedViz?.datasetId,
-          valueColumn: selectedViz?.mapping.valueColumn
-        }
-      );
       return;
     }
 
@@ -232,14 +226,6 @@
     const numClasses = selectedViz.classification?.numClasses ?? 5;
 
     if (!method) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (missing method)',
-        LogCategory.UI,
-        {
-          trigger,
-          selectedVisualizationId: selectedViz.id
-        }
-      );
       return;
     }
 
@@ -250,14 +236,6 @@
     );
     const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}`;
     if (computeKey === lastComputedKey) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (same compute key)',
-        LogCategory.UI,
-        {
-          trigger,
-          computeKey
-        }
-      );
       return;
     }
     lastComputedKey = computeKey;
@@ -268,6 +246,8 @@
       (d) => d.id === selectedViz.datasetId
     );
     if (!dataset?.sourceFileId) {
+      // Reset key so the $effect:missingBreaks retry can re-attempt once sourceFileId is available
+      lastComputedKey = '';
       logger.warn(
         '[configure-visualization] skipped breaks computation (missing sourceFileId)',
         LogCategory.UI,
@@ -280,7 +260,7 @@
       return;
     }
 
-    logger.info('[configure-visualization] computing breaks', LogCategory.UI, {
+    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
       trigger,
       requestId,
       selectedVisualizationId: selectedViz.id,
@@ -305,14 +285,21 @@
           result.counts.length
         );
         const existingColors = selectedViz.classification?.colors;
-        const colors =
-          existingColors && existingColors.length === actualNumClasses
-            ? existingColors
-            : generateColorsForBreaks(
-                actualNumClasses,
-                'sequential',
-                getColorBlindnessState().enabled ? 'high' : undefined
-              );
+        const contrast = getColorBlindnessState().enabled
+          ? ('high' as const)
+          : undefined;
+        let colors: string[];
+        if (existingColors && existingColors.length === actualNumClasses) {
+          colors = existingColors;
+        } else {
+          // Regenerate from user's palette when available, otherwise default blue
+          const userPalette = selectedViz.classification?.paletteId
+            ? findPaletteById(selectedViz.classification.paletteId)
+            : undefined;
+          colors = userPalette
+            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            : generateColorsForBreaks(actualNumClasses, 'sequential', contrast);
+        }
         const classificationUpdate: Parameters<
           typeof visualizationStore.updateClassification
         >[1] = {
@@ -333,7 +320,7 @@
           selectedViz.id,
           classificationUpdate
         );
-        logger.success(
+        logger.debug(
           '[configure-visualization] breaks computed and applied',
           LogCategory.UI,
           {
