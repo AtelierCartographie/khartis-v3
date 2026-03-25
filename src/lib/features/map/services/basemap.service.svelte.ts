@@ -509,7 +509,6 @@ function createBasemapService() {
       const response = await fetch(url);
 
       if (!response.ok) {
-        logger.debug('Lakes data not available', LogCategory.MAP);
         return;
       }
 
@@ -517,9 +516,6 @@ function createBasemapService() {
       additionalData.lakesData = geojson as FeatureCollection<
         Polygon | MultiPolygon
       >;
-      logger.debug('Lakes data loaded', LogCategory.MAP, {
-        features: additionalData.lakesData.features.length
-      });
     } catch (error) {
       logger.warn('Failed to load lakes data', LogCategory.MAP, error);
     }
@@ -533,7 +529,6 @@ function createBasemapService() {
       const response = await fetch(url);
 
       if (!response.ok) {
-        logger.debug('Rivers data not available', LogCategory.MAP);
         return;
       }
 
@@ -541,9 +536,6 @@ function createBasemapService() {
       additionalData.riversData = geojson as FeatureCollection<
         LineString | MultiLineString
       >;
-      logger.debug('Rivers data loaded', LogCategory.MAP, {
-        features: additionalData.riversData.features.length
-      });
     } catch (error) {
       logger.warn('Failed to load rivers data', LogCategory.MAP, error);
     }
@@ -557,15 +549,11 @@ function createBasemapService() {
       const response = await fetch(url);
 
       if (!response.ok) {
-        logger.debug('Cities data not available', LogCategory.MAP);
         return;
       }
 
       const geojson = await response.json();
       additionalData.citiesData = geojson as FeatureCollection<Point>;
-      logger.debug('Cities data loaded', LogCategory.MAP, {
-        features: additionalData.citiesData.features.length
-      });
     } catch (error) {
       logger.warn('Failed to load cities data', LogCategory.MAP, error);
     }

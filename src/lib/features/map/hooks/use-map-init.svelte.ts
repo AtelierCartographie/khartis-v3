@@ -20,7 +20,10 @@ import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
-import type { DeckOrthographicViewStateMap } from '../types';
+import type {
+  DeckOrthographicViewStateMap,
+  OrthographicMainViewState
+} from '../types';
 
 interface OrthographicViewStateChangeParams {
   viewId: string;
@@ -291,27 +294,29 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     const handleViewStateChange = ({
       viewState,
       interactionState
-    }: OrthographicViewStateChangeParams): DeckOrthographicViewStateMap => {
-      if (viewState.main) {
-        mapInstanceStore.updateDeckViewState({
-          target: viewState.main.target,
-          zoom: viewState.main.zoom
-        });
+    }: OrthographicViewStateChangeParams): OrthographicMainViewState => {
+      // Deck.gl passes the individual view's state as a flat object
+      // ({ target, zoom, … }), NOT nested under the view ID.
+      const vs: OrthographicMainViewState =
+        (viewState as unknown as DeckOrthographicViewStateMap).main ??
+        (viewState as unknown as OrthographicMainViewState);
 
-        if (
-          onOrthographicViewStateChanged &&
-          (interactionState.isDragging ||
-            interactionState.isPanning ||
-            interactionState.isZooming)
-        ) {
-          onOrthographicViewStateChanged(
-            viewState.main.target,
-            viewState.main.zoom
-          );
-        }
+      const isUserInteraction =
+        interactionState.isDragging ||
+        interactionState.isPanning ||
+        interactionState.isZooming;
+
+      mapInstanceStore.updateDeckViewState(
+        { target: vs.target, zoom: vs.zoom },
+        isUserInteraction
+      );
+
+      if (onOrthographicViewStateChanged && isUserInteraction) {
+        onOrthographicViewStateChanged(vs.target, vs.zoom);
       }
+
       onZoom();
-      return viewState;
+      return viewState as unknown as OrthographicMainViewState;
     };
 
     const orthographicDeck = createDeckWithDeferredResizeObserver(

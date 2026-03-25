@@ -121,13 +121,6 @@ export function filterArrowTableByYear(
     return table;
   }
 
-  logger.debug('Filtering Arrow table by year', LogCategory.MAP, {
-    column,
-    value: targetValue,
-    totalRows: table.numRows,
-    matchingRows: matchingIndices.length
-  });
-
   const result = selectRowsByIndices(table, matchingIndices);
   yearFilterCache.set(table, { column, value, result });
   return result;
@@ -262,12 +255,6 @@ export function filterArrowTableByDataFilters(
     return table;
   }
 
-  logger.debug('Filtering Arrow table by data filters', LogCategory.MAP, {
-    filterCount: validFilters.length,
-    totalRows: table.numRows,
-    matchingRows: matchingIndices.length
-  });
-
   if (matchingIndices.length === 0) {
     logger.warn('Data filters returned no matching rows', LogCategory.MAP, {
       filters: validFilters.map((f) => `${f.column} ${f.operator} ${f.value}`)
@@ -345,12 +332,6 @@ export function filterArrowTableByTableFilters(
   }
 
   if (matchingIndices.length === table.numRows) return table;
-
-  logger.debug('Filtering Arrow table by table filters', LogCategory.MAP, {
-    filterCount: validFilters.length,
-    totalRows: table.numRows,
-    matchingRows: matchingIndices.length
-  });
 
   return selectRowsByIndices(table, matchingIndices);
 }

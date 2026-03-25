@@ -31,25 +31,93 @@ const PATTERN_NAMES = [
   'plus'
 ] as const;
 
-type PatternName = (typeof PATTERN_NAMES)[number];
+export type PatternName = (typeof PATTERN_NAMES)[number];
 
-/** Maps Khartis pattern IDs to motif.js pattern options (patchSize enables smart inversion at high sizes) */
+/** Shared pattern type + angle mapping — used by legend, SVG export, and palette preview */
+export const PATTERN_TYPE_MAP: Record<
+  PatternName,
+  Pick<PatternOptions, 'type' | 'angle'>
+> = {
+  diagonal: { type: 'line', angle: 45 },
+  'diagonal-reverse': { type: 'line', angle: 315 },
+  horizontal: { type: 'line', angle: 0 },
+  vertical: { type: 'line', angle: 90 },
+  dots: { type: 'circle' },
+  cross: { type: 'plaid' },
+  triangle: { type: 'triangle' },
+  square: { type: 'square' },
+  diamond: { type: 'diamond' },
+  plus: { type: 'plus' }
+};
+
+/** Full motif.js options for atlas generation.
+ *  background must be 'transparent' so Deck.gl fillPatternMask works
+ *  (mask uses alpha channel — opaque white background = no visible effect). */
 const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
-  diagonal: { type: 'line', angle: 45, fill: '#000000', patchSize: true },
+  diagonal: {
+    type: 'line',
+    angle: 45,
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
   'diagonal-reverse': {
     type: 'line',
     angle: 315,
     fill: '#000000',
+    background: 'transparent',
     patchSize: true
   },
-  horizontal: { type: 'line', angle: 0, fill: '#000000', patchSize: true },
-  vertical: { type: 'line', angle: 90, fill: '#000000', patchSize: true },
-  dots: { type: 'circle', fill: '#000000', patchSize: true },
-  cross: { type: 'plaid', fill: '#000000', patchSize: true },
-  triangle: { type: 'triangle', fill: '#000000', patchSize: true },
-  square: { type: 'square', fill: '#000000', patchSize: true },
-  diamond: { type: 'diamond', fill: '#000000', patchSize: true },
-  plus: { type: 'plus', fill: '#000000', patchSize: true }
+  horizontal: {
+    type: 'line',
+    angle: 0,
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  vertical: {
+    type: 'line',
+    angle: 90,
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  dots: {
+    type: 'circle',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  cross: {
+    type: 'plaid',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  triangle: {
+    type: 'triangle',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  square: {
+    type: 'square',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  diamond: {
+    type: 'diamond',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  },
+  plus: {
+    type: 'plus',
+    fill: '#000000',
+    background: 'transparent',
+    patchSize: true
+  }
 };
 
 let cachedResult: AtlasResult | null = null;
@@ -71,7 +139,7 @@ export function getPatternAtlas(): {
 
   cachedResult = motifAtlas(PATTERN_CONFIGS);
 
-  logger.info('Pattern atlas generated via motif.js', LogCategory.MAP, {
+  logger.debug('Pattern atlas generated via motif.js', LogCategory.MAP, {
     patterns: Object.keys(cachedResult.mapping).length
   });
 

@@ -39,52 +39,31 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   let lastAppliedStyleKey = $state<string | null>(currentStyleKey);
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
-  let styleLoadStartTime = 0;
 
   function syncBasemapStyle(): void {
     const map = getMap();
-    logger.debug('syncBasemapStyle called', LogCategory.MAP, {
-      hasMap: !!map,
-      isMapLoaded: getIsMapLoaded(),
-      isStyleLoading
-    });
 
     if (!map || !getIsMapLoaded()) return;
 
-    if (isStyleLoading) {
-      logger.debug('Style still loading, skipping', LogCategory.MAP);
-      return;
-    }
+    if (isStyleLoading) return;
 
     const style = basemapStyleStore.selectedStyleUrl;
     const styleKey = getStyleKey(style);
 
-    if (styleKey === lastAppliedStyleKey) {
-      logger.debug('Style already applied, skipping', LogCategory.MAP, {
-        styleKey
-      });
-      return;
-    }
+    if (styleKey === lastAppliedStyleKey) return;
 
-    logger.debug('Applying new style', LogCategory.MAP, {
+    logger.debug('Applying basemap style', LogCategory.MAP, {
       from: lastAppliedStyleKey,
       to: styleKey
     });
 
     isStyleLoading = true;
-    styleLoadStartTime = performance.now();
 
     if (styleLoadHandler) {
       map.off('style.load', styleLoadHandler);
     }
 
     styleLoadHandler = () => {
-      const loadTime = performance.now() - styleLoadStartTime;
-      logger.debug(
-        `Style loaded in ${loadTime.toFixed(1)}ms`,
-        LogCategory.MAP,
-        { styleKey }
-      );
       isStyleLoading = false;
       lastAppliedStyleKey = styleKey;
 
@@ -94,7 +73,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
 
       if (onStyleLoaded) {
-        logger.debug('Calling onStyleLoaded callback', LogCategory.MAP);
         onStyleLoaded();
       }
     };
@@ -102,7 +80,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     // `style.load` fires once when the full style graph is ready.
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
-    logger.debug('Calling map.setStyle()', LogCategory.MAP);
     map.setStyle(style);
   }
 

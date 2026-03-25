@@ -1001,21 +1001,30 @@ interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
 }
 
+export interface BasemapLayerGroups {
+  /** Layers rendered below data: land fill, seas, lakes, relief */
+  background: Layer<DeckDataRow>[];
+  /** Layers rendered above data: borders, rivers, graticules, cities */
+  foreground: Layer<DeckDataRow>[];
+}
+
 export function createBasemapLayers(
   worldBaseTable: ArrowTable | null,
   ctx: BasemapLayerContext,
   additionalData?: BasemapAdditionalData
-): Layer<DeckDataRow>[] {
-  const layers: Layer<DeckDataRow>[] = [];
+): BasemapLayerGroups {
+  const background: Layer<DeckDataRow>[] = [];
+  const foreground: Layer<DeckDataRow>[] = [];
 
   for (const config of basemapLayersStore.layers) {
     if (!config.visible) continue;
 
     try {
       switch (config.id) {
+        // --- Background layers (below data) ---
         case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
-          if (layer) layers.push(layer);
+          if (layer) background.push(layer);
           break;
         }
 
@@ -1026,7 +1035,7 @@ export function createBasemapLayers(
               config as TerreLayerConfig,
               ctx
             );
-            layers.push(...terreLayers);
+            background.push(...terreLayers);
           }
           break;
 
@@ -1037,55 +1046,7 @@ export function createBasemapLayers(
               config as LacsLayerConfig,
               ctx
             );
-            if (layer) layers.push(layer);
-          }
-          break;
-
-        case BASEMAP_LAYER_ID.RIVIERES:
-          if (additionalData?.riversData) {
-            const layer = createRivieresLayer(
-              additionalData.riversData,
-              config as RivieresLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
-          break;
-
-        case BASEMAP_LAYER_ID.FRONTIERES:
-          if (worldBaseTable) {
-            const layer = createFrontieresLayer(
-              additionalData?.frontieresTable ?? worldBaseTable,
-              config as FrontieresLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
-          break;
-
-        case BASEMAP_LAYER_ID.EQUATEUR: {
-          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
-          if (layer) layers.push(layer);
-          break;
-        }
-
-        case BASEMAP_LAYER_ID.MERIDIENS: {
-          const layer = createMeridiensLayer(
-            config as MeridiensLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
-          break;
-        }
-
-        case BASEMAP_LAYER_ID.VILLES:
-          if (additionalData?.citiesData) {
-            const layer = createVillesLayer(
-              additionalData.citiesData,
-              config as VillesLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
+            if (layer) background.push(layer);
           }
           break;
 
@@ -1096,7 +1057,56 @@ export function createBasemapLayers(
               config as ReliefLayerConfig,
               ctx
             );
-            layers.push(...reliefLayers);
+            background.push(...reliefLayers);
+          }
+          break;
+
+        // --- Foreground layers (above data) ---
+        case BASEMAP_LAYER_ID.FRONTIERES:
+          if (worldBaseTable) {
+            const layer = createFrontieresLayer(
+              additionalData?.frontieresTable ?? worldBaseTable,
+              config as FrontieresLayerConfig,
+              ctx
+            );
+            if (layer) foreground.push(layer);
+          }
+          break;
+
+        case BASEMAP_LAYER_ID.RIVIERES:
+          if (additionalData?.riversData) {
+            const layer = createRivieresLayer(
+              additionalData.riversData,
+              config as RivieresLayerConfig,
+              ctx
+            );
+            if (layer) foreground.push(layer);
+          }
+          break;
+
+        case BASEMAP_LAYER_ID.EQUATEUR: {
+          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
+          if (layer) foreground.push(layer);
+          break;
+        }
+
+        case BASEMAP_LAYER_ID.MERIDIENS: {
+          const layer = createMeridiensLayer(
+            config as MeridiensLayerConfig,
+            ctx
+          );
+          if (layer) foreground.push(layer);
+          break;
+        }
+
+        case BASEMAP_LAYER_ID.VILLES:
+          if (additionalData?.citiesData) {
+            const layer = createVillesLayer(
+              additionalData.citiesData,
+              config as VillesLayerConfig,
+              ctx
+            );
+            if (layer) foreground.push(layer);
           }
           break;
       }
@@ -1112,5 +1122,5 @@ export function createBasemapLayers(
     }
   }
 
-  return layers;
+  return { background, foreground };
 }
