@@ -134,7 +134,7 @@
       {/each}
     </div>
 
-    {#if hasSecondaryEntries}
+    {#if hasSecondaryEntries && tooltipState.pinned}
       <div class="tooltip-accordion" class:open={accordionOpen}>
         <button
           class="accordion-toggle"

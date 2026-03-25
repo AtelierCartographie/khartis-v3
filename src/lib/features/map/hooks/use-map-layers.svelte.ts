@@ -126,35 +126,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
   }
 
-  let updateCount = 0;
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>
   ): void {
-    updateCount++;
-    const totalStart = performance.now();
-    logger.debug(`updateLayers #${updateCount} started`, LogCategory.MAP, {
-      tablesSize: tables.size,
-      geoJSONsSize: geoJSONs.size
-    });
-
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
     const map = getMap();
 
     if ((!deckOverlay && !deckInstance) || !getIsMapLoaded()) {
-      logger.debug('Early return - no deck context', LogCategory.MAP);
       return;
     }
 
     // In MapLibre mode, avoid pushing layers while style is being swapped/reloaded.
     if (deckOverlay && map && !map.isStyleLoaded()) {
-      logger.debug(
-        'Skipping layer update while MapLibre style is loading',
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -180,29 +167,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
 
-      logger.debug(
-        'Updating Deck.gl layers for multi-dataset view',
-        LogCategory.MAP,
-        {
-          tablesCount: tables.size,
-          geoJSONsCount: geoJSONs.size,
-          activeVisualizationsCount: activeVisualizations.length,
-          hasWorldBase: Boolean(worldBaseTable),
-          isOSMActive,
-          isOrthographicMode,
-          beforeId
-        }
-      );
-
       const layers: Layer<DeckDataRow>[] = [];
 
       // Only show basemap layers in orthographic mode (Deck.gl standalone)
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = !isOSMActive && isOrthographicMode;
 
+      // Basemap layers are split into background (terre, mers, lacs, relief)
+      // and foreground (frontières, rivières, graticules, villes).
+      // Foreground layers render ABOVE data so basemap borders remain visible
+      // even when polygon data covers the basemap fill.
+      let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
+
       if (shouldShowBasemapLayers) {
         try {
-          const basemapStart = performance.now();
           const basemapCtx = {
             modelMatrix: matrixToApply ?? undefined,
             projectionSuffix
@@ -215,16 +193,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
               undefined
           };
-          const basemapLayers = createBasemapLayers(
+          const basemapGroups = createBasemapLayers(
             worldBaseTable,
             basemapCtx,
             additionalData
           );
-          layers.push(...basemapLayers);
-          logger.debug(
-            `Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`,
-            LogCategory.MAP
-          );
+          layers.push(...basemapGroups.background);
+          basemapForegroundLayers = basemapGroups.foreground;
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -233,11 +208,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           );
         }
       }
-
-      logger.debug(
-        `Processing ${activeVisualizations.length} visualizations`,
-        LogCategory.MAP
-      );
 
       // Pre-filter Arrow tables by (datasetId, yearFilter) to avoid
       // redundant filtering when multiple visualizations share the same table + filter.
@@ -260,7 +230,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const renderedDatasetIds = new Set<string>();
       for (const viz of activeVisualizations) {
-        const vizStart = performance.now();
         try {
           const datasetId = viz.datasetId;
           const table = tables.get(datasetId);
@@ -272,16 +241,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.beforeId = beforeId;
 
           if (geojson) {
-            const geojsonStart = performance.now();
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
             layers.push(...geojsonLayers);
             if (geojsonLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
-            logger.debug(
-              `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
-              LogCategory.MAP
-            );
           } else if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
@@ -292,7 +256,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               );
               continue;
             }
-            const arrowStart = performance.now();
             const geoInfo = extractGeometryInfo(table);
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
@@ -317,15 +280,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             if (arrowLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
-            logger.debug(
-              `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
-              LogCategory.MAP
-            );
           }
-          logger.debug(
-            `Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`,
-            LogCategory.MAP
-          );
         } catch (error) {
           logger.error(
             'Visualization layer creation failed; continuing with remaining visualizations',
@@ -382,7 +337,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      const setStart = performance.now();
+      // Basemap foreground layers (borders, cities, rivers, graticules)
+      // render above data so administrative boundaries stay visible
+      if (basemapForegroundLayers.length > 0) {
+        layers.push(...basemapForegroundLayers);
+      }
+
       const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
@@ -424,15 +384,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           lastAppliedLayers = [];
         }
       }
-      logger.debug(
-        `setLayers took ${(performance.now() - setStart).toFixed(1)}ms`,
-        LogCategory.MAP
-      );
-      logger.debug(
-        `updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`,
-        LogCategory.MAP
-      );
-
       logger.success('Deck.gl layers applied', LogCategory.MAP, {
         layerCount: layers.length,
         isOSMActive

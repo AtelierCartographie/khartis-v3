@@ -71,10 +71,6 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
   if (typeof first === 'number') {
     const [lng, lat] = coords as [number, number];
     if (!isValidCoordinate(lng, lat)) {
-      logger.warn('Invalid point coordinates detected', LogCategory.MAP, {
-        lng,
-        lat
-      });
       return null;
     }
     return {
@@ -90,7 +86,6 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
   if (typeof second === 'number') {
     const lineCoords = coords as [number, number][];
     if (!validateCoordinates(lineCoords)) {
-      logger.warn('Invalid linestring coordinates detected', LogCategory.MAP);
       return null;
     }
     return {
@@ -182,9 +177,6 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
       case WKBGeometryTypeCode.POINT: {
         const point = readPoint();
         if (!isValidCoordinate(point[0], point[1])) {
-          logger.warn('Invalid WKB point coordinates', LogCategory.MAP, {
-            point
-          });
           return null;
         }
         return { type: GEOJSON_TYPE.POINT, coordinates: point };
@@ -247,15 +239,9 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
       }
 
       default:
-        logger.warn('Unsupported WKB geometry type', LogCategory.MAP, {
-          geomType
-        });
         return null;
     }
-  } catch (e) {
-    logger.warn('Failed to parse WKB geometry', LogCategory.MAP, {
-      error: e
-    });
+  } catch {
     return null;
   }
 }
@@ -339,55 +325,12 @@ export function arrowTableToGeoJSON(
     const geomVector = table.getChild(geoColumn);
 
     if (!geomVector) {
-      logger.warn('No geometry vector found for fallback', LogCategory.MAP, {
-        geoColumn
-      });
       return null;
     }
 
     const firstGeom = geomVector.get(0);
     const parsedFirstGeom = parseGeoJsonGeometry(firstGeom);
     if (!parsedFirstGeom) {
-      let geomDetails: Record<string, unknown> = {
-        geoColumn,
-        sampleGeomType: typeof firstGeom,
-        isArray: Array.isArray(firstGeom),
-        isString: typeof firstGeom === 'string',
-        isUint8Array: firstGeom instanceof Uint8Array,
-        isArrayBufferView: ArrayBuffer.isView(firstGeom),
-        isArrayBuffer: firstGeom instanceof ArrayBuffer
-      };
-
-      if (firstGeom && typeof firstGeom === 'object') {
-        const obj = firstGeom as Record<string, unknown>;
-        geomDetails = {
-          ...geomDetails,
-          objectKeys: Object.keys(obj).slice(0, 10),
-          hasToArray: typeof obj.toArray === 'function',
-          hasValues: typeof obj.values === 'function',
-          constructorName: obj.constructor?.name
-        };
-
-        if (typeof obj.toArray === 'function') {
-          try {
-            const arr = (obj as { toArray: () => unknown[] }).toArray();
-            geomDetails.toArrayResult = Array.isArray(arr)
-              ? `Array[${arr.length}]`
-              : typeof arr;
-            if (Array.isArray(arr) && arr.length > 0) {
-              geomDetails.firstElement = typeof arr[0];
-            }
-          } catch {
-            geomDetails.toArrayError = true;
-          }
-        }
-      }
-
-      logger.warn(
-        'Geometry is not in GeoJSON format, cannot use fallback',
-        LogCategory.MAP,
-        geomDetails
-      );
       return null;
     }
 
@@ -421,7 +364,7 @@ export function arrowTableToGeoJSON(
 
     return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
   } catch (error) {
-    logger.error(
+    logger.warn(
       'Failed to convert Arrow table to GeoJSON',
       LogCategory.MAP,
       error
@@ -511,7 +454,7 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
       isGeoJsonEncoded
     };
   } catch (error) {
-    logger.error('Failed to extract geometry info', LogCategory.MAP, error);
+    logger.warn('Failed to extract geometry info', LogCategory.MAP, error);
     return null;
   }
 }
