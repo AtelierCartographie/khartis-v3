@@ -80,11 +80,6 @@ export async function detectDecimalSeparator(
     const standardRatio = standardMatches / totalNumericValues;
 
     if (europeanRatio > standardRatio && europeanRatio > 0.3) {
-      logger.debug('European decimal format detected', LogCategory.DATA, {
-        europeanMatches,
-        standardMatches,
-        confidence: europeanRatio
-      });
       let thousandsSeparator: ',' | '.' | ' ' | undefined;
       const hasMixedDecimalFormats = standardMatches > 0;
 

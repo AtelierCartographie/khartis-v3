@@ -103,17 +103,12 @@ export async function exportToCsv(
     const decoder = new TextDecoder('utf-8');
     const csvString = decoder.decode(buffer);
 
-    logger.debug('CSV export completed', LogCategory.DUCKDB, {
-      table,
-      byteLength: buffer.byteLength
-    });
-
     return csvString;
   } finally {
     try {
       await ctx.db.dropFile(filename);
     } catch (error) {
-      logger.warn(
+      logger.debug(
         'Failed to remove temporary CSV file',
         LogCategory.DUCKDB,
         error
@@ -166,11 +161,6 @@ export async function exportToGeoparquet(
       `Failed to materialize GeoParquet buffer for ${table}`
     );
   }
-
-  logger.debug('GeoParquet buffer materialized', LogCategory.DUCKDB, {
-    table,
-    byteLength: stableBuffer.byteLength
-  });
 
   while (
     cacheState.size + stableBuffer.byteLength >

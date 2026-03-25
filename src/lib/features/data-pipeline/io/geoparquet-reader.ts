@@ -20,7 +20,7 @@ export async function initializeGeoParquetWasm(): Promise<void> {
   }
 
   const start = performance.now();
-  logger.info('Initializing GeoParquet WASM reader', LogCategory.DATA);
+  logger.debug('Initializing GeoParquet WASM reader', LogCategory.DATA);
 
   initializationPromise = (async () => {
     try {
@@ -65,8 +65,6 @@ export async function readGeoParquet(
         'GeoParquet table missing GeoArrow metadata',
         LogCategory.DATA
       );
-    } else {
-      logger.debug('GeoParquet metadata detected', LogCategory.DATA);
     }
 
     logger.success('GeoParquet file read', LogCategory.DATA, {
@@ -107,7 +105,7 @@ export function extractGeoArrowMetadata(
 
     return parsed;
   } catch (error) {
-    logger.error('Failed to parse GeoArrow metadata', LogCategory.DATA, error);
+    logger.warn('Failed to parse GeoArrow metadata', LogCategory.DATA, error);
     return null;
   }
 }

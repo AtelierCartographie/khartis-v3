@@ -96,9 +96,6 @@ async function ensureSimilarityCached(
     )) as Array<{ table_name: string }>;
 
     if (check && check.length > 0) {
-      logger.debug('Reusing existing similarity cache', LogCategory.DATA, {
-        cacheTableName
-      });
       return cacheTableName;
     }
     // Table was dropped externally — rebuild
@@ -731,16 +728,18 @@ function finalizeGPSJoin(
   basemap: BasemapMetadata
 ): FinalizeJoinResult {
   const start = performance.now();
-  logger.info('Finalizing GPS join (no textual join needed)', LogCategory.DATA, {
-    datasetId: dataset.id,
-    basemap: basemap.file
-  });
+  logger.info(
+    'Finalizing GPS join (no textual join needed)',
+    LogCategory.DATA,
+    {
+      datasetId: dataset.id,
+      basemap: basemap.file
+    }
+  );
 
   const gpsColumns = detectGPSColumns(dataset.columns);
   if (!gpsColumns) {
-    throw new Error(
-      'GPS columns (latitude/longitude) not found in dataset'
-    );
+    throw new Error('GPS columns (latitude/longitude) not found in dataset');
   }
 
   logger.success('GPS join finalized', LogCategory.DATA, {

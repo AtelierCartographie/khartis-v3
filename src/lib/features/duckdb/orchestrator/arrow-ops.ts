@@ -198,7 +198,11 @@ export async function addGeoArrowMetadataFromDuckDB(
         logger.info(
           'Mixed geometry types detected, normalized to Multi* variant',
           LogCategory.DUCKDB,
-          { tableName, detectedTypes: types, normalizedType: geometryType }
+          {
+            tableName,
+            detectedTypes: types.join(', '),
+            normalizedType: geometryType
+          }
         );
       }
     }

@@ -35,7 +35,8 @@ export function restoreJoinStateFromFile(
       if (detected) {
         updates.gpsColumns = detected;
         logger.info('Re-detected GPS columns', LogCategory.DUCKDB, {
-          detected
+          lat: detected.lat,
+          lon: detected.lon
         });
       }
     } else {
