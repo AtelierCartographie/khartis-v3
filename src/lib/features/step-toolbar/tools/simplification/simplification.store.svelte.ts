@@ -44,10 +44,6 @@ const { actions, getState } = createToolStore<
   ): Promise<SimplificationResult> => {
     if (s.source === SimplificationSource.Basemap) {
       if (osmBasemapStore.isActive) {
-        logger.info(
-          'Skipping simplification for active OSM basemap',
-          LogCategory.DUCKDB
-        );
         return {
           type: SimplificationTarget.BASEMAP,
           level: s.level,
@@ -74,7 +70,7 @@ const { actions, getState } = createToolStore<
       // No on-the-fly SQL simplification — variants must be declared in metadata.
       const variantFile = metadata.variants?.[s.level];
       if (!variantFile) {
-        logger.info(
+        logger.debug(
           'No variant available for this basemap at this level',
           LogCategory.DUCKDB,
           { basemapId, level: s.level }
@@ -90,7 +86,7 @@ const { actions, getState } = createToolStore<
         };
       }
 
-      logger.info(
+      logger.debug(
         'Loading basemap variant for simplification',
         LogCategory.DUCKDB,
         { basemapId, level: s.level, variantFile }
@@ -98,7 +94,7 @@ const { actions, getState } = createToolStore<
 
       await basemapService.loadVariant(basemapId, variantFile, s.level);
 
-      logger.success('Basemap variant loaded', LogCategory.DUCKDB, {
+      logger.debug('Basemap variant loaded', LogCategory.DUCKDB, {
         basemapId,
         variantFile
       });
@@ -143,7 +139,7 @@ const { actions, getState } = createToolStore<
         dataset.geometry.bounds
       );
 
-      logger.info('Starting dataset simplification', LogCategory.DUCKDB, {
+      logger.debug('Starting dataset simplification', LogCategory.DUCKDB, {
         datasetId: dataset.id,
         rate: s.rate,
         tolerance
@@ -163,7 +159,7 @@ const { actions, getState } = createToolStore<
         }
       });
 
-      logger.success('Dataset simplification completed', LogCategory.DUCKDB, {
+      logger.debug('Dataset simplification completed', LogCategory.DUCKDB, {
         datasetId: dataset.id,
         metrics
       });

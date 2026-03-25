@@ -2,6 +2,7 @@ import type {
   DatasetResult,
   ProcessedDataset
 } from '$lib/features/data-pipeline';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   FillMode,
   MissingDataShape,
@@ -294,6 +295,7 @@ const DEFAULT_CATEGORICAL_COLORS = [
 
 function incrementVersion(state: VisualizationState): void {
   state.version++;
+  persistenceRegistry.notifyChange('visualization');
 }
 
 function getDefaultStyle(
@@ -757,6 +759,7 @@ function createVisualizationStore(): VisualizationStore {
       return;
     }
     state.selectedVisualizationId = id;
+    incrementVersion(state);
   }
 
   function invertPalette(id: string): void {
@@ -897,3 +900,30 @@ function createVisualizationStore(): VisualizationStore {
 }
 
 export const visualizationStore = createVisualizationStore();
+
+persistenceRegistry.register({
+  key: 'visualization',
+  serialize: () => ({
+    visualizations: visualizationStore.visualizations,
+    selectedVisualizationId: visualizationStore.selectedVisualization?.id,
+    activeVisualizationIds: visualizationStore.activeVisualizations.map(
+      (v) => v.id
+    )
+  }),
+  deserialize: (data: unknown) => {
+    const settings = data as {
+      visualizations?: unknown[];
+      selectedVisualizationId?: string;
+      activeVisualizationIds?: string[];
+    };
+    visualizationStore.restoreFromSerialized({
+      visualizations: (settings.visualizations ?? []) as Parameters<
+        typeof visualizationStore.restoreFromSerialized
+      >[0]['visualizations'],
+      selectedVisualizationId: settings.selectedVisualizationId,
+      activeVisualizationIds: settings.activeVisualizationIds ?? []
+    });
+  },
+  reset: () => visualizationStore.clear(),
+  priority: 'debounced'
+});

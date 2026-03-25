@@ -19,6 +19,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
   initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -89,6 +90,13 @@
       window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
     }
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        persistenceRegistry.flush();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const initApp = async () => {
       // Start DuckDB in background — don't block UI on it (LCP optimization)
       const duckDBReadyPromise = duckDBOrchestrator
@@ -111,7 +119,7 @@
           globalState.isCreateProjectModalOpen = true;
         }
 
-        logger.info(
+        logger.debug(
           'UI ready — DuckDB loading in background',
           LogCategory.SYSTEM
         );
@@ -130,10 +138,7 @@
         await duckDBReadyPromise;
         await dataOrchestratorService.initialize();
 
-        logger.success(
-          'Background initialization complete',
-          LogCategory.SYSTEM
-        );
+        logger.debug('Background initialization complete', LogCategory.SYSTEM);
       } catch (error) {
         logger.error(
           'Background initialization failed',
@@ -172,6 +177,7 @@
         window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
       }
       ariaObserver.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   });
 
@@ -236,10 +242,14 @@
       previousStep === ToolbarStep.Styling &&
       currentStep !== ToolbarStep.Styling;
 
-    if (enteringStylingStep) {
-      zoomModeStore.setPageMode();
-    } else if (leavingStylingStep) {
-      zoomModeStore.setMapMode();
+    // Only switch zoom mode on actual step transitions, not on initial render.
+    // On page refresh, the user's zoom mode preference should be preserved.
+    if (previousStep !== null) {
+      if (enteringStylingStep) {
+        zoomModeStore.setPageMode();
+      } else if (leavingStylingStep) {
+        zoomModeStore.setMapMode();
+      }
     }
 
     if (shouldInitStylingElements) {

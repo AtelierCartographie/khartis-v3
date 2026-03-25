@@ -1,4 +1,5 @@
 import type maplibregl from 'maplibre-gl';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   BasemapStyle,
   DEFAULT_BASEMAP_STYLE,
@@ -14,14 +15,17 @@ function createBasemapStyleStore() {
 
   function setReferenceBasemap(id: string | null): void {
     state.referenceBasemapId = id;
+    persistenceRegistry.notifyChange('basemapStyle');
   }
 
   function setStyle(style: BasemapStyle): void {
     state.selectedStyle = style;
+    persistenceRegistry.notifyChange('basemapStyle');
   }
 
   function setShowLabels(show: boolean): void {
     state.showLabels = show;
+    persistenceRegistry.notifyChange('basemapStyle');
   }
 
   function reset(): void {
@@ -32,7 +36,8 @@ function createBasemapStyleStore() {
 
   function restoreFromSerialized(
     style: BasemapStyle,
-    referenceBasemapId?: string | null
+    referenceBasemapId?: string | null,
+    showLabels?: boolean
   ): void {
     if (!style || !Object.values(BasemapStyle).includes(style)) {
       reset();
@@ -41,6 +46,9 @@ function createBasemapStyleStore() {
     state.selectedStyle = style;
     if (referenceBasemapId !== undefined) {
       state.referenceBasemapId = referenceBasemapId;
+    }
+    if (showLabels !== undefined) {
+      state.showLabels = showLabels;
     }
   }
 
@@ -69,3 +77,26 @@ function createBasemapStyleStore() {
 }
 
 export const basemapStyleStore = createBasemapStyleStore();
+
+persistenceRegistry.register({
+  key: 'basemapStyle',
+  serialize: () => ({
+    style: basemapStyleStore.selectedStyle,
+    referenceBasemapId: basemapStyleStore.referenceBasemapId,
+    showLabels: basemapStyleStore.showLabels
+  }),
+  deserialize: (data: unknown) => {
+    const d = data as {
+      style?: string;
+      referenceBasemapId?: string | null;
+      showLabels?: boolean;
+    };
+    basemapStyleStore.restoreFromSerialized(
+      d.style as Parameters<typeof basemapStyleStore.restoreFromSerialized>[0],
+      d.referenceBasemapId,
+      d.showLabels
+    );
+  },
+  reset: () => basemapStyleStore.reset(),
+  priority: 'debounced'
+});

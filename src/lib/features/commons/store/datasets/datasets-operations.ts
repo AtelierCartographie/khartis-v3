@@ -88,11 +88,6 @@ export async function resetDataset(
 
     duckDBOrchestrator.bumpDatasetsVersion();
 
-    logger.success('Dataset reset successfully', LogCategory.STORE, {
-      datasetId: resetDatasetResult.id,
-      tableName: resetDatasetResult.tableName
-    });
-
     return true;
   } catch (error) {
     logger.error('Failed to reset dataset', LogCategory.STORE, error);

@@ -280,7 +280,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
               replaced
             );
           } catch (error) {
-            logger.warn(
+            logger.debug(
               'Failed to persist search replace transformation',
               LogCategory.UI,
               {
@@ -344,7 +344,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
               replacedCount
             );
           } catch (error) {
-            logger.warn(
+            logger.debug(
               'Failed to persist search replace transformations',
               LogCategory.UI,
               {

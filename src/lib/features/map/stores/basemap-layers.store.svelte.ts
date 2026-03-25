@@ -1,4 +1,5 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   BasemapDottedPattern,
   BasemapRepresentation,
@@ -240,6 +241,7 @@ function createBasemapLayersStore() {
 
   function incrementVersion(): void {
     state.version++;
+    persistenceRegistry.notifyChange('basemapLayers');
   }
 
   function getLayer<T extends BasemapLayerId>(
@@ -359,3 +361,14 @@ function createBasemapLayersStore() {
 }
 
 export const basemapLayersStore = createBasemapLayersStore();
+
+persistenceRegistry.register({
+  key: 'basemapLayers',
+  serialize: () => basemapLayersStore.layers,
+  deserialize: (data: unknown) =>
+    basemapLayersStore.restoreFromSerialized(
+      data as Parameters<typeof basemapLayersStore.restoreFromSerialized>[0]
+    ),
+  reset: () => basemapLayersStore.resetToDefaults(),
+  priority: 'debounced'
+});

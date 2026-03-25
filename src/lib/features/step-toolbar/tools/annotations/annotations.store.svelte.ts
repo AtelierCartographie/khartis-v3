@@ -440,272 +440,290 @@ function normalizeOpacityPercent(
 const { actions, getState } = createToolStore<
   AnnotationsState,
   AnnotationsActions
->(DEFAULT_STATE, (s) => ({
-  setVisibility: (visible: boolean) => {
-    s.visible = visible;
-    if (!visible) {
-      s.selectedId = null;
-    }
-  },
-  addAnnotation: (type: AnnotationKind, content: string) => {
-    if (type === AnnotationKind.TEXT && isEmptyContent(content)) {
-      return;
-    }
+>(
+  DEFAULT_STATE,
+  (s) => ({
+    setVisibility: (visible: boolean) => {
+      s.visible = visible;
+      if (!visible) {
+        s.selectedId = null;
+      }
+    },
+    addAnnotation: (type: AnnotationKind, content: string) => {
+      if (type === AnnotationKind.TEXT && isEmptyContent(content)) {
+        return;
+      }
 
-    const layout = resolvePageLayout();
-    const drawingType =
-      type === AnnotationKind.DRAWING
-        ? resolveDrawingType(content, s.defaultStyle.drawingType)
-        : null;
-    const style: AnnotationStyle = {
-      ...s.defaultStyle,
-      ...(drawingType ? { drawingType } : {})
-    };
-    const nonPageItemsCount = s.items.filter(
-      (item) => item.role == null
-    ).length;
-    const position = getNonPageAnnotationSpawnPosition(
-      type,
-      style,
-      nonPageItemsCount,
-      layout
-    );
-    const normalizedContent =
-      type === AnnotationKind.DRAWING && drawingType
-        ? createDefaultDrawingPoints(drawingType)
-        : content;
+      const layout = resolvePageLayout();
+      const drawingType =
+        type === AnnotationKind.DRAWING
+          ? resolveDrawingType(content, s.defaultStyle.drawingType)
+          : null;
+      const style: AnnotationStyle = {
+        ...s.defaultStyle,
+        ...(drawingType ? { drawingType } : {})
+      };
+      const nonPageItemsCount = s.items.filter(
+        (item) => item.role == null
+      ).length;
+      const position = getNonPageAnnotationSpawnPosition(
+        type,
+        style,
+        nonPageItemsCount,
+        layout
+      );
+      const normalizedContent =
+        type === AnnotationKind.DRAWING && drawingType
+          ? createDefaultDrawingPoints(drawingType)
+          : content;
 
-    const newAnnotation: Annotation = {
-      id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
-      type,
-      content: normalizedContent,
-      position,
-      style
-    };
-    s.items = [...s.items, newAnnotation];
-    s.selectedId = newAnnotation.id;
-  },
-  selectAnnotation: (id: string | null) => {
-    s.selectedId = id;
-    if (id) {
-      const item = s.items.find((i) => i.id === id);
-      if (item) {
-        s.activeType = item.type;
-        if (item.style) {
-          s.defaultStyle = { ...s.defaultStyle, ...item.style };
+      const newAnnotation: Annotation = {
+        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+        type,
+        content: normalizedContent,
+        position,
+        style
+      };
+      s.items = [...s.items, newAnnotation];
+      s.selectedId = newAnnotation.id;
+    },
+    selectAnnotation: (id: string | null) => {
+      s.selectedId = id;
+      if (id) {
+        const item = s.items.find((i) => i.id === id);
+        if (item) {
+          s.activeType = item.type;
+          if (item.style) {
+            s.defaultStyle = { ...s.defaultStyle, ...item.style };
+          }
         }
       }
-    }
-  },
-  updateAnnotation: (id: string, updates: Partial<Annotation>) => {
-    s.items = s.items.map((item) =>
-      item.id === id ? { ...item, ...updates } : item
-    );
-  },
-  removeAnnotation: (id: string) => {
-    s.items = s.items.filter((item) => item.id !== id);
-    if (s.selectedId === id) {
-      s.selectedId = null;
-    }
-  },
-  setActiveType: (type: AnnotationKind) => {
-    s.activeType = type;
-  },
-  setPredefinedStyle: (styleName: string) => {
-    const style = PREDEFINED_STYLES[styleName];
-    if (style) {
-      s.predefinedStyle = styleName;
-      s.defaultStyle = { ...s.defaultStyle, ...style };
+    },
+    updateAnnotation: (id: string, updates: Partial<Annotation>) => {
+      s.items = s.items.map((item) =>
+        item.id === id ? { ...item, ...updates } : item
+      );
+    },
+    removeAnnotation: (id: string) => {
+      s.items = s.items.filter((item) => item.id !== id);
+      if (s.selectedId === id) {
+        s.selectedId = null;
+      }
+    },
+    setActiveType: (type: AnnotationKind) => {
+      s.activeType = type;
+    },
+    setPredefinedStyle: (styleName: string) => {
+      const style = PREDEFINED_STYLES[styleName];
+      if (style) {
+        s.predefinedStyle = styleName;
+        s.defaultStyle = { ...s.defaultStyle, ...style };
+
+        if (s.selectedId) {
+          s.items = s.items.map((item) =>
+            item.id === s.selectedId
+              ? { ...item, style: { ...(item.style ?? {}), ...style } }
+              : item
+          );
+        }
+      }
+    },
+    setTextContent: (content: string) => {
+      s.textContent = content;
+    },
+    updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
+      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+      if (styleUpdates.opacity !== undefined) {
+        normalizedUpdates.opacity = normalizeOpacityPercent(
+          styleUpdates.opacity
+        );
+      }
+
+      s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
+    },
+    applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
+      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+      if (styleUpdates.opacity !== undefined) {
+        normalizedUpdates.opacity = normalizeOpacityPercent(
+          styleUpdates.opacity
+        );
+      }
+
+      s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
 
       if (s.selectedId) {
         s.items = s.items.map((item) =>
           item.id === s.selectedId
-            ? { ...item, style: { ...(item.style ?? {}), ...style } }
+            ? {
+                ...item,
+                style: { ...(item.style ?? {}), ...normalizedUpdates }
+              }
             : item
         );
       }
-    }
-  },
-  setTextContent: (content: string) => {
-    s.textContent = content;
-  },
-  updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-    const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-    if (styleUpdates.opacity !== undefined) {
-      normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
-    }
+    },
+    duplicateAnnotation: (id: string) => {
+      const original = s.items.find((item) => item.id === id);
+      if (original) {
+        const duplicatedContent =
+          original.type === AnnotationKind.TEXT &&
+          typeof original.content === 'string'
+            ? `${original.content}${m.copy_suffix()}`
+            : Array.isArray(original.content)
+              ? original.content.map((point) =>
+                  typeof point === 'object' && point !== null
+                    ? { ...point }
+                    : point
+                )
+              : original.content;
 
-    s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
-  },
-  applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-    const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-    if (styleUpdates.opacity !== undefined) {
-      normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
-    }
-
-    s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
-
-    if (s.selectedId) {
+        const duplicate = {
+          ...original,
+          id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+          content: duplicatedContent,
+          style: original.style ? { ...original.style } : undefined,
+          position: snapPositionToGrid({
+            x: original.position.x + 20,
+            y: original.position.y + 20
+          })
+        };
+        s.items = [...s.items, duplicate];
+        s.selectedId = duplicate.id;
+      }
+    },
+    moveAnnotation: (id: string, newPosition: { x: number; y: number }) => {
       s.items = s.items.map((item) =>
-        item.id === s.selectedId
-          ? { ...item, style: { ...(item.style ?? {}), ...normalizedUpdates } }
+        item.id === id
+          ? { ...item, position: snapPositionToGrid(newPosition) }
           : item
       );
-    }
-  },
-  duplicateAnnotation: (id: string) => {
-    const original = s.items.find((item) => item.id === id);
-    if (original) {
-      const duplicatedContent =
-        original.type === AnnotationKind.TEXT &&
-        typeof original.content === 'string'
-          ? `${original.content}${m.copy_suffix()}`
-          : Array.isArray(original.content)
-            ? original.content.map((point) =>
-                typeof point === 'object' && point !== null
-                  ? { ...point }
-                  : point
-              )
-            : original.content;
-
-      const duplicate = {
-        ...original,
-        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
-        content: duplicatedContent,
-        style: original.style ? { ...original.style } : undefined,
-        position: snapPositionToGrid({
-          x: original.position.x + 20,
-          y: original.position.y + 20
-        })
+    },
+    toggleVisibility: (id: string) => {
+      s.items = s.items.map((item) =>
+        item.id === id ? { ...item, visible: !item.visible } : item
+      );
+    },
+    clearAll: () => {
+      s.items = [];
+      s.selectedId = null;
+    },
+    toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => {
+      s.defaultStyle = {
+        ...s.defaultStyle,
+        [property]: !s.defaultStyle[property]
       };
-      s.items = [...s.items, duplicate];
-      s.selectedId = duplicate.id;
-    }
-  },
-  moveAnnotation: (id: string, newPosition: { x: number; y: number }) => {
-    s.items = s.items.map((item) =>
-      item.id === id
-        ? { ...item, position: snapPositionToGrid(newPosition) }
-        : item
-    );
-  },
-  toggleVisibility: (id: string) => {
-    s.items = s.items.map((item) =>
-      item.id === id ? { ...item, visible: !item.visible } : item
-    );
-  },
-  clearAll: () => {
-    s.items = [];
-    s.selectedId = null;
-  },
-  toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => {
-    s.defaultStyle = {
-      ...s.defaultStyle,
-      [property]: !s.defaultStyle[property]
-    };
-  },
-  setTextAlign: (align: TextAlign) => {
-    s.defaultStyle = { ...s.defaultStyle, textAlign: align };
-  },
-  initPageElements: (options) => {
-    const withPlaceholders = options?.withPlaceholders ?? false;
-    const visible = options?.visible ?? true;
-    const layout = resolvePageLayout();
-    const basemapSource = basemapService.currentBasemap?.metadata?.source || '';
+    },
+    setTextAlign: (align: TextAlign) => {
+      s.defaultStyle = { ...s.defaultStyle, textAlign: align };
+    },
+    initPageElements: (options) => {
+      const withPlaceholders = options?.withPlaceholders ?? false;
+      const visible = options?.visible ?? true;
+      const layout = resolvePageLayout();
+      const basemapSource =
+        basemapService.currentBasemap?.metadata?.source || '';
 
-    const hasPageElements = s.items.some((item) =>
-      isPageElementRole(item.role)
-    );
-    if (hasPageElements) {
+      const hasPageElements = s.items.some((item) =>
+        isPageElementRole(item.role)
+      );
+      if (hasPageElements) {
+        s.items = s.items.map((item) => {
+          if (!isPageElementRole(item.role)) {
+            return item;
+          }
+
+          const defaultContent = getPageElementDefaultContent(
+            item.role,
+            basemapSource,
+            withPlaceholders
+          );
+
+          return {
+            ...item,
+            visible,
+            content:
+              withPlaceholders && isEmptyContent(item.content)
+                ? defaultContent
+                : item.content
+          };
+        });
+        return;
+      }
+
+      const pageElements: {
+        role: PageElementRole;
+        style: Partial<AnnotationStyle>;
+      }[] = [
+        { role: ANNOTATION_ROLE.TITLE, style: { ...PREDEFINED_STYLES.title } },
+        {
+          role: ANNOTATION_ROLE.SUBTITLE,
+          style: { ...PREDEFINED_STYLES.subtitle }
+        },
+        {
+          role: ANNOTATION_ROLE.SOURCE,
+          style: { ...PREDEFINED_STYLES.caption }
+        },
+        {
+          role: ANNOTATION_ROLE.BASEMAP_SOURCE,
+          style: { ...PREDEFINED_STYLES.caption }
+        },
+        {
+          role: ANNOTATION_ROLE.SIGNATURE,
+          style: { ...PREDEFINED_STYLES.caption }
+        },
+        {
+          role: ANNOTATION_ROLE.CREDIT,
+          style: { ...PREDEFINED_STYLES.caption }
+        }
+      ];
+
+      const timestamp = Date.now();
+
+      const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
+        id: `page-element-${el.role}-${timestamp}-${index}`,
+        type: AnnotationKind.TEXT,
+        content: getPageElementDefaultContent(
+          el.role,
+          basemapSource,
+          withPlaceholders
+        ),
+        position: clampPageElementPosition(
+          getPageElementPosition(el.role, layout),
+          el.role,
+          layout
+        ),
+        style: { ...s.defaultStyle, ...el.style },
+        role: el.role,
+        visible
+      }));
+
+      s.items = [...s.items, ...newAnnotations];
+    },
+    setPageElementsVisibility: (visible: boolean) => {
+      s.items = s.items.map((item) =>
+        isPageElementRole(item.role) ? { ...item, visible } : item
+      );
+    },
+    redistributePageElements: (layoutOverrides) => {
+      const layout = resolvePageLayout(layoutOverrides);
       s.items = s.items.map((item) => {
         if (!isPageElementRole(item.role)) {
           return item;
         }
 
-        const defaultContent = getPageElementDefaultContent(
-          item.role,
-          basemapSource,
-          withPlaceholders
-        );
-
         return {
           ...item,
-          visible,
-          content:
-            withPlaceholders && isEmptyContent(item.content)
-              ? defaultContent
-              : item.content
+          position: clampPageElementPosition(
+            getPageElementPosition(item.role, layout),
+            item.role,
+            layout
+          )
         };
       });
-      return;
     }
-
-    const pageElements: {
-      role: PageElementRole;
-      style: Partial<AnnotationStyle>;
-    }[] = [
-      { role: ANNOTATION_ROLE.TITLE, style: { ...PREDEFINED_STYLES.title } },
-      {
-        role: ANNOTATION_ROLE.SUBTITLE,
-        style: { ...PREDEFINED_STYLES.subtitle }
-      },
-      { role: ANNOTATION_ROLE.SOURCE, style: { ...PREDEFINED_STYLES.caption } },
-      {
-        role: ANNOTATION_ROLE.BASEMAP_SOURCE,
-        style: { ...PREDEFINED_STYLES.caption }
-      },
-      {
-        role: ANNOTATION_ROLE.SIGNATURE,
-        style: { ...PREDEFINED_STYLES.caption }
-      },
-      { role: ANNOTATION_ROLE.CREDIT, style: { ...PREDEFINED_STYLES.caption } }
-    ];
-
-    const timestamp = Date.now();
-
-    const newAnnotations: Annotation[] = pageElements.map((el, index) => ({
-      id: `page-element-${el.role}-${timestamp}-${index}`,
-      type: AnnotationKind.TEXT,
-      content: getPageElementDefaultContent(
-        el.role,
-        basemapSource,
-        withPlaceholders
-      ),
-      position: clampPageElementPosition(
-        getPageElementPosition(el.role, layout),
-        el.role,
-        layout
-      ),
-      style: { ...s.defaultStyle, ...el.style },
-      role: el.role,
-      visible
-    }));
-
-    s.items = [...s.items, ...newAnnotations];
-  },
-  setPageElementsVisibility: (visible: boolean) => {
-    s.items = s.items.map((item) =>
-      isPageElementRole(item.role) ? { ...item, visible } : item
-    );
-  },
-  redistributePageElements: (layoutOverrides) => {
-    const layout = resolvePageLayout(layoutOverrides);
-    s.items = s.items.map((item) => {
-      if (!isPageElementRole(item.role)) {
-        return item;
-      }
-
-      return {
-        ...item,
-        position: clampPageElementPosition(
-          getPageElementPosition(item.role, layout),
-          item.role,
-          layout
-        )
-      };
-    });
-  }
-}));
+  }),
+  { key: 'annotations' }
+);
 
 export const annotationsActions = actions;
 export const getAnnotationsState = getState;

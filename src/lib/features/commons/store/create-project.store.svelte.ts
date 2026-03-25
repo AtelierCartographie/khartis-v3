@@ -144,11 +144,6 @@ export const createProjectActions = {
       }
 
       await this.processShapefileGroup(baseName, allFiles, sourceType);
-
-      logger.info('Incomplete shapefile completed', LogCategory.FILE, {
-        baseName,
-        fileCount: allFiles.length
-      });
     } else {
       // Update the incomplete file with new files and recalculate missing
       incompleteFile.relatedFileObjects = allFiles;

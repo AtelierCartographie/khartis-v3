@@ -224,7 +224,8 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
         s.items = syncedItems;
       }
     }
-  })
+  }),
+  { key: 'legend' }
 );
 
 export const legendActions = actions;

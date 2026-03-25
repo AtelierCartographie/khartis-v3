@@ -263,127 +263,133 @@ type GeoIndicationsActions = {
 const { state, actions } = createToolStore<
   GeoIndicationsState,
   GeoIndicationsActions
->(DEFAULT_STATE, (s) => ({
-  setState: (newState: Partial<GeoIndicationsState>) => {
-    Object.assign(s, normalizeState(newState, s));
-  },
-  setVisibility: (visible: boolean) => {
-    s.visible = visible;
-  },
-  toggleScale: () => {
-    s.scale.enabled = !s.scale.enabled;
-  },
-  setScaleDistance: (distance: number) => {
-    s.scale.distance = clampNumber(
-      distance,
-      0,
-      Number.MAX_SAFE_INTEGER,
-      s.scale.distance
-    );
-  },
-  toggleOrientation: () => {
-    s.orientation.enabled = !s.orientation.enabled;
-  },
-  toggleInsetMap: () => {
-    s.insetMap.enabled = !s.insetMap.enabled;
-  },
-  toggleScaleExpanded: () => {
-    s.scale.expanded = !s.scale.expanded;
-  },
-  setScaleForm: (form: ScaleForm) => {
-    s.scale.form = form;
-  },
-  setScaleUnits: (units: DistanceUnit) => {
-    s.scale.units = units;
-  },
-  setScaleColor: (colorState: ColorState) => {
-    s.scale.color = colorState;
-  },
-  setScaleColorFromHex: (hex: string) => {
-    s.scale.color = hexToHsl(hex);
-  },
-  setScaleFontFamily: (fontFamily: string) => {
-    if (
-      AVAILABLE_FONTS.includes(fontFamily as (typeof AVAILABLE_FONTS)[number])
-    ) {
-      s.scale.fontFamily = fontFamily;
+>(
+  DEFAULT_STATE,
+  (s) => ({
+    setState: (newState: Partial<GeoIndicationsState>) => {
+      Object.assign(s, normalizeState(newState, s));
+    },
+    setVisibility: (visible: boolean) => {
+      s.visible = visible;
+    },
+    toggleScale: () => {
+      s.scale.enabled = !s.scale.enabled;
+    },
+    setScaleDistance: (distance: number) => {
+      s.scale.distance = clampNumber(
+        distance,
+        0,
+        Number.MAX_SAFE_INTEGER,
+        s.scale.distance
+      );
+    },
+    toggleOrientation: () => {
+      s.orientation.enabled = !s.orientation.enabled;
+    },
+    toggleInsetMap: () => {
+      s.insetMap.enabled = !s.insetMap.enabled;
+    },
+    toggleScaleExpanded: () => {
+      s.scale.expanded = !s.scale.expanded;
+    },
+    setScaleForm: (form: ScaleForm) => {
+      s.scale.form = form;
+    },
+    setScaleUnits: (units: DistanceUnit) => {
+      s.scale.units = units;
+    },
+    setScaleColor: (colorState: ColorState) => {
+      s.scale.color = colorState;
+    },
+    setScaleColorFromHex: (hex: string) => {
+      s.scale.color = hexToHsl(hex);
+    },
+    setScaleFontFamily: (fontFamily: string) => {
+      if (
+        AVAILABLE_FONTS.includes(fontFamily as (typeof AVAILABLE_FONTS)[number])
+      ) {
+        s.scale.fontFamily = fontFamily;
+      }
+    },
+    setScaleFontSize: (fontSize: number) => {
+      if (
+        LEGEND_FONT_SIZES.includes(
+          fontSize as (typeof LEGEND_FONT_SIZES)[number]
+        )
+      ) {
+        s.scale.fontSize = fontSize;
+      }
+    },
+    setOrientationStyle: (style: OrientationIndicatorStyle) => {
+      s.orientation.style = style;
+    },
+    setOrientationSize: (size: number) => {
+      s.orientation.size = clampNumber(size, 5, 30, s.orientation.size);
+    },
+    setOrientationColor: (colorState: ColorState) => {
+      s.orientation.color = colorState;
+    },
+    setOrientationColorFromHex: (hex: string) => {
+      s.orientation.color = hexToHsl(hex);
+    },
+    setInsetMapType: (type: InsetMapType) => {
+      s.insetMap.type = type;
+    },
+    setInsetMapSize: (size: number) => {
+      s.insetMap.size = clampNumber(size, 20, 600, s.insetMap.size);
+    },
+    setInsetMapWindowColor: (colorState: ColorState) => {
+      s.insetMap.windowColor = colorState;
+    },
+    setInsetMapWindowColorFromHex: (hex: string) => {
+      s.insetMap.windowColor = hexToHsl(hex);
+    },
+    setInsetMapContinentColor: (colorState: ColorState) => {
+      s.insetMap.continentColor = colorState;
+    },
+    setInsetMapContinentColorFromHex: (hex: string) => {
+      s.insetMap.continentColor = hexToHsl(hex);
+    },
+    setInsetMapSeaColor: (colorState: ColorState) => {
+      s.insetMap.seaColor = colorState;
+    },
+    setInsetMapSeaColorFromHex: (hex: string) => {
+      s.insetMap.seaColor = hexToHsl(hex);
+    },
+    setInsetMapUseBasemapColors: (use: boolean) => {
+      s.insetMap.useBasemapColors = use;
+    },
+    setInsetMapZoom: (zoom: number) => {
+      s.insetMap.zoom = clampNumber(zoom, 0, 100, s.insetMap.zoom);
+    },
+    setInsetMapCenterLongitude: (longitude: number) => {
+      s.insetMap.centerLongitude = clampNumber(
+        longitude,
+        -180,
+        180,
+        s.insetMap.centerLongitude
+      );
+    },
+    setInsetMapCenterLatitude: (latitude: number) => {
+      s.insetMap.centerLatitude = clampNumber(
+        latitude,
+        -90,
+        90,
+        s.insetMap.centerLatitude
+      );
+    },
+    setScaleDragPosition: (pos: DragPosition | null) => {
+      s.scale.dragPosition = pos;
+    },
+    setOrientationDragPosition: (pos: DragPosition | null) => {
+      s.orientation.dragPosition = pos;
+    },
+    setInsetMapDragPosition: (pos: DragPosition | null) => {
+      s.insetMap.dragPosition = pos;
     }
-  },
-  setScaleFontSize: (fontSize: number) => {
-    if (
-      LEGEND_FONT_SIZES.includes(fontSize as (typeof LEGEND_FONT_SIZES)[number])
-    ) {
-      s.scale.fontSize = fontSize;
-    }
-  },
-  setOrientationStyle: (style: OrientationIndicatorStyle) => {
-    s.orientation.style = style;
-  },
-  setOrientationSize: (size: number) => {
-    s.orientation.size = clampNumber(size, 5, 30, s.orientation.size);
-  },
-  setOrientationColor: (colorState: ColorState) => {
-    s.orientation.color = colorState;
-  },
-  setOrientationColorFromHex: (hex: string) => {
-    s.orientation.color = hexToHsl(hex);
-  },
-  setInsetMapType: (type: InsetMapType) => {
-    s.insetMap.type = type;
-  },
-  setInsetMapSize: (size: number) => {
-    s.insetMap.size = clampNumber(size, 20, 600, s.insetMap.size);
-  },
-  setInsetMapWindowColor: (colorState: ColorState) => {
-    s.insetMap.windowColor = colorState;
-  },
-  setInsetMapWindowColorFromHex: (hex: string) => {
-    s.insetMap.windowColor = hexToHsl(hex);
-  },
-  setInsetMapContinentColor: (colorState: ColorState) => {
-    s.insetMap.continentColor = colorState;
-  },
-  setInsetMapContinentColorFromHex: (hex: string) => {
-    s.insetMap.continentColor = hexToHsl(hex);
-  },
-  setInsetMapSeaColor: (colorState: ColorState) => {
-    s.insetMap.seaColor = colorState;
-  },
-  setInsetMapSeaColorFromHex: (hex: string) => {
-    s.insetMap.seaColor = hexToHsl(hex);
-  },
-  setInsetMapUseBasemapColors: (use: boolean) => {
-    s.insetMap.useBasemapColors = use;
-  },
-  setInsetMapZoom: (zoom: number) => {
-    s.insetMap.zoom = clampNumber(zoom, 0, 100, s.insetMap.zoom);
-  },
-  setInsetMapCenterLongitude: (longitude: number) => {
-    s.insetMap.centerLongitude = clampNumber(
-      longitude,
-      -180,
-      180,
-      s.insetMap.centerLongitude
-    );
-  },
-  setInsetMapCenterLatitude: (latitude: number) => {
-    s.insetMap.centerLatitude = clampNumber(
-      latitude,
-      -90,
-      90,
-      s.insetMap.centerLatitude
-    );
-  },
-  setScaleDragPosition: (pos: DragPosition | null) => {
-    s.scale.dragPosition = pos;
-  },
-  setOrientationDragPosition: (pos: DragPosition | null) => {
-    s.orientation.dragPosition = pos;
-  },
-  setInsetMapDragPosition: (pos: DragPosition | null) => {
-    s.insetMap.dragPosition = pos;
-  }
-}));
+  }),
+  { key: 'geoIndications' }
+);
 
 export const geoIndicationsState = state;
 export const geoIndicationsActions = actions;

@@ -76,7 +76,7 @@
 
   async function applySimplificationNow(trigger: string): Promise<void> {
     if (isBasemapSourceBlocked) {
-      logger.info(
+      logger.debug(
         'Simplification skipped: basemap source blocked',
         LogCategory.UI,
         { trigger }
