@@ -763,7 +763,8 @@ function createDataOrchestratorService() {
       if (!dataset?.sourceFileId) continue;
 
       const method = viz.classification!.method;
-      const numClasses = viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
+      const numClasses =
+        viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
       const normalizedMethod = normalizeClassificationMethod(method);
       const requestedClassCount = resolveRequestedClassCount(
         normalizedMethod,
@@ -812,7 +813,6 @@ function createDataOrchestratorService() {
               }
             : {})
         });
-
       } catch (error) {
         logger.warn(
           `Failed to recompute breaks for viz ${viz.id}`,

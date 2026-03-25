@@ -222,7 +222,6 @@ function createGlobalStore() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(SELECTED_STEP_STORAGE_KEY, selectedStep);
     }
-
   }
 
   function setToolbarState(nextState: ToolbarState): void {

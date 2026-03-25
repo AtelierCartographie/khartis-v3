@@ -26,7 +26,7 @@
     colorBlindFilter = $bindable(false),
     selectedPaletteId,
     numClasses,
-    onTypeChange,
+    onTypeChange: _onTypeChange,
     onColorBlindChange,
     onSelect
   }: Props = $props();

@@ -1,0 +1,3 @@
+{
+  "args": "--use-gl=angle,--use-angle=swiftshader-webgl,--enable-unsafe-swiftshader,--enable-webgl,--enable-webgl2,--ignore-gpu-blocklist,--enable-accelerated-2d-canvas,--no-sandbox,--disable-dev-shm-usage"
+}

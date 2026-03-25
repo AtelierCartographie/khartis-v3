@@ -159,7 +159,7 @@
     return bounds;
   }
 
-  function queueStyleIdleRetry(source?: string): void {
+  function queueStyleIdleRetry(_source?: string): void {
     const map = mapInit.map;
     if (!map || waitingForStyleIdle) return;
 
