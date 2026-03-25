@@ -16,6 +16,7 @@ import { hexToRgb, hslToHex } from './color-utils';
 import { motif } from '@ateliercartographie/motif.js';
 import type { PatternOptions } from '@ateliercartographie/motif.js';
 import type { PatternId } from '$lib/features/main-toolbar/visualization-tab/components/palette-popover/palette.constants';
+import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
 import { LogCategory, logger } from './logger';
 import type {
   Annotation,
@@ -73,20 +74,6 @@ const svgPatternDefsCache = new Map<
   { defsHtml: string; patternUrl: string }
 >();
 
-/** Maps Khartis PatternId to motif.js type + angle for SVG export */
-const SVG_PATTERN_MAP: Record<string, { type: string; angle?: number }> = {
-  diagonal: { type: 'line', angle: 45 },
-  'diagonal-reverse': { type: 'line', angle: 315 },
-  horizontal: { type: 'line', angle: 0 },
-  vertical: { type: 'line', angle: 90 },
-  dots: { type: 'circle' },
-  cross: { type: 'plaid' },
-  triangle: { type: 'triangle' },
-  square: { type: 'square' },
-  diamond: { type: 'diamond' },
-  plus: { type: 'plus' }
-};
-
 /**
  * Generates SVG <defs> for a fill pattern using motif.js.
  * Returns the defs outerHTML and the CSS url() reference.
@@ -95,7 +82,7 @@ function generateSvgPatternDefs(
   patternId: string,
   params?: { size?: number; scale?: number }
 ): { defsHtml: string; patternUrl: string } | null {
-  const config = SVG_PATTERN_MAP[patternId];
+  const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
   if (!config) return null;
 
   const sizePx = params?.size ?? 4;

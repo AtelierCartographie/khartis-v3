@@ -221,7 +221,9 @@ export function validateGeospatialFile(
         ).filter((feature) => !feature.geometry || !feature.properties);
         if (invalidFeatures.length > 0) {
           warnings.push(
-            m.validation_geojson_invalid_features({ count: String(invalidFeatures.length) })
+            m.validation_geojson_invalid_features({
+              count: String(invalidFeatures.length)
+            })
           );
         }
       }

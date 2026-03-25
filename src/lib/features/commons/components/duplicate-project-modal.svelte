@@ -37,7 +37,9 @@
       selectedProjectId =
         projectsStore.currentProject?.id || projectsStore.projects[0].id;
       const selectedProject = projectsStore.getProjectById(selectedProjectId);
-      newProjectName = selectedProject ? `${selectedProject.name}${m.copy_suffix()}` : '';
+      newProjectName = selectedProject
+        ? `${selectedProject.name}${m.copy_suffix()}`
+        : '';
     }
   });
 

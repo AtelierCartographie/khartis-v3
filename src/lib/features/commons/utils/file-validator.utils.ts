@@ -180,7 +180,9 @@ export const FileValidator = {
 
     if (totalSize > config.maxTotalSize) {
       globalErrors.push(
-        m.validation_total_size_exceeded({ size: String(config.maxTotalSize / (1024 * 1024)) })
+        m.validation_total_size_exceeded({
+          size: String(config.maxTotalSize / (1024 * 1024))
+        })
       );
     }
 
@@ -228,16 +230,22 @@ export const FileValidator = {
       result.warnings.push(m.validation_no_extension());
     } else if (!config.allowedExtensions.includes(extension)) {
       if (config.strictMode) {
-        result.errors.push(m.validation_extension_unsupported({ ext: extension }));
+        result.errors.push(
+          m.validation_extension_unsupported({ ext: extension })
+        );
       } else {
-        result.warnings.push(m.validation_extension_maybe_unsupported({ ext: extension }));
+        result.warnings.push(
+          m.validation_extension_maybe_unsupported({ ext: extension })
+        );
       }
     }
 
     if (file.type) {
       result.metadata!.actualMimeType = file.type;
       if (!config.allowedMimeTypes.includes(file.type.toLowerCase())) {
-        result.warnings.push(m.validation_mime_unrecognized({ mime: file.type }));
+        result.warnings.push(
+          m.validation_mime_unrecognized({ mime: file.type })
+        );
       }
     }
   },
@@ -356,9 +364,7 @@ export const FileValidator = {
 
       case FileType.GEOJSON:
         if (file.size > 20 * 1024 * 1024) {
-          result.warnings.push(
-            m.validation_geojson_large()
-          );
+          result.warnings.push(m.validation_geojson_large());
         }
         break;
 
@@ -454,7 +460,9 @@ export const FileValidator = {
             GEOJSON_TYPE.GEOMETRY_COLLECTION
           ].includes(parsed.type)
         ) {
-          result.errors.push(m.validation_geojson_invalid_type({ type: parsed.type }));
+          result.errors.push(
+            m.validation_geojson_invalid_type({ type: parsed.type })
+          );
         }
 
         if (

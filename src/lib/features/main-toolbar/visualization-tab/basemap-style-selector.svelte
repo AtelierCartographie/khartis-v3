@@ -7,7 +7,6 @@
   } from 'carbon-components-svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   const tiledBasemapOptions = [
@@ -33,12 +32,10 @@
 
   function handleStyleChange(value: BasemapStyle): void {
     basemapStyleStore.setStyle(value);
-    projectStore.markAsDirty();
   }
 
   function handleLabelsToggle(e: CustomEvent<{ toggled: boolean }>): void {
     basemapStyleStore.setShowLabels(e.detail.toggled);
-    projectStore.markAsDirty();
   }
 </script>
 

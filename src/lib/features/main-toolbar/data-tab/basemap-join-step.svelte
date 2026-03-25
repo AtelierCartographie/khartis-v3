@@ -202,14 +202,6 @@
       if (abortSignal.aborted) return;
 
       if (!datasetReady) {
-        logger.debug(
-          'Skipping join stats computation - dataset not ready in orchestrator',
-          LogCategory.MAP,
-          {
-            datasetId: resolvedDatasetId,
-            basemap: basemap.file
-          }
-        );
         return;
       }
 
@@ -234,12 +226,6 @@
       const hasBlocking = hasBlockingJoinIssues(stats);
 
       if (!hasBlocking && stats.joinedCount > 0) {
-        logger.debug(
-          'Auto-finalizing join - no errors detected',
-          LogCategory.MAP,
-          { joinedCount: stats.joinedCount }
-        );
-
         try {
           await duckDBOrchestrator.finalizeJoin(
             resolvedDatasetId,
@@ -247,20 +233,8 @@
             linkedVariableName
           );
           dataTabStore.markStepComplete(basemapStepIndex);
-          logger.debug(
-            'Join auto-finalized, map should update',
-            LogCategory.MAP
-          );
         } catch (finalizeError) {
           if (isDatasetNotFoundError(finalizeError)) {
-            logger.debug(
-              'Skipping auto-finalize - dataset not ready in orchestrator',
-              LogCategory.MAP,
-              {
-                datasetId: resolvedDatasetId,
-                basemap: basemap.file
-              }
-            );
             return;
           }
 
@@ -278,14 +252,6 @@
       }
 
       if (isDatasetNotFoundError(error)) {
-        logger.debug(
-          'Skipping join stats computation - dataset not ready in orchestrator',
-          LogCategory.MAP,
-          {
-            datasetId: resolvedDatasetId,
-            basemap: basemap.file
-          }
-        );
         return;
       }
 
