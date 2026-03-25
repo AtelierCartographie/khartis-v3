@@ -14,12 +14,19 @@ import { projectStore } from './project.store.svelte';
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
 const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
+const SELECTED_STEP_STORAGE_KEY = 'khartis_selected_step';
 const MOBILE_BREAKPOINT_VALUE = 1024;
 
 const VALID_TOOLBAR_STATES = new Set<string>([
   ToolbarState.Full,
   ToolbarState.Compact,
   ToolbarState.Collapsed
+]);
+
+const VALID_TOOLBAR_STEPS = new Set<string>([
+  ToolbarStep.Data,
+  ToolbarStep.Visualizations,
+  ToolbarStep.Styling
 ]);
 
 function readToolbarStateFromStorage(): ToolbarState {
@@ -29,7 +36,21 @@ function readToolbarStateFromStorage(): ToolbarState {
   return ToolbarState.Full;
 }
 
+function readStepFromStorage(): ToolbarStep {
+  if (typeof window === 'undefined') return ToolbarStep.Data;
+  const stored = localStorage.getItem(SELECTED_STEP_STORAGE_KEY);
+  if (stored && VALID_TOOLBAR_STEPS.has(stored)) return stored as ToolbarStep;
+  return ToolbarStep.Data;
+}
+
+function resolveInitialToolbarState(step: ToolbarStep): ToolbarState {
+  if (step === ToolbarStep.Styling) return ToolbarState.Collapsed;
+  if (step === ToolbarStep.Visualizations) return ToolbarState.Compact;
+  return readToolbarStateFromStorage();
+}
+
 function createGlobalStore() {
+  const initialStep = readStepFromStorage();
   const state = $state<GlobalState>({
     settingPanel: false,
     mainPanel: true,
@@ -37,9 +58,9 @@ function createGlobalStore() {
     isCreateProjectModalOpen: false,
     isDuplicateModalOpen: false,
     isDeleteModalOpen: false,
-    selectedStep: ToolbarStep.Data,
+    selectedStep: initialStep,
     selectedTool: undefined,
-    toolbarState: readToolbarStateFromStorage(),
+    toolbarState: resolveInitialToolbarState(initialStep),
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
@@ -69,17 +90,6 @@ function createGlobalStore() {
   });
   let isUpdatingSelection = false;
   const pendingDatasetSelections = new Set<string>();
-
-  function getCallerHint(): string | undefined {
-    const stack = new Error().stack;
-    if (!stack) return undefined;
-    const caller = stack
-      .split('\n')
-      .slice(3, 5)
-      .map((line) => line.trim())
-      .join(' | ');
-    return caller || undefined;
-  }
 
   function ensureDatasetSelectionForSourceFile(sourceFileId: string): void {
     if (!sourceFileId) return;
@@ -197,8 +207,6 @@ function createGlobalStore() {
   }
 
   function setNavigationState(selectedStep: ToolbarStep): void {
-    const previousStep = state.selectedStep;
-    const previousToolbarState = state.toolbarState;
     state.selectedStep = selectedStep;
 
     if (selectedStep === ToolbarStep.Styling) {
@@ -211,31 +219,14 @@ function createGlobalStore() {
         preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
     }
 
-    if (
-      previousStep !== selectedStep ||
-      previousToolbarState !== state.toolbarState
-    ) {
-      logger.info('[global-store] navigation state changed', LogCategory.UI, {
-        fromStep: previousStep,
-        toStep: selectedStep,
-        fromToolbarState: previousToolbarState,
-        toToolbarState: state.toolbarState,
-        caller: getCallerHint()
-      });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, selectedStep);
     }
+
   }
 
   function setToolbarState(nextState: ToolbarState): void {
-    const previousToolbarState = state.toolbarState;
     state.toolbarState = nextState;
-    if (previousToolbarState !== nextState) {
-      logger.info('[global-store] toolbar state changed', LogCategory.UI, {
-        fromToolbarState: previousToolbarState,
-        toToolbarState: nextState,
-        selectedStep: state.selectedStep,
-        caller: getCallerHint()
-      });
-    }
     if (typeof window !== 'undefined') {
       localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, nextState);
     }
@@ -259,13 +250,7 @@ function createGlobalStore() {
     if (selectedDataButtonState.id === id) {
       return;
     }
-    const previousSelectedDataButtonId = selectedDataButtonState.id;
     selectedDataButtonState.id = id;
-
-    logger.debug('[global-store] data tab selection changed', LogCategory.UI, {
-      previousSelectedDataButtonId,
-      selectedDataButtonId: id
-    });
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);

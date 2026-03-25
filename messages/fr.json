@@ -1656,5 +1656,13 @@
   "copy_suffix": " (copie)",
   "copy_suffix_numbered": " (copie {count})",
   "viz_preview_label": "Aperçu de la visualisation",
-  "column_null_label": "nulls"
+  "column_null_label": "nulls",
+  "contrast_label": "Contraste",
+  "contrast_low": "Faible",
+  "contrast_normal": "Normal",
+  "contrast_high": "Élevé",
+  "preset_monochrome": "Monochrome",
+  "preset_bicolor": "Bicolore",
+  "preset_sepia": "Sépia",
+  "preset_colorblind": "Daltonisme"
 }

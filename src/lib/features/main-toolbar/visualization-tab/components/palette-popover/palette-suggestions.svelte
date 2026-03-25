@@ -1,12 +1,12 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Tag } from 'carbon-components-svelte';
-  import { PaintBrush, Checkmark } from 'carbon-icons-svelte';
+  import { MagicWandFilled, Checkmark } from 'carbon-icons-svelte';
   import {
     PALETTE_TYPE,
     type PaletteType,
     type Palette,
-    getPalettesForType,
+    type SuggestionPreset,
+    getSuggestionPalettes,
     generatePaletteColors,
     buildPatternBackground
   } from './palette.constants';
@@ -31,13 +31,16 @@
     onSelect
   }: Props = $props();
 
-  const palettes = $derived(getPalettesForType(paletteType, colorBlindFilter));
+  let activePreset = $state<SuggestionPreset>('monochrome');
 
-  function setType(type: PaletteType) {
-    paletteType = type;
-    onTypeChange?.(type);
+  const palettes = $derived(
+    getSuggestionPalettes(activePreset, colorBlindFilter)
+  );
 
-    const newPalettes = getPalettesForType(type, colorBlindFilter);
+  function setPreset(preset: SuggestionPreset) {
+    activePreset = preset;
+    // Auto-select first palette if current selection isn't in the new preset
+    const newPalettes = getSuggestionPalettes(preset, colorBlindFilter);
     if (
       !newPalettes.some((p) => p.id === selectedPaletteId) &&
       newPalettes.length > 0
@@ -58,39 +61,44 @@
 
 <div class="palette-suggestions">
   <div class="section-title">
-    <PaintBrush size={16} />
-    <span>{m.palette_suggestions()}</span>
+    <MagicWandFilled size={16} />
+    <span class="section-title-text">{m.palette_suggestions()}</span>
+    <div class="section-title-line"></div>
   </div>
 
   <div class="filter-tags">
-    <Tag
-      on:click={() => setType(PALETTE_TYPE.SEQUENTIAL)}
-      type={paletteType === PALETTE_TYPE.SEQUENTIAL ? 'blue' : undefined}
-      size="sm"
+    <button
+      type="button"
+      class="filter-tag"
+      class:selected={activePreset === 'monochrome'}
+      onclick={() => setPreset('monochrome')}
     >
-      {m.palette_sequential()}
-    </Tag>
-    <Tag
-      on:click={() => setType(PALETTE_TYPE.DIVERGING)}
-      type={paletteType === PALETTE_TYPE.DIVERGING ? 'blue' : undefined}
-      size="sm"
+      {m.preset_monochrome()}
+    </button>
+    <button
+      type="button"
+      class="filter-tag"
+      class:selected={activePreset === 'bicolor'}
+      onclick={() => setPreset('bicolor')}
     >
-      {m.palette_diverging()}
-    </Tag>
-    <Tag
-      on:click={() => setType(PALETTE_TYPE.QUALITATIVE)}
-      type={paletteType === PALETTE_TYPE.QUALITATIVE ? 'blue' : undefined}
-      size="sm"
+      {m.preset_bicolor()}
+    </button>
+    <button
+      type="button"
+      class="filter-tag"
+      class:selected={activePreset === 'sepia'}
+      onclick={() => setPreset('sepia')}
     >
-      {m.palette_qualitative()}
-    </Tag>
-    <Tag
-      on:click={toggleColorBlind}
-      type={colorBlindFilter ? 'blue' : undefined}
-      size="sm"
+      {m.preset_sepia()}
+    </button>
+    <button
+      type="button"
+      class="filter-tag filter-tag--toggle"
+      class:active={colorBlindFilter}
+      onclick={toggleColorBlind}
     >
-      {m.colorblind_simulation()}
-    </Tag>
+      {m.preset_colorblind()}
+    </button>
   </div>
 
   <div class="palette-grid">
@@ -117,7 +125,7 @@
         {/if}
         {#if selectedPaletteId === palette.id}
           <div class="check-icon">
-            <Checkmark size={16} />
+            <Checkmark size={20} />
           </div>
         {/if}
       </button>
@@ -129,22 +137,64 @@
   .palette-suggestions {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: 16px;
   }
 
   .section-title {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
+    color: #003a6d;
+  }
+
+  .section-title-text {
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--cds-text-primary);
+    white-space: nowrap;
+  }
+
+  .section-title-line {
+    flex: 1;
+    height: 1px;
+    background: var(--cds-border-subtle);
   }
 
   .filter-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--cds-spacing-02);
+    gap: 8px;
+  }
+
+  .filter-tag {
+    padding: 2px 8px;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    border-radius: 9px;
+    cursor: pointer;
+    background: #e5f6ff;
+    border: 1px solid #82cfff;
+    color: #003a6d;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      color 0.15s ease;
+
+    &:hover {
+      background: #cceeff;
+    }
+
+    &.selected {
+      background: #0072c3;
+      color: white;
+      border-color: #0072c3;
+    }
+
+    &.filter-tag--toggle.active {
+      background: #003a6d;
+      color: white;
+      border-color: #003a6d;
+    }
   }
 
   .palette-grid {
@@ -158,10 +208,9 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: var(--cds-spacing-02);
+    padding: 0;
     background: transparent;
     border: 2px solid transparent;
-    border-radius: 4px;
     cursor: pointer;
     transition: border-color 0.15s ease;
 
@@ -170,15 +219,14 @@
     }
 
     &.selected {
-      border-color: var(--cds-interactive);
+      border-color: #012749;
     }
   }
 
   .swatch-row {
     display: flex;
-    flex: 1;
+    width: 100%;
     height: 24px;
-    border-radius: 2px;
     overflow: hidden;
   }
 
@@ -196,9 +244,9 @@
 
   .check-icon {
     position: absolute;
-    right: 8px;
+    left: 50%;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
     color: white;
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
     display: flex;
