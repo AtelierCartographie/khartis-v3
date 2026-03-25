@@ -55,7 +55,6 @@ const Pipeline = {
   async initialize(): Promise<void> {
     if (initialized) return;
     const start = performance.now();
-    logger.info('Initializing data pipeline DuckDB session', LogCategory.DATA);
     try {
       await initDuckDB();
       initialized = true;
@@ -91,16 +90,6 @@ const Pipeline = {
     await this.initialize();
     const ctx = getContext();
     const start = performance.now();
-    logger.info(
-      'Processing uploaded file via data pipeline',
-      LogCategory.DATA,
-      {
-        uploadedFileId: uploadedFile.id,
-        fileName: uploadedFile.name,
-        hasOriginal: Boolean(originalFile)
-      }
-    );
-
     try {
       let result: DatasetResult | ZipDatasetResult;
 
@@ -214,7 +203,6 @@ const Pipeline = {
 
   async destroy(): Promise<void> {
     initialized = false;
-    logger.info('Data pipeline destroyed', LogCategory.DATA);
   }
 };
 

@@ -50,11 +50,6 @@ export async function registerExistingTable(
   const start = performance.now();
 
   try {
-    logger.info('Registering existing DuckDB table', LogCategory.DUCKDB, {
-      tableName,
-      sourceFileId
-    });
-
     const escapedTableNameForCheck = escapeSqlString(tableName);
     const tableCheck = (await Duck.query(
       `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedTableNameForCheck}'`,
@@ -102,7 +97,7 @@ export async function registerExistingTable(
     bumpDatasetsVersion();
     setCurrentTableName(tableName);
 
-    logger.success('DuckDB table registered', LogCategory.DUCKDB, {
+    logger.info('DuckDB table registered', LogCategory.DUCKDB, {
       tableName,
       datasetId: dataset.id,
       durationMs: (performance.now() - start).toFixed(2)
@@ -124,12 +119,6 @@ export async function processFile(
   callbacks: DatasetCallbacks
 ): Promise<DuckDBDataset | null> {
   const startTime = performance.now();
-  logger.info('Processing file with DuckDB', LogCategory.DUCKDB, {
-    fileId: file.id,
-    fileName: file.name,
-    fileType: file.fileType,
-    status: file.status
-  });
 
   if (!file.parsedData || file.status !== 'complete') {
     return null;

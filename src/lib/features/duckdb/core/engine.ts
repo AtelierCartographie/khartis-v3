@@ -69,7 +69,7 @@ function calculateOptimalMemory(): string {
     const deviceMemory =
       (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 4;
     const optimalMemory = Math.min(Math.floor(deviceMemory * 0.5 * 1024), 3072);
-    logger.info(
+    logger.debug(
       'Dynamic memory allocation based on device',
       LogCategory.DUCKDB,
       {
@@ -101,7 +101,7 @@ async function configureRuntimeSettings(): Promise<void> {
         ? Math.max(1, Math.min(navigator.hardwareConcurrency, 8))
         : 4;
     pragmas.unshift(`PRAGMA threads=${desiredThreads};`);
-    logger.info('Configuring DuckDB threads', LogCategory.DUCKDB, {
+    logger.debug('Configuring DuckDB threads', LogCategory.DUCKDB, {
       desiredThreads
     });
   }
@@ -148,7 +148,6 @@ async function configureLocalExtensionRepository(): Promise<void> {
 async function loadSpatialExtension(): Promise<void> {
   if (!connection || extensionsLoaded.spatial) return;
 
-  const start = performance.now();
   try {
     await executeQuery(
       connection,
@@ -158,9 +157,6 @@ async function loadSpatialExtension(): Promise<void> {
       }
     );
     extensionsLoaded.spatial = true;
-    logger.debug('Spatial extension preloaded', LogCategory.DUCKDB, {
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   } catch (error) {
     logger.error('Failed to preload spatial extension', LogCategory.DUCKDB, {
       error
@@ -171,7 +167,6 @@ async function loadSpatialExtension(): Promise<void> {
 async function loadHTTPFSExtension(): Promise<void> {
   if (!connection || extensionsLoaded.httpfs) return;
 
-  const start = performance.now();
   try {
     await executeQuery(
       connection,
@@ -181,9 +176,6 @@ async function loadHTTPFSExtension(): Promise<void> {
       }
     );
     extensionsLoaded.httpfs = true;
-    logger.debug('HTTPFS extension preloaded', LogCategory.DUCKDB, {
-      durationMs: (performance.now() - start).toFixed(2)
-    });
   } catch (error) {
     logger.error('Failed to preload HTTPFS extension', LogCategory.DUCKDB, {
       error
@@ -193,11 +185,9 @@ async function loadHTTPFSExtension(): Promise<void> {
 
 async function preloadExtensions(): Promise<void> {
   const startTime = performance.now();
-  logger.info('Preloading DuckDB extensions', LogCategory.DUCKDB);
-
   await Promise.all([loadSpatialExtension(), loadHTTPFSExtension()]);
 
-  logger.success('Extensions preloaded', LogCategory.DUCKDB, {
+  logger.debug('Extensions preloaded', LogCategory.DUCKDB, {
     totalDurationMs: (performance.now() - startTime).toFixed(2)
   });
 }
@@ -230,39 +220,19 @@ export async function initEngine(): Promise<void> {
         durationMs: (performance.now() - bundleStart).toFixed(2)
       });
 
-      const workerStart = performance.now();
       const worker = new Worker(bundle.mainWorker!);
-      logger.debug('DuckDB worker created', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - workerStart).toFixed(2)
-      });
 
-      const dbCreateStart = performance.now();
       const duckdbLogger = new duckdb.ConsoleLogger();
       db = new duckdb.AsyncDuckDB(duckdbLogger, worker);
-      logger.debug('AsyncDuckDB instance ready', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - dbCreateStart).toFixed(2)
-      });
 
-      const instantiateStart = performance.now();
       await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
-      logger.debug('DuckDB WASM instantiated', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - instantiateStart).toFixed(2)
-      });
 
-      const openStart = performance.now();
       await db.open({
         filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
         query: { castBigIntToDouble: false }
       });
-      logger.debug('DuckDB database opened', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - openStart).toFixed(2)
-      });
 
-      const connectStart = performance.now();
       connection = await db.connect();
-      logger.debug('DuckDB connection established', LogCategory.DUCKDB, {
-        durationMs: (performance.now() - connectStart).toFixed(2)
-      });
 
       await configureRuntimeSettings();
       await configureLocalExtensionRepository();
@@ -272,7 +242,6 @@ export async function initEngine(): Promise<void> {
       table_geoparquet_cache.clear();
       cacheState.accessOrder = [];
       cacheState.size = 0;
-      logger.debug('GeoParquet cache initialized', LogCategory.DUCKDB);
 
       logger.success('DuckDB initialization complete', LogCategory.DUCKDB, {
         totalDurationMs: (performance.now() - startTime).toFixed(2)

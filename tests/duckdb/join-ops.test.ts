@@ -423,9 +423,7 @@ describe('finalizeJoin behavior', () => {
 
     await expect(
       finalizeJoin(datasetWithoutGps, osmBasemap, '', duckClient)
-    ).rejects.toThrow(
-      'GPS columns (latitude/longitude) not found in dataset'
-    );
+    ).rejects.toThrow('GPS columns (latitude/longitude) not found in dataset');
 
     expect(queryMock).not.toHaveBeenCalled();
     expect(joinByIdMock).not.toHaveBeenCalled();

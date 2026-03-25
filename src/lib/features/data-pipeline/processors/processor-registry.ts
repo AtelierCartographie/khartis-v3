@@ -1,5 +1,4 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   FileProcessor,
   FileProcessorRegistration,
@@ -16,12 +15,6 @@ export function registerProcessor(
 ): void {
   processors.push({ processor, priority });
   processors.sort((a, b) => b.priority - a.priority);
-
-  logger.debug('Registered file processor', LogCategory.DATA, {
-    supportedTypes: processor.supportedFileTypes,
-    priority,
-    totalProcessors: processors.length
-  });
 }
 
 export function getProcessor(file: UploadedFile): FileProcessor | null {

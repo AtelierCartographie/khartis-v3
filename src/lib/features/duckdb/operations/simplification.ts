@@ -47,12 +47,6 @@ export async function simplifyGeometryTable(
   const geometryColumn = options.geometryColumn ?? 'geom';
   const createView = options.createView ?? false;
 
-  logger.info(
-    'Starting topology-aware geometry simplification',
-    LogCategory.DUCKDB,
-    { sourceTable, tolerance, geometryColumn }
-  );
-
   const originalVertices = await countVertices(
     Duck,
     sourceTable,
@@ -90,7 +84,7 @@ export async function simplifyGeometryTable(
 
   const duration = performance.now() - start;
 
-  logger.success('Geometry simplification completed', LogCategory.DUCKDB, {
+  logger.debug('Geometry simplification completed', LogCategory.DUCKDB, {
     targetTable,
     originalVertices,
     simplifiedVertices,

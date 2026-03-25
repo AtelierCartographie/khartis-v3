@@ -117,10 +117,6 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
 
   const prefetchPromise = (async () => {
     try {
-      logger.debug('Prefetching Arrow table metadata', LogCategory.DUCKDB, {
-        tableName: dataset.tableName
-      });
-
       const { arrowTableWithMetadata, geoArrowMetadata } =
         await arrowOps.createArrowTableWithMetadata(
           dataset.tableName,
@@ -130,12 +126,8 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
 
       dataset.arrowTableWithMetadata = arrowTableWithMetadata;
       dataset.geoArrowMetadata = geoArrowMetadata || undefined;
-
-      logger.info('Prefetched Arrow table metadata', LogCategory.DUCKDB, {
-        tableName: dataset.tableName
-      });
     } catch (error) {
-      logger.error(
+      logger.debug(
         'Failed to prefetch Arrow metadata',
         LogCategory.DUCKDB,
         error
@@ -669,12 +661,6 @@ export const duckDBOrchestrator = {
     const filters = [...state.getFilters(tableName), filter];
     state.setFilters(tableName, filters);
 
-    logger.debug('DuckDB filter added', LogCategory.DUCKDB, {
-      tableName,
-      filterId: filter.id,
-      operator: filter.operator
-    });
-
     return state.getFilters(tableName);
   },
 
@@ -685,11 +671,6 @@ export const duckDBOrchestrator = {
     const filters = state.getFilters(tableName);
     const updated = filters.filter((filter) => filter.id !== filterId);
     state.setFilters(tableName, updated);
-
-    logger.debug('DuckDB filter removed', LogCategory.DUCKDB, {
-      tableName,
-      filterId
-    });
 
     return state.getFilters(tableName);
   },

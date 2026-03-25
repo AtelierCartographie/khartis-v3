@@ -86,13 +86,6 @@ export async function processFileInternal(
   const format = detectFileFormat(fileInfo.name);
 
   const start = performance.now();
-  logger.debug('Reading file into DuckDB via pipeline', LogCategory.DATA, {
-    fileName: fileInfo.name,
-    tableName,
-    isGeoFile,
-    isShapefile,
-    hasCompanionFiles: Boolean(options.companionFiles?.length)
-  });
 
   if (
     isShapefile &&
@@ -211,7 +204,7 @@ async function readTabularFile(
 
   const detection = await detectDecimalSeparator(file);
   if (detection.separator === ',') {
-    logger.info('European decimal format detected', LogCategory.DATA, {
+    logger.debug('European decimal format detected', LogCategory.DATA, {
       confidence: detection.confidence,
       sampleSize: detection.sampleSize,
       delimiter: detection.delimiter,

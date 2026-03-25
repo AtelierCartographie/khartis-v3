@@ -32,11 +32,6 @@ export async function validateGPSColumns(
   Duck: DuckDBClientForGPS
 ): Promise<GPSValidationResult> {
   const start = performance.now();
-  logger.debug('Validating GPS columns', LogCategory.DATA, {
-    tableName,
-    latCol,
-    lonCol
-  });
 
   try {
     const escapedLat = escapeIdentifier(latCol);
@@ -122,7 +117,7 @@ export async function validateGPSColumns(
 
     const isValid = latInRange && lonInRange;
 
-    logger.info('GPS columns validated', LogCategory.DATA, {
+    logger.debug('GPS columns validated', LogCategory.DATA, {
       tableName,
       latCol,
       lonCol,
@@ -243,26 +238,10 @@ export async function getGPSBounds(
   const start = performance.now();
 
   if (!dataset.gpsMode || !dataset.gpsColumns) {
-    logger.debug(
-      'GPS bounds skipped - dataset not in GPS mode',
-      LogCategory.MAP,
-      {
-        datasetId: dataset.id,
-        gpsMode: dataset.gpsMode,
-        hasGpsColumns: !!dataset.gpsColumns
-      }
-    );
     return null;
   }
 
   const { lat, lon } = dataset.gpsColumns;
-
-  logger.debug('Computing GPS bounds', LogCategory.MAP, {
-    datasetId: dataset.id,
-    tableName: dataset.tableName,
-    latColumn: lat,
-    lonColumn: lon
-  });
 
   try {
     const escapedLat = escapeIdentifier(lat);
