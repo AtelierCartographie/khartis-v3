@@ -21,7 +21,9 @@
   } from './suggestion.utils';
 
   let configureSection: HTMLElement | undefined = $state();
-  let lastSnapshot = $state<string>('');
+  /** Datasets for which we already auto-created (or found existing) visualizations.
+   *  Prevents re-creation after the user explicitly deletes the last viz. */
+  const initializedDatasetIds = new Set<string>();
 
   function buildColumnAnalysis(dataset: {
     columns: Array<{
@@ -132,18 +134,20 @@
 
   $effect(() => {
     const dataset = datasetsStore.selectedDataset;
-    const datasetVisualizations = dataset
-      ? visualizationStore.getVisualizationsByDataset(dataset.id)
-      : [];
-    const hasExistingViz = datasetVisualizations.length > 0;
-    const snapshot = `${dataset?.id ?? 'none'}|${datasetVisualizations.length}`;
+    if (!dataset) return;
 
-    if (!dataset || hasExistingViz || snapshot === lastSnapshot) {
-      lastSnapshot = snapshot;
+    const datasetVisualizations = visualizationStore.getVisualizationsByDataset(
+      dataset.id
+    );
+
+    if (datasetVisualizations.length > 0) {
+      initializedDatasetIds.add(dataset.id);
       return;
     }
 
-    lastSnapshot = snapshot;
+    // Don't re-create if this dataset already had a viz (user deleted it)
+    if (initializedDatasetIds.has(dataset.id)) return;
+    initializedDatasetIds.add(dataset.id);
 
     const bestSuggestion = resolveBestSuggestion(dataset);
     const defaultType = bestSuggestion

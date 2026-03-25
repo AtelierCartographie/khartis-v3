@@ -409,11 +409,6 @@
   }
 
   onMount(() => {
-    logger.debug('AdvancedDataTable mounted', LogCategory.UI, {
-      tableName,
-      datasetId: dataset?.id
-    });
-
     const handleResize = () => {
       viewportHeight = window.innerHeight;
     };
@@ -567,17 +562,11 @@
     lastDatasetVersion = currentDatasetVersion;
 
     if (isLocalUpdate) {
-      logger.debug('Ignoring update due to local update', LogCategory.UI);
       return;
     }
 
     if (currentDataset || currentTableName) {
       untrack(async () => {
-        logger.debug('$effect: reloading table data', LogCategory.UI, {
-          tableName: currentTableName,
-          datasetId: currentDataset?.id
-        });
-
         try {
           await tableData.loadColumnsInfo();
           await filters.refreshFiltersState();

@@ -71,7 +71,8 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px;
+    height: 42px;
+    padding: 0 8px;
     background: var(--cds-background);
     color: var(--cds-text-secondary);
     fill: currentColor;
@@ -88,12 +89,12 @@
 
   .toggle-tab.full-width {
     width: 180px;
-    padding: 8px 16px 8px 12px;
+    padding: 0 16px 0 12px;
   }
 
   .toggle-tab:not(.full-width) {
     width: 48px;
-    padding: 8px;
+    padding: 0;
   }
 
   .toggle-tab.active {

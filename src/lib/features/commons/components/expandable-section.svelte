@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { ChevronDown, ChevronUp } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { untrack } from 'svelte';
@@ -66,30 +65,12 @@
 
   function toggle(): void {
     if (disabled) {
-      logger.debug(
-        '[expandable-section] toggle ignored because section is disabled',
-        LogCategory.UI,
-        { title }
-      );
       return;
     }
     if (showToggle && !toggleChecked) {
-      logger.debug(
-        '[expandable-section] toggle ignored because switch is off',
-        LogCategory.UI,
-        { title, showToggle, toggleChecked }
-      );
       return;
     }
     expanded = !expanded;
-    logger.debug(
-      '[expandable-section] expanded state changed',
-      LogCategory.UI,
-      {
-        title,
-        expanded
-      }
-    );
     onToggle?.(expanded);
   }
 
@@ -119,12 +100,6 @@
   }
 
   function handleToggleChange(toggled: boolean): void {
-    logger.info('[expandable-section] switch toggled', LogCategory.UI, {
-      title,
-      toggled,
-      disabled,
-      toggleDisabled
-    });
     onToggleChange?.(toggled);
   }
 </script>

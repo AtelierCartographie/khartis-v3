@@ -128,7 +128,6 @@ export async function calculateBreaks(
     let breaks: number[] = [];
 
     const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
-    logger.debug('Executing breaks query', LogCategory.DATA, { query });
 
     const result = (await Duck.query(query)) as Table;
     const rows = result.toArray() as BreaksRow[];
@@ -201,7 +200,7 @@ export async function calculateBreaks(
       }
     }
 
-    logger.success('Breaks calculated successfully', LogCategory.DATA, {
+    logger.debug('Breaks calculated successfully', LogCategory.DATA, {
       method,
       numClasses,
       breaks: breaks.length,
