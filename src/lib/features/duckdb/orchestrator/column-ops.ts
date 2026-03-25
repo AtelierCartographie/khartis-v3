@@ -39,7 +39,6 @@ export async function renameColumn(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
 }
 
 export async function changeColumnType(
@@ -111,7 +110,6 @@ export async function changeColumnType(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
 }
 
 export async function dropColumn(
@@ -128,7 +126,6 @@ export async function dropColumn(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
 }
 
 export async function dropRows(

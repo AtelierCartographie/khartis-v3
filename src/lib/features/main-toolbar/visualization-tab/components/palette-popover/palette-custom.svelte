@@ -27,7 +27,7 @@
   let {
     selectedPaletteId,
     numClasses,
-    colorBlindFilter = false,
+    colorBlindFilter: _colorBlindFilter = false,
     inverted = $bindable(false),
     onColorsChange,
     onPatternSelect,

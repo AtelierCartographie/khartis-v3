@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     visualizationStore,
     VisualizationType
@@ -23,7 +24,7 @@
   let configureSection: HTMLElement | undefined = $state();
   /** Datasets for which we already auto-created (or found existing) visualizations.
    *  Prevents re-creation after the user explicitly deletes the last viz. */
-  const initializedDatasetIds = new Set<string>();
+  const initializedDatasetIds = new SvelteSet<string>();
 
   function buildColumnAnalysis(dataset: {
     columns: Array<{
