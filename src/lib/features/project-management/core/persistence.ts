@@ -1,11 +1,14 @@
 import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
 import { deserialize, prepareForIndexedDB } from './serializer';
 import { loadFromStorage, saveToStorage } from './storage';
+import { migrateIfNeeded } from './schema-migration';
 
 let db: IDBDatabase | null = null;
+let localforageMigrated = false;
 
 export async function openDatabase(): Promise<IDBDatabase> {
   if (db) return db;
@@ -30,11 +33,78 @@ export async function openDatabase(): Promise<IDBDatabase> {
         store.createIndex('updatedAt', 'manifest.updatedAt', { unique: false });
         store.createIndex('name', 'manifest.name', { unique: false });
       }
+
+      // v2: add metadata object store (replaces localforage)
+      if (!db.objectStoreNames.contains(PROJECT_CONST.DB.METADATA_STORE_NAME)) {
+        db.createObjectStore(PROJECT_CONST.DB.METADATA_STORE_NAME, {
+          keyPath: 'key'
+        });
+      }
     };
   });
 
   db = database;
+
+  // One-shot migration: copy localforage keys to the new IDB metadata store
+  if (!localforageMigrated) {
+    localforageMigrated = true;
+    migrateFromLocalforage(database).catch((error) => {
+      logger.debug(
+        'Localforage migration skipped or failed (may already be migrated)',
+        LogCategory.PERSISTENCE,
+        error
+      );
+    });
+  }
+
   return database;
+}
+
+async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
+  // Dynamic import to avoid bundling localforage if it's already been removed
+  let lf: {
+    getItem: (k: string) => Promise<string | null>;
+    removeItem: (k: string) => Promise<void>;
+  };
+  try {
+    const mod = await import('localforage');
+    lf = mod.default;
+  } catch {
+    return; // localforage already removed from deps — nothing to migrate
+  }
+
+  const keys = [ProjectStorageKey.CURRENT, ProjectStorageKey.METADATA];
+  let migrated = 0;
+
+  for (const key of keys) {
+    const value = await lf.getItem(key);
+    if (value === null) continue;
+
+    // Write to new IDB metadata store
+    await new Promise<void>((resolve, reject) => {
+      const tx = database.transaction(
+        [PROJECT_CONST.DB.METADATA_STORE_NAME],
+        'readwrite'
+      );
+      tx.objectStore(PROJECT_CONST.DB.METADATA_STORE_NAME).put({
+        key,
+        value
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    // Remove from localforage
+    await lf.removeItem(key);
+    migrated++;
+  }
+
+  if (migrated > 0) {
+    logger.info(
+      `Migrated ${migrated} keys from localforage to IDB metadata store`,
+      LogCategory.PERSISTENCE
+    );
+  }
 }
 
 async function ensureDb(): Promise<IDBDatabase> {
@@ -83,10 +153,19 @@ export async function loadProject(id: string): Promise<KhartisProject | null> {
       }
 
       try {
-        const project = await deserialize(request.result);
+        const migrated = migrateIfNeeded(
+          request.result as Record<string, unknown>
+        );
+        const project = await deserialize(
+          migrated as unknown as Parameters<typeof deserialize>[0]
+        );
         resolve(project);
       } catch (error) {
-        reject(new Error(`Failed to deserialize project: ${error}`));
+        logger.error('Failed to deserialize project', LogCategory.PERSISTENCE, {
+          id,
+          error
+        });
+        resolve(null);
       }
     };
 

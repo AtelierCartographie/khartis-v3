@@ -53,15 +53,7 @@ function createFacetsStore() {
 
   async function enable(baseVizId: string, variables: string[]): Promise<void> {
     if (variables.length < 2) {
-      logger.warn('Facets require at least 2 variables', LogCategory.STORE);
       return;
-    }
-
-    if (variables.length > 9) {
-      logger.warn(
-        'More than 9 facets may impact performance',
-        LogCategory.STORE
-      );
     }
 
     const baseViz = visualizationStore.visualizations.find(
@@ -74,12 +66,6 @@ function createFacetsStore() {
       });
       return;
     }
-
-    logger.info('Enabling facets mode', LogCategory.STORE, {
-      baseVizId,
-      variablesCount: variables.length,
-      scaleMode: state.scaleMode
-    });
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -95,7 +81,7 @@ function createFacetsStore() {
       state.variables = [...variables];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
 
-      logger.success('Facets enabled', LogCategory.STORE, {
+      logger.debug('Facets enabled', LogCategory.STORE, {
         facetsCount: facetConfigs.length
       });
     } catch (error) {
@@ -108,8 +94,6 @@ function createFacetsStore() {
       return;
     }
 
-    logger.info('Disabling facets mode', LogCategory.STORE);
-
     visualizationStore.removeBulkVisualizations(
       state.generatedVisualizationIds
     );
@@ -119,7 +103,7 @@ function createFacetsStore() {
     state.variables = [];
     state.generatedVisualizationIds = [];
 
-    logger.success('Facets disabled', LogCategory.STORE);
+    logger.debug('Facets disabled', LogCategory.STORE);
   }
 
   function setVariables(variables: string[]): void {
@@ -136,9 +120,6 @@ function createFacetsStore() {
 
   function toggleSyncPanZoom(): void {
     state.syncPanZoom = !state.syncPanZoom;
-    logger.info('Toggled syncPanZoom', LogCategory.STORE, {
-      syncPanZoom: state.syncPanZoom
-    });
   }
 
   async function toggleScaleMode(): Promise<void> {
@@ -146,11 +127,6 @@ function createFacetsStore() {
       state.scaleMode === SCALE_MODE.SHARED
         ? SCALE_MODE.INDEPENDENT
         : SCALE_MODE.SHARED;
-
-    logger.info('Toggling scale mode', LogCategory.STORE, {
-      from: state.scaleMode,
-      to: newMode
-    });
 
     state.scaleMode = newMode;
 
@@ -172,7 +148,7 @@ function createFacetsStore() {
         visualizationStore.createBulkVisualizations(newConfigs);
         state.generatedVisualizationIds = newConfigs.map((config) => config.id);
 
-        logger.success(
+        logger.debug(
           'Scale mode toggled and facets regenerated',
           LogCategory.STORE
         );

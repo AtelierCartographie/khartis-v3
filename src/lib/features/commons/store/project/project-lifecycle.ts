@@ -6,39 +6,23 @@ import {
   ProjectStorageKey,
   duplicateProject as duplicateProjectEntity,
   projectRepository,
-  projectStorage
+  projectStorage,
+  persistenceRegistry
 } from '$lib/features/project-management';
-import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
-import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
-import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-import { geoIndicationsActions } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
-import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-import { projectionActions } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
 import { sanitizeProjectName } from '../../utils/sanitize.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
-import { basemapStyleStore } from '../basemap-style.store.svelte';
 import type { UploadedFile } from '../create-project.types';
-import { visualizationStore } from '../visualization.store.svelte';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
 import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
 
 export function resetAllStores(): void {
-  basemapLayersStore.resetToDefaults();
-  basemapStyleStore.reset();
-  mapProjectionStore.reset();
-  visualizationStore.clear();
-  annotationsActions.reset();
-  formatActions.reset();
-  legendActions.reset();
-  geoIndicationsActions.reset();
-  projectionActions.reset();
+  persistenceRegistry.resetAll();
 }
 
 export async function createProject(

@@ -93,11 +93,6 @@ export function updateDataset(
   };
 
   state.datasets = replaceAtIndex(state.datasets, datasetIndex, updatedDataset);
-
-  logger.debug('Dataset updated', LogCategory.STORE, {
-    datasetId,
-    updates: Object.keys(updates)
-  });
 }
 
 export function updateDatasetRowCount(

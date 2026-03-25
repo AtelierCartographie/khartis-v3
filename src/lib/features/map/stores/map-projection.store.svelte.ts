@@ -2,6 +2,7 @@ import {
   MAP_PROJECTION_TYPE,
   type MapProjectionTypeValue
 } from '$lib/features/commons/constants';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
 export type MapProjectionType = MapProjectionTypeValue;
 
@@ -16,6 +17,7 @@ function createMapProjectionStore() {
 
   function setProjection(projection: MapProjectionType): void {
     state.projection = projection;
+    persistenceRegistry.notifyChange('mapProjection');
   }
 
   function toggle(): void {
@@ -23,6 +25,7 @@ function createMapProjectionStore() {
       state.projection === PROJECTION_MERCATOR
         ? PROJECTION_GLOBE
         : PROJECTION_MERCATOR;
+    persistenceRegistry.notifyChange('mapProjection');
   }
 
   function reset(): void {
@@ -55,3 +58,12 @@ function createMapProjectionStore() {
 }
 
 export const mapProjectionStore = createMapProjectionStore();
+
+persistenceRegistry.register({
+  key: 'mapProjection',
+  serialize: () => mapProjectionStore.projection,
+  deserialize: (data: unknown) =>
+    mapProjectionStore.restoreFromSerialized(data as MapProjectionType),
+  reset: () => mapProjectionStore.reset(),
+  priority: 'debounced'
+});

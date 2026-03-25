@@ -72,112 +72,128 @@ function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
 const { actions, getState } = createToolStore<
   ProjectionState,
   ProjectionActions
->(DEFAULT_STATE, (s) => {
-  const setSelectedInternal = (projectionId: string, applyToMap: boolean) => {
-    s.selected = projectionId;
-    s.customCode = undefined;
-    if (applyToMap) {
-      mapProjectionStore.setProjection(toMapProjectionType(projectionId));
-    }
-  };
-
-  const setSelected = (projectionId: string) => {
-    setSelectedInternal(projectionId, true);
-  };
-
-  return {
-    setSelected,
-    setCustomCode: (code: string | null) => {
-      s.customCode = code?.trim() || undefined;
-    },
-    setViewMode: (mode: ViewMode) => {
-      s.viewMode = mode;
-      globalActions.setProjectionViewMode(mode);
-    },
-    setCenter: (longitude: number, latitude: number) => {
-      s.center = [longitude, latitude];
-      s.longitude = longitude;
-      s.latitude = latitude;
-
-      const map = mapInstanceStore.map;
-      if (map) {
-        map.setCenter([longitude, latitude]);
+>(
+  DEFAULT_STATE,
+  (s) => {
+    const setSelectedInternal = (projectionId: string, applyToMap: boolean) => {
+      s.selected = projectionId;
+      s.customCode = undefined;
+      if (applyToMap) {
+        mapProjectionStore.setProjection(toMapProjectionType(projectionId));
       }
-    },
-    setRotation: (rotation: number) => {
-      s.rotation = rotation;
+    };
 
-      const map = mapInstanceStore.map;
-      if (map) {
-        map.setBearing(rotation);
-      }
-    },
-    setScale: (scale: number) => {
-      s.scale = Math.max(0.1, Math.min(10, scale));
-    },
-    setSimplifiedPreview: (value: boolean) => {
-      s.simplifiedPreview = value;
-    },
-    suggestProjectionForCurrentData: () => {
-      const geoDatasets = datasetsStore.getDatasetsByType(true);
-      if (geoDatasets.length === 0) return;
+    const setSelected = (projectionId: string) => {
+      setSelectedInternal(projectionId, true);
+    };
 
-      const firstDataset = geoDatasets[0];
-      if (!firstDataset.geometry?.bounds) return;
+    return {
+      setSelected,
+      setCustomCode: (code: string | null) => {
+        s.customCode = code?.trim() || undefined;
+      },
+      setViewMode: (mode: ViewMode) => {
+        s.viewMode = mode;
+        globalActions.setProjectionViewMode(mode);
+      },
+      setCenter: (longitude: number, latitude: number) => {
+        s.center = [longitude, latitude];
+        s.longitude = longitude;
+        s.latitude = latitude;
 
-      const bounds: [[number, number], [number, number]] = [
-        [firstDataset.geometry.bounds[0], firstDataset.geometry.bounds[1]],
-        [firstDataset.geometry.bounds[2], firstDataset.geometry.bounds[3]]
-      ];
+        const map = mapInstanceStore.map;
+        if (map) {
+          map.setCenter([longitude, latitude]);
+        }
+      },
+      setRotation: (rotation: number) => {
+        s.rotation = rotation;
 
-      const suggested = suggestProjection(bounds);
-      setSelectedInternal(suggested, true);
-    },
-    applyProjectionToDataset: (
-      datasetId: string,
-      width: number,
-      height: number
-    ): FeatureCollection | null => {
-      const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
-      if (!dataset || !dataset.data) return null;
+        const map = mapInstanceStore.map;
+        if (map) {
+          map.setBearing(rotation);
+        }
+      },
+      setScale: (scale: number) => {
+        s.scale = Math.max(0.1, Math.min(10, scale));
+      },
+      setSimplifiedPreview: (value: boolean) => {
+        s.simplifiedPreview = value;
+      },
+      suggestProjectionForCurrentData: () => {
+        const geoDatasets = datasetsStore.getDatasetsByType(true);
+        if (geoDatasets.length === 0) return;
 
-      const features: Feature<Geometry, Record<string, unknown>>[] =
-        dataset.data
-          .map((d) => {
-            if (!isGeometryCandidate(d.geometry)) {
-              return null;
-            }
-            return {
-              type: GEOJSON_TYPE.FEATURE,
-              geometry: d.geometry,
-              properties: d as Record<string, unknown>
-            };
-          })
-          .filter(
-            (feature): feature is Feature<Geometry, Record<string, unknown>> =>
-              feature !== null
+        const firstDataset = geoDatasets[0];
+        if (!firstDataset.geometry?.bounds) return;
+
+        const bounds: [[number, number], [number, number]] = [
+          [firstDataset.geometry.bounds[0], firstDataset.geometry.bounds[1]],
+          [firstDataset.geometry.bounds[2], firstDataset.geometry.bounds[3]]
+        ];
+
+        const suggested = suggestProjection(bounds);
+        setSelectedInternal(suggested, true);
+      },
+      applyProjectionToDataset: (
+        datasetId: string,
+        width: number,
+        height: number
+      ): FeatureCollection | null => {
+        const dataset = datasetsStore.datasets.find((d) => d.id === datasetId);
+        if (!dataset || !dataset.data) return null;
+
+        const features: Feature<Geometry, Record<string, unknown>>[] =
+          dataset.data
+            .map((d) => {
+              if (!isGeometryCandidate(d.geometry)) {
+                return null;
+              }
+              return {
+                type: GEOJSON_TYPE.FEATURE,
+                geometry: d.geometry,
+                properties: d as Record<string, unknown>
+              };
+            })
+            .filter(
+              (
+                feature
+              ): feature is Feature<Geometry, Record<string, unknown>> =>
+                feature !== null
+            );
+
+        if (features.length === 0) {
+          return null;
+        }
+
+        const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
+          type: GEOJSON_TYPE.FEATURE_COLLECTION,
+          features
+        };
+
+        if (s.autoFit) {
+          const projection = fitProjectionToGeoJSON(
+            geojson,
+            s.selected,
+            width,
+            height
           );
 
-      if (features.length === 0) {
-        return null;
-      }
+          const projected = projectGeoJSON(geojson, s.selected, {
+            scale: projection.scale(),
+            translate: projection.translate(),
+            rotate: [s.rotation, 0, 0],
+            center: s.center || [s.longitude, s.latitude]
+          });
 
-      const geojson: FeatureCollection<Geometry, Record<string, unknown>> = {
-        type: GEOJSON_TYPE.FEATURE_COLLECTION,
-        features
-      };
-
-      if (s.autoFit) {
-        const projection = fitProjectionToGeoJSON(
-          geojson,
-          s.selected,
-          width,
-          height
-        );
+          return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION
+            ? projected
+            : null;
+        }
 
         const projected = projectGeoJSON(geojson, s.selected, {
-          scale: projection.scale(),
-          translate: projection.translate(),
+          scale: (s.scale || 1) * 100,
+          translate: [width / 2, height / 2],
           rotate: [s.rotation, 0, 0],
           center: s.center || [s.longitude, s.latitude]
         });
@@ -185,24 +201,14 @@ const { actions, getState } = createToolStore<
         return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION
           ? projected
           : null;
+      },
+      getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
+        return getProjectionById(s.selected);
       }
-
-      const projected = projectGeoJSON(geojson, s.selected, {
-        scale: (s.scale || 1) * 100,
-        translate: [width / 2, height / 2],
-        rotate: [s.rotation, 0, 0],
-        center: s.center || [s.longitude, s.latitude]
-      });
-
-      return projected.type === GEOJSON_TYPE.FEATURE_COLLECTION
-        ? projected
-        : null;
-    },
-    getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
-      return getProjectionById(s.selected);
-    }
-  };
-});
+    };
+  },
+  { key: 'projection' }
+);
 
 export const projectionActions = actions;
 export const getProjectionState = getState;
