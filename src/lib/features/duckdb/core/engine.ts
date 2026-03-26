@@ -3,8 +3,11 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
+import coi_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.worker.js?url';
+import coi_pthread_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.pthread.worker.js?url';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
+import duckdb_wasm_coi from '@duckdb/duckdb-wasm/dist/duckdb-coi.wasm?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { DUCK_CONST, EXTENSIONS } from '../constants';
@@ -106,11 +109,9 @@ async function configureRuntimeSettings(): Promise<void> {
     });
   }
 
-  for (const pragma of pragmas) {
-    await executeQuery(connection, pragma, {
-      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-    });
-  }
+  await executeQuery(connection, pragmas.join('\n'), {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  });
 
   logger.debug('Runtime settings applied', LogCategory.DUCKDB, {
     durationMs: (performance.now() - start).toFixed(2)
@@ -206,11 +207,18 @@ export async function initEngine(): Promise<void> {
       const bundleStart = performance.now();
       const MANUAL_BUNDLES: DuckDBBundles = {
         mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
-        eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker }
+        eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker },
+        coi: {
+          mainModule: duckdb_wasm_coi,
+          mainWorker: coi_worker,
+          pthreadWorker: coi_pthread_worker
+        }
       };
       const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      bundleVariant =
-        bundle.mainModule === duckdb_wasm_eh || bundle.mainWorker === eh_worker
+      bundleVariant = bundle.pthreadWorker
+        ? 'eh'
+        : bundle.mainModule === duckdb_wasm_eh ||
+            bundle.mainWorker === eh_worker
           ? 'eh'
           : 'mvp';
       threadsSupported = Boolean(bundle.pthreadWorker);
