@@ -10,6 +10,7 @@ yarn-error.log*
 pnpm-debug.log*
 *-old
 .zed
+agent-browser.json
 
 # Diagnostic reports
 report.*.json
