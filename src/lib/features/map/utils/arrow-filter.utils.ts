@@ -10,13 +10,15 @@ import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { FilterOperatorEnum } from '$lib/features/duckdb/types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
-interface YearFilterCacheEntry {
-  column: string;
-  value: number | string;
-  result: ArrowTable;
-}
-
-const yearFilterCache = new WeakMap<ArrowTable, YearFilterCacheEntry>();
+/**
+ * Multi-entry year filter cache.
+ * WeakMap<sourceTable, Map<cacheKey, filteredTable>> allows caching multiple
+ * year filter results per source table. When the user cycles between years
+ * (e.g., 2020→2021→2020), the second visit to 2020 is a cache hit and returns
+ * the same table reference — which in turn preserves downstream WeakMap caches
+ * (GeoArrow binary parsing, GeoJSON conversion) and avoids costly re-parsing.
+ */
+const yearFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 /**
  * Build a new Arrow table containing only the rows at the given indices.
@@ -61,10 +63,12 @@ export function filterArrowTableByYear(
 
   const { column, value } = yearFilter;
 
-  // Check cache: same table reference + same filter params → return cached result
-  const cached = yearFilterCache.get(table);
-  if (cached && cached.column === column && cached.value === value) {
-    return cached.result;
+  // Check multi-entry cache: same table + same filter params → cached result
+  const cacheKey = `${column}:${value}`;
+  const tableCache = yearFilterCache.get(table);
+  if (tableCache) {
+    const cached = tableCache.get(cacheKey);
+    if (cached) return cached;
   }
 
   const columnIndex = table.schema.fields.findIndex(
@@ -100,10 +104,13 @@ export function filterArrowTableByYear(
 
   for (let i = 0; i < table.numRows; i++) {
     const cellValue = columnVector.get(i);
+    // Fast path: number > bigint > string fallback
     const numValue =
       typeof cellValue === 'number'
         ? cellValue
-        : parseInt(String(cellValue), 10);
+        : typeof cellValue === 'bigint'
+          ? Number(cellValue)
+          : parseInt(String(cellValue), 10);
     if (!isNaN(numValue) && numValue === targetValue) {
       matchingIndices.push(i);
     }
@@ -116,13 +123,23 @@ export function filterArrowTableByYear(
     });
   }
 
+  // Store in multi-entry cache (same table ref → multiple year values cached)
+  function cacheResult(result: ArrowTable): void {
+    const existing = yearFilterCache.get(table);
+    if (existing) {
+      existing.set(cacheKey, result);
+    } else {
+      yearFilterCache.set(table, new Map([[cacheKey, result]]));
+    }
+  }
+
   if (matchingIndices.length === table.numRows) {
-    yearFilterCache.set(table, { column, value, result: table });
+    cacheResult(table);
     return table;
   }
 
   const result = selectRowsByIndices(table, matchingIndices);
-  yearFilterCache.set(table, { column, value, result });
+  cacheResult(result);
   return result;
 }
 
@@ -164,7 +181,11 @@ function matchesOperator(
   }
 
   const numCell =
-    typeof cellValue === 'number' ? cellValue : parseFloat(String(cellValue));
+    typeof cellValue === 'number'
+      ? cellValue
+      : typeof cellValue === 'bigint'
+        ? Number(cellValue)
+        : parseFloat(String(cellValue));
   const numFilter = parseFloat(filterValue ?? '');
 
   if (isNaN(numCell) || isNaN(numFilter)) {
