@@ -118,7 +118,8 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
       categoryColorMap,
       highlightedRowIds: mapHighlightStore.hasHighlights
         ? mapHighlightStore.highlightedRowIds
-        : undefined
+        : undefined,
+      highlightVersion: mapHighlightStore.version
     };
   }
 
