@@ -70,6 +70,16 @@ export type DuckDBUnsafeBindings = {
   runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
 };
 
+export type DuckDBStreamingBindings = DuckDBUnsafeBindings & {
+  startPendingQuery(
+    conn: unknown,
+    query: string,
+    allowStreamResult?: boolean
+  ): Promise<Uint8Array | null>;
+  fetchQueryResults(conn: unknown): Promise<Uint8Array | null>;
+  cancelPendingQuery(conn: unknown): Promise<boolean>;
+};
+
 export interface TableMetadata {
   analysis?: AnalysisResults | null;
   join: JoinInfo | null;
