@@ -568,40 +568,48 @@ export async function readGeoParquetViaDuckDB(
       LogCategory.MAP,
       { sourceCrs: geoInfo.sourceCrs, geomCol }
     );
-    // Attempt 1: read_parquet with explicit GEOMETRY cast
-    try {
-      const result = await Duck.query(
-        `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM read_parquet('${escapedFileId}')`,
-        { format: 'arrow-ipc' }
-      );
-      let table = tableFromIPC(result as Uint8Array);
-      table = addGeoJsonMetadata(table, bbox);
-      logger.debug('Reprojection via read_parquet succeeded', LogCategory.MAP);
-      return table;
-    } catch (err1) {
-      logger.warn(
-        'Reprojection via read_parquet failed, trying ST_Read',
-        LogCategory.MAP,
-        { error: err1 }
-      );
-    }
-    // Attempt 2: ST_Read (GDAL) always returns GEOMETRY type
-    try {
-      const result = await Duck.query(
-        `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}", '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM ST_Read('${escapedFileId}')`,
-        { format: 'arrow-ipc' }
-      );
-      let table = tableFromIPC(result as Uint8Array);
-      table = addGeoJsonMetadata(table, bbox);
-      logger.debug('Reprojection via ST_Read succeeded', LogCategory.MAP);
-      return table;
-    } catch (err2) {
-      logger.warn('Reprojection via ST_Read also failed', LogCategory.MAP, {
-        error: err2
-      });
+
+    // Native GeoArrow encodings (point, polygon, etc.) use struct types that
+    // DuckDB cannot cast to GEOMETRY. Skip DuckDB reprojection entirely
+    // and go straight to client-side proj4 — saves ~200ms of failed queries.
+    const isNativeGeoArrowEncoding =
+      geoInfo.encoding &&
+      geoInfo.encoding !== 'wkb' &&
+      geoInfo.encoding !== 'WKB';
+
+    if (!isNativeGeoArrowEncoding) {
+      // WKB-encoded: try DuckDB reprojection (::GEOMETRY cast works for WKB)
+      try {
+        const result = await Duck.query(
+          `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM read_parquet('${escapedFileId}')`,
+          { format: 'arrow-ipc' }
+        );
+        let table = tableFromIPC(result as Uint8Array);
+        table = addGeoJsonMetadata(table, bbox);
+        return table;
+      } catch (err1) {
+        logger.warn(
+          'Reprojection via read_parquet failed, trying ST_Read',
+          LogCategory.MAP,
+          { error: err1 }
+        );
+      }
+      try {
+        const result = await Duck.query(
+          `SELECT * EXCLUDE ("${escapedGeomCol}"), ST_AsGeoJSON(ST_Transform("${escapedGeomCol}", '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}" FROM ST_Read('${escapedFileId}')`,
+          { format: 'arrow-ipc' }
+        );
+        let table = tableFromIPC(result as Uint8Array);
+        table = addGeoJsonMetadata(table, bbox);
+        return table;
+      } catch (err2) {
+        logger.warn('Reprojection via ST_Read also failed', LogCategory.MAP, {
+          error: err2
+        });
+      }
     }
 
-    // Attempt 3: client-side reprojection with proj4.js
+    // Client-side reprojection with proj4.js
     // DuckDB WASM's spatial extension cannot reproject this CRS.
     // Read raw geometry as GeoJSON, reproject each coordinate with proj4, rebuild Arrow table.
     if (isProjectionSupported(geoInfo.sourceCrs)) {
