@@ -12,6 +12,7 @@ import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
 export interface DuckDBClientForArrow {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  queryStreaming?(sql: string): Promise<Uint8Array>;
   describe_table(
     tableName: string
   ): Promise<{ name: string[]; type: string[] }>;
@@ -60,12 +61,31 @@ export async function fetchArrowTableWithGeometry(
     query += ` WHERE ${whereClause}`;
   }
 
+  // Use streaming when available — reduces peak WASM memory for large tables.
+  // Fallback to regular query() if streaming returns 0 rows (race condition
+  // in DuckDB WASM's useUnsafe API under concurrent query load).
+  let ipcBuffer: Uint8Array;
+  let usedStreaming = false;
+
+  if (Duck.queryStreaming) {
+    usedStreaming = true;
+    ipcBuffer = await Duck.queryStreaming(query);
+    const streamTable = tableFromIPC(ipcBuffer);
+    if (streamTable.numRows > 0 || whereClause) {
+      return streamTable;
+    }
+    // Streaming returned schema-only (0 rows) — retry with regular query
+    logger.debug(
+      'queryStreaming returned 0 rows, retrying with regular query',
+      LogCategory.DUCKDB,
+      { tableName, ipcBufferBytes: ipcBuffer.byteLength }
+    );
+  }
+
   const buffer = (await Duck.query(query, {
     format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
   })) as ArrayBuffer | Uint8Array;
-
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
   return tableFromIPC(ipcBuffer);
 }
@@ -75,16 +95,35 @@ async function fetchTableWithGeometryAsWkb(
   geometryColumn: string,
   Duck: DuckDBClientForArrow
 ): Promise<Table> {
-  const buffer = (await Duck.query(
-    `SELECT * REPLACE (
-        ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
-      )
-      FROM "${tableName}"`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  )) as ArrayBuffer | Uint8Array;
+  const query = `SELECT * REPLACE (
+      ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
+    )
+    FROM "${tableName}"`;
 
-  const ipcBuffer =
-    buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  // Use streaming when available — reduces peak WASM memory for large tables.
+  // Fallback to regular query() if streaming returns 0 rows (race condition
+  // in DuckDB WASM's useUnsafe API under concurrent query load).
+  let ipcBuffer: Uint8Array;
+
+  if (Duck.queryStreaming) {
+    ipcBuffer = await Duck.queryStreaming(query);
+    const streamTable = tableFromIPC(ipcBuffer);
+    if (streamTable.numRows > 0) {
+      return streamTable;
+    }
+    // Streaming returned schema-only (0 rows) — retry with regular query
+    logger.debug(
+      'queryStreaming returned 0 rows, retrying with regular query',
+      LogCategory.DUCKDB,
+      { tableName, ipcBufferBytes: ipcBuffer.byteLength }
+    );
+  }
+
+  const buffer = (await Duck.query(query, {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  })) as ArrayBuffer | Uint8Array;
+  ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+
   return tableFromIPC(ipcBuffer);
 }
 
