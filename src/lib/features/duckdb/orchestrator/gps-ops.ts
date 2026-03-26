@@ -39,14 +39,15 @@ export async function validateGPSColumns(
     const escapedTable = escapeIdentifier(tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${escapedLat}") as lat_min,
-        MAX("${escapedLat}") as lat_max,
-        MEDIAN("${escapedLat}") as lat_median,
-        MIN("${escapedLon}") as lon_min,
-        MAX("${escapedLon}") as lon_max,
-        MEDIAN("${escapedLon}") as lon_median
+        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_min,
+        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_max,
+        MEDIAN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_median,
+        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_min,
+        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_max,
+        MEDIAN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_median
       FROM "${escapedTable}"
-      WHERE "${escapedLat}" IS NOT NULL AND "${escapedLon}" IS NOT NULL`,
+      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL`,
       { format: 'array' }
     )) as Array<{
       lat_min: number;
@@ -202,16 +203,22 @@ export async function getGPSArrowTable(
   const escapedLat = escapeIdentifier(lat);
   const escapedTableName = escapeIdentifier(dataset.tableName);
 
+  // TRY_CAST to DOUBLE handles VARCHAR columns with leading whitespace
+  // (e.g., CSV ` 2.497` after semicolon delimiter). Without it, BETWEEN
+  // uses string comparison where " 2.49" < "-180" → 0 rows.
   await Duck.query(`
     CREATE OR REPLACE VIEW "${gpsView}" AS
     SELECT
       *,
-      ST_Point("${escapedLon}", "${escapedLat}") AS geom
+      ST_Point(
+        TRY_CAST("${escapedLon}" AS DOUBLE),
+        TRY_CAST("${escapedLat}" AS DOUBLE)
+      ) AS geom
     FROM "${escapedTableName}"
-    WHERE "${escapedLat}" IS NOT NULL
-      AND "${escapedLon}" IS NOT NULL
-      AND "${escapedLat}" BETWEEN -90 AND 90
-      AND "${escapedLon}" BETWEEN -180 AND 180
+    WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+      AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
+      AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
+      AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180
   `);
 
   const arrowTable = await getArrowTableDirect(gpsView);
@@ -249,16 +256,16 @@ export async function getGPSBounds(
     const escapedTableName = escapeIdentifier(dataset.tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${escapedLon}") as min_lon,
-        MIN("${escapedLat}") as min_lat,
-        MAX("${escapedLon}") as max_lon,
-        MAX("${escapedLat}") as max_lat,
+        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as min_lon,
+        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as min_lat,
+        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as max_lon,
+        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as max_lat,
         COUNT(*) as valid_count
       FROM "${escapedTableName}"
-      WHERE "${escapedLat}" IS NOT NULL
-        AND "${escapedLon}" IS NOT NULL
-        AND "${escapedLat}" BETWEEN -90 AND 90
-        AND "${escapedLon}" BETWEEN -180 AND 180`,
+      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180`,
       { format: 'array' }
     )) as Array<{
       min_lon: number;
