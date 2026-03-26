@@ -236,7 +236,10 @@ export interface VisualizationStore {
     id: string,
     updates: Partial<VisualizationConfig>
   ) => void;
-  duplicateVisualization: (id: string) => VisualizationConfig | null;
+  duplicateVisualization: (
+    id: string,
+    targetDatasetId?: string
+  ) => VisualizationConfig | null;
   removeVisualization: (id: string) => void;
   createBulkVisualizations: (configs: VisualizationConfig[]) => void;
   removeBulkVisualizations: (ids: string[]) => void;
@@ -637,7 +640,10 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => updates);
   }
 
-  function duplicateVisualization(id: string): VisualizationConfig | null {
+  function duplicateVisualization(
+    id: string,
+    targetDatasetId?: string
+  ): VisualizationConfig | null {
     const original = getVisualizationById(id);
     if (!original) {
       return null;
@@ -651,7 +657,8 @@ function createVisualizationStore(): VisualizationStore {
     const duplicatedVisualization: VisualizationConfig = {
       ...deepClone(original),
       id: crypto.randomUUID(),
-      name: duplicatedName
+      name: duplicatedName,
+      ...(targetDatasetId ? { datasetId: targetDatasetId } : {})
     };
 
     state.visualizations.push(duplicatedVisualization);

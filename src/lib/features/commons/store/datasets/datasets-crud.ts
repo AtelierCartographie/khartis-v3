@@ -75,7 +75,10 @@ export function updateDataset(
   state: DatasetsState,
   datasetId: string,
   updates: Partial<
-    Pick<DatasetResult, 'tableName' | 'columns' | 'simplificationApplied'>
+    Pick<
+      DatasetResult,
+      'tableName' | 'columns' | 'simplificationApplied' | 'metadata'
+    >
   >
 ): void {
   const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);

@@ -11,6 +11,7 @@ import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { projectStore } from '../project.store.svelte';
+import { visualizationStore } from '../visualization.store.svelte';
 
 export async function resetDataset(
   state: DatasetsState,
@@ -145,15 +146,28 @@ export async function duplicateDataset(
       name: copyName,
       tableName: newTableName,
       sourceFileId: virtualFileId,
-      columns: [...dataset.columns],
+      columns: dataset.columns.map((col) => ({
+        ...col,
+        ...(col.stats ? { stats: { ...col.stats } } : {})
+      })),
       metadata: {
         ...dataset.metadata,
         processedAt: new Date(),
         transformations: []
-      }
+      },
+      ...(dataset.geoDetection
+        ? {
+            geoDetection: {
+              ...dataset.geoDetection,
+              geoColumns: [...(dataset.geoDetection.geoColumns ?? [])],
+              warnings: [...(dataset.geoDetection.warnings ?? [])]
+            }
+          }
+        : {})
     };
 
     state.datasets = [...state.datasets, newDataset];
+    state.enabledDatasetIds.add(newId);
 
     await duckDBOrchestrator.registerExistingTable(
       newTableName,
@@ -164,11 +178,19 @@ export async function duplicateDataset(
       }
     );
 
+    // Duplicate visualizations from the original dataset
+    const originalVizs =
+      visualizationStore.getVisualizationsByDataset(datasetId);
+    for (const viz of originalVizs) {
+      visualizationStore.duplicateVisualization(viz.id, newId);
+    }
+
     logger.success('Dataset duplicated successfully', LogCategory.STORE, {
       originalId: datasetId,
       newId,
       newTableName,
-      virtualFileId
+      virtualFileId,
+      vizCount: originalVizs.length
     });
 
     return newId;
