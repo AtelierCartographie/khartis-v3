@@ -151,33 +151,44 @@ function createBasemapService() {
   }
 
   async function fetchGeometryFile(
-    filename: string
+    filename: string,
+    preferParquet = false
   ): Promise<{ response: Response; isGeoJSON: boolean }> {
-    let url = getGeometryUrl(filename, 'geojson');
+    // When the caller knows the basemap is projected (Lambert-93, etc.),
+    // the file is parquet-only. Try parquet first to avoid a 404 on GeoJSON.
+    // For WGS84 basemaps, GeoJSON is the only format — try it first.
+    const firstFormat = preferParquet ? 'parquet' : 'geojson';
+    const secondFormat = preferParquet ? 'geojson' : 'parquet';
+
+    let url = getGeometryUrl(filename, firstFormat);
     let response = await fetch(url);
 
     if (response.ok) {
-      return { response, isGeoJSON: true };
+      return { response, isGeoJSON: firstFormat === 'geojson' };
     }
 
-    url = getGeometryUrl(filename, 'parquet');
+    url = getGeometryUrl(filename, secondFormat);
     response = await fetch(url);
 
     if (!response.ok) {
       throw new Error(`Failed to fetch geometry: ${response.statusText}`);
     }
 
-    return { response, isGeoJSON: false };
+    return { response, isGeoJSON: secondFormat === 'geojson' };
   }
 
   async function loadGeometryFromParquet(
     filename: string,
-    bbox?: [number, number, number, number]
+    bbox?: [number, number, number, number],
+    preferParquet = false
   ): Promise<ArrowTable> {
     const start = performance.now();
     logger.debug('Loading basemap geometry', LogCategory.MAP, { filename });
 
-    const { response, isGeoJSON } = await fetchGeometryFile(filename);
+    const { response, isGeoJSON } = await fetchGeometryFile(
+      filename,
+      preferParquet
+    );
 
     let jsTable: ArrowTable;
 
@@ -240,12 +251,18 @@ function createBasemapService() {
     const loadableLayers = metadata.layers.filter((l) => l.file);
     if (loadableLayers.length === 0) return layerTables;
 
+    const isProjected =
+      !!metadata.projection && metadata.projection !== 'WGS84';
     const results = await Promise.allSettled(
       loadableLayers.map(async (layer) => {
         const table =
           metadata.isCustom && (await doesDuckTableExist(layer.file!))
             ? await loadGeometryFromDuckTable(layer.file!)
-            : await loadGeometryFromParquet(layer.file!);
+            : await loadGeometryFromParquet(
+                layer.file!,
+                undefined,
+                isProjected
+              );
         return { file: layer.file!, table };
       })
     );
@@ -308,10 +325,12 @@ function createBasemapService() {
       const start = performance.now();
       logger.debug('Loading basemap', LogCategory.MAP, { basemapId });
 
+      const isProjected =
+        !!metadata.projection && metadata.projection !== 'WGS84';
       const [geometryTable, layerTables] = await Promise.all([
         metadata.isCustom
           ? loadCustomBasemapGeometry(metadata)
-          : loadGeometryFromParquet(metadata.file, metadata.bbox),
+          : loadGeometryFromParquet(metadata.file, metadata.bbox, isProjected),
         loadBasemapLayers(metadata)
       ]);
 
@@ -608,10 +627,10 @@ function createBasemapService() {
       `CREATE OR REPLACE TABLE "${variantTableName}" AS SELECT * FROM '${variantFile}'`
     );
 
-    const variantTable = (await Duck.query(
-      `SELECT * FROM "${variantTableName}"`,
-      { format: 'arrow-table' }
-    )) as ArrowTable;
+    const variantTable = await fetchArrowTableWithGeometry(
+      variantTableName,
+      Duck
+    );
 
     loadedBasemap.simplifiedVariants.set(level, variantTable);
     loadedBasemap.activeSimplificationLevel = level;

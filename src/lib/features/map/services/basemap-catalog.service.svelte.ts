@@ -232,8 +232,13 @@ function createBasemapCatalogService() {
     return state.catalog.basemaps
       .map((basemap) => {
         const area = overlapArea(basemap.bbox);
+        // Handle single-point datasets (dataArea === 0): score by containment
         const matchScore =
-          dataArea > 0 ? Math.min((area / dataArea) * 100, 100) : 0;
+          dataArea > 0
+            ? Math.min((area / dataArea) * 100, 100)
+            : area > 0
+              ? 100
+              : 0;
         return { ...basemap, matchScore, matchReason: 'GPS bbox overlap' };
       })
       .filter((s) => s.matchScore > 0)
