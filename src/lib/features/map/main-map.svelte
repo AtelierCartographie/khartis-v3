@@ -3,14 +3,11 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-  import {
-    InlineNotification,
-    SkeletonPlaceholder
-  } from 'carbon-components-svelte';
+  import { InlineNotification } from 'carbon-components-svelte';
   import { WarningAlt } from 'carbon-icons-svelte';
   import type { FeatureCollection } from 'geojson';
   import { onMount, untrack } from 'svelte';
-  import { cubicOut } from 'svelte/easing';
+
   import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
@@ -28,6 +25,7 @@
     formatState
   } from '../step-toolbar/tools/format/format.store.svelte';
   import { EVENT } from '../commons/constants/dom.constants';
+  import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
@@ -38,6 +36,7 @@
 
   let isInitializing = $state(true);
   let isMapReady = $state(false);
+  const skeletonShownAt = Date.now();
   let hasError = $state(false);
   let errorMessage = $state<string | null>(null);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -563,6 +562,9 @@
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
       }
+      if (skeletonTimeoutId) {
+        clearTimeout(skeletonTimeoutId);
+      }
       cleanupTransitionListener();
       if (containerResizeTimeoutId) {
         clearTimeout(containerResizeTimeoutId);
@@ -572,9 +574,21 @@
     };
   });
 
+  const MIN_SKELETON_DISPLAY_MS = 1000;
+  let skeletonTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   function handleMapReady() {
     logger.success('Map fully rendered', LogCategory.MAP);
-    isMapReady = true;
+    const elapsed = Date.now() - skeletonShownAt;
+    const remaining = Math.max(0, MIN_SKELETON_DISPLAY_MS - elapsed);
+    if (remaining === 0) {
+      isMapReady = true;
+    } else {
+      skeletonTimeoutId = setTimeout(() => {
+        skeletonTimeoutId = null;
+        isMapReady = true;
+      }, remaining);
+    }
   }
 
   const colorBlindnessState = $derived(getColorBlindnessState());
@@ -661,16 +675,14 @@
 </script>
 
 <div class="main-map-container" bind:this={containerRef}>
-  <!-- Skeleton loader - only during initial load -->
-  {#if !isMapReady}
-    <div
-      class="skeleton-loader"
-      style="width: {formatState.width}px; height: {formatState.height}px;"
-      out:fade={{ duration: 300, easing: cubicOut }}
-    >
-      <SkeletonPlaceholder style="width: 100%; height: 100%;" />
-    </div>
-  {/if}
+  <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
+  <div
+    class="skeleton-loader"
+    class:hidden={isMapReady}
+    style="width: {formatState.width}px; height: {formatState.height}px;"
+  >
+    <MapSkeleton paused={isMapReady} />
+  </div>
 
   <!-- Map wrapper - always rendered once initialized -->
   {#if !isInitializing && hasError}
@@ -765,11 +777,13 @@
     pointer-events: none;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     border-radius: 2px;
+    opacity: 1;
+    transition: opacity 0.3s cubic-bezier(0.33, 1, 0.68, 1);
   }
 
-  .skeleton-loader :global(.bx--skeleton__placeholder) {
-    width: 100%;
-    height: 100%;
+  .skeleton-loader.hidden {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .error-state {
