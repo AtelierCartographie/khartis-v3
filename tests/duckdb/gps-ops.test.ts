@@ -376,7 +376,9 @@ describe('getGPSArrowTable', () => {
       expect.stringContaining('CREATE OR REPLACE VIEW "gps_world_data" AS')
     );
     expect(Duck.query).toHaveBeenCalledWith(
-      expect.stringContaining('ST_Point("longitude", "latitude") AS geom')
+      expect.stringContaining(
+        'ST_Point(\n        TRY_CAST("longitude" AS DOUBLE),\n        TRY_CAST("latitude" AS DOUBLE)\n      ) AS geom'
+      )
     );
     expect(getArrowTableDirect).toHaveBeenCalledWith('gps_world_data');
     expect(result).toEqual({
