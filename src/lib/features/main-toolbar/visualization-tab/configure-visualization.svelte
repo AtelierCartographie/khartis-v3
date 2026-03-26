@@ -375,6 +375,24 @@
       computeBreaksForVisualization('$effect:classificationParamsChanged');
     }
   });
+
+  // Regenerate palette colors when color blindness toggle changes
+  $effect(() => {
+    const cbEnabled = getColorBlindnessState().enabled;
+    const vizId = selectedViz?.id;
+    const classification = selectedViz?.classification;
+    if (!vizId || !classification?.colors?.length || !classification.paletteId)
+      return;
+    const contrast = cbEnabled ? ('high' as const) : undefined;
+    const palette = findPaletteById(classification.paletteId);
+    if (!palette) return;
+    const colors = generatePaletteColors(
+      palette,
+      classification.colors.length,
+      contrast
+    );
+    visualizationStore.updateClassification(vizId, { colors });
+  });
 </script>
 
 <section id="configure-visualization">
