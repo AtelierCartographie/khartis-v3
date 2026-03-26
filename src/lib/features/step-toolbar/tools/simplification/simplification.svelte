@@ -198,7 +198,7 @@
           step={1}
           value={state.rate}
           on:change={(e) => {
-            store.setRate((e as CustomEvent).detail || 50);
+            store.setRate((e as CustomEvent).detail ?? 50);
             scheduleSimplificationApply('rate-change', 250);
           }}
           labelText=""
