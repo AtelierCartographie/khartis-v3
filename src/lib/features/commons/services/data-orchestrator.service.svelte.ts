@@ -35,6 +35,7 @@ import {
   generateColorsForBreaks
 } from './classification.service';
 import { FillMode } from '../../main-toolbar/constants';
+import { getColorBlindnessState } from '../../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 import {
   findPaletteById,
   generatePaletteColors
@@ -232,15 +233,12 @@ function createDataOrchestratorService() {
             duckResult.tableName
           );
 
-          const updatedDataset = datasetsStore.datasets.find(
-            (d) => d.id === dataset.id
-          );
-          if (updatedDataset) {
-            updatedDataset.metadata = {
-              ...updatedDataset.metadata,
+          datasetsStore.updateDataset(dataset.id, {
+            metadata: {
+              ...dataset.metadata,
               geoDuckTableReady: true
-            };
-          }
+            }
+          });
 
           geometryDatasetsVersion++;
         }
@@ -307,15 +305,12 @@ function createDataOrchestratorService() {
                 duckResult.tableName
               );
 
-              const updatedDataset = datasetsStore.datasets.find(
-                (d) => d.id === dataset.id
-              );
-              if (updatedDataset) {
-                updatedDataset.metadata = {
-                  ...updatedDataset.metadata,
+              datasetsStore.updateDataset(dataset.id, {
+                metadata: {
+                  ...dataset.metadata,
                   geoDuckTableReady: true
-                };
-              }
+                }
+              });
 
               geometryDatasetsVersion++;
             }
@@ -791,12 +786,15 @@ function createDataOrchestratorService() {
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
+          const contrast = getColorBlindnessState().enabled
+            ? ('high' as const)
+            : undefined;
           const userPalette = viz.classification?.paletteId
             ? findPaletteById(viz.classification.paletteId)
             : undefined;
           colors = userPalette
-            ? generatePaletteColors(userPalette, actualNumClasses)
-            : generateColorsForBreaks(actualNumClasses, 'sequential');
+            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            : generateColorsForBreaks(actualNumClasses, 'sequential', contrast);
         }
 
         visualizationStore.updateClassification(viz.id, {
@@ -861,8 +859,23 @@ function createDataOrchestratorService() {
     return false;
   }
 
+  /** Set to true once onProjectChanged() completes. If initialize() runs after,
+   *  it skips the migration + breaks work that onProjectChanged already did. */
+  let projectAlreadyRestored = false;
+
   async function initialize(): Promise<void> {
     await projectStore.waitForInit();
+
+    // onProjectChanged() may have already been called during projectStore init
+    // (via loadLastProject → loadProject). If so, skip duplicate restoration.
+    if (projectAlreadyRestored) {
+      logger.debug(
+        'initialize() skipping — onProjectChanged already restored project',
+        LogCategory.DATA
+      );
+      return;
+    }
+
     const currentProject = projectStore.currentProject;
 
     const vizSettings = (
@@ -937,6 +950,8 @@ function createDataOrchestratorService() {
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
     globalActions.ensureTabSelected();
+
+    projectAlreadyRestored = true;
   }
 
   return {
