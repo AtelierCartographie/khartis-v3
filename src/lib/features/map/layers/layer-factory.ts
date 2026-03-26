@@ -6,6 +6,7 @@ import {
   PathLayer,
   ScatterplotLayer
 } from '@deck.gl/layers';
+import { DataFilterExtension } from '@deck.gl/extensions';
 import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -30,7 +31,8 @@ import type {
   GeometryInfo,
   LayerContext,
   RGBColor,
-  ThematicLayer
+  ThematicLayer,
+  YearFilterInfo
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
@@ -70,7 +72,11 @@ import {
   parsePointData,
   pointColorAttr,
   pointRadiusAttr,
-  rowAccessor
+  rowAccessor,
+  filterValueAttr,
+  polygonCentroids,
+  pathCentroids,
+  pointPositions
 } from '../utils/geoarrow-stream-bridge';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
@@ -102,6 +108,44 @@ function getCachedGeoJSON(
   const result = arrowTableToGeoJSON(table, geoColumn);
   columnMap.set(geoColumn, result);
   return result;
+}
+
+/** Cached DataFilterExtension singleton — reused across all layers with year filtering */
+const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
+
+/**
+ * Build DataFilterExtension props for a binary layer when yearFilter is active.
+ * Injects getFilterValue binary attribute into data.attributes and returns
+ * layer props (extensions, filterRange, updateTriggers).
+ */
+function buildYearFilterProps(
+  binaryData: { readonly length: number; readonly featureIds: Uint32Array },
+  dataObj: { attributes: Record<string, unknown> },
+  table: ArrowTable,
+  yearFilter: YearFilterInfo
+): Record<string, unknown> {
+  const filterAttr = filterValueAttr(binaryData, table, yearFilter.column);
+  dataObj.attributes.getFilterValue = filterAttr;
+  return {
+    extensions: [DATA_FILTER_EXTENSION],
+    filterRange: [yearFilter.value, yearFilter.value] as [number, number]
+  };
+}
+
+/**
+ * Build DataFilterExtension props for a GeoJSON layer when yearFilter is active.
+ */
+function buildGeoJsonYearFilterProps(
+  yearFilter: YearFilterInfo
+): Record<string, unknown> {
+  return {
+    extensions: [DATA_FILTER_EXTENSION],
+    getFilterValue: (feature: { properties?: Record<string, unknown> }) => {
+      const raw = feature.properties?.[yearFilter.column];
+      return typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+    },
+    filterRange: [yearFilter.value, yearFilter.value] as [number, number]
+  };
 }
 
 /** Cached RotatableFillStyleExtension instance (reused across renders) */
@@ -303,6 +347,80 @@ function createTextLayerData(
   return output;
 }
 
+/**
+ * Create TextLayerDatum[] from binary geometry data + Arrow column values.
+ * Avoids the full ArrowTable → GeoJSON conversion for native GeoArrow data.
+ */
+function createTextLayerDataFromBinary(
+  table: ArrowTable,
+  geoInfo: GeometryInfo,
+  primaryColumn: string,
+  secondaryColumn?: string
+): TextLayerDatum[] {
+  const geoType = geoInfo.type;
+  let centroids: Float64Array;
+  let featureIds: Uint32Array;
+
+  if (
+    geoType === GeometryType.POLYGON ||
+    geoType === GeometryType.MULTIPOLYGON
+  ) {
+    const polyData = parseSolidPolygons(table);
+    centroids = polygonCentroids(polyData);
+    featureIds = polyData.featureIds;
+  } else if (
+    geoType === GeometryType.LINESTRING ||
+    geoType === GeometryType.MULTILINESTRING
+  ) {
+    const lineData = parsePaths(table);
+    centroids = pathCentroids(lineData);
+    featureIds = lineData.featureIds;
+  } else if (
+    geoType === GeometryType.POINT ||
+    geoType === GeometryType.MULTIPOINT
+  ) {
+    const ptData = parsePointData(table);
+    centroids = pointPositions(ptData);
+    featureIds = ptData.featureIds;
+  } else {
+    return [];
+  }
+
+  const primaryVector = table.getChild(primaryColumn);
+  if (!primaryVector) return [];
+  const secondaryVector = secondaryColumn
+    ? table.getChild(secondaryColumn)
+    : null;
+
+  const output: TextLayerDatum[] = [];
+  const numFeatures = centroids.length / 2;
+  const seen = new Set<number>();
+
+  for (let i = 0; i < numFeatures; i++) {
+    const fid = featureIds[i];
+    // Deduplicate: multi-geometry features share the same featureId
+    if (seen.has(fid)) continue;
+    seen.add(fid);
+
+    const primaryText = toTextValue(primaryVector.get(fid));
+    if (!primaryText) continue;
+
+    const x = centroids[i * 2];
+    const y = centroids[i * 2 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+    const secondaryText = secondaryVector
+      ? toTextValue(secondaryVector.get(fid))
+      : null;
+
+    output.push({
+      position: [x, y],
+      text: secondaryText ? `${primaryText}\n${secondaryText}` : primaryText
+    });
+  }
+  return output;
+}
+
 function createTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
@@ -322,29 +440,66 @@ function createTextOverlayLayers(
     return [];
   }
 
-  let geojsonData: FeatureCollection | null;
-  try {
-    geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
-  } catch (error) {
-    logger.warn(
-      'Failed to convert geometry for text overlays, skipping labels/texts',
-      LogCategory.MAP,
-      {
-        datasetId: ctx.datasetId,
-        error: error instanceof Error ? error.message : String(error)
+  // Opt 3: For native GeoArrow data, compute centroids from binary data directly.
+  // This avoids a full ArrowTable → GeoJSON conversion just to get label positions.
+  const isNativeGeoArrow =
+    geometryInfo.isNativeGeoArrow ||
+    (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
+  let textLayerData: TextLayerDatum[] | null = null;
+  let textLayerDataWithSecondary: TextLayerDatum[] | null = null;
+
+  if (isNativeGeoArrow) {
+    try {
+      textLayerData = createTextLayerDataFromBinary(
+        jsTable,
+        geometryInfo,
+        viz.mapping.labelColumn
+      );
+      if (viz.mapping.secondaryLabelColumn) {
+        textLayerDataWithSecondary = createTextLayerDataFromBinary(
+          jsTable,
+          geometryInfo,
+          viz.mapping.labelColumn,
+          viz.mapping.secondaryLabelColumn
+        );
       }
-    );
-    return [];
+    } catch {
+      // Fall through to GeoJSON path
+      textLayerData = null;
+    }
   }
 
-  if (!geojsonData) {
-    return [];
+  // Fallback: GeoJSON conversion (for WKB/GeoJSON-encoded data, or if binary failed)
+  if (!textLayerData) {
+    let geojsonData: FeatureCollection | null;
+    try {
+      geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
+    } catch (error) {
+      logger.warn(
+        'Failed to convert geometry for text overlays, skipping labels/texts',
+        LogCategory.MAP,
+        {
+          datasetId: ctx.datasetId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      return [];
+    }
+    if (!geojsonData) return [];
+    textLayerData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
+    if (viz.mapping.secondaryLabelColumn) {
+      textLayerDataWithSecondary = createTextLayerData(
+        geojsonData,
+        viz.mapping.labelColumn,
+        viz.mapping.secondaryLabelColumn
+      );
+    }
   }
 
   const layers: ThematicLayer[] = [];
 
   if (shouldRenderLabelLayer) {
-    const labelData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
+    const labelData = textLayerData;
     if (labelData.length > 0) {
       const labelColor = resolveStyleColor(viz.style.labelColor, ctx.fillColor);
       const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
@@ -388,11 +543,7 @@ function createTextOverlayLayers(
   }
 
   if (shouldRenderTextLayer) {
-    const textData = createTextLayerData(
-      geojsonData,
-      viz.mapping.labelColumn,
-      viz.mapping.secondaryLabelColumn
-    );
+    const textData = textLayerDataWithSecondary ?? textLayerData;
     if (textData.length > 0) {
       const textColor = resolveStyleColor(viz.style.textColor, ctx.fillColor);
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
@@ -460,6 +611,7 @@ export function createPointLayers(
     beforeId
   } = ctx;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
   const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
@@ -570,14 +722,14 @@ export function createPointLayers(
         highlightColor: HOVER_HIGHLIGHT_COLOR,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
+        ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
         updateTriggers: {
           getFillColor: [
             useCategoricalColor,
             viz?.mapping.categoryColumn,
             categoryColorMap,
             fillColor,
-            hasHighlights,
-            highlightedRowIds
+            hlVersion
           ],
           getPointRadius: [
             useProportionalSymbols,
@@ -588,12 +740,10 @@ export function createPointLayers(
             viz?.symbols?.maxSize,
             viz?.symbols?.sizeScale
           ],
-          getLineColor: [
-            strokeColor,
-            rawStrokeOpacity,
-            hasHighlights,
-            highlightedRowIds
-          ]
+          getLineColor: [strokeColor, rawStrokeOpacity, hlVersion],
+          ...(ctx.yearFilter && {
+            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+          })
         }
       })
     ];
@@ -679,6 +829,16 @@ export function createPointLayers(
     scatterBinaryData.attributes.getPointRadius = radiusBinAttr;
   }
 
+  // DataFilterExtension for GPU-side year filtering (binary points)
+  const yearFilterProps = ctx.yearFilter
+    ? buildYearFilterProps(
+        pointData,
+        scatterBinaryData,
+        jsTable,
+        ctx.yearFilter
+      )
+    : null;
+
   return [
     new ScatterplotLayer({
       id: layerId,
@@ -701,14 +861,14 @@ export function createPointLayers(
       highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...yearFilterProps,
       updateTriggers: {
         getFillColor: [
           useCategoricalColor,
           viz?.mapping.categoryColumn,
           categoryColorMap,
           fillColor,
-          hasHighlights,
-          highlightedRowIds
+          hlVersion
         ],
         getRadius: [
           useProportionalSymbols,
@@ -719,12 +879,10 @@ export function createPointLayers(
           viz?.symbols?.maxSize,
           viz?.symbols?.sizeScale
         ],
-        getLineColor: [
-          strokeColor,
-          rawStrokeOpacity,
-          hasHighlights,
-          highlightedRowIds
-        ]
+        getLineColor: [strokeColor, rawStrokeOpacity, hlVersion],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
       }
     })
   ];
@@ -761,6 +919,7 @@ export function createLineLayers(
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -867,6 +1026,11 @@ export function createLineLayers(
       pathBinaryData.attributes.getWidth = widthBinaryAttr;
     }
 
+    // DataFilterExtension for GPU-side year filtering (binary lines)
+    const lineYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(lineData, pathBinaryData, jsTable, ctx.yearFilter)
+      : null;
+
     return [
       new PathLayer({
         id: layerId,
@@ -882,6 +1046,7 @@ export function createLineLayers(
         highlightColor: HOVER_HIGHLIGHT_COLOR,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
+        ...lineYearFilterProps,
         updateTriggers: {
           getColor: [
             useChoropleth,
@@ -893,8 +1058,7 @@ export function createLineLayers(
             categoryColorMap,
             resolvedLineColor,
             normalizedLineOpacity,
-            hasLineHighlights,
-            lineHighlightedRowIds
+            hlVersion
           ],
           getWidth: [
             useProportionalWidth,
@@ -904,7 +1068,10 @@ export function createLineLayers(
             maxLineWidth,
             resolvedSizeScale,
             resolvedLineWidth
-          ]
+          ],
+          ...(ctx.yearFilter && {
+            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+          })
         }
       })
     ];
@@ -1011,6 +1178,7 @@ export function createLineLayers(
       highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
       updateTriggers: {
         getLineColor: [
           useChoropleth,
@@ -1022,8 +1190,7 @@ export function createLineLayers(
           categoryColorMap,
           resolvedLineColor,
           normalizedLineOpacity,
-          hasLineHighlights,
-          lineHighlightedRowIds
+          hlVersion
         ],
         getLineWidth: [
           useProportionalWidth,
@@ -1033,7 +1200,10 @@ export function createLineLayers(
           maxLineWidth,
           resolvedSizeScale,
           resolvedLineWidth
-        ]
+        ],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
       }
     })
   ];
@@ -1057,6 +1227,7 @@ export function createPolygonLayers(
   } = ctx;
   const hasPolyHighlights =
     polyHighlightedRowIds && polyHighlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -1135,12 +1306,17 @@ export function createPolygonLayers(
 
     // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
     const solidProps = createSolidPolygonLayerProps(polyData);
+    const solidBinaryData = solidProps.data as {
+      attributes: Record<string, unknown>;
+    };
     if (fillColorBinaryAttr) {
-      const binaryData = solidProps.data as {
-        attributes: Record<string, unknown>;
-      };
-      binaryData.attributes.getFillColor = fillColorBinaryAttr;
+      solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
     }
+
+    // DataFilterExtension for GPU-side year filtering (binary polygons)
+    const polyYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(polyData, solidBinaryData, jsTable, ctx.yearFilter)
+      : {};
 
     // Fill layer
     layers.push(
@@ -1161,6 +1337,7 @@ export function createPolygonLayers(
         highlightColor: HOVER_HIGHLIGHT_COLOR,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
+        ...polyYearFilterProps,
         updateTriggers: {
           getFillColor: [
             useChoropleth,
@@ -1168,21 +1345,33 @@ export function createPolygonLayers(
             viz?.classification?.breaks,
             viz?.classification?.colors,
             fillColor,
-            hasPolyHighlights,
-            polyHighlightedRowIds
-          ]
+            hlVersion
+          ],
+          ...(ctx.yearFilter && {
+            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+          })
         }
       })
     );
 
     // Stroke layer — inject binary color into data.attributes if needed
     const strokePathProps = createPathLayerProps(outlineData);
+    const strokeBinaryData = strokePathProps.data as {
+      attributes: Record<string, unknown>;
+    };
     if (strokeColorBinaryAttr) {
-      const strokeBinaryData = strokePathProps.data as {
-        attributes: Record<string, unknown>;
-      };
       strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
     }
+
+    // DataFilterExtension for GPU-side year filtering (binary polygon strokes)
+    const strokeYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(
+          outlineData,
+          strokeBinaryData,
+          jsTable,
+          ctx.yearFilter
+        )
+      : {};
 
     layers.push(
       new PathLayer({
@@ -1196,14 +1385,13 @@ export function createPolygonLayers(
         pickable: false,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
+        ...strokeYearFilterProps,
         updateTriggers: {
-          getColor: [
-            strokeColor,
-            rawPolyStrokeOpacity,
-            hasPolyHighlights,
-            polyHighlightedRowIds
-          ],
-          getWidth: [strokeWidth]
+          getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+          getWidth: [strokeWidth],
+          ...(ctx.yearFilter && {
+            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+          })
         }
       })
     );
@@ -1330,6 +1518,7 @@ export function createPolygonLayers(
       highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
       updateTriggers: {
         getFillColor: [
           useChoropleth,
@@ -1337,15 +1526,12 @@ export function createPolygonLayers(
           viz?.classification?.breaks,
           viz?.classification?.colors,
           fillColor,
-          hasPolyHighlights,
-          polyHighlightedRowIds
+          hlVersion
         ],
-        getLineColor: [
-          strokeColor,
-          rawPolyStrokeOpacity,
-          hasPolyHighlights,
-          polyHighlightedRowIds
-        ]
+        getLineColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
       },
       dataComparator: (newData, oldData) => newData === oldData
     })
@@ -1427,7 +1613,8 @@ export function createDeckLayers(
   jsTable: ArrowTable,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const geometryInfo = extractGeometryInfo(jsTable);
+  // Opt 5: reuse pre-computed geometryInfo from context when available
+  const geometryInfo = ctx.geometryInfo ?? extractGeometryInfo(jsTable);
 
   if (!geometryInfo) {
     const hasUserDataset = Boolean(ctx.datasetId);

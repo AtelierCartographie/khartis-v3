@@ -72,6 +72,11 @@ export interface DeckMapProps {
   syncViewState?: FacetSyncViewState | null;
 }
 
+export interface YearFilterInfo {
+  column: string;
+  value: number;
+}
+
 export interface LayerContext {
   viz:
     | import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig
@@ -85,9 +90,15 @@ export interface LayerContext {
   statistics: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
+  /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
+  highlightVersion?: number;
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   beforeId?: string;
+  /** Pre-computed geometry info — avoids redundant extractGeometryInfo() calls */
+  geometryInfo?: GeometryInfo;
+  /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
+  yearFilter?: YearFilterInfo;
 }
 
 export type BBox = [number, number, number, number];

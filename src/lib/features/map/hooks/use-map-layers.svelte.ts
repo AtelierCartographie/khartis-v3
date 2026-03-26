@@ -23,7 +23,6 @@ import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
-  filterArrowTableByYear,
   filterArrowTableByDataFilters,
   filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
@@ -209,25 +208,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      // Pre-filter Arrow tables by (datasetId, yearFilter) to avoid
-      // redundant filtering when multiple visualizations share the same table + filter.
-      const yearFilteredTableCache = new Map<string, ArrowTable>();
-
-      function getFilteredTable(
-        table: ArrowTable,
-        datasetId: string,
-        yearFilter: (typeof activeVisualizations)[0]['yearFilter']
-      ): ArrowTable {
-        const cacheKey = yearFilter
-          ? `${datasetId}:${yearFilter.column}:${yearFilter.value}`
-          : datasetId;
-        const cached = yearFilteredTableCache.get(cacheKey);
-        if (cached) return cached;
-        const result = filterArrowTableByYear(table, yearFilter);
-        yearFilteredTableCache.set(cacheKey, result);
-        return result;
-      }
-
       const renderedDatasetIds = new Set<string>();
       for (const viz of activeVisualizations) {
         try {
@@ -257,16 +237,30 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               continue;
             }
             const geoInfo = extractGeometryInfo(table);
+            ctx.geometryInfo = geoInfo ?? undefined;
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-            const yearFiltered = getFilteredTable(
-              table,
-              datasetId,
-              viz.yearFilter
-            );
+
+            // Year filter: pass through context for GPU-side DataFilterExtension.
+            // The full (unfiltered) table is passed to createDeckLayers so that
+            // the GeoArrow binary parse cache (WeakMap) stays stable across year changes.
+            // Data filters and table filters still apply JS-side (they change table structure).
+            if (viz.yearFilter) {
+              const yearValue =
+                typeof viz.yearFilter.value === 'number'
+                  ? viz.yearFilter.value
+                  : parseInt(String(viz.yearFilter.value), 10);
+              if (!isNaN(yearValue)) {
+                ctx.yearFilter = {
+                  column: viz.yearFilter.column,
+                  value: yearValue
+                };
+              }
+            }
+
             const vizFiltered = filterArrowTableByDataFilters(
-              yearFiltered,
+              table,
               viz.dataFilters,
               tablePrimitiveType
             );
