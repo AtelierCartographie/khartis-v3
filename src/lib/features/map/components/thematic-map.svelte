@@ -856,7 +856,6 @@
         logger.info('Loading reference basemap', LogCategory.MAP, {
           basemapId: refId
         });
-        let loadFailed = false;
         try {
           const loaded = await basemapService.loadBasemap(refId);
           if (requestId !== referenceBasemapRequestId) {
@@ -874,8 +873,7 @@
                   loaded.geometryTable
                 );
                 if (!bounds && loaded.metadata.bbox) {
-                  const [minLng, minLat, maxLng, maxLat] =
-                    loaded.metadata.bbox;
+                  const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
                   bounds = [
                     [minLng, minLat],
                     [maxLng, maxLat]
@@ -905,7 +903,6 @@
               }
             }
           } else {
-            loadFailed = true;
             logger.error(
               'Failed to load reference basemap — not found in service',
               LogCategory.MAP,
@@ -1192,10 +1189,8 @@
 
     <LegendOverlay />
 
-    {#if isStylingMode}
-      <GeoIndicationsOverlay />
-      <AnnotationOverlay />
-    {/if}
+    <GeoIndicationsOverlay interactive={isStylingMode} />
+    <AnnotationOverlay interactive={isStylingMode} />
   </div>
 </div>
 

@@ -30,6 +30,8 @@
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
+  let { interactive = true }: { interactive?: boolean } = $props();
+
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
   const KM_TO_MILES = 0.621371;
@@ -790,7 +792,11 @@
   });
 </script>
 
-<div class="geo-indications-overlay" bind:this={overlayElement}>
+<div
+  class="geo-indications-overlay"
+  class:non-interactive={!interactive}
+  bind:this={overlayElement}
+>
   {#if geoIndicationsState.visible && geoIndicationsState.scale.enabled}
     <div
       bind:this={scaleElement}
@@ -1080,6 +1086,13 @@
     cursor: pointer;
     touch-action: none;
     outline: none;
+  }
+
+  .geo-indications-overlay.non-interactive .scale-bar,
+  .geo-indications-overlay.non-interactive .north-arrow,
+  .geo-indications-overlay.non-interactive .inset-map-panel {
+    pointer-events: none;
+    cursor: default;
   }
 
   .north-arrow {
