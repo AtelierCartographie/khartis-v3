@@ -30,8 +30,11 @@ const DEFAULT_STATE: AnnotationsState = {
   activeType: AnnotationKind.TEXT,
   predefinedStyle: ANNOTATION_ROLE.NOTE,
   textContent: '',
+  isDrawingMode: false,
+  drawingModeType: DrawingType.LINE,
+  drawingInProgress: [],
   defaultStyle: {
-    font: 'cabin',
+    font: 'Cabin',
     fontSize: 12,
     bold: false,
     italic: false,
@@ -45,6 +48,11 @@ const DEFAULT_STATE: AnnotationsState = {
 type AnnotationsActions = {
   setVisibility: (visible: boolean) => void;
   addAnnotation: (type: AnnotationKind, content: string) => void;
+  startDrawingMode: (type: DrawingType) => void;
+  addDrawingPoint: (point: { x: number; y: number }) => void;
+  removeLastDrawingPoint: () => void;
+  finalizeDrawingMode: () => void;
+  cancelDrawingMode: () => void;
   selectAnnotation: (id: string | null) => void;
   updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   removeAnnotation: (id: string) => void;
@@ -486,6 +494,9 @@ const { actions, getState } = createToolStore<
       };
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
+      if (type === AnnotationKind.TEXT) {
+        s.textContent = '';
+      }
     },
     selectAnnotation: (id: string | null) => {
       s.selectedId = id;
@@ -512,6 +523,64 @@ const { actions, getState } = createToolStore<
     },
     setActiveType: (type: AnnotationKind) => {
       s.activeType = type;
+    },
+    startDrawingMode: (type: DrawingType) => {
+      s.isDrawingMode = true;
+      s.drawingModeType = type;
+      s.drawingInProgress = [];
+      s.selectedId = null;
+    },
+    addDrawingPoint: (point: { x: number; y: number }) => {
+      s.drawingInProgress = [...s.drawingInProgress, point];
+    },
+    removeLastDrawingPoint: () => {
+      if (s.drawingInProgress.length > 0) {
+        s.drawingInProgress = s.drawingInProgress.slice(0, -1);
+      }
+    },
+    finalizeDrawingMode: () => {
+      const points = s.drawingInProgress;
+      if (points.length < 2) {
+        s.isDrawingMode = false;
+        s.drawingInProgress = [];
+        return;
+      }
+
+      const minX = Math.min(...points.map((p) => p.x));
+      const minY = Math.min(...points.map((p) => p.y));
+      const relativePoints = points.map((p) => ({
+        x: p.x - minX,
+        y: p.y - minY
+      }));
+
+      const layout = resolvePageLayout();
+      const style: AnnotationStyle = {
+        ...s.defaultStyle,
+        drawingType: s.drawingModeType
+      };
+      const position = clampAnnotationPosition(
+        { x: minX, y: minY },
+        AnnotationKind.DRAWING,
+        style,
+        layout
+      );
+
+      const newAnnotation: Annotation = {
+        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+        type: AnnotationKind.DRAWING,
+        content: relativePoints,
+        position,
+        style
+      };
+
+      s.items = [...s.items, newAnnotation];
+      s.selectedId = newAnnotation.id;
+      s.isDrawingMode = false;
+      s.drawingInProgress = [];
+    },
+    cancelDrawingMode: () => {
+      s.isDrawingMode = false;
+      s.drawingInProgress = [];
     },
     setPredefinedStyle: (styleName: string) => {
       const style = PREDEFINED_STYLES[styleName];

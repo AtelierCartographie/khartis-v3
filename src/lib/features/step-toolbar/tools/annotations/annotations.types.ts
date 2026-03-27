@@ -50,6 +50,9 @@ export interface AnnotationStyle {
   drawingType?: DrawingType;
 
   size?: number;
+  shapeWidth?: number;
+  shapeHeight?: number;
+  rotation?: number;
 }
 
 export interface AnnotationsState {
@@ -60,4 +63,7 @@ export interface AnnotationsState {
   predefinedStyle: string;
   textContent: string;
   defaultStyle: AnnotationStyle;
+  isDrawingMode: boolean;
+  drawingModeType: DrawingType;
+  drawingInProgress: { x: number; y: number }[];
 }
