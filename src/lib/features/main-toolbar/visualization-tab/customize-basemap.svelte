@@ -258,9 +258,10 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary, #6f6f6f);
-    font-size: 14px;
-    line-height: 18px;
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
     margin: 0;
   }
 
