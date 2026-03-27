@@ -244,11 +244,16 @@ export async function getGPSBounds(
 ): Promise<GPSBounds | null> {
   const start = performance.now();
 
-  if (!dataset.gpsMode || !dataset.gpsColumns) {
+  if (!dataset.gpsMode) return null;
+
+  // In tabular-gps mode (no join), gpsColumns may not be set yet —
+  // fall back to auto-detecting GPS columns by name from the dataset schema.
+  const gpsColumns = dataset.gpsColumns ?? detectGPSColumns(dataset.columns);
+  if (!gpsColumns) {
     return null;
   }
 
-  const { lat, lon } = dataset.gpsColumns;
+  const { lat, lon } = gpsColumns;
 
   try {
     const escapedLat = escapeIdentifier(lat);
