@@ -60,48 +60,60 @@
   .toggle-tabs {
     display: flex;
     overflow: hidden;
-    border: 1px solid var(--cds-ui-03);
+    border-radius: 4px;
     width: 100%;
   }
 
   .toggle-tab {
     position: relative;
-    width: 100%;
     overflow: hidden;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    height: 42px;
+    height: 32px;
     padding: 0 8px;
-    background: var(--cds-background);
+    background: transparent;
     color: var(--cds-text-secondary);
     fill: currentColor;
-    border: none;
-    font-size: 0.9em;
-    font-weight: 500;
+    border: 1px solid #cac5c4;
+    border-right: none;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.875rem;
+    font-weight: 400;
+    letter-spacing: 0.16px;
     cursor: pointer;
+    flex-shrink: 0;
     transition:
-      background-color 0.2s ease,
-      color 0.2s ease,
-      width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-      padding 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .toggle-tab:last-child {
+    border-right: 1px solid #cac5c4;
+    border-radius: 0 4px 4px 0;
+  }
+
+  .toggle-tab:first-child {
+    border-radius: 4px 0 0 4px;
   }
 
   .toggle-tab.full-width {
-    width: 180px;
-    padding: 0 16px 0 12px;
+    flex: 1 0 0;
+    justify-content: flex-start;
+    padding: 0 16px;
   }
 
   .toggle-tab:not(.full-width) {
-    width: 48px;
+    width: 32px;
     padding: 0;
   }
 
   .toggle-tab.active {
     color: var(--cds-text-primary);
-    background-color: var(--cds-ui-03);
+    background-color: #cac5c4;
+    border-color: #cac5c4;
     z-index: var(--z-base);
-    flex: 1;
   }
 
   .toggle-tab:not(.active) {
@@ -109,7 +121,7 @@
   }
 
   .toggle-tab:hover:not(.active) {
-    background-color: var(--cds-hover-ui);
+    background-color: var(--cds-layer-hover-01);
   }
 
   .visually-hidden {
