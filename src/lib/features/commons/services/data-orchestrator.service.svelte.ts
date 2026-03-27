@@ -583,8 +583,11 @@ function createDataOrchestratorService() {
       return;
     }
 
+    const storedId = globalState.selectedDataButtonId;
     const selectedSourceFileId =
-      globalState.selectedDataButtonId ?? unprocessedFiles[0]?.id;
+      storedId && unprocessedFiles.some((f) => f.id === storedId)
+        ? storedId
+        : unprocessedFiles[0]?.id;
 
     if (selectedSourceFileId) {
       const idx = unprocessedFiles.findIndex(
