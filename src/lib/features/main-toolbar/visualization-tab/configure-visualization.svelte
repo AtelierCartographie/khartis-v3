@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
@@ -217,7 +218,10 @@
     });
   }
 
-  async function computeBreaksForVisualization(trigger = 'unknown') {
+  async function computeBreaksForVisualization(
+    trigger = 'unknown',
+    retryKey = ''
+  ) {
     if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
       return;
     }
@@ -234,7 +238,7 @@
       normalizedMethod,
       numClasses
     );
-    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}-${retryKey}`;
     if (computeKey === lastComputedKey) {
       return;
     }
@@ -246,8 +250,6 @@
       (d) => d.id === selectedViz.datasetId
     );
     if (!dataset?.sourceFileId) {
-      // Reset key so the $effect:missingBreaks retry can re-attempt once sourceFileId is available
-      lastComputedKey = '';
       logger.warn(
         '[configure-visualization] skipped breaks computation (missing sourceFileId)',
         LogCategory.UI,
@@ -330,8 +332,6 @@
           }
         );
       } else {
-        // Reset compute key so a re-trigger (e.g., after DuckDB table registration) can retry
-        lastComputedKey = '';
         logger.warn(
           '[configure-visualization] breaks computation returned empty result, will retry',
           LogCategory.UI,
@@ -355,14 +355,19 @@
   }
 
   $effect(() => {
-    // Track DuckDB version so this re-fires after table registration
-    const _duckVersion = duckDBOrchestrator.datasetsVersion;
+    // datasetsVersion is read here (tracked) and passed as retryKey so that
+    // computeKey changes when a new DuckDB table is registered, bypassing the
+    // deduplication guard without writing to lastComputedKey from async code.
+    const duckVersion = duckDBOrchestrator.datasetsVersion;
     if (
       selectedViz?.mapping.valueColumn &&
       selectedViz?.classification?.method &&
       !selectedViz?.classification?.breaks?.length
     ) {
-      computeBreaksForVisualization('$effect:missingBreaks');
+      computeBreaksForVisualization(
+        '$effect:missingBreaks',
+        String(duckVersion)
+      );
     }
   });
 
@@ -376,22 +381,35 @@
     }
   });
 
-  // Regenerate palette colors when color blindness toggle changes
+  // Regenerate palette colors when color blindness toggle changes.
+  // Only cbEnabled is tracked — everything else is read via untrack to avoid
+  // a write-triggers-read cycle (updateClassification replaces selectedViz object,
+  // causing selectedViz?.id to re-trigger even when the ID string is unchanged).
   $effect(() => {
     const cbEnabled = getColorBlindnessState().enabled;
-    const vizId = selectedViz?.id;
-    const classification = selectedViz?.classification;
-    if (!vizId || !classification?.colors?.length || !classification.paletteId)
-      return;
-    const contrast = cbEnabled ? ('high' as const) : undefined;
-    const palette = findPaletteById(classification.paletteId);
-    if (!palette) return;
-    const colors = generatePaletteColors(
-      palette,
-      classification.colors.length,
-      contrast
-    );
-    visualizationStore.updateClassification(vizId, { colors });
+    untrack(() => {
+      const vizId = selectedViz?.id;
+      const classification = selectedViz?.classification;
+      if (!vizId || !classification?.colors?.length) return;
+      const contrast = cbEnabled ? ('high' as const) : undefined;
+      let colors: string[];
+      if (classification.paletteId) {
+        const palette = findPaletteById(classification.paletteId);
+        if (!palette) return;
+        colors = generatePaletteColors(
+          palette,
+          classification.colors.length,
+          contrast
+        );
+      } else {
+        colors = generateColorsForBreaks(
+          classification.colors.length,
+          'sequential',
+          contrast
+        );
+      }
+      visualizationStore.updateClassification(vizId, { colors });
+    });
   });
 </script>
 
@@ -506,10 +524,11 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary, #6f6f6f);
+    color: var(--cds-text-helper, #6f6f6f);
     margin: 0;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
   }
 
   .config-accordion {
