@@ -65,10 +65,8 @@ export async function fetchArrowTableWithGeometry(
   // Fallback to regular query() if streaming returns 0 rows (race condition
   // in DuckDB WASM's useUnsafe API under concurrent query load).
   let ipcBuffer: Uint8Array;
-  let usedStreaming = false;
 
   if (Duck.queryStreaming) {
-    usedStreaming = true;
     ipcBuffer = await Duck.queryStreaming(query);
     const streamTable = tableFromIPC(ipcBuffer);
     if (streamTable.numRows > 0 || whereClause) {
