@@ -1,5 +1,6 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
@@ -145,33 +146,58 @@
 
     <div class="geo-columns-row">
       <div class="geo-column-select">
-        <ComboBox
-          items={geoFileColumns}
-          selectedId={geoFileColumnId}
-          on:select={handleGeoColumnSelect}
-          placeholder={m.enrich_select_column()}
-          size="sm"
-        />
+        <div class="combobox-with-badge">
+          <ComboBox
+            items={geoFileColumns}
+            selectedId={geoFileColumnId}
+            on:select={handleGeoColumnSelect}
+            placeholder={m.enrich_select_column()}
+            size="sm"
+          />
+          {#if geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName}
+            <div class="badge-overlay">
+              <VariableBadge
+                label={geoFileColumns.find((c) => c.id === geoFileColumnId)!
+                  .columnName}
+                type="geo-ref"
+              />
+            </div>
+          {/if}
+        </div>
         <span class="column-label">{m.enrich_geo_file_label()}</span>
       </div>
 
       <span class="column-separator">⇄</span>
 
       <div class="geo-column-select">
-        <ComboBox
-          items={enrichDataFieldItems}
-          selectedId={enrichLinkedVariableId}
-          on:select={handleEnrichColumnSelect}
-          placeholder={m.enrich_select_column()}
-          size="sm"
-        />
+        <div class="combobox-with-badge">
+          <ComboBox
+            items={enrichDataFieldItems}
+            selectedId={enrichLinkedVariableId}
+            on:select={handleEnrichColumnSelect}
+            placeholder={m.enrich_select_column()}
+            size="sm"
+          />
+          {#if enrichDataFieldItems.find((c) => c.id === enrichLinkedVariableId)?.columnName}
+            <div class="badge-overlay">
+              <VariableBadge
+                label={enrichDataFieldItems.find(
+                  (c) => c.id === enrichLinkedVariableId
+                )!.columnName}
+                type="geo-ref"
+              />
+            </div>
+          {/if}
+        </div>
         <span class="column-label">{m.enrich_tabular_data_label()}</span>
       </div>
     </div>
   </div>
 
-  {#if joinStats || isComputingJoin}
-    <div class="join-assisted-section">
+  <div class="join-assisted-section">
+    <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
+
+    {#if joinStats || isComputingJoin}
       <SectionHeaderWithIcon
         title={m.section_join_assisted()}
         icon={MagicWand}
@@ -199,13 +225,12 @@
           </div>
         {/if}
       {/if}
-    </div>
-  {:else}
-    <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
-    <p class="placeholder-text">
-      {m.enrich_select_columns_to_join()}
-    </p>
-  {/if}
+    {:else}
+      <p class="placeholder-text">
+        {m.enrich_select_columns_to_join()}
+      </p>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -309,6 +334,35 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
+  }
+
+  .combobox-with-badge {
+    position: relative;
+  }
+
+  .badge-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 40px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    pointer-events: none;
+    z-index: var(--z-base);
+  }
+
+  .combobox-with-badge:has(.badge-overlay) :global(.bx--text-input) {
+    color: transparent;
+  }
+
+  .combobox-with-badge:focus-within .badge-overlay {
+    display: none;
+  }
+
+  .combobox-with-badge:focus-within :global(.bx--text-input) {
+    color: inherit !important;
   }
 
   .column-label {

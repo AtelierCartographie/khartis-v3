@@ -24,7 +24,8 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
-  import { Launch, Location, Map as MapIcon } from 'carbon-icons-svelte';
+  import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
+  import { Launch, List, Map as MapIcon } from 'carbon-icons-svelte';
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import type { GeoComboBoxItem } from './data-tab.shared.types';
@@ -227,14 +228,14 @@
 
   const tabItems = [
     {
-      icon: MapIcon,
+      icon: List,
       label: m.geo_entities_tab(),
-      iconSize: 20
+      iconSize: 16
     },
     {
-      icon: Location,
+      icon: ChartTSne,
       label: m.geo_coordinates_tab(),
-      iconSize: 20
+      iconSize: 16
     }
   ];
 
@@ -738,5 +739,13 @@
   :global(.geo-tabs) {
     width: 100%;
     max-width: none;
+  }
+
+  :global(.geo-tabs .toggle-tab) {
+    height: 32px;
+  }
+
+  :global(.geo-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
   }
 </style>

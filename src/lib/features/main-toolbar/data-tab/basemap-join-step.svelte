@@ -29,7 +29,7 @@
     processBasemapImport
   } from '$lib/features/map/utils/basemap-import.utils';
   import * as m from '$lib/paraglide/messages';
-  import { Earth, List, Upload } from 'carbon-icons-svelte';
+  import { Earth, Grid, List, Upload } from 'carbon-icons-svelte';
   import BasemapCatalogTab from './basemap-join-components/basemap-catalog-tab.svelte';
   import BasemapImportTab from './basemap-join-components/basemap-import-tab.svelte';
   import BasemapOsmTab from './basemap-join-components/basemap-osm-tab.svelte';
@@ -50,9 +50,9 @@
   let activeTabIndex = $state(0);
 
   const tabItems = [
-    { icon: List, label: m.basemap_catalog(), iconSize: 20 },
-    { icon: Upload, label: m.basemap_import(), iconSize: 20 },
-    { icon: Earth, label: m.basemap_osm(), iconSize: 20 }
+    { icon: List, label: m.basemap_catalog(), iconSize: 16 },
+    { icon: Upload, label: m.basemap_import(), iconSize: 16 },
+    { icon: Grid, label: m.basemap_osm(), iconSize: 16 }
   ];
 
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
@@ -1140,6 +1140,14 @@
 
   .basemap-tabs-wrapper {
     margin-bottom: 12px;
+  }
+
+  .basemap-tabs-wrapper :global(.toggle-tab) {
+    height: 32px;
+  }
+
+  .basemap-tabs-wrapper :global(.toggle-tab.active) {
+    background-color: #cac5c4;
   }
 
   .join-separator {

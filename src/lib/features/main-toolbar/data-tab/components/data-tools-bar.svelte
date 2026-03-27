@@ -11,6 +11,7 @@
     ChartHistogram,
     View
   } from 'carbon-icons-svelte';
+  import { Button } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
   import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
 
@@ -60,6 +61,7 @@
 
 <div class="data-tools-bar">
   <div class="tools-left">
+    <!-- Figma order: Summary · Search · Filter · Calc · Delete · HiddenVar · Settings(CSV) · Restore -->
     <IconButton
       kind="ghost"
       size="small"
@@ -96,11 +98,6 @@
       class={isCalculatorActive ? 'active' : ''}
       on:click={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
     />
-    {#if hasSelection}
-      <span class="selection-count">
-        {m.selection_count({ count: selectionCount })}
-      </span>
-    {/if}
     <IconButton
       kind="ghost"
       size="small"
@@ -110,24 +107,10 @@
       disabled={effectiveDeleteDisabled}
       on:click={() => onDelete?.()}
     />
-    <IconButton
-      kind="ghost"
-      size="small"
-      icon={Reset}
-      iconDescription={m.data_tool_reset_icon()}
-      tooltipPosition="bottom"
-      disabled={resetDisabled}
-      on:click={() => onReset?.()}
-    />
-    {#if showCsvOptions}
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Settings}
-        iconDescription={m.csv_options_button()}
-        tooltipPosition="bottom"
-        on:click={() => onCsvOptions?.()}
-      />
+    {#if hasSelection}
+      <span class="selection-count">
+        {m.selection_count({ count: selectionCount })}
+      </span>
     {/if}
     {#if showHiddenColumns}
       <IconButton
@@ -139,17 +122,36 @@
         on:click={() => onShowHiddenColumns?.()}
       />
     {/if}
+    {#if showCsvOptions}
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={Settings}
+        iconDescription={m.csv_options_button()}
+        tooltipPosition="bottom"
+        on:click={() => onCsvOptions?.()}
+      />
+    {/if}
+    <IconButton
+      kind="ghost"
+      size="small"
+      icon={Reset}
+      iconDescription={m.data_tool_reset_icon()}
+      tooltipPosition="bottom"
+      disabled={resetDisabled}
+      on:click={() => onReset?.()}
+    />
   </div>
   <div class="tools-right">
-    <span class="expand-label">{m.data_tool_expand_label()}</span>
-    <IconButton
+    <Button
       kind="ghost"
       size="small"
       icon={Maximize}
       iconDescription={m.data_tool_expand_icon()}
-      tooltipPosition="bottom"
       on:click={() => onExpand?.()}
-    />
+    >
+      {m.data_tool_expand_label()}
+    </Button>
   </div>
 </div>
 
@@ -171,12 +173,6 @@
   .tools-right {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .expand-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-02);
   }
 
   .data-tools-bar :global(.bx--btn.active) {
