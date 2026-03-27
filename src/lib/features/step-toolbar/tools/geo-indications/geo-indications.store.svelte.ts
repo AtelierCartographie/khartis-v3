@@ -336,7 +336,7 @@ const { state, actions } = createToolStore<
       s.insetMap.type = type;
     },
     setInsetMapSize: (size: number) => {
-      s.insetMap.size = clampNumber(size, 20, 600, s.insetMap.size);
+      s.insetMap.size = clampNumber(size, 20, 800, s.insetMap.size);
     },
     setInsetMapWindowColor: (colorState: ColorState) => {
       s.insetMap.windowColor = colorState;
