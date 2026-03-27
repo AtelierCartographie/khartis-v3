@@ -1,4 +1,4 @@
-export type MapExportFormat = 'svg' | 'jpg' | 'png';
+export type MapExportFormat = 'svg' | 'jpg';
 export type DataExportFormat = 'csv' | 'geojson' | 'csv-geo';
 export type ExportResolution = '1080p' | '2k' | '4k';
 
@@ -12,8 +12,7 @@ export type ExportTabType = (typeof ExportTab)[keyof typeof ExportTab];
 
 export const MAP_FORMAT = {
   SVG: 'svg',
-  JPG: 'jpg',
-  PNG: 'png'
+  JPG: 'jpg'
 } as const;
 
 export const DATA_FORMAT = {

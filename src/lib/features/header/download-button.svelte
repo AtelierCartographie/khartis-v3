@@ -110,9 +110,6 @@
                     <RadioTile light value={MAP_FORMAT.SVG}
                       >{m.download_map_svg()}</RadioTile
                     >
-                    <RadioTile light value={MAP_FORMAT.PNG}
-                      >{m.download_map_png()}</RadioTile
-                    >
                     <RadioTile light value={MAP_FORMAT.JPG}
                       >{m.download_map_jpg()}</RadioTile
                     >

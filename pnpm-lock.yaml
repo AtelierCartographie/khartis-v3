@@ -84,6 +84,9 @@ importers:
       geoarrow-deck-stream:
         specifier: github:AtelierCartographie/geoarrow-deck-stream
         version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#62fce1cf6362d035ef4b40be8d8e983584773076(@deck.gl/core@9.2.11)(@deck.gl/layers@9.2.11(@deck.gl/core@9.2.11)(@loaders.gl/core@4.3.4)(@luma.gl/core@9.2.6)(@luma.gl/engine@9.2.6(@luma.gl/core@9.2.6)(@luma.gl/shadertools@9.2.6(@luma.gl/core@9.2.6))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
+      html-to-image:
+        specifier: ^1.11.13
+        version: 1.11.13
       localforage:
         specifier: ^1.10.0
         version: 1.10.0
@@ -3589,6 +3592,9 @@ packages:
 
   html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
+
+  html-to-image@1.11.13:
+    resolution: {integrity: sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==}
 
   http-cache-semantics@4.2.0:
     resolution: {integrity: sha512-dTxcvPXqPvXBQpq5dUr6mEMJX4oIEFv6bwom3FDwKRDsuIjjJGANqhBuoAn9c1RQJIdAKav33ED65E2ys+87QQ==}
@@ -9854,6 +9860,8 @@ snapshots:
       - '@noble/hashes'
 
   html-escaper@2.0.2: {}
+
+  html-to-image@1.11.13: {}
 
   http-cache-semantics@4.2.0: {}
 
