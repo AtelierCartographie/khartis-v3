@@ -409,7 +409,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       dragPan: true,
       dragRotate: false,
       doubleClickZoom: true,
-      touchZoomRotate: true
+      touchZoomRotate: true,
+      canvasContextAttributes: { preserveDrawingBuffer: true }
     });
 
     map.on('load', () => {

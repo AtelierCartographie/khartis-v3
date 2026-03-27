@@ -1,6 +1,5 @@
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import {
   exportProcessedDatasets,
@@ -9,11 +8,8 @@ import {
 } from '$lib/features/commons/utils/file-export.utils';
 import {
   exportMapToSvg,
-  exportMapToJpg,
-  exportMapToPng
+  exportMapToJpg
 } from '$lib/features/commons/utils/map-export.utils';
-import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
@@ -67,20 +63,7 @@ export async function exportProject(fileName: string): Promise<void> {
 export async function exportMapAsSvg(fileName: string): Promise<void> {
   validateMapExportPrerequisites();
 
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = exportMapToSvg(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    {},
-    annotations,
-    legend
-  );
+  const blob = await exportMapToSvg();
   const filename = generateExportFilename(fileName, 'svg');
 
   downloadFile(blob, filename);
@@ -93,43 +76,8 @@ export async function exportMapAsJpg(
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = await exportMapToJpg(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    { width, height },
-    annotations,
-    legend
-  );
+  const blob = await exportMapToJpg({ width, height });
   const filename = generateExportFilename(fileName, 'jpg');
-
-  downloadFile(blob, filename);
-}
-
-export async function exportMapAsPng(
-  fileName: string,
-  width: number = 1920,
-  height: number = 1080
-): Promise<void> {
-  validateMapExportPrerequisites();
-
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = await exportMapToPng(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    { width, height },
-    annotations,
-    legend
-  );
-  const filename = generateExportFilename(fileName, 'png');
 
   downloadFile(blob, filename);
 }

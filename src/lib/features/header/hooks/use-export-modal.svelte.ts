@@ -17,7 +17,6 @@ import {
   exportProject,
   exportMapAsSvg,
   exportMapAsJpg,
-  exportMapAsPng,
   exportData,
   ExportError
 } from '../services/export.service';
@@ -99,8 +98,6 @@ export function useExportModal(): UseExportModalReturn {
           const dims = RESOLUTION_DIMENSIONS[resolution];
           if (mapFormat === MAP_FORMAT.SVG) {
             await exportMapAsSvg(fileName);
-          } else if (mapFormat === MAP_FORMAT.PNG) {
-            await exportMapAsPng(fileName, dims.width, dims.height);
           } else {
             await exportMapAsJpg(fileName, dims.width, dims.height);
           }
