@@ -43,7 +43,7 @@
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Button, Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
 
   import 'carbon-components-svelte/css/all.css';
@@ -253,19 +253,21 @@
     }
 
     if (shouldInitStylingElements) {
-      const hasPageElements = getAnnotationsState().items.some(
-        (item) => item.role != null
-      );
-
-      if (hasPageElements) {
-        annotationsActions.setPageElementsVisibility(true);
-      } else {
-        annotationsActions.initPageElements({
-          withPlaceholders: true,
-          visible: true
-        });
-      }
-
+      // untrack: these calls read+write s.items; tracking them would cause
+      // a write-triggers-read loop. currentStep/projectId are the right triggers.
+      untrack(() => {
+        const hasPageElements = getAnnotationsState().items.some(
+          (item) => item.role != null
+        );
+        if (hasPageElements) {
+          annotationsActions.setPageElementsVisibility(true);
+        } else {
+          annotationsActions.initPageElements({
+            withPlaceholders: true,
+            visible: true
+          });
+        }
+      });
       stylingElementsInitializedForProject = currentProjectId;
     }
 

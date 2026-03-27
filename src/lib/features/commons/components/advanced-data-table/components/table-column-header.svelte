@@ -352,7 +352,7 @@
       {/if}
 
       {#if isEditMode}
-        <div class="col-actions">
+        <div class="col-actions" class:menu-open={menuOpen}>
           <button
             class="menu-trigger"
             bind:this={menuButton}
@@ -522,27 +522,42 @@
       <div class="summary-plot-wrapper">
         <div class="summary-plot">
           {#if histogramData?.kind === 'geographic'}
-            <div class="hist-geo-pills">
-              <span class="hist-geo-pill hist-geo-uniques">
-                {m.summary_plot_unique_values({
-                  count: histogramData.uniques.toLocaleString()
-                })}
-              </span>
-              {#if histogramData.nulls > 0}
-                <span class="hist-geo-pill hist-geo-nulls">
-                  {m.column_warning_nulls({
-                    count: histogramData.nulls.toLocaleString()
+            {#if histogramData.nulls > 0 || histogramData.duplicates > 0}
+              <div class="hist-warnings">
+                {#if histogramData.nulls > 0}
+                  <div class="hist-warning-line">
+                    <span class="hist-warning-icon"
+                      ><WarningAlt size={14} /></span
+                    >
+                    <span
+                      >{m.column_warning_nulls({
+                        count: histogramData.nulls.toLocaleString()
+                      })}</span
+                    >
+                  </div>
+                {/if}
+                {#if histogramData.duplicates > 0}
+                  <div class="hist-warning-line">
+                    <span class="hist-warning-icon"
+                      ><WarningAlt size={14} /></span
+                    >
+                    <span
+                      >{m.column_warning_duplicates({
+                        count: histogramData.duplicates.toLocaleString()
+                      })}</span
+                    >
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="hist-unique-bar">
+                <span class="hist-unique-text">
+                  {m.summary_plot_unique_values({
+                    count: histogramData.uniques.toLocaleString()
                   })}
                 </span>
-              {/if}
-              {#if histogramData.duplicates > 0}
-                <span class="hist-geo-pill hist-geo-duplicates">
-                  {m.column_warning_duplicates({
-                    count: histogramData.duplicates.toLocaleString()
-                  })}
-                </span>
-              {/if}
-            </div>
+              </div>
+            {/if}
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
             <div class="hist-warnings">
               {#each columnWarnings as warning, index (warning.message + index)}
@@ -571,7 +586,7 @@
                     class:last={i === histogramData.items.length - 1}
                     style="background-color: {item.category === null
                       ? '#ff832b'
-                      : '#d02670'}"
+                      : '#9f1853'}"
                     title="{item.count?.toLocaleString()} – {item.category ??
                       m.column_null_label()}"
                   >
@@ -650,6 +665,10 @@
     background-color: var(--cds-ui-03, #e0e0e0);
   }
 
+  th:hover {
+    background-color: var(--cds-layer-accent-hover-01, #d1d1d1);
+  }
+
   .col-header {
     display: flex;
     flex-direction: column;
@@ -668,6 +687,13 @@
     gap: 2px;
     flex-shrink: 0;
     margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+  }
+
+  th:hover .col-actions,
+  .col-actions.menu-open {
+    opacity: 1;
   }
 
   .menu-trigger {
@@ -817,7 +843,7 @@
 
   .hist-unique-bar {
     flex: 1;
-    background-color: #007d79;
+    background-color: #005d5d;
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -908,7 +934,7 @@
 
   .hist-num-bar {
     flex: 1 0 0;
-    background-color: #8a3ffc;
+    background-color: #6929c4;
     min-width: 0;
     min-height: 1px;
   }
@@ -994,42 +1020,9 @@
   }
 
   .hist-warning-line span {
-    color: var(--cds-text-02, #525252);
+    color: #ff832b;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .hist-geo-pills {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .hist-geo-pill {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: #ffffff;
-    padding: 2px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .hist-geo-uniques {
-    background-color: #007d79;
-  }
-
-  .hist-geo-nulls {
-    background-color: #ff832b;
-  }
-
-  .hist-geo-duplicates {
-    background-color: #d02670;
   }
 
   .hist-empty {
