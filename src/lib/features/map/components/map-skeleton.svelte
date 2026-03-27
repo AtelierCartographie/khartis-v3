@@ -10,7 +10,7 @@
 
 <div
   class="map-skeleton"
-  class:paused
+  class:paused={paused}
   style="width: {width}; height: {height};"
 ></div>
 
