@@ -1,18 +1,44 @@
 # Architecture
 
-> **Mental model and core design principles of Khartis v3**
+> Principes fondamentaux et flux de donnees de Khartis v3
 
-## Runtime Flow
+**Voir aussi** : [Gestion de l'etat](GESTION_ETAT.md) | [Pipeline de donnees](PIPELINE_DONNEES.md) | [Visualisation](VISUALISATIONS.md)
+
+---
+
+## Flux global
 
 ```
-Import → Validate → Parse → Type Inference + Stats → Dataset Store
-  ↓
-Visualization Suggestion → User Configuration → Layer Assembly (Deck.gl)
-  ↓
-Basemap (MapLibre) + Annotations + Layout → Export (PNG/SVG/PDF/CSV/GeoJSON)
+Fichier  -->  Validation  -->  DuckDB (read_csv / ST_Read)  -->  DatasetResult
+                                                                       |
+                                                         Config visualisation
+                                                                       |
+                                        Arrow table (GeoArrow colonnes binaires)
+                                                                       |
+                              geoarrow-deck-stream (parse → BinaryPolygonData / BinaryPathData)
+                                                                       |
+                        ┌─────────────────────────────────────────────┴─────────────────────────┐
+                  Mode orthographique                                                    Mode MapLibre (OSM)
+             Deck.gl standalone (OrthographicView)                               MapboxOverlay intercalé
+          Fond de carte Deck.gl (SolidPolygonLayer)                             Fond de carte tuiles MapLibre
+                   + couches thématiques                                              + couches thématiques
+                        └─────────────────────────────────────────────┬─────────────────────────┘
+                                                                       |
+                                               Annotations + Légende + Mise en page (overlay SVG)
+                                                                       |
+                                                          Export (PNG / SVG / PDF / CSV / GeoJSON)
 ```
 
-## Core Data Shapes
+## Les 4 piliers
+
+| Pilier | Description |
+|--------|-------------|
+| **Confidentialite client-only** | Tout le traitement se fait dans le navigateur (IndexedDB + memoire). Aucun envoi serveur, aucun appel API externe pour les donnees utilisateur. Fonctionne hors-ligne. |
+| **Modularite par feature** | Chaque feature dans `src/lib/features/` possede son store, ses composants et ses types. Couplage minimal entre features. |
+| **Reactivite Svelte 5 Runes** | `$state` et `$derived` pour l'etat reactif. Mutations explicites via methodes dediees, jamais d'affectation directe. |
+| **Rendu GPU-first** | Deck.gl pour les couches thematiques. Deux modes : **orthographique** (Deck.gl standalone, fond vectoriel Deck.gl via GeoArrow binaire) ou **MapLibre interleaved** (MapboxOverlay, fond OSM tuile). Rendu, pan et zoom acceleres par le GPU. |
+
+## Interfaces cles
 
 ```ts
 interface DataColumn {
@@ -46,120 +72,92 @@ interface Project {
 }
 ```
 
-## Four Pillars
+## Couches de stockage
 
-1. **Client-only Privacy**
-   - All processing in browser (IndexedDB + memory)
-   - No server upload or external API calls for user data
-   - Offline-capable
+| Couche | Role | Exemple |
+|--------|------|---------|
+| **Composant local** | Etat ephemere UI | Inputs de formulaire, visibilite modale |
+| **Store feature** | Etat domaine canonique | Liste datasets, config visualisation |
+| **Store global** | Coordination cross-feature | Metadonnees projet, dataset actif |
+| **Persistance** | Stockage long terme | Snapshots IndexedDB, auto-sauvegarde |
 
-2. **Feature-first Modularity**
-   - Self-contained features in `src/lib/features/`
-   - Each feature owns its store, components, types
-   - Minimal cross-feature coupling
+**Flux** : Composant --> Store feature --> Store global --> IndexedDB
 
-3. **Runes Reactive State**
-   - Svelte 5 `$state` and `$derived`
-   - Explicit mutation methods (no direct assignment)
-   - Predictable state updates
+Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail de chaque couche.
 
-4. **GPU-first Rendering**
-   - Deck.gl for thematic layers
-   - MapLibre for basemaps
-   - Hardware-accelerated pan/zoom/render
+## Performance
 
-## Store Layering
+| Defi | Solution |
+|------|----------|
+| Import de fichiers volumineux | Parsing natif DuckDB + `TABLESAMPLE` pour l'apercu |
+| Calculs lourds | DuckDB WASM (thread principal) |
+| Geometries complexes | Niveaux de simplification pre-calcules + LOD dynamique |
+| Editions rapides | Memoisation `$derived` + recalcul debounce |
 
-| Layer               | Purpose                    | Example                            |
-| ------------------- | -------------------------- | ---------------------------------- |
-| **Component Local** | Ephemeral UI state         | Form inputs, modal visibility      |
-| **Feature Store**   | Canonical domain state     | Dataset list, visualization config |
-| **Global Store**    | Cross-feature coordination | Project metadata, active dataset   |
-| **Persistence**     | Long-term storage          | IndexedDB snapshots, auto-save     |
+**Cibles** :
 
-**State flow**: Component → Feature Store → Global Store → IndexedDB
+| Metrique | Objectif |
+|----------|----------|
+| FCP | < 0.6 s |
+| LCP | < 1.0 s |
+| TTI | < 1.0 s |
+| TBT | 0 ms |
+| CLS | 0 |
+| Rendu | ~60 fps (datasets petits/moyens) |
 
-## Performance Strategy
+## Strategie d'erreur
 
-| Challenge          | Solution                                        |
-| ------------------ | ----------------------------------------------- |
-| Large file imports | DuckDB native parsing + TABLESAMPLE for preview |
-| Heavy computations | DuckDB WASM (main thread)                       |
-| Complex geometry   | Pre-simplified tiers + dynamic LOD              |
-| Rapid edits        | `$derived` memoization + debounced recompute    |
+- **Echouer vite** sur les entrees invalides (validation stricte)
+- **Degradation gracieuse** sur les erreurs de calcul (projection par defaut, classification de secours)
+- **Ne jamais bloquer l'UI** pour les taches longues (workers + feedback de progression)
+- **Messages utilisateur** contextuels et actionnables
 
-**Target**: <3s load, ~60fps rendering (small-medium datasets)
+## Securite et vie privee
 
-## Extensibility Contracts
+Aucune surface d'attaque serveur : toutes les donnees restent dans le navigateur. Les noms de fichier, cellules CSV et saisies utilisateur sont assainis. Quotas : 50 Mo/fichier, 100 Mo/projet, 50 projets max. CSRF, auth serveur et isolation multi-tenant ne s'appliquent pas.
+
+## Points d'extension
 
 ```ts
-// Add new file parser
+// Nouveau parser de fichier
 type Parser = (file: File) => Promise<RawDataset>;
 
-// Add new classification method
+// Nouvelle methode de classification
 interface ClassificationStrategy {
   id: string;
   compute(values: number[], k: number): number[];
 }
 
-// Add new export format
+// Nouveau format d'export
 interface Exporter {
   id: string;
   export(project: Project): Promise<Blob>;
 }
 
-// Add new visualization type
+// Nouveau type de visualisation
 interface VizFactory {
   id: string;
   create(dataset: Dataset, config: VizConfig): Visualization;
 }
 ```
 
-All extensions register in respective registries (parser, classification, export, visualization).
+| Tache | Point d'entree |
+|-------|----------------|
+| Nouveau format de fichier | `src/lib/features/data-pipeline/core/parsers.ts` |
+| Nouvelle visualisation | `src/lib/features/map/` |
+| Nouvelle classification | `src/lib/features/duckdb/macros/breaks.ts` |
+| Nouvel outil | `src/lib/features/step-toolbar/tools/<nom-outil>` |
 
-## Error Handling Principles
+Toutes les extensions s'enregistrent dans leur registre respectif (parser, classification, export, visualisation).
 
-- **Fail fast** on invalid input (validation)
-- **Fallback gracefully** on computation errors (default projection, safe classification)
-- **Never block UI** for long tasks (workers + progress feedback)
-- **User-friendly messages** (contextual, actionable)
+## Accessibilite
 
-## Security & Privacy
+- Navigation clavier complete avec indicateurs de focus visibles
+- Suggestions de palettes respectant les contrastes WCAG
+- Descriptions textuelles des statistiques et de la carte pour les lecteurs d'ecran
 
-- **Client-only**: No server attack surface
-- **Sanitization**: File names, CSV cells, user inputs
-- **Size quotas**: 50MB file, 100MB project, 50 projects max
-- **Dependency audits**: Regular security checks
+## Internationalisation
 
-Not applicable: CSRF, server auth, multi-tenant isolation
-
-## Accessibility
-
-- **Keyboard-first**: Full keyboard navigation
-- **Focus management**: Visible focus indicators
-- **Contrast-aware**: Color palette suggestions respect WCAG
-- **Textual summaries**: Stats and map descriptions for screen readers
-
-## Internationalization
-
-- **Paraglide**: Compile-time message extraction
-- **Semantic keys**: `m.projectCreate()` not `m.label1()`
-- **No concatenation**: Use message parameters
-- **Supported locales**: en, fr
-
-## Extension Points Quick Reference
-
-| Task               | Entry Point                                       |
-| ------------------ | ------------------------------------------------- |
-| New file format    | `src/lib/features/data-pipeline/core/parsers.ts`  |
-| New visualization  | `src/lib/features/map/`                           |
-| New classification | `src/lib/features/duckdb/macros/breaks.ts`        |
-| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>` |
-
----
-
-**See also:**
-
-- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing details
-- [VISUALIZATION.md](VISUALIZATION.md) - Rendering system
-- [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management
+- **Paraglide** : extraction des messages au build. Cles semantiques (`m.projectCreate()`)
+- **Pas de concatenation** : utiliser les parametres de messages
+- **Locales** : `fr`, `en`
