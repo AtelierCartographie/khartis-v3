@@ -36,7 +36,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   }
 
   const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
-  let lastAppliedStyleKey = $state<string | null>(currentStyleKey);
+  let lastAppliedStyleKey: string | null = currentStyleKey;
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
 
@@ -116,7 +116,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
       logger.debug('OSM raster basemap applied', LogCategory.MAP, {
         basemap: osmBasemap.file,
-        title: osmBasemap.title
+        title: osmBasemap.title_fr
       });
     }
   }

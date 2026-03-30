@@ -25,6 +25,7 @@ export {
 export {
   createBasemapLayers,
   type BasemapLayerGroups,
+  type MetadataLayerEntry,
   createEquateurLayer,
   createFrontieresLayer,
   createMeridiensLayer,
