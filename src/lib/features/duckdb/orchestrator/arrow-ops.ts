@@ -10,6 +10,17 @@ import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 import { SvelteMap } from 'svelte/reactivity';
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
+/**
+ * DuckDB >= 1.33 may return geometry column types like `GEOMETRY('EPSG:4326')`
+ * instead of plain `GEOMETRY`. This helper matches both forms.
+ */
+function isGeometryColumnType(columnType: string): boolean {
+  return (
+    columnType === GEOMETRY_COLUMN_TYPE ||
+    columnType.startsWith(GEOMETRY_COLUMN_TYPE + '(')
+  );
+}
+
 export interface DuckDBClientForArrow {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
   queryStreaming?(sql: string): Promise<Uint8Array>;
@@ -51,8 +62,8 @@ export async function fetchArrowTableWithGeometry(
     column_type: tableInfo.type[index]
   }));
 
-  const geomColumn = columns.find(
-    (c: { column_type: string }) => c.column_type === GEOMETRY_COLUMN_TYPE
+  const geomColumn = columns.find((c: { column_type: string }) =>
+    isGeometryColumnType(c.column_type)
   );
 
   let query: string;
@@ -140,8 +151,8 @@ export async function addGeoArrowMetadataFromDuckDB(
         column_type: tableInfo.type[index]
       }));
 
-      geomColumn = columns.find(
-        (c: { column_type: string }) => c.column_type === GEOMETRY_COLUMN_TYPE
+      geomColumn = columns.find((c: { column_type: string }) =>
+        isGeometryColumnType(c.column_type)
       );
 
       if (!geomColumn) {
@@ -203,9 +214,19 @@ export async function addGeoArrowMetadataFromDuckDB(
       geomColumnIndex !== -1 &&
       table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
 
+    // Check if DuckDB already set a geoarrow extension on the field
+    const existingExtension =
+      geomColumnIndex !== -1
+        ? table.schema.fields[geomColumnIndex].metadata?.get(
+            'ARROW:extension:name'
+          )
+        : undefined;
+
     const encoding = isGeoJsonString
       ? ArrowExtension.GEOJSON
-      : ArrowExtension.OGC_WKB;
+      : existingExtension === ArrowExtension.GEOARROW_WKB
+        ? ArrowExtension.GEOARROW_WKB
+        : ArrowExtension.OGC_WKB;
 
     const geoMetadata = {
       version: '1.0.0',
