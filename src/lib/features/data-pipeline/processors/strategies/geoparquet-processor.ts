@@ -3,7 +3,7 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { geoParquetReader } from '$lib/features/data-pipeline';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import type {
   FileProcessor,
   ProcessContext,
@@ -36,36 +36,27 @@ export const geoparquetProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const { insertArrowTableIntoDuckDB } =
-      await import('$lib/features/duckdb/io/arrow-converter');
-
+    // Register parquet file in DuckDB and create table via read_parquet().
+    // DuckDB >= 1.33 handles geoarrow.wkb natively — no need for geoparquet-wasm.
     const buffer = await getArrayBuffer(file);
-    const arrowTable = await geoParquetReader.readGeoParquet(buffer);
-    const geoMetadata = geoParquetReader.extractMetadata(arrowTable);
+    const sanitizedName = ctx.tableName
+      .replace(/[^a-zA-Z0-9_]/g, '_');
 
-    await insertArrowTableIntoDuckDB(arrowTable, ctx.tableName);
+    const parquetFile = new File([buffer], `${sanitizedName}.parquet`, {
+      type: 'application/octet-stream'
+    });
 
-    if (geoMetadata) {
-      const geomColumn = geoMetadata.primary_column.replace(
-        /[^a-zA-Z0-9_]/g,
-        '_'
-      );
-      try {
-        await ctx.Duck.query(`
-          CREATE OR REPLACE TABLE "${ctx.tableName}" AS
-          SELECT * REPLACE (
-            ST_GeomFromWKB("${geomColumn}")::GEOMETRY AS "${geomColumn}"
-          )
-          FROM "${ctx.tableName}"
-        `);
-      } catch (error) {
-        logger.warn(
-          'Failed to convert GeoParquet geometry column',
-          LogCategory.DUCKDB,
-          error
-        );
-      }
-    }
+    await ctx.Duck.register_files([parquetFile]);
+
+    const fileWithId = parquetFile as File & { id?: string };
+    const fileId =
+      fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
+    const escapedFileId = escapeSqlString(fileId);
+
+    await ctx.Duck.query(`
+      CREATE OR REPLACE TABLE "${ctx.tableName}" AS
+      SELECT * FROM read_parquet('${escapedFileId}')
+    `);
 
     const safeSeqName = ctx.tableName.replace(/[^a-zA-Z0-9_]/g, '_');
     await ctx.Duck.query(`
@@ -89,8 +80,7 @@ export const geoparquetProcessor: FileProcessor = {
         processedAt: new Date(),
         fileType: file.fileType
       },
-      geoDetection: file.deepAnalysis?.geoDetection,
-      geoArrowMetadata: geoMetadata ?? undefined
+      geoDetection: file.deepAnalysis?.geoDetection
     };
 
     logger.success('GeoParquet processed', LogCategory.DUCKDB, {
