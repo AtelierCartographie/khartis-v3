@@ -12,7 +12,6 @@ import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { DUCK_CONST, EXTENSIONS } from '../constants';
 import type {
-  CacheState,
   DescribeResult,
   DuckDBContext,
   ExtensionLoadPromises,
@@ -26,10 +25,8 @@ let connection: duckdb.AsyncDuckDBConnection | null = null;
 const loaded_files: Map<string, string> = new Map();
 const registered_files: Set<string> = new Set();
 const table_metadata: Map<string, TableMetadata> = new Map();
-const table_geoparquet_cache: Map<string, Uint8Array> = new Map();
 const describeCache: Map<string, DescribeResult> = new Map();
 const rowCountCache: Map<string, number> = new Map();
-const cacheState: CacheState = { size: 0, accessOrder: [] };
 const extensionsLoaded: ExtensionsLoaded = { spatial: false, httpfs: false };
 const extensionLoadPromises: ExtensionLoadPromises = {
   spatial: null,
@@ -55,10 +52,8 @@ export function getContext(): DuckDBContext {
     loaded_files,
     registered_files,
     table_metadata,
-    table_geoparquet_cache,
     describeCache,
     rowCountCache,
-    cacheState,
     extensionsLoaded,
     extensionLoadPromises,
     localExtensionRepositoryConfigured,
@@ -95,7 +90,12 @@ async function configureRuntimeSettings(): Promise<void> {
     `PRAGMA preserve_insertion_order=false;`,
     `PRAGMA enable_object_cache=true;`,
     `PRAGMA temp_directory='/tmp/duckdb';`,
-    `PRAGMA max_temp_directory_size='5GB';`
+    `PRAGMA max_temp_directory_size='5GB';`,
+    // Workaround for duckdb/duckdb-wasm#2199: spatial v1.5.x auto-converts
+    // GeoParquet columns to GEOMETRY('ogc:crs84') type which crashes Arrow IPC
+    // serialization (stoi bug in arrow_duck_schema.cpp). Disabling this keeps
+    // geometry as native GeoArrow structs, which geoarrow-deck-stream handles.
+    `SET enable_geoparquet_conversion = false;`
   ];
 
   if (threadsSupported) {
@@ -245,11 +245,6 @@ export async function initEngine(): Promise<void> {
       await configureRuntimeSettings();
       await configureLocalExtensionRepository();
       await preloadExtensions();
-
-      // Clear caches
-      table_geoparquet_cache.clear();
-      cacheState.accessOrder = [];
-      cacheState.size = 0;
 
       logger.success('DuckDB initialization complete', LogCategory.DUCKDB, {
         totalDurationMs: (performance.now() - startTime).toFixed(2)

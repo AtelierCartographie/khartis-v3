@@ -28,8 +28,7 @@ import {
 function createDuck() {
   return {
     query: mocks.queryMock,
-    describe_table: vi.fn(),
-    copy_to_geoparquet_as_buffer: vi.fn()
+    describe_table: vi.fn()
   };
 }
 

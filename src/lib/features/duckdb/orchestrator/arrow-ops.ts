@@ -16,7 +16,6 @@ export interface DuckDBClientForArrow {
   describe_table(
     tableName: string
   ): Promise<{ name: string[]; type: string[] }>;
-  copy_to_geoparquet_as_buffer(tableName: string): Promise<Uint8Array>;
 }
 
 export interface YearFilterClause {
@@ -35,6 +34,12 @@ export function buildYearFilterWhereClause(
   return `"${filter.column}" = ${value}`;
 }
 
+/**
+ * Fetch an Arrow table from DuckDB with geometry converted to WKB.
+ * DuckDB WASM < 1.33 returns geometry as an opaque blob — ST_AsWKB() converts
+ * it to standard WKB. When DuckDB >= 1.33 returns geoarrow.wkb natively,
+ * the ST_AsWKB() call is a no-op.
+ */
 export async function fetchArrowTableWithGeometry(
   tableName: string,
   Duck: DuckDBClientForArrow,
@@ -70,14 +75,28 @@ export async function fetchArrowTableWithGeometry(
     ipcBuffer = await Duck.queryStreaming(query);
     const streamTable = tableFromIPC(ipcBuffer);
     if (streamTable.numRows > 0 || whereClause) {
-      return streamTable;
+      // Guard: DuckDB streaming may emit a 0-row schema header as the first batch.
+      // geoarrow-deck-stream only reads data[0] — an empty first batch causes
+      // children[0] to be undefined. Fall back to regular query which returns a
+      // single contiguous batch.
+      const firstBatchEmpty =
+        streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
+      if (!firstBatchEmpty) {
+        return streamTable;
+      }
+      logger.debug(
+        'queryStreaming first batch is empty (schema header), retrying with regular query',
+        LogCategory.DUCKDB,
+        { tableName }
+      );
+    } else {
+      // Streaming returned schema-only (0 rows) — retry with regular query
+      logger.debug(
+        'queryStreaming returned 0 rows, retrying with regular query',
+        LogCategory.DUCKDB,
+        { tableName, ipcBufferBytes: ipcBuffer.byteLength }
+      );
     }
-    // Streaming returned schema-only (0 rows) — retry with regular query
-    logger.debug(
-      'queryStreaming returned 0 rows, retrying with regular query',
-      LogCategory.DUCKDB,
-      { tableName, ipcBufferBytes: ipcBuffer.byteLength }
-    );
   }
 
   const buffer = (await Duck.query(query, {
@@ -86,73 +105,6 @@ export async function fetchArrowTableWithGeometry(
   ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
   return tableFromIPC(ipcBuffer);
-}
-
-async function fetchTableWithGeometryAsWkb(
-  tableName: string,
-  geometryColumn: string,
-  Duck: DuckDBClientForArrow
-): Promise<Table> {
-  const query = `SELECT * REPLACE (
-      ST_AsWKB("${geometryColumn}") AS "${geometryColumn}"
-    )
-    FROM "${tableName}"`;
-
-  // Use streaming when available — reduces peak WASM memory for large tables.
-  // Fallback to regular query() if streaming returns 0 rows (race condition
-  // in DuckDB WASM's useUnsafe API under concurrent query load).
-  let ipcBuffer: Uint8Array;
-
-  if (Duck.queryStreaming) {
-    ipcBuffer = await Duck.queryStreaming(query);
-    const streamTable = tableFromIPC(ipcBuffer);
-    if (streamTable.numRows > 0) {
-      return streamTable;
-    }
-    // Streaming returned schema-only (0 rows) — retry with regular query
-    logger.debug(
-      'queryStreaming returned 0 rows, retrying with regular query',
-      LogCategory.DUCKDB,
-      { tableName, ipcBufferBytes: ipcBuffer.byteLength }
-    );
-  }
-
-  const buffer = (await Duck.query(query, {
-    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-  })) as ArrayBuffer | Uint8Array;
-  ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-
-  return tableFromIPC(ipcBuffer);
-}
-
-async function ensureGeometryColumnIsWkb(
-  table: Table,
-  tableName: string,
-  geometryColumn: string,
-  Duck: DuckDBClientForArrow
-): Promise<Table> {
-  const columnIndex = table.schema.fields.findIndex(
-    (field) => field.name === geometryColumn
-  );
-  if (columnIndex === -1) {
-    return table;
-  }
-
-  const vector = table.getChildAt(columnIndex);
-  const sampleCount = Math.min(table.numRows, 5);
-  for (let i = 0; i < sampleCount; i++) {
-    const value = (vector?.get(i) as Uint8Array | null) ?? null;
-    if (!value || value.length === 0) {
-      continue;
-    }
-    const firstByte = value[0];
-    if (firstByte === 0 || firstByte === 1) {
-      return table;
-    }
-    break;
-  }
-
-  return fetchTableWithGeometryAsWkb(tableName, geometryColumn, Duck);
 }
 
 export async function addGeoArrowMetadataFromDuckDB(
@@ -273,37 +225,14 @@ export async function addGeoArrowMetadataFromDuckDB(
       }
     };
 
-    let normalizedTable: Table;
-
-    if (isGeoJsonString) {
-      normalizedTable = table;
-      logger.debug(
-        'Geometry column is GeoJSON string, skipping WKB/GeoArrow conversion',
-        LogCategory.DUCKDB,
-        { tableName, columnName: geomColumn!.column_name }
-      );
-    } else {
-      normalizedTable = await ensureGeometryColumnIsWkb(
-        table,
-        tableName,
-        geomColumn!.column_name,
-        Duck
-      );
-      logger.debug(
-        'Geometry column is WKB binary, keeping as ogc.wkb encoding',
-        LogCategory.DUCKDB,
-        { tableName, columnName: geomColumn!.column_name }
-      );
-    }
-
-    const schema = normalizedTable.schema;
+    const schema = table.schema;
     if (!schema) {
       logger.warn(
         'Arrow table missing schema, cannot add GeoArrow metadata',
         LogCategory.DUCKDB,
         { tableName }
       );
-      return normalizedTable;
+      return table;
     }
 
     const newMetadata = schema.metadata
@@ -339,7 +268,7 @@ export async function addGeoArrowMetadataFromDuckDB(
 
     const newSchema = new Schema(updatedFields, metadataMap);
 
-    const tableWithMetadata = new Table(newSchema, normalizedTable.batches);
+    const tableWithMetadata = new Table(newSchema, table.batches);
 
     logger.debug('Added GeoArrow metadata to Arrow table', LogCategory.DUCKDB, {
       tableName,
@@ -387,13 +316,6 @@ export async function createArrowTableWithMetadata(
     );
   }
   return { arrowTableWithMetadata, geoArrowMetadata };
-}
-
-export async function exportTableToGeoParquet(
-  tableName: string,
-  Duck: DuckDBClientForArrow
-): Promise<Uint8Array> {
-  return Duck.copy_to_geoparquet_as_buffer(tableName);
 }
 
 export async function getArrowTableWithCache(

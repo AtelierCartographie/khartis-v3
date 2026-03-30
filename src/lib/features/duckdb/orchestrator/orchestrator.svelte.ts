@@ -7,7 +7,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { detectSemioType } from '$lib/features/commons/utils/semio-detector.utils';
 import {
-  geoParquetReader,
+  extractGeoArrowMetadata,
   type ProcessedDataset
 } from '$lib/features/data-pipeline';
 import * as m from '$lib/paraglide/messages';
@@ -121,7 +121,7 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
         await arrowOps.createArrowTableWithMetadata(
           dataset.tableName,
           Duck,
-          (table) => geoParquetReader.extractMetadata(table)
+          (table) => extractGeoArrowMetadata(table)
         );
 
       dataset.arrowTableWithMetadata = arrowTableWithMetadata;
@@ -161,7 +161,7 @@ async function createArrowTableWithMetadata(tableName: string): Promise<{
   }
 
   return arrowOps.createArrowTableWithMetadata(tableName, Duck, (table) =>
-    geoParquetReader.extractMetadata(table)
+    extractGeoArrowMetadata(table)
   );
 }
 
@@ -239,11 +239,13 @@ export const duckDBOrchestrator = {
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
     try {
-      return await datasetOps.processFile(file, Duck, {
+      const dataset = await datasetOps.processFile(file, Duck, {
         getRowCount: getRowCountInternal,
         createArrowTableWithMetadata,
         prefetchArrowMetadata
       });
+
+      return dataset;
     } catch (error) {
       showError(
         m.error_process_file_title(),
@@ -677,13 +679,6 @@ export const duckDBOrchestrator = {
 
   clearFilters: state.clearFiltersForTable,
 
-  async exportTableToGeoParquet(tableName: string): Promise<Uint8Array> {
-    if (!Duck) {
-      throw new DuckDBError('DuckDB not initialized');
-    }
-    return arrowOps.exportTableToGeoParquet(tableName, Duck);
-  },
-
   async getArrowTableDirect(
     tableName: string,
     yearFilter?: { column: string; value: number | string }
@@ -722,7 +717,7 @@ export const duckDBOrchestrator = {
       return await arrowOps.getArrowTableWithCache(
         tableName,
         Duck,
-        (table) => geoParquetReader.extractMetadata(table),
+        (table) => extractGeoArrowMetadata(table),
         () => {
           for (const dataset of state.getAllDatasets()) {
             if (

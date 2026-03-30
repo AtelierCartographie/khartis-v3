@@ -92,8 +92,8 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.19.15",
     "@vite-pwa/assets-generator": "^1.0.2",
-    "@vitest/coverage-v8": "^4.1.1",
-    "@vitest/ui": "^4.1.1",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/ui": "^4.1.2",
     "carbon-preprocess-svelte": "^0.11.28",
     "duckdb": "^1.4.4",
     "eslint": "^9.39.4",
@@ -108,12 +108,12 @@
     "rollup-plugin-visualizer": "^7.0.1",
     "sass-embedded": "^1.98.0",
     "semantic-release": "^25.0.3",
-    "svelte": "^5.55.0",
+    "svelte": "^5.55.1",
     "svelte-check": "^4.4.5",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.2",
     "vite": "^7.3.1",
-    "vitest": "^4.1.1",
+    "vitest": "^4.1.2",
     "workbox-window": "^7.4.0"
   },
   "dependencies": {
@@ -125,8 +125,7 @@
     "@deck.gl/geo-layers": "^9.2.11",
     "@deck.gl/layers": "^9.2.11",
     "@deck.gl/mapbox": "^9.2.11",
-    "@duckdb/duckdb-wasm": "1.31.0",
-    "@geoarrow/geoparquet-wasm": "0.2.0-beta.5",
+    "@duckdb/duckdb-wasm": "1.33.1-dev41.0",
     "@inlang/paraglide-js": "^2.15.1",
     "@luma.gl/core": "^9.2.6",
     "@math.gl/core": "^4.1.0",
@@ -134,15 +133,16 @@
     "@uwdata/flechette": "^2.3.0",
     "apache-arrow": "^21.1.0",
     "carbon-components-svelte": "^0.96.3",
-    "carbon-icons-svelte": "^13.9.1",
+    "carbon-icons-svelte": "^13.10.0",
     "clsx": "^2.1.1",
     "d3-geo": "^3.1.1",
     "d3-geo-projection": "^4.0.0",
     "fflate": "^0.8.2",
-    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream",
+    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#08bfcd4",
     "html-to-image": "^1.11.13",
     "localforage": "^1.10.0",
-    "maplibre-gl": "^5.21.0",
+    "maplibre-gl": "^5.21.1",
+    "proj-suggest": "github:AtelierCartographie/proj-suggest",
     "proj4": "^2.20.4",
     "svelte-dnd-action": "^0.9.69",
     "vite-plugin-pwa": "^1.2.0"
@@ -150,7 +150,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
-      "geoarrow-deck-stream"
+      "geoarrow-deck-stream",
+      "proj-suggest"
     ],
     "overrides": {
       "rollup": ">=4.59.0",

@@ -11,7 +11,6 @@ import {
 } from '$lib/features/duckdb/cache/cache-manager';
 import type {
   DuckDBContext,
-  CacheState,
   DescribeResult
 } from '$lib/features/duckdb/types';
 
@@ -24,10 +23,8 @@ function makeCtx(overrides: Partial<DuckDBContext> = {}): DuckDBContext {
     loaded_files: new Map(),
     registered_files: new Set(),
     table_metadata: new Map(),
-    table_geoparquet_cache: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
-    cacheState: { size: 0, accessOrder: [] } satisfies CacheState,
     extensionsLoaded: { spatial: false, httpfs: false },
     extensionLoadPromises: { spatial: null, httpfs: null },
     localExtensionRepositoryConfigured: false,
@@ -89,32 +86,6 @@ describe('markTableMutated', () => {
     expect(ctx.rowCountCache.has('tbl')).toBe(false);
   });
 
-  it("évince l'entrée geoparquet et met à jour cacheState.size", () => {
-    const buffer = new Uint8Array(100);
-    const ctx = makeCtx();
-    ctx.table_geoparquet_cache.set('tbl', buffer);
-    ctx.cacheState.size = 100;
-    ctx.cacheState.accessOrder = ['tbl'];
-
-    markTableMutated(ctx, 'tbl');
-
-    expect(ctx.table_geoparquet_cache.has('tbl')).toBe(false);
-    expect(ctx.cacheState.size).toBe(0);
-    expect(ctx.cacheState.accessOrder).not.toContain('tbl');
-  });
-
-  it('retire la table de accessOrder même si elle est au milieu de la liste', () => {
-    const buffer = new Uint8Array(50);
-    const ctx = makeCtx();
-    ctx.table_geoparquet_cache.set('middle', buffer);
-    ctx.cacheState.size = 50;
-    ctx.cacheState.accessOrder = ['first', 'middle', 'last'];
-
-    markTableMutated(ctx, 'middle');
-
-    expect(ctx.cacheState.accessOrder).toEqual(['first', 'last']);
-  });
-
   it('appelle le callback enregistré avec le nom de la table', () => {
     const callback = vi.fn();
     registerTableMutationCallback(callback);
@@ -135,14 +106,6 @@ describe('markTableMutated', () => {
     expect(() => markTableMutated(ctx, 'tbl')).not.toThrow();
   });
 
-  it("ne modifie pas cacheState.size quand la table n'est pas dans geoparquet_cache", () => {
-    const ctx = makeCtx();
-    ctx.cacheState.size = 200;
-
-    markTableMutated(ctx, 'absent_table');
-
-    expect(ctx.cacheState.size).toBe(200);
-  });
 });
 
 // ── getTableMetadata ──────────────────────────────────────────────────────────

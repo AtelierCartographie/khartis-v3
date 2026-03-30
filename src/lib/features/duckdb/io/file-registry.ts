@@ -57,7 +57,7 @@ export function generateUniqueTableName(
 }
 
 function addFileId(file: FileWithId): void {
-  file.id = file.lastModified + '-' + normalizeName(file.name);
+  file.id = 'f_' + file.lastModified + '-' + normalizeName(file.name);
 }
 
 /**
@@ -88,7 +88,7 @@ export async function registerFiles(
   for (const file of files) {
     const fileWithId = file as FileWithId;
     if (shapefile && shape_date) {
-      fileWithId.id = shape_date + '-' + normalizeName(file.name);
+      fileWithId.id = 'f_' + shape_date + '-' + normalizeName(file.name);
     } else {
       addFileId(fileWithId);
     }
