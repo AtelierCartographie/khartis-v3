@@ -179,11 +179,11 @@ export async function readGeofile(
 
     const finalTablename = tablename;
     const escapedFinalTable = escapeIdentifier(finalTablename);
+    const escapedGeoFileId = escapeSqlString(geofileWithId.id);
+
     await runInTransaction(
       ctx.connection,
       async () => {
-        const escapedGeoFileId = escapeSqlString(geofileWithId.id);
-
         if (shouldReproject) {
           const duckDBSuccess = await tryDuckDBReprojection(
             ctx,
