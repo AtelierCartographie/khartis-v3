@@ -162,10 +162,6 @@ export interface SearchStats {
   isSampled?: boolean; // true if search was performed on a sample (large table)
 }
 
-export interface CacheState {
-  size: number;
-  accessOrder: string[];
-}
 
 export interface ExtensionsLoaded {
   spatial: boolean;
@@ -245,10 +241,8 @@ export interface DuckDBContext {
   loaded_files: Map<string, string>;
   registered_files: Set<string>;
   table_metadata: Map<string, TableMetadata>;
-  table_geoparquet_cache: Map<string, Uint8Array>;
   describeCache: Map<string, DescribeResult>;
   rowCountCache: Map<string, number>;
-  cacheState: CacheState;
   extensionsLoaded: ExtensionsLoaded;
   extensionLoadPromises: ExtensionLoadPromises;
   localExtensionRepositoryConfigured: boolean;

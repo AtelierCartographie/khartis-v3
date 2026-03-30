@@ -44,34 +44,6 @@ export const DUCK_CONST = {
   }
 } as const;
 
-/**
- * Cache and retry configuration for DuckDB operations.
- */
-export const CACHE_CONSTANTS = {
-  /**
-   * Maximum cache size in bytes (100 MB).
-   * Based on typical browser memory constraints and IndexedDB limits.
-   */
-  MAX_CACHE_SIZE: 100 * 1024 * 1024,
-
-  /**
-   * Number of retry attempts for GeoParquet read operations.
-   * 3 retries provides good resilience against transient WASM failures.
-   */
-  GEO_PARQUET_READ_RETRIES: 3,
-
-  /**
-   * Delay between GeoParquet read retries in milliseconds.
-   * 15ms allows WASM garbage collection without noticeable delay.
-   */
-  GEO_PARQUET_RETRY_DELAY_MS: 15,
-
-  /**
-   * Parquet file magic bytes for format validation.
-   * "PAR1" (0x50, 0x41, 0x52, 0x31) identifies valid Parquet files.
-   */
-  PARQUET_MAGIC: new Uint8Array([0x50, 0x41, 0x52, 0x31])
-} as const;
 
 /**
  * Reader configuration for geometry processing.
