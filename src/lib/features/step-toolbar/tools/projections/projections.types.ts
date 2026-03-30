@@ -1,4 +1,5 @@
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
+import type { ProjectionSuggestion } from './projection-suggest.service';
 
 export interface ProjectionState {
   selected: string;
@@ -11,4 +12,8 @@ export interface ProjectionState {
   autoFit?: boolean;
   customCode?: string;
   simplifiedPreview?: boolean;
+  suggestions?: {
+    national: ProjectionSuggestion[];
+    generic: ProjectionSuggestion[];
+  };
 }
