@@ -4,7 +4,7 @@
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { fly } from 'svelte/transition';
+
   import {
     type Palette,
     type PaletteType,
@@ -141,6 +141,10 @@
       const target = e.target as Node;
       if (dropdownRef && !dropdownRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
+        const path = e.composedPath() as Element[];
+        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
+          return;
+        }
         handleClose();
       }
     }
@@ -182,7 +186,6 @@
       style="top: {dropdownPos.top}px; left: {dropdownPos.left}px; width: {dropdownPos.width}px;"
       role="listbox"
       aria-label={m.color_palette()}
-      transition:fly={{ y: -4, duration: 150 }}
     >
       <div class="dropdown-list">
         {#each palettes as palette (palette.id)}

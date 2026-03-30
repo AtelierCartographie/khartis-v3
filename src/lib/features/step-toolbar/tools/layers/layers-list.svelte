@@ -36,8 +36,8 @@
 
   let parentItems = $state<Layer[]>([]);
   let childItems = $state<Record<string, Layer[]>>({});
-  let draggingParent = $state(false);
-  let draggingChildOf = $state<string | null>(null);
+  let draggingParent = false;
+  let draggingChildOf: string | null = null;
 
   $effect(() => {
     if (!draggingParent) {

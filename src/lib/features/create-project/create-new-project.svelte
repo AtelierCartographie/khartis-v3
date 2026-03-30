@@ -55,7 +55,7 @@
   );
 
   let lastProcessedFiles = $state<SvelteSet<string>>(new SvelteSet());
-  let previousUploaderKey = $state(0);
+  let previousUploaderKey = 0;
 
   $effect(() => {
     if (uploaderKey !== previousUploaderKey) {

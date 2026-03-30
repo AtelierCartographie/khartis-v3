@@ -28,7 +28,12 @@ import {
   type VisualizationConfig
 } from '../store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
-import { showError, showWarning } from '../utils/notification.utils.svelte';
+import {
+  notificationManager,
+  showError,
+  showWarning
+} from '../utils/notification.utils.svelte';
+import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
 import {
   calculateBreaks,
@@ -271,6 +276,22 @@ function createDataOrchestratorService() {
             gpsMode: file.gpsMode,
             gpsColumns: file.gpsColumns
           });
+
+          if (file.joinedBasemap && file.geoColumn) {
+            await basemapCatalogService.loadCatalog();
+            const basemap = basemapCatalogService.getBasemapById(file.joinedBasemap);
+            if (basemap) {
+              try {
+                await duckDBOrchestrator.finalizeJoin(registered.id, basemap, file.geoColumn);
+              } catch (joinError) {
+                logger.warn('Failed to restore join on project load', LogCategory.DATA, {
+                  datasetId: registered.id,
+                  joinedBasemap: file.joinedBasemap,
+                  error: joinError
+                });
+              }
+            }
+          }
         }
 
         if (registered === null) {
@@ -667,6 +688,17 @@ function createDataOrchestratorService() {
             LogCategory.DATA,
             fileError
           );
+          const errorMsg = fileError instanceof Error ? fileError.message : '';
+          const subtitle =
+            errorMsg.includes('Multiple layers') ||
+            errorMsg.includes('more than one layer')
+              ? m.pipeline_error_geofile_multiple_layers()
+              : errorMsg || m.error_unknown_message();
+          notificationManager.error({
+            title: m.error_fatal_import_title(),
+            subtitle,
+            timeout: 0
+          });
         }
       });
     } catch (error) {

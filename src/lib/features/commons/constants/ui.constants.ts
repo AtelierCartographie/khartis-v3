@@ -85,7 +85,10 @@ export enum BasemapLayerType {
   LIMIT = 'limit',
   POLYGON = 'polygon',
   LINE = 'line',
-  POINT = 'point'
+  POINT = 'point',
+  LAND = 'land',
+  GRATICULE = 'graticule',
+  GEOGRAPHIC_LINES = 'geographic-lines'
 }
 
 export enum JoinStatus {
