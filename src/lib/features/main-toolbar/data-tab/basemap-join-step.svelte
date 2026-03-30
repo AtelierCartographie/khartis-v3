@@ -69,7 +69,8 @@
   const joinedCount = $derived(dataTabState.basemapJoin.joinedEntities);
   const toVerifyCount = $derived(dataTabState.basemapJoin.entitiesToVerify);
 
-  const allBasemaps = $derived(basemapCatalogService.basemaps);
+  const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
+  const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
 
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
@@ -97,7 +98,7 @@
   const suggestedBasemaps = $derived(() => {
     return basemapSuggestions
       .map((s: BasemapSuggestion) => ({
-        basemap: allBasemaps.find((b: BasemapMetadata) => b.file === s.file),
+        basemap: allBasemapsForLookup.find((b: BasemapMetadata) => b.file === s.file),
         score: s.matchScore
       }))
       .filter((item) => item.basemap !== undefined) as {
@@ -108,13 +109,13 @@
 
   function hasAvailableBasemap(basemapId: string): boolean {
     if (!basemapId) return false;
-    return allBasemaps.some((basemap) => basemap.file === basemapId);
+    return allBasemapsForLookup.some((basemap) => basemap.file === basemapId);
   }
 
   async function autoSelectFirstSuggestedBasemap(): Promise<void> {
     if (basemapSuggestions.length === 0) return;
 
-    const firstSuggestion = allBasemaps.find(
+    const firstSuggestion = allBasemapsForLookup.find(
       (basemap) => basemap.file === basemapSuggestions[0]?.file
     );
 
@@ -499,7 +500,7 @@
 
       dataTabActions.applyCorrections();
 
-      const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+      const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
       if (basemap) {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -587,7 +588,7 @@
 
       if (abortSignal.aborted) return;
 
-      const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+      const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
       if (basemap) {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -637,7 +638,7 @@
     )
       return;
 
-    const basemap = allBasemaps.find((b) => b.file === basemapSelected);
+    const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
     if (!basemap) {
       logger.warn('No basemap selected for join finalization', LogCategory.MAP);
       return;
@@ -812,7 +813,7 @@
 
           if (!selectedDataset || !datasetIdForOrchestrator) return;
 
-          const basemap = allBasemaps.find((b) => b.file === savedBasemap.id);
+          const basemap = allBasemapsForLookup.find((b) => b.file === savedBasemap.id);
           if (!basemap) return;
 
           if (
@@ -975,7 +976,7 @@
 
     previousLinkedVariableName = linkedVariableName;
 
-    const basemap = allBasemaps.find((b) => b.file === selectedBasemapId);
+    const basemap = allBasemapsForLookup.find((b) => b.file === selectedBasemapId);
     if (!basemap) return;
 
     logger.info(

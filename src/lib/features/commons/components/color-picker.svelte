@@ -3,7 +3,7 @@
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
-  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
+  import { ChevronDown } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { EVENT } from '../constants/dom.constants';
 
@@ -32,7 +32,7 @@
   let dropdownEl = $state<HTMLDivElement | null>(null);
   let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
   let openUpward = $state(false);
-  let initialColor = $state<ColorPayload | null>(null);
+  let initialColor: ColorPayload | null = null;
 
   // Portal the dropdown to document.body so position:fixed is relative to the
   // true viewport — Carbon Popover uses transform:translateX which would
@@ -372,11 +372,7 @@
                 colorOpen = false;
               }}
             >
-              {m.button_validate()}
-              <ArrowRight
-                size={16}
-                style="margin-left: var(--cds-spacing-03);"
-              />
+              {m.button_apply()}
             </Button>
           </Column>
         </Row>

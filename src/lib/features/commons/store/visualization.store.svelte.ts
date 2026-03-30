@@ -285,7 +285,7 @@ const DEFAULT_CHOROPLETH_COLORS = [
   '#08519c'
 ];
 
-const DEFAULT_CATEGORICAL_COLORS = [
+export const DEFAULT_CATEGORICAL_COLORS = [
   '#e41a1c',
   '#377eb8',
   '#4daf4a',

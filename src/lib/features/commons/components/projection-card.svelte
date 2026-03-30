@@ -18,6 +18,8 @@
     fullWidth?: boolean;
     onclick?: () => void;
     showInfo?: boolean;
+    equalArea?: boolean;
+    description?: string;
   }
 
   let {
@@ -32,8 +34,12 @@
     layout = 'horizontal',
     fullWidth = false,
     onclick,
-    showInfo = true
+    showInfo = true,
+    equalArea = false,
+    description
   }: ProjectionCardProps = $props();
+
+  let showTooltip = $state(false);
 
   function handleCardClick() {
     if (!disabled && onclick) onclick();
@@ -117,6 +123,9 @@
     <div class="card-body">
       <div class="subtitle">
         <span>{subtitle}</span>
+        {#if equalArea}
+          <Tag size="sm" type="green">{m.projection_equal_area()}</Tag>
+        {/if}
         {#if selected}
           <span class="check-badge ml-1" aria-hidden="true">
             <Checkmark size={16} />
@@ -128,10 +137,22 @@
     <div class="card-footer">
       <Tag type="blue">{tag}</Tag>
 
-      {#if showInfo}
-        <button class="info-btn" aria-label={m.info()}>
-          <Information size={20} />
-        </button>
+      {#if showInfo && description}
+        <div class="info-wrapper">
+          <button
+            class="info-btn"
+            aria-label={m.info()}
+            onclick={(e: MouseEvent) => {
+              e.stopPropagation();
+              showTooltip = !showTooltip;
+            }}
+          >
+            <Information size={20} />
+          </button>
+          {#if showTooltip}
+            <div class="info-tooltip">{description}</div>
+          {/if}
+        </div>
       {/if}
     </div>
   </div>
@@ -251,6 +272,11 @@
     white-space: nowrap;
   }
 
+  .info-wrapper {
+    position: relative;
+    flex-shrink: 0;
+  }
+
   .info-btn {
     width: 24px;
     height: 24px;
@@ -263,6 +289,22 @@
     color: var(--cds-blue);
     outline: none;
     border: none;
+  }
+
+  .info-tooltip {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    right: 0;
+    z-index: var(--z-popover, 6000);
+    width: max-content;
+    max-width: 200px;
+    padding: 0.5rem;
+    background-color: var(--cds-inverse-02, #393939);
+    color: var(--cds-inverse-01, #ffffff);
+    border-radius: 2px;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .check-badge {

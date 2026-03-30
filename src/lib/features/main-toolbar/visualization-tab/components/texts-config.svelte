@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
@@ -81,6 +82,7 @@
   let selectedFieldId = $state<number>(0);
   let selectedCategoryFieldId = $state<number>(0);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
+  let defaultLabelApplied = false;
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
@@ -93,9 +95,10 @@
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
       }
-    } else if (dataFields.length > 0) {
+    } else if (dataFields.length > 0 && !defaultLabelApplied) {
       selectedFieldId = 0;
-      onMappingChange?.({ labelColumn: dataFields[0].text });
+      defaultLabelApplied = true;
+      untrack(() => onMappingChange?.({ labelColumn: dataFields[0].text }));
     }
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const categoryIndex = dataFields.findIndex(
@@ -279,6 +282,7 @@
   function handleToggleChange(checked: boolean) {
     if (checked && opacity <= 0) {
       opacity = VISUALIZATION_DEFAULTS.textOpacity;
+      onStyleChange?.({ textOpacity: opacity / 100 });
     }
     onToggleVisibility?.(checked);
   }

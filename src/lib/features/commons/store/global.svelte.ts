@@ -339,6 +339,24 @@ function createGlobalStore() {
     });
   }
 
+  function resetNavigationState(): void {
+    state.selectedStep = ToolbarStep.Data;
+    state.toolbarState = readToolbarStateFromStorage();
+    if (state.toolbarState === ToolbarState.Collapsed) {
+      state.toolbarState = ToolbarState.Full;
+    }
+    state.selectedTool = undefined;
+    state.zoom.pagePanOffset = { x: 0, y: 0 };
+
+    selectedDataButtonState.id = undefined;
+    pendingDatasetSelections.clear();
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, ToolbarStep.Data);
+      localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
+    }
+  }
+
   return {
     get dataButtons() {
       return dataButtons;
@@ -443,7 +461,8 @@ function createGlobalStore() {
     setPageZoom,
     panPageBy,
     resetPagePan,
-    setToolbarTransitioning
+    setToolbarTransitioning,
+    resetNavigationState
   };
 }
 
@@ -466,7 +485,8 @@ export const globalActions = {
   openMobileToolbar: globalState.openMobileToolbar,
   closeMobileToolbar: globalState.closeMobileToolbar,
   toggleMobileToolbar: globalState.toggleMobileToolbar,
-  setToolbarTransitioning: globalState.setToolbarTransitioning
+  setToolbarTransitioning: globalState.setToolbarTransitioning,
+  resetNavigationState: globalState.resetNavigationState
 };
 
 export const MOBILE_BREAKPOINT = 1024;

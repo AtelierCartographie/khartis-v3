@@ -7,12 +7,15 @@
   } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
   import {
+    Button,
+    Dropdown,
     InlineNotification,
     RadioButton,
     RadioButtonGroup,
     Slider
   } from 'carbon-components-svelte';
-  import { Earth, LicenseGlobal } from 'carbon-icons-svelte';
+  import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
+  import type { SimplificationResult } from './simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -23,25 +26,46 @@
   import { onDestroy } from 'svelte';
 
   const store = simplificationActions;
-  const state = $derived(getSimplificationState());
+  let lastResult: SimplificationResult | null = $state(null);
+  let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let selectedGeoDatasetId: string | undefined = $state(undefined);
+  const simplState = $derived(getSimplificationState());
   const isOsmBasemapActive = $derived(osmBasemapStore.isActive);
+  const isImportedBasemap = $derived(
+    basemapService.currentBasemap?.metadata.isCustom === true
+  );
   const hasBasemapVariants = $derived(
-    !!basemapService.currentBasemap?.metadata.variants
+    !!basemapService.currentBasemap?.metadata.simplification_level
   );
   const isBasemapSourceBlocked = $derived(
-    state.source === SimplificationSource.Basemap &&
-      (isOsmBasemapActive || !hasBasemapVariants)
+    simplState.source === SimplificationSource.Basemap &&
+      (isOsmBasemapActive || (!isImportedBasemap && !hasBasemapVariants))
   );
-  let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const sourceIndex = $derived(
-    state.source === SimplificationSource.Basemap ? 0 : 1
+    simplState.source === SimplificationSource.Basemap ? 0 : 1
   );
 
   const geoDatasets = $derived(
     datasetsStore.getDatasetsByType(true).filter((d) => !d.joinedBasemap)
   );
   const hasGeoDatasets = $derived(geoDatasets.length > 0);
+
+  const geoDropdownItems = $derived(
+    geoDatasets.map((d) => ({ id: d.id, text: d.name }))
+  );
+
+  const resolvedGeoDatasetId = $derived.by(() => {
+    if (
+      selectedGeoDatasetId &&
+      geoDatasets.some((d) => d.id === selectedGeoDatasetId)
+    ) {
+      return selectedGeoDatasetId;
+    }
+    const selected = datasetsStore.selectedDataset;
+    if (selected?.geometry && !selected.joinedBasemap) return selected.id;
+    return geoDatasets[0]?.id;
+  });
 
   const geoDatasetLabel = $derived.by(() => {
     const selected = datasetsStore.selectedDataset;
@@ -84,12 +108,15 @@
       return;
     }
 
-    if (state.isProcessing) {
+    if (simplState.isProcessing) {
       return;
     }
 
     try {
-      await store.applySimplification();
+      const result = await store.applySimplification({
+        datasetId: resolvedGeoDatasetId
+      });
+      lastResult = result;
     } catch (error) {
       logger.error(
         'Failed to apply simplification from step-toolbar',
@@ -135,7 +162,7 @@
     hideInactiveLabel
   />
 
-  {#if state.source === SimplificationSource.Basemap}
+  {#if simplState.source === SimplificationSource.Basemap}
     {#if isOsmBasemapActive}
       <InlineNotification
         kind="warning"
@@ -143,7 +170,7 @@
         title={m.simplification_osm_not_available()}
         subtitle={m.simplification_osm_explanation()}
       />
-    {:else if !hasBasemapVariants}
+    {:else if !isImportedBasemap && !hasBasemapVariants}
       <InlineNotification
         kind="info"
         lowContrast
@@ -151,43 +178,83 @@
       />
     {/if}
 
-    <div>
-      <div class="form-label">{m.simplification_level_label()}</div>
-      <RadioButtonGroup
-        orientation="horizontal"
-        selected={state.level}
-        on:change={(e) => {
-          if (isBasemapSourceBlocked) return;
-          store.setLevel((e as CustomEvent).detail as SimplificationLevel);
-          scheduleSimplificationApply('level-change');
-        }}
-      >
-        <RadioButton
-          value={SimplificationLevel.Low}
-          labelText={m.simplification_level_low()}
-          disabled={isBasemapSourceBlocked}
-        />
-        <RadioButton
-          value={SimplificationLevel.Medium}
-          labelText={m.simplification_level_medium()}
-          disabled={isBasemapSourceBlocked}
-        />
-        <RadioButton
-          value={SimplificationLevel.High}
-          labelText={m.simplification_level_high()}
-          disabled={isBasemapSourceBlocked}
-        />
-      </RadioButtonGroup>
-    </div>
+    {#if isImportedBasemap && !isOsmBasemapActive}
+      <InlineNotification
+        kind="warning"
+        lowContrast
+        title={m.simplification_warning_title()}
+        subtitle={m.simplification_warning_subtitle()}
+      />
+      <div>
+        <div class="form-label">{m.simplification_rate_label()}</div>
+        <div class="slider-row">
+          <Slider
+            min={0}
+            max={100}
+            step={1}
+            value={simplState.rate}
+            on:change={(e) => {
+              store.setRate((e as CustomEvent).detail ?? 50);
+              scheduleSimplificationApply('rate-change', 250);
+            }}
+            labelText=""
+            minLabel="0"
+            maxLabel="100"
+            fullWidth
+          />
+        </div>
+      </div>
+    {:else}
+      <div>
+        <div class="form-label">{m.simplification_level_label()}</div>
+        <RadioButtonGroup
+          orientation="horizontal"
+          selected={simplState.level}
+          on:change={(e) => {
+            if (isBasemapSourceBlocked) return;
+            store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+            scheduleSimplificationApply('level-change');
+          }}
+        >
+          <RadioButton
+            value={SimplificationLevel.Low}
+            labelText={m.simplification_level_low()}
+            disabled={isBasemapSourceBlocked}
+          />
+          <RadioButton
+            value={SimplificationLevel.Medium}
+            labelText={m.simplification_level_medium()}
+            disabled={isBasemapSourceBlocked}
+          />
+          <RadioButton
+            value={SimplificationLevel.High}
+            labelText={m.simplification_level_high()}
+            disabled={isBasemapSourceBlocked}
+          />
+        </RadioButtonGroup>
+      </div>
+    {/if}
   {/if}
 
-  {#if state.source === SimplificationSource.Geo}
+  {#if simplState.source === SimplificationSource.Geo}
     <InlineNotification
       kind="warning"
       lowContrast
       title={m.simplification_warning_title()}
       subtitle={m.simplification_warning_subtitle()}
     />
+
+    {#if geoDropdownItems.length > 1}
+      <Dropdown
+        size="sm"
+        titleText={m.simplification_geo_dataset_label()}
+        selectedId={resolvedGeoDatasetId}
+        items={geoDropdownItems}
+        on:select={(e) => {
+          selectedGeoDatasetId = (e as CustomEvent).detail.selectedId as string;
+        }}
+      />
+    {/if}
 
     <div>
       <div class="form-label">{m.simplification_rate_label()}</div>
@@ -196,7 +263,7 @@
           min={0}
           max={100}
           step={1}
-          value={state.rate}
+          value={simplState.rate}
           on:change={(e) => {
             store.setRate((e as CustomEvent).detail ?? 50);
             scheduleSimplificationApply('rate-change', 250);
@@ -208,6 +275,32 @@
         />
       </div>
     </div>
+  {/if}
+
+  {#if lastResult?.simplified && lastResult.vertexReduction > 0}
+    <InlineNotification
+      kind="success"
+      lowContrast
+      title={m.simplification_success({
+        originalVertices: lastResult.originalVertices,
+        simplifiedVertices: lastResult.simplifiedVertices,
+        reductionPercentage: Math.round(lastResult.vertexReduction)
+      })}
+    />
+  {/if}
+
+  {#if simplState.lastApplied}
+    <Button
+      kind="tertiary"
+      size="small"
+      icon={Undo}
+      on:click={() => {
+        store.undoLastSimplification();
+        lastResult = null;
+      }}
+    >
+      {m.projection_code_reset()}
+    </Button>
   {/if}
 </div>
 

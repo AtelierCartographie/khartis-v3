@@ -64,7 +64,7 @@
     }
   });
 
-  let lastUiSnapshot = $state<string>('');
+  let lastUiSnapshot = '';
 
   $effect(() => {
     const project = projectStore.currentProject;

@@ -244,12 +244,8 @@
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
+      visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     }
-  });
-
-  $effect(() => {
-    void selectedDatasetId;
-    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
   $effect(() => {
