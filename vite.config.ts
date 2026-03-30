@@ -48,7 +48,6 @@ export default defineConfig(({ mode }) => {
         '@deck.gl/layers',
         'apache-arrow'
       ],
-      exclude: ['@geoarrow/geoparquet-wasm']
     },
     plugins: [
       process.env.ANALYZE === 'true' &&

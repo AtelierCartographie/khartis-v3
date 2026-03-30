@@ -423,6 +423,8 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     const resolvedGeometryType =
       extensionGeometryType ?? normalizedGeometryType;
 
+    // geoarrow.wkb (DuckDB >= 1.33) is included: geoarrow-deck-stream
+    // transparently decodes WKB in all parse functions.
     const isNativeGeoArrow = Boolean(
       arrowExtension &&
       (arrowExtension.startsWith('geoarrow.') ||
@@ -434,7 +436,9 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
         arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON)
     );
 
-    const isWkbEncoded = arrowExtension === ArrowExtension.OGC_WKB;
+    const isWkbEncoded =
+      arrowExtension === ArrowExtension.OGC_WKB ||
+      arrowExtension === ArrowExtension.GEOARROW_WKB;
     const isGeoJsonEncoded = arrowExtension === ArrowExtension.GEOJSON;
 
     if (!hasMatchingGeoExtension) {

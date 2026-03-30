@@ -2,77 +2,9 @@ import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
-import { CACHE_CONSTANTS, DUCK_CONST } from '../constants';
+import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
-
-function isValidParquetBuffer(buffer: Uint8Array): boolean {
-  if (buffer.byteLength < 8) return false;
-
-  const magicLength = CACHE_CONSTANTS.PARQUET_MAGIC.length;
-  for (let i = 0; i < magicLength; i++) {
-    if (buffer[i] !== CACHE_CONSTANTS.PARQUET_MAGIC[i]) return false;
-  }
-
-  for (let i = 0; i < magicLength; i++) {
-    if (
-      buffer[buffer.byteLength - magicLength + i] !==
-      CACHE_CONSTANTS.PARQUET_MAGIC[i]
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-async function readStableParquetBuffer(
-  ctx: DuckDBContext,
-  filename: string
-): Promise<Uint8Array> {
-  for (
-    let attempt = 0;
-    attempt < CACHE_CONSTANTS.GEO_PARQUET_READ_RETRIES;
-    attempt++
-  ) {
-    const rawBuffer = await ctx.db.copyFileToBuffer(filename);
-    const sourceView =
-      rawBuffer instanceof Uint8Array ? rawBuffer : new Uint8Array(rawBuffer);
-    const stableBuffer = new Uint8Array(sourceView.byteLength);
-    stableBuffer.set(sourceView);
-
-    if (isValidParquetBuffer(stableBuffer)) {
-      if (attempt > 0) {
-        logger.debug(
-          'GeoParquet buffer validated after retry',
-          LogCategory.DUCKDB,
-          {
-            filename,
-            attempt: attempt + 1
-          }
-        );
-      }
-      return stableBuffer;
-    }
-
-    logger.warn('GeoParquet buffer incomplete, retrying', LogCategory.DUCKDB, {
-      filename,
-      byteLength: stableBuffer.byteLength,
-      attempt: attempt + 1
-    });
-
-    await new Promise((resolve) =>
-      setTimeout(
-        resolve,
-        CACHE_CONSTANTS.GEO_PARQUET_RETRY_DELAY_MS * (attempt + 1)
-      )
-    );
-  }
-
-  throw new DuckDBError(
-    `Failed to read valid GeoParquet buffer from ${filename}`
-  );
-}
 
 export async function exportToCsv(
   ctx: DuckDBContext,
@@ -115,69 +47,4 @@ export async function exportToCsv(
       );
     }
   }
-}
-
-export async function exportToGeoparquet(
-  ctx: DuckDBContext,
-  table: string
-): Promise<Uint8Array> {
-  const cache = ctx.table_geoparquet_cache;
-  const cacheState = ctx.cacheState;
-
-  if (cache.has(table)) {
-    const index = cacheState.accessOrder.indexOf(table);
-    if (index > -1) {
-      cacheState.accessOrder.splice(index, 1);
-      cacheState.accessOrder.push(table);
-    }
-    const cachedBuffer = cache.get(table)!;
-    return cachedBuffer.slice();
-  }
-
-  const filename = `export_${Date.now()}.parquet`;
-  await executeQuery(
-    ctx.connection,
-    `COPY "${escapeIdentifier(table)}" TO '${filename}' (FORMAT PARQUET, CODEC 'ZSTD');`,
-    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-  );
-  let stableBuffer: Uint8Array | undefined;
-
-  try {
-    stableBuffer = await readStableParquetBuffer(ctx, filename);
-  } finally {
-    try {
-      await ctx.db.dropFile(filename);
-    } catch (dropError) {
-      logger.warn(
-        'Failed to remove temporary GeoParquet file',
-        LogCategory.DUCKDB,
-        dropError
-      );
-    }
-  }
-
-  if (!stableBuffer) {
-    throw new DuckDBError(
-      `Failed to materialize GeoParquet buffer for ${table}`
-    );
-  }
-
-  while (
-    cacheState.size + stableBuffer.byteLength >
-      CACHE_CONSTANTS.MAX_CACHE_SIZE &&
-    cacheState.accessOrder.length > 0
-  ) {
-    const oldest = cacheState.accessOrder.shift()!;
-    const oldBuffer = cache.get(oldest);
-    if (oldBuffer) {
-      cacheState.size -= oldBuffer.byteLength;
-      cache.delete(oldest);
-    }
-  }
-
-  cache.set(table, stableBuffer);
-  cacheState.accessOrder.push(table);
-  cacheState.size += stableBuffer.byteLength;
-
-  return stableBuffer.slice();
 }
