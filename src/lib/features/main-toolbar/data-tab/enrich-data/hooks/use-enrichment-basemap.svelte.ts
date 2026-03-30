@@ -49,7 +49,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   let importedCustomBasemap = $state<BasemapMetadata | null>(null);
   let suggestedBasemaps = $state<BasemapSuggestionItem[]>([]);
 
-  const basemaps = $derived(basemapCatalogService.basemaps);
+  const basemaps = $derived(basemapCatalogService.catalogBasemaps);
 
   function setBasemapTabIndex(index: number): void {
     basemapTabIndex = index;
@@ -98,7 +98,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       });
 
       logger.debug('Custom basemap imported', LogCategory.MAP, {
-        title: customBasemap.title
+        title: customBasemap.title_fr
       });
     } catch (error) {
       logger.error('Failed to import custom basemap', LogCategory.MAP, error);
