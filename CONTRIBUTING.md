@@ -6,8 +6,8 @@ Thank you for your interest in improving Khartis v3. This guide explains how to 
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- pnpm 9 (via Corepack)
+- Node.js ≥ 22
+- pnpm 10 (via Corepack)
 - Git and a modern browser (Chrome, Firefox, Safari, Edge)
 
 ### Setup
@@ -44,7 +44,7 @@ Use descriptive prefixes for your branches:
 
 ### Pull requests
 
-- **Target branch**: open PRs against `main` (or `develop` when the prerelease flow is active)
+- **Target branch**: open PRs against `staging`
 - **Title**: Conventional Commits format: `type(scope): description`
 - **Description**: include:
   - What changes were made and why
@@ -124,7 +124,7 @@ BREAKING CHANGE: Legacy authentication method removed
 
 ### Testing
 
-- [ ] `pnpm test` passes (unit + e2e as applicable)
+- [ ] `pnpm test:unit` and `pnpm test:pipeline` pass
 - [ ] New features include tests; bug fixes include regression tests
 - [ ] Manual validation on dev build
 - [ ] Cross‑browser spot‑check (Chrome, Firefox, Safari)
@@ -185,7 +185,6 @@ export function createFeatureStore() {
 
 - **DuckDB-first**: Use DuckDB native functions for all data operations
 - **No external parsers**: Use `Duck.read_csv()` instead of PapaParse, `ST_Read()` for geo files
-- **Contracts pattern**: Define interfaces in `contracts/`, implementations in `adapters/`
 - **Pipeline pattern**: Use `dataPipeline.processFile()` for all file imports
 
 ### Web Workers Usage
@@ -208,17 +207,20 @@ Workers are available for:
 
 ### Error Classes
 
-Use the hierarchical error system:
+Use the hierarchical error system defined in `src/lib/features/commons/errors/pipeline.errors.ts`:
 
-- `KhartisError` (base class)
-- `DataError`, `DataValidationError`, `DataParseError`
-- `DuckDBError`, `DuckDBConnectionError`
-- `VisualizationError`, `ClassificationError`
-- `StorageError`, `QuotaExceededError`
+- `PipelineError` (base class — `code`, `details`)
+  - `DataValidationError` — invalid data (adds `field`)
+  - `ParseError` — file parsing failures (adds `fileType`)
+  - `DuckDBError` — query errors (adds `query`)
+  - `NonFatalError` — toast-worthy but no rollback
+    - `DuplicateFileError` — duplicate file import (adds `fileName`)
 
 ### Error Patterns
 
 ```typescript
+import { DataValidationError, isPipelineError } from '$lib/features/commons/errors/pipeline.errors';
+
 try {
   await operation();
 } catch (error) {
@@ -230,11 +232,11 @@ try {
 }
 ```
 
-### User-Friendly Messages
+### Error Guidelines
 
 - Always provide actionable error messages
-- Use `getUserMessage()` helper for technical errors
-- Show warnings for non-critical issues
+- Use `isPipelineError()` / `isFatalError()` guards for error classification
+- Show warnings for non-critical issues (use `NonFatalError`)
 
 ## 7) Testing
 
@@ -247,9 +249,9 @@ try {
 ### Running tests
 
 ```bash
-pnpm test          # All tests (unit + E2E)
-pnpm test:unit     # Unit tests only
-pnpm test:e2e      # E2E tests only
+pnpm test:unit     # Unit tests (Vitest, jsdom + node)
+pnpm test:pipeline # Pipeline + DuckDB integration tests
+pnpm test:e2e      # E2E tests (Playwright, port 4173)
 pnpm build         # Ensure production build works
 ```
 
@@ -267,25 +269,25 @@ pnpm build         # Ensure production build works
 - E2E tests for major user workflows
 - Test both success and error scenarios
 
-## 7) Internationalization
+## 8) Internationalization
 
 - Use Paraglide‑JS for strings; add keys to messages
 - Run `pnpm machine-translate` to generate missing translations and review
 - Prefer descriptive hierarchical keys (e.g., `legend.title`, `format.page.size`)
 
-## 8) Accessibility & responsiveness
+## 9) Accessibility & responsiveness
 
 - Ensure keyboard access to controls; Enter/Esc confirm/cancel
 - Maintain visible focus and logical tab order
 - Validate contrast and touch targets; verify responsive behavior
 
-## 9) Security & privacy
+## 10) Security & privacy
 
 - Khartis runs client‑side; do not add server dependencies without discussion
 - Do not commit secrets or tokens; use environment variables securely in local only
 - Keep dependencies up‑to‑date and avoid untrusted sources
 
-## 10) Useful scripts
+## 11) Useful scripts
 
 - `dev`: start the dev server
 - `build`: build for production
@@ -296,23 +298,26 @@ pnpm build         # Ensure production build works
 - `generate-pwa-assets`: build PWA icons
 - `machine-translate`: generate/update i18n translations
 
-## 11) Getting help
+## 12) Getting help
 
 - **Documentation**: See `/docs` folder for comprehensive guides:
   - `README.md` - Documentation overview
+  - `GUIDE_UTILISATEUR.md` - User guide (data import, visualization, export)
+  - `GUIDE_DEVELOPPEUR.md` - Developer quick start and common tasks
+  - `GLOSSAIRE.md` - Cartographic and technical glossary
   - `ARCHITECTURE.md` - System design and principles
-  - `DATA_PIPELINE.md` - Data processing architecture
-  - `VISUALIZATION.md` - Rendering and visualization types
-  - `STATE_AND_FEATURES.md` - State management patterns
+  - `PIPELINE_DONNEES.md` - Data processing architecture
+  - `VISUALISATIONS.md` - Rendering and visualization types
+  - `GESTION_ETAT.md` - State management patterns
+  - `FONDS_DE_CARTE.md` - Basemap preparation and catalog
   - `REFERENCE.md` - Types and utilities reference
-  - `TROUBLESHOOTING.md` - Common issues and solutions
-  - `TESTING.md` - Testing strategies and examples
-  - `MIGRATION_GUIDE.md` - Migration from v2 to v3
+  - `TESTS.md` - Testing strategies and examples
+  - `PWA.md` - Progressive Web App and offline support
 - **Issues**: Search existing ones or open a new issue
 - **Discussions**: Use GitHub Discussions for ideas and Q&A
 - **Maintainers**: See contributors in package.json
 
-## 12) Code of Conduct
+## 13) Code of Conduct
 
 This project follows our Code of Conduct (CODE_OF_CONDUCT.md). Please review it before contributing.
 
