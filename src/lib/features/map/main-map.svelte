@@ -114,7 +114,8 @@
     logger.info('Preparing dataset for map rendering', LogCategory.MAP, {
       datasetId: dataset.id,
       fileName: dataset.name,
-      hasGeometry: Boolean(dataset.geometry)
+      hasGeometry: Boolean(dataset.geometry),
+      sourceFileId: dataset.sourceFileId
     });
     try {
       if (dataset.geometry && dataset.sourceFileId) {
@@ -283,7 +284,6 @@
     generation: number
   ): Promise<void> {
     const datasetId = dataset.id;
-
     if (dataset.geometry) {
       const result = await loadGeoDatasetTable(dataset);
 
