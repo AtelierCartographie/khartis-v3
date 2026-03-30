@@ -6,7 +6,6 @@
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { fly } from 'svelte/transition';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import PaletteCustom from './palette-custom.svelte';
   import PaletteComparison from './palette-comparison.svelte';
@@ -173,6 +172,10 @@
       const target = e.target as Node;
       if (popoverRef && !popoverRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
+        const path = e.composedPath() as Element[];
+        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
+          return;
+        }
         handleClose();
       }
     }
@@ -204,7 +207,6 @@
       style:right={popoverRight}
       role="dialog"
       aria-label={popoverTitle}
-      transition:fly={{ y: -10, duration: 200 }}
     >
       <header class="popover-header">
         <h3>{popoverTitle}</h3>
@@ -290,7 +292,6 @@
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
-    transition: right 0.2s ease-out;
   }
 
   .popover-header {

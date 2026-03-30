@@ -6,6 +6,7 @@
     visualizationStore,
     ALL_PRIMITIVE_FILTERS,
     ClassificationMethod,
+    DEFAULT_CATEGORICAL_COLORS,
     PrimitiveFilterType,
     type VisualizationConfig,
     type VisualizationModes,
@@ -43,8 +44,8 @@
   import YearFilter from './components/year-filter.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  let lastComputedKey = $state<string>('');
-  let computeRequestCounter = $state(0);
+  let lastComputedKey = '';
+  let computeRequestCounter = 0;
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -89,6 +90,18 @@
           numClasses: 5
         });
         computeBreaksForVisualization('modesChange:fillClasses');
+      }
+
+      // Initialize classification colors when switching to CATEGORIES mode if not already set
+      if (
+        updates.fill === FillMode.CATEGORIES &&
+        !selectedViz.classification?.colors?.length
+      ) {
+        visualizationStore.updateClassification(selectedViz.id, {
+          method: ClassificationMethod.MANUAL,
+          classes: 0,
+          colors: [...DEFAULT_CATEGORICAL_COLORS]
+        });
       }
     }
   }
@@ -280,6 +293,8 @@
         numClasses: requestedClassCount
       });
 
+      if (requestId !== computeRequestCounter) return;
+
       if (result && selectedViz?.id) {
         const actualNumClasses = resolveComputedClassCount(
           normalizedMethod,
@@ -381,32 +396,30 @@
     }
   });
 
-  // Regenerate palette colors when color blindness toggle changes.
-  // Only cbEnabled is tracked — everything else is read via untrack to avoid
-  // a write-triggers-read cycle (updateClassification replaces selectedViz object,
-  // causing selectedViz?.id to re-trigger even when the ID string is unchanged).
   $effect(() => {
     const cbEnabled = getColorBlindnessState().enabled;
+    const paletteId = selectedViz?.classification?.paletteId;
+    const numColors = selectedViz?.classification?.classes;
+
     untrack(() => {
       const vizId = selectedViz?.id;
-      const classification = selectedViz?.classification;
-      if (!vizId || !classification?.colors?.length) return;
+      if (!vizId || !numColors) return;
       const contrast = cbEnabled ? ('high' as const) : undefined;
       let colors: string[];
-      if (classification.paletteId) {
-        const palette = findPaletteById(classification.paletteId);
+      if (paletteId) {
+        const palette = findPaletteById(paletteId);
         if (!palette) return;
-        colors = generatePaletteColors(
-          palette,
-          classification.colors.length,
-          contrast
-        );
+        colors = generatePaletteColors(palette, numColors, contrast);
       } else {
-        colors = generateColorsForBreaks(
-          classification.colors.length,
-          'sequential',
-          contrast
-        );
+        colors = generateColorsForBreaks(numColors, 'sequential', contrast);
+      }
+      const existing = selectedViz?.classification?.colors;
+      if (
+        existing &&
+        existing.length === colors.length &&
+        existing.every((c, i) => c === colors[i])
+      ) {
+        return;
       }
       visualizationStore.updateClassification(vizId, { colors });
     });

@@ -11,7 +11,7 @@ export const SCALE_MODE = {
 export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
 export interface FacetsLayout {
-  columns: 2 | 3 | 4;
+  columns: number;
   gap: number;
 }
 
@@ -40,6 +40,7 @@ const DEFAULT_STATE: FacetsState = {
 
 function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
+  let isRegenerating = false;
 
   function getFacetVisualizations(): VisualizationConfig[] {
     if (!state.enabled) {
@@ -110,7 +111,51 @@ function createFacetsStore() {
     state.variables = [...variables];
   }
 
-  function setColumns(columns: 2 | 3 | 4): void {
+  async function reorderVariables(
+    fromIndex: number,
+    toIndex: number
+  ): Promise<void> {
+    if (fromIndex === toIndex) return;
+
+    const next = [...state.variables];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    state.variables = next;
+
+    if (state.enabled && state.baseVisualizationId) {
+      const baseViz = visualizationStore.visualizations.find(
+        (v) => v.id === state.baseVisualizationId
+      );
+
+      if (baseViz) {
+        isRegenerating = true;
+        try {
+          const newConfigs = await generateFacetVisualizations(
+            baseViz,
+            state.variables,
+            state.scaleMode
+          );
+
+          visualizationStore.removeBulkVisualizations(
+            state.generatedVisualizationIds
+          );
+          visualizationStore.createBulkVisualizations(newConfigs);
+          state.generatedVisualizationIds = newConfigs.map(
+            (config) => config.id
+          );
+
+          logger.debug(
+            'Variables reordered and facets regenerated',
+            LogCategory.STORE
+          );
+        } finally {
+          isRegenerating = false;
+        }
+      }
+    }
+  }
+
+  function setColumns(columns: number): void {
     state.layout.columns = columns;
   }
 
@@ -123,6 +168,8 @@ function createFacetsStore() {
   }
 
   async function toggleScaleMode(): Promise<void> {
+    if (isRegenerating) return;
+
     const newMode: ScaleMode =
       state.scaleMode === SCALE_MODE.SHARED
         ? SCALE_MODE.INDEPENDENT
@@ -136,22 +183,29 @@ function createFacetsStore() {
       );
 
       if (baseViz) {
-        const newConfigs = await generateFacetVisualizations(
-          baseViz,
-          state.variables,
-          newMode
-        );
+        isRegenerating = true;
+        try {
+          const newConfigs = await generateFacetVisualizations(
+            baseViz,
+            state.variables,
+            newMode
+          );
 
-        visualizationStore.removeBulkVisualizations(
-          state.generatedVisualizationIds
-        );
-        visualizationStore.createBulkVisualizations(newConfigs);
-        state.generatedVisualizationIds = newConfigs.map((config) => config.id);
+          visualizationStore.removeBulkVisualizations(
+            state.generatedVisualizationIds
+          );
+          visualizationStore.createBulkVisualizations(newConfigs);
+          state.generatedVisualizationIds = newConfigs.map(
+            (config) => config.id
+          );
 
-        logger.debug(
-          'Scale mode toggled and facets regenerated',
-          LogCategory.STORE
-        );
+          logger.debug(
+            'Scale mode toggled and facets regenerated',
+            LogCategory.STORE
+          );
+        } finally {
+          isRegenerating = false;
+        }
       }
     }
   }
@@ -184,6 +238,7 @@ function createFacetsStore() {
     enable,
     disable,
     setVariables,
+    reorderVariables,
     setColumns,
     setGap,
     toggleScaleMode,

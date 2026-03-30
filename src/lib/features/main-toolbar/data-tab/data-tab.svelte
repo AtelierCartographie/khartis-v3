@@ -23,8 +23,6 @@
 
   {#if isGeographicMode}
     <EnrichDataStep />
-  {:else if isTabularGPSMode}
-    <BasemapJoinStep />
   {:else}
     <GeolocationStep />
     <BasemapJoinStep />

@@ -32,7 +32,7 @@ function getStepNames(mode: WorkflowMode): DataTabStep[] {
     return ['control', 'enrich'];
   }
   if (mode === 'tabular-gps') {
-    return ['control', 'basemap'];
+    return ['control', 'geolocate', 'basemap'];
   }
   return ['control', 'geolocate', 'join'];
 }
@@ -58,7 +58,7 @@ function isTabularGPSMode(): boolean {
 }
 
 function isTwoStepMode(): boolean {
-  return isGeographicMode() || isTabularGPSMode();
+  return isGeographicMode();
 }
 
 function getStepCount(): number {
@@ -185,9 +185,8 @@ export const dataTabStore = {
   },
   /** The step index where the basemap-join step lives (last step for tabular workflows) */
   get basemapStepIndex(): number {
-    if (isTabularGPSMode()) return 1;
-    if (!isGeographicMode()) return 2;
-    return -1; // geographic mode doesn't have a basemap step
+    if (isGeographicMode()) return -1;
+    return getStepCount() - 1;
   },
   get isReadyForVisualization(): boolean {
     if (isGeographicMode()) {

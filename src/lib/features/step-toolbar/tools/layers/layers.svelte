@@ -29,7 +29,9 @@
         ? l.type === 'geographic'
           ? Earth
           : ColorPalette
-        : undefined
+        : l.type === 'visualization'
+          ? ColorPalette
+          : Earth
     }))
   );
 

@@ -20,9 +20,15 @@ import type { ProjectStateContainer } from './project-state.svelte';
 import { cleanFileForStorage } from './project-files';
 import { addToHistory, resetHistory } from './project-history';
 import { saveCurrentProject } from './project-persistence';
+import { globalActions } from '../global.svelte';
+import { dataTabStore } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
+import { dataToolsStore } from '$lib/features/main-toolbar/data-tab/data-tools.store.svelte';
 
 export function resetAllStores(): void {
   persistenceRegistry.resetAll();
+  globalActions.resetNavigationState();
+  dataTabStore.reset();
+  dataToolsStore.reset();
 }
 
 export async function createProject(
@@ -101,6 +107,7 @@ export async function deleteProject(
 
     if (container._state.currentProject?.id === id) {
       container._state.currentProject = undefined;
+      resetAllStores();
       await projectStorage.remove(ProjectStorageKey.CURRENT);
       await dataOrchestratorService.onProjectChanged();
     }

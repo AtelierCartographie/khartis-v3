@@ -239,6 +239,7 @@
 
   .tab-content {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: var(--cds-spacing-03);

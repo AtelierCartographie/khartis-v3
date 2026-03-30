@@ -41,7 +41,7 @@
 
   let columnAnalysis = $state<AnalysisResult[]>([]);
   let columnAnalysisLoaded = $state(false);
-  let previousAutoSelectedColumn = $state<string | null>(null);
+  let previousAutoSelectedColumn: string | null = null;
   let columnAnalysisAbort: AbortController | null = null;
 
   async function loadColumnAnalysis() {
@@ -249,9 +249,9 @@
 
   let latitudeFieldId = $state<number | undefined>(undefined);
   let longitudeFieldId = $state<number | undefined>(undefined);
-  let previousDatasetId = $state<string | undefined>(undefined);
+  let previousDatasetId: string | undefined = undefined;
   let gpsValidation = $state<GPSValidationResult | null>(null);
-  let hasAutoGeoreferenceInitialization = $state(false);
+  let hasAutoGeoreferenceInitialization = false;
 
   $effect(() => {
     const currentDatasetId = selectedDataset?.id;
