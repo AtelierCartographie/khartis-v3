@@ -1,6 +1,7 @@
 import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 export type {
   PickingInfo,
@@ -9,7 +10,6 @@ export type {
 } from '@deck.gl/core';
 
 export type {
-  BasemapCatalog,
   BasemapLayer,
   BasemapMetadata,
   BasemapSuggestion,
@@ -99,6 +99,8 @@ export interface LayerContext {
   geometryInfo?: GeometryInfo;
   /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
   yearFilter?: YearFilterInfo;
+  /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */
+  customProjection?: ProjectionLike;
 }
 
 export type BBox = [number, number, number, number];
