@@ -4,6 +4,8 @@ import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
 import type { Feature, FeatureCollection } from 'geojson';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { proj4d3 } from '$lib/features/map/utils/proj4d3';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface ProjectionInfo {
   id: string;
@@ -116,39 +118,6 @@ export function getProjectionById(id: string): ProjectionInfo | undefined {
   return PROJECTIONS.find((p) => p.id === id);
 }
 
-export function suggestProjection(
-  bounds: [[number, number], [number, number]]
-): string {
-  const [minLon, minLat] = bounds[0];
-  const [maxLon, maxLat] = bounds[1];
-
-  const width = maxLon - minLon;
-  const height = maxLat - minLat;
-  const centerLat = (minLat + maxLat) / 2;
-
-  if (width > 180) {
-    return 'natural-earth';
-  }
-
-  if (Math.abs(centerLat) > 60) {
-    return 'stereographic';
-  }
-
-  if (height < 30 && width < 60) {
-    if (Math.abs(centerLat) < 30) {
-      return 'mercator';
-    } else {
-      return 'lambert-conformal';
-    }
-  }
-
-  if (width > 90) {
-    return 'robinson';
-  }
-
-  return 'albers';
-}
-
 export function projectGeoJSON(
   geojson: ProjectableGeoJSON,
   projectionId: string,
@@ -158,14 +127,33 @@ export function projectGeoJSON(
     rotate?: [number, number, number];
     center?: [number, number];
     clipExtent?: [[number, number], [number, number]];
+    customCode?: string;
   }
 ): ProjectableGeoJSON {
-  const projectionInfo = getProjectionById(projectionId);
-  if (!projectionInfo) {
-    throw new Error(`Unknown projection: ${projectionId}`);
-  }
+  let projection: GeoProjection;
 
-  const projection = projectionInfo.projection();
+  if (options?.customCode) {
+    try {
+      projection = proj4d3(options.customCode);
+    } catch (error) {
+      logger.error(
+        'Custom CRS code failed, falling back to built-in projection',
+        LogCategory.MAP,
+        { customCode: options.customCode, error }
+      );
+      const fallback = getProjectionById(projectionId);
+      if (!fallback) {
+        throw new Error(`Unknown projection: ${projectionId}`);
+      }
+      projection = fallback.projection();
+    }
+  } else {
+    const projectionInfo = getProjectionById(projectionId);
+    if (!projectionInfo) {
+      throw new Error(`Unknown projection: ${projectionId}`);
+    }
+    projection = projectionInfo.projection();
+  }
 
   if (options?.scale) projection.scale(options.scale);
   if (options?.translate) projection.translate(options.translate);
@@ -202,14 +190,33 @@ export function fitProjectionToGeoJSON(
   projectionId: string,
   width: number,
   height: number,
-  padding: number = 20
+  padding: number = 20,
+  customCode?: string
 ): GeoProjection {
-  const projectionInfo = getProjectionById(projectionId);
-  if (!projectionInfo) {
-    throw new Error(`Unknown projection: ${projectionId}`);
-  }
+  let projection: GeoProjection;
 
-  const projection = projectionInfo.projection();
+  if (customCode) {
+    try {
+      projection = proj4d3(customCode);
+    } catch (error) {
+      logger.error(
+        'Custom CRS code failed in fitProjection, falling back to built-in projection',
+        LogCategory.MAP,
+        { customCode, error }
+      );
+      const fallback = getProjectionById(projectionId);
+      if (!fallback) {
+        throw new Error(`Unknown projection: ${projectionId}`);
+      }
+      projection = fallback.projection();
+    }
+  } else {
+    const projectionInfo = getProjectionById(projectionId);
+    if (!projectionInfo) {
+      throw new Error(`Unknown projection: ${projectionId}`);
+    }
+    projection = projectionInfo.projection();
+  }
 
   projection.fitSize([width - padding * 2, height - padding * 2], geojson);
 
