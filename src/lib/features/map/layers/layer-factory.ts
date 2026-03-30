@@ -36,6 +36,7 @@ import type {
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
+  getCategoricalColorMap,
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
@@ -66,17 +67,22 @@ import {
   createPolygonFillColorAttribute,
   createWidthAttribute
 } from 'geoarrow-deck-stream';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,
   parsePointData,
+  parseSolidPolygonsWithProjection,
+  parsePathsWithProjection,
+  parsePointDataWithProjection,
   pointColorAttr,
   pointRadiusAttr,
   rowAccessor,
   filterValueAttr,
   polygonCentroids,
   pathCentroids,
-  pointPositions
+  pointPositions,
+  projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
@@ -84,6 +90,26 @@ const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 80];
+
+function resolvePolygonParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) =>
+        parseSolidPolygonsWithProjection(table, customProjection)
+    : parseSolidPolygons;
+}
+
+function resolvePathParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) => parsePathsWithProjection(table, customProjection)
+    : parsePaths;
+}
+
+function resolvePointParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) =>
+        parsePointDataWithProjection(table, customProjection)
+    : parsePointData;
+}
 
 // WeakMap cache for arrowTableToGeoJSON — keyed by (table, geoColumn).
 // Avoids redundant full-table walks when the same table is converted
@@ -355,31 +381,36 @@ function createTextLayerDataFromBinary(
   table: ArrowTable,
   geoInfo: GeometryInfo,
   primaryColumn: string,
-  secondaryColumn?: string
+  secondaryColumn?: string,
+  customProjection?: ProjectionLike
 ): TextLayerDatum[] {
   const geoType = geoInfo.type;
   let centroids: Float64Array;
   let featureIds: Uint32Array;
 
+  const parsePolygons = resolvePolygonParser(customProjection);
+  const parseLines = resolvePathParser(customProjection);
+  const parsePoints = resolvePointParser(customProjection);
+
   if (
     geoType === GeometryType.POLYGON ||
     geoType === GeometryType.MULTIPOLYGON
   ) {
-    const polyData = parseSolidPolygons(table);
+    const polyData = parsePolygons(table);
     centroids = polygonCentroids(polyData);
     featureIds = polyData.featureIds;
   } else if (
     geoType === GeometryType.LINESTRING ||
     geoType === GeometryType.MULTILINESTRING
   ) {
-    const lineData = parsePaths(table);
+    const lineData = parseLines(table);
     centroids = pathCentroids(lineData);
     featureIds = lineData.featureIds;
   } else if (
     geoType === GeometryType.POINT ||
     geoType === GeometryType.MULTIPOINT
   ) {
-    const ptData = parsePointData(table);
+    const ptData = parsePoints(table);
     centroids = pointPositions(ptData);
     featureIds = ptData.featureIds;
   } else {
@@ -453,14 +484,17 @@ function createTextOverlayLayers(
       textLayerData = createTextLayerDataFromBinary(
         jsTable,
         geometryInfo,
-        viz.mapping.labelColumn
+        viz.mapping.labelColumn,
+        undefined,
+        ctx.customProjection
       );
       if (viz.mapping.secondaryLabelColumn) {
         textLayerDataWithSecondary = createTextLayerDataFromBinary(
           jsTable,
           geometryInfo,
           viz.mapping.labelColumn,
-          viz.mapping.secondaryLabelColumn
+          viz.mapping.secondaryLabelColumn,
+          ctx.customProjection
         );
       }
     } catch {
@@ -629,7 +663,11 @@ export function createPointLayers(
   if (!isNativeGeoArrowPoint && (isWkbEncoded || isGeoJsonEncoded)) {
     let geojsonData;
     try {
-      geojsonData = getCachedGeoJSON(jsTable, geoColumn);
+      const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+      geojsonData =
+        rawGeoJSON && ctx.customProjection
+          ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+          : rawGeoJSON;
     } catch (error) {
       logger.error(
         'Error converting point geometry to GeoJSON',
@@ -656,11 +694,35 @@ export function createPointLayers(
       return [];
     }
 
+    let effectiveCategoryColorMap = categoryColorMap;
+    if (
+      useCategoricalColor &&
+      viz?.mapping.categoryColumn &&
+      (!categoryColorMap || categoryColorMap.size === 0) &&
+      viz.classification?.colors?.length
+    ) {
+      const col = viz.mapping.categoryColumn;
+      const uniqueVals = [
+        ...new Set(
+          geojsonData.features
+            .map((f) => f.properties?.[col])
+            .filter((v) => v !== null && v !== undefined)
+            .map(String)
+        )
+      ];
+      if (uniqueVals.length > 0) {
+        effectiveCategoryColorMap = getCategoricalColorMap(
+          uniqueVals,
+          viz.classification.colors
+        );
+      }
+    }
+
     const baseFillColor =
       useCategoricalColor && viz
         ? createGeoJsonCategoricalColorAccessor(
             viz.mapping.categoryColumn!,
-            categoryColorMap,
+            effectiveCategoryColorMap,
             fillColor
           )
         : fillColor;
@@ -750,7 +812,7 @@ export function createPointLayers(
   }
 
   // Parse Arrow table to binary point data
-  const pointData = parsePointData(jsTable);
+  const pointData = resolvePointParser(ctx.customProjection)(jsTable);
 
   // Build fill color: static or per-feature attribute
   const baseFillAccessor =
@@ -943,7 +1005,7 @@ export function createLineLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
   if (isNativeGeoArrowLine || isNativeGeoArrow) {
-    const lineData = parsePaths(jsTable);
+    const lineData = resolvePathParser(ctx.customProjection)(jsTable);
 
     // Build color: choropleth > categorical > static
     const choroplethAccessor =
@@ -1087,7 +1149,11 @@ export function createLineLayers(
 
   let lineGeojsonData;
   try {
-    lineGeojsonData = getCachedGeoJSON(jsTable, geoColumn);
+    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+    lineGeojsonData =
+      rawGeoJSON && ctx.customProjection
+        ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+        : rawGeoJSON;
   } catch (error) {
     logger.error('Error converting line geometry to GeoJSON', LogCategory.MAP, {
       encoding: arrowExtension,
@@ -1250,8 +1316,8 @@ export function createPolygonLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
 
   if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
-    const polyData = parseSolidPolygons(jsTable);
-    const outlineData = parsePaths(jsTable);
+    const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
+    const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
 
     // Build fill color: choropleth or static, with optional highlight dimming
     const baseFillAccessor =
@@ -1438,7 +1504,13 @@ export function createPolygonLayers(
 
   let geojsonData;
   try {
-    geojsonData = getCachedGeoJSON(jsTable, geoColumn);
+    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+    // When a basemap projection is active, pre-project GeoJSON coordinates
+    // so data aligns with the projected basemap coordinate space.
+    geojsonData =
+      rawGeoJSON && ctx.customProjection
+        ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+        : rawGeoJSON;
   } catch (error) {
     logger.error(
       'Error converting polygon geometry to GeoJSON',
@@ -1585,10 +1657,15 @@ export function createGeoJsonLayers(
 
   const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
 
+  // When a basemap projection is active, pre-project GeoJSON coordinates
+  const data = ctx.customProjection
+    ? projectGeoJSON(geojson, ctx.customProjection)
+    : geojson;
+
   return [
     new GeoJsonLayer({
       id: layerId,
-      data: geojson,
+      data,
       filled: true,
       stroked: true,
       getFillColor: [...fillColor, Math.round(fillOpacity * 255)],

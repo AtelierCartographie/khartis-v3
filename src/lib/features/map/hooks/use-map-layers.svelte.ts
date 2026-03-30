@@ -13,9 +13,11 @@ import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
 import {
   createBasemapLayers,
   createDeckLayers,
-  createGeoJsonLayers
+  createGeoJsonLayers,
+  type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
+import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
 import { GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
@@ -27,6 +29,9 @@ import {
   filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+import { proj4d3 } from '../utils/proj4d3';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -162,6 +167,37 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? mapProjectionStore.projection
         : undefined;
 
+      // Build basemap projection from metadata (composite/simple/identity)
+      const currentMetadata = basemapService.currentBasemap?.metadata;
+      const basemapProjection =
+        currentMetadata && !currentMetadata.isCustom
+          ? buildProjectionForBasemap(
+              currentMetadata,
+              960,
+              600,
+              basemapService.projectionPresets
+            )
+          : undefined;
+
+      // Basemap projection takes priority to keep data and basemap aligned.
+      // Custom CRS from projection tool (proj4d3, in meters) only applies
+      // when no basemap projection exists (identity basemaps, custom imports).
+      let customProjection: ProjectionLike | undefined = basemapProjection;
+      if (!customProjection && isOrthographicMode) {
+        const projState = getProjectionState();
+        if (projState.customCode) {
+          try {
+            customProjection = proj4d3(projState.customCode);
+          } catch (error) {
+            logger.error(
+              'Custom CRS code failed for thematic layers, using identity',
+              LogCategory.MAP,
+              { customCode: projState.customCode, error }
+            );
+          }
+        }
+      }
+
       // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
@@ -182,15 +218,31 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         try {
           const basemapCtx = {
             modelMatrix: matrixToApply ?? undefined,
-            projectionSuffix
+            projectionSuffix,
+            projection: basemapProjection
           };
+
+          const metadataLayers: MetadataLayerEntry[] = [];
+          if (currentMetadata && !currentMetadata.isCustom) {
+            for (const layer of currentMetadata.layers) {
+              if (!layer.file) continue;
+              const table = basemapService.currentLayers.get(layer.file);
+              if (!table) continue;
+              metadataLayers.push({
+                table,
+                style: layer.style ?? null,
+                type: layer.type,
+                file: layer.file
+              });
+            }
+          }
+
           const additionalData = {
-            lakesData: basemapService.lakesData ?? undefined,
-            riversData: basemapService.riversData ?? undefined,
-            citiesData: basemapService.citiesData ?? undefined,
             frontieresTable:
               basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
-              undefined
+              undefined,
+            metadataLayers,
+            stylePresets: basemapService.stylePresets
           };
           const basemapGroups = createBasemapLayers(
             worldBaseTable,
@@ -219,6 +271,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
+          ctx.customProjection = customProjection;
 
           if (geojson) {
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
@@ -308,6 +361,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackCtx.modelMatrix = matrixToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
+          fallbackCtx.customProjection = customProjection;
 
           if (geojson) {
             const fallbackGeoJsonLayers = createGeoJsonLayers(
