@@ -57,6 +57,7 @@
   }: Props = $props();
 
   let _isCalculating = $state(false);
+  let breaksRequestId = 0;
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -138,6 +139,7 @@
       return;
     }
 
+    const myRequestId = ++breaksRequestId;
     _isCalculating = true;
     try {
       const storeMethod = panelMethodToStoreMethod(currentMethod);
@@ -151,6 +153,8 @@
         method: storeMethod,
         numClasses: requestedClassCount
       });
+
+      if (myRequestId !== breaksRequestId) return;
 
       if (result) {
         const actualClassCount = result.counts.length;

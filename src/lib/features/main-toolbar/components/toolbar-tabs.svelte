@@ -173,7 +173,7 @@
     datasetToDelete = null;
   }
 
-  let lastSourceFilesCount = $state(0);
+  let lastSourceFilesCount = 0;
 
   let editingTabId = $state<string | null>(null);
   let editedName = $state('');
@@ -262,6 +262,8 @@
   }
 
   function handleTabMenuClickOutside(event: MouseEvent) {
+    const path = event.composedPath() as Element[];
+    if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) return;
     const target = event.target as Node;
     const menuElement = document.querySelector('.tab-context-menu');
     if (menuElement && !menuElement.contains(target)) {

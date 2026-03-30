@@ -115,7 +115,28 @@
   );
 
   function handleTabChange(index: number) {
+    if (index === 0 && activeTab === 1) {
+      singleColor = endColor;
+    } else if (index === 1 && activeTab === 0) {
+      endColor = singleColor;
+      startColor = '#ffffff';
+    }
     activeTab = index;
+
+    if (index === 0) {
+      onColorsChange?.(
+        generateSequentialFromColor(singleColor, numClasses, resolvedContrast)
+      );
+    } else if (index === 1) {
+      onColorsChange?.(
+        generateSequentialFromColors(
+          startColor,
+          endColor,
+          numClasses,
+          resolvedContrast
+        )
+      );
+    }
   }
 
   function handleContrastChange(value: string) {

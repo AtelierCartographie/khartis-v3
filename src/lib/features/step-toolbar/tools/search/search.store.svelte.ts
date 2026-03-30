@@ -4,11 +4,16 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
+import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
+import type { TooltipEntry } from '$lib/features/map/types';
 import type { SearchState } from './search.types';
 
 const MIN_SEARCH_LENGTH = 2;
@@ -124,6 +129,45 @@ async function persistReplaceTransformations(
   }
 }
 
+const TOOLTIP_EXCLUDED_COLUMNS = new Set([
+  INTERNAL_COLUMN.ID,
+  INTERNAL_COLUMN.GEOM,
+  INTERNAL_COLUMN.GEOMETRY,
+  'basemap_id',
+  'typo_match'
+]);
+
+async function showTooltipForResult(
+  rowId: number,
+  tableName: string
+): Promise<void> {
+  try {
+    const rows = (await Duck.query(
+      `SELECT * EXCLUDE (geom, geometry) FROM "${tableName}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
+
+    const row = rows?.[0];
+    if (!row) return;
+
+    const entries: TooltipEntry[] = Object.entries(row)
+      .filter(([key]) => !TOOLTIP_EXCLUDED_COLUMNS.has(key))
+      .map(([key, val]) => ({ key, value: formatValue(val) }));
+
+    mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
+  } catch (error) {
+    logger.debug(
+      'Failed to fetch tooltip data for search result',
+      LogCategory.UI,
+      {
+        rowId,
+        tableName,
+        error
+      }
+    );
+  }
+}
+
 function clearMapHighlights(): void {
   mapHighlightStore.clearHighlights();
 }
@@ -146,6 +190,7 @@ function setHighlightsFromResults(
     }
   }
 
+  mapTooltipStore.unpin();
   const uniqueRows = [...new Set(results.map((result) => result.rowId))];
   mapHighlightStore.setHighlightedRows(uniqueRows);
 }
@@ -215,6 +260,12 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
 
       s.currentResultIndex = index;
       setHighlightsFromResults(s.results, s.currentResultIndex, true);
+
+      const tableName = getSearchTableName();
+      const focused = s.results[index];
+      if (tableName && focused) {
+        void showTooltipForResult(focused.rowId, tableName);
+      }
     };
 
     return {
@@ -398,6 +449,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.currentResultIndex = 0;
         s.isSearching = false;
         clearMapHighlights();
+        mapTooltipStore.unpin();
       }
     };
   }

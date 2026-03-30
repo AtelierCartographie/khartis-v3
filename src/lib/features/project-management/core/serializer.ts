@@ -41,18 +41,25 @@ function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
     return false;
   }
 
-  const candidate = value as Partial<BasemapMetadata>;
+  const candidate = value as Record<string, unknown>;
+  // Accept both new format (title_fr, proj_source) and old .kh files (title, projection)
+  const hasTitle =
+    typeof candidate.title_fr === 'string' ||
+    typeof candidate.title === 'string';
+  const hasProjection =
+    typeof candidate.proj_source === 'string' ||
+    typeof candidate.projection === 'string';
+
   return (
     typeof candidate.file === 'string' &&
-    candidate.file.length > 0 &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.description === 'string' &&
+    (candidate.file as string).length > 0 &&
+    hasTitle &&
     typeof candidate.source === 'string' &&
     typeof candidate.date === 'string' &&
-    typeof candidate.projection === 'string' &&
+    hasProjection &&
     Array.isArray(candidate.layers) &&
     Array.isArray(candidate.bbox) &&
-    candidate.bbox.length === 4
+    (candidate.bbox as unknown[]).length === 4
   );
 }
 

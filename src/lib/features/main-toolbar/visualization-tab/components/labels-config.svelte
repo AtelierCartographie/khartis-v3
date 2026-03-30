@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -71,6 +72,7 @@
   let discretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(0);
   let selectedCategoryFieldId = $state<number>(0);
+  let defaultLabelApplied = false;
 
   $effect(() => {
     if (visualization?.mapping.labelColumn && dataFields.length > 0) {
@@ -80,9 +82,10 @@
       if (fieldIndex >= 0) {
         selectedFieldId = fieldIndex;
       }
-    } else if (dataFields.length > 0) {
+    } else if (dataFields.length > 0 && !defaultLabelApplied) {
       selectedFieldId = 0;
-      onMappingChange?.({ labelColumn: dataFields[0].text });
+      defaultLabelApplied = true;
+      untrack(() => onMappingChange?.({ labelColumn: dataFields[0].text }));
     }
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const categoryIndex = dataFields.findIndex(
@@ -242,6 +245,7 @@
   function handleToggleChange(checked: boolean) {
     if (checked && opacity <= 0) {
       opacity = VISUALIZATION_DEFAULTS.labelOpacity;
+      onStyleChange?.({ labelOpacity: opacity / 100 });
     }
     onToggleVisibility?.(checked);
   }

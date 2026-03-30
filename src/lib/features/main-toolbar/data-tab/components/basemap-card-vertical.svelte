@@ -103,7 +103,9 @@
   tabindex={disabled ? -1 : 0}
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
-  aria-label={basemap.title}
+  aria-label={basemap.subtitle_fr
+    ? `${basemap.title_fr} · ${basemap.subtitle_fr}`
+    : basemap.title_fr}
   aria-pressed={selected}
   aria-disabled={disabled}
 >
@@ -117,7 +119,12 @@
 
   <div class="content-section">
     <div class="title-row">
-      <span class="card-title">{basemap.title}</span>
+      <span class="card-title"
+        >{basemap.title_fr}{#if basemap.subtitle_fr}<span
+            class="card-subtitle"
+            >&ensp;·&ensp;{basemap.subtitle_fr}</span
+          >{/if}</span
+      >
       <div class="radio-wrapper">
         <RadioButton
           checked={selected}
@@ -126,12 +133,6 @@
         />
       </div>
     </div>
-
-    {#if basemap.level}
-      <span class="card-level">{basemap.level}</span>
-    {/if}
-
-    <p class="card-description">{basemap.description}</p>
 
     <div class="metadata-row">
       <span class="source">{basemap.source}</span>
@@ -321,45 +322,9 @@
     padding-right: 8px;
   }
 
-  .card-level {
-    display: inline-block;
-    font-size: 0.6875rem;
+  .card-subtitle {
     font-weight: 400;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    padding: 0 16px;
-    color: #697077;
-  }
-
-  .variant-blue .card-level {
-    color: #4589ff;
-  }
-
-  .card-description {
-    font-size: 0.75rem;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    padding: 0 16px;
-    margin: 0;
-    max-height: 48px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .variant-blue .card-description {
-    color: #003a6d;
-  }
-
-  .variant-blue.disabled .card-description {
-    color: rgba(0, 58, 109, 0.25);
-  }
-
-  .variant-gray .card-description {
-    color: #161616;
-  }
-
-  .variant-gray.disabled .card-description {
-    color: #c6c6c6;
+    opacity: 0.7;
   }
 
   .metadata-row {

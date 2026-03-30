@@ -235,6 +235,8 @@
   }
 
   function handleClickOutside(event: MouseEvent) {
+    const path = event.composedPath() as Element[];
+    if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) return;
     if (menuButton && !menuButton.contains(event.target as Node)) {
       closeMenu();
     }
